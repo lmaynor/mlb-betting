@@ -75,7 +75,7 @@ class XGBModel:
             verbose_eval=verbose_eval,
         )
 
-        results = {"best_iteration": self.booster.best_ntree_limit}
+        results = {"best_iteration": getattr(self.booster, 'best_iteration', getattr(self.booster, 'best_ntree_limit', 0))}
 
         if X_test is not None and y_test is not None:
             preds = self.predict(X_test)
@@ -100,7 +100,7 @@ class XGBModel:
         if self.booster is None:
             raise RuntimeError("Model not trained. Call train() or load() first.")
         dm = self._to_dmatrix(X)
-        return self.booster.predict(dm, iteration_range=(0, self.booster.best_ntree_limit))
+        return self.booster.predict(dm, iteration_range=(0, getattr(self.booster, 'best_iteration', getattr(self.booster, 'best_ntree_limit', 0))))
 
     def walk_forward_cv(
         self,
@@ -178,7 +178,7 @@ class XGBModel:
             "features": self.features,
             "params":   self.params,
             "saved_at": datetime.now().isoformat(),
-            "best_iteration": self.booster.best_ntree_limit,
+            "best_iteration": getattr(self.booster, 'best_iteration', getattr(self.booster, 'best_ntree_limit', 0)),
         }
         meta_path.write_text(json.dumps(meta_out, indent=2))
         print(f"  Model saved: {model_path.name}")
