@@ -1,0 +1,47 @@
+
+# Data
+
+Baseball_Data/
+
+*.csv
+
+*.db
+
+*.pkl
+
+# Model weights (keep meta)
+
+*.json
+
+!models/model_meta_*.json
+
+# Python
+
+*.pyc
+
+__pycache__/
+
+.ipynb_checkpoints/
+
+*.egg-info/
+
+dist/
+
+build/
+
+# Env
+
+.env
+
+*.log
+
+# Cache dirs
+
+statcast_cache_daily/
+
+weather_cache_daily/
+
+lineup_cache_daily/
+
+odds_cache_daily/
+
