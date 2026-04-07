@@ -1,6 +1,6 @@
-"""
+ï»¿"""
 Shared odds math used by all systems.
-Single source of truth — do not reimplement in notebooks.
+Single source of truth - do not reimplement in notebooks.
 """
 import numpy as np
 import pandas as pd
@@ -37,10 +37,7 @@ def kelly_stake(
     min_pct: float = 0.005,
     max_pct: float = 0.05,
 ) -> float:
-    """
-    Fractional Kelly criterion. Returns dollar stake.
-    Returns 0 if edge <= 0 or Kelly < min_pct.
-    """
+    """Fractional Kelly criterion. Returns dollar stake."""
     if pd.isna(edge) or pd.isna(odds) or edge <= 0:
         return 0.0
     b = odds / 100 if odds > 0 else 100 / abs(odds)
