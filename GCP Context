@@ -1,0 +1,224 @@
+# MLB Betting System — Current State & Next Objectives
+
+## Project overview
+
+An MLB sports betting system with four prediction models (NRFI, HR, F5, K)
+built on a shared `mlb_core` library. Currently runs as Jupyter notebooks
+on a Windows machine. Goal: fully automated twice-daily runs on GCP with
+Discord signal delivery.
+
+---
+
+## Repository structure
+
+```
+mlb-betting/
+├── mlb_core/                  ← shared library
+│   ├── config.py              ← v1 (hardcoded Windows paths)
+│   ├── config/                ← v2 (env-var based) ✅ DONE
+│   ├── storage.py             ← v2 GCS/local layer ✅ DONE
+│   ├── data/
+│   │   ├── statcast.py        ← v1, unchanged
+│   │   ├── weather.py         ← v1, unchanged
+│   │   └── lineups.py         ← v1, unchanged
+│   ├── models/
+│   │   └── base.py            ← v1 XGBModel, unchanged
+│   ├── odds/
+│   │   ├── utils.py           ← v1, unchanged
+│   │   └── dk_scraper.py      ← v2 HTTP (no Selenium) ✅ DONE
+│   ├── tracking/
+│   │   └── bet_tracker.py     ← v2 SQLAlchemy/Cloud SQL ✅ DONE
+│   └── notify/
+│       └── discord.py         ← NEW ✅ DONE
+├── NRFI_Pro_System/
+│   ├── config_nrfi.py         ← v2 ✅ DONE
+│   └── [notebook .ipynb]      ← prediction logic still here
+├── HR_Pro/
+│   ├── config_hr.py           ← v2 ✅ DONE
+│   └── [notebook .ipynb]
+├── F5_Pro_System/
+│   ├── config_f5.py           ← v2 ✅ DONE
+│   └── [notebook .ipynb]
+├── K_Pro_System/
+│   ├── config_k.py            ← v2 ✅ DONE
+│   └── [notebook .ipynb]
+├── runners/                   ← Cloud Run runners ✅ DONE
+│   ├── run_nrfi.py            ← wired, _build_predictions() is a stub
+│   ├── run_hr.py              ← wired, _build_predictions() is a stub
+│   ├── run_f5.py              ← wired, _build_predictions() is a stub
+│   └── run_k.py               ← wired, _build_predictions() is a stub
+├── main.py                    ← Flask entrypoint ✅ DONE
+├── Dockerfile                 ✅ DONE
+├── requirements.txt           ✅ DONE
+├── setup.py                   ← v2 ✅ DONE
+├── .env.example               ✅ DONE
+└── deploy/
+    ├── deploy.sh              ← full bootstrap script ✅ DONE
+    └── deploy_update.sh       ✅ DONE
+```
+
+---
+
+## What is complete
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `mlb_core.config` v2 | ✅ | Env-var paths, GCS/SQL mode detection |
+| `mlb_core.storage` | ✅ | Transparent GCS ↔ local file layer |
+| `mlb_core.odds.dk_scraper` v2 | ✅ | Direct HTTP, no Selenium/Chrome |
+| `mlb_core.tracking.bet_tracker` v2 | ✅ | SQLAlchemy, Cloud SQL + SQLite fallback |
+| `mlb_core.notify.discord` | ✅ | Bet signals + P&L summary embeds |
+| All four system configs v2 | ✅ | Env-var paths, GCS model keys added |
+| `runners/run_*.py` | ✅ | Framework wired; prediction stubs only |
+| `main.py` Flask server | ✅ | `/run` + `/healthz` endpoints |
+| `Dockerfile` | ✅ | No Selenium, `mlb_core` installed as package |
+| `deploy.sh` | ✅ | Provisions GCS, Cloud SQL, Secrets, Scheduler |
+
+---
+
+## What is NOT done — next objectives
+
+### 1. Fill in prediction stubs (CRITICAL PATH)
+Each `runners/run_*.py` has a `_build_predictions()` function that returns
+an empty DataFrame. The actual prediction logic still lives in the notebooks.
+
+**For each system:**
+- Open the corresponding notebook
+- Copy the feature engineering + prediction cells (roughly Sections 3–8)
+  into `_build_predictions()`
+- The function must return a DataFrame with these columns:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `game_pk` | int | MLB game id |
+| `away_team` | str | 3-letter abbrev |
+| `home_team` | str | 3-letter abbrev |
+| `model_prob` | float | Model output probability |
+| `market_prob` | float | Vig-removed market implied prob |
+| `edge` | float | `model_prob - market_prob` |
+| `kelly_pct` | float | Kelly fraction |
+| `odds` | int | American odds |
+| `stake` | float | Dollar stake |
+
+  Only rows where `edge >= cfg["min_edge"]` should be included.
+  HR runner also needs a `player` column.
+
+**Suggested approach:** share the notebook files here (or paste the
+relevant cells) and the stubs can be filled in automatically.
+
+---
+
+### 2. Replace `mlb_core.data` file I/O with `storage.py`
+`statcast.py`, `weather.py`, and `lineups.py` still read/write local files
+directly via `pd.read_csv(path)` and `f.write_bytes()`. In GCS mode these
+paths won't exist on the container.
+
+**Work needed:**
+- Replace direct `pd.read_csv(path)` calls with `storage.read_csv(key)`
+- Replace `df.to_csv(path)` calls with `storage.write_csv(df, key)`
+- Replace `f.exists()` / `f.unlink()` checks with `storage.exists(key)`
+  and `storage.delete(key)`
+- The daily cache directories (`cache_daily/`) need to become GCS prefixes
+
+---
+
+### 3. GCP infrastructure provisioning
+`deploy.sh` is written but not yet run. Before running it you need:
+
+- [ ] GCP project created and billing enabled
+- [ ] `gcloud` CLI installed and authenticated (`gcloud auth login`)
+- [ ] `PROJECT_ID` env var set
+- [ ] Discord webhook URL(s) ready
+- [ ] Model `.json` and `.pkl` files locally available to upload
+
+**Run order:**
+```bash
+export PROJECT_ID=your-project-id
+export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+./deploy/deploy.sh          # ~10 min first time (Cloud SQL provisioning)
+```
+
+Then upload models:
+```bash
+BUCKET=your-project-id-mlb-data
+gsutil -m cp -r NRFI_Pro_System/models/ gs://$BUCKET/NRFI_Pro_System/models/
+gsutil -m cp -r HR_Pro/models/          gs://$BUCKET/HR_Pro/models/
+gsutil -m cp -r F5_Pro_System/models/   gs://$BUCKET/F5_Pro_System/models/
+gsutil -m cp -r K_Pro_System/models/    gs://$BUCKET/K_Pro_System/models/
+```
+
+---
+
+### 4. End-to-end smoke test
+Once the stubs are filled and the infrastructure is up:
+
+```bash
+SERVICE_URL=$(gcloud run services describe mlb-betting \
+  --region=us-central1 --format="value(status.url)")
+
+# Step 1: data refresh only (safe, no bets logged)
+curl -X POST "$SERVICE_URL/run" \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"systems":["NRFI"],"run_type":"data"}'
+
+# Step 2: full prediction run
+curl -X POST "$SERVICE_URL/run" \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"systems":["NRFI"],"run_type":"morning"}'
+```
+
+Verify: Discord message appears, bet row written to Cloud SQL.
+
+---
+
+### 5. Historical data migration (one-time)
+The existing `Baseball_Data/` CSVs and cache files need to be uploaded to
+GCS so the nightly jobs have a baseline to append to rather than rebuilding
+from scratch.
+
+```bash
+gsutil -m cp -r ~/Downloads/Baseball_Data/ gs://$BUCKET/
+```
+
+If the files are large, use `gsutil -m` (parallel) and expect this to take
+a while on a residential connection.
+
+---
+
+### 6. Set PAPER=False when ready for live betting
+All four system configs currently have `"PAPER": True`. When you're
+satisfied with the smoke tests, update via env var or config edit and
+redeploy.
+
+---
+
+## Environment variable reference
+
+| Variable | Required on GCP | Default | Description |
+|----------|----------------|---------|-------------|
+| `MLB_GCS_BUCKET` | Yes | (empty = local) | GCS bucket name |
+| `MLB_DB_URL` | Yes | (empty = SQLite) | Cloud SQL connection string |
+| `GCP_PROJECT` | Yes | `""` | GCP project id |
+| `GCP_REGION` | No | `us-central1` | GCP region |
+| `DISCORD_WEBHOOK_URL` | Yes | (empty = no Discord) | Webhook URL |
+| `DISCORD_WEBHOOK_NRFI` | No | falls back to above | Per-system override |
+| `DISCORD_WEBHOOK_HR` | No | falls back to above | Per-system override |
+| `DISCORD_WEBHOOK_F5` | No | falls back to above | Per-system override |
+| `DISCORD_WEBHOOK_K` | No | falls back to above | Per-system override |
+| `MLB_BASE_DATA` | No | `~/Baseball_Data` | Local data root (dev) |
+| `MLB_BASE_DIR` | No | repo root | Local repo root (dev) |
+| `NRFI_BASE_DIR` | No | `<repo>/NRFI_Pro_System` | System root override |
+| `HR_BASE_DIR` | No | `<repo>/HR_Pro` | System root override |
+| `F5_BASE_DIR` | No | `<repo>/F5_Pro_System` | System root override |
+| `K_BASE_DIR` | No | `<repo>/K_Pro_System` | System root override |
+
+---
+
+## Schedule (once deployed)
+
+| Job | Cron (UTC) | ET equivalent | run_type | What it does |
+|-----|-----------|---------------|----------|--------------|
+| `mlb-betting-morning` | `0 13 * * *` | 9:00 AM | `morning` | Data refresh + predictions + Discord |
+| `mlb-betting-evening` | `0 21 * * *` | 5:00 PM | `evening` | Predictions only (updated odds) + Discord |
