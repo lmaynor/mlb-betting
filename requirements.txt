@@ -1,0 +1,12 @@
+flask
+pandas
+numpy
+xgboost
+scikit-learn
+requests
+sqlalchemy
+pg8000
+google-cloud-storage
+pytz
+scipy
+gunicorn
