@@ -55,6 +55,11 @@ cfg = {
     "model_meta":             str(BASE_DIR / "models" / "model_meta_hr_v6.json"),
     "calibrator":             str(BASE_DIR / "models" / "isotonic_calibrator_hr_v6.pkl"),
     "bet_db":                 str(BASE_DIR / "data" / "hr_bets.db"),
+# GCS keys for model files
+    "gcs_model_xgb":      "HR_Pro/models/xgb_hr_v6.json",
+    "gcs_model_meta":     "HR_Pro/models/model_meta_hr_v6.json",
+    "gcs_model_features": "HR_Pro/data/model_features.csv",
+    "gcs_calibrator":     "HR_Pro/models/isotonic_calibrator_hr_v6.pkl",
 
     # Betting params
     "min_edge":       0.03,
