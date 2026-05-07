@@ -1,11 +1,70 @@
-﻿"""
-Unified BetTracker for all systems (NRFI, HR, F5, K).
-One schema, one class. System column differentiates records.
 """
-import sqlite3
-import pandas as pd
+mlb_core.tracking.bet_tracker v2 — Cloud SQL + SQLite fallback.
+
+Changes from v1:
+  - Uses SQLAlchemy so the same code works with SQLite (dev) and
+    Cloud SQL / Postgres (GCP).
+  - Connection string comes from MLB_DB_URL env var.
+  - SQLite path falls back to the system-specific bet_db config key.
+  - Schema is unchanged so existing SQLite files are compatible.
+"""
+import os
 from pathlib import Path
-from datetime import date, datetime, timedelta
+from datetime import datetime
+
+import pandas as pd
+import sqlalchemy as sa
+from sqlalchemy import text
+
+from mlb_core.config import DB_URL
+
+
+_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS bets (
+    id             SERIAL PRIMARY KEY,
+    system         TEXT    NOT NULL,
+    game_date      TEXT,
+    game_pk        INTEGER,
+    player         TEXT,
+    away_team      TEXT,
+    home_team      TEXT,
+    bet_type       TEXT,
+    model_prob     REAL,
+    market_prob    REAL,
+    edge           REAL,
+    kelly_pct      REAL,
+    odds           INTEGER,
+    stake          REAL,
+    paper          INTEGER DEFAULT 1,
+    result         TEXT,
+    profit         REAL,
+    settled_at     TEXT,
+    notes          TEXT,
+    created_at     TEXT
+)
+"""
+
+# SQLite doesn't support SERIAL — use AUTOINCREMENT equivalent
+_SCHEMA_SQL_SQLITE = _SCHEMA_SQL.replace(
+    "id             SERIAL PRIMARY KEY",
+    "id             INTEGER PRIMARY KEY AUTOINCREMENT",
+)
+
+
+def _make_engine(db_path: str) -> sa.Engine:
+    """
+    Build a SQLAlchemy engine.
+
+    Priority:
+      1. MLB_DB_URL env var  →  Cloud SQL (Postgres via pg8000)
+      2. db_path argument    →  local SQLite
+    """
+    url = DB_URL or ""
+    if url:
+        return sa.create_engine(url)
+    sqlite_path = Path(db_path)
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    return sa.create_engine(f"sqlite:///{sqlite_path}")
 
 
 class BetTracker:
@@ -14,6 +73,9 @@ class BetTracker:
 
     Usage:
         tracker = BetTracker("C:/path/to/nrfi_bets.db", system="NRFI")
+        # or on GCP (DB_URL env var set):
+        tracker = BetTracker(db_path="unused", system="NRFI")
+
         bet_id = tracker.log_bet(
             game_date="2026-04-07",
             away_team="CHC", home_team="STL",
@@ -26,47 +88,20 @@ class BetTracker:
         tracker.settle(bet_id, result="win", profit=15.65)
     """
 
-    SCHEMA = """
-        CREATE TABLE IF NOT EXISTS bets (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            system         TEXT    NOT NULL,
-            game_date      TEXT,
-            game_pk        INTEGER,
-            player         TEXT,
-            away_team      TEXT,
-            home_team      TEXT,
-            bet_type       TEXT,
-            model_prob     REAL,
-            market_prob    REAL,
-            edge           REAL,
-            kelly_pct      REAL,
-            odds           INTEGER,
-            stake          REAL,
-            paper          INTEGER DEFAULT 1,
-            result         TEXT,
-            profit         REAL,
-            settled_at     TEXT,
-            notes          TEXT,
-            created_at     TEXT
-        )
-    """
-
     def __init__(self, db_path: str | Path, system: str):
-        """
-        Args:
-            db_path: Path to SQLite file. Created if it does not exist.
-            system:  One of 'NRFI', 'HR', 'F5', 'K'.
-        """
-        db_path = Path(db_path)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
         self.db_path = str(db_path)
-        self.system = system.upper()
+        self.system  = system.upper()
+        self.engine  = _make_engine(self.db_path)
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(self.SCHEMA)
-            conn.commit()
+        schema = (
+            _SCHEMA_SQL_SQLITE
+            if self.engine.dialect.name == "sqlite"
+            else _SCHEMA_SQL
+        )
+        with self.engine.begin() as conn:
+            conn.execute(text(schema))
 
     def log_bet(
         self,
@@ -86,63 +121,54 @@ class BetTracker:
         notes: str = "",
     ) -> int:
         """Log a bet. Returns bet_id."""
-        with sqlite3.connect(self.db_path) as conn:
-            cur = conn.execute(
-                """INSERT INTO bets
-                   (system, game_date, game_pk, player, away_team, home_team,
-                    bet_type, model_prob, market_prob, edge, kelly_pct,
-                    odds, stake, paper, notes, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    self.system, game_date, game_pk, player,
-                    away_team, home_team, bet_type,
-                    model_prob, market_prob, edge, kelly_pct,
-                    odds, stake, int(paper), notes,
-                    datetime.now().isoformat(),
-                ),
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("""
+                    INSERT INTO bets
+                        (system, game_date, game_pk, player, away_team, home_team,
+                         bet_type, model_prob, market_prob, edge, kelly_pct,
+                         odds, stake, paper, notes, created_at)
+                    VALUES
+                        (:system, :game_date, :game_pk, :player, :away_team, :home_team,
+                         :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
+                         :odds, :stake, :paper, :notes, :created_at)
+                """),
+                {
+                    "system": self.system, "game_date": game_date,
+                    "game_pk": game_pk, "player": player,
+                    "away_team": away_team, "home_team": home_team,
+                    "bet_type": bet_type, "model_prob": model_prob,
+                    "market_prob": market_prob, "edge": edge,
+                    "kelly_pct": kelly_pct, "odds": odds,
+                    "stake": stake, "paper": int(paper),
+                    "notes": notes, "created_at": datetime.now().isoformat(),
+                },
             )
-            conn.commit()
-        bet_id = cur.lastrowid
+            bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \
+                     else conn.execute(text("SELECT lastval()")).scalar()
+
         label = player if player else f"{away_team} @ {home_team}"
-        print(
-            f"  [{self.system}] Bet #{bet_id} logged: {bet_type} {label}"
-            f" | edge: {edge:+.1%}" if edge else f"  [{self.system}] Bet #{bet_id} logged"
-        )
+        edge_str = f" | edge: {edge:+.1%}" if edge is not None else ""
+        print(f"  [{self.system}] Bet #{bet_id} logged: {bet_type} {label}{edge_str}")
         return bet_id
 
     def settle(self, bet_id: int, result: str, profit: float) -> None:
-        """
-        Settle a bet.
-
-        Args:
-            bet_id: ID returned by log_bet.
-            result: 'win' or 'loss'.
-            profit: Dollar P&L (positive for win, negative for loss).
-        """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.engine.begin() as conn:
             conn.execute(
-                "UPDATE bets SET result=?, profit=?, settled_at=? WHERE id=?",
-                (result, round(profit, 2), datetime.now().isoformat(), bet_id),
+                text("UPDATE bets SET result=:r, profit=:p, settled_at=:s WHERE id=:id"),
+                {"r": result, "p": round(profit, 2),
+                 "s": datetime.now().isoformat(), "id": bet_id},
             )
-            conn.commit()
         print(f"  [{self.system}] Bet #{bet_id} settled: {result} (P&L: ${profit:+.2f})")
 
     def pending(self) -> pd.DataFrame:
-        """Return all unsettled bets."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self.engine.connect() as conn:
             return pd.read_sql(
                 "SELECT * FROM bets WHERE result IS NULL ORDER BY game_date DESC", conn
             )
 
     def summary(self, last_n: int = None, season: str = None) -> dict:
-        """
-        Print and return performance summary.
-
-        Args:
-            last_n:  Limit to last N settled bets.
-            season:  Filter by season year string e.g. '2026'.
-        """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.engine.connect() as conn:
             df = pd.read_sql("SELECT * FROM bets", conn)
 
         if df.empty:
@@ -152,9 +178,8 @@ class BetTracker:
         if season:
             df = df[df["game_date"].str.startswith(season)]
 
-        resolved = df[df["result"].notna()].copy()
+        resolved   = df[df["result"].notna()].copy()
         pending_df = df[df["result"].isna()]
-
         if last_n:
             resolved = resolved.tail(last_n)
 
@@ -165,15 +190,16 @@ class BetTracker:
 
         stats = {}
         if not resolved.empty:
-            wins = (resolved["result"] == "win").sum()
-            total_staked = resolved["stake"].sum()
-            pnl = resolved["profit"].sum()
-            roi = pnl / total_staked * 100 if total_staked > 0 else 0
-            avg_edge = resolved["edge"].mean()
-            hit_rate = wins / len(resolved)
+            wins          = (resolved["result"] == "win").sum()
+            total_staked  = resolved["stake"].sum()
+            pnl           = resolved["profit"].sum()
+            roi           = pnl / total_staked * 100 if total_staked > 0 else 0
+            avg_edge      = resolved["edge"].mean()
+            hit_rate      = wins / len(resolved)
 
             print(f"  Win rate     : {hit_rate:.1%} ({wins}/{len(resolved)})")
-            print(f"  Avg edge     : {avg_edge:+.1%}" if avg_edge == avg_edge else "  Avg edge     : N/A")
+            if avg_edge == avg_edge:
+                print(f"  Avg edge     : {avg_edge:+.1%}")
             print(f"  Total staked : ${total_staked:.2f}")
             print(f"  P&L          : ${pnl:+.2f}")
             print(f"  ROI          : {roi:+.1f}%")
@@ -193,6 +219,5 @@ class BetTracker:
         return stats
 
     def all_bets(self) -> pd.DataFrame:
-        """Return all bets as DataFrame."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self.engine.connect() as conn:
             return pd.read_sql("SELECT * FROM bets ORDER BY game_date DESC", conn)
