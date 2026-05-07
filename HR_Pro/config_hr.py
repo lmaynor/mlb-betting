@@ -60,6 +60,13 @@ cfg = {
     "gcs_model_meta":     "HR_Pro/models/model_meta_hr_v6.json",
     "gcs_model_features": "HR_Pro/data/model_features.csv",
     "gcs_calibrator":     "HR_Pro/models/isotonic_calibrator_hr_v6.pkl",
+    "gcs_player_game":      "HR_Pro/data/player_game_master.csv",
+    "gcs_batter_features":  "HR_Pro/data/batter_rolling_features.csv",
+    "gcs_pitcher_features": "HR_Pro/data/pitcher_hr_features.csv",
+    "gcs_platoon_features": "HR_Pro/data/batter_platoon_features.csv",
+    "gcs_game_features":    "HR_Pro/data/game_features_master.csv",
+    "gcs_statcast_master":  "Statcast/statcast_master.csv",
+    "gcs_weather_master":   "Weather/weather_master.csv",
 
     # Betting params
     "min_edge":       0.03,
