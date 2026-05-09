@@ -116,6 +116,18 @@ def build_features_handler():
     else:
         result = {"status": "error", "error": f"Unknown system: {system}"}
     return jsonify(result), 200
+@app.route("/build-features", methods=["POST"])
+def build_features_handler():
+    from datetime import date
+    body     = request.get_json(silent=True) or {}
+    system   = body.get("system", "HR")
+    run_date = body.get("run_date", date.today().isoformat())
+    if system == "HR":
+        from runners.build_hr_features import run
+        result = run(run_date=run_date)
+    else:
+        result = {"status": "error", "error": f"Unknown system: {system}"}
+    return jsonify(result), 200
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
