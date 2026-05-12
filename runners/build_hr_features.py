@@ -208,7 +208,16 @@ def build_player_game(sc: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
         game_date=("game_date","first"),
         home_team=("home_team","first"),
         away_team=("away_team","first"),
+        player_name=("player_name","first"),
     ).reset_index()
+    # Normalize "Last, First" -> "First Last" for Odds API matching
+    if "player_name" in opp.columns:
+        def _flip_name(n):
+            if isinstance(n, str) and "," in n:
+                parts = n.split(",", 1)
+                return parts[1].strip() + " " + parts[0].strip()
+            return n
+        opp["player_name"] = opp["player_name"].apply(_flip_name)
 
     agg = pa.groupby(["batter","game_pk"]).agg(
         hr            =("hr",           "max"),
