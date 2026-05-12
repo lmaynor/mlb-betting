@@ -42,6 +42,8 @@ _session.headers.update({"User-Agent": "mlb-betting/1.0"})
 
 MLB_LINESCORE_URL = "https://statsapi.mlb.com/api/v1/game/{game_pk}/linescore"
 
+# Pace between calls. MLB Stats API is generous but we don't want to hammer
+# it on a multi-thousand-game backfill.
 MLB_API_SLEEP_SEC = 0.25
 
 
@@ -70,6 +72,9 @@ def fetch_inning_scores(game_pk: int) -> Optional[pd.DataFrame]:
             continue
         for half_key, half_label in [("away", "top"), ("home", "bot")]:
             half = inning_data.get(half_key, {})
+            # If the bottom of the final inning wasn't played (home team won
+            # without batting), runs/hits will be missing. Skip rather than
+            # invent zeros — null is the truth.
             runs = half.get("runs")
             hits = half.get("hits")
             if runs is None and hits is None:
@@ -96,6 +101,9 @@ def fetch_scores_for_game_pks(game_pks: list, verbose: bool = True) -> pd.DataFr
 
     Returns long-format DataFrame: one row per (game_pk, inning, half).
     Failed games are logged and dropped.
+
+    For long backfills use scoring_backfill_gcs() instead — it checkpoints
+    to GCS so partial progress survives VM recycling.
     """
     frames = []
     total  = len(game_pks)
@@ -126,45 +134,94 @@ def fetch_scores_for_game_pks(game_pks: list, verbose: bool = True) -> pd.DataFr
     return out
 
 
-def scoring_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
-                          game_pks: list) -> pd.DataFrame:
-    """
-    Fetch scoring for the given game_pks, merge with existing GCS master,
-    write back. Idempotent — re-runs with overlapping game_pks dedupe on
-    (game_pk, inning, half) with keep="last".
+def _upload_scoring_csv(df: pd.DataFrame, bucket, key: str):
+    """Helper: dedupe + write a scoring DataFrame to GCS."""
+    df = df.drop_duplicates(subset=["game_pk", "inning", "half"], keep="last")
+    tmp = "/tmp/scoring_master_new.csv"
+    df.to_csv(tmp, index=False)
+    bucket.blob(key).upload_from_filename(
+        tmp, content_type="text/csv", timeout=600
+    )
+    return df
 
-    Use for initial bootstrap (pass all historical game_pks) or for daily
-    updates (pass yesterday's game_pks).
+
+def scoring_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
+                          game_pks: list,
+                          checkpoint_every: int = 1000) -> pd.DataFrame:
+    """
+    Resumable, checkpointed backfill.
+
+    On start: loads existing scoring_master.csv from GCS (if any) and skips
+    game_pks already covered. So re-running after a partial failure picks
+    up where it left off.
+
+    During run: every `checkpoint_every` games, uploads a snapshot to GCS.
+    A VM recycle mid-backfill loses at most the last `checkpoint_every`
+    games of work.
+
+    On finish: final upload writes the complete master.
+
+    Idempotent. Dedupes on (game_pk, inning, half) with keep="last".
     """
     from google.cloud import storage
-
-    logger.info(f"Scoring backfill: {len(game_pks):,} game_pks → "
-                f"gs://{gcs_bucket}/{gcs_master_key}")
-
-    new_df = fetch_scores_for_game_pks(game_pks)
-    if new_df.empty:
-        logger.warning("  No scoring rows fetched")
-        return pd.DataFrame()
 
     client = storage.Client()
     bucket = client.bucket(gcs_bucket)
     blob = bucket.blob(gcs_master_key)
 
+    # 1. Load existing master (if any) and identify what we already have
     if blob.exists():
         existing = pd.read_csv(blob.open("r"), low_memory=False)
-        logger.info(f"  Existing master: {len(existing):,} rows")
-        combined = pd.concat([existing, new_df], ignore_index=True)
+        already_have = set(existing["game_pk"].astype(int).unique())
+        logger.info(f"  Existing master: {len(existing):,} rows | "
+                    f"{len(already_have):,} games already covered")
     else:
-        logger.info("  No existing master — creating new")
-        combined = new_df
+        existing = pd.DataFrame(columns=["game_pk", "inning", "half",
+                                          "runs", "hits", "errors", "lob"])
+        already_have = set()
+        logger.info("  No existing master — starting fresh")
 
-    combined = combined.drop_duplicates(
-        subset=["game_pk", "inning", "half"], keep="last"
-    )
+    todo = [g for g in game_pks if int(g) not in already_have]
+    skipped = len(game_pks) - len(todo)
+    logger.info(f"Scoring backfill: {len(todo):,} games to fetch "
+                f"({skipped:,} already covered) → "
+                f"gs://{gcs_bucket}/{gcs_master_key}")
 
-    tmp = "/tmp/scoring_master_new.csv"
-    combined.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
-    logger.info(f"  Master updated: {len(combined):,} rows | "
-                f"{combined['game_pk'].nunique():,} games")
-    return combined
+    if not todo:
+        logger.info("  Nothing to fetch — master already complete")
+        return existing
+
+    # 2. Fetch in chunks, checkpoint every `checkpoint_every` games
+    accumulated = [existing] if not existing.empty else []
+    chunk_frames = []
+    failed = 0
+
+    for i, gpk in enumerate(todo):
+        if i > 0:
+            time.sleep(MLB_API_SLEEP_SEC)
+        df = fetch_inning_scores(gpk)
+        if df is None:
+            failed += 1
+        else:
+            chunk_frames.append(df)
+
+        # Checkpoint every N games (or at the end)
+        done = i + 1
+        is_checkpoint = (done % checkpoint_every == 0) or (done == len(todo))
+        if is_checkpoint and chunk_frames:
+            chunk_df = pd.concat(chunk_frames, ignore_index=True)
+            accumulated.append(chunk_df)
+            combined = pd.concat(accumulated, ignore_index=True)
+            combined = _upload_scoring_csv(combined, bucket, gcs_master_key)
+            # Keep memory bounded: replace the list with the deduped result
+            accumulated = [combined]
+            chunk_frames = []
+            logger.info(f"  CHECKPOINT {done}/{len(todo)} | "
+                        f"master: {len(combined):,} rows / "
+                        f"{combined['game_pk'].nunique():,} games | "
+                        f"failed so far: {failed}")
+
+    final = accumulated[-1] if accumulated else existing
+    logger.info(f"  Master updated: {len(final):,} rows | "
+                f"{final['game_pk'].nunique():,} games")
+    return final
