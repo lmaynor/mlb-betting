@@ -30,7 +30,7 @@ ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 ODDS_API_SLEEP_SEC = 1.5
 
 
-def fetch_nrfi_odds(bookmaker: str = "draftkings") -> dict:
+def fetch_nrfi_odds(bookmaker: str = "fanduel") -> dict:
     """
     Fetch NRFI/YRFI odds for today's MLB events from The Odds API.
 
