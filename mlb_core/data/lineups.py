@@ -47,6 +47,43 @@ def _get_games_for_date(date_str: str) -> list:
     return games
 
 
+def get_today_schedule(date_str: str) -> pd.DataFrame:
+    """
+    Public helper for the runners. Returns one row per game with home/away
+    team abbrevs, game start time, and probable pitcher info (id+name+throws)
+    if posted by MLB. Columns:
+        game_pk, game_date, game_time_utc, home_team, away_team,
+        home_pitcher_id, home_pitcher_name, home_pitcher_throws,
+        away_pitcher_id, away_pitcher_name, away_pitcher_throws
+
+    Probable-pitcher fields are NaN if the team hasn't announced one yet.
+    """
+    try:
+        r = _session.get(MLB_SCHEDULE_URL.format(date=date_str), timeout=30)
+        r.raise_for_status()
+    except Exception:
+        return pd.DataFrame()
+
+    rows = []
+    for d in r.json().get("dates", []):
+        for g in d.get("games", []):
+            row = {
+                "game_pk":       g["gamePk"],
+                "game_date":     date_str,
+                "game_time_utc": g.get("gameDate", ""),
+            }
+            for side in ("home", "away"):
+                tm = g["teams"][side]
+                team_name = tm.get("team", {}).get("name", "")
+                row[f"{side}_team"] = TEAM_NAME_TO_ABBREV.get(team_name, team_name)
+                pp = tm.get("probablePitcher") or {}
+                row[f"{side}_pitcher_id"]     = pp.get("id")
+                row[f"{side}_pitcher_name"]   = pp.get("fullName")
+                row[f"{side}_pitcher_throws"] = (pp.get("pitchHand") or {}).get("code")
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def _get_lineup_for_game(game_pk: int) -> pd.DataFrame:
     try:
         r = _session.get(MLB_BOXSCORE_URL.format(game_pk=game_pk), timeout=30)

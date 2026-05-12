@@ -56,6 +56,12 @@ STADIUMS: dict = {
     "WSH": (38.8730,  -77.0074, "open",        -4),
 }
 
+# Modern team-code aliases for 2026+ Statcast data.
+# 2025+ Statcast uses "AZ" instead of "ARI" and "ATH" instead of "OAK".
+# Backfill the modern keys so lookups in either era resolve to the same stadium.
+STADIUMS["AZ"]  = STADIUMS["ARI"]
+STADIUMS["ATH"] = STADIUMS["OAK"]
+
 WIND_OUT_PARKS = {"CHC", "COL", "TEX", "LAD"}
 WIND_IN_PARKS  = {"CHC", "COL", "SF", "BOS"}
 
@@ -263,6 +269,7 @@ def weather_rebuild_master(cache_dir: Path, master_path: Path,
     master = pd.concat(frames, ignore_index=True).drop_duplicates("game_pk")
     master.to_csv(master_path, index=False)
     print(f"  Weather: {len(master):,} games saved")
+
 
 def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
     """Fetch yesterday's weather, append to GCS master. No local cache needed.
