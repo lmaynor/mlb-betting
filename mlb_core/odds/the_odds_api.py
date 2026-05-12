@@ -14,6 +14,7 @@ Markets exposed here:
   fetch_k_odds()      — pitcher_strikeouts + alternates (deferred to K port)
 """
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -23,6 +24,10 @@ logger = logging.getLogger(__name__)
 # Constants match run_hr.py — same key, same base.
 ODDS_API_KEY  = "1ad27b4115b12e9893ffed40a7e2cd27"
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
+
+# Per-event request pacing to avoid 429s. The free tier appears to
+# throttle bursts of >~5 calls/sec, so sleep between per-event fetches.
+ODDS_API_SLEEP_SEC = 1.5
 
 
 def fetch_nrfi_odds(bookmaker: str = "draftkings") -> dict:
@@ -70,9 +75,14 @@ def fetch_nrfi_odds(bookmaker: str = "draftkings") -> dict:
     odds_by_event = {}
     requests_used = 0
     skipped       = 0
+    last_remaining = None
 
     # Step 2: per-event fetch of the NRFI market.
-    for event in events:
+    for idx, event in enumerate(events):
+        # Pace requests after the first one to avoid 429 rate-limiting.
+        if idx > 0:
+            time.sleep(ODDS_API_SLEEP_SEC)
+
         event_id   = event["id"]
         away_team  = event["away_team"]
         home_team  = event["home_team"]
@@ -90,6 +100,7 @@ def fetch_nrfi_odds(bookmaker: str = "draftkings") -> dict:
             r = session.get(url, params=params, timeout=30)
             r.raise_for_status()
             requests_used += 1
+            last_remaining = r.headers.get("x-requests-remaining", last_remaining)
         except Exception as e:
             logger.warning(f"NRFI odds fetch failed for {away_team}@{home_team}: {e}")
             skipped += 1
@@ -111,7 +122,8 @@ def fetch_nrfi_odds(bookmaker: str = "draftkings") -> dict:
 
     logger.info(
         f"NRFI odds: {len(odds_by_event)} games | "
-        f"{requests_used} API calls used | {skipped} skipped"
+        f"{requests_used} API calls used | {skipped} skipped | "
+        f"quota remaining: {last_remaining}"
     )
     return odds_by_event
 
