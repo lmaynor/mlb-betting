@@ -36,31 +36,6 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     from mlb_core.storage import download_model
 
     # ------------------------------------------------------------------
-    # 1. Nightly data refresh
-    # ------------------------------------------------------------------
-    if run_type in ("morning", "data"):
-        logger.info("NRFI: refreshing nightly data")
-        from mlb_core.data import statcast_nightly, weather_nightly, lineup_nightly
-        from pathlib import Path
-
-        statcast_nightly(
-            cache_dir=Path(cfg["statcast_cache_dir"]),
-            master_path=Path(cfg["statcast_master"]),
-            season_start=cfg["season_start"],
-            season_start_month=cfg["season_start_month"],
-            season_end_month=cfg["season_end_month"],
-        )
-        weather_nightly(
-            cache_dir=Path(cfg["weather_cache_dir"]),
-            master_path=Path(cfg["weather_master"]),
-        )
-        lineup_nightly(
-            cache_dir=Path(cfg["lineup_cache_dir"]),
-            master_path=Path(cfg["lineups_master"]),
-        )
-
-    if run_type == "data":
-        return {"bets_logged": 0, "message": "data refresh only"}
 
     # ------------------------------------------------------------------
     # 2. Load model
