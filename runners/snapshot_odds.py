@@ -4,8 +4,8 @@ runners/snapshot_odds.py — Fetch today's MLB slate from SGO, save to GCS.
 Runs on a Cloud Scheduler trigger via main.py's /snapshot-odds endpoint.
 
 What it does:
-  1. Calls SGO /v2/events with leagueID=MLB, oddsAvailable=true.
-  2. Costs N objects where N = number of MLB events returned.
+  1. Calls SGO /v2/events filtered to run_date in ET (00:00 → 23:59 ET).
+  2. Costs N objects where N = number of MLB events returned for that day.
   3. Writes raw JSON to GCS at two paths:
        Odds/sgo/{YYYY-MM-DD}/snapshot_{HHMM_UTC}.json   (historical archive)
        Odds/sgo/latest.json                              (runner read target)
@@ -35,6 +35,8 @@ def run(run_date: str = None) -> dict:
 
     Args:
         run_date: ISO date string ("2026-05-12"). Defaults to today (UTC).
+                  The slate is filtered to this day in ET (not UTC) so
+                  late West Coast games aren't dropped at the boundary.
 
     Returns:
         Dict with keys:
@@ -62,9 +64,9 @@ def run(run_date: str = None) -> dict:
     # Read usage before the call so we can report the delta
     usage_before = _safe_usage(client)
 
-    # Fetch the slate
+    # Fetch the slate, filtered to one ET day
     try:
-        events = client.fetch_mlb_slate()
+        events = client.fetch_mlb_slate(run_date=run_date)
     except Exception as e:
         logger.error(f"SGO snapshot: fetch failed: {e}")
         return {"status": "error", "error": f"fetch_mlb_slate: {e}"}

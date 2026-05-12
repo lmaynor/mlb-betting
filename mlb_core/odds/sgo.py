@@ -33,7 +33,9 @@ import logging
 import os
 import time
 import unicodedata
+from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -50,6 +52,11 @@ SGO_REQUEST_INTERVAL_SEC = 7.0
 # Bookmaker we read for predictions. SGO returns many; we use DK only because
 # HR Pro v6 was trained against DK lines.
 PRIMARY_BOOKMAKER = "draftkings"
+
+# Slate windowing is done in Eastern Time. MLB schedules are reported in ET
+# and a "today" in ET maps cleanly to the local game day. UTC would
+# misclassify late West Coast games into "tomorrow".
+_ET = ZoneInfo("America/New_York")
 
 # Market families. Prefixes are confirmed against a real CLE-LAA event payload
 # (2026-05-12) and match what the SGO docs publish.
@@ -76,6 +83,23 @@ def normalize_name(name: str) -> str:
     n = unicodedata.normalize("NFD", name)
     n = "".join(c for c in n if unicodedata.category(c) != "Mn")
     return n.encode("ascii", "ignore").decode().lower().strip()
+
+
+def et_day_window(run_date: str) -> tuple[str, str]:
+    """Return (startsAfter, startsBefore) as ISO strings with ET offset.
+
+    A "day" is 00:00:00 ET to 23:59:59 ET on `run_date`. Returned strings
+    include explicit offset so SGO interprets them in ET regardless of its
+    server timezone. zoneinfo handles DST transitions correctly.
+
+    Example:
+      et_day_window("2026-05-12")
+        → ("2026-05-12T00:00:00-04:00", "2026-05-12T23:59:59-04:00")
+    """
+    y, m, d = (int(x) for x in run_date.split("-"))
+    start = datetime(y, m, d, 0, 0, 0, tzinfo=_ET)
+    end   = datetime(y, m, d, 23, 59, 59, tzinfo=_ET)
+    return start.isoformat(), end.isoformat()
 
 
 def _dk_odds_int(odd_entry: dict) -> Optional[int]:
@@ -164,28 +188,40 @@ class SgoClient:
         body = self._get("/v2/account/usage")
         return body.get("data", body)
 
-    def fetch_mlb_slate(self, odds_available: bool = True,
+    def fetch_mlb_slate(self, run_date: str | None = None,
+                         odds_available: bool = True,
                          limit: int = 50) -> list[dict]:
-        """Fetch today's MLB slate with all markets.
+        """Fetch MLB events for one ET day.
 
-        One call returns every game with every market — billed as one
-        object per event.
+        One call returns every game in the window with every market —
+        billed as one object per event. Without `run_date`, SGO returns
+        every event with posted odds (today through ~5 days out), so always
+        pass run_date in production.
 
         Args:
+            run_date:       ISO date "YYYY-MM-DD". Filters to events whose
+                            start time falls within that ET calendar day.
+                            If None, no date filter is applied (use only
+                            for diagnostics).
             odds_available: When True (default) only returns events with
-                            posted odds. Excludes far-future games.
+                            posted odds.
             limit:          Max events per page. MLB never exceeds ~17 games
-                            per day, so the default 50 is safe ceiling.
+                            per day; default 50 is a safe ceiling.
 
         Returns:
-            List of event dicts. Empty list on API error or off-season.
+            List of event dicts. Empty list on API error or empty slate.
         """
+        params: dict = {
+            "leagueID":      "MLB",
+            "oddsAvailable": "true" if odds_available else "false",
+            "limit":         str(limit),
+        }
+        if run_date:
+            starts_after, starts_before = et_day_window(run_date)
+            params["startsAfter"]  = starts_after
+            params["startsBefore"] = starts_before
         try:
-            body = self._get("/v2/events", {
-                "leagueID":      "MLB",
-                "oddsAvailable": "true" if odds_available else "false",
-                "limit":         str(limit),
-            })
+            body = self._get("/v2/events", params)
         except Exception as e:
             logger.error(f"SGO fetch_mlb_slate failed: {e}")
             return []
