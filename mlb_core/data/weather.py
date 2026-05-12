@@ -263,3 +263,40 @@ def weather_rebuild_master(cache_dir: Path, master_path: Path,
     master = pd.concat(frames, ignore_index=True).drop_duplicates("game_pk")
     master.to_csv(master_path, index=False)
     print(f"  Weather: {len(master):,} games saved")
+
+def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
+    """Fetch yesterday's weather, append to GCS master. No local cache needed.
+
+    Mirrors statcast_nightly_gcs(): pulls one day from Open-Meteo archive via
+    the existing _pull_weather_date() helper, then concat+dedupe against the
+    GCS master CSV and write back using upload_from_filename.
+    """
+    from google.cloud import storage
+
+    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    print(f"Weather nightly (GCS): {yesterday}")
+
+    new_df = _pull_weather_date(yesterday, is_forecast=False)
+    if new_df.empty:
+        print("  No weather data for yesterday")
+        return
+    print(f"  Fetched {len(new_df):,} games")
+
+    client = storage.Client()
+    bucket = client.bucket(gcs_bucket)
+    blob = bucket.blob(gcs_master_key)
+
+    if blob.exists():
+        existing = pd.read_csv(blob.open("r"), low_memory=False)
+        print(f"  Existing master: {len(existing):,} rows")
+        combined = pd.concat([existing, new_df], ignore_index=True)
+    else:
+        print("  No existing master - creating new")
+        combined = new_df
+
+    combined = combined.drop_duplicates(subset=["game_pk"], keep="last")
+
+    tmp = "/tmp/weather_master_new.csv"
+    combined.to_csv(tmp, index=False)
+    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    print(f"  Master updated: {len(combined):,} rows | through {yesterday}")
