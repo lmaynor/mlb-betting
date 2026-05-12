@@ -1,0 +1,86 @@
+Here's the full breakdown of all four notebooks:
+
+---
+
+## System Overview
+
+All four are MLB betting models in a shared ecosystem. They scrape DraftKings, generate XGBoost predictions, size bets via Kelly criterion, and log to a SQLite tracker. All are `paper_mode=True` — no live money until 200 settled bets confirm edge.
+
+Shared infra (`mlb_core`) handles: Statcast pulls, weather, odds utils, Kelly math, BetTracker, and the XGBModel base class. Each notebook owns its feature engineering, which is where the actual signal lives.
+
+---
+
+## NRFI Pro v17
+
+**Purpose:** Predict whether the first inning of an MLB game ends scoreless (No Run First Inning).
+
+**Model:** XGBoost binary classifier, `binary:logistic`. One prediction per *half-inning*, combined as:
+`P(YRFI_game) = 1 - (1 - P_top) * (1 - P_bot)`
+
+**Data:** Statcast filtered to `inning=1` only. ~491k pitches, 2019–2025.
+
+**42 features** across: pitcher rolling L3/L10 (zone%, whiff%, K%, xwOBA, velo), batter quality (top-3 lineup slot wOBA/hard-hit rolling L50), weather (temp, wind direction/speed, indoor flag), park factors, umpire tendencies, and handedness splits (wOBA vs L/R, lineup LHB fraction, platoon edge).
+
+**Key assumption:** Top-3 lineup slots are a sufficient proxy for lineup quality. Full 9-batter aggregation was tested and didn't improve signal.
+
+**Performance:** Walk-forward AUC 0.587 (CI [0.571, 0.603]). One known rigor flag: overfit gap 0.093 (threshold is 0.03) — likely from small test set size, but worth watching.
+
+**Daily flow:** Pull Statcast nightly → scrape DK NRFI market → build features → generate half-inning predictions → combine → Kelly sizing → log bets.
+
+---
+
+## HR Pro v6
+
+**Purpose:** Predict whether a specific batter hits a home run in a given game.
+
+**Model:** XGBoost binary classifier, `binary:logistic`. One row per batter-game pair.
+
+**22 features** (post-SHAP pruning): batter rolling HR rate, barrel%, exit velocity, launch angle, handedness splits vs opposing pitcher, opposing pitcher HR-allowed rolling stats, park factor, wind/temp, implied win probability.
+
+**Performance:** AUC 0.6331, calibration gap 0.0011, overfit gap 0.0148. Best metrics of the four systems.
+
+**Known issue:** Flat 7% vig strip introduces Kelly sizing bias. Flagged for fix after 200 settled bets.
+
+**Settlement:** Checks `events == 'home_run'` in Statcast against logged bets.
+
+---
+
+## F5 Pro v4
+
+**Purpose:** Predict whether the home team wins the first 5 innings of an MLB game.
+
+**Model:** XGBoost binary classifier, `binary:logistic`. One row per game.
+
+**44 features:** Starter rolling stats for both sides, team-level rolling xwOBA and hard-hit rates, and a cross-system join that pulls NRFI pitcher features (`build_nrfi_features()`). Weather, park, umpire included.
+
+**Performance:** Walk-forward mean AUC 0.597.
+
+**Key implementation detail:** DK scraper filters `betOfferTypeId == 2` to avoid full-game moneyline bleed-through. There's a pending confirmation that `marketType.id == "1_39"` is the correct exclusion filter.
+
+**F5 outcome derivation:** `_compute_f5_outcome()` derives win/loss from Statcast score data — no separate results feed.
+
+---
+
+## K Pro v1
+
+**Purpose:** Predict pitcher strikeout totals and find edges on DK K props (O/U lines and ladder rungs).
+
+**Model:** XGBoost Poisson regressor (`count:poisson`) predicts lambda (expected K count). Then Monte Carlo (N=10,000 simulations) converts lambda to a full probability distribution, and edges are calculated independently per O/U line and per ladder rung.
+
+**Features:** Pitcher rolling K%, swinging strike rate, zone%, count-leverage stats (`balls`/`strikes` available 2021+), opponent K rate and top-3 batter K rate, umpire K boost, is_home, implied win probability, temp, dome flag. `bat_speed` explicitly excluded — 2024+ only, breaks walk-forward CV.
+
+**Performance target:** MAE < 1.2 Ks, R² > 0.15, calibration within 5% of mean actual.
+
+**DK scraper:** Two URLs — standard O/U (`strikeouts-o-u`) and ladder (`strikeouts` with `k_1plus` through `k_8plus`).
+
+**Settlement:** Uses boxscore `strikeOuts` field, not Statcast pitch events.
+
+---
+
+## Shared Assumptions Across All Systems
+
+- Statcast master CSV is single source of truth — `statcast_master.csv` replaces all prior per-system files
+- Walk-forward CV folds: train on prior years, test on next (2023/2024/2025 folds)
+- All systems use Kelly with fractional sizing, capped at `max_kelly_pct`
+- No live deployment until paper trading gate (200 bets) is cleared on each system
+- Cloud deployment (GCP e2-small + GCS) deferred until gates clear
