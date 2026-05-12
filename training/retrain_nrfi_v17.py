@@ -46,6 +46,22 @@ logger = logging.getLogger(__name__)
 
 VERSION = "v17"
 
+# NOTE: lineup_pct_L was removed from HALFINN_FEATURES on 2026-05-12 after
+# diagnosing AUC inflation in the deployed retrain Job. With lineup_pct_L
+# in the feature set, test AUC was 0.7763 (train 0.8069). With it removed,
+# AUC drops to 0.5765 (train 0.7011), matching the notebook's documented
+# v16/v17 OOS performance (~0.59). lineup_pct_L has only 50 unique values
+# (fractions of LHB count in top 3 batters) and corr(lineup_pct_L, yrfi)
+# = -0.0294 — pairwise signal is noise-level. The 0.20 AUC contribution
+# came from non-linear interactions that, combined with weather/umpire/
+# park features, fingerprint individual games. platoon_edge (a derived
+# feature: woba_split_STD * (lineup_pct_L - 0.40)) was diagnosed
+# separately — it adds ~0.04 AUC of independent signal (15k unique values,
+# corr -0.10 with lineup_pct_L) so it stays. The other handedness
+# features (woba_vs_L_STD, woba_vs_R_STD, woba_split_STD) contribute
+# essentially zero on their own (~0.002 AUC) but stay for notebook parity.
+# If reintroducing lineup_pct_L, re-run the leave-one-out diagnostic on
+# fresh data first. See session transcript 2026-05-12 for full analysis.
 HALFINN_FEATURES = [
     # Pitcher rolling (last 3 starts)
     "zone_pct_L3", "chase_pct_L3", "whiff_pct_L3", "k_pct_L3", "bb_pct_L3",
@@ -67,7 +83,7 @@ HALFINN_FEATURES = [
     "ump_overall_accuracy_L30", "ump_total_run_impact_L30", "ump_consistency_L30",
     # Platoon splits
     "woba_vs_L_STD", "woba_vs_R_STD", "woba_split_STD",
-    "lineup_pct_L", "platoon_edge",
+    "platoon_edge",  # lineup_pct_L removed 2026-05-12 — see comment above HALFINN_FEATURES
 ]
 
 XGB_PARAMS = {
