@@ -20,6 +20,7 @@ Environment variables required:
     DISCORD_WEBHOOK_URL     Discord webhook (or per-system variants)
     GCP_PROJECT             GCP project id
     MLB_BASE_DATA           (optional, for local dev)
+    SGO_API_KEY             SportsGameOdds API key
 """
 import os
 import sys
@@ -116,6 +117,32 @@ def build_features_handler():
     else:
         result = {"status": "error", "error": f"Unknown system: {system}"}
     return jsonify(result), 200
+
+
+@app.route("/snapshot-odds", methods=["POST"])
+def snapshot_odds_handler():
+    """Trigger one SGO slate fetch and write the snapshot to GCS.
+
+    Called by Cloud Scheduler twice daily (15:00 and 21:00 UTC).
+    Costs ~N MLB games' worth of SGO objects per call.
+    """
+    body = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", date.today().isoformat())
+    try:
+        from runners.snapshot_odds import run as snapshot_run
+        result = snapshot_run(run_date=run_date)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"snapshot-odds failed:\n{tb}")
+        try:
+            from mlb_core.notify.discord import post_error
+            post_error("SGO", f"Snapshot crashed:\n```\n{tb[:1500]}\n```", run_date)
+        except Exception:
+            pass
+        return jsonify({"status": "error", "error": str(e)}), 500
+    http_status = 200 if result.get("status") == "ok" else 500
+    return jsonify(result), http_status
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))

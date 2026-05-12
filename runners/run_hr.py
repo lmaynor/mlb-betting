@@ -1,7 +1,7 @@
 """
 runners/run_hr.py — HR Pro daily runner for Cloud Run.
 
-Odds source: The Odds API (batter_home_runs market, over 0.5 = anytime HR)
+Odds source: SGO snapshot at Odds/sgo/latest.json (written by snapshot_odds.py)
 Feature source: GCS model_features.csv (pre-built, updated nightly)
 Model: xgb_hr_v6.json loaded from GCS
 
@@ -20,11 +20,7 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
-# ── The Odds API ──────────────────────────────────────────────────────────
-ODDS_API_KEY = "1ad27b4115b12e9893ffed40a7e2cd27"
-ODDS_API_BASE = "https://api.the-odds-api.com/v4"
-
-# HR_FEATURES — 35 features from full retrain (post-SHAP prune)
+# HR_FEATURES — 34 features from full retrain (post-SHAP prune)
 HR_FEATURES = [
     "batter_hr_rate_L50",
     "batter_barrel_rate_L50",
@@ -51,7 +47,6 @@ HR_FEATURES = [
     "pull_side_dist",
     "pitcher_high_fb_pct_L50",
     "batter_barrel_rate_L20",
-    "batter_launch_speed_L20",
     "batter_whiff_pct_L20",
     "batter_hr_zone_rate_L20",
     "cf_dist",
@@ -66,67 +61,30 @@ HR_FEATURES = [
 
 def _fetch_hr_odds(run_date: str) -> dict:
     """
-    Fetch anytime HR odds from The Odds API.
-    Returns dict: {player_name: {"odds": int, "game_id": str}}
+    Fetch anytime HR odds from the latest SGO snapshot in GCS.
+
+    Returns the same dict shape the old Odds-API-based function did:
+        {player_name: {"odds": int,
+                       "away_team": str,
+                       "home_team": str,
+                       "event_id": str}}
+
+    Reads Odds/sgo/latest.json which is written twice daily by
+    runners.snapshot_odds. If the snapshot is missing or stale, returns
+    an empty dict and the caller will produce no bets.
+
+    Cost: 0 SGO objects (this reads the cached snapshot, not the live API).
     """
-    session = requests.Session()
-    session.headers.update({"User-Agent": "mlb-betting/1.0"})
+    from mlb_core.odds import sgo
 
-    # Get today's events
-    events_url = f"{ODDS_API_BASE}/sports/baseball_mlb/events"
-    r = session.get(events_url, params={"apiKey": ODDS_API_KEY}, timeout=30)
-    r.raise_for_status()
-    events = r.json()
-
+    events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
-        logger.warning("HR odds: no MLB events found")
+        logger.warning("HR odds: SGO snapshot empty or missing")
         return {}
 
-    player_odds = {}
-    requests_used = 0
-
-    for event in events:
-        event_id   = event["id"]
-        away_team  = event["away_team"]
-        home_team  = event["home_team"]
-
-        url = f"{ODDS_API_BASE}/sports/baseball_mlb/events/{event_id}/odds"
-        params = {
-            "apiKey":      ODDS_API_KEY,
-            "regions":     "us",
-            "markets":     "batter_home_runs",
-            "oddsFormat":  "american",
-            "bookmakers":  "draftkings",
-        }
-        try:
-            r = session.get(url, params=params, timeout=30)
-            r.raise_for_status()
-            requests_used += 1
-        except Exception as e:
-            logger.warning(f"HR odds fetch failed for {away_team}@{home_team}: {e}")
-            continue
-
-        data = r.json()
-        for bm in data.get("bookmakers", []):
-            if bm["key"] != "draftkings":
-                continue
-            for market in bm.get("markets", []):
-                if market["key"] != "batter_home_runs":
-                    continue
-                for outcome in market.get("outcomes", []):
-                    # over 0.5 = anytime HR
-                    if outcome.get("name") == "Over" and outcome.get("point") == 0.5:
-                        player_name = outcome.get("description", "")
-                        if player_name:
-                            player_odds[player_name] = {
-                                "odds":      outcome["price"],
-                                "away_team": away_team,
-                                "home_team": home_team,
-                                "event_id":  event_id,
-                            }
-
-    logger.info(f"HR odds: {len(player_odds)} players | {requests_used} API calls used")
-    return player_odds
+    props = sgo.extract_hr_props(events)
+    logger.info(f"HR odds: {len(props)} players from SGO snapshot")
+    return props
 
 
 def _load_model(cfg: dict) -> xgb.Booster:
@@ -504,7 +462,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("HR: no candidate batter-game rows — skipping predictions")
         return pd.DataFrame()
 
-    # 3. Fetch odds
+    # 3. Fetch odds (from SGO snapshot)
     player_odds = _fetch_hr_odds(run_date)
     if not player_odds:
         logger.warning("HR: no odds available — skipping predictions")
