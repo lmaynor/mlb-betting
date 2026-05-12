@@ -349,47 +349,38 @@ def build_batter_rolling(sc: pd.DataFrame, existing: pd.DataFrame, lookback_days
             on=["batter","game_pk"], how="left"
         )
 
-    # Rolling windows
-    game_agg = game_agg.sort_values(["batter","game_date"]).reset_index(drop=True)
-
-    def rolling_mean(g, col, n):
-        return g[col].shift(1).rolling(n, min_periods=max(1, n//2)).mean()
-
+    # Concat keep + new rows first, then compute rolling on full history
+    combined = pd.concat([keep, game_agg], ignore_index=True)
+    combined.drop_duplicates(subset=["batter","game_pk"], keep="last", inplace=True)
+    combined = combined.sort_values(["batter","game_date"]).reset_index(drop=True)
+    # Drop stale rolling cols so they get recomputed on full history
+    rolling_cols = [c for c in combined.columns if c.startswith("batter_") and
+                    any(c.endswith(s) for s in ["_L20","_L50","_season","_vs_lhp","_vs_rhp"])]
+    combined = combined.drop(columns=rolling_cols, errors="ignore")
     def season_mean(g, col):
         return g.groupby("season")[col].transform(lambda x: x.shift(1).expanding().mean())
-
     for col, alias in [
-        ("hr_game","hr"), ("barrel_game","barrel_rate"), ("hard_hit_game","hard_hit"),
+        ("hr_game","hr_rate"), ("barrel_game","barrel_rate"), ("hard_hit_game","hard_hit"),
         ("xwoba_game","xwoba"), ("ev_game","launch_speed"), ("ev_max_game","max_ev"),
         ("la_std_game","la_std"), ("fb_game","fb_rate"), ("sweet_spot_game","sweetspot_rate"),
         ("hr_zone_game","hr_zone_rate"), ("hr_per_fb_game","hr_per_fb"),
     ]:
-        if col not in game_agg.columns: continue
-        game_agg[f"batter_{alias}_L20"] = game_agg.groupby("batter")[col].transform(
+        if col not in combined.columns: continue
+        combined[f"batter_{alias}_L20"] = combined.groupby("batter")[col].transform(
             lambda x: x.shift(1).rolling(20, min_periods=5).mean()
         )
-        game_agg[f"batter_{alias}_L50"] = game_agg.groupby("batter")[col].transform(
+        combined[f"batter_{alias}_L50"] = combined.groupby("batter")[col].transform(
             lambda x: x.shift(1).rolling(50, min_periods=10).mean()
         )
-        game_agg[f"batter_{alias}_season"] = season_mean(game_agg, col)
-
+        combined[f"batter_{alias}_season"] = season_mean(combined, col)
     for col, alias in [
         ("whiff_pct","whiff_pct"), ("chase_pct","chase_pct"), ("zone_contact_pct","zone_contact_pct"),
     ]:
-        if col not in game_agg.columns: continue
-        game_agg[f"batter_{alias}_L20"] = game_agg.groupby("batter")[col].transform(
+        if col not in combined.columns: continue
+        combined[f"batter_{alias}_L20"] = combined.groupby("batter")[col].transform(
             lambda x: x.shift(1).rolling(20, min_periods=5).mean()
         )
-
-    # HR vs handedness (needs p_throws from player_game)
-    if "p_throws" in sc.columns:
-        hand_pa = pa.copy()
-        hand_pa["p_throws"] = sc.loc[hand_pa.index, "p_throws"] if "p_throws" in sc.columns else np.nan
-
-    combined = pd.concat([keep, game_agg], ignore_index=True)
-    combined.drop_duplicates(subset=["batter","game_pk"], keep="last", inplace=True)
-    combined = combined.sort_values(["batter","game_date"]).reset_index(drop=True)
-    logger.info(f"  +{len(game_agg):,} recalculated | Total: {len(combined):,} | L20 coverage: {combined['batter_hr_rate_L20'].notna().mean():.1%}")
+    logger.info(f"  +{len(game_agg):,} recalculated | Total: {len(combined):,} | L20 coverage: {combined['batter_hr_rate_L20'].notna().mean():.1%}" if 'batter_hr_rate_L20' in combined.columns else f"  +{len(game_agg):,} recalculated | Total: {len(combined):,}")
     return combined
 
 
