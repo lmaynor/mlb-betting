@@ -693,7 +693,14 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     # ── 1. Nightly data refresh ──────────────────────────────────────────
     if run_type in ("morning", "data"):
         logger.info("HR features: refreshing nightly data")
-        statcast_nightly(
+        if GCS_BUCKET:
+            from mlb_core.data.statcast import statcast_nightly_gcs
+            statcast_nightly_gcs(
+                gcs_bucket=GCS_BUCKET,
+                gcs_master_key=cfg.get("gcs_statcast_master", "Statcast/statcast_master.csv"),
+            )
+        else:
+            statcast_nightly(
             cache_dir=Path(cfg["statcast_cache_dir"]),
             master_path=Path(cfg["statcast_master"]),
             season_start=cfg["season_start"],

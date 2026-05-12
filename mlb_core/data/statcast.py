@@ -234,3 +234,41 @@ def load_statcast(master_path: Path, inning: int | None = None) -> pd.DataFrame:
     if inning is not None:
         df = df[pd.to_numeric(df["inning"], errors="coerce") == inning].copy()
     return df
+
+def statcast_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
+    """Fetch yesterday, append to GCS master. No local cache needed."""
+    from google.cloud import storage
+    from io import BytesIO
+
+    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    print(f"Statcast nightly (GCS): {yesterday}")
+
+    csv_text = _fetch_day(yesterday)
+    if csv_text is None:
+        print("  No data for yesterday")
+        return
+
+    new_df = pd.read_csv(StringIO(csv_text))
+    if new_df.empty:
+        print("  Empty response")
+        return
+
+    available = [c for c in STATCAST_FIELDS if c in new_df.columns]
+    new_df = new_df[available]
+    print(f"  Fetched {len(new_df):,} pitches")
+
+    client = storage.Client()
+    bucket = client.bucket(gcs_bucket)
+    blob = bucket.blob(gcs_master_key)
+
+    existing = pd.read_csv(blob.open("r"), low_memory=False)
+    print(f"  Existing master: {len(existing):,} rows")
+
+    combined = pd.concat([existing, new_df], ignore_index=True)
+    dedup_cols = [c for c in ["game_pk", "batter", "at_bat_number", "pitch_number"] if c in combined.columns]
+    combined = combined.drop_duplicates(subset=dedup_cols)
+
+    tmp = "/tmp/statcast_master_new.csv"
+    combined.to_csv(tmp, index=False)
+    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    print(f"  Master updated: {len(combined):,} rows | through {yesterday}")
