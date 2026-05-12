@@ -707,10 +707,11 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             season_start_month=cfg["season_start_month"],
             season_end_month=cfg["season_end_month"],
         )
-        weather_nightly(
-            cache_dir=Path(cfg["weather_cache_dir"]),
-            master_path=Path(cfg["weather_master"]),
-        )
+        if not GCS_BUCKET:
+            weather_nightly(
+                cache_dir=Path(cfg["weather_cache_dir"]),
+                master_path=Path(cfg["weather_master"]),
+            )
 
     # ── 2. Load Statcast ─────────────────────────────────────────────────
     logger.info("HR features: loading Statcast")
