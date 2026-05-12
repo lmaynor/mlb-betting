@@ -3,6 +3,7 @@ from pathlib import Path
 
 # -- GCS (Cloud Run) vs local (Windows) ---------------------------------------
 GCS_BUCKET = os.environ.get("MLB_GCS_BUCKET", "")
+DB_URL = os.environ.get("MLB_DB_URL", "")
 BASE_DATA  = Path(os.environ.get("MLB_BASE_DATA", r"C:\Users\lmayn\Downloads\Baseball_Data"))
 
 # -- Shared data paths ---------------------------------------------------------
