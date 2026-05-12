@@ -20,43 +20,11 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
-# HR_FEATURES — 34 features from full retrain (post-SHAP prune)
-HR_FEATURES = [
-    "batter_hr_rate_L50",
-    "batter_barrel_rate_L50",
-    "batter_hr_rate_season",
-    "batter_hr_rate_vs_hand",
-    "batter_max_ev_L20",
-    "hr_park_factor_hand",
-    "temperature_f",
-    "hr_park_factor",
-    "batter_launch_speed_L20",
-    "pitcher_fb_rate_L50",
-    "batter_zone_contact_pct_L20",
-    "batter_chase_pct_L20",
-    "batter_hr_rate_vs_hand_season",
-    "pitcher_hard_hit_L50",
-    "batter_hr_per_fb_L20",
-    "pitcher_xwoba_L50",
-    "altitude_ft",
-    "air_density",
-    "pitcher_barrel_rate_L50",
-    "batter_sweetspot_rate_L20",
-    "batter_xwoba_season",
-    "pitcher_fb_pct_L50",
-    "pull_side_dist",
-    "pitcher_high_fb_pct_L50",
-    "batter_barrel_rate_L20",
-    "batter_whiff_pct_L20",
-    "batter_hr_zone_rate_L20",
-    "cf_dist",
-    "batter_xwoba_L20",
-    "ewma_batting_order",
-    "implied_win_pct",
-    "batter_hr_vs_lhp",
-    "batter_hr_vs_rhp",
-    "batter_hr_vs_lhp_season",
-]
+# Feature list is loaded from model_meta_hr_v6.json at predict time — see
+# _load_model below. The previous hardcoded HR_FEATURES drifted from the
+# trained model (34 listed vs 22 in the model) and caused
+# `feature_names mismatch` errors at predict time once SGO odds started
+# returning data. Authoritative list lives with the model artifact.
 
 
 def _fetch_hr_odds(run_date: str) -> dict:
@@ -87,31 +55,62 @@ def _fetch_hr_odds(run_date: str) -> dict:
     return props
 
 
-def _load_model(cfg: dict) -> xgb.Booster:
-    """Load XGB model from GCS or local path."""
-    from mlb_core.config import GCS_BUCKET
-    from mlb_core.storage import download_model
+def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict]:
+    """Load HR XGBoost model + its trained feature list + training means.
 
-    if GCS_BUCKET:
-        with tempfile.TemporaryDirectory() as tmpdir:
+    Returns (booster, features, feature_means).
+      - `features` comes from the model_meta's `features` key. If the meta
+        is missing in GCS, falls back to `booster.feature_names` (set by
+        XGBoost when the model was trained with named features). Raises
+        only if both are unavailable.
+      - `feature_means` is used to fill NaN at predict time. Empty dict if
+        meta has no such key — XGBoost handles NaN natively.
+    """
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import download_model, read_bytes, exists
+
+    booster = xgb.Booster()
+    meta = {}
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if GCS_BUCKET:
             local = download_model(
                 cfg.get("gcs_model_xgb", cfg["model_xgb"]),
                 Path(tmpdir) / "xgb_hr.json",
             )
-            booster = xgb.Booster()
             booster.load_model(str(local))
-    else:
-        booster = xgb.Booster()
-        booster.load_model(cfg["model_xgb"])
+            meta_key = cfg.get("gcs_model_meta")
+            if meta_key and exists(meta_key):
+                try:
+                    meta = json.loads(read_bytes(meta_key))
+                except Exception as e:
+                    logger.warning(f"HR meta load failed ({meta_key}): {e}")
+        else:
+            booster.load_model(cfg["model_xgb"])
+            meta_path = Path(cfg["model_meta"])
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_bytes())
+                except Exception as e:
+                    logger.warning(f"HR meta load failed ({meta_path}): {e}")
 
-    meta_path = Path(cfg["model_meta"])
-    if meta_path.exists():
-        with open(meta_path) as f:
-            meta = json.load(f)
-        booster.best_ntree_limit = meta.get("best_iteration", 0)
-        logger.info(f"HR model loaded | AUC={meta.get('auc_oos','?')} | "
-                    f"features={len(meta.get('features', HR_FEATURES))}")
-    return booster
+    features = meta.get("features")
+    if not features:
+        # Fall back to feature names embedded in the booster JSON itself
+        features = list(getattr(booster, "feature_names", []) or [])
+        if features:
+            logger.warning(f"HR meta missing or has no 'features' key — "
+                           f"falling back to booster.feature_names "
+                           f"({len(features)} features)")
+        else:
+            raise RuntimeError("HR features unavailable: meta missing and "
+                               "booster.feature_names is empty")
+
+    feature_means = meta.get("feature_means", {}) or {}
+    booster.best_ntree_limit = meta.get("best_iteration", 0)
+    logger.info(f"HR model loaded | features={len(features)} | "
+                f"feature_means={len(feature_means)} | "
+                f"AUC={meta.get('auc_oos', '?')}")
+    return booster, features, feature_means
 
 
 def _normalize_name(name: str) -> str:
@@ -453,8 +452,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     """
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
 
-    # 1. Load model
-    booster = _load_model(cfg)
+    # 1. Load model + its trained feature list
+    booster, features, feature_means = _load_model(cfg)
 
     # 2. Build today's live feature rows
     feat_df = _build_today_feature_rows(cfg, run_date)
@@ -468,14 +467,23 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("HR: no odds available — skipping predictions")
         return pd.DataFrame()
 
-    # 4. Score all players
-    avail = [f for f in HR_FEATURES if f in feat_df.columns]
-    missing = set(HR_FEATURES) - set(avail)
+    # 4. Score all players. Reindex to the model's exact feature list (in
+    #    its exact order) so XGBoost doesn't reject the DMatrix. Missing
+    #    cols become NaN, then get filled with training means if the meta
+    #    provided them.
+    missing = [f for f in features if f not in feat_df.columns]
     if missing:
-        logger.warning(f"HR: {len(missing)} features missing: {list(missing)[:5]}")
-
-    X = feat_df[avail].apply(pd.to_numeric, errors="coerce").astype(float)
-    dm = xgb.DMatrix(X, feature_names=avail)
+        logger.warning(f"HR: {len(missing)} features missing from input: "
+                       f"{missing[:5]}")
+    X = feat_df.reindex(columns=features).apply(pd.to_numeric, errors="coerce")
+    if feature_means:
+        for col in features:
+            mean = feature_means.get(col)
+            if mean is None:
+                continue
+            X[col] = X[col].fillna(float(mean))
+    X = X.astype(float)
+    dm = xgb.DMatrix(X, feature_names=features)
     ntree = getattr(booster, "best_ntree_limit", 0)
     preds = booster.predict(dm, iteration_range=(0, ntree) if ntree else None)
     feat_df = feat_df.copy()

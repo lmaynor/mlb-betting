@@ -19,6 +19,7 @@ COPY HR_Pro/          ./HR_Pro/
 COPY F5_Pro_System/   ./F5_Pro_System/
 COPY K_Pro_System/    ./K_Pro_System/
 COPY runners/         ./runners/
+COPY training/        ./training/
 COPY main.py          .
 COPY setup.py         .
 
