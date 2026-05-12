@@ -114,6 +114,12 @@ def build_features_handler():
     if system == "HR":
         from runners.build_hr_features import run
         result = run(run_date=run_date)
+    elif system == "NRFI":
+        from runners.build_nrfi_features import run
+        result = run(run_date=run_date)
+    elif system == "F5":
+        from runners.build_f5_features import run
+        result = run(run_date=run_date)
     else:
         result = {"status": "error", "error": f"Unknown system: {system}"}
     return jsonify(result), 200

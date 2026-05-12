@@ -67,6 +67,8 @@ _NRFI_OVER_ID     = "points-all-1i-ou-over"
 _NRFI_UNDER_ID    = "points-all-1i-ou-under"
 _F5_OVER_ID       = "points-all-1ix5-ou-over"
 _F5_UNDER_ID      = "points-all-1ix5-ou-under"
+_F5_ML_HOME_ID    = "points-home-1ix5-ml-home"    # F5 moneyline, home side
+_F5_ML_AWAY_ID    = "points-away-1ix5-ml-away"    # F5 moneyline, away side
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -466,6 +468,64 @@ def extract_f5_odds(events: list[dict]) -> dict:
         }
 
     logger.info(f"SGO extract_f5_odds: {len(out)} events with DK prices")
+    return out
+
+
+def extract_f5_ml_odds(events: list[dict]) -> dict:
+    """Extract first-5-innings two-way moneyline odds for every event.
+
+    F5 Pro v5 bets the moneyline (home wins F5 vs away wins F5), not the
+    totals over/under. SGO exposes this as a two-sided market with home and
+    away as separate oddIDs; pull both for each event.
+
+    Returns:
+        {
+          event_id: {
+            "away_team":     str,
+            "home_team":     str,
+            "commence_time": str,
+            "home_odds":     int,    # DK American for home to win F5
+            "away_odds":     int,    # DK American for away to win F5
+            "bookmaker":     "draftkings",
+            "fair_home":     int,    # SGO no-vig home
+            "fair_away":     int,    # SGO no-vig away
+            "open_home":     int,    # opening home
+            "open_away":     int,    # opening away
+          },
+          ...
+        }
+    """
+    out: dict = {}
+    for event in events:
+        odds = event.get("odds") or {}
+        home_entry = odds.get(_F5_ML_HOME_ID)
+        away_entry = odds.get(_F5_ML_AWAY_ID)
+        if not home_entry or not away_entry:
+            continue
+
+        home_odds = _dk_odds_int(home_entry)
+        away_odds = _dk_odds_int(away_entry)
+        if home_odds is None or away_odds is None:
+            continue
+
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        commence   = (event.get("status") or {}).get("startsAt", "")
+
+        out[event_id] = {
+            "away_team":     away,
+            "home_team":     home,
+            "commence_time": commence,
+            "home_odds":     home_odds,
+            "away_odds":     away_odds,
+            "bookmaker":     PRIMARY_BOOKMAKER,
+            "fair_home":     _safe_int(home_entry.get("fairOdds")),
+            "fair_away":     _safe_int(away_entry.get("fairOdds")),
+            "open_home":     _safe_int(home_entry.get("openBookOdds")),
+            "open_away":     _safe_int(away_entry.get("openBookOdds")),
+        }
+
+    logger.info(f"SGO extract_f5_ml_odds: {len(out)} events with DK prices")
     return out
 
 

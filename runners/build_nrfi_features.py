@@ -152,7 +152,40 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
              .reset_index(drop=True)
     )
 
-    starts["pitcher_is_home"] = (starts["inning_topbot"] == "Bot").astype(int)
+    # inning_topbot == "Top" means the AWAY team is batting top of the 1st;
+    # the pitcher facing them is the HOME pitcher. Verified 16/16 starts in
+    # diagnostics (2026-05-12). Previous formula (== "Bot") was inverted.
+    starts["pitcher_is_home"] = (starts["inning_topbot"] == "Top").astype(int)
+
+    # Overwrite the in-loop yrfi computed from bat_score / post_bat_score —
+    # those Statcast columns are 100% null for 2021-2025 in the GCS master,
+    # producing yrfi=0 across the board. Authoritative 1st-inning run totals
+    # come from Scoring/scoring_master.csv (MLB Stats API).
+    #
+    # A home pitcher faces the away team batting (top half); an away pitcher
+    # faces the home team batting (bottom half). yrfi = runs allowed by this
+    # pitcher in the 1st inning > 0.
+    try:
+        from mlb_core.storage import read_csv as _read_csv, exists as _exists
+        if _exists("Scoring/scoring_master.csv"):
+            scoring = _read_csv("Scoring/scoring_master.csv", low_memory=False)
+            scoring_1st = scoring[scoring["inning"] == 1][["game_pk", "half", "runs"]].copy()
+            scoring_1st = scoring_1st.drop_duplicates(["game_pk", "half"], keep="first")
+            starts["_half_key"] = np.where(starts["pitcher_is_home"] == 1, "top", "bot")
+            starts = starts.merge(
+                scoring_1st.rename(columns={"half": "_half_key", "runs": "_runs_against"}),
+                on=["game_pk", "_half_key"], how="left",
+            )
+            matched = starts["_runs_against"].notna().sum()
+            starts["yrfi"] = (starts["_runs_against"].fillna(0) > 0).astype(int)
+            starts = starts.drop(columns=["_half_key", "_runs_against"])
+            logger.info(f"  yrfi rebuilt from scoring_master: matched {matched:,}/{len(starts):,} "
+                        f"starts | rate={starts['yrfi'].mean():.3f}")
+        else:
+            logger.warning("  Scoring/scoring_master.csv missing — yrfi kept from bat_score "
+                           "(likely zeros for 2021-2025 due to null source columns)")
+    except Exception as e:
+        logger.warning(f"  yrfi rebuild from scoring_master failed: {e} — keeping in-loop value")
     starts["season"]          = pd.to_datetime(starts["game_date"]).dt.year
     starts = starts.sort_values(["pitcher", "game_date"]).reset_index(drop=True)
 

@@ -54,6 +54,14 @@ cfg = {
     "calibrator":         str(BASE_DIR / "models" / "isotonic_calibrator_v17.pkl"),
     "bet_db":             str(BASE_DIR / "data" / "nrfi_bets.db"),
 
+    # GCS keys (Cloud Run uses these; local mode uses paths above)
+    "gcs_model_halfinn":      "NRFI_Pro_System/models/xgb_halfinn_v17.json",
+    "gcs_model_gamelevel":    "NRFI_Pro_System/models/xgb_gamelevel_v17.json",
+    "gcs_model_meta":         "NRFI_Pro_System/models/model_meta_v17.json",
+    "gcs_calibrator":         "NRFI_Pro_System/models/isotonic_calibrator_v17.pkl",
+    "gcs_model_features":     "NRFI_Pro_System/data/model_features.csv",
+    "gcs_pitcher_features":   "NRFI_Pro_System/data/pitcher_start_features.csv",
+
     # Betting params
     "min_edge":           0.06,
     "kelly_fraction":     0.25,
