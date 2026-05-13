@@ -287,6 +287,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
+                    logger.info(
+                        f"K pred | {row['_pitcher_name']} | lam={row['lambda_k']:.2f} "
+                        f"proj={probs['mean']:.2f} line={line} {side} | "
+                        f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
+                    )
                     if edge >= cfg["min_edge"]:
                         results.append({
                             "player":      row["_pitcher_name"],
