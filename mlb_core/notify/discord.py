@@ -114,8 +114,6 @@ def _format_bet_headline(b: dict, system: str) -> str:
     return f"{bt} - {matchup}"
 
 
-
-
 def _get_webhook(system: str) -> Optional[str]:
     """Return webhook URL for this system, or None if not configured."""
     url = (
@@ -252,6 +250,76 @@ def post_summary(stats: dict, system: str, run_date: str = None) -> None:
             {"name": "ROI",      "value": f"{roi:+.1f}%",               "inline": True},
             {"name": "Avg edge", "value": edge_str,                      "inline": True},
         ],
+    }
+    _post(webhook_url, {"embeds": [embed]})
+
+
+def post_all_systems_summary(
+    system_stats: dict,
+    settle_date: str = None,
+) -> None:
+    """Post a cross-system profitability summary to Discord.
+
+    system_stats: dict keyed by system name ("HR", "NRFI", "F5", "K").
+    Each value is either None (no resolved bets yet) or a dict with:
+        bets, wins, hit_rate, pnl, roi, avg_edge, pending
+
+    Produces one embed with a field per system — a single daily digest
+    showing how all four models are performing this season.
+
+    Reads DISCORD_WEBHOOK_SUMMARY first, falls back to DISCORD_WEBHOOK_URL.
+    """
+    webhook_url = _get_webhook("SUMMARY") or _get_webhook("HR")
+    if not webhook_url:
+        return
+
+    settle_date = settle_date or date.today().isoformat()
+    season = settle_date[:4]
+
+    fields = []
+    total_pnl = 0.0
+    for system in ["HR", "NRFI", "F5", "K"]:
+        stats = system_stats.get(system)
+        color_dot = {
+            "HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"
+        }.get(system, "⚪")
+
+        if not stats:
+            fields.append({
+                "name":   f"{color_dot} {system}",
+                "value":  "_no settled bets yet_",
+                "inline": False,
+            })
+            continue
+
+        wins     = stats["wins"]
+        bets     = stats["bets"]
+        hit      = stats["hit_rate"]
+        pnl      = stats["pnl"]
+        roi      = stats["roi"]
+        avg_edge = stats.get("avg_edge")
+        pending  = stats.get("pending", 0)
+        total_pnl += pnl
+
+        pnl_str  = f"${pnl:+.2f}"
+        roi_str  = f"{roi:+.1f}%"
+        edge_str = f"{avg_edge:+.1%}" if avg_edge is not None else "N/A"
+        rec_str  = f"{wins}/{bets} ({hit:.0%})"
+        pend_str = f" | {pending} pending" if pending else ""
+
+        fields.append({
+            "name":   f"{color_dot} {system}",
+            "value":  f"`{rec_str}` P&L: **{pnl_str}** | ROI: **{roi_str}** | edge: {edge_str}{pend_str}",
+            "inline": False,
+        })
+
+    total_emoji = "📈" if total_pnl >= 0 else "📉"
+    embed = {
+        "title":       f"{total_emoji} {season} Season Summary | {settle_date}",
+        "description": f"Combined paper P&L: **${total_pnl:+.2f}**",
+        "color":       0x57F287 if total_pnl >= 0 else 0xED4245,
+        "fields":      fields,
+        "footer":      {"text": "mlb-betting | paper mode | all systems"},
     }
     _post(webhook_url, {"embeds": [embed]})
 

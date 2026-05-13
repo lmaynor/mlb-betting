@@ -292,6 +292,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
         results.append({
             "player":       row["_pitcher_name"],
+            "team":         row["home_team"] if row["is_home"] == 1 else row["away_team"],
             "game_pk":      int(row["game_pk"]),
             "away_team":    row["away_team"],
             "home_team":    row["home_team"],

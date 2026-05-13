@@ -105,6 +105,7 @@ def run_handler():
 
     return jsonify({"results": results, "date": run_date}), http_status
 
+
 @app.route("/build-features", methods=["POST"])
 def build_features_handler():
     from datetime import date
@@ -151,6 +152,32 @@ def snapshot_odds_handler():
         return jsonify({"status": "error", "error": str(e)}), 500
     http_status = 200 if result.get("status") == "ok" else 500
     return jsonify(result), http_status
+
+
+@app.route("/settle", methods=["POST"])
+def settle_handler():
+    """Settle yesterday's bets from GCS scoring + Statcast sources.
+
+    Called by Cloud Scheduler nightly at 09:00 UTC (after Statcast refresh).
+    Can also be triggered manually with {"settle_date": "YYYY-MM-DD"} to
+    re-settle a specific date.
+    """
+    body = request.get_json(silent=True) or {}
+    settle_date = body.get("settle_date")  # optional; defaults to yesterday
+    try:
+        from runners.settle_bets import run as settle_run
+        result = settle_run(settle_date=settle_date)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"settle failed:\n{tb}")
+        try:
+            from mlb_core.notify.discord import post_error
+            post_error("SETTLE", f"Settlement crashed:\n```\n{tb[:1500]}\n```",
+                       settle_date or date.today().isoformat())
+        except Exception:
+            pass
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify(result), 200
 
 
 if __name__ == "__main__":
