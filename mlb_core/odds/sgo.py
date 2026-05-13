@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────
 
-SGO_API_KEY  = os.environ.get("SGO_API_KEY", "beceb4f0a660a1204cbc735b9a3082f2")
+SGO_API_KEY  = os.environ.get("SGO_API_KEY", "")
 SGO_API_BASE = "https://api.sportsgameodds.com"
 
 # Amateur tier: 10 req/min. We pace at 7 sec between calls to leave headroom.
