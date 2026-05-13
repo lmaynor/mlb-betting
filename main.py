@@ -180,6 +180,41 @@ def settle_handler():
     return jsonify(result), 200
 
 
+
+@app.route("/refresh-data", methods=["POST"])
+def refresh_data_handler():
+    """Refresh weather and umpire masters from upstream sources.
+    Called nightly at 08:00 UTC (after west coast games finish).
+    """
+    from mlb_core.config import GCS_BUCKET
+    results = {}
+
+    try:
+        from mlb_core.data.weather import weather_nightly_gcs
+        weather_nightly_gcs(
+            gcs_bucket=GCS_BUCKET,
+            gcs_master_key="Weather/weather_master.csv",
+        )
+        results["weather"] = "ok"
+    except Exception as e:
+        logger.error(f"weather refresh failed: {e}")
+        results["weather"] = str(e)
+
+    try:
+        from mlb_core.data.umpires import umpires_nightly_gcs
+        umpires_nightly_gcs(
+            gcs_bucket=GCS_BUCKET,
+            gcs_master_key="Umpires/umpscorecards_master.csv",
+        )
+        results["umpires"] = "ok"
+    except Exception as e:
+        logger.error(f"umpires refresh failed: {e}")
+        results["umpires"] = str(e)
+
+    status = 200 if all(v == "ok" for v in results.values()) else 207
+    return jsonify({"status": "ok" if status == 200 else "partial", **results}), status
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
