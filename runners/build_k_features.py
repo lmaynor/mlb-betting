@@ -592,7 +592,7 @@ def _backfill_opponent_history(pf: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFra
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
-def build_features(cfg: dict, run_date: str | None = None) -> dict:
+def run(run_date: str | None = None) -> dict:
     """Build K Pro feature CSVs (historical + today's slate) and write to GCS.
 
     Steps mirror notebook sections 1, 4, 5, 6:
@@ -603,6 +603,7 @@ def build_features(cfg: dict, run_date: str | None = None) -> dict:
 
     Returns a status dict suitable for the /build-features HTTP response.
     """
+    from K_Pro_System.config_k import cfg
     run_date = run_date or date.today().isoformat()
     logger.info(f"K build: starting for run_date={run_date}")
 
