@@ -190,7 +190,9 @@ def _score(booster: xgb.Booster, features: list[str], feature_means: dict,
     X = X.astype(float)
     dm = xgb.DMatrix(X, feature_names=features)
     ntree = getattr(booster, "best_ntree_limit", 0)
-    return booster.predict(dm, iteration_range=(0, ntree) if ntree else None)
+    if ntree:
+        return booster.predict(dm, iteration_range=(0, ntree))
+    return booster.predict(dm)
 
 
 def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:

@@ -166,7 +166,9 @@ def _score_lambda(booster: xgb.Booster, features: list, feature_means: dict,
     X = X.astype(float)
     dm = xgb.DMatrix(X, feature_names=features)
     ntree = getattr(booster, "best_ntree_limit", 0)
-    return booster.predict(dm, iteration_range=(0, ntree) if ntree else None)
+    if ntree:
+        return booster.predict(dm, iteration_range=(0, ntree))
+    return booster.predict(dm)
 
 
 # ── Monte Carlo K distribution (notebook Section 8) ──────────────────────────
