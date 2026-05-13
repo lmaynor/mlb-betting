@@ -324,6 +324,14 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp) -
     pa_14 = pa[(pa["game_date"] >= td - timedelta(days=14)) & (pa["game_date"] < td)]
     pa_50 = pa[(pa["game_date"] >= td - timedelta(days=50)) & (pa["game_date"] < td)]
 
+    # If pa_14 is empty (e.g. target_date is the literal first day of available
+    # Statcast data), the downstream groupby produces an empty `base` whose
+    # bat_team column defaults to float64 — which then refuses to merge against
+    # the str-dtyped `slice_` from g14h. Return an empty frame; the caller
+    # (_backfill_opponent_history) already does `if opp_d.empty: continue`.
+    if pa_14.empty:
+        return pd.DataFrame()
+
     # Team-level L14
     g14 = pa_14.groupby("bat_team")
     base = pd.DataFrame({
@@ -340,24 +348,10 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp) -
         g14h = pa_14.groupby(["bat_team", "p_throws"])["is_k"].mean().reset_index()
         g14h = g14h.rename(columns={"is_k": "opp_k_rate_vs_hand_L14"})
         for hand in ("L", "R"):
-            slice_ = g14h[g14h["p_throws"] == hand][["bat_team", "opp_k_rate_vs_hand_L14"]]
-            try:
-                merged = base.merge(slice_, on="bat_team", how="left")
-            except ValueError as merge_err:
-                # Instrumentation: surface what made the dtypes diverge
-                logger.error(
-                    "K build merge crash @ target_date=%s hand=%s | "
-                    "base.shape=%s base.bat_team.dtype=%s base.head=%s | "
-                    "slice.shape=%s slice.bat_team.dtype=%s slice.head=%s | "
-                    "g14h.shape=%s g14h.bat_team.dtype=%s | "
-                    "pa_14.shape=%s pa_14.bat_team.dtype=%s pa_14.p_throws.dtype=%s",
-                    target_date, hand,
-                    base.shape, base["bat_team"].dtype, base["bat_team"].head().tolist(),
-                    slice_.shape, slice_["bat_team"].dtype, slice_["bat_team"].head().tolist(),
-                    g14h.shape, g14h["bat_team"].dtype,
-                    pa_14.shape, pa_14["bat_team"].dtype, pa_14["p_throws"].dtype,
-                )
-                raise
+            merged = base.merge(
+                g14h[g14h["p_throws"] == hand][["bat_team", "opp_k_rate_vs_hand_L14"]],
+                on="bat_team", how="left",
+            )
             merged["p_throws"] = hand
             rows.append(merged)
     else:
