@@ -524,11 +524,19 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         if edge < cfg["min_edge"]:
             continue
 
+        # Derive batter team abbrev from row's home/away side flag set upstream
+        side = row.get("batter_team_side", "")
+        batter_team = (
+            odds_info["home_team"] if side == "home"
+            else odds_info["away_team"] if side == "away"
+            else ""
+        )
         results.append({
             "player":       player_name,
             "game_pk":      int(row.get("game_pk", 0)),
             "away_team":    odds_info["away_team"],
             "home_team":    odds_info["home_team"],
+            "team":         batter_team,
             "model_prob":   round(model_prob, 4),
             "market_prob":  round(fair_prob, 4),
             "edge":         round(edge, 4),

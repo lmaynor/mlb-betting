@@ -32,6 +32,89 @@ _SYSTEM_COLORS = {
 
 _DEFAULT_COLOR = 0x99AAB5  # grey
 
+# Abbrev -> sportsbook-canonical nickname (the medium form DK/SGO use).
+# Used by the per-system bet-headline formatter below.
+TEAM_NICKNAME = {
+    "ARI": "Diamondbacks", "ATL": "Braves",     "BAL": "Orioles",
+    "BOS": "Red Sox",      "CHC": "Cubs",       "CWS": "White Sox",
+    "CIN": "Reds",         "CLE": "Guardians",  "COL": "Rockies",
+    "DET": "Tigers",       "HOU": "Astros",     "KC":  "Royals",
+    "LAA": "Angels",       "LAD": "Dodgers",    "MIA": "Marlins",
+    "MIL": "Brewers",      "MIN": "Twins",      "NYM": "Mets",
+    "NYY": "Yankees",      "OAK": "Athletics",  "PHI": "Phillies",
+    "PIT": "Pirates",      "SD":  "Padres",     "SF":  "Giants",
+    "SEA": "Mariners",     "STL": "Cardinals",  "TB":  "Rays",
+    "TEX": "Rangers",      "TOR": "Blue Jays",  "WSH": "Nationals",
+}
+
+
+def _format_bet_headline(b: dict, system: str) -> str:
+    """Return the canonical sportsbook-style headline for one bet row.
+
+    System-specific:
+      NRFI -> "Yankees @ Guardians - 1st Inning - Under 0.5 Runs"
+              (bet_type "NRFI" = Under 0.5; "YRFI" = Over 0.5)
+      F5   -> "Dodgers - 1st 5 Innings Moneyline"
+              (player field carries the F5 winner team abbrev from run_f5)
+      HR   -> "Aaron Judge (NYY) - To Hit A Home Run"
+      K    -> "Gerrit Cole (NYY) - Over 7.5 Strikeouts"
+
+    Falls back to the prior generic format if the row doesn't have the
+    fields the formatter expects.
+    """
+    away = b.get("away_team", "")
+    home = b.get("home_team", "")
+    away_full = TEAM_NICKNAME.get(away, away)
+    home_full = TEAM_NICKNAME.get(home, home)
+
+    sys = (system or "").upper()
+    bt  = (b.get("bet_type") or "").upper()
+
+    if sys == "NRFI":
+        side = "Under 0.5 Runs" if "NRFI" in bt else "Over 0.5 Runs"
+        return f"{away_full} @ {home_full} - 1st Inning - {side}"
+
+    if sys == "F5":
+        # F5 runner puts the winning team abbrev in bet_type or player.
+        # The bet_type usually reads e.g. "F5_HOME" / "F5_AWAY" or "COL F5".
+        # We need to know WHICH team is the bet — derive from b["side"] if
+        # present (the runner sets side="HOME"|"AWAY"), else parse bet_type.
+        side = (b.get("side") or "").upper()
+        if side == "HOME":
+            team_full = home_full
+        elif side == "AWAY":
+            team_full = away_full
+        else:
+            # Best-effort parse of bet_type. If e.g. "COL F5" or "F5 COL",
+            # pull the abbrev token and look it up.
+            tokens = bt.replace("_", " ").split()
+            team_abbr = next((t for t in tokens if t in TEAM_NICKNAME), None)
+            team_full = TEAM_NICKNAME.get(team_abbr, b.get("player") or f"{away_full}/{home_full}")
+        return f"{team_full} - 1st 5 Innings Moneyline"
+
+    if sys == "HR":
+        player = b.get("player", "")
+        team   = b.get("team") or b.get("batter_team") or ""
+        team   = team if team else ""
+        team_tag = f" ({team})" if team else ""
+        return f"{player}{team_tag} - To Hit A Home Run"
+
+    if sys == "K":
+        player = b.get("player", "")
+        team   = b.get("team") or ""
+        team_tag = f" ({team})" if team else ""
+        line   = b.get("line")
+        side   = (b.get("side") or "").upper()
+        side_word = "Over" if side == "OVER" else ("Under" if side == "UNDER" else side)
+        line_str  = f" {line}" if line is not None else ""
+        return f"{player}{team_tag} - {side_word}{line_str} Strikeouts"
+
+    # Fallback to prior generic format
+    matchup = f"{b.get('player','')} - {away} @ {home}".strip(" -")
+    return f"{bt} - {matchup}"
+
+
+
 
 def _get_webhook(system: str) -> Optional[str]:
     """Return webhook URL for this system, or None if not configured."""
@@ -102,11 +185,6 @@ def post_bets(
 
     fields = []
     for b in bets:
-        player     = b.get("player", "")
-        away       = b.get("away_team", "")
-        home       = b.get("home_team", "")
-        matchup    = f"{player} — {away} @ {home}" if player else f"{away} @ {home}"
-        bet_type   = b.get("bet_type", "")
         model_prob = b.get("model_prob")
         edge       = b.get("edge")
         odds       = b.get("odds")
@@ -118,8 +196,9 @@ def post_bets(
         stake_str = f"${stake:.2f}"     if stake      is not None else "N/A"
         paper_tag = " 📄" if paper else " 💵"
 
+        headline = _format_bet_headline(b, system)
         fields.append({
-            "name":   f"{bet_type} — {matchup}{paper_tag}",
+            "name":   f"{headline}{paper_tag}",
             "value":  f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}** | stake: **{stake_str}**",
             "inline": False,
         })

@@ -297,6 +297,14 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp) -
         logger.warning("K build: cannot infer bat_team — lineup features will be empty")
         return pd.DataFrame()
 
+    # Drop rows where bat_team or p_throws is NaN (Statcast occasionally has these),
+    # and force string dtype so groupby/merge don't end up with mixed-dtype keys.
+    pa = pa.dropna(subset=["bat_team"]).copy()
+    pa["bat_team"] = pa["bat_team"].astype(str)
+    if "p_throws" in pa.columns:
+        pa = pa.dropna(subset=["p_throws"]).copy()
+        pa["p_throws"] = pa["p_throws"].astype(str)
+
     pa["is_k"]   = (pa["events"] == "strikeout").astype(int)
     if "description" in pa.columns:
         pa["is_swing"] = pa["description"].isin(
@@ -551,10 +559,20 @@ def _backfill_opponent_history(pf: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFra
     pa["bat_team"] = np.where(
         pa["inning_topbot"] == "Bot", pa["home_team"], pa["away_team"]
     )
+    pa = pa.dropna(subset=["bat_team"]).copy()
+    pa["bat_team"] = pa["bat_team"].astype(str)
     pitcher_bat_team = (
         pa.groupby(["game_pk", "pitcher"])["bat_team"].first().reset_index()
     )
     pf = pf.merge(pitcher_bat_team, on=["game_pk", "pitcher"], how="left")
+    # The merge above may introduce NaN bat_team where pitcher_bat_team didn't
+    # match. Cast to str so the downstream merge against opp_all (str) doesn't
+    # fall into the mixed-dtype crash. NaN becomes "nan" which won't match
+    # anything in opp_all — that's fine, those rows get NaN opp features.
+    pf["bat_team"] = pf["bat_team"].astype(str)
+    # p_throws may also be NaN-cast from upstream pitcher_features; force str
+    if "p_throws" in pf.columns:
+        pf["p_throws"] = pf["p_throws"].astype(str)
 
     # Aggregate once per unique date
     unique_dates = sorted(pf["game_date"].dropna().unique())
