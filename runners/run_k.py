@@ -422,7 +422,10 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             bets_logged += 1
             bet_rows.append(row.to_dict())
 
-    post_bets(bet_rows, system="K", run_date=run_date)
+    k_rows    = [b for b in bet_rows if b.get("market", "K") == "K"]
+    outs_rows = [b for b in bet_rows if b.get("market") == "OUTS"]
+    post_bets(k_rows,    system="K",    run_date=run_date)
+    post_bets(outs_rows, system="OUTS", run_date=run_date)
     stats = tracker.summary(season=run_date[:4])
     post_summary(stats, system="K", run_date=run_date)
 
