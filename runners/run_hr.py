@@ -485,7 +485,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     X = X.astype(float)
     dm = xgb.DMatrix(X, feature_names=features)
     ntree = getattr(booster, "best_ntree_limit", 0)
-    preds = booster.predict(dm, iteration_range=(0, ntree) if ntree else None)
+    if ntree:
+        preds = booster.predict(dm, iteration_range=(0, ntree))
+    else:
+        # No best_iteration in meta (e.g. bootstrapped meta) — use all trees.
+        preds = booster.predict(dm)
     feat_df = feat_df.copy()
     feat_df["model_prob"] = preds
 
