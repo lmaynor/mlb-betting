@@ -275,37 +275,22 @@ def _build_pitcher_features(sc: pd.DataFrame) -> pd.DataFrame:
 
 # ── Section 5 — opponent (lineup) features ───────────────────────────────────
 
-def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp) -> pd.DataFrame:
-    """Per-team batting K-vulnerability windows ending at target_date.
-
-    Returns DataFrame with columns:
-        bat_team, p_throws,
-        opp_k_rate_L14, opp_k_rate_vs_hand_L14,
-        opp_chase_rate_L14, opp_whiff_rate_L14, opp_lineup_pct_L,
-        opp_top3_k_rate_L50
-
-    Unlike the notebook (which keys by game_pk on today's slate), we aggregate
-    at the team level so the runner can join by (bat_team, p_throws).
-    """
+def _prepare_pa_for_opp_features(sc):
+    """Pre-compute per-PA flags used by every target_date in
+    _build_opponent_team_features. Done once per build."""
     pa = sc[sc["events"].notna()].copy()
-
-    if "inning_topbot" in pa.columns and "home_team" in pa.columns and "away_team" in pa.columns:
-        pa["bat_team"] = np.where(
-            pa["inning_topbot"] == "Bot", pa["home_team"], pa["away_team"]
-        )
-    else:
+    if not ("inning_topbot" in pa.columns and "home_team" in pa.columns and "away_team" in pa.columns):
         logger.warning("K build: cannot infer bat_team — lineup features will be empty")
         return pd.DataFrame()
-
-    # Drop rows where bat_team or p_throws is NaN (Statcast occasionally has these),
-    # and force string dtype so groupby/merge don't end up with mixed-dtype keys.
+    pa["bat_team"] = np.where(
+        pa["inning_topbot"] == "Bot", pa["home_team"], pa["away_team"]
+    )
     pa = pa.dropna(subset=["bat_team"]).copy()
     pa["bat_team"] = pa["bat_team"].astype(str)
     if "p_throws" in pa.columns:
         pa = pa.dropna(subset=["p_throws"]).copy()
         pa["p_throws"] = pa["p_throws"].astype(str)
-
-    pa["is_k"]   = (pa["events"] == "strikeout").astype(int)
+    pa["is_k"] = (pa["events"] == "strikeout").astype(int)
     if "description" in pa.columns:
         pa["is_swing"] = pa["description"].isin(
             ["swinging_strike", "swinging_strike_blocked", "foul", "foul_tip", "hit_into_play"]
@@ -319,6 +304,28 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp) -
     pa["is_out_zone"] = (pa["zone"] > 9).astype(int) if "zone" in pa.columns else 0
     pa["is_chase"]    = (pa["is_out_zone"] & pa["is_swing"]).astype(int)
     pa["is_lhb"]      = (pa["stand"] == "L").astype(int) if "stand" in pa.columns else 0
+    return pa
+
+
+def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp,
+                                    pa_prepared: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Per-team batting K-vulnerability windows ending at target_date.
+
+    Returns DataFrame with columns:
+        bat_team, p_throws,
+        opp_k_rate_L14, opp_k_rate_vs_hand_L14,
+        opp_chase_rate_L14, opp_whiff_rate_L14, opp_lineup_pct_L,
+        opp_top3_k_rate_L50
+
+    Unlike the notebook (which keys by game_pk on today's slate), we aggregate
+    at the team level so the runner can join by (bat_team, p_throws).
+    """
+    if pa_prepared is not None:
+        pa = pa_prepared
+    else:
+        pa = _prepare_pa_for_opp_features(sc)
+        if pa.empty:
+            return pd.DataFrame()
 
     td = pd.Timestamp(target_date)
     pa_14 = pa[(pa["game_date"] >= td - timedelta(days=14)) & (pa["game_date"] < td)]
@@ -582,11 +589,13 @@ def _backfill_opponent_history(pf: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFra
     if "p_throws" in pf.columns:
         pf["p_throws"] = pf["p_throws"].astype(str)
 
-    # Aggregate once per unique date
+    # Pre-prepare pa ONCE so each iteration only does the per-date window filter,
+    # not the full O(N) sc filter + per-row derivations.
+    pa_prepared = _prepare_pa_for_opp_features(sc)
     unique_dates = sorted(pf["game_date"].dropna().unique())
     out_chunks = []
     for d in unique_dates:
-        opp_d = _build_opponent_team_features(sc, pd.Timestamp(d))
+        opp_d = _build_opponent_team_features(sc, pd.Timestamp(d), pa_prepared=pa_prepared)
         if opp_d.empty:
             continue
         opp_d["game_date"] = pd.Timestamp(d)
