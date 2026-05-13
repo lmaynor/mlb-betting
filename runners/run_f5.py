@@ -365,4 +365,4 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     post_summary(stats, system="F5", run_date=run_date)
 
     logger.info(f"F5: {bets_logged} bets logged")
-    return {"bets_logged": bets_logged}
+    return {"bets_logged": bets_logged, "bet_rows": bet_rows}

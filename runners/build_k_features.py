@@ -89,13 +89,25 @@ def _identify_starters(sc: pd.DataFrame) -> pd.DataFrame:
     starters = starters.merge(starter_ks, on=["game_pk", "pitcher"], how="left")
     starters["starter_ks"] = starters["starter_ks"].fillna(0).astype(int)
 
-    if "outs_when_up" in sc.columns:
-        ip_df = (
-            sc.groupby(["game_pk", "pitcher"])["outs_when_up"].max().reset_index()
+    # Count out-recording events per (game_pk, pitcher) to derive IP.
+    # outs_when_up is the inning-out count (0/1/2), not cumulative — using
+    # its max() always yields 1.0 IP. Use event types instead (same set as
+    # settle_bets.py OUTS settlement).
+    _out_events = {
+        "strikeout", "field_out", "force_out", "grounded_into_double_play",
+        "double_play", "triple_play", "fielders_choice_out",
+        "sac_fly", "sac_bunt", "sac_fly_double_play",
+    }
+    if "events" in sc.columns:
+        outs_df = (
+            pa[pa["events"].isin(_out_events)]
+            .groupby(["game_pk", "pitcher"])
+            .size()
+            .reset_index(name="outs_recorded")
         )
-        ip_df["starter_ip"] = (ip_df["outs_when_up"] + 1) / 3.0
+        outs_df["starter_ip"] = outs_df["outs_recorded"] / 3.0
         starters = starters.merge(
-            ip_df[["game_pk", "pitcher", "starter_ip"]],
+            outs_df[["game_pk", "pitcher", "starter_ip"]],
             on=["game_pk", "pitcher"], how="left",
         )
     else:
@@ -395,76 +407,41 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp,
 # ── Section 6 — feature join ─────────────────────────────────────────────────
 
 def _join_umpires(pf: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Join umpire L30 metrics onto pitcher rows by game_pk.
+    """Join umpire L30 metrics (game-level) onto pitcher rows by game_pk.
 
-    Reuses build_nrfi_features.build_umpire_features() to roll the raw
-    umpscorecards master into per-game L30 features, then joins on game_pk.
-
-    Column mapping to K feature names:
-      ump_overall_accuracy_L30  <- ump_overall_accuracy_L30  (direct)
-      ump_consistency_L30       <- ump_consistency_L30        (direct)
-      ump_k_boost_L30           <- ump_total_run_impact_L30   (proxy; a proper
-                                   per-umpire K-rate boost would need Statcast
-                                   aggregation -- tracked in backlog)
+    The umpire master CSV in the lake carries L30 rolling per-umpire stats.
+    Notebook Section 2 also derives ump_k_boost_L30 from Statcast K rates;
+    we lift that derivation upstream into the umpire master if it's there,
+    otherwise leave NaN (XGBoost handles it).
     """
     from mlb_core.storage import read_csv, exists
-
-    _nan_cols = ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30")
-
     if not exists("Umpires/umpscorecards_master.csv"):
-        logger.info("K build: no umpire master -- ump_* features will be NaN")
-        for col in _nan_cols:
+        logger.info("K build: no umpire master — ump_* features will be NaN")
+        for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
             if col not in pf.columns:
                 pf[col] = np.nan
         return pf
 
     try:
-        ump_raw = read_csv("Umpires/umpscorecards_master.csv", low_memory=False)
+        umps = read_csv("Umpires/umpscorecards_master.csv", low_memory=False)
     except Exception as e:
         logger.warning(f"K build: umpire master read failed: {e}")
-        for col in _nan_cols:
+        for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
             if col not in pf.columns:
                 pf[col] = np.nan
         return pf
 
-    try:
-        from runners.build_nrfi_features import build_umpire_features
-        ump = build_umpire_features(ump_raw)
-    except Exception as e:
-        logger.warning(f"K build: umpire feature roll failed: {e}")
-        for col in _nan_cols:
-            if col not in pf.columns:
-                pf[col] = np.nan
-        return pf
-
-    if ump.empty or "game_pk" not in ump.columns:
-        for col in _nan_cols:
-            if col not in pf.columns:
-                pf[col] = np.nan
-        return pf
-
-    col_map = {}
-    if "ump_overall_accuracy_L30" in ump.columns:
-        col_map["ump_overall_accuracy_L30"] = "ump_overall_accuracy_L30"
-    if "ump_consistency_L30" in ump.columns:
-        col_map["ump_consistency_L30"] = "ump_consistency_L30"
-    if "ump_total_run_impact_L30" in ump.columns:
-        col_map["ump_total_run_impact_L30"] = "ump_k_boost_L30"
-
-    keep_cols = ["game_pk"] + list(col_map.keys())
-    ump_join = (ump[[c for c in keep_cols if c in ump.columns]]
-                .drop_duplicates("game_pk")
-                .rename(columns=col_map))
-    ump_join["game_pk"] = pd.to_numeric(ump_join["game_pk"], errors="coerce")
-
-    pf = pf.merge(ump_join, on="game_pk", how="left")
-
-    for col in _nan_cols:
+    keep = ["game_pk"]
+    for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
+        if col in umps.columns:
+            keep.append(col)
+    if "game_pk" in umps.columns and len(keep) > 1:
+        umps["game_pk"] = pd.to_numeric(umps["game_pk"], errors="coerce")
+        umps = umps[keep].drop_duplicates("game_pk")
+        pf = pf.merge(umps, on="game_pk", how="left")
+    for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
         if col not in pf.columns:
             pf[col] = np.nan
-
-    matched = pf["ump_overall_accuracy_L30"].notna().sum()
-    logger.info(f"K build: umpire join -- {matched}/{len(pf)} rows matched")
     return pf
 
 
