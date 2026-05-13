@@ -14,17 +14,19 @@ Two entry points:
   2. load_snapshot(gcs_key) — reads a saved snapshot JSON from GCS.
      Cost: 0 objects. Used by every runner (HR, NRFI, F5, K) at predict time.
 
-  After getting events from either source, the four extractors slice out
+  After getting events from either source, the extractors slice out
   the markets each system needs:
 
-    extract_hr_props(events)  → {player_name: {odds, away_team, home_team, event_id, ...}}
-    extract_nrfi_odds(events) → {event_id: {nrfi_odds, yrfi_odds, ...}}
-    extract_f5_odds(events)   → {event_id: {f5_over_odds, f5_under_odds, line, ...}}
-    extract_k_odds(events)    → {pitcher_name: {odds, line, ...}}
+    extract_hr_props(events)      → {player_name: {odds, away_team, home_team, ...}}
+    extract_nrfi_odds(events)     → {event_id: {nrfi_odds, yrfi_odds, ...}}
+    extract_1i_3way_odds(events)  → {event_id: {away_odds, home_odds, draw_odds, ...}}
+    extract_f5_odds(events)       → {event_id: {f5_over_odds, f5_under_odds, line, ...}}
+    extract_f5_ml_odds(events)    → {event_id: {home_odds, away_odds, ...}}
+    extract_k_odds(events)        → {pitcher_name: {over_odds, under_odds, line, ...}}
+    extract_outs_odds(events)     → {pitcher_name: {over_odds, under_odds, line, ...}}
 
-  All extractors read DraftKings only, prefer yn-yes for binary props,
-  and also capture fairOdds + openBookOdds for future analysis without
-  changing the primary contract.
+  All extractors read DraftKings only and also capture fairOdds +
+  openBookOdds for future analysis without changing the primary contract.
 
 API docs: https://sportsgameodds.com/docs/
 """
@@ -53,33 +55,29 @@ SGO_REQUEST_INTERVAL_SEC = 7.0
 # HR Pro v6 was trained against DK lines.
 PRIMARY_BOOKMAKER = "draftkings"
 
-# Slate windowing is done in Eastern Time. MLB schedules are reported in ET
-# and a "today" in ET maps cleanly to the local game day. UTC would
-# misclassify late West Coast games into "tomorrow".
+# Slate windowing is done in Eastern Time.
 _ET = ZoneInfo("America/New_York")
 
-# Market families. Prefixes are confirmed against a real CLE-LAA event payload
-# (2026-05-12) and match what the SGO docs publish.
-_HR_YN_PREFIX     = "batting_homeRuns-"           # ...-PLAYER_MLB-game-yn-yes/no
-_HR_OU_PREFIX     = "batting_homeRuns-"           # ...-PLAYER_MLB-game-ou-over/under
-_K_PREFIX         = "pitching_strikeouts-"        # ...-PITCHER_MLB-game-ou-over/under
+# Market ID constants — confirmed against live CLE-LAA payload (2026-05-13)
+_HR_YN_PREFIX     = "batting_homeRuns-"
+_HR_OU_PREFIX     = "batting_homeRuns-"
+_K_PREFIX         = "pitching_strikeouts-"
+_OUTS_PREFIX      = "pitching_outs-"
 _NRFI_OVER_ID     = "points-all-1i-ou-over"
 _NRFI_UNDER_ID    = "points-all-1i-ou-under"
+_1I_3WAY_AWAY_ID  = "points-away-1i-ml3way-away"   # away scores, home doesn't
+_1I_3WAY_HOME_ID  = "points-home-1i-ml3way-home"   # home scores, away doesn't
+_1I_3WAY_DRAW_ID  = "points-all-1i-ml3way-draw"    # neither scores (= NRFI)
 _F5_OVER_ID       = "points-all-1ix5-ou-over"
 _F5_UNDER_ID      = "points-all-1ix5-ou-under"
-_F5_ML_HOME_ID    = "points-home-1ix5-ml-home"    # F5 moneyline, home side
-_F5_ML_AWAY_ID    = "points-away-1ix5-ml-away"    # F5 moneyline, away side
+_F5_ML_HOME_ID    = "points-home-1ix5-ml-home"
+_F5_ML_AWAY_ID    = "points-away-1ix5-ml-away"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 def normalize_name(name: str) -> str:
-    """NFD + ASCII fold + lower + strip. Matches HR runner's _normalize_name.
-
-    SGO returns accented names like "Angel Martínez" / "José Ramírez".
-    Lineup data and feature CSVs use varying conventions, so normalize
-    both sides through this function before matching.
-    """
+    """NFD + ASCII fold + lower + strip."""
     if not isinstance(name, str):
         return ""
     n = unicodedata.normalize("NFD", name)
@@ -88,16 +86,7 @@ def normalize_name(name: str) -> str:
 
 
 def et_day_window(run_date: str) -> tuple[str, str]:
-    """Return (startsAfter, startsBefore) as ISO strings with ET offset.
-
-    A "day" is 00:00:00 ET to 23:59:59 ET on `run_date`. Returned strings
-    include explicit offset so SGO interprets them in ET regardless of its
-    server timezone. zoneinfo handles DST transitions correctly.
-
-    Example:
-      et_day_window("2026-05-12")
-        → ("2026-05-12T00:00:00-04:00", "2026-05-12T23:59:59-04:00")
-    """
+    """Return (startsAfter, startsBefore) as ISO strings with ET offset."""
     y, m, d = (int(x) for x in run_date.split("-"))
     start = datetime(y, m, d, 0, 0, 0, tzinfo=_ET)
     end   = datetime(y, m, d, 23, 59, 59, tzinfo=_ET)
@@ -105,11 +94,7 @@ def et_day_window(run_date: str) -> tuple[str, str]:
 
 
 def _dk_odds_int(odd_entry: dict) -> Optional[int]:
-    """Pull DK odds from a single odd entry's byBookmaker block.
-
-    Returns the American-odds int (e.g. -110, +840) or None if DK isn't
-    populated on this market.
-    """
+    """Pull DK American odds int from an odd entry. None if unavailable."""
     by_book = odd_entry.get("byBookmaker") or {}
     dk = by_book.get(PRIMARY_BOOKMAKER) or {}
     if not dk.get("available"):
@@ -124,7 +109,7 @@ def _dk_odds_int(odd_entry: dict) -> Optional[int]:
 
 
 def _dk_line_float(odd_entry: dict) -> Optional[float]:
-    """Pull DK over/under line from a single odd entry."""
+    """Pull DK over/under line from an odd entry."""
     by_book = odd_entry.get("byBookmaker") or {}
     dk = by_book.get(PRIMARY_BOOKMAKER) or {}
     raw = dk.get("overUnder")
@@ -137,11 +122,7 @@ def _dk_line_float(odd_entry: dict) -> Optional[float]:
 
 
 def _event_teams(event: dict) -> tuple[str, str]:
-    """Return (away_abbrev_or_name, home_abbrev_or_name).
-
-    Prefers the 'medium' name ("Yankees", "Guardians") which matches how
-    The Odds API returned them. Falls back to teamID or empty string.
-    """
+    """Return (away_name, home_name) using medium names."""
     teams = event.get("teams") or {}
     def _one(side: str) -> str:
         t = teams.get(side) or {}
@@ -172,7 +153,6 @@ class SgoClient:
         self._last_request_at: float = 0.0
 
     def _throttle(self) -> None:
-        """Sleep so we stay under 10 req/min."""
         gap = time.time() - self._last_request_at
         if gap < SGO_REQUEST_INTERVAL_SEC:
             time.sleep(SGO_REQUEST_INTERVAL_SEC - gap)
@@ -186,33 +166,12 @@ class SgoClient:
         return r.json()
 
     def get_usage(self) -> dict:
-        """Return /v2/account/usage payload. Free (does not count against quota)."""
         body = self._get("/v2/account/usage")
         return body.get("data", body)
 
     def fetch_mlb_slate(self, run_date: str | None = None,
                          odds_available: bool = True,
                          limit: int = 50) -> list[dict]:
-        """Fetch MLB events for one ET day.
-
-        One call returns every game in the window with every market —
-        billed as one object per event. Without `run_date`, SGO returns
-        every event with posted odds (today through ~5 days out), so always
-        pass run_date in production.
-
-        Args:
-            run_date:       ISO date "YYYY-MM-DD". Filters to events whose
-                            start time falls within that ET calendar day.
-                            If None, no date filter is applied (use only
-                            for diagnostics).
-            odds_available: When True (default) only returns events with
-                            posted odds.
-            limit:          Max events per page. MLB never exceeds ~17 games
-                            per day; default 50 is a safe ceiling.
-
-        Returns:
-            List of event dicts. Empty list on API error or empty slate.
-        """
         params: dict = {
             "leagueID":      "MLB",
             "oddsAvailable": "true" if odds_available else "false",
@@ -233,11 +192,6 @@ class SgoClient:
 # ── Snapshot I/O ──────────────────────────────────────────────────────────
 
 def load_snapshot(gcs_key: str) -> list[dict]:
-    """Read a saved slate JSON from GCS (or local disk in local mode).
-
-    Returns empty list if the key doesn't exist or fails to parse.
-    Uses mlb_core.storage so it works in both modes transparently.
-    """
     from mlb_core.storage import exists, read_bytes
     if not exists(gcs_key):
         logger.warning(f"SGO snapshot not found: {gcs_key}")
@@ -255,79 +209,50 @@ def load_snapshot(gcs_key: str) -> list[dict]:
 def extract_hr_props(events: list[dict]) -> dict:
     """Extract anytime-HR props for every player on every event.
 
-    Drop-in replacement for run_hr._fetch_hr_odds. Return shape:
-
-        {
-          player_name: {
-            "odds":          int,    # DK American odds for "Yes / Over 0.5"
-            "away_team":     str,    # "Yankees"
-            "home_team":     str,    # "Guardians"
-            "event_id":      str,    # SGO eventID
-            "line":          float,  # 0.5 (from the underlying market)
-            "fair_odds":     int,    # SGO no-vig consensus (-105 etc.)
-            "open_odds":     int,    # DK opening line (None if unavailable)
-            "source_oddid":  str,    # which oddID we read
-          },
-          ...
-        }
-
-    Reading priority per player:
-        1. ...-yn-yes (binary "Any Home Runs")
-        2. ...-ou-over at line 0.5 (mathematically equivalent fallback)
-
-    Players for whom DK posts neither market are silently dropped.
+    Returns {player_name: {odds, away_team, home_team, event_id, line,
+                            fair_odds, open_odds, source_oddid}}
+    Reading priority: yn-yes → ou-over@0.5 fallback.
     """
     out: dict = {}
-
     for event in events:
         away, home = _event_teams(event)
         event_id   = event.get("eventID")
         odds       = event.get("odds") or {}
 
-        # Index this event's HR markets by player and side
-        # Two passes: prefer yn-yes, fall back to ou-over@0.5
-        per_player_yn: dict = {}  # player_id -> odd entry (yn-yes)
-        per_player_ou: dict = {}  # player_id -> odd entry (ou-over @ 0.5)
+        per_player_yn: dict = {}
+        per_player_ou: dict = {}
 
         for odd_id, entry in odds.items():
             if not odd_id.startswith(_HR_YN_PREFIX):
                 continue
-            stat_id = entry.get("statID")
-            if stat_id != "batting_homeRuns":
+            if entry.get("statID") != "batting_homeRuns":
                 continue
             player_id = entry.get("playerID") or entry.get("statEntityID")
             if not player_id:
                 continue
-            side = entry.get("sideID")
+            side     = entry.get("sideID")
             bet_type = entry.get("betTypeID")
-
             if bet_type == "yn" and side == "yes":
                 per_player_yn[player_id] = (odd_id, entry)
             elif bet_type == "ou" and side == "over":
-                # Only keep the 0.5 line for the OU fallback
                 line = _dk_line_float(entry)
                 fair_line = entry.get("fairOverUnder")
                 if line == 0.5 or (line is None and str(fair_line) == "0.5"):
                     per_player_ou[player_id] = (odd_id, entry)
 
-        # Assemble output rows for this event
         for player_id, (yn_oid, yn_entry) in per_player_yn.items():
             row = _hr_row_from_entry(event, player_id, yn_oid, yn_entry,
                                       away, home, event_id)
             if row:
-                # Use player display name as the dict key
-                name = row.pop("_player_name")
-                out[name] = row
+                out[row.pop("_player_name")] = row
 
-        # Fill in any players who only had ou-over, not yn-yes
         for player_id, (ou_oid, ou_entry) in per_player_ou.items():
             if player_id in per_player_yn:
                 continue
             row = _hr_row_from_entry(event, player_id, ou_oid, ou_entry,
                                       away, home, event_id)
             if row:
-                name = row.pop("_player_name")
-                out[name] = row
+                out[row.pop("_player_name")] = row
 
     logger.info(f"SGO extract_hr_props: {len(out)} players with DK prices "
                 f"across {len(events)} events")
@@ -337,7 +262,6 @@ def extract_hr_props(events: list[dict]) -> dict:
 def _hr_row_from_entry(event: dict, player_id: str, odd_id: str,
                        entry: dict, away: str, home: str,
                        event_id: str) -> Optional[dict]:
-    """Build one HR-output row. Returns None if DK not available on this market."""
     dk_odds = _dk_odds_int(entry)
     if dk_odds is None:
         return None
@@ -345,57 +269,39 @@ def _hr_row_from_entry(event: dict, player_id: str, odd_id: str,
     if not name:
         return None
     return {
-        "_player_name":  name,
-        "odds":          dk_odds,
-        "away_team":     away,
-        "home_team":     home,
-        "event_id":      event_id,
-        "line":          _dk_line_float(entry) or 0.5,
-        "fair_odds":     _safe_int(entry.get("fairOdds")),
-        "open_odds":     _safe_int(entry.get("openBookOdds")),
-        "source_oddid":  odd_id,
+        "_player_name": name,
+        "odds":         dk_odds,
+        "away_team":    away,
+        "home_team":    home,
+        "event_id":     event_id,
+        "line":         _dk_line_float(entry) or 0.5,
+        "fair_odds":    _safe_int(entry.get("fairOdds")),
+        "open_odds":    _safe_int(entry.get("openBookOdds")),
+        "source_oddid": odd_id,
     }
 
 
 def extract_nrfi_odds(events: list[dict]) -> dict:
-    """Extract NRFI/YRFI odds for every event.
+    """Extract NRFI/YRFI O/U odds (under 0.5 = NRFI, over 0.5 = YRFI).
 
-    Drop-in shape replacement for the_odds_api.fetch_nrfi_odds. Returns:
-
-        {
-          event_id: {
-            "away_team":     str,
-            "home_team":     str,
-            "commence_time": str,    # ISO UTC from status.startsAt
-            "nrfi_odds":     int,    # DK American for Under 0.5
-            "yrfi_odds":     int,    # DK American for Over  0.5
-            "point":         0.5,
-            "bookmaker":     "draftkings",
-            "fair_nrfi":     int,    # SGO no-vig under
-            "fair_yrfi":     int,    # SGO no-vig over
-            "open_nrfi":     int,    # opening under
-            "open_yrfi":     int,    # opening over
-          },
-          ...
-        }
+    Returns {event_id: {away_team, home_team, commence_time,
+                         nrfi_odds, yrfi_odds, point, bookmaker,
+                         fair_nrfi, fair_yrfi, open_nrfi, open_yrfi}}
     """
     out: dict = {}
     for event in events:
-        odds = event.get("odds") or {}
+        odds        = event.get("odds") or {}
         over_entry  = odds.get(_NRFI_OVER_ID)
         under_entry = odds.get(_NRFI_UNDER_ID)
         if not over_entry or not under_entry:
             continue
-
         yrfi = _dk_odds_int(over_entry)
         nrfi = _dk_odds_int(under_entry)
         if nrfi is None or yrfi is None:
             continue
-
         away, home = _event_teams(event)
         event_id   = event.get("eventID")
         commence   = (event.get("status") or {}).get("startsAt", "")
-
         out[event_id] = {
             "away_team":     away,
             "home_team":     home,
@@ -409,74 +315,17 @@ def extract_nrfi_odds(events: list[dict]) -> dict:
             "open_nrfi":     _safe_int(under_entry.get("openBookOdds")),
             "open_yrfi":     _safe_int(over_entry.get("openBookOdds")),
         }
-
     logger.info(f"SGO extract_nrfi_odds: {len(out)} events with DK prices")
     return out
 
 
-def extract_f5_odds(events: list[dict]) -> dict:
-    """Extract first-5-innings Over/Under odds for every event.
+def extract_1i_3way_odds(events: list[dict]) -> dict:
+    """Extract first-inning 3-way moneyline odds for every event.
 
-    Returns:
-        {
-          event_id: {
-            "away_team":      str,
-            "home_team":      str,
-            "commence_time":  str,
-            "over_odds":      int,
-            "under_odds":     int,
-            "line":           float,   # the DK over/under line (e.g. 4.5)
-            "bookmaker":      "draftkings",
-            "fair_over":      int,
-            "fair_under":     int,
-            "open_over":      int,
-            "open_under":     int,
-          },
-          ...
-        }
-    """
-    out: dict = {}
-    for event in events:
-        odds = event.get("odds") or {}
-        over_entry  = odds.get(_F5_OVER_ID)
-        under_entry = odds.get(_F5_UNDER_ID)
-        if not over_entry or not under_entry:
-            continue
-
-        over_odds  = _dk_odds_int(over_entry)
-        under_odds = _dk_odds_int(under_entry)
-        if over_odds is None or under_odds is None:
-            continue
-
-        away, home = _event_teams(event)
-        event_id   = event.get("eventID")
-        commence   = (event.get("status") or {}).get("startsAt", "")
-        line       = _dk_line_float(over_entry)
-
-        out[event_id] = {
-            "away_team":     away,
-            "home_team":     home,
-            "commence_time": commence,
-            "over_odds":     over_odds,
-            "under_odds":    under_odds,
-            "line":          line,
-            "bookmaker":     PRIMARY_BOOKMAKER,
-            "fair_over":     _safe_int(over_entry.get("fairOdds")),
-            "fair_under":    _safe_int(under_entry.get("fairOdds")),
-            "open_over":     _safe_int(over_entry.get("openBookOdds")),
-            "open_under":    _safe_int(under_entry.get("openBookOdds")),
-        }
-
-    logger.info(f"SGO extract_f5_odds: {len(out)} events with DK prices")
-    return out
-
-
-def extract_f5_ml_odds(events: list[dict]) -> dict:
-    """Extract first-5-innings two-way moneyline odds for every event.
-
-    F5 Pro v5 bets the moneyline (home wins F5 vs away wins F5), not the
-    totals over/under. SGO exposes this as a two-sided market with home and
-    away as separate oddIDs; pull both for each event.
+    The three legs and their market IDs (confirmed 2026-05-13):
+      away scores, home doesn't  → points-away-1i-ml3way-away
+      home scores, away doesn't  → points-home-1i-ml3way-home
+      neither scores (draw)      → points-all-1i-ml3way-draw
 
     Returns:
         {
@@ -484,34 +333,111 @@ def extract_f5_ml_odds(events: list[dict]) -> dict:
             "away_team":     str,
             "home_team":     str,
             "commence_time": str,
-            "home_odds":     int,    # DK American for home to win F5
-            "away_odds":     int,    # DK American for away to win F5
+            "away_odds":     int,   # DK American — away scores, home doesn't
+            "home_odds":     int,   # DK American — home scores, away doesn't
+            "draw_odds":     int,   # DK American — neither scores
             "bookmaker":     "draftkings",
-            "fair_home":     int,    # SGO no-vig home
-            "fair_away":     int,    # SGO no-vig away
-            "open_home":     int,    # opening home
-            "open_away":     int,    # opening away
+            "fair_away":     int,
+            "fair_home":     int,
+            "fair_draw":     int,
           },
           ...
         }
+
+    All three legs must have DK prices for an event to be included.
+    Events with any leg missing are silently dropped.
     """
     out: dict = {}
     for event in events:
-        odds = event.get("odds") or {}
+        odds        = event.get("odds") or {}
+        away_entry  = odds.get(_1I_3WAY_AWAY_ID)
+        home_entry  = odds.get(_1I_3WAY_HOME_ID)
+        draw_entry  = odds.get(_1I_3WAY_DRAW_ID)
+        if not away_entry or not home_entry or not draw_entry:
+            continue
+        away_odds = _dk_odds_int(away_entry)
+        home_odds = _dk_odds_int(home_entry)
+        draw_odds = _dk_odds_int(draw_entry)
+        if away_odds is None or home_odds is None or draw_odds is None:
+            continue
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        commence   = (event.get("status") or {}).get("startsAt", "")
+        out[event_id] = {
+            "away_team":     away,
+            "home_team":     home,
+            "commence_time": commence,
+            "away_odds":     away_odds,
+            "home_odds":     home_odds,
+            "draw_odds":     draw_odds,
+            "bookmaker":     PRIMARY_BOOKMAKER,
+            "fair_away":     _safe_int(away_entry.get("fairOdds")),
+            "fair_home":     _safe_int(home_entry.get("fairOdds")),
+            "fair_draw":     _safe_int(draw_entry.get("fairOdds")),
+        }
+    logger.info(f"SGO extract_1i_3way_odds: {len(out)} events with DK prices")
+    return out
+
+
+def extract_f5_odds(events: list[dict]) -> dict:
+    """Extract first-5-innings O/U odds.
+
+    Returns {event_id: {away_team, home_team, commence_time,
+                         over_odds, under_odds, line, bookmaker,
+                         fair_over, fair_under, open_over, open_under}}
+    """
+    out: dict = {}
+    for event in events:
+        odds        = event.get("odds") or {}
+        over_entry  = odds.get(_F5_OVER_ID)
+        under_entry = odds.get(_F5_UNDER_ID)
+        if not over_entry or not under_entry:
+            continue
+        over_odds  = _dk_odds_int(over_entry)
+        under_odds = _dk_odds_int(under_entry)
+        if over_odds is None or under_odds is None:
+            continue
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        commence   = (event.get("status") or {}).get("startsAt", "")
+        out[event_id] = {
+            "away_team":     away,
+            "home_team":     home,
+            "commence_time": commence,
+            "over_odds":     over_odds,
+            "under_odds":    under_odds,
+            "line":          _dk_line_float(over_entry),
+            "bookmaker":     PRIMARY_BOOKMAKER,
+            "fair_over":     _safe_int(over_entry.get("fairOdds")),
+            "fair_under":    _safe_int(under_entry.get("fairOdds")),
+            "open_over":     _safe_int(over_entry.get("openBookOdds")),
+            "open_under":    _safe_int(under_entry.get("openBookOdds")),
+        }
+    logger.info(f"SGO extract_f5_odds: {len(out)} events with DK prices")
+    return out
+
+
+def extract_f5_ml_odds(events: list[dict]) -> dict:
+    """Extract first-5-innings two-way moneyline odds.
+
+    Returns {event_id: {away_team, home_team, commence_time,
+                         home_odds, away_odds, bookmaker,
+                         fair_home, fair_away, open_home, open_away}}
+    """
+    out: dict = {}
+    for event in events:
+        odds       = event.get("odds") or {}
         home_entry = odds.get(_F5_ML_HOME_ID)
         away_entry = odds.get(_F5_ML_AWAY_ID)
         if not home_entry or not away_entry:
             continue
-
         home_odds = _dk_odds_int(home_entry)
         away_odds = _dk_odds_int(away_entry)
         if home_odds is None or away_odds is None:
             continue
-
         away, home = _event_teams(event)
         event_id   = event.get("eventID")
         commence   = (event.get("status") or {}).get("startsAt", "")
-
         out[event_id] = {
             "away_team":     away,
             "home_team":     home,
@@ -524,31 +450,16 @@ def extract_f5_ml_odds(events: list[dict]) -> dict:
             "open_home":     _safe_int(home_entry.get("openBookOdds")),
             "open_away":     _safe_int(away_entry.get("openBookOdds")),
         }
-
     logger.info(f"SGO extract_f5_ml_odds: {len(out)} events with DK prices")
     return out
 
 
 def extract_k_odds(events: list[dict]) -> dict:
-    """Extract pitcher strikeout Over/Under odds for every pitcher.
+    """Extract pitcher strikeout O/U odds.
 
-    Returns:
-        {
-          pitcher_name: {
-            "over_odds":     int,
-            "under_odds":    int,
-            "line":          float,
-            "away_team":     str,
-            "home_team":     str,
-            "event_id":      str,
-            "bookmaker":     "draftkings",
-            "fair_over":     int,
-            "fair_under":    int,
-            "open_over":     int,
-            "open_under":    int,
-          },
-          ...
-        }
+    Returns {pitcher_name: {over_odds, under_odds, line,
+                              away_team, home_team, event_id, bookmaker,
+                              fair_over, fair_under, open_over, open_under}}
     """
     out: dict = {}
     for event in events:
@@ -556,8 +467,7 @@ def extract_k_odds(events: list[dict]) -> dict:
         event_id   = event.get("eventID")
         odds       = event.get("odds") or {}
 
-        # Two passes — collect over and under per pitcher, then zip
-        over_map: dict = {}
+        over_map:  dict = {}
         under_map: dict = {}
         for odd_id, entry in odds.items():
             if not odd_id.startswith(_K_PREFIX):
@@ -579,17 +489,14 @@ def extract_k_odds(events: list[dict]) -> dict:
             under_pair = under_map.get(player_id)
             if not under_pair:
                 continue
-            under_oid, under_entry = under_pair
-
-            over_odds = _dk_odds_int(over_entry)
+            _, under_entry = under_pair
+            over_odds  = _dk_odds_int(over_entry)
             under_odds = _dk_odds_int(under_entry)
             if over_odds is None or under_odds is None:
                 continue
-
             name = _player_name(event, player_id)
             if not name:
                 continue
-
             out[name] = {
                 "over_odds":  over_odds,
                 "under_odds": under_odds,
@@ -603,13 +510,87 @@ def extract_k_odds(events: list[dict]) -> dict:
                 "open_over":  _safe_int(over_entry.get("openBookOdds")),
                 "open_under": _safe_int(under_entry.get("openBookOdds")),
             }
-
     logger.info(f"SGO extract_k_odds: {len(out)} pitchers with DK prices")
     return out
 
 
+def extract_outs_odds(events: list[dict]) -> dict:
+    """Extract pitcher outs recorded O/U odds.
+
+    Market ID pattern: pitching_outs-{PITCHER_MLB}-game-ou-over/under
+    Confirmed in live payload (2026-05-13).
+
+    Returns:
+        {
+          pitcher_name: {
+            "over_odds":  int,
+            "under_odds": int,
+            "line":       float,   # e.g. 14.5 outs = ~4.8 IP
+            "away_team":  str,
+            "home_team":  str,
+            "event_id":   str,
+            "bookmaker":  "draftkings",
+            "fair_over":  int,
+            "fair_under": int,
+          },
+          ...
+        }
+
+    Same structure as extract_k_odds — just a different stat prefix.
+    """
+    out: dict = {}
+    for event in events:
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        odds       = event.get("odds") or {}
+
+        over_map:  dict = {}
+        under_map: dict = {}
+        for odd_id, entry in odds.items():
+            if not odd_id.startswith(_OUTS_PREFIX):
+                continue
+            if entry.get("statID") != "pitching_outs":
+                continue
+            if entry.get("betTypeID") != "ou":
+                continue
+            player_id = entry.get("playerID") or entry.get("statEntityID")
+            if not player_id:
+                continue
+            side = entry.get("sideID")
+            if side == "over":
+                over_map[player_id] = (odd_id, entry)
+            elif side == "under":
+                under_map[player_id] = (odd_id, entry)
+
+        for player_id, (over_oid, over_entry) in over_map.items():
+            under_pair = under_map.get(player_id)
+            if not under_pair:
+                continue
+            _, under_entry = under_pair
+            over_odds  = _dk_odds_int(over_entry)
+            under_odds = _dk_odds_int(under_entry)
+            if over_odds is None or under_odds is None:
+                continue
+            name = _player_name(event, player_id)
+            if not name:
+                continue
+            out[name] = {
+                "over_odds":  over_odds,
+                "under_odds": under_odds,
+                "line":       _dk_line_float(over_entry),
+                "away_team":  away,
+                "home_team":  home,
+                "event_id":   event_id,
+                "bookmaker":  PRIMARY_BOOKMAKER,
+                "fair_over":  _safe_int(over_entry.get("fairOdds")),
+                "fair_under": _safe_int(under_entry.get("fairOdds")),
+            }
+    logger.info(f"SGO extract_outs_odds: {len(out)} pitchers with DK prices")
+    return out
+
+
 def _safe_int(raw) -> Optional[int]:
-    """Parse American odds string like "+102" / "-115" to int. None on failure."""
+    """Parse American odds string to int. None on failure."""
     if raw is None:
         return None
     try:

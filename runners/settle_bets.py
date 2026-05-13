@@ -85,17 +85,48 @@ def _load_statcast_outcomes(game_pks: set) -> pd.DataFrame:
 # ── Per-system settlement logic ───────────────────────────────────────────────
 
 def _settle_nrfi(pending: pd.DataFrame, scoring: pd.DataFrame) -> list[dict]:
+    """Settle NRFI/YRFI O/U bets and first-inning 3-way ML bets.
+
+    3-way settlement (bet_type in 1I_AWAY, 1I_HOME, 1I_DRAW):
+      1I_AWAY: win if away half (top) > 0 AND home half (bot) == 0
+      1I_HOME: win if home half (bot) > 0 AND away half (top) == 0
+      1I_DRAW: win if both halves == 0 (same as NRFI)
+    """
     results = []
     game_pks = set(pending["game_pk"].dropna().astype(int))
     inn1 = scoring[(scoring["game_pk"].isin(game_pks)) & (scoring["inning"] == 1)]
-    runs_by_game = inn1.groupby("game_pk")["runs"].sum()
+
+    # Per-half runs for inning 1
+    half_runs = inn1.groupby(["game_pk", "half"])["runs"].sum().unstack(fill_value=0)
+    for col in ("top", "bot"):
+        if col not in half_runs.columns:
+            half_runs[col] = 0
+
+    # Total runs (for NRFI/YRFI)
+    runs_by_game = half_runs["top"].add(half_runs["bot"], fill_value=0)
+
     for _, bet in pending.iterrows():
         gpk = int(bet["game_pk"])
-        if gpk not in runs_by_game.index:
+        if gpk not in half_runs.index:
             logger.info(f"settle NRFI: game_pk={gpk} not in scoring master yet — skipping")
             continue
-        actual = "YRFI" if int(runs_by_game[gpk]) > 0 else "NRFI"
-        result = "win" if (bet["bet_type"] or "").upper() == actual else "loss"
+
+        away_r = int(half_runs.loc[gpk, "top"])  # away bats in top
+        home_r = int(half_runs.loc[gpk, "bot"])  # home bats in bot
+        bt     = (bet["bet_type"] or "").upper()
+
+        if bt == "1I_AWAY":
+            result = "win" if away_r > 0 and home_r == 0 else "loss"
+        elif bt == "1I_HOME":
+            result = "win" if home_r > 0 and away_r == 0 else "loss"
+        elif bt == "1I_DRAW":
+            result = "win" if away_r == 0 and home_r == 0 else "loss"
+        else:
+            # Standard NRFI/YRFI
+            total_runs = away_r + home_r
+            actual = "YRFI" if total_runs > 0 else "NRFI"
+            result = "win" if bt == actual else "loss"
+
         results.append({"id": int(bet["id"]), "result": result,
                         "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result)})
     return results
@@ -162,15 +193,43 @@ def _settle_hr(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
 
 
 def _settle_k(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
+    """Settle K strikeout O/U bets and OUTS_ pitcher outs O/U bets.
+
+    bet_type format:
+      K_OVER_7.5 / K_UNDER_7.5    — strikeout O/U (vs line)
+      OUTS_OVER_14.5 / OUTS_UNDER_14.5 — outs recorded O/U (vs line)
+
+    Both use Statcast per (game_pk, pitcher). Outs = count of all PA-ending
+    events where the pitcher recorded an out (events != walk/HBP/HR/single etc.)
+    — more precisely, total outs = (innings pitched × 3) which we approximate
+    as count of all plate appearances that ended in an out event.
+    """
     if sc.empty:
         return []
     from mlb_core.storage import read_csv, exists
+
+    # Strikeout counts
     k_counts = (
         sc[sc["events"] == "strikeout"]
         .groupby(["game_pk", "pitcher"]).size()
         .reset_index(name="actual_ks")
     )
     k_counts["game_pk"] = k_counts["game_pk"].astype(int)
+
+    # Outs recorded: PA-ending events that are outs (not hits, walks, HBP, errors)
+    _OUT_EVENTS = {
+        "strikeout", "strikeout_double_play", "field_out", "force_out",
+        "grounded_into_double_play", "double_play", "triple_play",
+        "fielders_choice_out", "sac_fly", "sac_bunt", "sac_fly_double_play",
+    }
+    outs_counts = (
+        sc[sc["events"].isin(_OUT_EVENTS)]
+        .groupby(["game_pk", "pitcher"]).size()
+        .reset_index(name="actual_outs")
+    )
+    outs_counts["game_pk"] = outs_counts["game_pk"].astype(int)
+
+    # Resolve pitcher id from K feature CSV
     gpk_to_pitcher = {}
     if exists("K_Pro_System/data/model_features.csv"):
         try:
@@ -182,36 +241,62 @@ def _settle_k(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
             gpk_to_pitcher = kf.groupby("game_pk")["pitcher"].first().to_dict()
         except Exception as e:
             logger.warning(f"settle K: feature CSV load failed: {e}")
-    k_lookup = k_counts.set_index(["game_pk", "pitcher"])["actual_ks"].to_dict()
+
+    k_lookup    = k_counts.set_index(["game_pk", "pitcher"])["actual_ks"].to_dict()
+    outs_lookup = outs_counts.set_index(["game_pk", "pitcher"])["actual_outs"].to_dict()
+
     results = []
     for _, bet in pending.iterrows():
         gpk = int(bet["game_pk"])
         bt  = (bet["bet_type"] or "").upper()
         parts = bt.split("_")
-        if len(parts) < 3:
-            continue
-        side = parts[1]
-        try:
-            line = float(parts[2])
-        except ValueError:
-            continue
-        pitcher_id = gpk_to_pitcher.get(gpk)
-        if pitcher_id is None:
-            logger.info(f"settle K: no pitcher_id for game_pk={gpk} — skipping")
-            continue
-        actual_ks = k_lookup.get((gpk, pitcher_id))
-        if actual_ks is None:
-            logger.info(f"settle K: no Statcast data for game_pk={gpk} pitcher={pitcher_id} — skipping")
-            continue
-        if actual_ks == line:
+
+        # Determine market type from prefix
+        if bt.startswith("OUTS_"):
+            # OUTS_OVER_14.5 → parts = ["OUTS", "OVER", "14.5"]
+            if len(parts) < 3:
+                continue
+            side = parts[1]
+            try:
+                line = float(parts[2])
+            except ValueError:
+                continue
+            pitcher_id = gpk_to_pitcher.get(gpk)
+            if pitcher_id is None:
+                logger.info(f"settle OUTS: no pitcher_id for game_pk={gpk} — skipping")
+                continue
+            actual = outs_lookup.get((gpk, pitcher_id))
+            if actual is None:
+                logger.info(f"settle OUTS: no Statcast data for game_pk={gpk} — skipping")
+                continue
+        else:
+            # K_OVER_7.5 → parts = ["K", "OVER", "7.5"]
+            if len(parts) < 3:
+                continue
+            side = parts[1]
+            try:
+                line = float(parts[2])
+            except ValueError:
+                continue
+            pitcher_id = gpk_to_pitcher.get(gpk)
+            if pitcher_id is None:
+                logger.info(f"settle K: no pitcher_id for game_pk={gpk} — skipping")
+                continue
+            actual = k_lookup.get((gpk, pitcher_id))
+            if actual is None:
+                logger.info(f"settle K: no Statcast data for game_pk={gpk} — skipping")
+                continue
+
+        if actual == line:
             result = "push"
         elif side == "OVER":
-            result = "win" if actual_ks > line else "loss"
+            result = "win" if actual > line else "loss"
         else:
-            result = "win" if actual_ks < line else "loss"
+            result = "win" if actual < line else "loss"
+
         results.append({"id": int(bet["id"]), "result": result,
                         "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result),
-                        "actual": actual_ks})
+                        "actual": actual})
     return results
 
 

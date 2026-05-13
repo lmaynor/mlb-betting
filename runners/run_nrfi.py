@@ -243,6 +243,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         except Exception as e:
             logger.warning(f"NRFI calibrator predict failed: {e} — using raw probs")
 
+    # 3-way joint probabilities derived from per-half probs
+    pivot["p_3way_away"] = pivot["away"] * (1.0 - pivot["home"])
+    pivot["p_3way_home"] = pivot["home"] * (1.0 - pivot["away"])
+    pivot["p_3way_draw"] = pivot["model_nrfi_prob"]
+
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("NRFI: SGO snapshot empty or missing — skipping")

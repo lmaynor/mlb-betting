@@ -1,16 +1,5 @@
 """
 mlb_core.notify.discord — Discord webhook publisher.
-
-Usage:
-    from mlb_core.notify.discord import post_bets, post_summary
-
-    post_bets(bets_df, system="NRFI", date="2026-04-22")
-    post_summary(stats, system="NRFI")
-
-Webhook URL is read from the DISCORD_WEBHOOK_URL environment variable
-(or DISCORD_WEBHOOK_<SYSTEM> for a per-system override, e.g.
-DISCORD_WEBHOOK_NRFI).  If no webhook is configured, calls are no-ops
-and a warning is logged.
 """
 import os
 import logging
@@ -22,18 +11,14 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Colour codes per system for the embed sidebar
 _SYSTEM_COLORS = {
-    "NRFI": 0x5865F2,   # blurple
-    "HR":   0xED4245,   # red
-    "F5":   0x57F287,   # green
-    "K":    0xFEE75C,   # yellow
+    "NRFI": 0x5865F2,
+    "HR":   0xED4245,
+    "F5":   0x57F287,
+    "K":    0xFEE75C,
 }
+_DEFAULT_COLOR = 0x99AAB5
 
-_DEFAULT_COLOR = 0x99AAB5  # grey
-
-# Abbrev -> sportsbook-canonical nickname (the medium form DK/SGO use).
-# Used by the per-system bet-headline formatter below.
 TEAM_NICKNAME = {
     "ARI": "Diamondbacks", "ATL": "Braves",     "BAL": "Orioles",
     "BOS": "Red Sox",      "CHC": "Cubs",       "CWS": "White Sox",
@@ -49,18 +34,21 @@ TEAM_NICKNAME = {
 
 
 def _format_bet_headline(b: dict, system: str) -> str:
-    """Return the canonical sportsbook-style headline for one bet row.
+    """Return canonical sportsbook-style headline for one bet row.
 
-    System-specific:
-      NRFI -> "Yankees @ Guardians - 1st Inning - Under 0.5 Runs"
-              (bet_type "NRFI" = Under 0.5; "YRFI" = Over 0.5)
-      F5   -> "Dodgers - 1st 5 Innings Moneyline"
-              (player field carries the F5 winner team abbrev from run_f5)
-      HR   -> "Aaron Judge (NYY) - To Hit A Home Run"
-      K    -> "Gerrit Cole (NYY) - Over 7.5 Strikeouts"
-
-    Falls back to the prior generic format if the row doesn't have the
-    fields the formatter expects.
+    Handles all side values:
+      NRFI system:
+        NRFI / YRFI          — existing O/U bets
+        1I_AWAY              — away team scores 1st inning, home doesn't
+        1I_HOME              — home team scores 1st inning, away doesn't
+        1I_DRAW              — neither team scores 1st inning (3-way draw)
+      F5 system:
+        HOME / AWAY          — F5 moneyline
+      HR system:
+        (player + team)      — To Hit A Home Run
+      K system:
+        OVER / UNDER         — strikeout O/U
+        OUTS_OVER/UNDER      — outs recorded O/U (bet_type starts with OUTS_)
     """
     away = b.get("away_team", "")
     home = b.get("home_team", "")
@@ -69,53 +57,60 @@ def _format_bet_headline(b: dict, system: str) -> str:
 
     sys = (system or "").upper()
     bt  = (b.get("bet_type") or "").upper()
+    side = (b.get("side") or "").upper()
 
     if sys == "NRFI":
-        side = "Under 0.5 Runs" if "NRFI" in bt else "Over 0.5 Runs"
-        return f"{away_full} @ {home_full} - 1st Inning - {side}"
+        # 3-way first-inning ML
+        if side == "1I_AWAY":
+            return f"{away_full} @ {home_full} - 1st Inning - {away_full} Score"
+        if side == "1I_HOME":
+            return f"{away_full} @ {home_full} - 1st Inning - {home_full} Score"
+        if side == "1I_DRAW":
+            return f"{away_full} @ {home_full} - 1st Inning - Neither Scores"
+        # Standard NRFI/YRFI O/U
+        ou_side = "Under 0.5 Runs" if "NRFI" in (side or bt) else "Over 0.5 Runs"
+        return f"{away_full} @ {home_full} - 1st Inning - {ou_side}"
 
     if sys == "F5":
-        # F5 runner puts the winning team abbrev in bet_type or player.
-        # The bet_type usually reads e.g. "F5_HOME" / "F5_AWAY" or "COL F5".
-        # We need to know WHICH team is the bet — derive from b["side"] if
-        # present (the runner sets side="HOME"|"AWAY"), else parse bet_type.
-        side = (b.get("side") or "").upper()
         if side == "HOME":
             team_full = home_full
         elif side == "AWAY":
             team_full = away_full
         else:
-            # Best-effort parse of bet_type. If e.g. "COL F5" or "F5 COL",
-            # pull the abbrev token and look it up.
             tokens = bt.replace("_", " ").split()
             team_abbr = next((t for t in tokens if t in TEAM_NICKNAME), None)
-            team_full = TEAM_NICKNAME.get(team_abbr, b.get("player") or f"{away_full}/{home_full}")
+            team_full = TEAM_NICKNAME.get(team_abbr,
+                        b.get("player") or f"{away_full}/{home_full}")
         return f"{team_full} - 1st 5 Innings Moneyline"
 
     if sys == "HR":
-        player = b.get("player", "")
-        team   = b.get("team") or b.get("batter_team") or ""
-        team   = team if team else ""
+        player   = b.get("player", "")
+        team     = b.get("team") or b.get("batter_team") or ""
         team_tag = f" ({team})" if team else ""
         return f"{player}{team_tag} - To Hit A Home Run"
 
     if sys == "K":
-        player = b.get("player", "")
-        team   = b.get("team") or ""
+        player   = b.get("player", "")
+        team     = b.get("team") or ""
         team_tag = f" ({team})" if team else ""
-        line   = b.get("line")
-        side   = (b.get("side") or "").upper()
+        line     = b.get("line")
+        line_str = f" {line}" if line is not None else ""
+
+        # Outs recorded market (bet_type starts with OUTS_)
+        if bt.startswith("OUTS_"):
+            side_word = "Over" if side == "OVER" else ("Under" if side == "UNDER" else side)
+            return f"{player}{team_tag} - {side_word}{line_str} Outs Recorded"
+
+        # Standard strikeout O/U
         side_word = "Over" if side == "OVER" else ("Under" if side == "UNDER" else side)
-        line_str  = f" {line}" if line is not None else ""
         return f"{player}{team_tag} - {side_word}{line_str} Strikeouts"
 
-    # Fallback to prior generic format
+    # Fallback
     matchup = f"{b.get('player','')} - {away} @ {home}".strip(" -")
     return f"{bt} - {matchup}"
 
 
 def _get_webhook(system: str) -> Optional[str]:
-    """Return webhook URL for this system, or None if not configured."""
     url = (
         os.getenv(f"DISCORD_WEBHOOK_{system.upper()}")
         or os.getenv("DISCORD_WEBHOOK_URL")
@@ -129,7 +124,6 @@ def _get_webhook(system: str) -> Optional[str]:
 
 
 def _post(webhook_url: str, payload: dict) -> bool:
-    """POST a Discord webhook payload. Returns True on success."""
     try:
         r = requests.post(webhook_url, json=payload, timeout=15)
         r.raise_for_status()
@@ -150,16 +144,6 @@ def post_bets(
     system: str,
     run_date: str = None,
 ) -> None:
-    """
-    Post today's bet signals to Discord.
-
-    Args:
-        bets:      List of bet dicts or a DataFrame. Each row must have:
-                   away_team, home_team, bet_type, model_prob, edge, odds, stake.
-                   Optional: player, kelly_pct, paper.
-        system:    System name e.g. "NRFI".
-        run_date:  Date string e.g. "2026-04-22". Defaults to today.
-    """
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
@@ -172,15 +156,14 @@ def post_bets(
     if not bets:
         _post(webhook_url, {
             "embeds": [{
-                "title": f"{system} | {run_date}",
+                "title":       f"{system} | {run_date}",
                 "description": "No qualifying bets today.",
-                "color": _DEFAULT_COLOR,
+                "color":       _DEFAULT_COLOR,
             }]
         })
         return
 
     color = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
-
     fields = []
     for b in bets:
         model_prob = b.get("model_prob")
@@ -205,39 +188,28 @@ def post_bets(
         "title":       f"{system} Bets | {run_date}",
         "description": f"**{len(bets)}** bet{'s' if len(bets) != 1 else ''} found",
         "color":       color,
-        "fields":      fields[:25],   # Discord cap
+        "fields":      fields[:25],
         "footer":      {"text": "mlb-betting | paper mode" if bets[0].get("paper") else "mlb-betting | LIVE"},
     }
-
     _post(webhook_url, {"embeds": [embed]})
 
 
 def post_summary(stats: dict, system: str, run_date: str = None) -> None:
-    """
-    Post a performance summary embed.
-
-    Args:
-        stats:     Dict returned by BetTracker.summary().
-        system:    System name.
-        run_date:  Date string. Defaults to today.
-    """
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
 
     run_date = run_date or date.today().isoformat()
-
     if not stats:
         return
 
-    color   = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
-    pnl     = stats.get("pnl", 0)
-    roi     = stats.get("roi", 0)
-    bets    = stats.get("bets", 0)
-    wins    = stats.get("wins", 0)
-    hit     = stats.get("hit_rate", 0)
-    edge    = stats.get("avg_edge")
-
+    color     = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
+    pnl       = stats.get("pnl", 0)
+    roi       = stats.get("roi", 0)
+    bets      = stats.get("bets", 0)
+    wins      = stats.get("wins", 0)
+    hit       = stats.get("hit_rate", 0)
+    edge      = stats.get("avg_edge")
     pnl_emoji = "📈" if pnl >= 0 else "📉"
     edge_str  = f"{edge:+.1%}" if edge is not None else "N/A"
 
@@ -246,9 +218,9 @@ def post_summary(stats: dict, system: str, run_date: str = None) -> None:
         "color":  color,
         "fields": [
             {"name": "Record",   "value": f"{wins}/{bets} ({hit:.1%})", "inline": True},
-            {"name": "P&L",      "value": f"{pnl_emoji} ${pnl:+.2f}",   "inline": True},
-            {"name": "ROI",      "value": f"{roi:+.1f}%",               "inline": True},
-            {"name": "Avg edge", "value": edge_str,                      "inline": True},
+            {"name": "P&L",      "value": f"{pnl_emoji} ${pnl:+.2f}",  "inline": True},
+            {"name": "ROI",      "value": f"{roi:+.1f}%",              "inline": True},
+            {"name": "Avg edge", "value": edge_str,                     "inline": True},
         ],
     }
     _post(webhook_url, {"embeds": [embed]})
@@ -259,13 +231,6 @@ def post_all_systems_summary(
     settle_date: str = None,
 ) -> None:
     """Post a cross-system profitability summary to Discord.
-
-    system_stats: dict keyed by system name ("HR", "NRFI", "F5", "K").
-    Each value is either None (no resolved bets yet) or a dict with:
-        bets, wins, hit_rate, pnl, roi, avg_edge, pending
-
-    Produces one embed with a field per system — a single daily digest
-    showing how all four models are performing this season.
 
     Reads DISCORD_WEBHOOK_SUMMARY first, falls back to DISCORD_WEBHOOK_URL.
     """
@@ -280,9 +245,7 @@ def post_all_systems_summary(
     total_pnl = 0.0
     for system in ["HR", "NRFI", "F5", "K"]:
         stats = system_stats.get(system)
-        color_dot = {
-            "HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"
-        }.get(system, "⚪")
+        color_dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"}.get(system, "⚪")
 
         if not stats:
             fields.append({
@@ -325,7 +288,6 @@ def post_all_systems_summary(
 
 
 def post_error(system: str, message: str, run_date: str = None) -> None:
-    """Post an error alert to Discord."""
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
