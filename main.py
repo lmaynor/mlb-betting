@@ -180,39 +180,26 @@ def settle_handler():
     return jsonify(result), 200
 
 
-
-@app.route("/refresh-data", methods=["POST"])
-def refresh_data_handler():
-    """Refresh weather and umpire masters from upstream sources.
-    Called nightly at 08:00 UTC (after west coast games finish).
+@app.route("/monitor", methods=["POST"])
+def monitor_handler():
+    """Check rolling performance for all systems. Post Discord alerts if degraded.
+    Called by Cloud Scheduler at 09:30 UTC daily (30 min after settle).
     """
-    from mlb_core.config import GCS_BUCKET
-    results = {}
-
+    body = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", date.today().isoformat())
     try:
-        from mlb_core.data.weather import weather_nightly_gcs
-        weather_nightly_gcs(
-            gcs_bucket=GCS_BUCKET,
-            gcs_master_key="Weather/weather_master.csv",
-        )
-        results["weather"] = "ok"
+        from runners.monitor_performance import run as monitor_run
+        result = monitor_run(run_date=run_date)
     except Exception as e:
-        logger.error(f"weather refresh failed: {e}")
-        results["weather"] = str(e)
-
-    try:
-        from mlb_core.data.umpires import umpires_nightly_gcs
-        umpires_nightly_gcs(
-            gcs_bucket=GCS_BUCKET,
-            gcs_master_key="Umpires/umpscorecards_master.csv",
-        )
-        results["umpires"] = "ok"
-    except Exception as e:
-        logger.error(f"umpires refresh failed: {e}")
-        results["umpires"] = str(e)
-
-    status = 200 if all(v == "ok" for v in results.values()) else 207
-    return jsonify({"status": "ok" if status == 200 else "partial", **results}), status
+        tb = traceback.format_exc()
+        logger.error(f"monitor failed:\n{tb}")
+        try:
+            from mlb_core.notify.discord import post_error
+            post_error("MONITOR", f"Monitor crashed:\n```\n{tb[:1500]}\n```", run_date)
+        except Exception:
+            pass
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify(result), 200
 
 
 if __name__ == "__main__":

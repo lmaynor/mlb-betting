@@ -7,6 +7,12 @@ Changes from v1:
   - Connection string comes from MLB_DB_URL env var.
   - SQLite path falls back to the system-specific bet_db config key.
   - Schema is unchanged so existing SQLite files are compatible.
+
+Changes from v2:
+  - log_bet() now checks for duplicates on (system, game_date, game_pk,
+    bet_type) before inserting. Duplicate bets are skipped and -1 is
+    returned. Prevents morning + evening runs from double-logging the
+    same bet when the line hasn't moved.
 """
 import os
 from pathlib import Path
@@ -103,6 +109,37 @@ class BetTracker:
         with self.engine.begin() as conn:
             conn.execute(text(schema))
 
+    def is_duplicate(
+        self,
+        game_date: str,
+        game_pk: int,
+        bet_type: str,
+    ) -> bool:
+        """Return True if a bet with this (system, game_date, game_pk, bet_type)
+        already exists in the DB.
+
+        Prevents the morning and evening scoring runs from double-logging the
+        same bet when the line and edge haven't changed between runs.
+        """
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    SELECT id FROM bets
+                    WHERE system    = :system
+                      AND game_date = :game_date
+                      AND game_pk   = :game_pk
+                      AND bet_type  = :bet_type
+                    LIMIT 1
+                """),
+                {
+                    "system":    self.system,
+                    "game_date": game_date,
+                    "game_pk":   game_pk,
+                    "bet_type":  bet_type,
+                },
+            ).fetchone()
+        return row is not None
+
     def log_bet(
         self,
         game_date: str = None,
@@ -120,7 +157,21 @@ class BetTracker:
         paper: bool = True,
         notes: str = "",
     ) -> int:
-        """Log a bet. Returns bet_id."""
+        """Log a bet. Returns bet_id, or -1 if the bet is a duplicate.
+
+        Duplicate check: (system, game_date, game_pk, bet_type) must be
+        unique. If a matching row already exists the bet is skipped and
+        -1 is returned. The caller should treat -1 as "already logged,
+        no action needed."
+        """
+        # Dedup check — skip silently if already logged today
+        if game_date and game_pk is not None and bet_type:
+            if self.is_duplicate(game_date, game_pk, bet_type):
+                label = player if player else f"{away_team} @ {home_team}"
+                print(f"  [{self.system}] SKIP duplicate: {bet_type} {label} "
+                      f"on {game_date} (game_pk={game_pk})")
+                return -1
+
         with self.engine.begin() as conn:
             result = conn.execute(
                 text("""
