@@ -251,6 +251,75 @@ def _feature_means(df: pd.DataFrame, features: list) -> dict:
     return means
 
 
+
+def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
+                   threshold: float = 0.10) -> list[str]:
+    """Warn if removing any single feature improves OOS MAE by >threshold.
+
+    A feature whose removal improves MAE by >10% may be carrying target
+    information (leakage). Warning only -- does not abort the retrain.
+    Skipped if env var K_SKIP_LEAKAGE_CHECK=1 is set (for fast reruns).
+
+    Only checks features with >50% non-NaN coverage to avoid false
+    positives from sparse columns.
+    """
+    import os
+    if os.getenv("K_SKIP_LEAKAGE_CHECK") == "1":
+        logger.info("leakage check skipped (K_SKIP_LEAKAGE_CHECK=1)")
+        return []
+
+    last = CV_FOLDS[-1]
+    df_tr = df[df["year"] < last].copy()
+    df_te = df[df["year"] == last].copy()
+    if len(df_te) < 10:
+        return []
+
+    best_iter    = oos["best_iteration"]
+    baseline_mae = oos["mae_oos"]
+    y_tr = df_tr[TARGET].astype(float)
+    y_te = df_te[TARGET].astype(float)
+    suspicious = []
+
+    logger.info(f"leakage check | baseline MAE={baseline_mae:.3f} | "
+                f"threshold={threshold:.0%} | checking {len(features)} features")
+
+    for feat in features:
+        coverage = df_tr[feat].notna().mean() if feat in df_tr.columns else 0.0
+        if coverage < 0.5:
+            continue
+
+        df_tr_z = df_tr.copy(); df_tr_z[feat] = 0.0
+        df_te_z = df_te.copy(); df_te_z[feat] = 0.0
+
+        dtrain_z = xgb.DMatrix(
+            df_tr_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_tr, feature_names=features)
+        dtest_z  = xgb.DMatrix(
+            df_te_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_te, feature_names=features)
+
+        b = xgb.train(XGB_PARAMS, dtrain_z,
+                      num_boost_round=best_iter, verbose_eval=False)
+        mae_z = _mae(y_te, b.predict(dtest_z))
+        improvement = (baseline_mae - mae_z) / max(baseline_mae, 1e-9)
+
+        if improvement > threshold:
+            suspicious.append(feat)
+            logger.warning(
+                f"  LEAKAGE SUSPECT: {feat!r} | "
+                f"MAE {baseline_mae:.3f} -> {mae_z:.3f} "
+                f"(improvement={improvement:+.1%})"
+            )
+
+    if not suspicious:
+        logger.info("  leakage check passed -- no suspicious features")
+    else:
+        logger.warning(
+            f"  leakage check: {len(suspicious)} suspicious features: {suspicious}"
+        )
+    return suspicious
+
+
 def run() -> dict:
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import write_bytes, upload_model
@@ -275,6 +344,11 @@ def run() -> dict:
         oos = _oos_eval(df, available)
     except Exception as e:
         return {"status": "error", "error": f"OOS eval: {e}"}
+
+    leakage_suspects = _leakage_check(df, available, oos)
+    if leakage_suspects:
+        logger.warning(f"proceeding with retrain despite {len(leakage_suspects)} "
+                       f"leakage suspect(s) -- review before promoting to production")
 
     try:
         booster = _full_retrain(df, available, oos["best_iteration"])
@@ -356,6 +430,7 @@ def run() -> dict:
         "best_iteration":  oos["best_iteration"],
         "wf_mae":          wf_summary.get("wf_mae"),
         "wf_mae_std":      wf_summary.get("wf_mae_std"),
+        "leakage_suspects": leakage_suspects,
         "booster_archive": booster_archive_key,
         "meta_archive":    meta_archive_key,
         "booster_latest":  GCS_BOOSTER_LATEST,
