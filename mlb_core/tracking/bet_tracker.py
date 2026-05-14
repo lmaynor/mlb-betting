@@ -1,18 +1,16 @@
 """
-mlb_core.tracking.bet_tracker v2 — Cloud SQL + SQLite fallback.
-
-Changes from v1:
-  - Uses SQLAlchemy so the same code works with SQLite (dev) and
-    Cloud SQL / Postgres (GCP).
-  - Connection string comes from MLB_DB_URL env var.
-  - SQLite path falls back to the system-specific bet_db config key.
-  - Schema is unchanged so existing SQLite files are compatible.
+mlb_core.tracking.bet_tracker v3 — Cloud SQL + SQLite fallback.
 
 Changes from v2:
-  - log_bet() now checks for duplicates on (system, game_date, game_pk,
-    bet_type) before inserting. Duplicate bets are skipped and -1 is
-    returned. Prevents morning + evening runs from double-logging the
-    same bet when the line hasn't moved.
+  - Added `kelly_triggered` BOOLEAN column. True when the prediction
+    cleared both min_edge and min_kelly_pct and received a non-zero stake.
+    False for predictions that were scored but filtered out.
+  - Added dedup check in log_bet(): skips insert if a row already exists
+    for (system, game_date, game_pk, bet_type). Returns -1 on duplicate.
+    Morning + evening runs both score; the first one wins.
+  - All runners now call log_bet() for every scored prediction (not just
+    qualifying ones), setting kelly_triggered=False and stake=0 for
+    filtered predictions. This supports threshold/Kelly post-mortems.
 """
 import os
 from pathlib import Path
@@ -27,44 +25,42 @@ from mlb_core.config import DB_URL
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS bets (
-    id             SERIAL PRIMARY KEY,
-    system         TEXT    NOT NULL,
-    game_date      TEXT,
-    game_pk        INTEGER,
-    player         TEXT,
-    away_team      TEXT,
-    home_team      TEXT,
-    bet_type       TEXT,
-    model_prob     REAL,
-    market_prob    REAL,
-    edge           REAL,
-    kelly_pct      REAL,
-    odds           INTEGER,
-    stake          REAL,
-    paper          INTEGER DEFAULT 1,
-    result         TEXT,
-    profit         REAL,
-    settled_at     TEXT,
-    notes          TEXT,
-    created_at     TEXT
+    id               SERIAL PRIMARY KEY,
+    system           TEXT    NOT NULL,
+    game_date        TEXT,
+    game_pk          INTEGER,
+    player           TEXT,
+    away_team        TEXT,
+    home_team        TEXT,
+    bet_type         TEXT,
+    model_prob       REAL,
+    market_prob      REAL,
+    edge             REAL,
+    kelly_pct        REAL,
+    odds             INTEGER,
+    stake            REAL,
+    kelly_triggered  BOOLEAN DEFAULT TRUE,
+    paper            INTEGER DEFAULT 1,
+    result           TEXT,
+    profit           REAL,
+    settled_at       TEXT,
+    notes            TEXT,
+    created_at       TEXT
 )
 """
 
-# SQLite doesn't support SERIAL — use AUTOINCREMENT equivalent
 _SCHEMA_SQL_SQLITE = _SCHEMA_SQL.replace(
-    "id             SERIAL PRIMARY KEY",
-    "id             INTEGER PRIMARY KEY AUTOINCREMENT",
+    "id               SERIAL PRIMARY KEY",
+    "id               INTEGER PRIMARY KEY AUTOINCREMENT",
 )
+
+# Migration: add kelly_triggered to existing tables that predate v3.
+_MIGRATE_SQL = """
+ALTER TABLE bets ADD COLUMN kelly_triggered BOOLEAN DEFAULT TRUE
+"""
 
 
 def _make_engine(db_path: str) -> sa.Engine:
-    """
-    Build a SQLAlchemy engine.
-
-    Priority:
-      1. MLB_DB_URL env var  →  Cloud SQL (Postgres via pg8000)
-      2. db_path argument    →  local SQLite
-    """
     url = DB_URL or ""
     if url:
         return sa.create_engine(url)
@@ -78,19 +74,23 @@ class BetTracker:
     Unified bet tracker. All systems use this class.
 
     Usage:
-        tracker = BetTracker("C:/path/to/nrfi_bets.db", system="NRFI")
-        # or on GCP (DB_URL env var set):
-        tracker = BetTracker(db_path="unused", system="NRFI")
+        tracker = BetTracker("path/to/bets.db", system="NRFI")
 
+        # Log every scored prediction (qualifying or not):
         bet_id = tracker.log_bet(
-            game_date="2026-04-07",
-            away_team="CHC", home_team="STL",
+            game_date="2026-05-14",
+            game_pk=12345,
+            player="CLE @ LAA",
+            away_team="CLE", home_team="LAA",
             bet_type="NRFI",
             model_prob=0.58, market_prob=0.52,
             edge=0.06, kelly_pct=0.018,
             odds=-115, stake=18.00,
+            kelly_triggered=True,
             paper=True,
         )
+        # Returns -1 if (system, game_date, game_pk, bet_type) already exists.
+
         tracker.settle(bet_id, result="win", profit=15.65)
     """
 
@@ -108,35 +108,22 @@ class BetTracker:
         )
         with self.engine.begin() as conn:
             conn.execute(text(schema))
+            # Migrate existing tables that don't yet have kelly_triggered.
+            try:
+                conn.execute(text(_MIGRATE_SQL))
+            except Exception:
+                pass  # Column already exists — expected after first migration.
 
-    def is_duplicate(
-        self,
-        game_date: str,
-        game_pk: int,
-        bet_type: str,
-    ) -> bool:
-        """Return True if a bet with this (system, game_date, game_pk, bet_type)
-        already exists in the DB.
-
-        Prevents the morning and evening scoring runs from double-logging the
-        same bet when the line and edge haven't changed between runs.
-        """
+    def is_duplicate(self, game_date: str, game_pk: int, bet_type: str) -> bool:
+        """Return True if this (system, game_date, game_pk, bet_type) is already logged."""
         with self.engine.connect() as conn:
             row = conn.execute(
                 text("""
-                    SELECT id FROM bets
-                    WHERE system    = :system
-                      AND game_date = :game_date
-                      AND game_pk   = :game_pk
-                      AND bet_type  = :bet_type
+                    SELECT 1 FROM bets
+                    WHERE system=:s AND game_date=:d AND game_pk=:g AND bet_type=:t
                     LIMIT 1
                 """),
-                {
-                    "system":    self.system,
-                    "game_date": game_date,
-                    "game_pk":   game_pk,
-                    "bet_type":  bet_type,
-                },
+                {"s": self.system, "d": game_date, "g": game_pk, "t": bet_type},
             ).fetchone()
         return row is not None
 
@@ -154,22 +141,13 @@ class BetTracker:
         kelly_pct: float = None,
         odds: int = None,
         stake: float = None,
+        kelly_triggered: bool = True,
         paper: bool = True,
         notes: str = "",
     ) -> int:
-        """Log a bet. Returns bet_id, or -1 if the bet is a duplicate.
-
-        Duplicate check: (system, game_date, game_pk, bet_type) must be
-        unique. If a matching row already exists the bet is skipped and
-        -1 is returned. The caller should treat -1 as "already logged,
-        no action needed."
-        """
-        # Dedup check — skip silently if already logged today
-        if game_date and game_pk is not None and bet_type:
+        """Log a prediction. Returns bet_id, or -1 if duplicate."""
+        if game_pk is not None and bet_type is not None and game_date is not None:
             if self.is_duplicate(game_date, game_pk, bet_type):
-                label = player if player else f"{away_team} @ {home_team}"
-                print(f"  [{self.system}] SKIP duplicate: {bet_type} {label} "
-                      f"on {game_date} (game_pk={game_pk})")
                 return -1
 
         with self.engine.begin() as conn:
@@ -178,11 +156,11 @@ class BetTracker:
                     INSERT INTO bets
                         (system, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
-                         odds, stake, paper, notes, created_at)
+                         odds, stake, kelly_triggered, paper, notes, created_at)
                     VALUES
                         (:system, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
-                         :odds, :stake, :paper, :notes, :created_at)
+                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at)
                 """),
                 {
                     "system": self.system, "game_date": game_date,
@@ -191,16 +169,19 @@ class BetTracker:
                     "bet_type": bet_type, "model_prob": model_prob,
                     "market_prob": market_prob, "edge": edge,
                     "kelly_pct": kelly_pct, "odds": odds,
-                    "stake": stake, "paper": int(paper),
+                    "stake": stake,
+                    "kelly_triggered": kelly_triggered,
+                    "paper": int(paper),
                     "notes": notes, "created_at": datetime.now().isoformat(),
                 },
             )
             bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \
                      else conn.execute(text("SELECT lastval()")).scalar()
 
-        label = player if player else f"{away_team} @ {home_team}"
-        edge_str = f" | edge: {edge:+.1%}" if edge is not None else ""
-        print(f"  [{self.system}] Bet #{bet_id} logged: {bet_type} {label}{edge_str}")
+        if kelly_triggered:
+            label = player if player else f"{away_team} @ {home_team}"
+            edge_str = f" | edge: {edge:+.1%}" if edge is not None else ""
+            print(f"  [{self.system}] Bet #{bet_id} logged: {bet_type} {label}{edge_str}")
         return bet_id
 
     def settle(self, bet_id: int, result: str, profit: float) -> None:
@@ -229,24 +210,27 @@ class BetTracker:
         if season:
             df = df[df["game_date"].str.startswith(season)]
 
-        resolved   = df[df["result"].notna()].copy()
-        pending_df = df[df["result"].isna()]
+        # Summary counts only kelly_triggered=True rows (actual bets).
+        bet_df     = df[df["kelly_triggered"].fillna(True).astype(bool)]
+        resolved   = bet_df[bet_df["result"].notna()].copy()
+        pending_df = bet_df[bet_df["result"].isna()]
         if last_n:
             resolved = resolved.tail(last_n)
 
         print(f"\n{'='*52}")
         print(f"  {self.system} BET TRACKER")
         print(f"{'='*52}")
-        print(f"  Total logged : {len(df)} | Resolved: {len(resolved)} | Pending: {len(pending_df)}")
+        print(f"  Total logged : {len(bet_df)} bets | {len(df)-len(bet_df)} non-triggered")
+        print(f"  Resolved: {len(resolved)} | Pending: {len(pending_df)}")
 
         stats = {}
         if not resolved.empty:
-            wins          = (resolved["result"] == "win").sum()
-            total_staked  = resolved["stake"].sum()
-            pnl           = resolved["profit"].sum()
-            roi           = pnl / total_staked * 100 if total_staked > 0 else 0
-            avg_edge      = resolved["edge"].mean()
-            hit_rate      = wins / len(resolved)
+            wins         = (resolved["result"] == "win").sum()
+            total_staked = resolved["stake"].sum()
+            pnl          = resolved["profit"].sum()
+            roi          = pnl / total_staked * 100 if total_staked > 0 else 0
+            avg_edge     = resolved["edge"].mean()
+            hit_rate     = wins / len(resolved)
 
             print(f"  Win rate     : {hit_rate:.1%} ({wins}/{len(resolved)})")
             if avg_edge == avg_edge:

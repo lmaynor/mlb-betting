@@ -292,30 +292,32 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    if edge >= cfg["min_edge"]:
-                        results.append({
-                            "player":      row["_pitcher_name"],
-                            "team":        team,
-                            "game_pk":     int(row["game_pk"]),
-                            "away_team":   row["away_team"],
-                            "home_team":   row["home_team"],
-                            "side":        side,
-                            "line":        float(line),
-                            "lambda_k":    round(float(row["lambda_k"]), 3),
-                            "proj_k":      round(probs["mean"], 3),
-                            "model_prob":  round(model_prob, 4),
-                            "market_prob": round(fair, 4),
-                            "edge":        round(edge, 4),
-                            "kelly_pct":   round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
-                            "odds":        odds,
-                            "stake":       kelly_stake(
-                                edge, odds, bankroll=cfg["BANKROLL"],
-                                fraction=cfg["kelly_fraction"],
-                                min_pct=cfg["min_kelly_pct"],
-                                max_pct=cfg["max_kelly_pct"],
-                            ),
-                            "market": "K",
-                        })
+                    _stake = kelly_stake(
+                        edge, odds, bankroll=cfg["BANKROLL"],
+                        fraction=cfg["kelly_fraction"],
+                        min_pct=cfg["min_kelly_pct"],
+                        max_pct=cfg["max_kelly_pct"],
+                    )
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    results.append({
+                        "player":          row["_pitcher_name"],
+                        "team":            team,
+                        "game_pk":         int(row["game_pk"]),
+                        "away_team":       row["away_team"],
+                        "home_team":       row["home_team"],
+                        "side":            side,
+                        "line":            float(line),
+                        "lambda_k":        round(float(row["lambda_k"]), 3),
+                        "proj_k":          round(probs["mean"], 3),
+                        "model_prob":      round(model_prob, 4),
+                        "market_prob":     round(fair, 4),
+                        "edge":            round(edge, 4),
+                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
+                        "odds":            odds,
+                        "stake":           _stake if kelly_triggered else 0.0,
+                        "kelly_triggered": kelly_triggered,
+                        "market":          "K",
+                    })
 
         # ── Pitcher outs O/U ───────────────────────────────────────────────
         outs_info = outs_by_norm.get(norm)
@@ -342,30 +344,32 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
-                    if edge >= cfg["min_edge"]:
-                        results.append({
-                            "player":      row["_pitcher_name"],
-                            "team":        team,
-                            "game_pk":     int(row["game_pk"]),
-                            "away_team":   row["away_team"],
-                            "home_team":   row["home_team"],
-                            "side":        side,
-                            "line":        float(line),
-                            "lambda_k":    round(float(row["lambda_k"]), 3),
-                            "proj_k":      round(dist["mean_outs"] / 3, 3),
-                            "model_prob":  round(model_prob, 4),
-                            "market_prob": round(fair, 4),
-                            "edge":        round(edge, 4),
-                            "kelly_pct":   round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
-                            "odds":        odds,
-                            "stake":       kelly_stake(
-                                edge, odds, bankroll=cfg["BANKROLL"],
-                                fraction=cfg["kelly_fraction"],
-                                min_pct=cfg["min_kelly_pct"],
-                                max_pct=cfg["max_kelly_pct"],
-                            ),
-                            "market": "OUTS",
-                        })
+                    _stake = kelly_stake(
+                        edge, odds, bankroll=cfg["BANKROLL"],
+                        fraction=cfg["kelly_fraction"],
+                        min_pct=cfg["min_kelly_pct"],
+                        max_pct=cfg["max_kelly_pct"],
+                    )
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    results.append({
+                        "player":          row["_pitcher_name"],
+                        "team":            team,
+                        "game_pk":         int(row["game_pk"]),
+                        "away_team":       row["away_team"],
+                        "home_team":       row["home_team"],
+                        "side":            side,
+                        "line":            float(line),
+                        "lambda_k":        round(float(row["lambda_k"]), 3),
+                        "proj_k":          round(dist["mean_outs"] / 3, 3),
+                        "model_prob":      round(model_prob, 4),
+                        "market_prob":     round(fair, 4),
+                        "edge":            round(edge, 4),
+                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_triggered"]), 4),
+                        "odds":            odds,
+                        "stake":           _stake if kelly_triggered else 0.0,
+                        "kelly_triggered": kelly_triggered,
+                        "market":          "OUTS",
+                    })
 
     if not results:
         return pd.DataFrame()
@@ -403,22 +407,26 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
         bet_type = (f"K_{row['side']}_{row['line']}"
                     if market == "K"
                     else f"OUTS_{row['side']}_{row['line']}")
+        triggered = bool(row.get("kelly_triggered", True))
         bet_id = tracker.log_bet(
-            game_date   = run_date,
-            game_pk     = int(row["game_pk"]),
-            player      = row["player"],
-            away_team   = row["away_team"],
-            home_team   = row["home_team"],
-            bet_type    = bet_type,
-            model_prob  = row["model_prob"],
-            market_prob = row["market_prob"],
-            edge        = row["edge"],
-            kelly_pct   = row["kelly_pct"],
-            odds        = row["odds"],
-            stake       = row["stake"],
-            paper       = cfg["PAPER"],
+            game_date        = run_date,
+            game_pk          = int(row["game_pk"]),
+            player           = row["player"],
+            away_team        = row["away_team"],
+            home_team        = row["home_team"],
+            bet_type         = bet_type,
+            model_prob       = row["model_prob"],
+            market_prob      = row["market_prob"],
+            edge             = row["edge"],
+            kelly_pct        = row["kelly_pct"],
+            odds             = row["odds"],
+            stake            = row["stake"],
+            kelly_triggered  = triggered,
+            paper            = cfg["PAPER"],
         )
-        if bet_id != -1:
+        if bet_id == -1:
+            continue
+        if triggered:
             bets_logged += 1
             bet_rows.append(row.to_dict())
 

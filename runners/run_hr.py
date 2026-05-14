@@ -521,8 +521,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         )
 
-        if edge < cfg["min_edge"]:
-            continue
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
 
         # Derive batter team abbrev from row's home/away side flag set upstream
         side = row.get("batter_team_side", "")
@@ -532,17 +531,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             else ""
         )
         results.append({
-            "player":       player_name,
-            "game_pk":      int(row.get("game_pk", 0)),
-            "away_team":    odds_info["away_team"],
-            "home_team":    odds_info["home_team"],
-            "team":         batter_team,
-            "model_prob":   round(model_prob, 4),
-            "market_prob":  round(fair_prob, 4),
-            "edge":         round(edge, 4),
-            "kelly_pct":    round(k_pct, 4),
-            "odds":         odds,
-            "stake":        stake,
+            "player":          player_name,
+            "game_pk":         int(row.get("game_pk", 0)),
+            "away_team":       odds_info["away_team"],
+            "home_team":       odds_info["home_team"],
+            "team":            batter_team,
+            "model_prob":      round(model_prob, 4),
+            "market_prob":     round(fair_prob, 4),
+            "edge":            round(edge, 4),
+            "kelly_pct":       round(k_pct, 4),
+            "odds":            odds,
+            "stake":           stake if kelly_triggered else 0.0,
+            "kelly_triggered": kelly_triggered,
         })
 
     if not results:
@@ -576,23 +576,28 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     bet_rows    = []
 
     for _, row in today_df.iterrows():
-        tracker.log_bet(
-            game_date   = run_date,
-            game_pk     = row.get("game_pk"),
-            player      = row.get("player"),
-            away_team   = row.get("away_team"),
-            home_team   = row.get("home_team"),
-            bet_type    = "HR",
-            model_prob  = row.get("model_prob"),
-            market_prob = row.get("market_prob"),
-            edge        = row.get("edge"),
-            kelly_pct   = row.get("kelly_pct"),
-            odds        = row.get("odds"),
-            stake       = row.get("stake"),
-            paper       = cfg["PAPER"],
+        triggered = bool(row.get("kelly_triggered", True))
+        bet_id = tracker.log_bet(
+            game_date        = run_date,
+            game_pk          = row.get("game_pk"),
+            player           = row.get("player"),
+            away_team        = row.get("away_team"),
+            home_team        = row.get("home_team"),
+            bet_type         = "HR",
+            model_prob       = row.get("model_prob"),
+            market_prob      = row.get("market_prob"),
+            edge             = row.get("edge"),
+            kelly_pct        = row.get("kelly_pct"),
+            odds             = row.get("odds"),
+            stake            = row.get("stake"),
+            kelly_triggered  = triggered,
+            paper            = cfg["PAPER"],
         )
-        bets_logged += 1
-        bet_rows.append(row.to_dict())
+        if bet_id == -1:
+            continue
+        if triggered:
+            bets_logged += 1
+            bet_rows.append(row.to_dict())
 
     # 4. Discord
     post_bets(bet_rows, system="HR", run_date=run_date)

@@ -1,18 +1,15 @@
 """
-Cloud Run entrypoint v2.
+Cloud Run entrypoint v3.
 
-Exposes a Flask HTTP server. Cloud Scheduler POSTs to /run with a JSON
-body specifying which systems to run:
-
-    {"systems": ["NRFI", "HR", "F5", "K"], "run_type": "morning"}
-
-Run types:
-    morning  — nightly data refresh + predictions + bet signals (default)
-    evening  — predictions + bet signals only (no data refresh)
-    data     — data refresh only, no predictions
-
-Health check:
-    GET /healthz  → 200 OK
+Routes:
+    GET  /healthz          Health check
+    POST /run              Score all systems + post bets
+    POST /build-features   Build features for one system
+    POST /snapshot-odds    Fetch SGO slate → GCS
+    POST /settle           Settle pending bets
+    POST /refresh-data     Nightly weather + umpire master refresh
+    POST /monitor          Rolling performance monitor (model health)
+    POST /monitor-ops      Infrastructure health monitor (schedulers, GCS)
 
 Environment variables required:
     MLB_GCS_BUCKET          GCS bucket name
@@ -23,7 +20,6 @@ Environment variables required:
     SGO_API_KEY             SportsGameOdds API key
 """
 import os
-import sys
 import json
 import logging
 import traceback
@@ -62,14 +58,11 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"{system} runner failed:\n{tb}")
-
-        # Notify Discord of the failure
         try:
             from mlb_core.notify.discord import post_error
             post_error(system, f"Runner crashed:\n```\n{tb[:1500]}\n```", run_date)
         except Exception:
             pass
-
         return {"system": system, "status": "error", "error": str(e)}
 
 
@@ -80,12 +73,11 @@ def healthz():
 
 @app.route("/run", methods=["POST"])
 def run_handler():
-    body = request.get_json(silent=True) or {}
+    body     = request.get_json(silent=True) or {}
     systems  = body.get("systems", list(VALID_SYSTEMS))
     run_type = body.get("run_type", "morning")
     run_date = body.get("run_date", date.today().isoformat())
 
-    # Validate
     unknown = set(systems) - VALID_SYSTEMS
     if unknown:
         return jsonify({"error": f"Unknown systems: {unknown}"}), 400
@@ -97,46 +89,38 @@ def run_handler():
         logger.info(f"Running {system}...")
         result = _run_system(system, run_type, run_date)
         results.append(result)
-        status = result.get("status")
-        logger.info(f"{system} finished: {status}")
+        logger.info(f"{system} finished: {result.get('status')}")
 
-    errors = [r for r in results if r["status"] == "error"]
-    http_status = 207 if errors else 200   # 207 = multi-status (partial success)
+    errors      = [r for r in results if r["status"] == "error"]
+    http_status = 207 if errors else 200
 
     return jsonify({"results": results, "date": run_date}), http_status
 
 
 @app.route("/build-features", methods=["POST"])
 def build_features_handler():
-    from datetime import date
     body     = request.get_json(silent=True) or {}
     system   = body.get("system", "HR")
     run_date = body.get("run_date", date.today().isoformat())
+
     if system == "HR":
         from runners.build_hr_features import run
-        result = run(run_date=run_date)
     elif system == "NRFI":
         from runners.build_nrfi_features import run
-        result = run(run_date=run_date)
     elif system == "F5":
         from runners.build_f5_features import run
-        result = run(run_date=run_date)
     elif system == "K":
         from runners.build_k_features import run
-        result = run(run_date=run_date)
     else:
-        result = {"status": "error", "error": f"Unknown system: {system}"}
+        return jsonify({"status": "error", "error": f"Unknown system: {system}"}), 400
+
+    result = run(run_date=run_date)
     return jsonify(result), 200
 
 
 @app.route("/snapshot-odds", methods=["POST"])
 def snapshot_odds_handler():
-    """Trigger one SGO slate fetch and write the snapshot to GCS.
-
-    Called by Cloud Scheduler twice daily (15:00 and 21:00 UTC).
-    Costs ~N MLB games' worth of SGO objects per call.
-    """
-    body = request.get_json(silent=True) or {}
+    body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", date.today().isoformat())
     try:
         from runners.snapshot_odds import run as snapshot_run
@@ -150,20 +134,15 @@ def snapshot_odds_handler():
         except Exception:
             pass
         return jsonify({"status": "error", "error": str(e)}), 500
+
     http_status = 200 if result.get("status") == "ok" else 500
     return jsonify(result), http_status
 
 
 @app.route("/settle", methods=["POST"])
 def settle_handler():
-    """Settle yesterday's bets from GCS scoring + Statcast sources.
-
-    Called by Cloud Scheduler nightly at 09:00 UTC (after Statcast refresh).
-    Can also be triggered manually with {"settle_date": "YYYY-MM-DD"} to
-    re-settle a specific date.
-    """
-    body = request.get_json(silent=True) or {}
-    settle_date = body.get("settle_date")  # optional; defaults to yesterday
+    body        = request.get_json(silent=True) or {}
+    settle_date = body.get("settle_date", None)  # optional; defaults to yesterday
     try:
         from runners.settle_bets import run as settle_run
         result = settle_run(settle_date=settle_date)
@@ -177,15 +156,32 @@ def settle_handler():
         except Exception:
             pass
         return jsonify({"status": "error", "error": str(e)}), 500
+
+    return jsonify(result), 200
+
+
+@app.route("/refresh-data", methods=["POST"])
+def refresh_data_handler():
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", date.today().isoformat())
+    try:
+        from mlb_core.data.weather import weather_nightly_gcs
+        from mlb_core.data.umpires import umpires_nightly_gcs
+        wx_result  = weather_nightly_gcs(run_date=run_date)
+        ump_result = umpires_nightly_gcs(run_date=run_date)
+        result = {"status": "ok", "weather": wx_result, "umpires": ump_result}
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"refresh-data failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
     return jsonify(result), 200
 
 
 @app.route("/monitor", methods=["POST"])
 def monitor_handler():
-    """Check rolling performance for all systems. Post Discord alerts if degraded.
-    Called by Cloud Scheduler at 09:30 UTC daily (30 min after settle).
-    """
-    body = request.get_json(silent=True) or {}
+    """Rolling performance monitor — model health (ROI, hit rate)."""
+    body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", date.today().isoformat())
     try:
         from runners.monitor_performance import run as monitor_run
@@ -193,13 +189,26 @@ def monitor_handler():
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"monitor failed:\n{tb}")
-        try:
-            from mlb_core.notify.discord import post_error
-            post_error("MONITOR", f"Monitor crashed:\n```\n{tb[:1500]}\n```", run_date)
-        except Exception:
-            pass
         return jsonify({"status": "error", "error": str(e)}), 500
+
     return jsonify(result), 200
+
+
+@app.route("/monitor-ops", methods=["POST"])
+def monitor_ops_handler():
+    """Infrastructure health monitor — schedulers, GCS freshness, model artifacts."""
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", date.today().isoformat())
+    try:
+        from runners.monitor_ops import run as monitor_ops_run
+        result = monitor_ops_run(run_date=run_date)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"monitor-ops failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+    http_status = 200 if result.get("healthy") else 207
+    return jsonify(result), http_status
 
 
 if __name__ == "__main__":
