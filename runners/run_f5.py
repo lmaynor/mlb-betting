@@ -327,7 +327,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     from F5_Pro_System.config_f5 import cfg
     from mlb_core.tracking import BetTracker
-    from mlb_core.notify.discord import post_bets, post_summary
+    from mlb_core.notify.discord import post_bets
 
     today_df = _build_predictions(cfg, run_date)
 
@@ -365,8 +365,6 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             bet_rows.append(row.to_dict())
 
     post_bets(bet_rows, system="F5", run_date=run_date)
-    stats = tracker.summary(season=run_date[:4])
-    post_summary(stats, system="F5", run_date=run_date)
 
     logger.info(f"F5: {bets_logged} bets logged")
     return {"bets_logged": bets_logged, "bet_rows": bet_rows}

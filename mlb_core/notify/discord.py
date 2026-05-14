@@ -263,15 +263,7 @@ def post_all_systems_summary(
     run_date: str = None,
     settle_date: str = None,
 ) -> None:
-    """
-    Post a cross-system P&L summary embed after settlement.
-
-    Args:
-        systems_stats: Dict keyed by system name. Values are summary dicts
-                       (pnl, roi, bets, wins, hit_rate, avg_edge, pending)
-                       or None if a system has no settled bets yet.
-        run_date:      Date string. settle_date is accepted as an alias.
-    """
+    """Post a daily recap embed after settlement. One field per system."""
     webhook_url = (
         os.getenv("DISCORD_WEBHOOK_SUMMARY")
         or os.getenv("DISCORD_WEBHOOK_URL")
@@ -282,18 +274,24 @@ def post_all_systems_summary(
 
     run_date = run_date or settle_date or date.today().isoformat()
 
-    _SYSTEM_ICONS = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"}
+    _SYSTEM_ICONS = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠"}
 
-    # Guard: skip None entries before summing
     valid_stats = {k: v for k, v in systems_stats.items() if v}
-    total_pnl = sum(s.get("pnl", 0) for s in valid_stats.values())
-    pnl_emoji = "📈" if total_pnl >= 0 else "📉"
+    total_pnl   = sum(s.get("pnl", 0) for s in valid_stats.values())
+    pnl_emoji   = "📈" if total_pnl >= 0 else "📉"
 
-    lines = []
-    for system, stats in systems_stats.items():
+    fields = []
+    for system in ["HR", "NRFI", "F5", "K", "OUTS"]:
+        stats = systems_stats.get(system)
+        icon  = _SYSTEM_ICONS.get(system, "⚪")
         if not stats:
+            fields.append({
+                "name":   f"{icon} {system}",
+                "value":  "_No settled bets yet_",
+                "inline": True,
+            })
             continue
-        icon    = _SYSTEM_ICONS.get(system.upper(), "⚪")
+
         wins    = stats.get("wins", 0)
         bets    = stats.get("bets", 0)
         hit     = stats.get("hit_rate", 0)
@@ -302,21 +300,31 @@ def post_all_systems_summary(
         edge    = stats.get("avg_edge")
         pending = stats.get("pending", 0)
 
+        pnl_sign    = "📈" if pnl >= 0 else "📉"
         edge_str    = f"{edge:+.1%}" if edge is not None else "N/A"
-        pending_str = f" | {pending} pending" if pending else ""
-        lines.append(
-            f"{icon} **{system:<4}** {wins}/{bets} ({hit:.0%})  "
-            f"P&L: ${pnl:+.2f}  ROI: {roi:+.1f}%  edge: {edge_str}{pending_str}"
-        )
+        pending_str = f"\n⏳ {pending} pending" if pending else ""
 
-    description = (
-        f"Combined paper P&L: **${total_pnl:+.2f}**\n\n" + "\n".join(lines)
-    ) if lines else "No settled bets yet."
+        value = (
+            f"**{wins}/{bets}** ({hit:.0%} hit rate)\n"
+            f"{pnl_sign} **${pnl:+.2f}** | ROI {roi:+.1f}%\n"
+            f"Avg edge {edge_str}{pending_str}"
+        )
+        fields.append({"name": f"{icon} {system}", "value": value, "inline": True})
+
+    # Blank spacer so Discord renders 3-column inline layout cleanly
+    if len(fields) % 3 == 2:
+        fields.append({"name": "\u200b", "value": "\u200b", "inline": True})
+
+    settled_count = sum(s.get("bets", 0) for s in valid_stats.values())
+    description   = (
+        f"Combined paper P&L: **${total_pnl:+.2f}**  |  {settled_count} settled bets"
+    ) if valid_stats else "No settled bets yet."
 
     embed = {
-        "title":       f"{pnl_emoji} 2026 Season Summary | {run_date}",
+        "title":       f"{pnl_emoji} Daily Recap | {run_date}",
         "description": description,
         "color":       0x57F287 if total_pnl >= 0 else 0xED4245,
+        "fields":      fields,
         "footer":      {"text": "mlb-betting | paper mode"},
     }
     _post(webhook_url, {"embeds": [embed]})

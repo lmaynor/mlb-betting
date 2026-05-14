@@ -390,7 +390,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     from K_Pro_System.config_k import cfg
     from mlb_core.tracking import BetTracker
-    from mlb_core.notify.discord import post_bets, post_summary
+    from mlb_core.notify.discord import post_bets
 
     today_df = _build_predictions(cfg, run_date)
     if today_df.empty:
@@ -399,6 +399,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
         return {"bets_logged": 0}
 
     tracker = BetTracker(cfg["bet_db"], system="K")
+    outs_tracker = BetTracker(cfg["bet_db"], system="OUTS")
     bets_logged = 0
     bet_rows = []
 
@@ -408,7 +409,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
                     if market == "K"
                     else f"OUTS_{row['side']}_{row['line']}")
         triggered = bool(row.get("kelly_triggered", True))
-        bet_id = tracker.log_bet(
+        active_tracker = outs_tracker if market == "OUTS" else tracker
+        bet_id = active_tracker.log_bet(
             game_date        = run_date,
             game_pk          = int(row["game_pk"]),
             player           = row["player"],
@@ -434,8 +436,6 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     outs_rows = [b for b in bet_rows if b.get("market") == "OUTS"]
     post_bets(k_rows,    system="K",    run_date=run_date)
     post_bets(outs_rows, system="OUTS", run_date=run_date)
-    stats = tracker.summary(season=run_date[:4])
-    post_summary(stats, system="K", run_date=run_date)
 
     logger.info(f"K: {bets_logged} bets logged")
     return {"bets_logged": bets_logged, "bet_rows": bet_rows}

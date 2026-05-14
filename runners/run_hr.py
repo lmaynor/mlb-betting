@@ -559,7 +559,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     from HR_Pro.config_hr import cfg
     from mlb_core.tracking import BetTracker
-    from mlb_core.notify.discord import post_bets, post_summary
+    from mlb_core.notify.discord import post_bets
 
     # 2. Predictions
     logger.info("HR: generating predictions")
@@ -601,8 +601,6 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     # 4. Discord
     post_bets(bet_rows, system="HR", run_date=run_date)
-    stats = tracker.summary(season=run_date[:4])
-    post_summary(stats, system="HR", run_date=run_date)
 
     logger.info(f"HR: {bets_logged} bets logged")
     return {"bets_logged": bets_logged, "bet_rows": bet_rows}

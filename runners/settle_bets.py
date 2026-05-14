@@ -340,7 +340,7 @@ def run(settle_date: str = None) -> dict:
 
     all_game_pks = set(pending_all["game_pk"].dropna().astype(int))
     needs_scoring  = pending_all["system"].isin({"NRFI", "F5"}).any()
-    needs_statcast = pending_all["system"].isin({"HR", "K"}).any()
+    needs_statcast = pending_all["system"].isin({"HR", "K", "OUTS"}).any()
 
     scoring = _load_scoring(settle_date)          if needs_scoring  else pd.DataFrame()
     sc      = _load_statcast_outcomes(all_game_pks) if needs_statcast else pd.DataFrame()
@@ -353,6 +353,7 @@ def run(settle_date: str = None) -> dict:
         elif sys == "F5":   outcomes = _settle_f5(grp, scoring)
         elif sys == "HR":   outcomes = _settle_hr(grp, sc)
         elif sys == "K":    outcomes = _settle_k(grp, sc)
+        elif sys == "OUTS":  outcomes = _settle_k(grp, sc)
         else:
             logger.warning(f"settle: unknown system '{system}' — skipping")
             continue
@@ -377,7 +378,7 @@ def run(settle_date: str = None) -> dict:
         )
 
     system_stats = {}
-    for system in ["HR", "NRFI", "F5", "K"]:
+    for system in ["HR", "NRFI", "F5", "K", "OUTS"]:
         rows = season_bets[season_bets["system"] == system]
         resolved = rows[rows["result"].notna()]
         if resolved.empty:
