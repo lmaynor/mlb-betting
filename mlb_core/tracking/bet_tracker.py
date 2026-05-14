@@ -108,11 +108,13 @@ class BetTracker:
         )
         with self.engine.begin() as conn:
             conn.execute(text(schema))
-            # Migrate existing tables that don't yet have kelly_triggered.
-            try:
+        # Migrate in a separate transaction so a "column already exists"
+        # error doesn't poison the connection used for schema creation.
+        try:
+            with self.engine.begin() as conn:
                 conn.execute(text(_MIGRATE_SQL))
-            except Exception:
-                pass  # Column already exists — expected after first migration.
+        except Exception:
+            pass  # Column already exists — expected after first migration.
 
     def is_duplicate(self, game_date: str, game_pk: int, bet_type: str) -> bool:
         """Return True if this (system, game_date, game_pk, bet_type) is already logged."""
