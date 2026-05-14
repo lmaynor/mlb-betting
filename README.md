@@ -5,15 +5,15 @@ Shared infrastructure and per-system notebooks for NRFI, HR, F5, and K Pro model
 
 ## Structure
 
-- `mlb_core/` — shared package (odds utils, data pulls, model base, bet tracker)
+- `mlb_core/`  shared package (odds utils, data pulls, model base, bet tracker)
 
-- `NRFI_Pro_System/` — No Run First Inning
+- `NRFI_Pro_System/`  No Run First Inning
 
-- `HR_Pro/` — Anytime Home Run
+- `HR_Pro/`  Anytime Home Run
 
-- `F5_Pro_System/` — First 5 Innings
+- `F5_Pro_System/`  First 5 Innings
 
-- `K_Pro_System/` — Strikeout props
+- `K_Pro_System/`  Strikeout props
 
 ## Setup
 

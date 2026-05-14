@@ -45,3 +45,5 @@ lineup_cache_daily/
 
 odds_cache_daily/
 
+*.zip
+Untitled*.ipynb
