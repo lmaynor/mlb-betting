@@ -203,7 +203,7 @@ class BetTracker:
 
     def summary(self, last_n: int = None, season: str = None) -> dict:
         with self.engine.connect() as conn:
-            df = pd.read_sql("SELECT * FROM bets WHERE system = :sys", conn, params={"sys": self.system})
+            df = pd.read_sql(text("SELECT * FROM bets WHERE system = :sys"), conn, params={"sys": self.system})
 
         if df.empty:
             print(f"[{self.system}] No bets logged.")
