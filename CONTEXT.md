@@ -1,5 +1,7 @@
 # Project Context
 
+_Last updated: 2026-05-14 18:55 CST_
+
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
 **This doc captures what doesn't change session-to-session.** For point-in-time status (which models are deployed, which bugs are open), see the latest handoff. For modeling theory, see `ipynb_CONTEXT`. For operational runbooks, see `deploy/*.md`.
