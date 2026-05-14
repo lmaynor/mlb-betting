@@ -364,7 +364,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "model_prob":      round(model_prob, 4),
                         "market_prob":     round(fair, 4),
                         "edge":            round(edge, 4),
-                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_triggered"]), 4),
+                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
                         "odds":            odds,
                         "stake":           _stake if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
