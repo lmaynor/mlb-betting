@@ -225,3 +225,52 @@ def scoring_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
     logger.info(f"  Master updated: {len(final):,} rows | "
                 f"{final['game_pk'].nunique():,} games")
     return final
+
+
+def scoring_nightly_gcs(gcs_bucket: str, gcs_master_key: str) -> None:
+    """Fetch yesterday's inning scores, append to GCS master.
+
+    Called by /refresh-data nightly. Gets game_pks from the MLB schedule
+    API then fetches linescore for each via fetch_scores_for_game_pks().
+    """
+    from datetime import date, timedelta
+    from google.cloud import storage
+    from mlb_core.data.lineups import _get_games_for_date
+
+    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    logger.info(f"scoring_nightly_gcs: fetching {yesterday}")
+
+    games = _get_games_for_date(yesterday)
+    if not games:
+        logger.warning(f"scoring_nightly_gcs: no games found for {yesterday}")
+        return
+
+    game_pks = [g["game_pk"] for g in games]
+    logger.info(f"scoring_nightly_gcs: {len(game_pks)} games to fetch")
+
+    new_df = fetch_scores_for_game_pks(game_pks, verbose=False)
+    if new_df.empty:
+        logger.warning("scoring_nightly_gcs: no scoring data returned")
+        return
+
+    client = storage.Client()
+    bucket = client.bucket(gcs_bucket)
+    blob = bucket.blob(gcs_master_key)
+
+    if blob.exists():
+        existing = pd.read_csv(blob.open("r"), low_memory=False)
+        logger.info(f"scoring_nightly_gcs: existing master {len(existing):,} rows")
+        combined = pd.concat([existing, new_df], ignore_index=True)
+    else:
+        logger.info("scoring_nightly_gcs: no existing master — creating new")
+        combined = new_df
+
+    combined = combined.drop_duplicates(
+        subset=["game_pk", "inning", "half"], keep="last"
+    )
+
+    tmp = "/tmp/scoring_master_new.csv"
+    combined.to_csv(tmp, index=False)
+    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    logger.info(f"scoring_nightly_gcs: master updated {len(combined):,} rows "
+                f"| through {yesterday}")
