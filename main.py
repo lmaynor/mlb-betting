@@ -167,9 +167,10 @@ def refresh_data_handler():
     try:
         from mlb_core.data.weather import weather_nightly_gcs
         from mlb_core.data.umpires import umpires_nightly_gcs
-        wx_result  = weather_nightly_gcs(run_date=run_date)
-        ump_result = umpires_nightly_gcs(run_date=run_date)
-        result = {"status": "ok", "weather": wx_result, "umpires": ump_result}
+        from mlb_core.config import GCS_BUCKET
+        wx_result  = weather_nightly_gcs(GCS_BUCKET, "Weather/weather_master.csv")
+        ump_result = umpires_nightly_gcs(GCS_BUCKET, "Umpires/umpscorecards_master.csv")
+        result = {"status": "ok"}
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"refresh-data failed:\n{tb}")

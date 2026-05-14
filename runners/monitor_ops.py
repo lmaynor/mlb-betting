@@ -33,6 +33,7 @@ SCHEDULER_JOBS = [
     "mlb-betting-morning",
     "mlb-snapshot-evening",
     "mlb-betting-evening",
+    "mlb-monitor-ops",
 ]
 
 FEATURE_KEYS = {
@@ -50,6 +51,13 @@ MODEL_KEYS = {
 }
 
 SGO_SNAPSHOT_KEY   = "Odds/sgo/latest.json"
+DATA_MASTER_KEYS = {
+    "scoring_master":  "Scoring/scoring_master.csv",
+    "statcast_master": "Statcast/statcast_master.csv",
+    "weather_master":  "Weather/weather_master.csv",
+    "umpires_master":  "Umpires/umpscorecards_master.csv",
+}
+DATA_STALE_HOURS = float(os.getenv("MONITOR_OPS_DATA_STALE_HOURS", "26"))
 STALE_HOURS        = float(os.getenv("MONITOR_OPS_STALE_HOURS", "26"))
 GCP_PROJECT        = os.getenv("GCP_PROJECT", "concrete-crow-445205-m4")
 SCHEDULER_LOCATION = os.getenv("SCHEDULER_LOCATION", "us-central1")
@@ -112,6 +120,18 @@ def _gcs_age_hours(gcs_key: str) -> float | None:
         return None
 
 
+def _check_data_masters() -> list[str]:
+    """Check scoring/statcast/weather/umpires masters are fresh."""
+    failures = []
+    for name, key in DATA_MASTER_KEYS.items():
+        age = _gcs_age_hours(key)
+        if age is None:
+            failures.append(f"`{name}` missing: `{key}`")
+        elif age > DATA_STALE_HOURS:
+            failures.append(f"`{name}` stale: {age:.1f}h old")
+    return failures
+
+
 def _check_snapshot_freshness() -> list[str]:
     age = _gcs_age_hours(SGO_SNAPSHOT_KEY)
     if age is None:
@@ -130,6 +150,30 @@ def _check_feature_freshness() -> list[str]:
         elif age > STALE_HOURS:
             failures.append(f"{system} `model_features.csv` stale: {age:.1f}h old")
     return failures
+
+
+def _check_stuck_bets() -> list[str]:
+    """Alert if any bets have been pending for > 3 days."""
+    try:
+        from datetime import date, timedelta
+        from mlb_core.tracking.bet_tracker import _make_engine
+        from sqlalchemy import text
+        cutoff = (date.today() - timedelta(days=3)).isoformat()
+        engine = _make_engine(db_path="unused")
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT system, COUNT(*) as n FROM bets "
+                     "WHERE result IS NULL AND game_date <= :cutoff "
+                     "GROUP BY system"),
+                {"cutoff": cutoff},
+            ).fetchall()
+        failures = []
+        for row in rows:
+            failures.append(f"{row[0]}: {row[1]} bets pending > 3 days")
+        return failures
+    except Exception as e:
+        logger.warning(f"monitor_ops: stuck bets check failed: {e}")
+        return []
 
 
 def _check_model_artifacts() -> list[str]:
@@ -176,7 +220,9 @@ def run(run_date: str = None) -> dict:
 
     failures: list[str] = []
     failures += _check_schedulers()
+    failures += _check_data_masters()
     failures += _check_snapshot_freshness()
+    failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()
 
