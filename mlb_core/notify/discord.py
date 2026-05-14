@@ -159,7 +159,7 @@ def post_bets(
     if not webhook_url:
         return
 
-    run_date = run_date or date.today().isoformat()
+    run_date = run_date or settle_date or date.today().isoformat()
 
     if isinstance(bets, pd.DataFrame):
         bets = bets.to_dict("records")
@@ -261,6 +261,7 @@ def post_error(system: str, message: str, run_date: str = None) -> None:
 def post_all_systems_summary(
     systems_stats: dict,
     run_date: str = None,
+    settle_date: str = None,
 ) -> None:
     """
     Post a cross-system P&L summary embed.
