@@ -59,7 +59,9 @@ def _load_scoring(settle_date: str) -> pd.DataFrame:
         df["game_pk"] = pd.to_numeric(df["game_pk"], errors="coerce")
         df["inning"]  = pd.to_numeric(df["inning"],  errors="coerce")
         df["runs"]    = pd.to_numeric(df["runs"],    errors="coerce").fillna(0)
-        return df.dropna(subset=["game_pk", "inning"])
+        df = df.dropna(subset=["game_pk", "inning"])
+        logger.info(f"settle: scoring_master loaded {len(df):,} rows | {df['game_pk'].nunique():,} games")
+        return df
     except Exception as e:
         logger.error(f"settle: scoring_master load failed: {e}")
         return pd.DataFrame()
@@ -96,6 +98,8 @@ def _settle_nrfi(pending: pd.DataFrame, scoring: pd.DataFrame) -> list[dict]:
     game_pks = set(pending["game_pk"].dropna().astype(int))
     inn1 = scoring[(scoring["game_pk"].isin(game_pks)) & (scoring["inning"] == 1)]
 
+    logger.info(f"settle NRFI: {len(pending)} pending bets | game_pks={sorted(set(pending['game_pk'].dropna().astype(int).tolist()))}")
+    logger.info(f"settle NRFI: scoring has {inn1['game_pk'].nunique()} matching games")
     # Per-half runs for inning 1
     half_runs = inn1.groupby(["game_pk", "half"])["runs"].sum().unstack(fill_value=0)
     for col in ("top", "bot"):
@@ -136,6 +140,8 @@ def _settle_f5(pending: pd.DataFrame, scoring: pd.DataFrame) -> list[dict]:
     results = []
     game_pks = set(pending["game_pk"].dropna().astype(int))
     f5 = scoring[(scoring["game_pk"].isin(game_pks)) & (scoring["inning"] <= 5)]
+    logger.info(f"settle F5: {len(pending)} pending bets | game_pks={sorted(set(pending['game_pk'].dropna().astype(int).tolist()))}")
+    logger.info(f"settle F5: scoring has {f5['game_pk'].nunique()} matching games")
     runs = f5.groupby(["game_pk", "half"])["runs"].sum().unstack(fill_value=0)
     for col in ("top", "bot"):
         if col not in runs.columns:
@@ -329,6 +335,8 @@ def run(settle_date: str = None) -> dict:
     retry_count = (pending_all["game_date"] < settle_date).sum()
     logger.info(f"settle: {today_count} bets for {settle_date}, "
                 f"{retry_count} stale pending bets being retried")
+    for gd, grp in pending_all.groupby("game_date"):
+        logger.info(f"settle: pending breakdown — game_date={gd} | {len(grp)} bets | systems={grp['system'].unique().tolist()}")
 
     all_game_pks = set(pending_all["game_pk"].dropna().astype(int))
     needs_scoring  = pending_all["system"].isin({"NRFI", "F5"}).any()
