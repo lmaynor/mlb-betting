@@ -256,3 +256,65 @@ def post_error(system: str, message: str, run_date: str = None) -> None:
             "color":       0xED4245,
         }]
     })
+
+
+def post_all_systems_summary(
+    systems_stats: dict,
+    run_date: str = None,
+) -> None:
+    """
+    Post a cross-system P&L summary embed.
+
+    Args:
+        systems_stats: Dict keyed by system name, each value is the dict
+                       returned by BetTracker.summary(). Expected keys:
+                       pnl, roi, bets, wins, hit_rate, avg_edge, pending.
+        run_date:      Date string e.g. "2026-05-14". Defaults to today.
+    """
+    webhook_url = (
+        os.getenv("DISCORD_WEBHOOK_SUMMARY")
+        or os.getenv("DISCORD_WEBHOOK_URL")
+    )
+    if not webhook_url:
+        logger.warning("No Discord webhook configured for summary.")
+        return
+
+    run_date = run_date or date.today().isoformat()
+
+    _SYSTEM_ICONS = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"}
+
+    total_pnl = sum(s.get("pnl", 0) for s in systems_stats.values())
+    pnl_emoji = "📈" if total_pnl >= 0 else "📉"
+
+    lines = []
+    for system, stats in systems_stats.items():
+        if not stats:
+            continue
+        icon     = _SYSTEM_ICONS.get(system.upper(), "⚪")
+        wins     = stats.get("wins", 0)
+        bets     = stats.get("bets", 0)
+        hit      = stats.get("hit_rate", 0)
+        pnl      = stats.get("pnl", 0)
+        roi      = stats.get("roi", 0)
+        edge     = stats.get("avg_edge")
+        pending  = stats.get("pending", 0)
+
+        edge_str    = f"{edge:+.1%}" if edge is not None else "N/A"
+        pending_str = f" | {pending} pending" if pending else ""
+        lines.append(
+            f"{icon} **{system:<4}** {wins}/{bets} ({hit:.0%})  "
+            f"P&L: ${pnl:+.2f}  ROI: {roi:+.1f}%  edge: {edge_str}{pending_str}"
+        )
+
+    description = (
+        f"Combined paper P&L: **${total_pnl:+.2f}**\n\n"
+        + "\n".join(lines)
+    ) if lines else "No settled bets yet."
+
+    embed = {
+        "title":       f"{pnl_emoji} 2026 Season Summary | {run_date}",
+        "description": description,
+        "color":       0x57F287 if total_pnl >= 0 else 0xED4245,
+        "footer":      {"text": "mlb-betting | paper mode"},
+    }
+    _post(webhook_url, {"embeds": [embed]})
