@@ -13,6 +13,23 @@ INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:latest"
 SERVICE_URL="https://mlb-betting-628109313129.us-central1.run.app"
 
+
+echo "==> 0. Stamp CONTEXT.md"
+python3 - << 'PYEOF'
+from pathlib import Path
+from datetime import datetime
+import zoneinfo, re
+cst = zoneinfo.ZoneInfo("America/Chicago")
+ts = datetime.now(cst).strftime("%Y-%m-%d %H:%M CST")
+p = Path("CONTEXT.md")
+txt = p.read_text()
+txt = re.sub(r"_Last updated:.*?_", f"_Last updated: {ts}_", txt)
+p.write_text(txt)
+print(f"  CONTEXT.md stamped: {ts}")
+PYEOF
+git add CONTEXT.md
+git commit -m "docs: update CONTEXT.md timestamp" --allow-empty
+
 echo "==> 1. Build"
 gcloud builds submit --tag="$IMAGE" --project="$PROJECT_ID"
 
