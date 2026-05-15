@@ -213,7 +213,8 @@ class BetTracker:
     def pending(self) -> pd.DataFrame:
         with self.engine.connect() as conn:
             return pd.read_sql(
-                "SELECT * FROM bets WHERE result IS NULL ORDER BY game_date DESC", conn
+                text("SELECT * FROM bets WHERE system = :sys AND result IS NULL ORDER BY game_date DESC"),
+                conn, params={"sys": self.system},
             )
 
     def summary(self, last_n: int = None, season: str = None) -> dict:
@@ -272,4 +273,7 @@ class BetTracker:
 
     def all_bets(self) -> pd.DataFrame:
         with self.engine.connect() as conn:
-            return pd.read_sql("SELECT * FROM bets ORDER BY game_date DESC", conn)
+            return pd.read_sql(
+                text("SELECT * FROM bets WHERE system = :sys ORDER BY game_date DESC"),
+                conn, params={"sys": self.system},
+            )

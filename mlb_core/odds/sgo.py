@@ -181,11 +181,9 @@ class SgoClient:
             starts_after, starts_before = et_day_window(run_date)
             params["startsAfter"]  = starts_after
             params["startsBefore"] = starts_before
-        try:
-            body = self._get("/v2/events", params)
-        except Exception as e:
-            logger.error(f"SGO fetch_mlb_slate failed: {e}")
-            return []
+        # Let exceptions propagate — callers (snapshot_odds.py) catch them
+        # and post Discord alerts. Swallowing here made errors invisible.
+        body = self._get("/v2/events", params)
         return body.get("data") or []
 
 
