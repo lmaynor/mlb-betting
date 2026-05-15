@@ -147,6 +147,39 @@ def _check_feature_freshness() -> list[str]:
     return failures
 
 
+def _check_build_sentinels() -> list[str]:
+    """Check each system's last_build.json sentinel for freshness and status."""
+    from mlb_core.storage import stat, read_bytes, exists
+    import json
+
+    SENTINELS = {
+        "HR":   "HR_Pro/data/last_build.json",
+        "NRFI": "NRFI_Pro_System/data/last_build.json",
+        "K":    "K_Pro_System/data/last_build.json",
+        "F5":   "F5_Pro_System/data/last_build.json",
+    }
+    failures = []
+    for system, key in SENTINELS.items():
+        if not exists(key):
+            failures.append(f"`{system}` build sentinel missing: `{key}`")
+            continue
+        s = stat(key)
+        if s is None:
+            failures.append(f"`{system}` build sentinel unreadable: `{key}`")
+            continue
+        age_hrs = (datetime.now(timezone.utc) - s["mtime_utc"]).total_seconds() / 3600
+        if age_hrs > DATA_STALE_HOURS:
+            failures.append(f"`{system}` build sentinel stale: {age_hrs:.1f}h old")
+            continue
+        try:
+            data = json.loads(read_bytes(key).decode())
+            if data.get("status") != "ok":
+                failures.append(f"`{system}` last build failed: {data.get('error', '?')}")
+        except Exception as e:
+            failures.append(f"`{system}` build sentinel parse error: {e}")
+    return failures
+
+
 def _check_stuck_bets() -> list[str]:
     """Alert if any bets have been pending for > 3 days."""
     try:
@@ -217,6 +250,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_schedulers()
     failures += _check_data_masters()
     failures += _check_snapshot_freshness()
+    failures += _check_build_sentinels()
     failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()

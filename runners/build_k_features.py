@@ -690,7 +690,7 @@ def run(run_date: str | None = None) -> dict:
     if not slate_only.empty:
         write_csv(slate_only, cfg["gcs_lineup_features"])
 
-    return {
+    result = {
         "status":          "ok",
         "system":          "K",
         "run_date":        run_date,
@@ -700,3 +700,6 @@ def run(run_date: str | None = None) -> dict:
         "missing_columns": missing_cols,
         "gcs_key":         cfg["gcs_model_features"],
     }
+    from mlb_core.storage import write_build_sentinel
+    write_build_sentinel("K", result)
+    return result

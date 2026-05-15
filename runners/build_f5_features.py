@@ -534,10 +534,8 @@ def run(run_date: str = None) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"F5 upload: {e}"}
 
-    logger.info(f"F5: ✅ feature build complete | {len(gf):,} games")
-    return {
-        "status": "ok",
-        "rows": int(len(gf)),
-        "columns": int(len(gf.columns)),
-        "home_win_rate": round(float(home_rate), 4),
-    }
+    logger.info(f"F5: feature build complete | {len(gf):,} games")
+    result = {"status": "ok", "rows": int(len(gf)), "columns": int(len(gf.columns)), "home_win_rate": round(float(home_rate), 4)}
+    from mlb_core.storage import write_build_sentinel
+    write_build_sentinel("F5", result)
+    return result

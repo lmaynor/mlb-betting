@@ -798,4 +798,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     _save(model_features, cfg.get("gcs_model_features", "HR_Pro/data/model_features.csv"),        cfg["model_features"])
 
     logger.info(f"HR feature build complete | {len(model_features):,} rows")
-    return {"status": "ok", "rows": len(model_features)}
+    result = {"status": "ok", "rows": len(model_features)}
+    from mlb_core.storage import write_build_sentinel
+    write_build_sentinel("HR", result)
+    return result

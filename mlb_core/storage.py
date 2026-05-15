@@ -156,3 +156,31 @@ def stat(key: str) -> dict | None:
     st = path.stat()
     return {"mtime_utc": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc),
             "size": st.st_size}
+
+
+def write_build_sentinel(system: str, result: dict) -> None:
+    """Write a build sentinel JSON to GCS after a successful feature build.
+    Key: {system}_Pro_System/data/last_build.json (or HR_Pro/data/last_build.json)
+    """
+    import json
+    from datetime import datetime, timezone
+
+    system_to_prefix = {
+        "HR":   "HR_Pro",
+        "NRFI": "NRFI_Pro_System",
+        "K":    "K_Pro_System",
+        "F5":   "F5_Pro_System",
+    }
+    prefix = system_to_prefix.get(system.upper(), f"{system}_Pro_System")
+    key = f"{prefix}/data/last_build.json"
+    payload = {
+        "system":    system.upper(),
+        "status":    result.get("status", "ok"),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "rows":      result.get("rows", 0),
+    }
+    try:
+        write_bytes(json.dumps(payload).encode(), key)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"write_build_sentinel failed for {system}: {e}")

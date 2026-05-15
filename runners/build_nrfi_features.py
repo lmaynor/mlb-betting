@@ -572,8 +572,7 @@ def run(run_date: str = None) -> dict:
         return {"status": "error", "error": f"upload: {e}"}
 
     logger.info(f"NRFI feature build complete | {len(model_features):,} rows")
-    return {
-        "status": "ok",
-        "rows": int(len(model_features)),
-        "columns": int(len(model_features.columns)),
-    }
+    result = {"status": "ok", "rows": int(len(model_features)), "columns": int(len(model_features.columns))}
+    from mlb_core.storage import write_build_sentinel
+    write_build_sentinel("NRFI", result)
+    return result
