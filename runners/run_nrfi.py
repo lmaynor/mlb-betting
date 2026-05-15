@@ -267,7 +267,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         by_abbrev[(away_abbr, home_abbr)] = {**info, "event_id": ev_id}
 
     results = []
-    for _, row in pivot.iterrows():
+    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.tracking.bet_tracker import _make_engine
+    _exposure_engine = _make_engine("unused")
+        for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
         odds_info = by_abbrev.get(key)
         if odds_info is None:
@@ -294,10 +297,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob = float(row["model_yrfi_prob"])
 
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
-        from mlb_core.risk.exposure import get_bankroll_and_cap
-        from mlb_core.tracking.bet_tracker import _make_engine
-        _engine = _make_engine("unused")
-        _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+        _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
         stake = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,

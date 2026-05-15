@@ -370,6 +370,9 @@ Builds take ~2m20s. The bottleneck is `nvidia-nccl-cu12` (300MB, pulled by
 xgboost). `selenium` and `pybaseball` were removed from `setup.py` — do not
 re-add them. Production deps only in `setup.py`.
 
+### ASCII only in source files
+Use ASCII-only characters in all Python string literals, comments, log messages, and docstrings. No Unicode punctuation: use `->` not `->` (U+2192), `--` not `--` (U+2014 em-dash), `>=` not `>=`. Em-dashes and Unicode arrows look identical to ASCII in the terminal but have different bytes, causing silent `str.replace()` assert failures. Enforced by convention; will be added to ruff config when linting is set up.
+
 ### Read before write — one deploy per task
 Before editing any file: read it from the **local Cloud Shell file** (not
 GitHub — GitHub fetch can return stale cached content). Use `cat` or `sed`
@@ -580,11 +583,11 @@ then switch to local reads before writing any patches.
 socket (`/cloudsql/...`) that only exists inside Cloud Run. Use the proxy
 endpoint for ad-hoc DB inspection instead of direct connections.
 
-**HR DNP bets stay pending indefinitely.** The HR settler skips players
-not in Statcast (late scratches / DNPs) rather than marking them as losses.
-These accumulate as pending. Backlog: add max-age void logic — bets older
-than 3 days with no Statcast appearance should be marked `result="void"`,
-`profit=0`.
+**HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
+calls the MLB Stats API per game_pk. If the game is not Final, the bet is
+skipped (retried tomorrow). If Final: player not in starting lineup -> void
+(DK voids non-starters); starter with HR -> win; starter without HR -> loss.
+No Statcast dependency for HR settlement.
 
 ---
 

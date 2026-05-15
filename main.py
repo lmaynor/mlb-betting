@@ -136,6 +136,12 @@ def snapshot_odds_handler():
         return jsonify({"status": "error", "error": str(e)}), 500
 
     http_status = 200 if result.get("status") == "ok" else 500
+    if result.get("status") == "error":
+        try:
+            from mlb_core.notify.discord import post_error
+            post_error("SGO", f"Snapshot returned error:\n```\n{result.get('error', '?')}\n```", run_date)
+        except Exception:
+            pass
     return jsonify(result), http_status
 
 

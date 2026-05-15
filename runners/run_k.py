@@ -255,7 +255,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     for n, info in outs_odds_by_name.items()}
 
     results = []
-
+    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.tracking.bet_tracker import _make_engine
+    _exposure_engine = _make_engine("unused")
+    
     for _, row in feat_df.iterrows():
         norm     = row["_pitcher_name_norm"]
         avg_ip   = row.get("avg_ip_L5")
@@ -292,10 +295,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    from mlb_core.risk.exposure import get_bankroll_and_cap
-                    from mlb_core.tracking.bet_tracker import _make_engine
-                    _engine = _make_engine("unused")
-                    _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+                    _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
                     _stake = min(kelly_stake(
                         edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
@@ -348,10 +348,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
-                    from mlb_core.risk.exposure import get_bankroll_and_cap
-                    from mlb_core.tracking.bet_tracker import _make_engine
-                    _engine = _make_engine("unused")
-                    _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+                    _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
                     _stake = min(kelly_stake(
                         edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],

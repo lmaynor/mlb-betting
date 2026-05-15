@@ -169,65 +169,116 @@ def _settle_f5(pending: pd.DataFrame, scoring: pd.DataFrame) -> list[dict]:
     return results
 
 
-def _settle_hr(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
+def _fetch_hr_boxscore(game_pk: int) -> dict | None:
+    """
+    Fetch MLB Stats API boxscore for game_pk.
+    Returns dict keyed by normalized player name:
+        {name: {"starter": bool, "home_runs": int}}
+    Returns None if the game is not yet Final.
+    """
     import unicodedata
+    import requests as _req
+
     def _norm(s):
         if not isinstance(s, str): return ""
         n = unicodedata.normalize("NFD", s)
         n = "".join(c for c in n if unicodedata.category(c) != "Mn")
         return n.encode("ascii", "ignore").decode().lower().strip()
-    if sc.empty:
-        return []
-    hr_events = sc[sc["events"] == "home_run"].copy()
-    def _norm_statcast(s):
-        """Statcast uses 'Last, First' — convert to 'first last' to match SGO names."""
-        if not isinstance(s, str): return ""
-        s = _norm(s)
-        if "," in s:
-            parts = [p.strip() for p in s.split(",", 1)]
-            return f"{parts[1]} {parts[0]}" if len(parts) == 2 else s
-        return s
 
-    hr_events["_name"] = hr_events["player_name"].apply(_norm_statcast)
-    hr_set = set(zip(hr_events["game_pk"].astype(int), hr_events["_name"]))
-    sc["_name"] = sc["player_name"].apply(_norm_statcast)
-    appeared = set(zip(sc["game_pk"].astype(int), sc["_name"]))
+    try:
+        url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
+        r = _req.get(url, timeout=10)
+        r.raise_for_status()
+        box = r.json()
+    except Exception as e:
+        logger.warning(f"settle HR: boxscore fetch failed for game_pk={game_pk}: {e}")
+        return None
+
+    try:
+        status_url = f"https://statsapi.mlb.com/api/v1/schedule?gamePk={game_pk}"
+        sr = _req.get(status_url, timeout=10)
+        sr.raise_for_status()
+        sched = sr.json()
+        state = sched["dates"][0]["games"][0]["status"]["abstractGameState"]
+        if state != "Final":
+            return None
+    except Exception as e:
+        logger.warning(f"settle HR: status check failed for game_pk={game_pk}: {e}")
+        return None
+
+    players = {}
+    for side in ("away", "home"):
+        team = box.get("teams", {}).get(side, {})
+        for pid, p in team.get("players", {}).items():
+            name = _norm(p.get("person", {}).get("fullName", ""))
+            if not name:
+                continue
+            batting_order = p.get("battingOrder", "")
+            try:
+                is_starter = int(str(batting_order)) % 100 == 0
+            except (ValueError, TypeError):
+                is_starter = False
+            hrs = p.get("stats", {}).get("batting", {}).get("homeRuns", 0)
+            players[name] = {"starter": is_starter, "home_runs": int(hrs)}
+    return players
+
+
+def _settle_hr(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
+    """Settle HR bets using MLB Stats API boxscore.
+
+    Settlement logic:
+      - Game not Final -> skip (retry tomorrow)
+      - Game Final, player not a starter -> void (DK rule: must start)
+      - Game Final, player was starter, hit HR -> win
+      - Game Final, player was starter, no HR -> loss
+    """
+    import unicodedata
+
+    def _norm(s):
+        if not isinstance(s, str): return ""
+        n = unicodedata.normalize("NFD", s)
+        n = "".join(c for c in n if unicodedata.category(c) != "Mn")
+        return n.encode("ascii", "ignore").decode().lower().strip()
+
     results = []
+    _boxscore_cache: dict[int, dict | None] = {}
+
     for _, bet in pending.iterrows():
         gpk  = int(bet["game_pk"])
         name = _norm(bet["player"] or "")
         if not name:
             continue
-        if (gpk, name) not in appeared:
-            try:
-                bet_date = datetime.strptime(str(bet["game_date"]), "%Y-%m-%d").date()
-            except Exception:
-                logger.info(f"settle HR: {bet['player']} bad game_date — skipping")
-                continue
-            age_days = (date.today() - bet_date).days
-            if age_days >= 3:
-                # Guard: only void if Statcast master is fresh (< 26hrs).
-                # A stale master could incorrectly void a player who did play.
-                from mlb_core.storage import stat as gcs_stat
-                from datetime import timezone
-                s = gcs_stat("Statcast/statcast_master.csv")
-                if s is None:
-                    logger.warning(f"settle HR: statcast_master missing — skipping void for {bet['player']}")
-                    continue
-                age_hrs = (datetime.now(timezone.utc) - s["mtime_utc"]).total_seconds() / 3600
-                if age_hrs > 26:
-                    logger.warning(f"settle HR: statcast_master stale ({age_hrs:.1f}hrs) — skipping void for {bet['player']}")
-                    continue
-                results.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
-                logger.info(f"settle HR: {bet['player']} DNP > 3 days (age={age_days}d) — voiding")
-            else:
-                logger.info(f"settle HR: {bet['player']} not in Statcast for game_pk={gpk} — skipping (DNP?, {age_days}d old)")
-            continue
-        result = "win" if (gpk, name) in hr_set else "loss"
-        results.append({"id": int(bet["id"]), "result": result,
-                        "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result)})
-    return results
 
+        if gpk not in _boxscore_cache:
+            _boxscore_cache[gpk] = _fetch_hr_boxscore(gpk)
+
+        box = _boxscore_cache[gpk]
+        if box is None:
+            logger.info(f"settle HR: game_pk={gpk} not Final yet -- skipping")
+            continue
+
+        player_data = box.get(name)
+        if player_data is None:
+            matches = [v for k, v in box.items() if name in k or k in name]
+            player_data = matches[0] if len(matches) == 1 else None
+
+        if player_data is None:
+            logger.info(f"settle HR: {bet['player']} not found in boxscore for game_pk={gpk} -- skipping")
+            continue
+
+        if not player_data["starter"]:
+            results.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
+            logger.info(f"settle HR: {bet['player']} did not start game_pk={gpk} -- voiding")
+            continue
+
+        result = "win" if player_data["home_runs"] > 0 else "loss"
+        results.append({
+            "id":     int(bet["id"]),
+            "result": result,
+            "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result),
+        })
+        logger.info(f"settle HR: {bet['player']} game_pk={gpk} hrs={player_data['home_runs']} -> {result}")
+    return results
 
 def _settle_k(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
     """Settle K strikeout O/U bets and OUTS_ pitcher outs O/U bets.

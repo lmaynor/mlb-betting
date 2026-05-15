@@ -317,47 +317,63 @@ def test_settle_k_push():
     assert results[0]["result"] == "push"
 
 
-def test_settle_hr_statcast_last_first_format():
-    """Statcast 'Last, First' names are converted to 'First Last' to match SGO bet names."""
+def _make_boxscore(starter=True, home_runs=0):
+    """Helper: return a mock _fetch_hr_boxscore result for Aaron Judge."""
+    return {"aaron judge": {"starter": starter, "home_runs": home_runs}}
+
+
+def test_settle_hr_win(monkeypatch):
+    """Starter who hit a HR -> win."""
     from runners.settle_bets import _settle_hr
-    sc = pd.DataFrame([
-        {"game_pk": GAME_PK, "pitcher": 99, "batter": 1,
-         "events": "home_run", "player_name": "Judge, Aaron"},  # Statcast format
-        {"game_pk": GAME_PK, "pitcher": 99, "batter": 1,
-         "events": "strikeout", "player_name": "Judge, Aaron"},
-    ])
+    import runners.settle_bets as sb
+    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=True, home_runs=1))
     pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",  # SGO format
+        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
         "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
     }])
-    results = _settle_hr(pending, sc)
+    results = _settle_hr(pending, pd.DataFrame())
     assert results[0]["result"] == "win"
     assert results[0]["profit"] == 50.0
 
 
-def test_settle_hr_loss_statcast_format():
-    """HR loss with Statcast 'Last, First' names."""
+def test_settle_hr_loss(monkeypatch):
+    """Starter who did not hit a HR -> loss."""
     from runners.settle_bets import _settle_hr
-    sc = pd.DataFrame([
-        {"game_pk": GAME_PK, "pitcher": 99, "batter": 1,
-         "events": "strikeout", "player_name": "Judge, Aaron"},
-    ])
+    import runners.settle_bets as sb
+    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=True, home_runs=0))
     pending = pd.DataFrame([{
         "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
         "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
     }])
-    results = _settle_hr(pending, sc)
+    results = _settle_hr(pending, pd.DataFrame())
     assert results[0]["result"] == "loss"
+    assert results[0]["profit"] == -10.0
 
 
-def test_settle_hr_dnp_young_skip():
-    """DNP bet < 3 days old should be skipped (not voided)."""
+def test_settle_hr_void_not_starter(monkeypatch):
+    """Player who did not start (PH/DNP) -> void."""
     from runners.settle_bets import _settle_hr
-    sc = pd.DataFrame(columns=["game_pk", "pitcher", "batter", "events", "player_name"])
+    import runners.settle_bets as sb
+    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=False, home_runs=0))
     pending = pd.DataFrame([{
         "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
-        "bet_type": "HR", "stake": 10.0, "odds": 500,
-        "game_date": date.today().isoformat(),
+        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
     }])
-    results = _settle_hr(pending, sc)
-    assert len(results) == 0, "young DNP should be skipped, not settled"
+    results = _settle_hr(pending, pd.DataFrame())
+    assert results[0]["result"] == "void"
+    assert results[0]["profit"] == 0.0
+
+
+def test_settle_hr_game_not_final(monkeypatch):
+    """Game not yet Final -> skip."""
+    from runners.settle_bets import _settle_hr
+    import runners.settle_bets as sb
+    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: None)
+    pending = pd.DataFrame([{
+        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
+        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
+    }])
+    results = _settle_hr(pending, pd.DataFrame())
+    assert len(results) == 0, "non-final game should be skipped"
+
+

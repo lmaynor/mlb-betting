@@ -499,7 +499,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     name_to_idx = {n: i for i, n in enumerate(feat_df["_name_key"]) if n}
 
     results = []
-    for player_name, odds_info in player_odds.items():
+    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.tracking.bet_tracker import _make_engine
+    _exposure_engine = _make_engine("unused")
+        for player_name, odds_info in player_odds.items():
         key = _normalize_name(player_name)
         idx = name_to_idx.get(key)
         if idx is None:
@@ -513,10 +516,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         fair_prob   = market_prob / 1.07
         edge        = model_prob - fair_prob
         k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
-        from mlb_core.risk.exposure import get_bankroll_and_cap
-        from mlb_core.tracking.bet_tracker import _make_engine
-        _engine = _make_engine("unused")
-        _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+        _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
         stake       = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,

@@ -264,7 +264,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     feat_df["p_home"] = p_home
 
     results = []
-    for _, row in feat_df.iterrows():
+    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.tracking.bet_tracker import _make_engine
+    _exposure_engine = _make_engine("unused")
+        for _, row in feat_df.iterrows():
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:
@@ -290,10 +293,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             team = row["away_team"]
 
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
-        from mlb_core.risk.exposure import get_bankroll_and_cap
-        from mlb_core.tracking.bet_tracker import _make_engine
-        _engine = _make_engine("unused")
-        _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+        _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
         stake = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,
