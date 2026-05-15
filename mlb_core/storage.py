@@ -139,3 +139,20 @@ def upload_model(local_path: Path, gcs_key: str) -> None:
     """Upload a local model file to GCS (no-op in local mode)."""
     if GCS_BUCKET:
         _gcs_blob(gcs_key).upload_from_filename(str(local_path))
+
+
+def stat(key: str) -> dict | None:
+    """Return {'mtime_utc': datetime, 'size': int} for a key, or None if missing."""
+    if GCS_BUCKET:
+        blob = _gcs_blob(key)
+        blob.reload()
+        if not blob.exists():
+            return None
+        return {"mtime_utc": blob.updated, "size": blob.size}
+    path = _local_path(key)
+    if not path.exists():
+        return None
+    from datetime import datetime, timezone
+    st = path.stat()
+    return {"mtime_utc": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc),
+            "size": st.st_size}

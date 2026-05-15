@@ -22,6 +22,9 @@ from sqlalchemy import text
 
 from mlb_core.config import DB_URL
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS bets (
@@ -57,6 +60,12 @@ _SCHEMA_SQL_SQLITE = _SCHEMA_SQL.replace(
 # Migration: add kelly_triggered to existing tables that predate v3.
 _MIGRATE_SQL = """
 ALTER TABLE bets ADD COLUMN kelly_triggered BOOLEAN DEFAULT TRUE
+"""
+
+# One-shot: reclassify OUTS bets logged before the OUTS system split (2026-05-14).
+# Prior to the split, OUTS bets were logged under system="K". Safe to re-run.
+_MIGRATE_OUTS_SQL = """
+UPDATE bets SET system = 'OUTS' WHERE bet_type LIKE 'OUTS_%' AND system = 'K'
 """
 
 
@@ -115,6 +124,12 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_SQL))
         except Exception:
             pass  # Column already exists — expected after first migration.
+        # One-shot reclassification — idempotent, safe to re-run.
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_MIGRATE_OUTS_SQL))
+        except Exception as e:
+            logger.warning(f"bet_tracker: OUTS migration failed: {e}")
 
     def is_duplicate(self, game_date: str, game_pk: int, bet_type: str) -> bool:
         """Return True if this (system, game_date, game_pk, bet_type) is already logged."""

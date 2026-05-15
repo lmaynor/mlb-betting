@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # ── Profit calculation ────────────────────────────────────────────────────────
 
 def _calc_profit(stake: float, odds: int, result: str) -> float:
-    if result == "push":
+    if result in ("push", "void"):
         return 0.0
     if result == "loss":
         return -round(stake, 2)
@@ -190,7 +190,29 @@ def _settle_hr(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
         if not name:
             continue
         if (gpk, name) not in appeared:
-            logger.info(f"settle HR: {bet['player']} not in Statcast for game_pk={gpk} — skipping (DNP?)")
+            try:
+                bet_date = datetime.strptime(str(bet["game_date"]), "%Y-%m-%d").date()
+            except Exception:
+                logger.info(f"settle HR: {bet['player']} bad game_date — skipping")
+                continue
+            age_days = (date.today() - bet_date).days
+            if age_days >= 3:
+                # Guard: only void if Statcast master is fresh (< 26hrs).
+                # A stale master could incorrectly void a player who did play.
+                from mlb_core.storage import stat as gcs_stat
+                from datetime import timezone
+                s = gcs_stat("Statcast/statcast_master.csv")
+                if s is None:
+                    logger.warning(f"settle HR: statcast_master missing — skipping void for {bet['player']}")
+                    continue
+                age_hrs = (datetime.now(timezone.utc) - s["mtime_utc"]).total_seconds() / 3600
+                if age_hrs > 26:
+                    logger.warning(f"settle HR: statcast_master stale ({age_hrs:.1f}hrs) — skipping void for {bet['player']}")
+                    continue
+                results.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
+                logger.info(f"settle HR: {bet['player']} DNP > 3 days (age={age_days}d) — voiding")
+            else:
+                logger.info(f"settle HR: {bet['player']} not in Statcast for game_pk={gpk} — skipping (DNP?, {age_days}d old)")
             continue
         result = "win" if (gpk, name) in hr_set else "loss"
         results.append({"id": int(bet["id"]), "result": result,
