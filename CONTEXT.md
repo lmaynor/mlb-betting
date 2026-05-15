@@ -6,7 +6,7 @@ The standing architectural and conventions document for `lmaynor/mlb-betting`. R
 
 **This doc captures what doesn't change session-to-session.** For point-in-time status (which models are deployed, which bugs are open), see the latest handoff. For modeling theory, see `ipynb_CONTEXT`. For operational runbooks, see `deploy/*.md`.
 
-If you change something here, treat it as a contract change — flag it in the next commit and the next handoff.
+If you change something here, treat it as a contract change -- flag it in the next commit and the next handoff.
 
 ---
 
@@ -22,7 +22,7 @@ Five MLB betting systems running daily in GCP:
 | **K Pro v1** | E[pitcher strikeouts] (Poisson) | DK K props (O/U) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (proxy) | DK pitcher outs O/U | Live (paper) |
 
-OUTS is a sub-market of the K runner — same feature CSV, same `run_k.py` — but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
+OUTS is a sub-market of the K runner -- same feature CSV, same `run_k.py` -- but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
 
 All five are paper-mode-only until each clears a 200-settled-bet gate.
 
@@ -42,23 +42,23 @@ mlb-betting/
 │                                         /monitor, /monitor-ops
 ├── Dockerfile                    Single image. Used by Cloud Run service AND jobs.
 ├── requirements.txt              Pinned Python deps.
-├── setup.py                      Makes mlb_core importable. Only prod deps —
+├── setup.py                      Makes mlb_core importable. Only prod deps --
 │                                 selenium/pybaseball removed (they were notebook-only).
 │
 ├── mlb_core/                     SHARED INFRA
 │   ├── config.py                 GCS_BUCKET, DB_URL, BASE_DATA env-var resolution.
-│   ├── storage.py                read_csv/write_csv/exists — transparent GCS-or-local.
+│   ├── storage.py                read_csv/write_csv/exists -- transparent GCS-or-local.
 │   ├── data/
 │   │   ├── statcast.py           Statcast pulls.
-│   │   ├── lineups.py            get_today_schedule(date) — MLB Stats API.
-│   │   │                         _get_games_for_date() — reused by scoring refresh.
+│   │   ├── lineups.py            get_today_schedule(date) -- MLB Stats API.
+│   │   │                         _get_games_for_date() -- reused by scoring refresh.
 │   │   ├── scoring.py            Inning-by-inning runs from MLB Stats API.
-│   │   │                         scoring_nightly_gcs() — called by /refresh-data.
-│   │   │                         scoring_backfill_gcs() — manual backfill by date range.
+│   │   │                         scoring_nightly_gcs() -- called by /refresh-data.
+│   │   │                         scoring_backfill_gcs() -- manual backfill by date range.
 │   │   ├── weather.py            Open-Meteo forecast + STADIUMS dict.
-│   │   │                         weather_nightly_gcs() — called by /refresh-data.
+│   │   │                         weather_nightly_gcs() -- called by /refresh-data.
 │   │   └── umpires.py            Umpire scorecard pulls.
-│   │                             umpires_nightly_gcs() — called by /refresh-data.
+│   │                             umpires_nightly_gcs() -- called by /refresh-data.
 │   ├── odds/
 │   │   ├── sgo.py                SGO client + 6 extractors:
 │   │   │                           extract_hr_props()
@@ -73,7 +73,7 @@ mlb-betting/
 │   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake.
 │   ├── notify/
 │   │   └── discord.py            post_bets / post_error / post_all_systems_summary.
-│   │                             Webhook-based. post_summary() removed — daily recap
+│   │                             Webhook-based. post_summary() removed -- daily recap
 │   │                             in post_all_systems_summary() covers all systems.
 │   └── tracking/
 │       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
@@ -89,7 +89,7 @@ mlb-betting/
 │   ├── run_nrfi.py               Score NRFI/YRFI O/U + 1st inning 3-way ML, post bets.
 │   ├── run_f5.py                 Score F5 ML, post bets.
 │   ├── run_k.py                  Score K O/U (system="K") + pitcher outs O/U
-│   │                             (system="OUTS") — two trackers, one runner.
+│   │                             (system="OUTS") -- two trackers, one runner.
 │   ├── snapshot_odds.py          Fetch SGO slate → GCS latest.json.
 │   ├── settle_bets.py            Nightly: settle all pending bets from GCS sources.
 │   │                             Retries stale pending bets (Statcast lag handling).
@@ -120,9 +120,9 @@ mlb-betting/
 │   └── RETRAIN_NOTES.md
 │
 ├── .env.example                  Documents all env vars. .env is gitignored.
-├── *.ipynb                       Modeling notebooks — canonical source of logic.
+├── *.ipynb                       Modeling notebooks -- canonical source of logic.
 ├── ipynb_CONTEXT                 Summary of what each notebook does.
-├── CONTEXT.md                    (this file) — Claude project is source of truth.
+├── CONTEXT.md                    (this file) -- Claude project is source of truth.
 │                                 Commit to repo at end of each session.
 └── tests/
     └── test_sgo_extractors.py
@@ -151,7 +151,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 │                                       Updated nightly by mlb-refresh-data.
 ├── Odds/
 │   └── sgo/
-│       ├── latest.json                 LATEST POINTER — all runners read this.
+│       ├── latest.json                 LATEST POINTER -- all runners read this.
 │       └── {YYYY-MM-DD}/snapshot_{HHMM}.json
 ├── HR_Pro/
 │   ├── data/
@@ -176,20 +176,20 @@ gs://concrete-crow-445205-m4-mlb-data/
 └── probes/                             Sandbox.
 ```
 
-OUTS shares K's GCS artifacts — no separate model or feature CSV.
+OUTS shares K's GCS artifacts -- no separate model or feature CSV.
 
 ---
 
 ## 4. The daily loops
 
-### Loop A: Data refresh (08:00 UTC — `mlb-refresh-data`)
+### Loop A: Data refresh (08:00 UTC -- `mlb-refresh-data`)
 Fetches yesterday's weather (Open-Meteo archive), umpire scorecards
 (umpscorecards.com), and inning-by-inning scoring (MLB Stats API) for
 yesterday's games. Appends all three to GCS masters.
 
-Scoring refresh runs at 08:00 UTC — 2hr buffer after west coast games
+Scoring refresh runs at 08:00 UTC -- 2hr buffer after west coast games
 finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
-No Statcast — that has its own nightly job inside `build_hr_features.py`.
+No Statcast -- that has its own nightly job inside `build_hr_features.py`.
 
 ### Loop B: Feature builds (12:00–12:45 UTC)
 
@@ -208,7 +208,7 @@ No Statcast — that has its own nightly job inside `build_hr_features.py`.
 ```
 
 Runners post bet signals to Discord only (`post_bets`). No per-runner
-performance summaries — those come from the daily recap in `/settle`.
+performance summaries -- those come from the daily recap in `/settle`.
 
 ### Loop D: Settle + monitor (09:00–13:15 UTC)
 
@@ -245,8 +245,8 @@ performance summaries — those come from the daily recap in `/settle`.
 ### Model artifact contract (every system)
 
 A model lives in GCS as two files:
-- `xgb_{system}_v{N}.json` — XGBoost booster
-- `model_meta_{...}_v{N}.json` — JSON dict with at minimum:
+- `xgb_{system}_v{N}.json` -- XGBoost booster
+- `model_meta_{...}_v{N}.json` -- JSON dict with at minimum:
   ```json
   {
     "version":       "v6",
@@ -268,7 +268,7 @@ if ntree:
     return booster.predict(dm, iteration_range=(0, ntree))
 return booster.predict(dm)
 ```
-Do NOT use `iteration_range=(0, ntree) if ntree else None` — passing `None`
+Do NOT use `iteration_range=(0, ntree) if ntree else None` -- passing `None`
 crashes XGBoost ≥2.0.
 
 ### SGO snapshot contract
@@ -290,7 +290,7 @@ Market IDs in use:
 ### Bet dedup contract
 
 `BetTracker.log_bet()` checks `(system, game_date, game_pk, bet_type)` for
-duplicates before inserting. Returns `-1` on duplicate — caller should skip.
+duplicates before inserting. Returns `-1` on duplicate -- caller should skip.
 Morning run wins; evening run skips.
 
 ### Prediction logging contract
@@ -304,7 +304,7 @@ hit-rate stats. Filters by `self.system` via `text("SELECT * FROM bets WHERE sys
 
 ### Discord posting contract
 
-Runners call `post_bets()` only — bet signals for today's slate.
+Runners call `post_bets()` only -- bet signals for today's slate.
 **No `post_summary()` calls from runners.** The daily recap is posted by
 `settle_bets.run()` via `post_all_systems_summary()` after settlement.
 This gives one clean daily embed covering all five systems (HR, NRFI, F5, K, OUTS).
@@ -321,16 +321,52 @@ This gives one clean daily embed covering all five systems (HR, NRFI, F5, K, OUT
 
 ### Settlement sources
 
-| System | Source | Logic |
+All settlement uses MLB Stats API via `mlb_core.data.game_result.fetch_game_result(game_pk)`.
+Returns None if game not Final (bet skipped, retried tomorrow). One API call per game_pk,
+result cached and shared across all systems in the same settle run.
+
+| System | MLB API field | Logic |
 |---|---|---|
-| NRFI/YRFI | scoring_master inning 1 top+bot runs | >0 = YRFI |
-| 1I_AWAY | scoring_master inning 1 per-half | top>0 AND bot==0 |
-| 1I_HOME | scoring_master inning 1 per-half | bot>0 AND top==0 |
-| 1I_DRAW | scoring_master inning 1 per-half | top==0 AND bot==0 |
-| F5 | scoring_master innings 1-5 | compare home vs away runs; tie=push |
-| HR | statcast_master events==home_run | batter+game_pk |
-| K | statcast_master events==strikeout | pitcher+game_pk via feature CSV |
-| OUTS | statcast_master out events | pitcher+game_pk via feature CSV (same as K) |
+| NRFI/YRFI | `innings[0].away_runs + home_runs` | >0 = YRFI |
+| 1I_AWAY | `innings[0].away_runs / home_runs` | away>0 AND home==0 |
+| 1I_HOME | `innings[0].away_runs / home_runs` | home>0 AND away==0 |
+| 1I_DRAW | `innings[0].away_runs / home_runs` | away==0 AND home==0 |
+| F5 | `innings[0:5]` sum per side | compare home vs away; tie=push |
+| HR | `batters[name].home_runs` | starter + HR > 0 = win; not starter = void |
+| K | `pitchers[name].strikeouts` | vs line O/U |
+| OUTS | `pitchers[name].outs` | vs line O/U |
+
+### SGO market coverage (all markets, settlement status)
+
+`fetch_game_result()` returns all fields needed for every SGO market.
+Add new systems by extracting from SGO snapshot + reading from game_result dict.
+
+| SGO market | odd_id pattern | MLB API field | Status |
+|---|---|---|---|
+| HR yes/no | `batting_homeRuns-*-yn-yes` | `batters[name].home_runs` | Live |
+| Batter hits | `batting_hits-*-ou` | `batters[name].hits` | Backlog |
+| Batter total bases | `batting_totalBases-*-ou` | `batters[name].total_bases` | Backlog |
+| Batter RBI | `batting_RBI-*-ou` | `batters[name].rbi` | Backlog |
+| Batter runs | `points-{PLAYER}-game-ou` | `batters[name].runs` | Backlog |
+| Batter strikeouts | `batting_strikeouts-*-ou` | `batters[name].strikeouts` | Backlog |
+| Stolen bases | `batting_stolenBases-*-ou` | `batters[name].stolen_bases` | Backlog |
+| Pitcher strikeouts | `pitching_strikeouts-*-ou` | `pitchers[name].strikeouts` | Live |
+| Pitcher outs | `pitching_outs-*-ou` | `pitchers[name].outs` | Live |
+| Pitcher earned runs | `pitching_earnedRuns-*-ou` | `pitchers[name].earned_runs` | Backlog |
+| Pitcher hits allowed | `pitching_hits-*-ou` | `pitchers[name].hits_allowed` | Backlog |
+| Pitcher walks | `pitching_basesOnBalls-*-ou` | `pitchers[name].walks` | Backlog |
+| Pitcher pitches | `pitching_pitchesThrown-*-ou` | `pitchers[name].pitches_thrown` | Backlog |
+| NRFI/YRFI O/U | `points-all-1i-ou-*` | `innings[0]` runs | Live |
+| 1st inn 3-way | `points-*-1i-ml3way-*` | `innings[0]` runs | Live |
+| F5 moneyline | `points-*-1ix5-ml-*` | `innings[0:5]` runs | Live |
+| F3 moneyline | `points-*-1ix3-ml-*` | `innings[0:3]` runs | Backlog (needs model) |
+| F7 moneyline | `points-*-1ix7-ml-*` | `innings[0:7]` runs | Backlog |
+| 1st half ML | `points-*-1h-ml-*` | `innings[0:4]` runs | Backlog |
+| Full game ML | `points-*-game-ml-*` | all innings runs | Backlog |
+| First to score | `firstToScore-*-game-ml-*` | `innings` scan | Backlog |
+| Last to score | `lastToScore-*-game-ml-*` | `innings` scan | Backlog |
+| DK fantasy score | `fantasyScore-*-game-ou` | computed from batting stats | Backlog |
+| Pitcher wins | `pitching_win-*-game-yn-*` | `pitchers[name].wins` | Backlog |
 
 ### Team name resolution
 
@@ -367,15 +403,15 @@ Never call the GCS Python client directly from runners.
 
 ### Build speed
 Builds take ~2m20s. The bottleneck is `nvidia-nccl-cu12` (300MB, pulled by
-xgboost). `selenium` and `pybaseball` were removed from `setup.py` — do not
+xgboost). `selenium` and `pybaseball` were removed from `setup.py` -- do not
 re-add them. Production deps only in `setup.py`.
 
 ### ASCII only in source files
 Use ASCII-only characters in all Python string literals, comments, log messages, and docstrings. No Unicode punctuation: use `->` not `->` (U+2192), `--` not `--` (U+2014 em-dash), `>=` not `>=`. Em-dashes and Unicode arrows look identical to ASCII in the terminal but have different bytes, causing silent `str.replace()` assert failures. Enforced by convention; will be added to ruff config when linting is set up.
 
-### Read before write — one deploy per task
+### Read before write -- one deploy per task
 Before editing any file: read it from the **local Cloud Shell file** (not
-GitHub — GitHub fetch can return stale cached content). Use `cat` or `sed`
+GitHub -- GitHub fetch can return stale cached content). Use `cat` or `sed`
 to confirm exact content including whitespace. Identify all problems, write
 all fixes in one `python3 -` script, verify with `grep`/`cat`, then one
 commit and one deploy.
@@ -383,9 +419,9 @@ commit and one deploy.
 When `str.replace()` asserts fail: use `sed -n 'N,Mp' file` to read exact
 whitespace from the local file before writing the replace string.
 
-`cat >>` appends are fragile for multi-line additions — use `python3 -` with
+`cat >>` appends are fragile for multi-line additions -- use `python3 -` with
 `str.replace()` instead. If a function already exists, appending creates a
-duplicate — Python silently uses the last definition.
+duplicate -- Python silently uses the last definition.
 
 ### Debug logging
 Add `logger.info` lines liberally when diagnosing silent failures. Log:
@@ -411,9 +447,9 @@ separate tracker (`system="OUTS"`), no new feature build or model needed.
 
 ### Feature/column naming drift
 Several places where the same concept has different names:
-- `ump_total_run_impact_L30` (umpire master) ↔ `ump_k_boost_L30` (K model) — proxied
+- `ump_total_run_impact_L30` (umpire master) ↔ `ump_k_boost_L30` (K model) -- proxied
 - `model_features` vs `game_features` (F5 config had both pre-v5)
-- `pitcher_is_home` (NRFI) — `inning_topbot=="Top"` means home pitcher
+- `pitcher_is_home` (NRFI) -- `inning_topbot=="Top"` means home pitcher
 
 When in doubt, find the notebook and match the model-meta features list exactly.
 
@@ -464,11 +500,11 @@ Same Docker image for service AND jobs.
 secretmanager.secretAccessor.
 
 **Secrets** (all in Secret Manager):
-- `mlb-db-url` — Postgres DSN with Unix socket
-- `mlb-gcs-bucket` — bucket name
-- `sgo-api-key` — SGO API key (version 3 is current — v1 was exposed, v2
+- `mlb-db-url` -- Postgres DSN with Unix socket
+- `mlb-gcs-bucket` -- bucket name
+- `sgo-api-key` -- SGO API key (version 3 is current -- v1 was exposed, v2
   had invisible newlines causing header errors)
-- `discord-webhook-url` — Discord webhook
+- `discord-webhook-url` -- Discord webhook
 
 **Cloud Run Jobs:**
 - `mlb-retrain-f5-meta`
@@ -491,7 +527,7 @@ the new revision loses the SQL binding and DB writes fail with `[Errno 5]`.
 
 **Personal Google accounts can't mint Cloud Run audience tokens.** Use
 `gcloud run services proxy <service> --port=8080` for manual curl tests.
-Restart the proxy after a redeploy — stale proxy returns Google's 404.
+Restart the proxy after a redeploy -- stale proxy returns Google's 404.
 
 **`oddsAvailable=true` is not "today only" in SGO.** Returns 5-day window.
 Always pass `startsAfter`/`startsBefore`. `et_day_window()` handles this.
@@ -513,7 +549,7 @@ Always run migrations in a **separate** `engine.begin()` block with its own
 Passing a raw string with `:param` syntax to `pd.read_sql()` causes
 `syntax error at or near ":"` in pg8000. Always wrap:
 ```python
-# Wrong — crashes with pg8000
+# Wrong -- crashes with pg8000
 df = pd.read_sql("SELECT * FROM bets WHERE system = :sys", conn, params={"sys": s})
 # Correct
 df = pd.read_sql(text("SELECT * FROM bets WHERE system = :sys"), conn, params={"sys": s})
@@ -527,13 +563,13 @@ Kelly fraction, HR bets at +600 with edges below ~7% get $0 stake.
 `NRFI_Pro_System/data/pitcher_start_features.csv`. NRFI must rebuild before
 F5. Scheduler reflects this (12:15 NRFI → 12:45 F5).
 
-**`lineup_pct_L` leakage.** Was in NRFI v17 training — carried same-game
+**`lineup_pct_L` leakage.** Was in NRFI v17 training -- carried same-game
 run information into the half-inning target. Removed in retrain. Never add
 same-game batter stats as features in inning-1 models.
 
 **K build performance.** The opponent backfill pre-prepares the PA frame
 once (`_prepare_pa_for_opp_features`) before the per-date loop. Do not
-revert this — the naive version was killed by gunicorn at 15min.
+revert this -- the naive version was killed by gunicorn at 15min.
 
 **SGO API key is in Secret Manager version 3.** Version 1 was the old
 exposed key. Version 2 had invisible newlines causing `Invalid leading
@@ -547,14 +583,14 @@ features (`ump_overall_accuracy_L30`, `ump_k_boost_L30`,
 `ump_consistency_L30`) were NaN-only in training data for all systems due
 to a join bug. The K builder now correctly rolls the umpire master, but
 `ump_k_boost_L30` is proxied via `ump_total_run_impact_L30`. Models were
-trained and validated without umpire signal — XGBoost handles NaN natively.
+trained and validated without umpire signal -- XGBoost handles NaN natively.
 
 **3-way 1st inning ML is derived, not retrained.** `p_3way_away/home/draw`
 are computed from existing NRFI half-probabilities. No new model needed.
 The math: `p_away = p_away_half * (1 - p_home_half)`, etc.
 
 **Pitcher outs O/U is a proxy model.** Uses `avg_ip_L5` from the K feature
-CSV modelled as Normal(avg_ip, 1.5 IP std). Not a trained predictor —
+CSV modelled as Normal(avg_ip, 1.5 IP std). Not a trained predictor --
 edge signal will be weaker than K strikeout model.
 
 **`scoring_master.csv` had no nightly refresh until 2026-05-14.** Bets
@@ -575,7 +611,7 @@ All per-system Discord summaries showed K stats. Fixed with `text()` wrapper.
 
 **GitHub fetch can return stale cached content.** `web_fetch` on raw GitHub
 URLs can return an older version. Always read the local Cloud Shell file
-with `cat` or `sed` — that is the source of truth when `git status` is clean.
+with `cat` or `sed` -- that is the source of truth when `git status` is clean.
 Use GitHub fetch only to understand file structure at the start of a session,
 then switch to local reads before writing any patches.
 
@@ -593,24 +629,24 @@ No Statcast dependency for HR settlement.
 
 ## 9. Performance monitor
 
-`runners/monitor_performance.py` — fires at 09:30 UTC daily via `mlb-monitor`.
+`runners/monitor_performance.py` -- fires at 09:30 UTC daily via `mlb-monitor`.
 
 Alert thresholds (overrideable via env vars):
-- `MONITOR_ROI_WARN=-15` — ROI over last 30 bets below -15% triggers alert
-- `MONITOR_HIT_RATE_DROP=10` — hit rate more than 10pct below expected
-- `MONITOR_MIN_BETS=20` — minimum settled bets before alerting
-- `MONITOR_ROLLING_WINDOW=30` — window size
+- `MONITOR_ROI_WARN=-15` -- ROI over last 30 bets below -15% triggers alert
+- `MONITOR_HIT_RATE_DROP=10` -- hit rate more than 10pct below expected
+- `MONITOR_MIN_BETS=20` -- minimum settled bets before alerting
+- `MONITOR_ROLLING_WINDOW=30` -- window size
 
 Posts weekly digest every Monday.
 
-Expected hit rates (baselines — update after 200 bets per system):
+Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
 
 ---
 
 ## 10. Ops monitor
 
-`runners/monitor_ops.py` — fires at 13:15 UTC daily via `mlb-monitor-ops`.
+`runners/monitor_ops.py` -- fires at 13:15 UTC daily via `mlb-monitor-ops`.
 
 Checks (all post-feature-build):
 - All 12 Cloud Scheduler jobs: last run status code
@@ -626,13 +662,13 @@ Silent on clean run. Posts Discord alert only on failure.
 
 ## 11. Pointers to other docs
 
-- `ipynb_CONTEXT` — modeling theory + per-notebook summaries
-- `SGO_CONTEXT` — SGO API reference, market IDs, quota, patterns
-- `SCHEDULER_CONTEXT` — full scheduler inventory with payloads (12 jobs)
-- `deploy/SGO_DEPLOY_NOTES.md` — SGO setup runbook
-- `deploy/RETRAIN_NOTES.md` — retrain pipeline runbook + rollback
-- The notebooks (`*.ipynb`) — canonical modeling logic
-- Latest session handoff — point-in-time state, open action items
+- `ipynb_CONTEXT` -- modeling theory + per-notebook summaries
+- `SGO_CONTEXT` -- SGO API reference, market IDs, quota, patterns
+- `SCHEDULER_CONTEXT` -- full scheduler inventory with payloads (12 jobs)
+- `deploy/SGO_DEPLOY_NOTES.md` -- SGO setup runbook
+- `deploy/RETRAIN_NOTES.md` -- retrain pipeline runbook + rollback
+- The notebooks (`*.ipynb`) -- canonical modeling logic
+- Latest session handoff -- point-in-time state, open action items
 
 ---
 

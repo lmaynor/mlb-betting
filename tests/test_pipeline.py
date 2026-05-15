@@ -30,7 +30,6 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import date
-from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -185,17 +184,27 @@ def test_calc_profit_void():
     assert _calc_profit(10.0, -115, "void") == 0.0
 
 
+def _make_game_cache(away_inn1=0, home_inn1=0, innings_5_away=None, innings_5_home=None):
+    """Build a minimal game_cache dict for settlement tests."""
+    if innings_5_away is None:
+        innings_5_away = [away_inn1] + [0] * 4
+    if innings_5_home is None:
+        innings_5_home = [home_inn1] + [0] * 4
+    innings = [
+        {"num": i+1, "away_runs": innings_5_away[i], "home_runs": innings_5_home[i],
+         "away_hits": 0, "home_hits": 0}
+        for i in range(5)
+    ] + [{"num": i+6, "away_runs": 0, "home_runs": 0, "away_hits": 0, "home_hits": 0}
+         for i in range(4)]
+    return {GAME_PK: {"game_pk": GAME_PK, "final": True, "innings": innings,
+                      "pitchers": {}, "batters": {}}}
+
+
 def test_settle_nrfi_win():
     from runners.settle_bets import _settle_nrfi
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
-        "stake": 10.0, "odds": -115,
-    }])
-    scoring = pd.DataFrame([
-        {"game_pk": GAME_PK, "inning": 1, "half": "top", "runs": 0},
-        {"game_pk": GAME_PK, "inning": 1, "half": "bot", "runs": 0},
-    ])
-    results = _settle_nrfi(pending, scoring)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
+                              "stake": 10.0, "odds": -115}])
+    results = _settle_nrfi(pending, _make_game_cache(away_inn1=0, home_inn1=0))
     assert len(results) == 1
     assert results[0]["result"] == "win"
     assert abs(results[0]["profit"] - 8.70) < 0.01
@@ -203,177 +212,124 @@ def test_settle_nrfi_win():
 
 def test_settle_nrfi_loss():
     from runners.settle_bets import _settle_nrfi
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
-        "stake": 10.0, "odds": -115,
-    }])
-    scoring = pd.DataFrame([
-        {"game_pk": GAME_PK, "inning": 1, "half": "top", "runs": 1},
-        {"game_pk": GAME_PK, "inning": 1, "half": "bot", "runs": 0},
-    ])
-    results = _settle_nrfi(pending, scoring)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
+                              "stake": 10.0, "odds": -115}])
+    results = _settle_nrfi(pending, _make_game_cache(away_inn1=1, home_inn1=0))
     assert results[0]["result"] == "loss"
     assert results[0]["profit"] == -10.0
 
 
 def test_settle_3way_away():
     from runners.settle_bets import _settle_nrfi
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "1I_AWAY",
-        "stake": 10.0, "odds": 200,
-    }])
-    scoring = pd.DataFrame([
-        {"game_pk": GAME_PK, "inning": 1, "half": "top", "runs": 1},
-        {"game_pk": GAME_PK, "inning": 1, "half": "bot", "runs": 0},
-    ])
-    results = _settle_nrfi(pending, scoring)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "1I_AWAY",
+                              "stake": 10.0, "odds": 200}])
+    results = _settle_nrfi(pending, _make_game_cache(away_inn1=1, home_inn1=0))
     assert results[0]["result"] == "win"
     assert results[0]["profit"] == 20.0
 
 
 def test_settle_f5_home_win():
     from runners.settle_bets import _settle_f5
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
-        "stake": 10.0, "odds": -110,
-    }])
-    scoring = pd.DataFrame(
-        [{"game_pk": GAME_PK, "inning": i, "half": "bot", "runs": 1} for i in range(1, 6)] +
-        [{"game_pk": GAME_PK, "inning": i, "half": "top", "runs": 0} for i in range(1, 6)]
-    )
-    results = _settle_f5(pending, scoring)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
+                              "stake": 10.0, "odds": -110}])
+    cache = _make_game_cache(innings_5_away=[0,0,0,0,0], innings_5_home=[1,0,0,0,0])
+    results = _settle_f5(pending, cache)
     assert results[0]["result"] == "win"
 
 
 def test_settle_f5_push():
     from runners.settle_bets import _settle_f5
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
-        "stake": 10.0, "odds": -110,
-    }])
-    scoring = pd.DataFrame([
-        {"game_pk": GAME_PK, "inning": i, "half": h, "runs": 1}
-        for i in range(1, 6) for h in ("top", "bot")
-    ])
-    results = _settle_f5(pending, scoring)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
+                              "stake": 10.0, "odds": -110}])
+    cache = _make_game_cache(innings_5_away=[1,0,0,0,0], innings_5_home=[1,0,0,0,0])
+    results = _settle_f5(pending, cache)
     assert results[0]["result"] == "push"
     assert results[0]["profit"] == 0.0
 
 
+def _make_k_cache(strikeouts=8, outs=18, pitcher_name="Slade Cecconi"):
+    """Build a minimal game_cache for K/OUTS settlement tests."""
+    return {GAME_PK: {"game_pk": GAME_PK, "final": True, "innings": [],
+                      "batters": {},
+                      "pitchers": {pitcher_name.lower(): {
+                          "starter": True, "strikeouts": strikeouts, "outs": outs,
+                          "innings_pitched": "6.0", "earned_runs": 2,
+                          "hits_allowed": 5, "walks": 2, "home_runs_allowed": 0,
+                          "pitches_thrown": 90, "wins": 1, "losses": 0, "saves": 0,
+                      }}}}
+
+
 def test_settle_k_over_win():
     from runners.settle_bets import _settle_k
-    sc = pd.DataFrame([
-        {"game_pk": GAME_PK, "pitcher": 123, "batter": i,
-         "events": "strikeout", "player_name": f"Batter{i}"}
-        for i in range(8)
-    ])
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "K_OVER_6.5",
-        "stake": 10.0, "odds": -120,
-    }])
-    with patch("mlb_core.storage.exists", return_value=True), \
-         patch("mlb_core.storage.read_csv", return_value=pd.DataFrame([
-             {"game_pk": GAME_PK, "pitcher": 123}
-         ])):
-        results = _settle_k(pending, sc)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
+                              "bet_type": "K_OVER_6.5", "stake": 10.0, "odds": -120}])
+    results = _settle_k(pending, _make_k_cache(strikeouts=8))
     assert results[0]["result"] == "win"
 
 
 def test_settle_k_under_win():
     from runners.settle_bets import _settle_k
-    sc = pd.DataFrame([
-        {"game_pk": GAME_PK, "pitcher": 123, "batter": i,
-         "events": "strikeout", "player_name": f"Batter{i}"}
-        for i in range(4)
-    ])
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "K_UNDER_6.5",
-        "stake": 10.0, "odds": 110,
-    }])
-    with patch("mlb_core.storage.exists", return_value=True), \
-         patch("mlb_core.storage.read_csv", return_value=pd.DataFrame([
-             {"game_pk": GAME_PK, "pitcher": 123}
-         ])):
-        results = _settle_k(pending, sc)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
+                              "bet_type": "K_UNDER_6.5", "stake": 10.0, "odds": 110}])
+    results = _settle_k(pending, _make_k_cache(strikeouts=4))
     assert results[0]["result"] == "win"
 
 
 def test_settle_k_push():
     from runners.settle_bets import _settle_k
-    sc = pd.DataFrame([
-        {"game_pk": GAME_PK, "pitcher": 123, "batter": i,
-         "events": "strikeout", "player_name": f"Batter{i}"}
-        for i in range(7)
-    ])
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "bet_type": "K_OVER_7.0",
-        "stake": 10.0, "odds": -110,
-    }])
-    with patch("mlb_core.storage.exists", return_value=True), \
-         patch("mlb_core.storage.read_csv", return_value=pd.DataFrame([
-             {"game_pk": GAME_PK, "pitcher": 123}
-         ])):
-        results = _settle_k(pending, sc)
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
+                              "bet_type": "K_OVER_7.0", "stake": 10.0, "odds": -110}])
+    results = _settle_k(pending, _make_k_cache(strikeouts=7))
     assert results[0]["result"] == "push"
 
 
-def _make_boxscore(starter=True, home_runs=0):
-    """Helper: return a mock _fetch_hr_boxscore result for Aaron Judge."""
-    return {"aaron judge": {"starter": starter, "home_runs": home_runs}}
+def _make_hr_cache(starter=True, home_runs=0, final=True):
+    """Build a minimal game_cache for HR settlement tests."""
+    if not final:
+        return {GAME_PK: None}
+    return {GAME_PK: {"game_pk": GAME_PK, "final": True, "innings": [],
+                      "pitchers": {},
+                      "batters": {"aaron judge": {
+                          "starter": starter, "home_runs": home_runs,
+                          "batting_order": 300 if starter else 301,
+                          "hits": 1, "at_bats": 4, "plate_appearances": 5,
+                          "rbi": 1, "runs": 1, "doubles": 0, "triples": 0,
+                          "walks": 1, "strikeouts": 1, "stolen_bases": 0, "total_bases": home_runs * 4,
+                      }}}}
 
 
-def test_settle_hr_win(monkeypatch):
-    """Starter who hit a HR -> win."""
+def test_settle_hr_win():
     from runners.settle_bets import _settle_hr
-    import runners.settle_bets as sb
-    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=True, home_runs=1))
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
-        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
-    }])
-    results = _settle_hr(pending, pd.DataFrame())
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
+                              "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
+    results = _settle_hr(pending, _make_hr_cache(starter=True, home_runs=1))
     assert results[0]["result"] == "win"
     assert results[0]["profit"] == 50.0
 
 
-def test_settle_hr_loss(monkeypatch):
-    """Starter who did not hit a HR -> loss."""
+def test_settle_hr_loss():
     from runners.settle_bets import _settle_hr
-    import runners.settle_bets as sb
-    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=True, home_runs=0))
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
-        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
-    }])
-    results = _settle_hr(pending, pd.DataFrame())
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
+                              "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
+    results = _settle_hr(pending, _make_hr_cache(starter=True, home_runs=0))
     assert results[0]["result"] == "loss"
     assert results[0]["profit"] == -10.0
 
 
-def test_settle_hr_void_not_starter(monkeypatch):
-    """Player who did not start (PH/DNP) -> void."""
+def test_settle_hr_void_not_starter():
     from runners.settle_bets import _settle_hr
-    import runners.settle_bets as sb
-    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: _make_boxscore(starter=False, home_runs=0))
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
-        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
-    }])
-    results = _settle_hr(pending, pd.DataFrame())
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
+                              "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
+    results = _settle_hr(pending, _make_hr_cache(starter=False, home_runs=0))
     assert results[0]["result"] == "void"
     assert results[0]["profit"] == 0.0
 
 
-def test_settle_hr_game_not_final(monkeypatch):
-    """Game not yet Final -> skip."""
+def test_settle_hr_game_not_final():
     from runners.settle_bets import _settle_hr
-    import runners.settle_bets as sb
-    monkeypatch.setattr(sb, "_fetch_hr_boxscore", lambda gpk: None)
-    pending = pd.DataFrame([{
-        "id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
-        "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE,
-    }])
-    results = _settle_hr(pending, pd.DataFrame())
+    pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
+                              "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
+    results = _settle_hr(pending, _make_hr_cache(final=False))
     assert len(results) == 0, "non-final game should be skipped"
 
 
