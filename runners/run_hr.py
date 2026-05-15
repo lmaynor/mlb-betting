@@ -491,7 +491,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         # No best_iteration in meta (e.g. bootstrapped meta) — use all trees.
         preds = booster.predict(dm)
     feat_df = feat_df.copy()
-    feat_df["model_prob"] = preds
+    feat_df["model_prob"] = preds.clip(0.001, 0.999)
 
     # 5. Match predictions to odds by normalized player name
     # Build a normalized-name index over feat_df once, then look up each odds player.

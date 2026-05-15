@@ -280,6 +280,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     n_sims=cfg["mc_sims"], cap=cfg["mc_cap"],
                 )
                 p_over, p_under = _ou_probs(probs, float(line))
+                p_over  = min(max(p_over,  0.001), 0.999)
+                p_under = min(max(p_under, 0.001), 0.999)
                 mkt_over  = american_to_implied_prob(over_odds)
                 mkt_under = american_to_implied_prob(under_odds)
                 total = mkt_over + mkt_under
@@ -339,6 +341,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             if line is not None and over_odds is not None and under_odds is not None:
                 dist = _simulate_outs(avg_ip_f)
                 p_over, p_under = _outs_ou_probs(dist, float(line))
+                p_over  = min(max(p_over,  0.001), 0.999)
+                p_under = min(max(p_under, 0.001), 0.999)
                 # Skip if distribution has no coverage near the line
                 if p_over + p_under < 0.05:
                     continue
@@ -441,6 +445,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             stake            = row["stake"],
             kelly_triggered  = triggered,
             paper            = cfg["PAPER"],
+            lambda_k         = row.get("lambda_k"),
+            proj_k           = row.get("proj_k"),
         )
         if bet_id == -1:
             continue

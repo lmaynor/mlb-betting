@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS bets (
     profit           REAL,
     settled_at       TEXT,
     notes            TEXT,
-    created_at       TEXT
+    created_at       TEXT,
+    lambda_k         REAL,
+    proj_k           REAL
 )
 """
 
@@ -56,6 +58,14 @@ _SCHEMA_SQL_SQLITE = _SCHEMA_SQL.replace(
     "id               SERIAL PRIMARY KEY",
     "id               INTEGER PRIMARY KEY AUTOINCREMENT",
 )
+
+# Migration: add lambda_k / proj_k columns for K/OUTS diagnostics.
+_MIGRATE_LAMBDA_SQL = """
+ALTER TABLE bets ADD COLUMN lambda_k REAL
+"""
+_MIGRATE_PROJ_K_SQL = """
+ALTER TABLE bets ADD COLUMN proj_k REAL
+"""
 
 # Migration: add kelly_triggered to existing tables that predate v3.
 _MIGRATE_SQL = """
@@ -143,6 +153,17 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_OUTS_SQL))
         except Exception as e:
             logger.warning(f"bet_tracker: OUTS migration failed: {e}")
+        # Migrate lambda_k / proj_k columns.
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_MIGRATE_LAMBDA_SQL))
+        except Exception:
+            pass
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_MIGRATE_PROJ_K_SQL))
+        except Exception:
+            pass
         # Composite index for is_duplicate() -- idempotent.
         try:
             with self.engine.begin() as conn:
@@ -188,6 +209,8 @@ class BetTracker:
         kelly_triggered: bool = True,
         paper: bool = True,
         notes: str = "",
+        lambda_k: float = None,
+        proj_k: float = None,
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
         if game_pk is not None and bet_type is not None and game_date is not None:
@@ -200,11 +223,11 @@ class BetTracker:
                     INSERT INTO bets
                         (system, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
-                         odds, stake, kelly_triggered, paper, notes, created_at)
+                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k)
                     VALUES
                         (:system, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
-                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at)
+                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k)
                 """),
                 {
                     "system": self.system, "game_date": game_date,
@@ -217,6 +240,8 @@ class BetTracker:
                     "kelly_triggered": kelly_triggered,
                     "paper": int(paper),
                     "notes": notes, "created_at": datetime.now().isoformat(),
+                    "lambda_k": lambda_k,
+                    "proj_k": proj_k,
                 },
             )
             bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \

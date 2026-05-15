@@ -261,7 +261,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     p_home = _score(booster, features, feature_means, feat_df)
     feat_df = feat_df.copy()
-    feat_df["p_home"] = p_home
+    feat_df["p_home"] = p_home.clip(0.001, 0.999)
 
     results = []
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap

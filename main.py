@@ -278,6 +278,112 @@ def monitor_ops_handler():
 
 
 
+
+@app.route("/dashboard", methods=["GET"])
+def dashboard():
+    from sqlalchemy import text
+    from mlb_core.tracking.bet_tracker import BetTracker
+    system_filter = request.args.get("system", None)
+    days = int(request.args.get("days", 7))
+    bt = BetTracker(os.environ["DB_URL"], "HR")
+
+    systems = ["HR", "NRFI", "F5", "K", "OUTS"]
+    summary_rows = ""
+    for sys in systems:
+        with bt.engine.connect() as conn:
+            r = conn.execute(text(
+                "SELECT "
+                "COUNT(*) FILTER (WHERE result IS NOT NULL AND kelly_triggered=true) as settled, "
+                "SUM(profit) FILTER (WHERE result IS NOT NULL AND kelly_triggered=true) as pnl, "
+                "AVG(edge) FILTER (WHERE kelly_triggered=true) as avg_edge, "
+                "COUNT(*) FILTER (WHERE result IS NULL AND kelly_triggered=true) as pending "
+                "FROM bets WHERE system=:s "
+                "AND game_date >= TO_CHAR(NOW() - INTERVAL '30 days', 'YYYY-MM-DD')"
+            ), {"s": sys}).fetchone()
+        settled  = r[0] or 0
+        pnl      = round(r[1] or 0, 2)
+        avg_edge = f"{r[2]*100:.1f}%" if r[2] else "-"
+        pending  = r[3] or 0
+        summary_rows += (
+            f"<tr><td>{sys}</td><td>{settled}</td><td>{pending}</td>"
+            f"<td>${pnl:+.2f}</td><td>{avg_edge}</td></tr>"
+        )
+
+    where = f"WHERE created_at >= NOW() - INTERVAL '{days} days'"
+    if system_filter:
+        where += f" AND system = '{system_filter}'"
+    with bt.engine.connect() as conn:
+        rows = conn.execute(text(
+            f"SELECT id, system, game_date, player, bet_type, model_prob, market_prob, "
+            f"edge, odds, stake, kelly_triggered, lambda_k, proj_k, result, profit "
+            f"FROM bets {where} ORDER BY game_date DESC, model_prob DESC LIMIT 500"
+        )).fetchall()
+
+    bet_rows_html = ""
+    for b in [dict(r._mapping) for r in rows]:
+        prob  = b.get("model_prob") or 0
+        edge  = b.get("edge") or 0
+        flag  = ' style="background:#3d0000"' if (prob >= 0.95 or edge >= 0.40) else ''
+        kt    = "Y" if b.get("kelly_triggered") else "n"
+        lk    = f'{b["lambda_k"]:.2f}' if b.get("lambda_k") is not None else "-"
+        pk    = f'{b["proj_k"]:.2f}' if b.get("proj_k") is not None else "-"
+        res   = b.get("result") or "-"
+        pnl_s = f'${b["profit"]:+.2f}' if b.get("profit") is not None else "-"
+        bet_rows_html += (
+            f"<tr{flag}>"
+            f"<td>{b.get("game_date","")}</td>"
+            f"<td>{b.get("system","")}</td>"
+            f"<td>{b.get("player","")}</td>"
+            f"<td>{b.get("bet_type","")}</td>"
+            f"<td>{prob:.1%}</td>"
+            f"<td>{edge:+.1%}</td>"
+            f"<td>{b.get("odds","")}</td>"
+            f"<td>${b.get("stake") or 0:.0f}</td>"
+            f"<td>{kt}</td><td>{lk}</td><td>{pk}</td>"
+            f"<td>{res}</td><td>{pnl_s}</td>"
+            f"</tr>"
+        )
+
+    html = (
+        '<!DOCTYPE html><html><head><title>MLB Dashboard</title>'
+        '<style>'
+        'body{background:#111;color:#eee;font-family:monospace;padding:20px}'
+        'h1,h2{color:#f90;margin:16px 0 8px}'
+        'table{border-collapse:collapse;width:100%;margin-bottom:30px}'
+        'th,td{border:1px solid #444;padding:5px 9px;font-size:12px}'
+        'th{background:#222;color:#f90}'
+        'tr:hover{background:#1a1a1a}'
+        'a{color:#f90;margin-right:8px}'
+        '</style></head><body>'
+        '<h1>MLB Betting Dashboard</h1>'
+        '<div>Days: '
+        '<a href="/dashboard?days=1">1</a>'
+        '<a href="/dashboard?days=3">3</a>'
+        '<a href="/dashboard?days=7">7</a>'
+        '<a href="/dashboard?days=30">30</a>'
+        '&nbsp;| System: '
+        '<a href="/dashboard">All</a>'
+        '<a href="/dashboard?system=K">K</a>'
+        '<a href="/dashboard?system=NRFI">NRFI</a>'
+        '<a href="/dashboard?system=F5">F5</a>'
+        '<a href="/dashboard?system=HR">HR</a>'
+        '<a href="/dashboard?system=OUTS">OUTS</a>'
+        '</div>'
+        '<h2>30-day Summary</h2>'
+        '<table><tr><th>System</th><th>Settled</th><th>Pending</th>'
+        '<th>P&amp;L</th><th>Avg Edge</th></tr>'
+        f'{summary_rows}</table>'
+        f'<h2>Recent Bets (last {days}d)'
+        ' -- <span style="color:#f66">red = prob&gt;95% or edge&gt;40%</span></h2>'
+        '<table><tr>'
+        '<th>Date</th><th>Sys</th><th>Player</th><th>Type</th>'
+        '<th>Prob</th><th>Edge</th><th>Odds</th><th>Stake</th>'
+        '<th>KT</th><th>Lambda</th><th>ProjK</th><th>Result</th><th>P&amp;L</th>'
+        f'</tr>{bet_rows_html}</table>'
+        '</body></html>'
+    )
+    return html, 200, {"Content-Type": "text/html"}
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
