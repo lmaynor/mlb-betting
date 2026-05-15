@@ -65,26 +65,7 @@ STADIUMS["ATH"] = STADIUMS["OAK"]
 WIND_OUT_PARKS = {"CHC", "COL", "TEX", "LAD"}
 WIND_IN_PARKS  = {"CHC", "COL", "SF", "BOS"}
 
-MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=probablePitcher"
-
-
-def _get_games_for_date(date_str: str) -> list:
-    try:
-        r = _session.get(MLB_SCHEDULE_URL.format(date=date_str), timeout=30)
-        r.raise_for_status()
-    except Exception:
-        return []
-    games = []
-    for d in r.json().get("dates", []):
-        for g in d.get("games", []):
-            games.append({
-                "game_pk":        g["gamePk"],
-                "game_date":      date_str,
-                "game_time_utc":  g.get("gameDate", ""),
-                "away_team_name": g["teams"]["away"]["team"]["name"],
-                "home_team_name": g["teams"]["home"]["team"]["name"],
-            })
-    return games
+from mlb_core.data.lineups import _get_games_for_date  # noqa: F401
 
 
 def _fetch_weather(lat, lon, date_str, hour_utc, is_forecast=False) -> dict | None:

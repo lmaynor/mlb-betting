@@ -102,19 +102,14 @@ def _check_schedulers() -> list[str]:
 def _gcs_age_hours(gcs_key: str) -> float | None:
     """Return age of a GCS object in hours. None if missing or GCS unavailable."""
     from mlb_core.config import GCS_BUCKET
-    from mlb_core.storage import exists
-
     if not GCS_BUCKET:
         return None
-    if not exists(gcs_key):
-        return None
     try:
-        from google.cloud import storage as gcs
-        client = gcs.Client()
-        blob = client.bucket(GCS_BUCKET).blob(gcs_key)
-        blob.reload()
-        age = (datetime.now(timezone.utc) - blob.updated).total_seconds() / 3600
-        return age
+        from mlb_core.storage import stat
+        s = stat(gcs_key)
+        if s is None:
+            return None
+        return (datetime.now(timezone.utc) - s["mtime_utc"]).total_seconds() / 3600
     except Exception as e:
         logger.warning(f"monitor_ops: age check failed for {gcs_key}: {e}")
         return None
