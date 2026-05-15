@@ -255,9 +255,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     for n, info in outs_odds_by_name.items()}
 
     results = []
-    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
+    _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
+    _pending_stakes: dict[int, float] = {}
     
     for _, row in feat_df.iterrows():
         norm     = row["_pitcher_name_norm"]
@@ -295,7 +298,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
+                    _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
                     _stake = min(kelly_stake(
                         edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
@@ -303,6 +306,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    if kelly_triggered and _stake > 0:
+                        _pending_stakes[int(row["game_pk"])] = (
+                            _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
+                        )
                     results.append({
                         "player":          row["_pitcher_name"],
                         "team":            team,
@@ -348,7 +355,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
-                    _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
+                    _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
                     _stake = min(kelly_stake(
                         edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
@@ -356,6 +363,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    if kelly_triggered and _stake > 0:
+                        _pending_stakes[int(row["game_pk"])] = (
+                            _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
+                        )
                     results.append({
                         "player":          row["_pitcher_name"],
                         "team":            team,

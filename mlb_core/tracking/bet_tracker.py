@@ -68,6 +68,19 @@ _MIGRATE_OUTS_SQL = """
 UPDATE bets SET system = 'OUTS' WHERE bet_type LIKE 'OUTS_%' AND system = 'K'
 """
 
+# Composite index for is_duplicate() hot path.
+_IDX_DEDUP_SQL = """
+CREATE INDEX IF NOT EXISTS idx_bets_dedup
+  ON bets(system, game_date, game_pk, bet_type)
+"""
+
+# Partial index for pending-bet queries (Postgres only -- SQLite ignores WHERE clause).
+_IDX_PENDING_SQL = """
+CREATE INDEX IF NOT EXISTS idx_bets_pending
+  ON bets(result, game_date)
+  WHERE result IS NULL
+"""
+
 
 def _make_engine(db_path: str) -> sa.Engine:
     url = DB_URL or ""
@@ -130,6 +143,20 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_OUTS_SQL))
         except Exception as e:
             logger.warning(f"bet_tracker: OUTS migration failed: {e}")
+        # Composite index for is_duplicate() -- idempotent.
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_IDX_DEDUP_SQL))
+        except Exception:
+            pass
+        # Partial index for pending queries (Postgres only).
+        if self.engine.dialect.name != "sqlite":
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(text(_IDX_PENDING_SQL))
+            except Exception:
+                pass
+
 
     def is_duplicate(self, game_date: str, game_pk: int, bet_type: str) -> bool:
         """Return True if this (system, game_date, game_pk, bet_type) is already logged."""

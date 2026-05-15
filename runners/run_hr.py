@@ -499,9 +499,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     name_to_idx = {n: i for i, n in enumerate(feat_df["_name_key"]) if n}
 
     results = []
-    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
+    _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
+    _pending_stakes: dict[int, float] = {}
         for player_name, odds_info in player_odds.items():
         key = _normalize_name(player_name)
         idx = name_to_idx.get(key)
@@ -516,7 +519,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         fair_prob   = market_prob / 1.07
         edge        = model_prob - fair_prob
         k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
+        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
         stake       = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,
@@ -526,6 +529,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         ), _cap)
 
         kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        if kelly_triggered and stake > 0:
+            _pending_stakes[int(row.get("game_pk", 0))] = (
+                _pending_stakes.get(int(row.get("game_pk", 0)), 0.0) + stake
+            )
 
         # Derive batter team abbrev from row's home/away side flag set upstream
         side = row.get("batter_team_side", "")

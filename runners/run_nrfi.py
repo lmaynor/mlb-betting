@@ -267,9 +267,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         by_abbrev[(away_abbr, home_abbr)] = {**info, "event_id": ev_id}
 
     results = []
-    from mlb_core.risk.exposure import get_bankroll_and_cap, current_bankroll
+    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
+    _exposure_game_pks = list(pivot["game_pk"].dropna().astype(int).unique()) if "pivot" in dir() else []
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
+    _pending_stakes: dict[int, float] = {}
         for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
         odds_info = by_abbrev.get(key)
@@ -297,7 +300,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob = float(row["model_yrfi_prob"])
 
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = get_bankroll_and_cap(_exposure_engine, int(row["game_pk"]), game_date)
+        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
         stake = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,
@@ -306,6 +309,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
         kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        if kelly_triggered and stake > 0:
+            _pending_stakes[int(row["game_pk"])] = (
+                _pending_stakes.get(int(row["game_pk"]), 0.0) + stake
+            )
 
         results.append({
             "player":          f"{row['away_team']} @ {row['home_team']}",

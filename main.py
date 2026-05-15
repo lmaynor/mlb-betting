@@ -118,6 +118,63 @@ def build_features_handler():
     return jsonify(result), 200
 
 
+@app.route("/build-all-features", methods=["POST"])
+def build_all_features_handler():
+    """Run all feature builders sequentially in dependency order.
+
+    Dependency order: HR -> NRFI -> K -> F5 (F5 reads NRFI pitcher_start_features.csv).
+    HR and K are independent of each other and NRFI.
+
+    Body (all optional):
+        systems: list[str]  -- subset to run, default all four in order
+        continue_on_error: bool -- default false (fail fast)
+    Returns HTTP 207 if any system errored, 200 if all clean.
+    """
+    import time
+    body             = request.get_json(silent=True) or {}
+    run_date         = body.get("run_date", date.today().isoformat())
+    continue_on_err  = body.get("continue_on_error", False)
+    default_order    = ["HR", "NRFI", "K", "F5"]
+    systems          = body.get("systems", default_order)
+    # Enforce dependency order even if caller passes a subset
+    ordered = [s for s in default_order if s in [x.upper() for x in systems]]
+
+    builders = {
+        "HR":   "runners.build_hr_features",
+        "NRFI": "runners.build_nrfi_features",
+        "K":    "runners.build_k_features",
+        "F5":   "runners.build_f5_features",
+    }
+
+    results = []
+    any_error = False
+    for sys_name in ordered:
+        t0 = time.time()
+        logger.info(f"build-all-features: starting {sys_name}")
+        try:
+            import importlib
+            mod = importlib.import_module(builders[sys_name])
+            result = mod.run(run_date=run_date)
+            duration = round(time.time() - t0, 1)
+            results.append({"system": sys_name, "status": "ok",
+                            "duration_sec": duration, "result": result})
+            logger.info(f"build-all-features: {sys_name} done in {duration}s")
+        except Exception as e:
+            duration = round(time.time() - t0, 1)
+            tb = traceback.format_exc()
+            logger.error(f"build-all-features: {sys_name} failed:
+{tb}")
+            results.append({"system": sys_name, "status": "error",
+                            "duration_sec": duration, "error": str(e)})
+            any_error = True
+            if not continue_on_err:
+                break
+
+    http_status = 207 if any_error else 200
+    return jsonify({"status": "error" if any_error else "ok",
+                    "results": results}), http_status
+
+
 @app.route("/snapshot-odds", methods=["POST"])
 def snapshot_odds_handler():
     body     = request.get_json(silent=True) or {}

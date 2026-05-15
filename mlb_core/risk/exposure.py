@@ -91,3 +91,63 @@ def get_bankroll_and_cap(
         f"unit=${unit:.2f} cap=${cap:.2f} open=${open_s:.2f} remaining=${remaining:.2f}"
     )
     return bankroll, remaining
+
+
+def prefetch_exposure(
+    engine,
+    game_pks: list[int],
+    game_date: str,
+    starting: float = STARTING_BANKROLL,
+) -> tuple[float, dict[int, float]]:
+    """
+    Prefetch bankroll and open stakes for all game_pks in one pass.
+    Call once per runner invocation, before the prediction loop.
+
+    Returns:
+        (bankroll, {game_pk: open_stake_dollars})
+    """
+    bankroll = current_bankroll(engine, starting=starting)
+    if not game_pks:
+        return bankroll, {}
+    try:
+        from sqlalchemy import text as _text
+        placeholders = ",".join(str(g) for g in game_pks)
+        with engine.connect() as conn:
+            rows = conn.execute(_text(f"""
+                SELECT game_pk, COALESCE(SUM(stake), 0) as open_stake
+                FROM bets
+                WHERE game_pk IN ({placeholders})
+                  AND game_date = :gd
+                  AND result IS NULL
+                  AND kelly_triggered = TRUE
+                GROUP BY game_pk
+            """), {"gd": game_date}).fetchall()
+        return bankroll, {int(r[0]): float(r[1]) for r in rows}
+    except Exception as e:
+        logger.warning(f"exposure: prefetch_exposure failed: {e} -- returning zeros")
+        return bankroll, {}
+
+
+def apply_cap(
+    bankroll: float,
+    game_pk: int,
+    prefetched: dict[int, float],
+    pending: dict[int, float],
+    cap_units: float = CAP_UNITS,
+    unit_pct: float = UNIT_PCT,
+) -> tuple[float, float]:
+    """
+    Compute (bankroll, remaining_cap) using prefetched + in-run pending stakes.
+
+    prefetched: open stakes from DB at start of runner (does not change).
+    pending:    stakes logged so far THIS runner run (local accumulator).
+    """
+    unit = bankroll * unit_pct
+    cap  = cap_units * unit
+    open_s = prefetched.get(game_pk, 0.0) + pending.get(game_pk, 0.0)
+    remaining = max(0.0, cap - open_s)
+    logger.debug(
+        f"exposure: game_pk={game_pk} bankroll=${bankroll:.0f} "
+        f"unit=${unit:.2f} cap=${cap:.2f} open=${open_s:.2f} remaining=${remaining:.2f}"
+    )
+    return bankroll, remaining

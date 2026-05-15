@@ -157,6 +157,43 @@ def test_exposure_cap_zero_when_full(tmp_path):
     assert remaining == 0.0
 
 
+def test_prefetch_exposure_empty(tmp_path):
+    """prefetch_exposure with no bets returns zeros."""
+    from mlb_core.risk.exposure import prefetch_exposure
+    make_tracker("NRFI", tmp_path)
+    from mlb_core.tracking.bet_tracker import _make_engine
+    engine = _make_engine(str(tmp_path / "NRFI_bets.db"))
+    bankroll, stakes = prefetch_exposure(engine, [GAME_PK], GAME_DATE, starting=1000.0)
+    assert bankroll == 1000.0
+    assert stakes.get(GAME_PK, 0.0) == 0.0
+
+
+def test_prefetch_exposure_with_bet(tmp_path):
+    """prefetch_exposure returns correct open stake for a game_pk."""
+    from mlb_core.risk.exposure import prefetch_exposure
+    tracker = make_tracker("NRFI", tmp_path)
+    log_nrfi_bet(tracker, game_pk=GAME_PK, stake=15.0, kelly_triggered=True)
+    bankroll, stakes = prefetch_exposure(tracker.engine, [GAME_PK], GAME_DATE, starting=1000.0)
+    assert abs(stakes.get(GAME_PK, 0.0) - 15.0) < 0.01
+
+
+def test_apply_cap_with_pending(tmp_path):
+    """apply_cap sees prefetched + in-run pending stakes."""
+    from mlb_core.risk.exposure import apply_cap
+    # $8 prefetched + $7 pending = $15 open; cap = $20 (2u at 1% of $1000)
+    prefetched = {GAME_PK: 8.0}
+    pending    = {GAME_PK: 7.0}
+    _, remaining = apply_cap(1000.0, GAME_PK, prefetched, pending)
+    assert abs(remaining - 5.0) < 0.01
+
+
+def test_apply_cap_zero_when_exceeded(tmp_path):
+    """apply_cap returns 0 when cap already exceeded."""
+    from mlb_core.risk.exposure import apply_cap
+    _, remaining = apply_cap(1000.0, GAME_PK, {GAME_PK: 25.0}, {})
+    assert remaining == 0.0
+
+
 # ── Settlement logic tests ────────────────────────────────────────────────────
 
 def test_calc_profit_win_plus_odds():
