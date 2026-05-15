@@ -59,6 +59,10 @@ mlb-betting/
 │   │   │                         weather_nightly_gcs() -- called by /refresh-data.
 │   │   └── umpires.py            Umpire scorecard pulls.
 │   │                             umpires_nightly_gcs() -- called by /refresh-data.
+│   ├── data/
+│   │   ├── game_result.py        fetch_game_result(game_pk) -- MLB Stats API.
+│   │   │                         Returns innings, pitchers, batters. None if not Final.
+│   │   │                         Used by settle_bets.run() for all settlement.
 │   ├── odds/
 │   │   ├── sgo.py                SGO client + 6 extractors:
 │   │   │                           extract_hr_props()
@@ -69,12 +73,15 @@ mlb-betting/
 │   │   │                           extract_k_odds()
 │   │   │                           extract_outs_odds()
 │   │   ├── dk_scraper.py         LEGACY. Kept for resolve_team() only.
-│   │   ├── the_odds_api.py       DEPRECATED. Slated for deletion.
 │   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake.
 │   ├── notify/
 │   │   └── discord.py            post_bets / post_error / post_all_systems_summary.
 │   │                             Webhook-based. post_summary() removed -- daily recap
 │   │                             in post_all_systems_summary() covers all systems.
+│   ├── risk/
+│   │   └── exposure.py           prefetch_exposure() + apply_cap().
+│   │                             One DB query per runner; _pending_stakes accumulator
+│   │                             tracks within-runner exposure correctly.
 │   └── tracking/
 │       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
 │                                 log_bet() dedup on (system, game_date, game_pk, bet_type).
@@ -91,10 +98,9 @@ mlb-betting/
 │   ├── run_k.py                  Score K O/U (system="K") + pitcher outs O/U
 │   │                             (system="OUTS") -- two trackers, one runner.
 │   ├── snapshot_odds.py          Fetch SGO slate → GCS latest.json.
-│   ├── settle_bets.py            Nightly: settle all pending bets from GCS sources.
-│   │                             Retries stale pending bets (Statcast lag handling).
-│   │                             Debug logging: pending breakdown by date/system,
-│   │                             scoring master row count, game_pk lists per settler.
+│   ├── settle_bets.py            Nightly: settle all pending bets via MLB Stats API.
+│   │                             fetch_game_result() called once per game_pk, cached.
+│   │                             Retries non-Final games automatically on next run.
 │   ├── monitor_performance.py    Daily: rolling perf check, Discord alerts, Mon digest.
 │   └── monitor_ops.py            Daily: infra health check after feature builds.
 │                                 Checks: scheduler job status, GCS freshness of SGO
@@ -125,7 +131,8 @@ mlb-betting/
 ├── CONTEXT.md                    (this file) -- Claude project is source of truth.
 │                                 Commit to repo at end of each session.
 └── tests/
-    └── test_sgo_extractors.py
+    ├── test_sgo_extractors.py
+    └── test_pipeline.py          43 tests: BetTracker, exposure cap, all 4 settlers.
 ```
 
 ---
@@ -173,6 +180,9 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── xgb_k_v1.json
 │       ├── model_meta_v1.json
 │       └── archive/
+├── {system_prefix}/
+│   └── data/last_build.json            Build sentinel per system. Written on success
+│                                       by each feature builder. Checked by monitor_ops.
 └── probes/                             Sandbox.
 ```
 
@@ -218,7 +228,7 @@ performance summaries -- those come from the daily recap in `/settle`.
                              posts daily recap embed (post_all_systems_summary)
 09:30 UTC → /monitor      → rolling perf check, Discord alert if degraded
                              Monday: weekly digest post
-13:15 UTC → /monitor-ops  → infra health check after feature builds complete
+12:50 UTC → /monitor-ops  → infra health check after feature builds complete
                              Silent on clean run.
 ```
 
@@ -383,6 +393,30 @@ Add new systems by extracting from SGO snapshot + reading from game_result dict.
 | DK fantasy score | `fantasyScore-*-game-ou` | computed from batting stats | Backlog |
 | Pitcher wins | `pitching_win-*-game-yn-*` | `pitchers[name].wins` | Backlog |
 
+### game_result contract
+
+`mlb_core.data.game_result.fetch_game_result(game_pk)` makes two MLB Stats API
+calls (linescore + boxscore) and returns a structured dict. Returns None if the
+game is not yet Final -- caller should skip and retry tomorrow.
+
+```python
+{
+    "game_pk":  int,
+    "final":    True,
+    "innings":  [{"num": 1, "away_runs": 0, "home_runs": 0, "away_hits": 0, "home_hits": 0}, ...],
+    "pitchers": {"luis castillo": {"starter": True, "strikeouts": 6, "outs": 17,
+                                   "earned_runs": 3, "hits_allowed": 4, "walks": 3,
+                                   "pitches_thrown": 108, "wins": 1, ...}},
+    "batters":  {"aaron judge":   {"starter": True, "home_runs": 1, "hits": 2,
+                                   "total_bases": 5, "rbi": 2, "runs": 1,
+                                   "stolen_bases": 0, "strikeouts": 1, ...}},
+}
+```
+
+All player names are normalized: NFD + ASCII fold + lower + strip.
+Partial name matching: if exact lookup fails, tries substring match (handles Jr., accents).
+`settle_bets.run()` calls this once per game_pk and caches -- shared across all systems.
+
 ### Team name resolution
 
 SGO returns medium names ("Yankees"). Internal data uses 3-letter abbrevs.
@@ -466,6 +500,18 @@ To add a new betting system:
 OUTS is the model for a sub-market of an existing system: same runner,
 separate tracker (`system="OUTS"`), no new feature build or model needed.
 
+### Adding a new betting market (no new model needed)
+When a new SGO market maps directly to an existing MLB API field in `game_result`:
+1. Add extractor to `mlb_core/odds/sgo.py` following the `extract_k_odds()` pattern
+2. Wire extractor into the appropriate runner (`run_k.py` for pitcher props, `run_hr.py` for batter props)
+3. Add settlement logic to `_settle_k()` or `_settle_hr()` -- just read the right field from `game_cache`
+4. Add bet_type to §5 naming convention table
+5. Update SGO market coverage table in §5 (Status: Live)
+6. Add to CONTEXT.md §5 settlement sources table
+
+For markets that need a new model: build the model in a notebook first, then
+follow the full "adding a new system" checklist above.
+
 ### Feature/column naming drift
 Several places where the same concept has different names:
 - `ump_total_run_impact_L30` (umpire master) ↔ `ump_k_boost_L30` (K model) -- proxied
@@ -489,7 +535,7 @@ All five must pass:
 ```
                               ┌──────────────────┐
                               │ Cloud Scheduler  │
-                              │  12 cron jobs    │
+                              │   9 cron jobs    │
                               └────────┬─────────┘
                                        │ OIDC
                                        ▼
@@ -640,6 +686,14 @@ then switch to local reads before writing any patches.
 socket (`/cloudsql/...`) that only exists inside Cloud Run. Use the proxy
 endpoint for ad-hoc DB inspection instead of direct connections.
 
+**`/build-all-features` is a single point of failure.** If it errors midway,
+downstream systems silently use yesterday's feature CSVs. The build sentinels
+(`{system}/data/last_build.json`) catch this -- `monitor_ops` at 12:50 UTC alerts
+if any sentinel is stale or status=error. The morning scoring run at 16:00 UTC is
+2h10m after the alert, giving time to manually re-run the failed system via
+`/build-features`. Adding runner-side sentinel checks (abort if stale, post Discord
+alert) is on the backlog.
+
 **HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
 calls the MLB Stats API per game_pk. If the game is not Final, the bet is
 skipped (retried tomorrow). If Final: player not in starting lineup -> void
@@ -667,7 +721,7 @@ Expected hit rates (baselines -- update after 200 bets per system):
 
 ## 10. Ops monitor
 
-`runners/monitor_ops.py` -- fires at 13:15 UTC daily via `mlb-monitor-ops`.
+`runners/monitor_ops.py` -- fires at 12:50 UTC daily via `mlb-monitor-ops`.
 
 Checks (all post-feature-build):
 - All 12 Cloud Scheduler jobs: last run status code
@@ -685,7 +739,7 @@ Silent on clean run. Posts Discord alert only on failure.
 
 - `ipynb_CONTEXT` -- modeling theory + per-notebook summaries
 - `SGO_CONTEXT` -- SGO API reference, market IDs, quota, patterns
-- `SCHEDULER_CONTEXT` -- full scheduler inventory with payloads (12 jobs)
+- `SCHEDULER_CONTEXT` -- full scheduler inventory with payloads (9 jobs)
 - `deploy/SGO_DEPLOY_NOTES.md` -- SGO setup runbook
 - `deploy/RETRAIN_NOTES.md` -- retrain pipeline runbook + rollback
 - The notebooks (`*.ipynb`) -- canonical modeling logic
