@@ -33,6 +33,8 @@ git push
 
 echo "==> 0.5. Run tests"
 python3 -m compileall -q mlb_core/ runners/ main.py
+find mlb_core runners -name '*.py' -print0 | xargs -0 python3 -m py_compile
+python3 -m py_compile main.py
 pytest tests/ -q
 if [ $? -ne 0 ]; then
   echo "Tests failed -- aborting deploy"
