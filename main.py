@@ -275,6 +275,36 @@ def monitor_ops_handler():
     http_status = 200 if result.get("healthy") else 207
     return jsonify(result), http_status
 
+@app.route("/reset-bets", methods=["POST"])
+def reset_bets():
+    """Delete bets by date, system, player, or game_pk. Requires at least date."""
+    from sqlalchemy import text
+    from mlb_core.tracking.bet_tracker import BetTracker
+    body    = request.get_json(silent=True) or {}
+    date    = body.get("date")
+    system  = body.get("system")
+    player  = body.get("player")
+    game_pk = body.get("game_pk")
+    if not date:
+        return jsonify({"error": "date is required"}), 400
+    bt = BetTracker(os.environ["DB_URL"], "HR")
+    where = "WHERE game_date = :date"
+    params = {"date": date}
+    if system:
+        where += " AND system = :system"
+        params["system"] = system.upper()
+    if player:
+        where += " AND player ILIKE :player"
+        params["player"] = f"%{player}%"
+    if game_pk:
+        where += " AND game_pk = :game_pk"
+        params["game_pk"] = int(game_pk)
+    with bt.engine.begin() as conn:
+        result = conn.execute(text(f"DELETE FROM bets {where}"), params)
+        deleted = result.rowcount
+    logger.info(f"reset-bets: deleted {deleted} rows for {body}")
+    return jsonify({"deleted": deleted, "params": body})
+
 
 
 
