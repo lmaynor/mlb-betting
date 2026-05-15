@@ -228,10 +228,7 @@ performance summaries -- those come from the daily recap in `/settle`.
 | 08:00 | `mlb-refresh-data` | Weather + umpire + scoring masters |
 | 09:00 | `mlb-settle` | Settle bets, post daily recap |
 | 09:30 | `mlb-monitor` | Rolling perf check, alerts |
-| 12:00 | `mlb-hr-features` | HR feature build |
-| 12:15 | `mlb-nrfi-features` | NRFI feature build |
-| 12:30 | `mlb-k-features` | K/OUTS feature build |
-| 12:45 | `mlb-f5-features` | F5 feature build |
+| 12:00 | `mlb-build-all-features` | All feature builds: HR -> NRFI -> K -> F5 (dependency order) |
 | 13:15 | `mlb-monitor-ops` | Infra health check |
 | 15:55 | `mlb-snapshot-morning` | SGO odds snapshot |
 | 16:00 | `mlb-betting-morning` | Score all 4 runners |
