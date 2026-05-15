@@ -468,6 +468,117 @@ def dashboard():
     )
     return html, 200, {"Content-Type": "text/html"}
 
+
+
+# ---------------------------------------------------------------------------
+# Public API -- read-only, authenticated with X-API-Key header
+# Used by beezy.vip frontend.
+# ---------------------------------------------------------------------------
+
+from runners.public_api import (
+    get_today_picks, get_picks, get_recent_settled,
+    get_summary_stats, _require_api_key,
+)
+
+SITE_API_KEY  = os.environ.get("SITE_API_KEY", "")
+ALLOWED_ORIGIN = os.environ.get("SITE_ORIGIN", "https://beezy.vip")
+
+
+def _cors_headers():
+    return {
+        "Access-Control-Allow-Origin":  ALLOWED_ORIGIN,
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+    }
+
+
+def _auth_required(req):
+    if not SITE_API_KEY:
+        return jsonify({"error": "SITE_API_KEY not configured"}), 500
+    if not _require_api_key(dict(req.headers), SITE_API_KEY):
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
+
+
+@app.route("/api/public/picks/today", methods=["GET", "OPTIONS"])
+def public_picks_today():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        picks = get_today_picks(engine)
+        resp  = jsonify({"picks": picks, "count": len(picks)})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except Exception as exc:
+        logger.exception("public_picks_today failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/picks", methods=["GET", "OPTIONS"])
+def public_picks():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        picks = get_picks(
+            engine,
+            system=request.args.get("system"),
+            date=request.args.get("date"),
+            status=request.args.get("status"),
+            limit=request.args.get("limit", 50),
+            offset=request.args.get("offset", 0),
+        )
+        resp = jsonify({"picks": picks, "count": len(picks)})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except Exception as exc:
+        logger.exception("public_picks failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/picks/recent", methods=["GET", "OPTIONS"])
+def public_picks_recent():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        limit = int(request.args.get("limit", 20))
+        picks = get_recent_settled(engine, limit=limit)
+        resp  = jsonify({"picks": picks, "count": len(picks)})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=120"
+        return resp
+    except Exception as exc:
+        logger.exception("public_picks_recent failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/stats/summary", methods=["GET", "OPTIONS"])
+def public_stats_summary():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        stats = get_summary_stats(engine)
+        resp  = jsonify(stats)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        logger.exception("public_stats_summary failed")
+        return jsonify({"error": str(exc)}), 500
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

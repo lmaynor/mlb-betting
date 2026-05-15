@@ -49,6 +49,7 @@ gcloud run services update "$SERVICE" \
   --region="$REGION" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
+  --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,SGO_API_KEY=sgo-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
   --project="$PROJECT_ID"
 
 NEW_REV=$(gcloud run services describe "$SERVICE" --region="$REGION" \
