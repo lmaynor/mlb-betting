@@ -424,6 +424,12 @@ re-add them. Production deps only in `setup.py`.
 ### ASCII only in source files
 Use ASCII-only characters in all Python string literals, comments, log messages, and docstrings. No Unicode punctuation: use `->` not `->` (U+2192), `--` not `--` (U+2014 em-dash), `>=` not `>=`. Em-dashes and Unicode arrows look identical to ASCII in the terminal but have different bytes, causing silent `str.replace()` assert failures. Enforced by convention; will be added to ruff config when linting is set up.
 
+### Deploy script runs tests before building
+`./deploy/deploy_service.sh` runs `python3 -m compileall` + `pytest tests/` before
+`gcloud builds submit`. A failing test or syntax error aborts the deploy immediately.
+Never invoke `gcloud builds submit` directly -- always use the deploy script so
+`--add-cloudsql-instances` is preserved and tests gate the build.
+
 ### Read before write -- one deploy per task
 Before editing any file: read it from the **local Cloud Shell file** (not
 GitHub -- GitHub fetch can return stale cached content). Use `cat` or `sed`
