@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Auth + private
+Disallow: /dashboard
+Disallow: /api
+Disallow: /login
+Disallow: /signup
+
+# Deferred routes (noindex, v2)
+Disallow: /pitchers
+Disallow: /players
+Disallow: /recap
+Disallow: /teams
+Disallow: /games
+
+Sitemap: https://beezy.vip/sitemap.xml

@@ -47,3 +47,19 @@ odds_cache_daily/
 
 *.zip
 Untitled*.ipynb
+
+# beezy-vip
+beezy-vip/.env.local
+beezy-vip/.env*.local
+beezy-vip/node_modules/
+beezy-vip/.next/
+beezy-vip/tsconfig.tsbuildinfo
+beezy-vip/gcp-key.json
+
+# beezy-vip
+beezy-vip/.env.local
+beezy-vip/.env*.local
+beezy-vip/node_modules/
+beezy-vip/.next/
+beezy-vip/tsconfig.tsbuildinfo
+beezy-vip/gcp-key.json
