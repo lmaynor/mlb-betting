@@ -434,6 +434,10 @@ Cloud Run reads from Secret Manager `mlb-db-url:latest`. Always include
 exists inside Cloud Run. Use the proxy endpoint for ad-hoc queries:
 `curl -X POST http://localhost:8081/settle` etc.
 
+**Always use `from mlb_core.config import DB_URL` in new routes, never `os.environ["DB_URL"]`.** The env var is `MLB_DB_URL` -- reading `DB_URL` directly causes `KeyError` at runtime. `mlb_core.config` handles the lookup correctly.
+
+**K Pro v1 `model_meta_v1.json` had corrupt `feature_means`: `avg_ip_L5=1.0` (correct: 5.6), `k_per_9_L5=48.5` (correct: 8.66), `k_per_9_L10=48.8` (correct: 8.70).** Caused near-zero lambda predictions for all pitchers. Root cause: model trained when IP calculation bug was present. Fixed 2026-05-15 by patching GCS meta directly. K model needs full retrain with correct IP values.
+
 ---
 
 ## 6. Conventions
