@@ -179,9 +179,18 @@ def _settle_hr(pending: pd.DataFrame, sc: pd.DataFrame) -> list[dict]:
     if sc.empty:
         return []
     hr_events = sc[sc["events"] == "home_run"].copy()
-    hr_events["_name"] = hr_events["player_name"].apply(_norm)
+    def _norm_statcast(s):
+        """Statcast uses 'Last, First' — convert to 'first last' to match SGO names."""
+        if not isinstance(s, str): return ""
+        s = _norm(s)
+        if "," in s:
+            parts = [p.strip() for p in s.split(",", 1)]
+            return f"{parts[1]} {parts[0]}" if len(parts) == 2 else s
+        return s
+
+    hr_events["_name"] = hr_events["player_name"].apply(_norm_statcast)
     hr_set = set(zip(hr_events["game_pk"].astype(int), hr_events["_name"]))
-    sc["_name"] = sc["player_name"].apply(_norm)
+    sc["_name"] = sc["player_name"].apply(_norm_statcast)
     appeared = set(zip(sc["game_pk"].astype(int), sc["_name"]))
     results = []
     for _, bet in pending.iterrows():
