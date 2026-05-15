@@ -495,7 +495,7 @@ def _cors_headers():
 def _auth_required(req):
     if not SITE_API_KEY:
         return jsonify({"error": "SITE_API_KEY not configured"}), 500
-    if not _require_api_key(dict(req.headers), SITE_API_KEY):
+    if not _require_api_key(req.headers, SITE_API_KEY):
         return jsonify({"error": "Unauthorized"}), 401
     return None
 
@@ -578,6 +578,7 @@ def public_stats_summary():
     except Exception as exc:
         logger.exception("public_stats_summary failed")
         return jsonify({"error": str(exc)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
