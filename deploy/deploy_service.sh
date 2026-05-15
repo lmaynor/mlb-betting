@@ -31,6 +31,14 @@ git add CONTEXT.md
 git commit -m "docs: update CONTEXT.md timestamp" --allow-empty
 git push
 
+echo "==> 0.5. Run tests"
+python3 -m compileall -q mlb_core/ runners/ main.py
+pytest tests/ -q
+if [ $? -ne 0 ]; then
+  echo "Tests failed -- aborting deploy"
+  exit 1
+fi
+
 echo "==> 1. Build"
 gcloud builds submit --tag="$IMAGE" --project="$PROJECT_ID"
 

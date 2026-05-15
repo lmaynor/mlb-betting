@@ -14,6 +14,6 @@ jobs:
       - name: Install
         run: pip install -e .
       - name: Syntax check
-        run: python3 -m py_compile main.py runners/*.py mlb_core/tracking/bet_tracker.py mlb_core/risk/exposure.py mlb_core/data/game_result.py
+        run: python3 -m compileall -q mlb_core/ runners/ main.py
       - name: Test
         run: pytest tests/ -v

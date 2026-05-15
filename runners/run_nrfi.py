@@ -273,7 +273,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(pivot["game_pk"].dropna().astype(int).unique()) if "pivot" in dir() else []
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
     _pending_stakes: dict[int, float] = {}
-        for _, row in pivot.iterrows():
+    for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
         odds_info = by_abbrev.get(key)
         if odds_info is None:

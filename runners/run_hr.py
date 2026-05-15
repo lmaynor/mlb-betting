@@ -505,7 +505,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
     _pending_stakes: dict[int, float] = {}
-        for player_name, odds_info in player_odds.items():
+    for player_name, odds_info in player_odds.items():
         key = _normalize_name(player_name)
         idx = name_to_idx.get(key)
         if idx is None:

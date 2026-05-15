@@ -270,7 +270,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
     _pending_stakes: dict[int, float] = {}
-        for _, row in feat_df.iterrows():
+    for _, row in feat_df.iterrows():
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:
