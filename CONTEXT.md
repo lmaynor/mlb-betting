@@ -477,6 +477,16 @@ whitespace from the local file before writing the replace string.
 `str.replace()` instead. If a function already exists, appending creates a
 duplicate -- Python silently uses the last definition.
 
+**Always use `os.path.expanduser()` for the base path in patch scripts.**
+Never hardcode `/root/mlb-betting` -- the Cloud Shell home is `/home/lmaynor21`.
+Always start patch scripts with `base = os.path.expanduser("~/mlb-betting")`.
+
+**Read exact anchor lines from local file before writing any patch.**
+Use `sed -n 'N,Mp' file` to get the exact string including whitespace.
+Never copy anchor strings from GitHub fetch output or Claude project docs --
+both can be stale. Write the patch only after confirming the exact local content.
+If a patch script asserts, it means the anchor was wrong -- read the file again.
+
 ### Debug logging
 Add `logger.info` lines liberally when diagnosing silent failures. Log:
 - What data was loaded (row counts, game_pk lists)
