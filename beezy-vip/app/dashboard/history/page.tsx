@@ -3,6 +3,8 @@ import { apiGetPicks, apiGetStats } from '@/lib/betting-api'
 import { StatCard }                   from '@/components/ui/primitives'
 import type { Metadata }              from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'History — Dashboard' }
 export const revalidate = 300
 

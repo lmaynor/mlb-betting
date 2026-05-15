@@ -5,6 +5,8 @@ import { CopyBetButton }                        from '@/components/ui/copy-bet-b
 import { currentUser }                         from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: "Today's Picks — Dashboard" }
 export const revalidate = 60
 

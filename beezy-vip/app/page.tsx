@@ -7,6 +7,8 @@ import { ModelsGrid }       from '@/components/landing/models-grid'
 import { RecentPicksTable } from '@/components/landing/recent-picks-table'
 import { PricingSection }   from '@/components/landing/pricing'
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 300  // ISR every 5 min
 
 function LoadingStats() {

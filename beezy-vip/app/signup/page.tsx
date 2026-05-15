@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = { title: 'Join Beezy.VIP' }
 
 // PRE_LAUNCH = true until Stripe is enabled

@@ -4,6 +4,8 @@ import { PicksTable }    from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title:       'MLB Picks — All Systems',
   description: 'Every MLB pick from all Beezy.VIP machine learning systems. Filter by market, date, and result.',

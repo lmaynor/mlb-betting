@@ -5,6 +5,8 @@ import type { Metadata } from 'next'
 
 type Props = { params: { name: string } }
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 3600
 
 function decodeName(slug: string): string {

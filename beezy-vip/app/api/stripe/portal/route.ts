@@ -3,9 +3,11 @@ import Stripe           from 'stripe'
 import { currentUser }  from '@clerk/nextjs/server'
 import { redirect }     from 'next/navigation'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-})
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2026-04-22.dahlia',
+  })
+}
 
 export async function GET() {
   const user = await currentUser().catch(() => null)
@@ -22,7 +24,8 @@ export async function GET() {
   }
 
   try {
-    const session = await stripe.billingPortal.sessions.create({
+    const stripe = getStripe()
+  const session = await stripe.billingPortal.sessions.create({
       customer:   customerId,
       return_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.vip'}/dashboard/settings`,
     })

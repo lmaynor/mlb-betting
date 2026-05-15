@@ -3,6 +3,8 @@ import { getArticle }  from '@/lib/learn-db'
 import { ARTICLE_SPECS } from '@/lib/article-generator'
 import type { Metadata, ResolvingMetadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 3600
 
 type Props = { params: { slug: string } }

@@ -3,6 +3,8 @@ import { ARTICLE_SPECS }  from '@/lib/article-generator'
 import Link               from 'next/link'
 import type { Metadata }  from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title:       'Learn — MLB Betting Guides & Strategy',
   description: 'Data-driven guides on NRFI, Kelly criterion, implied probability, strikeout props, and machine learning models for sports betting.',

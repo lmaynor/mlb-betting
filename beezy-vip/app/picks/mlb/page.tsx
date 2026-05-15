@@ -3,6 +3,8 @@ import { apiGetStats } from '@/lib/betting-api'
 import { SystemBadge }     from '@/components/ui/primitives'
 import type { Metadata }   from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title:       'MLB Picks Today — All Systems',
   description: 'Today\'s MLB picks from all Beezy.VIP machine learning systems: NRFI, HR, F5, K, and OUTS.',

@@ -4,6 +4,8 @@ import { StatCard }     from '@/components/ui/primitives'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title:       'Results — Full History',
   description: 'Complete public results for all Beezy.VIP MLB betting systems. Every bet, every result, wins and losses.',

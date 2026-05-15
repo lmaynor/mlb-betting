@@ -6,6 +6,8 @@ import type { Metadata, ResolvingMetadata } from 'next'
 
 type Props = { params: { date: string } }
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 1800
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

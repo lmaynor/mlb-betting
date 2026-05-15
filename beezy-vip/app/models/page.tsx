@@ -3,6 +3,8 @@ import { SystemBadge }     from '@/components/ui/primitives'
 import Link                from 'next/link'
 import type { Metadata }   from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title:       'Models — Methodology & Transparency',
   description: 'How Beezy.VIP builds XGBoost models for MLB betting. Data sources, training methodology, walk-forward CV, and version history.',

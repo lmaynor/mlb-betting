@@ -6,6 +6,8 @@ import type { Metadata } from 'next'
 
 type Props = { params: { date: string } }
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 3600
 
 function formatDate(d: string): string {

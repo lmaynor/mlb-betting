@@ -8,7 +8,7 @@ const API_URL  = process.env.BETTING_API_URL  ?? ''
 const API_KEY  = process.env.BETTING_API_KEY  ?? ''
 
 async function apiFetch<T>(path: string, cacheSecs = 60): Promise<T> {
-  if (!API_URL) throw new Error('BETTING_API_URL is not set')
+  if (!API_URL) throw new Error('BETTING_API_URL is not set -- set this env var in Vercel')
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'X-API-Key': API_KEY },
     next: { revalidate: cacheSecs },

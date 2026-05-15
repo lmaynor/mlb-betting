@@ -7,9 +7,11 @@ import { NextResponse }  from 'next/server'
 import Stripe            from 'stripe'
 import { clerkClient }   from '@clerk/nextjs/server'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-})
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2026-04-22.dahlia',
+  })
+}
 
 const PRICE_TO_TIER: Record<string, string> = {
   [process.env.STRIPE_PRICE_STARTER ?? 'price_starter']: 'starter',
@@ -34,6 +36,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: 'STRIPE_SECRET_KEY not set' })
   }
 
+  const stripe = getStripe()
   const clerk     = await clerkClient()
   const fixed:    string[] = []
   const errors:   string[] = []

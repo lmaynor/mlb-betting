@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe                        from 'stripe'
 import { auth, currentUser }         from '@clerk/nextjs/server'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-04-22.dahlia',
-})
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2026-04-22.dahlia',
+  })
+}
 
 const PRICE_MAP: Record<string, string | undefined> = {
   starter: process.env.STRIPE_PRICE_STARTER,
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
   // Reuse existing Stripe customer if they have one
   const existingCustomerId = user?.privateMetadata?.stripeCustomerId as string | undefined
 
+  const stripe = getStripe()
   const session = await stripe.checkout.sessions.create({
     mode:               'subscription',
     line_items:         [{ price: priceId, quantity: 1 }],

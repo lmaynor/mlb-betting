@@ -1,6 +1,8 @@
 import { SystemPicksPage } from '@/components/picks/system-picks-page'
 import type { Metadata }   from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const revalidate = 60
 
 export const metadata: Metadata = {
