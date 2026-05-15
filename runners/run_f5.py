@@ -290,13 +290,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             team = row["away_team"]
 
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
-        stake = kelly_stake(
+        from mlb_core.risk.exposure import get_bankroll_and_cap
+        from mlb_core.tracking.bet_tracker import _make_engine
+        _engine = _make_engine("unused")
+        _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+        stake = min(kelly_stake(
             edge, odds,
-            bankroll=cfg["BANKROLL"],
+            bankroll=_bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
-        )
+        ), _cap)
         kelly_triggered = edge >= cfg["min_edge"] and stake > 0
 
         results.append({

@@ -292,12 +292,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    _stake = kelly_stake(
-                        edge, odds, bankroll=cfg["BANKROLL"],
+                    from mlb_core.risk.exposure import get_bankroll_and_cap
+                    from mlb_core.tracking.bet_tracker import _make_engine
+                    _engine = _make_engine("unused")
+                    _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+                    _stake = min(kelly_stake(
+                        edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
-                    )
+                    ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
                     results.append({
                         "player":          row["_pitcher_name"],
@@ -344,12 +348,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
-                    _stake = kelly_stake(
-                        edge, odds, bankroll=cfg["BANKROLL"],
+                    from mlb_core.risk.exposure import get_bankroll_and_cap
+                    from mlb_core.tracking.bet_tracker import _make_engine
+                    _engine = _make_engine("unused")
+                    _bankroll, _cap = get_bankroll_and_cap(_engine, int(row["game_pk"]), game_date)
+                    _stake = min(kelly_stake(
+                        edge, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
-                    )
+                    ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
                     results.append({
                         "player":          row["_pitcher_name"],
