@@ -235,6 +235,44 @@ def load_statcast(master_path: Path, inning: int | None = None) -> pd.DataFrame:
         df = df[pd.to_numeric(df["inning"], errors="coerce") == inning].copy()
     return df
 
+def statcast_backfill_gcs(gcs_bucket: str, gcs_master_key: str, dates: list) -> dict:
+    """Backfill Statcast master for a list of date strings (YYYY-MM-DD).
+    Loads master once, appends all dates, deduplicates, uploads once.
+    Returns dict of {date: pitches_added}.
+    """
+    from google.cloud import storage
+    client  = storage.Client()
+    bucket  = client.bucket(gcs_bucket)
+    blob    = bucket.blob(gcs_master_key)
+    existing = pd.read_csv(blob.open("r"), low_memory=False)
+    print(f"  Existing master: {len(existing):,} rows")
+    results = {}
+    for d in dates:
+        print(f"  Fetching {d}...")
+        csv_text = _fetch_day(d)
+        if csv_text is None:
+            print(f"    No data for {d}")
+            results[d] = 0
+            continue
+        new_df = pd.read_csv(StringIO(csv_text))
+        if new_df.empty:
+            print(f"    Empty response for {d}")
+            results[d] = 0
+            continue
+        available = [c for c in STATCAST_FIELDS if c in new_df.columns]
+        new_df = new_df[available]
+        print(f"    {d}: {len(new_df):,} pitches fetched")
+        results[d] = len(new_df)
+        existing = pd.concat([existing, new_df], ignore_index=True)
+    dedup_cols = [c for c in ["game_pk", "batter", "at_bat_number", "pitch_number"] if c in existing.columns]
+    existing = existing.drop_duplicates(subset=dedup_cols)
+    tmp = "/tmp/statcast_master_backfill.csv"
+    existing.to_csv(tmp, index=False)
+    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    print(f"  Master updated: {len(existing):,} rows")
+    return results
+
+
 def statcast_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
     """Fetch yesterday, append to GCS master. No local cache needed."""
     from google.cloud import storage

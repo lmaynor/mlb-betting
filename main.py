@@ -275,6 +275,60 @@ def monitor_ops_handler():
     http_status = 200 if result.get("healthy") else 207
     return jsonify(result), http_status
 
+@app.route("/backfill-statcast", methods=["POST"])
+def backfill_statcast():
+    """Backfill Statcast master for missing dates.
+    Body: {"dates": ["2026-05-09", "2026-05-10"]}
+    """
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.data.statcast import statcast_backfill_gcs
+    body  = request.get_json(silent=True) or {}
+    dates = body.get("dates")
+    if not dates:
+        return jsonify({"error": "dates list required"}), 400
+    try:
+        results = statcast_backfill_gcs(
+            GCS_BUCKET,
+            "Statcast/statcast_master.csv",
+            dates,
+        )
+        return jsonify({"status": "ok", "dates": results})
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"backfill-statcast failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route("/reset-and-run", methods=["POST"])
+def reset_and_run():
+    """Reset bets for a date and immediately rerun all systems. For recovery use only."""
+    from sqlalchemy import text
+    from mlb_core.tracking.bet_tracker import BetTracker
+    from runners.run_hr import run as run_hr
+    from runners.run_nrfi import run as run_nrfi
+    from runners.run_f5 import run as run_f5
+    from runners.run_k import run as run_k
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("date", date.today().isoformat())
+    systems  = body.get("systems", ["HR", "NRFI", "F5", "K"])
+    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    deleted = {}
+    for sys in systems + ["OUTS"]:
+        with bt.engine.begin() as conn:
+            r = conn.execute(text(
+                "DELETE FROM bets WHERE game_date = :d AND system = :s"
+            ), {"d": run_date, "s": sys})
+            deleted[sys] = r.rowcount
+    logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
+    results = {}
+    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k}
+    for sys in systems:
+        if sys in runner_map:
+            try:
+                results[sys] = runner_map[sys](run_type="morning", run_date=run_date)
+            except Exception as e:
+                results[sys] = {"error": str(e)}
+    return jsonify({"deleted": deleted, "results": results})
+
 @app.route("/reset-bets", methods=["POST"])
 def reset_bets():
     """Delete bets by date, system, player, or game_pk. Requires at least date."""
