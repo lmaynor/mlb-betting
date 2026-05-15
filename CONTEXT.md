@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-14 21:01 CST_
+_Last updated: 2026-05-14 22:55 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
