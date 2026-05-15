@@ -637,8 +637,7 @@ df = pd.read_sql(text("SELECT * FROM bets WHERE system = :sys"), conn, params={"
 ```
 This applies to any `pd.read_sql` call with named parameters against Postgres.
 
-**Kelly floor zeroes out HR longshots.** With `min_kelly_pct=0.005` and 50%
-Kelly fraction, HR bets at +600 with edges below ~7% get $0 stake.
+**Kelly floor zeroes out HR longshots.** HR uses `min_kelly_pct=0.001` (lowered from 0.005 on 2026-05-15) and 50% Kelly fraction. At +600 odds, edge=0.03 produces pct=0.0025 which clears the 0.001 floor giving ~$2.50 stake. The other systems use 0.005 which is appropriate for their shorter odds.
 
 **NRFI feature build order.** F5's builder reads
 `NRFI_Pro_System/data/pitcher_start_features.csv`. NRFI must rebuild before
