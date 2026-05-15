@@ -162,8 +162,7 @@ def build_all_features_handler():
         except Exception as e:
             duration = round(time.time() - t0, 1)
             tb = traceback.format_exc()
-            logger.error(f"build-all-features: {sys_name} failed:
-{tb}")
+            logger.error(f"build-all-features: {sys_name} failed: {tb[:500]}")
             results.append({"system": sys_name, "status": "error",
                             "duration_sec": duration, "error": str(e)})
             any_error = True
