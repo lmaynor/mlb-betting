@@ -843,11 +843,54 @@ adding or removing jobs -- it drives the scheduler health check.
 
 ---
 
-## 14. When to update this file
+## 14. DK grading rules (MLB props)
+
+These are the DraftKings house rules that govern how bets are settled.
+Knowing these prevents incorrect settlement logic and bad model assumptions.
+
+### Batter props (HR, hits, TB, RBI, runs, Ks, SB)
+- **Must start**: Player must be in the starting lineup. Pinch hitters who
+  never start are voided even if they record a plate appearance.
+- **Must record a plate appearance**: If a starter is scratched before
+  recording a PA (e.g. injury in warmups), bet is void.
+- **FanDuel differs**: FanDuel only requires a plate appearance (no start
+  requirement). Same player prop grades differently across books.
+
+### Pitcher props (Ks, outs, ER, hits, walks, pitches)
+- **Must throw a pitch**: If listed starter is scratched before throwing a
+  pitch, bet is void.
+- **No minimum innings**: Unlike some books, DK does not require a minimum
+  IP for pitcher props to grade. If the starter throws 1 pitch and leaves
+  due to injury, the bet grades on whatever stats were recorded.
+- **Bulk/opener situations**: If a team uses an opener, the "starter" for
+  prop purposes is the player DK listed at bet time. Verify the SGO market
+  references the correct pitcher MLBAM ID.
+
+### Game-level props (NRFI, F5, full game)
+- **Official game requirement**: Game must be official (5 innings for the
+  visiting team to have batted, or the home team completes 5 innings if
+  leading) for F5 and full-game props to grade. Suspended games before
+  5 innings = void.
+- **NRFI**: Grades after the top and bottom of the 1st inning complete.
+  Rain delay mid-inning = wait for completion. Game called before inning
+  1 completes = void.
+- **Rainouts/postponements**: All props void if game is postponed before
+  starting. If postponed mid-game before official, props void.
+
+### Settlement implications for this system
+- HR settler: void if `not starter` (batting_order % 100 != 0) -- correct
+- K/OUTS settler: no minimum IP check needed -- DK grades on whatever stats
+  recorded as long as pitcher threw at least 1 pitch
+- NRFI settler: if game_result has < 1 full inning, skip (not Final yet)
+- F5 settler: if `len(innings) < 5`, skip -- game not yet official
+
+---
+
+## 15. When to update this file
 
 - Adding/removing a system → §1, §2, §3
 - Changing a contract → §5
-- New market or bet type → §5 (bet type table + settlement table)
+- New market or bet type → §5 (bet type table + settlement table) + §14 (DK grading rules)
 - New gotcha → §8
 - New infra → §7
 - Changes to file layout → §2
@@ -855,5 +898,6 @@ adding or removing jobs -- it drives the scheduler health check.
 - Ops monitor check change → §10
 - Scheduler job added/removed → §13 + update monitor_ops.SCHEDULER_JOBS
 - SGO API change → §12
+- DK house rule change → §14
 
 **Don't put point-in-time state here.** That belongs in the session handoff.
