@@ -685,6 +685,13 @@ then switch to local reads before writing any patches.
 socket (`/cloudsql/...`) that only exists inside Cloud Run. Use the proxy
 endpoint for ad-hoc DB inspection instead of direct connections.
 
+**`game_date` vs `run_date` in runners.** The exposure prefetch call inside
+`_build_predictions()` must use `run_date` (the parameter passed to the function),
+not `game_date` (which is a DataFrame column name, not a local variable at that
+scope). Using `game_date` causes `NameError: name 'game_date' is not defined` at
+runtime. Tests don't catch this because `_build_predictions()` is not called in
+the test suite -- only the downstream settlement and exposure math is tested.
+
 **`/build-all-features` is a single point of failure.** If it errors midway,
 downstream systems silently use yesterday's feature CSVs. The build sentinels
 (`{system}/data/last_build.json`) catch this -- `monitor_ops` at 12:50 UTC alerts
