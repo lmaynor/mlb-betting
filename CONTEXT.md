@@ -191,14 +191,15 @@ Scoring refresh runs at 08:00 UTC -- 2hr buffer after west coast games
 finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
 No Statcast -- that has its own nightly job inside `build_hr_features.py`.
 
-### Loop B: Feature builds (12:00–12:45 UTC)
-
+### Loop B: Feature builds (12:00 UTC)
 | Time | Job | Notes |
 |---|---|---|
-| 12:00 | `mlb-hr-features` | Includes Statcast nightly refresh |
-| 12:15 | `mlb-nrfi-features` | Must run before F5 |
-| 12:30 | `mlb-k-features` | Independent; OUTS uses same features |
-| 12:45 | `mlb-f5-features` | Reads NRFI pitcher_start_features.csv |
+| 12:00 | `mlb-build-all-features` | Runs HR -> NRFI -> K -> F5 in dependency order |
+
+Dependency order enforced in code: F5 reads NRFI's `pitcher_start_features.csv`.
+HR and K are independent. Each system writes a build sentinel to GCS on success
+(`{system_prefix}/data/last_build.json`) -- checked by `monitor_ops` at 13:15 UTC.
+
 
 ### Loop C: Score + bet (16:00 and 22:00 UTC / 11am and 5pm CT)
 
@@ -575,7 +576,7 @@ Kelly fraction, HR bets at +600 with edges below ~7% get $0 stake.
 
 **NRFI feature build order.** F5's builder reads
 `NRFI_Pro_System/data/pitcher_start_features.csv`. NRFI must rebuild before
-F5. Scheduler reflects this (12:15 NRFI → 12:45 F5).
+F5. Dependency order enforced in `/build-all-features` code -- F5 always runs after NRFI.
 
 **`lineup_pct_L` leakage.** Was in NRFI v17 training -- carried same-game
 run information into the half-inning target. Removed in retrain. Never add
