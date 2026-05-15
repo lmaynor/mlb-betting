@@ -274,7 +274,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
     _exposure_game_pks = list(pivot["game_pk"].dropna().astype(int).unique()) if "pivot" in dir() else []
-    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date)
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="NRFI")
     _pending_stakes: dict[int, float] = {}
     for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])

@@ -98,6 +98,7 @@ def prefetch_exposure(
     game_pks: list[int],
     game_date: str,
     starting: float = STARTING_BANKROLL,
+    system: str = None,
 ) -> tuple[float, dict[int, float]]:
     """
     Prefetch bankroll and open stakes for all game_pks in one pass.
@@ -120,8 +121,9 @@ def prefetch_exposure(
                   AND game_date = :gd
                   AND result IS NULL
                   AND kelly_triggered = TRUE
+                  {('AND system = :sys' if system else '')}
                 GROUP BY game_pk
-            """), {"gd": game_date}).fetchall()
+            """), {"gd": game_date, "sys": system} if system else {"gd": game_date}).fetchall()
         return bankroll, {int(r[0]): float(r[1]) for r in rows}
     except Exception as e:
         logger.warning(f"exposure: prefetch_exposure failed: {e} -- returning zeros")
