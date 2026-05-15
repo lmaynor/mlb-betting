@@ -71,7 +71,7 @@ cfg = {
     # Betting params
     "min_edge":       0.03,
     "kelly_fraction": 0.50,
-    "min_kelly_pct":  0.005,
+    "min_kelly_pct":  0.001,  # HR: longshot props need lower floor than default 0.005
     "max_kelly_pct":  0.05,
     "cap_units":      10.0,  # HR: multiple batters per game
     "PAPER":          True,
