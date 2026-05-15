@@ -259,7 +259,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
-    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, game_date)
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date)
     _pending_stakes: dict[int, float] = {}
     
     for _, row in feat_df.iterrows():
