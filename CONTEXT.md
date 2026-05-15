@@ -303,13 +303,14 @@ Both live in `_init_db()` in `mlb_core/tracking/bet_tracker.py`, each in its own
 
 ### Exposure cap contract
 All runners use `prefetch_exposure()` + `apply_cap()` from `mlb_core.risk.exposure`:
-1. Before the prediction loop: `_bankroll, _prefetched_stakes = prefetch_exposure(engine, game_pks, game_date)` -- one DB query total
+1. Before the prediction loop: `_bankroll, _prefetched_stakes = prefetch_exposure(engine, game_pks, game_date, system="SYSTEM")` -- one DB query total, filtered to this system only
 2. Maintain `_pending_stakes: dict[int, float] = {}` -- incremented after each `kelly_triggered` bet
 3. Per row: `_bankroll, _cap = apply_cap(_bankroll, game_pk, _prefetched_stakes, _pending_stakes)`
 4. `stake = min(kelly_stake(...), _cap)`
 
 This ensures within-runner accumulation is tracked correctly (second bet on same game_pk sees reduced cap)
-and cross-runner accumulation is handled by re-querying at the top of each runner.
+The cap is **per-system** -- NRFI, K, HR, F5 are independent markets and do not count against each other's cap.
+Cross-system correlation (e.g. HR in 1st inning affecting YRFI) is light enough to handle via Kelly fraction sizing alone.
 
 ### Bet dedup contract
 
