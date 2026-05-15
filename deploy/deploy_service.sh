@@ -29,6 +29,7 @@ print(f"  CONTEXT.md stamped: {ts}")
 PYEOF
 git add CONTEXT.md
 git commit -m "docs: update CONTEXT.md timestamp" --allow-empty
+git push
 
 echo "==> 1. Build"
 gcloud builds submit --tag="$IMAGE" --project="$PROJECT_ID"
