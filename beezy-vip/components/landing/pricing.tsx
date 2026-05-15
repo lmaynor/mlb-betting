@@ -1,3 +1,5 @@
+'use client'
+
 // PRE_LAUNCH controls whether CTAs go to Discord or Stripe checkout
 const PRE_LAUNCH = true
 
