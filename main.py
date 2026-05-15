@@ -287,7 +287,7 @@ def reset_bets():
     game_pk = body.get("game_pk")
     if not date:
         return jsonify({"error": "date is required"}), 400
-    bt = BetTracker(os.environ["DB_URL"], "HR")
+    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     where = "WHERE game_date = :date"
     params = {"date": date}
     if system:
@@ -315,7 +315,7 @@ def dashboard():
     from mlb_core.tracking.bet_tracker import BetTracker
     system_filter = request.args.get("system", None)
     days = int(request.args.get("days", 7))
-    bt = BetTracker(os.environ["DB_URL"], "HR")
+    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
 
     systems = ["HR", "NRFI", "F5", "K", "OUTS"]
     summary_rows = ""
