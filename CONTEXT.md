@@ -57,12 +57,11 @@ mlb-betting/
 │   │   │                         scoring_backfill_gcs() -- manual backfill by date range.
 │   │   ├── weather.py            Open-Meteo forecast + STADIUMS dict.
 │   │   │                         weather_nightly_gcs() -- called by /refresh-data.
-│   │   └── umpires.py            Umpire scorecard pulls.
-│   │                             umpires_nightly_gcs() -- called by /refresh-data.
-│   ├── data/
-│   │   ├── game_result.py        fetch_game_result(game_pk) -- MLB Stats API.
-│   │   │                         Returns innings, pitchers, batters. None if not Final.
-│   │   │                         Used by settle_bets.run() for all settlement.
+│   │   ├── umpires.py            Umpire scorecard pulls.
+│   │   │                         umpires_nightly_gcs() -- called by /refresh-data.
+│   │   └── game_result.py        fetch_game_result(game_pk) -- MLB Stats API linescore
+│   │                             + boxscore. Returns innings/pitchers/batters dict.
+│   │                             Returns None if game not Final. Used by settle_bets.
 │   ├── odds/
 │   │   ├── sgo.py                SGO client + 6 extractors:
 │   │   │                           extract_hr_props()
@@ -724,7 +723,7 @@ Expected hit rates (baselines -- update after 200 bets per system):
 `runners/monitor_ops.py` -- fires at 12:50 UTC daily via `mlb-monitor-ops`.
 
 Checks (all post-feature-build):
-- All 12 Cloud Scheduler jobs: last run status code
+- All 9 Cloud Scheduler jobs: last run status code
 - SGO snapshot age < 26hrs
 - All 4 system `model_features.csv` age < 26hrs
 - All 4 data masters (scoring, statcast, weather, umpires) age < 26hrs
@@ -738,16 +737,113 @@ Silent on clean run. Posts Discord alert only on failure.
 ## 11. Pointers to other docs
 
 - `ipynb_CONTEXT` -- modeling theory + per-notebook summaries
-- `SGO_CONTEXT` -- SGO API reference, market IDs, quota, patterns
-- `SCHEDULER_CONTEXT` -- full scheduler inventory with payloads (9 jobs)
-- `deploy/SGO_DEPLOY_NOTES.md` -- SGO setup runbook
 - `deploy/RETRAIN_NOTES.md` -- retrain pipeline runbook + rollback
 - The notebooks (`*.ipynb`) -- canonical modeling logic
 - Latest session handoff -- point-in-time state, open action items
 
 ---
 
-## 12. When to update this file
+## 12. SGO API reference
+
+**Base URL:** `https://api.sportsgameodds.com`
+**Client:** `mlb_core.odds.sgo.SgoClient`
+**Key:** Secret Manager `sgo-api-key` version 3 (v1 exposed, v2 had newlines)
+
+### Quota (amateur tier)
+- 10 requests/minute -- client paces at 7s between calls
+- Monthly object limit -- each event returned = 1 object regardless of market count
+- Typical daily cost: ~15 objects per snapshot (15 games), 2 snapshots/day = ~30/day
+
+### Key methods
+```python
+client = SgoClient()
+events = client.fetch_mlb_slate(run_date="2026-05-15")  # raises on error
+snapshot = load_snapshot("Odds/sgo/latest.json")        # reads from GCS
+```
+
+`fetch_mlb_slate()` raises on network/auth errors -- `snapshot_odds.py` catches
+and posts Discord alert. Returns `[]` on genuine empty slate (off-day) -- leaves
+`latest.json` untouched so runners use yesterday's snapshot.
+
+### Slate windowing
+Always filter by ET day using `et_day_window(run_date)`:
+```python
+starts_after, starts_before = et_day_window("2026-05-15")
+# Returns ISO8601 strings for 00:00 and 23:59 ET
+```
+`oddsAvailable=true` returns a 5-day window without this filter.
+
+### Snapshot timing
+DK K props for evening games are not posted until ~2-3pm ET.
+Morning snapshot (15:55 UTC / 10:55am ET) may miss evening game props.
+Evening snapshot (21:55 UTC / 4:55pm ET) catches all props.
+Dedup in runners prevents double-logging if both snapshots have the same game.
+
+### Adding a new extractor
+Follow the `extract_k_odds()` pattern in `sgo.py`:
+1. Find the market odd_id pattern from a live SGO snapshot
+2. Filter `event["odds"]` by odd_id prefix
+3. Extract DK bookmaker entry: `event["odds"][odd_id]["byBookmaker"]["draftkings"]`
+4. Return dict keyed by player name or event_id
+
+---
+
+## 13. Scheduler reference
+
+**Location:** `us-central1`
+**Service URL:** `https://mlb-betting-628109313129.us-central1.run.app`
+**Auth:** OIDC via `scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com`
+
+### Full job inventory
+
+| Job | Schedule (UTC) | Endpoint | Deadline | Body |
+|---|---|---|---|---|
+| `mlb-refresh-data` | `0 8 * * *` | `/refresh-data` | 300s | `{}` |
+| `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
+| `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
+| `mlb-build-all-features` | `0 12 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
+| `mlb-monitor-ops` | `50 12 * * *` | `/monitor-ops` | 120s | `{}` |
+| `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}` |
+| `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"evening"}` |
+
+### status.code values
+- `-1` -- never run or ran successfully
+- `0` -- success
+- `2` -- error (HTTP non-2xx)
+- `13` -- deadline exceeded (DEADLINE_EXCEEDED)
+
+### Manual triggers
+```bash
+# Trigger a job immediately
+gcloud scheduler jobs run mlb-settle --location=us-central1
+
+# Talk to the service via proxy
+gcloud run services proxy mlb-betting --region=us-central1 --port=8081 &
+sleep 4
+curl -s -X POST http://localhost:8081/settle | python3 -m json.tool
+
+# Build features for one system
+curl -s -X POST http://localhost:8081/build-features   -H "Content-Type: application/json"   -d '{"system":"NRFI"}' | python3 -m json.tool
+
+# Build all systems
+curl -s -X POST http://localhost:8081/build-all-features   -H "Content-Type: application/json"   -d '{"systems":["HR","NRFI","K","F5"],"continue_on_error":true}' | python3 -m json.tool
+```
+
+### Adding a new scheduler job
+```bash
+gcloud scheduler jobs create http JOB_NAME   --location=us-central1   --schedule="CRON"   --uri="https://mlb-betting-628109313129.us-central1.run.app/ENDPOINT"   --message-body='{"key":"value"}'   --headers="Content-Type=application/json"   --oidc-service-account-email="scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com"   --oidc-token-audience="https://mlb-betting-628109313129.us-central1.run.app"   --attempt-deadline=NNNs
+```
+Max `attempt-deadline`: 1800s.
+
+### monitor_ops.SCHEDULER_JOBS list
+`monitor_ops.py` has a hardcoded `SCHEDULER_JOBS` list. Update it when
+adding or removing jobs -- it drives the scheduler health check.
+
+---
+
+## 14. When to update this file
 
 - Adding/removing a system → §1, §2, §3
 - Changing a contract → §5
@@ -757,5 +853,7 @@ Silent on clean run. Posts Discord alert only on failure.
 - Changes to file layout → §2
 - Performance monitor threshold change → §9
 - Ops monitor check change → §10
+- Scheduler job added/removed → §13 + update monitor_ops.SCHEDULER_JOBS
+- SGO API change → §12
 
 **Don't put point-in-time state here.** That belongs in the session handoff.
