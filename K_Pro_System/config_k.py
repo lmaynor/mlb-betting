@@ -83,6 +83,7 @@ cfg = {
     "kelly_fraction":     0.25,
     "min_kelly_pct":      0.005,
     "max_kelly_pct":      0.05,
+    "cap_units":          5.0,  # K: K + OUTS props per game
     "PAPER":              True,
     "BANKROLL":           1000,
 

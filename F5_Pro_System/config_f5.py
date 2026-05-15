@@ -59,6 +59,7 @@ cfg = {
     "kelly_fraction": 0.25,
     "min_kelly_pct":  0.005,
     "max_kelly_pct":  0.05,
+    "cap_units":      3.0,  # F5: one bet per game
     "paper_mode":     True,
     "PAPER":          True,
     "BANKROLL":       1000,

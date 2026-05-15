@@ -519,7 +519,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         fair_prob   = market_prob / 1.07
         edge        = model_prob - fair_prob
         k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
+        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake       = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,

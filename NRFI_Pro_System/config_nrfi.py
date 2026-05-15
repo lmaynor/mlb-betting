@@ -67,6 +67,7 @@ cfg = {
     "kelly_fraction":     0.25,
     "min_kelly_pct":      0.005,
     "max_kelly_pct":      0.05,
+    "cap_units":          3.0,  # NRFI: one bet per game
     "scraper_delay":      3.0,
     "PAPER":              True,
     "BANKROLL":           1000,

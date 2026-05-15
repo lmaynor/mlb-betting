@@ -303,7 +303,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob = float(row["model_yrfi_prob"])
 
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes)
+        _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake = min(kelly_stake(
             edge, odds,
             bankroll=_bankroll,
