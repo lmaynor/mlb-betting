@@ -64,9 +64,11 @@ def _edge_emoji(edge: Optional[float]) -> str:
 
 
 def _round_stake(stake: Optional[float]) -> Optional[float]:
-    """Round stake to nearest $5."""
+    """Round stake to nearest $5 for large stakes, $1 for small stakes."""
     if stake is None:
         return None
+    if stake < 10:
+        return round(stake)
     return round(stake / 5) * 5
 
 
