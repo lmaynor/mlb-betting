@@ -287,6 +287,23 @@ Market IDs in use:
 - F5 ML: `points-{home,away}-1ix5-ml-{home,away}`
 - **Outs**: `pitching_outs-{PITCHER_MLB}-game-ou-{over,under}`
 
+### Database indexes (bets table)
+Two indexes are created on first BetTracker init (idempotent via CREATE INDEX IF NOT EXISTS):
+- `idx_bets_dedup` on `(system, game_date, game_pk, bet_type)` -- covers `is_duplicate()` hot path
+- `idx_bets_pending` on `(result, game_date) WHERE result IS NULL` -- covers settle queries (Postgres only)
+
+Both live in `_init_db()` in `mlb_core/tracking/bet_tracker.py`, each in its own `engine.begin()` + try/except block.
+
+### Exposure cap contract
+All runners use `prefetch_exposure()` + `apply_cap()` from `mlb_core.risk.exposure`:
+1. Before the prediction loop: `_bankroll, _prefetched_stakes = prefetch_exposure(engine, game_pks, game_date)` -- one DB query total
+2. Maintain `_pending_stakes: dict[int, float] = {}` -- incremented after each `kelly_triggered` bet
+3. Per row: `_bankroll, _cap = apply_cap(_bankroll, game_pk, _prefetched_stakes, _pending_stakes)`
+4. `stake = min(kelly_stake(...), _cap)`
+
+This ensures within-runner accumulation is tracked correctly (second bet on same game_pk sees reduced cap)
+and cross-runner accumulation is handled by re-querying at the top of each runner.
+
 ### Bet dedup contract
 
 `BetTracker.log_bet()` checks `(system, game_date, game_pk, bet_type)` for
