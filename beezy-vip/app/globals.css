@@ -26,7 +26,8 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
-body { background: var(--bg); min-height: 100vh; }
+body { background: var(--bg); min-height: 100vh; overflow-x: hidden; }
+html { overflow-x: hidden; }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
@@ -88,4 +89,9 @@ body { background: var(--bg); min-height: 100vh; }
   .steps-grid { grid-template-columns: 1fr !important; }
   .steps-grid > div { border-right: none !important; border-bottom: 0.5px solid #1f1f24; }
   .steps-grid > div:last-child { border-bottom: none !important; }
+}
+
+@media (max-width: 640px) {
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+  .hero-stats  { border-top: 0.5px solid #1f1f24; }
 }

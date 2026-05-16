@@ -6,7 +6,7 @@ export function Footer() {
   return (
     <footer style={{ borderTop: B, background: '#111114', marginTop: '48px' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '32px', marginBottom: '32px' }}>
+        <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '32px', marginBottom: '32px' }}>
           <div>
             <div className="mono" style={{ fontSize: '14px', fontWeight: 600, color: '#f5f5f7', marginBottom: '8px' }}>
               BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
