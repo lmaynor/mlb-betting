@@ -53,7 +53,19 @@ SGO_REQUEST_INTERVAL_SEC = 7.0
 
 # Onshore US books we accept. Offshore (bovada, unibet, williamhill, etc.) excluded.
 ONSHORE_BOOKS = {
-    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "pointsbet",
+    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+}
+
+# SGO key -> canonical name stored in DB.
+# ESPN Bet rebranded to theScore Bet in 2025; SGO may use either key.
+BOOK_CANONICAL: dict[str, str] = {
+    "draftkings": "draftkings",
+    "fanduel":    "fanduel",
+    "caesars":    "caesars",
+    "betmgm":     "betmgm",
+    "espnbet":    "thescore",
+    "thescore":   "thescore",
+    "pointsbet":  "pointsbet",
 }
 
 # Slate windowing is done in Eastern Time.
@@ -120,7 +132,7 @@ def _best_book_odds_int(odd_entry: dict) -> tuple[Optional[int], Optional[str]]:
         if val is None:
             continue
         if best_odds is None or val > best_odds:
-            best_odds, best_book = val, book
+            best_odds, best_book = val, BOOK_CANONICAL.get(book, book)
     return best_odds, best_book
 
 
