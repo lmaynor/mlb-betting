@@ -27,7 +27,7 @@ export async function RecentPicksTable() {
 
   try {
     const bets = await apiGetRecentSettled(16)
-    const settled = bets.filter(b => b.profit !== null && b.profit !== 0)
+    const settled = bets.filter(b => b.stake !== null && (b.stake ?? 0) > 0 && b.result !== null)
     if (settled.length > 0) {
       rows = settled.slice(0, 8).map(b => ({
         system:  b.system,
