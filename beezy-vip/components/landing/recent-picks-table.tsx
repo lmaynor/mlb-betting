@@ -54,7 +54,7 @@ export async function RecentPicksTable() {
       <div className="border" style={{ borderColor: 'var(--border)' }}>
         {/* Column header */}
         <div
-          className="grid grid-cols-[52px_52px_1fr_72px] gap-2 px-3 py-2 border-b"
+          className="grid gap-2 px-3 py-2 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px" }}
           style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
         >
           {['Result', 'System', 'Matchup', 'Units'].map((h, i) => (
@@ -75,7 +75,7 @@ export async function RecentPicksTable() {
           return (
             <div
               key={i}
-              className="grid grid-cols-[52px_52px_1fr_72px] gap-2 items-center px-3 py-2.5 border-b"
+              className="grid gap-2 items-center px-3 py-2.5 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px" }}
               style={{
                 borderColor: 'var(--border)',
                 borderBottomWidth: i === rows.length - 1 ? 0 : undefined,
