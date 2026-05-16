@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-16 01:31 CST_
+_Last updated: 2026-05-16 02:30 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -16,11 +16,11 @@ Five MLB betting systems running daily in GCP:
 
 | System | What it predicts | Market | Status |
 |---|---|---|---|
-| **HR Pro v6** | P(batter hits HR in game) | DK HR yes/no props | Live (paper) |
-| **NRFI Pro v17** | P(no run scored in inning 1) | DK NRFI/YRFI O/U + 1st inning 3-way ML | Live (paper) |
-| **F5 Pro v5** | P(home team wins first 5 innings) | DK F5 moneyline | Live (paper) |
-| **K Pro v1** | E[pitcher strikeouts] (Poisson) | DK K props (O/U) | Live (paper) |
-| **OUTS** | E[pitcher outs recorded] (proxy) | DK pitcher outs O/U | Live (paper) |
+| **HR Pro v6** | P(batter hits HR in game) | HR yes/no props (best onshore book) | Live (paper) |
+| **NRFI Pro v17** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
+| **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
+| **K Pro v1** | E[pitcher strikeouts] (Poisson) | K props O/U (best onshore book) | Live (paper) |
+| **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
 
 OUTS is a sub-market of the K runner -- same feature CSV, same `run_k.py` -- but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
 
@@ -278,6 +278,25 @@ return booster.predict(dm)
 Do NOT use `iteration_range=(0, ntree) if ntree else None` -- passing `None`
 crashes XGBoost ≥2.0.
 
+### Multi-book odds contract
+
+All extractors use `_best_book_odds_int()` in `mlb_core/odds/sgo.py`.
+Picks best American odds across `ONSHORE_BOOKS` for the bettor.
+Result stored as `book` column in `bets` table.
+
+```python
+ONSHORE_BOOKS = {
+    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+}
+BOOK_CANONICAL = {  # SGO key -> canonical name stored in DB
+    "espnbet":  "thescore",  # ESPN Bet rebranded to theScore Bet 2025
+    "thescore": "thescore",
+    # all others map to themselves
+}
+```
+
+To add/remove a book: edit both dicts in `sgo.py`. Historic bets have `book=NULL`.
+
 ### SGO snapshot contract
 
 `Odds/sgo/latest.json` is an array of event dicts. Key fields:
@@ -434,6 +453,11 @@ Cloud Run reads from Secret Manager `mlb-db-url:latest`. Always include
 **Cannot connect to Cloud SQL from Cloud Shell.** The Unix socket only
 exists inside Cloud Run. Use the proxy endpoint for ad-hoc queries:
 `curl -X POST http://localhost:8081/settle` etc.
+
+**`bets` table has a `book TEXT` column** added 2026-05-16. Stores the canonical
+onshore book name (`draftkings`, `fanduel`, `caesars`, `betmgm`, `thescore`,
+`pointsbet`). NULL for bets logged before multi-book support. Auto-migrated
+by `_MIGRATE_BOOK_SQL` in `bet_tracker.py` on first init.
 
 **Always use `from mlb_core.config import DB_URL` in new routes, never `os.environ["DB_URL"]`.** The env var is `MLB_DB_URL` -- reading `DB_URL` directly causes `KeyError` at runtime. `mlb_core.config` handles the lookup correctly.
 
@@ -804,7 +828,7 @@ Dedup in runners prevents double-logging if both snapshots have the same game.
 Follow the `extract_k_odds()` pattern in `sgo.py`:
 1. Find the market odd_id pattern from a live SGO snapshot
 2. Filter `event["odds"]` by odd_id prefix
-3. Extract DK bookmaker entry: `event["odds"][odd_id]["byBookmaker"]["draftkings"]`
+3. Call `_best_book_odds_int(entry)` -- returns `(odds_int, book_name)` for best onshore book
 4. Return dict keyed by player name or event_id
 
 ---
@@ -933,8 +957,8 @@ as a subdirectory of this repo and is deployed separately to Vercel.
 ### What it is
 
 Next.js 16 / React 19 / Tailwind v4 frontend. Read-only -- it never writes
-to the production `bets` table. The one exception is `learn_articles`, which
-is the site's own data stored on Vercel Postgres.
+to the production `bets` table. Articles are served statically from `beezy-vip/lib/articles-static.ts`
+and `beezy-vip/content/learn/*.md` -- no DB needed.
 
 Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.vip
 pending DNS configuration).
@@ -949,7 +973,8 @@ beezy-vip/
 │   ├── results/                  Results history
 │   ├── models/                   Model methodology
 │   ├── tools/                    Betting calculators
-│   ├── learn/                    AI-generated articles
+│   ├── learn/                    Static articles (served from repo)
+│   │   └── [slug]/               Individual article pages
 │   ├── dashboard/                Auth-gated member pages
 │   ├── legal/                    Terms, privacy, responsible gambling, refunds
 │   ├── blocked/                  Geo-restriction landing page
@@ -962,7 +987,8 @@ beezy-vip/
 ├── lib/
 │   ├── betting-api.ts            Fetch-based client for Cloud Run public API
 │   ├── db.ts                     Postgres pool + query types (Bet, SystemStats)
-│   ├── learn-db.ts               Vercel Postgres pool for learn_articles
+│   ├── articles-static.ts        10 static articles (no DB needed)
+│   ├── learn-db.ts               Vercel Postgres pool for learn_articles (unused)
 │   ├── auth.ts                   Clerk auth helpers
 │   ├── odds.ts                   Kelly, implied prob, formatting utilities
 │   └── model-specs.ts            Static model metadata
@@ -1008,6 +1034,13 @@ old names -- they will cause silent data failures:
 | `profit` | `pnl` |
 | `market_prob` | `implied_prob` |
 | `result = 'win'/'loss'/'push'/'void'` | `result = 'W'/'L'/'P'` |
+
+**Picks page filters:** league, market, book, date, status. Book filter maps
+display names (DraftKings, FanDuel, theScore, etc.) to lowercase DB values
+via `.toLowerCase().replace(/ /g, "")`. Passed as `?book=` query param to
+`GET /api/public/picks`.
+
+**Results page filters:** system, result -- client-side on already-fetched data.
 
 This contract is enforced by `beezy-vip/tests/index.test.ts` (TypeScript
 compile-time) and `tests/test_public_api.py` (runtime, included in the
