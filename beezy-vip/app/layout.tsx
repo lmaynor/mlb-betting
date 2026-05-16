@@ -7,6 +7,11 @@ const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' }
 import { Nav } from '@/components/layout/nav'
 import { Footer } from '@/components/layout/footer'
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export const metadata: Metadata = {
   title: {
     default:  'Beezy.VIP — MLB Picks Backed by Machine Learning',
