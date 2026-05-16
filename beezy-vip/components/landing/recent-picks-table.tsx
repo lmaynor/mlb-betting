@@ -74,8 +74,7 @@ export async function RecentPicksTable() {
           return (
             <div
               key={i}
-              className="grid gap-2 items-center px-3 py-2.5 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px" }}
-              style={{
+              className="grid gap-2 items-center px-3 py-2.5 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px",
                 borderColor: 'var(--border)',
                 borderBottomWidth: i === rows.length - 1 ? 0 : undefined,
               }}
