@@ -484,6 +484,14 @@ SITE_API_KEY  = os.environ.get("SITE_API_KEY", "")
 ALLOWED_ORIGIN = os.environ.get("SITE_ORIGIN", "https://beezy.vip")
 
 
+def _get_engine():
+    from mlb_core.tracking.bet_tracker import BetTracker
+    return BetTracker(os.environ["MLB_DB_URL"], "HR").engine
+
+
+
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin":  ALLOWED_ORIGIN,
@@ -508,7 +516,7 @@ def public_picks_today():
     if err:
         return err
     try:
-        picks = get_today_picks(engine)
+        picks = get_today_picks(_get_engine())
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"
@@ -527,7 +535,7 @@ def public_picks():
         return err
     try:
         picks = get_picks(
-            engine,
+            _get_engine(),
             system=request.args.get("system"),
             date=request.args.get("date"),
             status=request.args.get("status"),
@@ -552,7 +560,7 @@ def public_picks_recent():
         return err
     try:
         limit = int(request.args.get("limit", 20))
-        picks = get_recent_settled(engine, limit=limit)
+        picks = get_recent_settled(_get_engine(), limit=limit)
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=120"
@@ -570,7 +578,7 @@ def public_stats_summary():
     if err:
         return err
     try:
-        stats = get_summary_stats(engine)
+        stats = get_summary_stats(_get_engine())
         resp  = jsonify(stats)
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=300"

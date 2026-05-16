@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 
 # Set env vars before importing main
 os.environ.setdefault("SITE_API_KEY", "test-secret-key-abc123")
-os.environ.setdefault("MLB_DB_URL", "postgresql://fake/fake")
+# MLB_DB_URL not set here -- existing tests use sqlite via tmp_path
 os.environ.setdefault("MLB_GCS_BUCKET", "fake-bucket")
 
 VALID_KEY = "test-secret-key-abc123"
@@ -45,14 +45,10 @@ def client():
     """
     mock_engine = MagicMock()
 
-    with patch("sqlalchemy.create_engine", return_value=mock_engine), \
-         patch("main.engine", mock_engine, create=True):
-
+    with patch("main._get_engine", return_value=mock_engine):
         import main as m
         m.app.config["TESTING"] = True
-        # Inject the test key and mock engine into the module
         m.SITE_API_KEY = VALID_KEY
-        m.engine = mock_engine
 
         with m.app.test_client() as c:
             yield c
