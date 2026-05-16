@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-16 04:21 CST_
+_Last updated: 2026-05-16 00:30 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -968,7 +968,7 @@ beezy-vip/
 │   └── model-specs.ts            Static model metadata
 ├── middleware.ts                 Clerk auth + geo-blocking
 ├── next.config.ts
-├── tailwind.config.ts
+├── tailwind.config.ts            DELETED -- Tailwind v4 auto-discovers; config was breaking scanning
 ├── vercel.json                   Cron job definitions
 └── tests/
     └── index.test.ts             Frontend unit tests (schema contract, geo, ResultPill)
