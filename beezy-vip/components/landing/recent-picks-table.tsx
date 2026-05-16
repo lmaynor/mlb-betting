@@ -26,9 +26,10 @@ export async function RecentPicksTable() {
   let rows = SEED
 
   try {
-    const bets = await apiGetRecentSettled(8)
-    if (bets.length > 0) {
-      rows = bets.map(b => ({
+    const bets = await apiGetRecentSettled(16)
+    const settled = bets.filter(b => b.profit !== null && b.profit !== 0)
+    if (settled.length > 0) {
+      rows = settled.slice(0, 8).map(b => ({
         system:  b.system,
         matchup: b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`,
         result:  b.result ?? 'pending',
@@ -56,7 +57,7 @@ export async function RecentPicksTable() {
       <div style={{ border: B }}>
         {/* Header */}
         <div style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', padding: '8px 12px', background: '#111114', borderBottom: B }}>
-          {[['Result', 'left'], ['System', 'left'], ['Matchup', 'left'], ['Units', 'right']].map(([h, align]) => (
+          {[['Result', 'left'], ['System', 'left'], ['Matchup', 'left'], ['P&L', 'right']].map(([h, align]) => (
             <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', textAlign: align as 'left' | 'right' }}>
               {h}
             </div>
@@ -76,7 +77,7 @@ export async function RecentPicksTable() {
               </span>
               <span style={{ fontSize: '12px', color: 'var(--sec)' }}>{row.matchup}</span>
               <span className="mono" style={{ fontSize: '12px', fontWeight: 500, textAlign: 'right', color: isWin ? 'var(--win)' : 'var(--loss)' }}>
-                {isWin ? '+' : ''}{row.profit.toFixed(2)}u
+                {isWin && row.profit > 0 ? '+' : ''}{row.profit !== 0 ? '$'+Math.abs(row.profit).toFixed(2) : '—'}
               </span>
             </div>
           )
