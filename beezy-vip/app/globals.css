@@ -86,7 +86,8 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 ::-webkit-scrollbar-thumb { background: var(--border-bright); }
 
 .nav-desktop { display: flex; }
-.hero-grid { display: grid; }
+.hero-grid  { display: grid; }
+.hero-stats { display: grid; }
 
 .nav-mobile  { display: none; }
 

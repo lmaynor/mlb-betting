@@ -24,7 +24,7 @@ export async function Hero() {
 
   return (
     <section style={{ borderBottom: B, borderTop: B }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
+      <div className="hero-grid" style={{ gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
 
         {/* Left: headline + copy + CTAs */}
         <div className="hero-left" style={{ padding: '48px 20px 40px', borderRight: B }}>
@@ -52,7 +52,7 @@ export async function Hero() {
         </div>
 
         {/* Right: 2x2 stat grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        <div className="hero-stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div style={{ padding: '24px 18px', borderBottom: B, borderRight: B }}>
             <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Season ROI</div>
             <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiPos ? 'var(--win)' : 'var(--loss)' }}>
