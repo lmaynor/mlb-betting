@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS bets (
     notes            TEXT,
     created_at       TEXT,
     lambda_k         REAL,
-    proj_k           REAL
+    proj_k           REAL,
+    book             TEXT
 )
 """
 
@@ -65,6 +66,10 @@ ALTER TABLE bets ADD COLUMN lambda_k REAL
 """
 _MIGRATE_PROJ_K_SQL = """
 ALTER TABLE bets ADD COLUMN proj_k REAL
+"""
+
+_MIGRATE_BOOK_SQL = """
+ALTER TABLE bets ADD COLUMN book TEXT
 """
 
 # Migration: add kelly_triggered to existing tables that predate v3.
@@ -164,6 +169,11 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_PROJ_K_SQL))
         except Exception:
             pass
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_MIGRATE_BOOK_SQL))
+        except Exception:
+            pass
         # Composite index for is_duplicate() -- idempotent.
         try:
             with self.engine.begin() as conn:
@@ -211,6 +221,7 @@ class BetTracker:
         notes: str = "",
         lambda_k: float = None,
         proj_k: float = None,
+        book: str = None,
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
         if game_pk is not None and bet_type is not None and game_date is not None:
@@ -223,11 +234,11 @@ class BetTracker:
                     INSERT INTO bets
                         (system, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
-                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k)
+                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book)
                     VALUES
                         (:system, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
-                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k)
+                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book)
                 """),
                 {
                     "system": self.system, "game_date": game_date,
@@ -242,6 +253,7 @@ class BetTracker:
                     "notes": notes, "created_at": datetime.now().isoformat(),
                     "lambda_k": lambda_k,
                     "proj_k": proj_k,
+                    "book": book,
                 },
             )
             bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \

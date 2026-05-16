@@ -330,6 +330,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "stake":           _stake if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
                         "market":          "K",
+                        "bookmaker":       k_info.get("bookmaker"),
                     })
 
         # ── Pitcher outs O/U ───────────────────────────────────────────────
@@ -389,6 +390,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "stake":           _stake if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
                         "market":          "OUTS",
+                        "bookmaker":       outs_info.get("bookmaker"),
                     })
 
     if not results:
@@ -447,6 +449,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             lambda_k         = row.get("lambda_k"),
             proj_k           = row.get("proj_k"),
+            book             = row.get("bookmaker"),
         )
         if bet_id == -1:
             continue

@@ -51,9 +51,10 @@ SGO_API_BASE = "https://api.sportsgameodds.com"
 # Amateur tier: 10 req/min. We pace at 7 sec between calls to leave headroom.
 SGO_REQUEST_INTERVAL_SEC = 7.0
 
-# Bookmaker we read for predictions. SGO returns many; we use DK only because
-# HR Pro v6 was trained against DK lines.
-PRIMARY_BOOKMAKER = "draftkings"
+# Onshore US books we accept. Offshore (bovada, unibet, williamhill, etc.) excluded.
+ONSHORE_BOOKS = {
+    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "pointsbet",
+}
 
 # Slate windowing is done in Eastern Time.
 _ET = ZoneInfo("America/New_York")
@@ -93,13 +94,7 @@ def et_day_window(run_date: str) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def _dk_odds_int(odd_entry: dict) -> Optional[int]:
-    """Pull DK American odds int from an odd entry. None if unavailable."""
-    by_book = odd_entry.get("byBookmaker") or {}
-    dk = by_book.get(PRIMARY_BOOKMAKER) or {}
-    if not dk.get("available"):
-        return None
-    raw = dk.get("odds")
+def _parse_odds_int(raw) -> Optional[int]:
     if raw is None:
         return None
     try:
@@ -108,17 +103,48 @@ def _dk_odds_int(odd_entry: dict) -> Optional[int]:
         return None
 
 
-def _dk_line_float(odd_entry: dict) -> Optional[float]:
-    """Pull DK over/under line from an odd entry."""
+def _best_book_odds_int(odd_entry: dict) -> tuple[Optional[int], Optional[str]]:
+    """Best American odds across onshore US books.
+
+    Returns (odds_int, book_name) or (None, None) if nothing available.
+    Best = highest American odds value (most favorable to the bettor).
+    """
     by_book = odd_entry.get("byBookmaker") or {}
-    dk = by_book.get(PRIMARY_BOOKMAKER) or {}
-    raw = dk.get("overUnder")
-    if raw is None:
-        return None
-    try:
-        return float(raw)
-    except (ValueError, TypeError):
-        return None
+    best_odds, best_book = None, None
+    for book, info in by_book.items():
+        if book not in ONSHORE_BOOKS:
+            continue
+        if not info.get("available"):
+            continue
+        val = _parse_odds_int(info.get("odds"))
+        if val is None:
+            continue
+        if best_odds is None or val > best_odds:
+            best_odds, best_book = val, book
+    return best_odds, best_book
+
+
+def _dk_odds_int(odd_entry: dict) -> Optional[int]:
+    """Compat alias -- returns best onshore odds without book name."""
+    odds, _ = _best_book_odds_int(odd_entry)
+    return odds
+
+
+def _dk_line_float(odd_entry: dict) -> Optional[float]:
+    """Over/under line from first available onshore book (lines are identical across books)."""
+    by_book = odd_entry.get("byBookmaker") or {}
+    for book in ONSHORE_BOOKS:
+        info = by_book.get(book) or {}
+        if not info.get("available"):
+            continue
+        raw = info.get("overUnder")
+        if raw is None:
+            continue
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 def _event_teams(event: dict) -> tuple[str, str]:
@@ -260,7 +286,7 @@ def extract_hr_props(events: list[dict]) -> dict:
 def _hr_row_from_entry(event: dict, player_id: str, odd_id: str,
                        entry: dict, away: str, home: str,
                        event_id: str) -> Optional[dict]:
-    dk_odds = _dk_odds_int(entry)
+    dk_odds, _book = _best_book_odds_int(entry)
     if dk_odds is None:
         return None
     name = _player_name(event, player_id)
@@ -269,6 +295,7 @@ def _hr_row_from_entry(event: dict, player_id: str, odd_id: str,
     return {
         "_player_name": name,
         "odds":         dk_odds,
+        "bookmaker":    _book,
         "away_team":    away,
         "home_team":    home,
         "event_id":     event_id,
@@ -293,8 +320,8 @@ def extract_nrfi_odds(events: list[dict]) -> dict:
         under_entry = odds.get(_NRFI_UNDER_ID)
         if not over_entry or not under_entry:
             continue
-        yrfi = _dk_odds_int(over_entry)
-        nrfi = _dk_odds_int(under_entry)
+        yrfi, _yrfi_book = _best_book_odds_int(over_entry)
+        nrfi, _nrfi_book = _best_book_odds_int(under_entry)
         if nrfi is None or yrfi is None:
             continue
         away, home = _event_teams(event)
@@ -307,13 +334,15 @@ def extract_nrfi_odds(events: list[dict]) -> dict:
             "nrfi_odds":     nrfi,
             "yrfi_odds":     yrfi,
             "point":         0.5,
-            "bookmaker":     PRIMARY_BOOKMAKER,
+            "nrfi_book":     _nrfi_book,
+            "yrfi_book":     _yrfi_book,
+            "bookmaker":     _nrfi_book,
             "fair_nrfi":     _safe_int(under_entry.get("fairOdds")),
             "fair_yrfi":     _safe_int(over_entry.get("fairOdds")),
             "open_nrfi":     _safe_int(under_entry.get("openBookOdds")),
             "open_yrfi":     _safe_int(over_entry.get("openBookOdds")),
         }
-    logger.info(f"SGO extract_nrfi_odds: {len(out)} events with DK prices")
+    logger.info(f"SGO extract_nrfi_odds: {len(out)} events with onshore prices")
     return out
 
 
@@ -353,9 +382,9 @@ def extract_1i_3way_odds(events: list[dict]) -> dict:
         draw_entry  = odds.get(_1I_3WAY_DRAW_ID)
         if not away_entry or not home_entry or not draw_entry:
             continue
-        away_odds = _dk_odds_int(away_entry)
-        home_odds = _dk_odds_int(home_entry)
-        draw_odds = _dk_odds_int(draw_entry)
+        away_odds, _away_book = _best_book_odds_int(away_entry)
+        home_odds, _home_book = _best_book_odds_int(home_entry)
+        draw_odds, _draw_book = _best_book_odds_int(draw_entry)
         if away_odds is None or home_odds is None or draw_odds is None:
             continue
         away, home = _event_teams(event)
@@ -368,12 +397,12 @@ def extract_1i_3way_odds(events: list[dict]) -> dict:
             "away_odds":     away_odds,
             "home_odds":     home_odds,
             "draw_odds":     draw_odds,
-            "bookmaker":     PRIMARY_BOOKMAKER,
+            "bookmaker":     _away_book,
             "fair_away":     _safe_int(away_entry.get("fairOdds")),
             "fair_home":     _safe_int(home_entry.get("fairOdds")),
             "fair_draw":     _safe_int(draw_entry.get("fairOdds")),
         }
-    logger.info(f"SGO extract_1i_3way_odds: {len(out)} events with DK prices")
+    logger.info(f"SGO extract_1i_3way_odds: {len(out)} events with onshore prices")
     return out
 
 
@@ -391,8 +420,8 @@ def extract_f5_odds(events: list[dict]) -> dict:
         under_entry = odds.get(_F5_UNDER_ID)
         if not over_entry or not under_entry:
             continue
-        over_odds  = _dk_odds_int(over_entry)
-        under_odds = _dk_odds_int(under_entry)
+        over_odds, _over_book   = _best_book_odds_int(over_entry)
+        under_odds, _under_book = _best_book_odds_int(under_entry)
         if over_odds is None or under_odds is None:
             continue
         away, home = _event_teams(event)
@@ -405,13 +434,13 @@ def extract_f5_odds(events: list[dict]) -> dict:
             "over_odds":     over_odds,
             "under_odds":    under_odds,
             "line":          _dk_line_float(over_entry),
-            "bookmaker":     PRIMARY_BOOKMAKER,
+            "bookmaker":     _over_book,
             "fair_over":     _safe_int(over_entry.get("fairOdds")),
             "fair_under":    _safe_int(under_entry.get("fairOdds")),
             "open_over":     _safe_int(over_entry.get("openBookOdds")),
             "open_under":    _safe_int(under_entry.get("openBookOdds")),
         }
-    logger.info(f"SGO extract_f5_odds: {len(out)} events with DK prices")
+    logger.info(f"SGO extract_f5_odds: {len(out)} events with onshore prices")
     return out
 
 
@@ -429,8 +458,8 @@ def extract_f5_ml_odds(events: list[dict]) -> dict:
         away_entry = odds.get(_F5_ML_AWAY_ID)
         if not home_entry or not away_entry:
             continue
-        home_odds = _dk_odds_int(home_entry)
-        away_odds = _dk_odds_int(away_entry)
+        home_odds, _home_book = _best_book_odds_int(home_entry)
+        away_odds, _away_book = _best_book_odds_int(away_entry)
         if home_odds is None or away_odds is None:
             continue
         away, home = _event_teams(event)
@@ -442,13 +471,13 @@ def extract_f5_ml_odds(events: list[dict]) -> dict:
             "commence_time": commence,
             "home_odds":     home_odds,
             "away_odds":     away_odds,
-            "bookmaker":     PRIMARY_BOOKMAKER,
+            "bookmaker":     _home_book,
             "fair_home":     _safe_int(home_entry.get("fairOdds")),
             "fair_away":     _safe_int(away_entry.get("fairOdds")),
             "open_home":     _safe_int(home_entry.get("openBookOdds")),
             "open_away":     _safe_int(away_entry.get("openBookOdds")),
         }
-    logger.info(f"SGO extract_f5_ml_odds: {len(out)} events with DK prices")
+    logger.info(f"SGO extract_f5_ml_odds: {len(out)} events with onshore prices")
     return out
 
 
@@ -488,8 +517,8 @@ def extract_k_odds(events: list[dict]) -> dict:
             if not under_pair:
                 continue
             _, under_entry = under_pair
-            over_odds  = _dk_odds_int(over_entry)
-            under_odds = _dk_odds_int(under_entry)
+            over_odds, _over_book   = _best_book_odds_int(over_entry)
+            under_odds, _under_book = _best_book_odds_int(under_entry)
             if over_odds is None or under_odds is None:
                 continue
             name = _player_name(event, player_id)
@@ -502,13 +531,13 @@ def extract_k_odds(events: list[dict]) -> dict:
                 "away_team":  away,
                 "home_team":  home,
                 "event_id":   event_id,
-                "bookmaker":  PRIMARY_BOOKMAKER,
+                "bookmaker":  _over_book,
                 "fair_over":  _safe_int(over_entry.get("fairOdds")),
                 "fair_under": _safe_int(under_entry.get("fairOdds")),
                 "open_over":  _safe_int(over_entry.get("openBookOdds")),
                 "open_under": _safe_int(under_entry.get("openBookOdds")),
             }
-    logger.info(f"SGO extract_k_odds: {len(out)} pitchers with DK prices")
+    logger.info(f"SGO extract_k_odds: {len(out)} pitchers with onshore prices")
     return out
 
 
@@ -565,8 +594,8 @@ def extract_outs_odds(events: list[dict]) -> dict:
             if not under_pair:
                 continue
             _, under_entry = under_pair
-            over_odds  = _dk_odds_int(over_entry)
-            under_odds = _dk_odds_int(under_entry)
+            over_odds, _over_book   = _best_book_odds_int(over_entry)
+            under_odds, _under_book = _best_book_odds_int(under_entry)
             if over_odds is None or under_odds is None:
                 continue
             name = _player_name(event, player_id)
@@ -579,11 +608,11 @@ def extract_outs_odds(events: list[dict]) -> dict:
                 "away_team":  away,
                 "home_team":  home,
                 "event_id":   event_id,
-                "bookmaker":  PRIMARY_BOOKMAKER,
+                "bookmaker":  _over_book,
                 "fair_over":  _safe_int(over_entry.get("fairOdds")),
                 "fair_under": _safe_int(under_entry.get("fairOdds")),
             }
-    logger.info(f"SGO extract_outs_odds: {len(out)} pitchers with DK prices")
+    logger.info(f"SGO extract_outs_odds: {len(out)} pitchers with onshore prices")
     return out
 
 
