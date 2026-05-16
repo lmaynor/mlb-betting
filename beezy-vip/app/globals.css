@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @source "../components/**/*.tsx";
 @source "../app/**/*.tsx";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
   --bg:            #0a0a0c;
@@ -24,13 +23,13 @@
 html {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 body { background: var(--bg); min-height: 100vh; }
 
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.mono { font-family: var(--font-mono), ui-monospace, monospace; }
 
 .grid-bg {
   background-image:
