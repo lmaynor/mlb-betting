@@ -29,7 +29,7 @@ def get_today_picks(engine):
 
 
 def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None):
-    conditions = []
+    conditions = ["kelly_triggered = true"]
     params = {}
 
     if system:
