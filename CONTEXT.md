@@ -1092,10 +1092,41 @@ the IAM level anymore. Add a secret check to those routes before going live.
 
 ### Tailwind v4 gotchas
 
-- Use `@import "tailwindcss"` not `@tailwind base/components/utilities`
-- Arbitrary grid column values like `grid-cols-[7fr_5fr]` are NOT scanned
-  by Tailwind v4 at build time. Use `style={{ gridTemplateColumns: '...' }}`
-  instead for any dynamic or arbitrary column definitions.
+**The core rule: use pure inline styles for everything in beezy-vip. Do not
+use Tailwind utility classes for colors, borders, backgrounds, spacing, or
+layout. Tailwind v4 with `@tailwindcss/postcss` does not reliably scan and
+generate CSS for utility classes in this monorepo subdirectory setup.**
+
+Specific failures observed:
+- Arbitrary values: `grid-cols-[7fr_5fr]`, `border-[#1f1f24]`, `bg-[var(--surface)]`
+  -- none of these are generated. Always use `style={{ ... }}` instead.
+- Semantic utilities: `border-b`, `border-r`, `h-14`, `text-muted`, `text-accent`,
+  `bg-[var(--border)]` -- not generated because CSS variables aren't in the
+  Tailwind config. Use inline styles with hardcoded hex values or CSS vars.
+- `@source` directives and deleting `tailwind.config.ts` did not fix scanning.
+- The `@import url(...)` for Google Fonts in `globals.css` interfered with
+  PostCSS processing. Fonts must be loaded via `next/font/google` in `layout.tsx`.
+
+What IS safe to use (pre-generated Tailwind utilities):
+- `className="mono"` -- custom class defined in globals.css, always works
+- `className="live-dot"` -- same
+- `className="sticky"`, `className="hidden"`, `className="flex"` -- core
+  utilities that are pre-generated, but prefer inline style for anything
+  layout-critical.
+
+The correct pattern for ALL components in beezy-vip:
+```tsx
+// Wrong -- Tailwind class may not generate
+<div className="border-b border-[#1f1f24] bg-[var(--surface)] p-4">
+
+// Correct -- always renders
+<div style={{ borderBottom: '0.5px solid #1f1f24', background: '#111114', padding: '16px' }}>
+```
+
+Define a module-level constant `const B = '0.5px solid #1f1f24'` at the top
+of each component file for consistent border values.
+
+Other gotchas:
 - `export const metadata` and `'use client'` cannot both be in the same file.
   Put metadata in a `layout.tsx` sibling and keep `'use client'` in the page.
 - All data-fetching pages need `export const dynamic = 'force-dynamic'` or
@@ -1103,6 +1134,10 @@ the IAM level anymore. Add a secret check to those routes before going live.
 - Stripe, Clerk, and any SDK that initializes at module level with env vars
   will crash the build. Use lazy initialization (`getStripe()` function) and
   add `export const dynamic = 'force-dynamic'` to all affected routes.
+- JSX elements cannot have two `style={{}}` props -- merge them into one.
+- `gap` in a CSS grid must be set via inline `style={{ gap: '...' }}` when
+  the grid itself uses inline style. Tailwind `gap-2` on an inline-grid div
+  will not apply.
 
 ### When to update this section
 
