@@ -28,7 +28,7 @@ export function Nav() {
         </span>
       </div>
 
-      <nav className="sticky top-0 z-50 w-full border-b border-[var(--border)] bg-[var(--bg)]/95 backdrop-blur-sm">
+      <nav className="sticky top-0 z-50 w-full" style={{ borderBottom: '0.5px solid #1f1f24', background: 'rgba(10,10,12,0.95)', backdropFilter: 'blur(8px)' }}>
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
 
           {/* Logo */}
