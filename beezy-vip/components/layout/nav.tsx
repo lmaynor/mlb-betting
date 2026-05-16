@@ -22,7 +22,7 @@ export function Nav() {
   return (
     <>
       {/* Paper mode banner */}
-      <div className="w-full text-center py-1.5" style={{ background: '#1c1207', borderBottom: '.5px solid #3d2e0f' }}>
+      <div className="w-full text-center py-1.5" style={{ background: '#1c1207', borderBottom: '.5px solid #3d2e0f', padding: '7px 16px' }}>
         <span className="mono text-[10px] tracking-widest uppercase" style={{ color: '#f59e0b' }}>
           Paper mode &middot; All results are simulated &middot; Not financial advice
         </span>
