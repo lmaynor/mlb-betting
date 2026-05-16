@@ -3,94 +3,51 @@
 import { useState } from 'react'
 import { americanToImpliedProb, formatProb, formatOdds, probToAmerican } from '@/lib/odds'
 
-export default function EdgeFinderPage() {
-  const [odds, setOdds] = useState('')
+const B = '0.5px solid #1f1f24'
+const inputStyle: React.CSSProperties = { width: '100%', background: '#111114', border: B, color: '#f5f5f7', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: '6px' }
 
-  const o        = parseFloat(odds)
-  const valid    = !isNaN(o)
-  const implied  = valid ? americanToImpliedProb(o) : null
+export default function EdgeFinderPage() {
+  const [bookOdds, setBookOdds]   = useState('')
+  const [modelProb, setModelProb] = useState('')
+
+  const o = parseFloat(bookOdds)
+  const p = parseFloat(modelProb) / 100
+  const valid = !isNaN(o) && !isNaN(p) && p > 0 && p < 1
+  const impliedP = !isNaN(o) ? americanToImpliedProb(o) : null
+  const edge = valid && impliedP ? ((p - impliedP) * 100) : null
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
-      <div className="mb-8">
-        <p className="mono text-xs text-accent uppercase tracking-widest mb-2">Tools</p>
-        <h1 className="text-2xl font-extrabold uppercase tracking-tight mb-2">Edge Finder</h1>
-        <p className="text-muted text-sm">
-          Enter the line you see at your book. Get implied probability instantly.
-          Pro members also see the Beezy model number and edge percentage.
-        </p>
+    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 20px' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px' }}>Tools</p>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Edge Finder</h1>
+        <p style={{ fontSize: '13px', color: '#71717a' }}>Enter the book line and your model probability. See your edge instantly.</p>
       </div>
-
-      <div className="border border-[var(--border)] p-6 mb-6">
-        <label className="mono text-xs uppercase tracking-widest text-muted block mb-2">
-          Your Line (American Odds)
-        </label>
-        <input
-          type="number"
-          value={odds}
-          onChange={e => setOdds(e.target.value)}
-          placeholder="-115"
-          className="w-full bg-[var(--surface)] border border-[var(--border)] text-text mono text-sm px-4 py-3 focus:outline-none focus:border-accent placeholder:text-muted transition-colors"
-        />
-      </div>
-
-      {implied !== null && (
-        <div className="border border-[var(--border)] mb-6">
-          <div className="grid grid-cols-2 border-b border-[var(--border)]">
-            <div className="px-5 py-4 border-r border-[var(--border)]">
-              <p className="mono text-xs text-muted uppercase tracking-widest mb-2">Implied Probability</p>
-              <p className="mono text-3xl font-extrabold text-text">{formatProb(implied)}</p>
-              <p className="mono text-xs text-muted mt-1">With vig</p>
-            </div>
-            <div className="px-5 py-4">
-              <p className="mono text-xs text-muted uppercase tracking-widest mb-2">Your Odds</p>
-              <p className="mono text-3xl font-extrabold text-text">{formatOdds(o)}</p>
-              <p className="mono text-xs text-muted mt-1">American</p>
-            </div>
+      <div style={{ border: B, padding: '20px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+            <label style={labelStyle}>Book Line (American)</label>
+            <input type="number" value={bookOdds} onChange={e => setBookOdds(e.target.value)} placeholder="-115" style={inputStyle} />
+            {impliedP && <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '4px' }}>Implied: {formatProb(impliedP)}</p>}
           </div>
-
-          {/* Beezy model prob — gated */}
-          <div className="px-5 py-4 bg-[var(--surface)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="mono text-xs text-muted uppercase tracking-widest mb-1">Beezy Model Probability</p>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="mono text-2xl font-extrabold text-muted blur-sm select-none"
-                    aria-hidden
-                  >
-                    {formatProb(implied + 0.05)}
-                  </span>
-                  <span className="mono text-xs border border-[var(--border)] px-2 py-0.5 text-muted">
-                    Pro only
-                  </span>
-                </div>
-              </div>
-              <a
-                href="/signup"
-                className="mono text-xs uppercase tracking-widest px-4 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
-              >
-                Unlock
-              </a>
-            </div>
+          <div>
+            <label style={labelStyle}>Model Win Prob (%)</label>
+            <input type="number" value={modelProb} onChange={e => setModelProb(e.target.value)} placeholder="58.0" min="0" max="100" step="0.1" style={inputStyle} />
+          </div>
+        </div>
+      </div>
+      {edge !== null && (
+        <div style={{ border: B, padding: '24px', textAlign: 'center' }}>
+          <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '8px' }}>Edge</div>
+          <div className="mono" style={{ fontSize: '40px', fontWeight: 700, color: edge > 0 ? '#10b981' : '#ef4444' }}>
+            {edge > 0 ? '+' : ''}{edge.toFixed(1)}%
+          </div>
+          <div style={{ fontSize: '12px', color: '#71717a', marginTop: '8px' }}>
+            {edge > 4 ? 'Qualifies for Kelly sizing' : edge > 0 ? 'Positive edge — below typical threshold' : 'No edge — do not bet'}
           </div>
         </div>
       )}
-
-      {/* How to use */}
-      <div className="border border-[var(--border)] p-5 space-y-3">
-        <p className="mono text-xs text-muted uppercase tracking-widest">How to Use</p>
-        <p className="text-xs text-muted leading-relaxed">
-          Enter the line you see at DraftKings or your book of choice. The tool converts
-          it to implied probability — what the market says the true win probability is.
-        </p>
-        <p className="text-xs text-muted leading-relaxed">
-          If Beezy&apos;s model probability is higher than the implied probability, that&apos;s positive
-          expected value. Use the{' '}
-          <a href="/tools/kelly-calculator" className="text-accent hover:underline">Kelly Calculator</a>{' '}
-          to size your stake.
-        </p>
-      </div>
     </div>
   )
 }

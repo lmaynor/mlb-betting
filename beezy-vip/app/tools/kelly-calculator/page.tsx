@@ -3,88 +3,44 @@
 import { useState } from 'react'
 import { kellyStake, formatOdds, americanToImpliedProb, formatProb } from '@/lib/odds'
 
+const B = '0.5px solid #1f1f24'
+const inputStyle: React.CSSProperties = { width: '100%', background: '#111114', border: B, color: '#f5f5f7', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: '6px' }
+
 export default function KellyCalculatorPage() {
   const [bankroll, setBankroll] = useState('1000')
-  const [odds,     setOdds]     = useState('')
-  const [prob,     setProb]     = useState('')
+  const [odds, setOdds]         = useState('')
+  const [prob, setProb]         = useState('')
 
-  const b = parseFloat(bankroll)
-  const o = parseFloat(odds)
-  const p = parseFloat(prob) / 100  // user enters as percentage
-
+  const b = parseFloat(bankroll), o = parseFloat(odds), p = parseFloat(prob) / 100
   const valid = !isNaN(b) && b > 0 && !isNaN(o) && !isNaN(p) && p > 0 && p < 1
-
-  const result    = valid ? kellyStake(b, o, p) : null
-  const impliedP  = !isNaN(o) ? americanToImpliedProb(o) : null
-
-  const inputClass = `
-    w-full bg-[var(--surface)] border border-[var(--border)] text-text
-    mono text-sm px-4 py-3 focus:outline-none focus:border-accent
-    placeholder:text-muted transition-colors
-  `
+  const result   = valid ? kellyStake(b, o, p) : null
+  const impliedP = !isNaN(o) ? americanToImpliedProb(o) : null
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
-      <div className="mb-8">
-        <p className="mono text-xs text-accent uppercase tracking-widest mb-2">Tools</p>
-        <h1 className="text-2xl font-extrabold uppercase tracking-tight mb-2">
-          Kelly Criterion Calculator
-        </h1>
-        <p className="text-muted text-sm">
-          Calculates optimal bet size based on your edge. Enter your bankroll, the line,
-          and your estimated win probability.
-        </p>
+    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 20px' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px' }}>Tools</p>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Kelly Criterion Calculator</h1>
+        <p style={{ fontSize: '13px', color: '#71717a' }}>Calculate optimal bet size based on your edge. Enter bankroll, line, and estimated win probability.</p>
       </div>
 
-      <div className="border border-[var(--border)] p-6 mb-6 space-y-4">
-        <div>
-          <label className="mono text-xs uppercase tracking-widest text-muted block mb-2">
-            Bankroll ($)
-          </label>
-          <input
-            type="number"
-            value={bankroll}
-            onChange={e => setBankroll(e.target.value)}
-            placeholder="1000"
-            className={inputClass}
-          />
+      <div style={{ border: B, padding: '20px', marginBottom: '16px' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={labelStyle}>Bankroll ($)</label>
+          <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <label className="mono text-xs uppercase tracking-widest text-muted block mb-2">
-              Line (American)
-            </label>
-            <input
-              type="number"
-              value={odds}
-              onChange={e => setOdds(e.target.value)}
-              placeholder="-110"
-              className={inputClass}
-            />
-            {impliedP && (
-              <p className="mono text-xs text-muted mt-1">
-                Implied: {formatProb(impliedP)}
-              </p>
-            )}
+            <label style={labelStyle}>Line (American)</label>
+            <input type="number" value={odds} onChange={e => setOdds(e.target.value)} placeholder="-110" style={inputStyle} />
+            {impliedP && <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '4px' }}>Implied: {formatProb(impliedP)}</p>}
           </div>
-
           <div>
-            <label className="mono text-xs uppercase tracking-widest text-muted block mb-2">
-              Your Win Prob (%)
-            </label>
-            <input
-              type="number"
-              value={prob}
-              onChange={e => setProb(e.target.value)}
-              placeholder="55.0"
-              min="0"
-              max="100"
-              step="0.1"
-              className={inputClass}
-            />
+            <label style={labelStyle}>Your Win Prob (%)</label>
+            <input type="number" value={prob} onChange={e => setProb(e.target.value)} placeholder="55.0" min="0" max="100" step="0.1" style={inputStyle} />
             {impliedP && !isNaN(p) && p > 0 && (
-              <p className={`mono text-xs mt-1 ${p > impliedP ? 'text-win' : 'text-loss'}`}>
+              <p className="mono" style={{ fontSize: '11px', marginTop: '4px', color: p > impliedP ? '#10b981' : '#ef4444' }}>
                 Edge: {p > impliedP ? '+' : ''}{((p - impliedP) * 100).toFixed(1)}%
               </p>
             )}
@@ -93,34 +49,22 @@ export default function KellyCalculatorPage() {
       </div>
 
       {result && (
-        <div className="border border-[var(--border)]">
-          <div className="grid grid-cols-2 border-b border-[var(--border)] bg-[var(--surface)]">
-            <div className="px-5 py-4">
-              <p className="mono text-xs text-muted uppercase tracking-widest mb-2">Full Kelly</p>
-              <p className="mono text-3xl font-extrabold text-accent">{result.fullKelly}%</p>
-              <p className="mono text-sm text-win mt-1">${result.stakeFullDollars.toFixed(2)}</p>
+        <div style={{ border: B, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
+            <div style={{ padding: '20px', borderRight: B }}>
+              <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '8px' }}>Full Kelly</div>
+              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: '#10b981' }}>{result.fullKelly}%</div>
+              <div className="mono" style={{ fontSize: '13px', color: '#10b981', marginTop: '4px' }}>${result.stakeFullDollars.toFixed(2)}</div>
             </div>
-            <div className="px-5 py-4 border-l border-[var(--border)]">
-              <p className="mono text-xs text-muted uppercase tracking-widest mb-2">Half Kelly</p>
-              <p className="mono text-3xl font-extrabold text-text">{result.halfKelly}%</p>
-              <p className="mono text-sm text-muted mt-1">${result.stakeHalfDollars.toFixed(2)}</p>
+            <div style={{ padding: '20px' }}>
+              <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '8px' }}>Half Kelly</div>
+              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: '#f5f5f7' }}>{result.halfKelly}%</div>
+              <div className="mono" style={{ fontSize: '13px', color: '#71717a', marginTop: '4px' }}>${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>
-
-          <div className="px-5 py-4">
-            <p className="mono text-xs text-muted leading-relaxed">
-              Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth
-              but requires an accurate probability estimate and tolerance for variance.
-            </p>
+          <div style={{ padding: '14px 20px' }}>
+            <p className="mono" style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6 }}>Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
           </div>
-        </div>
-      )}
-
-      {result && result.fullKelly === 0 && (
-        <div className="border border-loss/30 bg-loss/5 px-5 py-4 mt-4">
-          <p className="mono text-xs text-loss">
-            No edge detected. Kelly criterion returns 0% — do not bet.
-          </p>
         </div>
       )}
     </div>

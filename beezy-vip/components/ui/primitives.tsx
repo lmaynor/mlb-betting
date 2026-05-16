@@ -1,147 +1,88 @@
 'use client'
 
-import { clsx } from 'clsx'
+const PILL: Record<string, { bg: string; color: string; border: string }> = {
+  NRFI: { bg: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' },
+  HR:   { bg: '#1c1207', color: '#f59e0b', border: '0.5px solid #854f0b' },
+  F5:   { bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
+  K:    { bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
+  OUTS: { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
+}
 
-// ── Live dot ────────────────────────────────────────────────
 export function LiveDot({ label }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-2">
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
       <span className="live-dot" />
-      {label && (
-        <span className="mono text-xs tracking-widest text-muted uppercase">
-          {label}
-        </span>
-      )}
+      {label && <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{label}</span>}
     </span>
   )
 }
 
-// ── System badge ─────────────────────────────────────────────
-const SYSTEM_COLORS: Record<string, string> = {
-  NRFI:  'text-[#00FF87] border-[#00FF87]/30 bg-[#00FF87]/5',
-  HR:    'text-[#FFB800] border-[#FFB800]/30 bg-[#FFB800]/5',
-  F5:    'text-[#00B4FF] border-[#00B4FF]/30 bg-[#00B4FF]/5',
-  K:     'text-[#BF5FFF] border-[#BF5FFF]/30 bg-[#BF5FFF]/5',
-  OUTS:  'text-[#FF6B35] border-[#FF6B35]/30 bg-[#FF6B35]/5',
-}
-
 export function SystemBadge({ system }: { system: string }) {
-  const colors = SYSTEM_COLORS[system] ?? 'text-muted border-white/10 bg-white/5'
+  const p = PILL[system] ?? { bg: '#1f1f24', color: '#a1a1aa', border: '0.5px solid #2a2a31' }
   return (
-    <span className={clsx('mono text-xs font-600 px-2 py-0.5 border tracking-widest', colors)}>
+    <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}>
       {system}
     </span>
   )
 }
 
-// ── Stat card ─────────────────────────────────────────────────
-export function StatCard({
-  label,
-  value,
-  sub,
-  accent = false,
-}: {
-  label: string
-  value: string
-  sub?: string
-  accent?: boolean
-}) {
+export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="flex flex-col gap-1 p-5 border border-[var(--border)] bg-[var(--surface)]">
-      <span className="text-xs tracking-widest uppercase text-muted">{label}</span>
-      <span
-        className={clsx(
-          'mono text-3xl font-semibold leading-none',
-          accent ? 'text-accent' : 'text-text'
-        )}
-      >
-        {value}
-      </span>
-      {sub && <span className="mono text-xs text-muted">{sub}</span>}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '20px', border: '0.5px solid #1f1f24', background: '#111114' }}>
+      <span style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{label}</span>
+      <span className="mono" style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? '#10b981' : '#f5f5f7' }}>{value}</span>
+      {sub && <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>{sub}</span>}
     </div>
   )
 }
 
-// ── Result pill ───────────────────────────────────────────────
 export function ResultPill({ result }: { result: string | null }) {
-  if (!result) return <span className="mono text-xs text-muted">PENDING</span>
+  if (!result || result === 'pending') return <span className="mono" style={{ fontSize: '9px', color: '#71717a' }}>PENDING</span>
   const isWin  = result === 'win'
   const isPush = result === 'push'
   const isVoid = result === 'void'
-  // Display label: capitalize for UI readability
-  const label  = result.toUpperCase()
+  const style = isWin
+    ? { background: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' }
+    : isPush || isVoid
+    ? { background: '#1f1f24', color: '#71717a', border: '0.5px solid #2a2a31' }
+    : { background: '#200808', color: '#ef4444', border: '0.5px solid #a32d2d' }
   return (
-    <span
-      className={clsx(
-        'mono text-xs font-semibold px-2 py-0.5 border',
-        isWin  && 'text-win  border-win/30  bg-win/5',
-        isPush && 'text-muted border-muted/30 bg-muted/5',
-        isVoid && 'text-muted border-muted/30 bg-muted/5',
-        !isWin && !isPush && !isVoid && 'text-loss border-loss/30 bg-loss/5'
-      )}
-    >
-      {label}
+    <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', display: 'inline-block', ...style }}>
+      {result.toUpperCase()}
     </span>
   )
 }
 
-// ── PnL display ───────────────────────────────────────────────
 export function PnL({ value }: { value: number | null }) {
-  if (value === null) return <span className="mono text-xs text-muted">—</span>
+  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: '#71717a' }}>—</span>
   const pos = value >= 0
   return (
-    <span className={clsx('mono text-sm font-semibold', pos ? 'text-win' : 'text-loss')}>
-      {pos ? '+' : ''}
-      {value.toFixed(2)}u
+    <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? '#10b981' : '#ef4444' }}>
+      {pos ? '+' : ''}{(value / 10).toFixed(2)}u
     </span>
   )
 }
 
-// ── Section header ────────────────────────────────────────────
-export function SectionHeader({
-  label,
-  sub,
-}: {
-  label: string
-  sub?: string
-}) {
+export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div className="flex flex-col gap-1 mb-8">
-      <h2 className="text-2xl font-extrabold tracking-tight uppercase">{label}</h2>
-      {sub && <p className="text-muted text-sm">{sub}</p>}
+    <div style={{ marginBottom: '24px' }}>
+      <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', letterSpacing: '-0.01em' }}>{label}</h2>
+      {sub && <p style={{ fontSize: '13px', color: '#71717a', marginTop: '4px' }}>{sub}</p>}
     </div>
   )
 }
 
-// ── Button ────────────────────────────────────────────────────
-export function Button({
-  children,
-  variant = 'primary',
-  href,
-  onClick,
-  className,
-}: {
-  children: React.ReactNode
-  variant?: 'primary' | 'ghost' | 'accent'
-  href?: string
-  onClick?: () => void
-  className?: string
-}) {
-  const base = 'inline-flex items-center justify-center mono text-sm font-semibold tracking-widest uppercase px-6 py-3 border transition-all duration-150 cursor-pointer'
-  const variants = {
-    primary: 'bg-accent text-bg border-accent hover:bg-accent/90',
-    ghost:   'bg-transparent text-text border-[var(--border-bright)] hover:border-accent hover:text-accent',
-    accent:  'bg-accent/10 text-accent border-accent/40 hover:bg-accent/20',
+export function Button({ children, variant = 'primary', href, onClick }: { children: React.ReactNode; variant?: 'primary' | 'ghost' | 'accent'; href?: string; onClick?: () => void }) {
+  const styles: Record<string, React.CSSProperties> = {
+    primary: { background: '#10b981', color: '#0a0a0c', border: 'none' },
+    ghost:   { background: 'transparent', color: '#f5f5f7', border: '0.5px solid #2a2a31' },
+    accent:  { background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '0.5px solid rgba(16,185,129,0.4)' },
   }
-  const cls = clsx(base, variants[variant], className)
-
-  if (href) {
-    return <a href={href} className={cls}>{children}</a>
-  }
-  return <button onClick={onClick} className={cls}>{children}</button>
+  const base: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono, monospace)', fontSize: '12px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px 20px', cursor: 'pointer', textDecoration: 'none', ...styles[variant] }
+  if (href) return <a href={href} style={base}>{children}</a>
+  return <button onClick={onClick} style={base}>{children}</button>
 }
 
-// ── Divider ───────────────────────────────────────────────────
 export function Divider() {
-  return <div className="w-full h-px bg-[var(--border)]" />
+  return <div style={{ width: '100%', height: '0.5px', background: '#1f1f24' }} />
 }

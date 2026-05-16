@@ -1,22 +1,9 @@
 'use client'
-
-export default function RouteError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string }
-  reset: () => void
-}) {
+export default function PicksError({ reset }: { error: Error; reset: () => void }) {
   return (
-    <div className="max-w-7xl mx-auto px-4 py-24 text-center">
-      <p className="mono text-xs text-loss uppercase tracking-widest mb-3">Error</p>
-      <p className="text-sm text-muted mb-6">Failed to load this page. Data may be temporarily unavailable.</p>
-      <button
-        onClick={reset}
-        className="mono text-xs uppercase tracking-widest px-5 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
-      >
-        Retry
-      </button>
+    <div style={{ padding: '40px', textAlign: 'center', border: '0.5px solid #1f1f24' }}>
+      <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginBottom: '12px' }}>Failed to load picks.</p>
+      <button onClick={reset} className="mono" style={{ fontSize: '11px', color: '#10b981', background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>Try again &rarr;</button>
     </div>
   )
 }
