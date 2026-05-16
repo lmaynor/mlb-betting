@@ -1,4 +1,21 @@
 @import "tailwindcss";
+
+/* Mobile-first resets */
+*, *::before, *::after { box-sizing: border-box; }
+html { 
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  overflow-x: hidden;
+  width: 100%;
+}
+body { 
+  width: 100%;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+img, video { max-width: 100%; height: auto; }
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {

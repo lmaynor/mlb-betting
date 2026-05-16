@@ -28,7 +28,7 @@ export function Nav() {
         </span>
       </div>
 
-      <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', borderBottom: B, background: '#111114' }}>
+      <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw', borderBottom: B, background: '#111114', overflow: 'hidden' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '52px' }}>
 
           {/* Logo */}
