@@ -23,7 +23,7 @@ export async function Hero() {
   const roiPos = roiNum >= 0
 
   return (
-    <section style={{ borderBottom: B }}>
+    <section style={{ borderBottom: B, borderTop: B }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
 
         {/* Left: headline + copy + CTAs */}
