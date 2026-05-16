@@ -1,12 +1,11 @@
 'use client'
 
-import Link           from 'next/link'
-import { useState }   from 'react'
+import Link from 'next/link'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { LiveDot }    from '@/components/ui/primitives'
-import { Menu, X }    from 'lucide-react'
-import { clsx }       from 'clsx'
+import { Menu, X } from 'lucide-react'
 
+const B = '0.5px solid #1f1f24'
 const NAV_LINKS = [
   { label: 'Picks',   href: '/picks' },
   { label: 'Tools',   href: '/tools' },
@@ -17,89 +16,62 @@ const NAV_LINKS = [
 
 export function Nav() {
   const [open, setOpen] = useState(false)
-  const pathname        = usePathname()
+  const pathname = usePathname()
 
   return (
     <>
       {/* Paper mode banner */}
-      <div className="w-full text-center py-1.5" style={{ background: '#1c1207', borderBottom: '.5px solid #3d2e0f', padding: '7px 16px' }}>
-        <span className="mono text-[10px] tracking-widest uppercase" style={{ color: '#f59e0b' }}>
+      <div style={{ background: '#1c1207', borderBottom: '0.5px solid #3d2e0f', padding: '7px 16px', textAlign: 'center' }}>
+        <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#f59e0b' }}>
           Paper mode &middot; All results are simulated &middot; Not financial advice
         </span>
       </div>
 
-      <nav className="sticky top-0 z-50 w-full" style={{ borderBottom: '0.5px solid #1f1f24', background: '#111114', backdropFilter: 'blur(8px)' }}>
-        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: "52px" }}>
+      <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', borderBottom: B, background: '#111114' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '52px' }}>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
-            <span className="mono text-base font-semibold tracking-tight" style={{ color: 'var(--text)' }}>
-              BEEZY<span style={{ color: 'var(--accent)' }}>.VIP</span>
+          <Link href="/" style={{ textDecoration: 'none' }}>
+            <span className="mono" style={{ fontSize: '15px', fontWeight: 600, color: '#f5f5f7' }}>
+              BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
             </span>
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-6">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }} className="nav-desktop">
             {NAV_LINKS.map(l => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={clsx(
-                  'mono text-xs tracking-widest uppercase transition-colors',
-                  pathname.startsWith(l.href)
-                    ? 'text-accent'
-                    : 'text-muted hover:text-text'
-                )}
-              >
+              <Link key={l.href} href={l.href} className="mono" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none', color: pathname.startsWith(l.href) ? '#10b981' : '#71717a' }}>
                 {l.label}
               </Link>
             ))}
           </div>
 
-          {/* CTA */}
-          <div className="hidden md:flex items-center gap-3">
-            <a
-              href="https://discord.gg/beezy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mono text-xs tracking-widest uppercase px-4 py-2 font-semibold transition-colors" style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-            >
+          {/* Desktop CTA */}
+          <div className="nav-desktop">
+            <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer" className="mono"
+              style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 14px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
               Join Discord
             </a>
           </div>
 
-          {/* Mobile menu toggle */}
-          <button
-            className="md:hidden text-muted hover:text-text"
-            onClick={() => setOpen(!open)}
-          >
+          {/* Mobile toggle */}
+          <button onClick={() => setOpen(!open)} className="nav-mobile" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center' }}>
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
 
         {/* Mobile menu */}
         {open && (
-          <div className="md:hidden border-t border-[var(--border)] bg-[var(--surface)]">
+          <div style={{ borderTop: B, background: '#111114' }} className="nav-mobile">
             {NAV_LINKS.map(l => (
-              <Link
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className={clsx(
-                  'block mono text-xs tracking-widest uppercase px-4 py-3 border-b border-[var(--border)] transition-colors',
-                  pathname.startsWith(l.href) ? 'text-accent' : 'text-muted hover:text-text'
-                )}
-              >
+              <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="mono"
+                style={{ display: 'block', fontSize: '12px', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '14px 20px', borderBottom: B, textDecoration: 'none', color: pathname.startsWith(l.href) ? '#10b981' : '#71717a' }}>
                 {l.label}
               </Link>
             ))}
-            <div className="p-4">
-              <a
-                href="https://discord.gg/beezy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full mono text-xs tracking-widest uppercase text-center px-4 py-3 bg-accent text-bg font-semibold"
-              >
+            <div style={{ padding: '14px 20px' }}>
+              <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer" className="mono"
+                style={{ display: 'block', textAlign: 'center', fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
                 Join Discord
               </a>
             </div>
