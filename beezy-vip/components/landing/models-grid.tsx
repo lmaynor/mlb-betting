@@ -65,14 +65,14 @@ export async function ModelsGrid() {
       stats = db.map(s => ({
         system:     s.system,
         win_rate:   parseFloat(String(s.win_rate)),
-        roi:        parseFloat(String(s.roi)),
+        roi:        parseFloat(String(s.roi ?? 0)),
         total_bets: parseInt(String(s.total_bets)),
       }))
     }
   } catch { /* seed */ }
 
   return (
-    <section className="px-5 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+    <section className="px-5 py-8 border-b border-[#1f1f24]" style={{ borderColor: 'var(--border)' }}>
       <div className="flex items-center justify-between mb-4">
         <span className="mono text-[10px] tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
           Active systems

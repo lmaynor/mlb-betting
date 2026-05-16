@@ -18,7 +18,7 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className="px-5 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+    <section className="px-5 py-8 border-b border-[#1f1f24]" style={{ borderColor: 'var(--border)' }}>
       <div className="mono text-[10px] tracking-widest uppercase mb-4" style={{ color: 'var(--muted)' }}>
         How it works
       </div>

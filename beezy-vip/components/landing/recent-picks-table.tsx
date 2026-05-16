@@ -36,7 +36,7 @@ export async function RecentPicksTable() {
   } catch { /* seed */ }
 
   return (
-    <section className="px-5 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+    <section className="px-5 py-8 border-b border-[#1f1f24]" style={{ borderColor: 'var(--border)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
         <span className="mono text-[10px] tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
@@ -54,7 +54,7 @@ export async function RecentPicksTable() {
       <div className="border" style={{ borderColor: 'var(--border)' }}>
         {/* Column header */}
         <div
-          className="grid gap-2 px-3 py-2 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px", background: 'var(--surface)', borderColor: 'var(--border)' }}
+          className="grid gap-2 px-3 py-2 border-b border-[#1f1f24]" style={{ gridTemplateColumns: "52px 52px 1fr 72px", background: 'var(--surface)', borderColor: 'var(--border)' }}
         >
           {['Result', 'System', 'Matchup', 'Units'].map((h, i) => (
             <div
@@ -74,7 +74,7 @@ export async function RecentPicksTable() {
           return (
             <div
               key={i}
-              className="grid gap-2 items-center px-3 py-2.5 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px",
+              className="grid gap-2 items-center px-3 py-2.5 border-b border-[#1f1f24]" style={{ gridTemplateColumns: "52px 52px 1fr 72px",
                 borderColor: 'var(--border)',
                 borderBottomWidth: i === rows.length - 1 ? 0 : undefined,
               }}

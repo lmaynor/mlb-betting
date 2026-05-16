@@ -21,13 +21,13 @@ export async function Hero() {
   const roiPos = roiNum >= 0
 
   return (
-    <section className="border-b" style={{ borderColor: 'var(--border)' }}>
+    <section className="border-b border-[#1f1f24]" style={{ borderColor: 'var(--border)' }}>
       <div
         className="grid" style={{ gridTemplateColumns: "minmax(0,7fr) minmax(0,5fr)", borderColor: 'var(--border)' }}
       >
         {/* Left: headline + copy + CTAs */}
         <div
-          className="px-5 py-10 md:py-14 md:border-r"
+          className="px-5 py-10 md:py-14 md:border-r border-[#1f1f24]"
           style={{ borderColor: 'var(--border)' }}
         >
           {/* Eyebrow */}
@@ -75,7 +75,7 @@ export async function Hero() {
         <div className="grid grid-cols-2" style={{ borderColor: 'var(--border)' }}>
           {/* Season ROI */}
           <div
-            className="p-5 md:p-6 border-b border-r"
+            className="p-5 md:p-6 border-b border-r border-[#1f1f24]"
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="mono text-[9px] tracking-widest uppercase mb-2" style={{ color: 'var(--muted)' }}>
@@ -92,7 +92,7 @@ export async function Hero() {
 
           {/* Win Rate */}
           <div
-            className="p-5 md:p-6 border-b"
+            className="p-5 md:p-6 border-b border-[#1f1f24]"
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="mono text-[9px] tracking-widest uppercase mb-2" style={{ color: 'var(--muted)' }}>
@@ -109,7 +109,7 @@ export async function Hero() {
 
           {/* Settled Bets */}
           <div
-            className="p-5 md:p-6 border-r"
+            className="p-5 md:p-6 border-r border-[#1f1f24]"
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="mono text-[9px] tracking-widest uppercase mb-2" style={{ color: 'var(--muted)' }}>
