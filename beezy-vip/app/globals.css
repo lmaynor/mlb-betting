@@ -16,8 +16,6 @@ body {
 }
 img, video { max-width: 100%; height: auto; }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 :root {
   --bg:            #0a0a0c;
   --surface:       #111114;
@@ -85,11 +83,21 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border-bright); }
 
-.nav-desktop { display: flex; }
-.hero-grid  { display: grid; }
-.hero-stats { display: grid; }
+/* ── Desktop base grid rules ── */
+.nav-desktop    { display: flex; align-items: center; gap: 32px; }
+.nav-mobile     { display: none; }
 
-.nav-mobile  { display: none; }
+.hero-grid      { display: grid; grid-template-columns: 1fr 1fr; min-height: 480px; }
+.hero-stats     { display: grid; grid-template-columns: 1fr 1fr; }
+
+.steps-grid     { display: grid; grid-template-columns: repeat(3, 1fr); }
+.systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
+.pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.tools-grid     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
+.footer-grid    { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; }
+.models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
+.results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; }
+
 
 @media (max-width: 768px) {
   .nav-desktop { display: none; }
