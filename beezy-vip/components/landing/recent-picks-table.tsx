@@ -77,7 +77,7 @@ export async function RecentPicksTable() {
               </span>
               <span style={{ fontSize: '12px', color: 'var(--sec)' }}>{row.matchup}</span>
               <span className="mono" style={{ fontSize: '12px', fontWeight: 500, textAlign: 'right', color: isWin ? 'var(--win)' : 'var(--loss)' }}>
-                {isWin && row.profit > 0 ? '+' : ''}{row.profit !== 0 ? '$'+Math.abs(row.profit).toFixed(2) : '—'}
+                {row.profit >= 0 ? '+' : ''}{(row.profit / 10).toFixed(2)}u
               </span>
             </div>
           )
