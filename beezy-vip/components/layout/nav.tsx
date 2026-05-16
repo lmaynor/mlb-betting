@@ -29,7 +29,7 @@ export function Nav() {
       </div>
 
       <nav className="sticky top-0 z-50 w-full" style={{ borderBottom: '0.5px solid #1f1f24', background: '#111114', backdropFilter: 'blur(8px)' }}>
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: "52px" }}>
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
