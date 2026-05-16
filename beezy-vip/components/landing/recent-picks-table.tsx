@@ -54,8 +54,7 @@ export async function RecentPicksTable() {
       <div className="border" style={{ borderColor: 'var(--border)' }}>
         {/* Column header */}
         <div
-          className="grid gap-2 px-3 py-2 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px" }}
-          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          className="grid gap-2 px-3 py-2 border-b" style={{ gridTemplateColumns: "52px 52px 1fr 72px", background: 'var(--surface)', borderColor: 'var(--border)' }}
         >
           {['Result', 'System', 'Matchup', 'Units'].map((h, i) => (
             <div
