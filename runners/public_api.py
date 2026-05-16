@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 def _require_api_key(request_headers: dict, site_api_key: str) -> bool:
     """Return True if the X-API-Key header matches the configured key."""
-    return request_headers.get("X-API-Key", "").strip() == site_api_key
+    # HTTP/2 lowercases headers -- check both forms
+    key = request_headers.get("X-API-Key", "") or request_headers.get("x-api-key", "")
+    return key.strip() == site_api_key
 
 
 def get_today_picks(engine):
@@ -93,9 +95,9 @@ def get_summary_stats(engine):
             "COUNT(*) FILTER (WHERE result = 'push') AS pushes, "
             "ROUND(COUNT(*) FILTER (WHERE result = 'win')::numeric / "
             "  NULLIF(COUNT(*) FILTER (WHERE result IN ('win','loss')), 0) * 100, 1) AS win_rate, "
-            "ROUND(SUM(profit) / NULLIF(SUM(stake), 0) * 100, 2) AS roi, "
-            "ROUND(SUM(profit), 2) AS total_pnl, "
-            "ROUND(AVG(model_prob - market_prob) * 100, 2) AS avg_edge "
+            "ROUND((SUM(profit) / NULLIF(SUM(stake), 0) * 100)::numeric, 2) AS roi, "
+            "ROUND(SUM(profit)::numeric, 2) AS total_pnl, "
+            "ROUND((AVG(model_prob - market_prob) * 100)::numeric, 2) AS avg_edge "
             "FROM bets WHERE result IS NOT NULL AND result != 'void' "
             "GROUP BY system ORDER BY roi DESC"
         )).mappings().all()
