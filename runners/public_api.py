@@ -106,8 +106,8 @@ def get_summary_stats(engine):
             "SELECT COUNT(*) AS total_bets, "
             "ROUND(COUNT(*) FILTER (WHERE result = 'win')::numeric / "
             "  NULLIF(COUNT(*) FILTER (WHERE result IN ('win','loss')), 0) * 100, 1) AS win_rate, "
-            "ROUND(SUM(profit) / NULLIF(SUM(stake), 0) * 100, 2) AS roi, "
-            "ROUND(AVG(model_prob - market_prob) * 100, 2) AS avg_edge "
+            "ROUND((SUM(profit) / NULLIF(SUM(stake), 0) * 100)::numeric, 2) AS roi, "
+            "ROUND((AVG(model_prob - market_prob) * 100)::numeric, 2) AS avg_edge "
             "FROM bets WHERE result IS NOT NULL AND result != 'void'"
         )).mappings().first()
 
