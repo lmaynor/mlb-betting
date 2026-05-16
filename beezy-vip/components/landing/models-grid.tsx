@@ -1,3 +1,5 @@
+const B = '0.5px solid #1f1f24'
+
 import { apiGetStats } from '@/lib/betting-api'
 import Link from 'next/link'
 
@@ -98,7 +100,7 @@ export async function ModelsGrid() {
               className="block p-4 transition-colors group sys-grid-item"
               style={{ background: 'var(--bg)' }}
             >
-              <div className="flex items-start justify-between mb-3">
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:"10px", gap:"8px" }}>
                 <span
                   className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 inline-block"
                   style={pillStyleToObj(meta.pillStyle)}
@@ -143,10 +145,13 @@ export async function ModelsGrid() {
         <div
           className="p-4 flex items-center justify-center"
           style={{
-            background:   'var(--surface)',
-            borderLeft:   `.5px solid var(--border)`,
-            borderTop:    stats.length > 3 ? `.5px solid var(--border)` : undefined,
-            minHeight:    '140px',
+            background: '#111114',
+            borderLeft: B,
+            borderTop:  B,
+            minHeight:  '140px',
+            display:    'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <div className="text-center">
