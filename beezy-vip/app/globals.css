@@ -75,3 +75,17 @@ body { background: var(--bg); min-height: 100vh; }
   .nav-desktop { display: none; }
   .nav-mobile  { display: block; }
 }
+
+@media (max-width: 768px) {
+  body { overflow-x: hidden; }
+
+  .hero-grid  { grid-template-columns: 1fr !important; }
+  .hero-left  { border-right: none !important; padding: 28px 16px 24px !important; }
+  .hero-stats { grid-template-columns: 1fr 1fr !important; border-top: 0.5px solid #1f1f24; }
+
+  .blotter-grid { grid-template-columns: 44px 44px 1fr 58px !important; gap: 6px !important; }
+
+  .steps-grid { grid-template-columns: 1fr !important; }
+  .steps-grid > div { border-right: none !important; border-bottom: 0.5px solid #1f1f24; }
+  .steps-grid > div:last-child { border-bottom: none !important; }
+}

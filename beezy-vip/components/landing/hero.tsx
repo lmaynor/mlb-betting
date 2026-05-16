@@ -27,7 +27,7 @@ export async function Hero() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
 
         {/* Left: headline + copy + CTAs */}
-        <div style={{ padding: '48px 20px 40px', borderRight: B }}>
+        <div className="hero-left" style={{ padding: '48px 20px 40px', borderRight: B }}>
           <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>
             5 models live &middot; Paper mode &middot; {stats.total_bets} settled bets
           </div>

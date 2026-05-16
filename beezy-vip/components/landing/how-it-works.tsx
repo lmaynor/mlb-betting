@@ -12,7 +12,7 @@ export function HowItWorks() {
       <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '14px' }}>
         How it works
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
+      <div className="steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
         {STEPS.map((step, i) => (
           <div key={step.num} style={{ padding: '18px', borderRight: i < STEPS.length - 1 ? B : undefined }}>
             <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '8px' }}>{step.num}</div>

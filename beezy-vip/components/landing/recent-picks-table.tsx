@@ -56,7 +56,7 @@ export async function RecentPicksTable() {
 
       <div style={{ border: B }}>
         {/* Header */}
-        <div style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', padding: '8px 12px', background: '#111114', borderBottom: B }}>
+        <div className="blotter-grid" style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', padding: '8px 12px', background: '#111114', borderBottom: B }}>
           {[['Result', 'left'], ['System', 'left'], ['Matchup', 'left'], ['P&L', 'right']].map(([h, align]) => (
             <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', textAlign: align as 'left' | 'right' }}>
               {h}
@@ -68,7 +68,7 @@ export async function RecentPicksTable() {
           const isWin = row.result === 'win'
           const pill  = PILL[row.system] ?? { bg: '#1f1f24', color: '#a1a1aa', border: B }
           return (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', alignItems: 'center', padding: '9px 12px', borderBottom: i < rows.length - 1 ? B : undefined }}>
+            <div key={i} className="blotter-grid" style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', alignItems: 'center', padding: '9px 12px', borderBottom: i < rows.length - 1 ? B : undefined }}>
               <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 6px', textAlign: 'center', background: isWin ? '#052016' : '#200808', color: isWin ? '#10b981' : '#ef4444', border: isWin ? '0.5px solid #0f6e56' : '0.5px solid #a32d2d', display: 'inline-block' }}>
                 {isWin ? 'WIN' : 'LOSS'}
               </span>
