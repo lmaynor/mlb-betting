@@ -31,7 +31,7 @@ export async function Hero() {
           <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>
             5 models live &middot; Paper mode &middot; {stats.total_bets} settled bets
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1.12, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: '12px' }}>
+          <h1 className="hero-h1" style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1.12, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: '12px' }}>
             MLB betting models<br />that show their work.
           </h1>
           <p style={{ fontSize: '13px', lineHeight: 1.65, color: 'var(--sec)', marginBottom: '22px', maxWidth: '400px' }}>

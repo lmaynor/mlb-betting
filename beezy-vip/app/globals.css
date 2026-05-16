@@ -102,3 +102,29 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
   .banner-short { display: inline; }
   .banner-full  { display: none; }
 }
+
+@media (max-width: 768px) {
+  body { overflow-x: clip; }
+
+  /* Nav: hide desktop links, show burger */
+  .nav-desktop { display: none !important; }
+  .nav-mobile  { display: block !important; }
+
+  /* Hero: force single column */
+  .hero-grid  { display: block !important; }
+  .hero-left  { border-right: none !important; padding: 24px 16px !important; }
+  .hero-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; border-top: 0.5px solid #1f1f24; }
+  .hero-h1    { font-size: 22px !important; }
+
+  /* Steps: stack */
+  .steps-grid { display: block !important; }
+  .steps-grid > div { border-right: none !important; border-bottom: 0.5px solid #1f1f24; }
+  .steps-grid > div:last-child { border-bottom: none; }
+
+  /* Footer */
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px !important; }
+
+  /* Banner */
+  .banner-full  { display: none; }
+  .banner-short { display: inline; }
+}
