@@ -1,172 +1,129 @@
-import { apiGetStats } from '@/lib/betting-api'
-import { SystemBadge }     from '@/components/ui/primitives'
-import Link                from 'next/link'
-import type { Metadata }   from 'next'
-
 export const dynamic = 'force-dynamic'
+
+import { apiGetStats } from '@/lib/betting-api'
+import Link from 'next/link'
+import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title:       'Models — Methodology & Transparency',
-  description: 'How Beezy.VIP builds XGBoost models for MLB betting. Data sources, training methodology, walk-forward CV, and version history.',
+  description: 'How Beezy.VIP builds XGBoost models for MLB betting. Walk-forward CV, Kelly gating, 200-bet gate.',
 }
 
-export const revalidate = 3600
+const B = '0.5px solid #1f1f24'
+
+const PILL: Record<string, { bg: string; color: string; border: string }> = {
+  NRFI: { bg: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' },
+  HR:   { bg: '#1c1207', color: '#f59e0b', border: '0.5px solid #854f0b' },
+  F5:   { bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
+  K:    { bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
+  OUTS: { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
+}
 
 const MODEL_DETAIL = {
-  NRFI: {
-    version:     'v17',
-    description: 'Predicts whether the first inning will be scoreless. Primary features: starting pitcher ERA/FIP/K%, umpire called-strike%, park factor, wind speed/direction, game-time temperature.',
-    dataRange:   '2021–2025',
-    ooaAUC:      0.618,
-    href:        '/models/nrfi',
-  },
-  HR: {
-    version:     'v6',
-    description: 'Predicts batter HR probability per PA. Primary features: barrel rate, hard-hit%, launch angle, pitcher HR/9, fly ball%, park HR factor, platoon split.',
-    dataRange:   '2021–2025',
-    ooaAUC:      0.603,
-    href:        '/models/hr',
-  },
-  F5: {
-    version:     'v4',
-    description: 'Predicts F5 winner and total. Primary features: starter SIERA, last-5 ERA, opponent wOBA, umpire run-scoring rate, weather.',
-    dataRange:   '2022–2025',
-    ooaAUC:      0.594,
-    href:        '/models/f5',
-  },
-  K: {
-    version:     'v9',
-    description: 'Predicts starter strikeout total. Primary features: SwStr%, Zone%, ChaseStr%, opponent K%, L5 avg Ks, home/away split, opponent lineup K%.',
-    dataRange:   '2021–2025',
-    ooaAUC:      0.631,
-    href:        '/models/k',
-  },
-  OUTS: {
-    version:     'v3',
-    description: 'Predicts outs recorded by a starter. Primary features: pitch efficiency, innings-per-start trend, bullpen availability, opponent OBP, game leverage.',
-    dataRange:   '2022–2025',
-    ooaAUC:      0.587,
-    href:        '/models/outs',
-  },
+  NRFI: { version: 'v17', desc: 'Predicts whether the first inning will be scoreless. Primary features: starter ERA/FIP/K%, umpire called-strike%, park factor, wind speed/direction, game-time temperature.', range: '2021–2025', auc: 0.618, href: '/models/nrfi' },
+  HR:   { version: 'v6',  desc: 'Predicts batter HR probability per PA. Primary features: barrel rate, hard-hit%, launch angle, pitcher HR/9, fly ball%, park HR factor, platoon split.', range: '2021–2025', auc: 0.603, href: '/models/hr' },
+  F5:   { version: 'v4',  desc: 'Predicts F5 winner. Primary features: starter SIERA, last-5 ERA, opponent wOBA, umpire run-scoring rate, weather.', range: '2022–2025', auc: 0.594, href: '/models/f5' },
+  K:    { version: 'v9',  desc: 'Predicts starter strikeout total. Primary features: SwStr%, Zone%, ChaseStr%, opponent K%, L5 avg Ks, home/away split.', range: '2021–2025', auc: 0.631, href: '/models/k' },
+  OUTS: { version: 'v3',  desc: 'Predicts outs recorded by a starter. Primary features: pitch efficiency, innings-per-start trend, bullpen availability, opponent OBP.', range: '2022–2025', auc: 0.587, href: '/models/outs' },
 }
 
 export default async function ModelsPage() {
   const stats = await apiGetStats().then(s => s.bySystem).catch(() => [])
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="mb-12">
-        <h1 className="text-2xl font-extrabold uppercase tracking-tight mb-2">Models</h1>
-        <p className="mono text-sm text-muted">
-          Full methodology. Bettors are skeptical — we show our work.
-        </p>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+      <div style={{ marginBottom: '28px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Models</h1>
+        <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>Full methodology. Bettors are skeptical — we show our work.</p>
       </div>
 
-      {/* Approach overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+      {/* Overview strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', border: B, marginBottom: '24px' }}>
         {[
-          { label: 'Model Type',   value: 'XGBoost',         sub: 'Gradient boosted trees' },
-          { label: 'Data Source',  value: '946k+ rows',      sub: 'Statcast pitch-level data' },
+          { label: 'Model type',   value: 'XGBoost',         sub: 'Gradient boosted trees' },
+          { label: 'Training data', value: '946k+ rows',     sub: 'Statcast pitch-level data' },
           { label: 'Validation',   value: 'Walk-forward CV', sub: 'No future data leakage' },
-        ].map(item => (
-          <div key={item.label} className="p-5 bg-[var(--surface)] border border-[var(--border)]">
-            <p className="mono text-xs uppercase tracking-widest text-muted mb-2">{item.label}</p>
-            <p className="font-bold text-sm">{item.value}</p>
-            <p className="mono text-xs text-muted mt-1">{item.sub}</p>
+        ].map((item, i) => (
+          <div key={item.label} style={{ padding: '18px', borderRight: i < 2 ? B : undefined }}>
+            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '6px' }}>{item.label}</div>
+            <div className="mono" style={{ fontSize: '16px', fontWeight: 600, color: '#f5f5f7', marginBottom: '4px' }}>{item.value}</div>
+            <div style={{ fontSize: '11px', color: '#71717a' }}>{item.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Training methodology */}
-      <div className="border border-[var(--border)] p-6 mb-12">
-        <h2 className="text-sm font-extrabold uppercase tracking-wide mb-4">Training Methodology</h2>
-        <div className="space-y-3 text-sm text-muted leading-relaxed">
-          <p>
-            Each model uses walk-forward cross-validation: trained on seasons N through N-1,
-            validated on season N. This mirrors live deployment — the model never sees future data.
-          </p>
-          <p>
-            Kelly criterion gates betting: a bet only qualifies if model probability minus
-            implied probability exceeds a system-specific edge threshold and Kelly stake is positive.
-          </p>
-          <p>
-            Models enter production after clearing a 200-bet out-of-sample gate. Currently
-            in paper mode — results are simulated, not real money.
-          </p>
-        </div>
+      {/* Methodology prose */}
+      <div style={{ padding: '20px', border: B, marginBottom: '24px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#a1a1aa', marginBottom: '12px' }}>Training methodology</div>
+        {[
+          'Each model uses walk-forward cross-validation: trained on seasons N through N-1, validated on season N. The model never sees future data.',
+          'Kelly criterion gates betting: a bet only qualifies if model probability minus implied probability exceeds the edge threshold and Kelly stake is positive.',
+          'Models enter production after clearing a 200-bet out-of-sample gate. Currently in paper mode — results are simulated, not real money.',
+        ].map((p, i) => (
+          <p key={i} style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.7, marginBottom: i < 2 ? '10px' : 0 }}>{p}</p>
+        ))}
       </div>
 
-      {/* Per-model cards */}
-      <h2 className="text-sm font-extrabold uppercase tracking-wide mb-6">Active Systems</h2>
-      <div className="space-y-4">
-        {Object.entries(MODEL_DETAIL).map(([system, detail]) => {
-          const stat = stats.find(s => s.system === system)
-          return (
-            <div key={system} className="border border-[var(--border)] bg-[var(--surface)] p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <SystemBadge system={system} />
-                  <span className="mono text-xs text-muted">{detail.version}</span>
+      {/* Model table */}
+      <div style={{ marginBottom: '24px' }}>
+        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '10px' }}>Active systems</div>
+        <div style={{ border: B }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 80px 70px', background: '#111114', borderBottom: B }}>
+            {['System', 'Description', 'OOS AUC', 'Training', 'Detail'].map(h => (
+              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', padding: '9px 12px' }}>{h}</div>
+            ))}
+          </div>
+          {Object.entries(MODEL_DETAIL).map(([sys, d], i) => {
+            const stat = stats.find(s => s.system === sys)
+            const pill = PILL[sys] ?? { bg: '#1f1f24', color: '#a1a1aa', border: B }
+            const roi  = stat ? parseFloat(String(stat.roi ?? 0)) : null
+            return (
+              <div key={sys} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 80px 70px', borderBottom: i < 4 ? B : undefined, alignItems: 'center' }}>
+                <div style={{ padding: '12px' }}>
+                  <span className="mono" style={{ fontSize: '9px', fontWeight: 600, padding: '3px 7px', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{sys}</span>
+                  <div className="mono" style={{ fontSize: '9px', color: '#71717a' }}>{d.version}</div>
                 </div>
-                <Link
-                  href={detail.href}
-                  className="mono text-xs uppercase tracking-widest text-muted hover:text-accent transition-colors"
-                >
-                  Full Detail →
-                </Link>
-              </div>
-
-              <p className="text-sm text-muted leading-relaxed mb-4">{detail.description}</p>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-[var(--border)]">
-                <div>
-                  <p className="mono text-xs text-muted uppercase tracking-widest mb-1">OOS AUC</p>
-                  <p className="mono text-sm font-semibold text-accent">{detail.ooaAUC.toFixed(3)}</p>
+                <div style={{ padding: '12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7', marginBottom: '2px' }}>
+                    {MODEL_DETAIL[sys as keyof typeof MODEL_DETAIL]?.desc.split('.')[0]}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#71717a' }}>{d.desc.split('.').slice(1).join('.').trim()}</div>
                 </div>
-                <div>
-                  <p className="mono text-xs text-muted uppercase tracking-widest mb-1">Training Data</p>
-                  <p className="mono text-sm font-semibold">{detail.dataRange}</p>
-                </div>
-                {stat && (
-                  <>
-                    <div>
-                      <p className="mono text-xs text-muted uppercase tracking-widest mb-1">Live Win Rate</p>
-                      <p className="mono text-sm font-semibold">{parseFloat(String(stat.win_rate)).toFixed(1)}%</p>
+                <div style={{ padding: '12px' }}>
+                  <div className="mono" style={{ fontSize: '16px', fontWeight: 600, color: '#f5f5f7' }}>{d.auc.toFixed(3)}</div>
+                  <div className="mono" style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>OOS AUC</div>
+                  {roi !== null && (
+                    <div className="mono" style={{ fontSize: '11px', fontWeight: 600, marginTop: '2px', color: roi >= 0 ? '#10b981' : '#ef4444' }}>
+                      {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
                     </div>
-                    <div>
-                      <p className="mono text-xs text-muted uppercase tracking-widest mb-1">Live ROI</p>
-                      <p className={`mono text-sm font-semibold ${parseFloat(String(stat.roi)) > 0 ? 'text-win' : 'text-loss'}`}>
-                        {parseFloat(String(stat.roi)) > 0 ? '+' : ''}{parseFloat(String(stat.roi)).toFixed(1)}%
-                      </p>
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
+                <div style={{ padding: '12px' }}>
+                  <span className="mono" style={{ fontSize: '11px', color: '#a1a1aa' }}>{d.range}</span>
+                </div>
+                <div style={{ padding: '12px' }}>
+                  <Link href={d.href} style={{ fontSize: '11px', color: '#3b82f6', textDecoration: 'none' }}>Detail &rarr;</Link>
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
       {/* Data sources */}
-      <div className="border border-[var(--border)] p-6 mt-12">
-        <h2 className="text-sm font-extrabold uppercase tracking-wide mb-4">Data Sources</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {[
-            { name: 'Statcast',        desc: '946k+ pitch rows · Exit velo, launch angle, spin rate, zones' },
-            { name: 'MLB Stats API',   desc: 'Game results · Nightly settlement · Lineup data' },
-            { name: 'Open-Meteo',      desc: 'Weather · Temperature, wind speed/direction, precipitation' },
-            { name: 'Umpire Scorecards', desc: 'K-rate, called-strike%, run-scoring tendency' },
-            { name: 'SGO Odds',        desc: 'Opening and closing lines · Implied probabilities' },
-          ].map(src => (
-            <div key={src.name} className="flex gap-3">
-              <span className="text-accent mt-0.5">+</span>
-              <div>
-                <p className="text-sm font-semibold">{src.name}</p>
-                <p className="mono text-xs text-muted">{src.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '10px' }}>Data sources</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: B }}>
+        {[
+          { name: 'Statcast',          desc: '946k+ pitch rows. Launch angle, exit velocity, spin rate.' },
+          { name: 'MLB Stats API',      desc: 'Game results, inning scoring, lineup data, settlement.' },
+          { name: 'Open-Meteo',         desc: 'Historical and forecast weather per stadium.' },
+          { name: 'Umpire Scorecards',  desc: 'K-rate boost, run impact, zone accuracy by umpire.' },
+        ].map((src, i) => (
+          <div key={src.name} style={{ padding: '14px', borderRight: i < 3 ? B : undefined }}>
+            <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: '#f5f5f7', marginBottom: '4px' }}>{src.name}</div>
+            <div style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.5 }}>{src.desc}</div>
+          </div>
+        ))}
       </div>
     </div>
   )
