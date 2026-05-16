@@ -17,6 +17,7 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
     system: sp.market && sp.market !== 'All' ? sp.market : undefined,
     date:   sp.date ?? 'today',
     status: sp.status && sp.status !== 'all' ? sp.status : undefined,
+    book: sp.book && sp.book !== 'All' ? sp.book.toLowerCase().replace(/ /g, '') : undefined,
     limit:  100,
   }).catch(() => [])
   return <PicksTable picks={picks} />
@@ -29,7 +30,7 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '18px', fontWeight: 600, color: '#f5f5f7' }}>Picks</h1>
-          <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>MLB · DraftKings · All systems</p>
+          <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>MLB · All books · All systems</p>
         </div>
         <Suspense fallback={
           <div style={{ padding: '40px', textAlign: 'center', border: '0.5px solid #1f1f24' }}>

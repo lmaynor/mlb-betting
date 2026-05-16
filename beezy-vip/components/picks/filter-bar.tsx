@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback } from 'react'
 
 const MARKETS  = ['All', 'NRFI', 'HR', 'F5', 'K', 'OUTS']
+const BOOKS    = ['All', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'ESPN Bet', 'PointsBet']
 const DATES    = [{ label: 'Today', value: 'today' }, { label: 'Yesterday', value: 'yesterday' }, { label: 'Last 7 Days', value: 'last7' }]
 const STATUSES = [{ label: 'All', value: 'all' }, { label: 'Pending', value: 'pending' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }]
 const LEAGUES  = ['All', 'MLB', 'NFL', 'NBA']
@@ -50,6 +51,10 @@ export function PicksFilterBar() {
         <div style={rowStyle}>
           <span style={labelStyle}>Market</span>
           {MARKETS.map(m => <Chip key={m} label={m} active={get('market') === m || (m === 'All' && !sp.get('market'))} onClick={() => set('market', m)} />)}
+        </div>
+        <div style={rowStyle}>
+          <span style={labelStyle}>Book</span>
+          {BOOKS.map(b => <Chip key={b} label={b} active={get('book') === b || (b === 'All' && !sp.get('book'))} onClick={() => set('book', b)} />)}
         </div>
         <div style={rowStyle}>
           <span style={labelStyle}>Date</span>
