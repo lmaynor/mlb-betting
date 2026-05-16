@@ -149,6 +149,13 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
   .steps-grid > div { border-right: none !important; border-bottom: 0.5px solid #1f1f24; }
   .steps-grid > div:last-child { border-bottom: none; }
 
+  /* Systems / Models / Pricing: single column on mobile */
+  .systems-grid  { grid-template-columns: 1fr !important; }
+  .models-grid   { grid-template-columns: 1fr !important; }
+  .pricing-grid  { grid-template-columns: 1fr !important; gap: 16px !important; }
+  .tools-grid    { grid-template-columns: 1fr !important; }
+  .results-grid  { grid-template-columns: 1fr !important; }
+
   /* Footer */
   .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px !important; }
 
