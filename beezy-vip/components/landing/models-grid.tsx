@@ -38,7 +38,7 @@ export async function ModelsGrid() {
         <Link href="/models" style={{ fontSize: '11px', color: '#3b82f6', textDecoration: 'none' }}>Full methodology &rarr;</Link>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
+      <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
         {items.map((s, i) => {
           const col = i % 3
           const row = Math.floor(i / 3)

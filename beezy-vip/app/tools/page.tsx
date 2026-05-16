@@ -34,7 +34,7 @@ export default function ToolsPage() {
         <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>Free calculators. Pro dashboards for members.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
+      <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
         {TOOLS.map((tool, i) => {
           const col = i % 3
           const row = Math.floor(i / 3)

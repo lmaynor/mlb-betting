@@ -38,7 +38,7 @@ export default async function ModelsPage() {
       </div>
 
       {/* Overview strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', border: B, marginBottom: '24px' }}>
+      <div className="models-strip" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B, marginBottom: '24px' }}>
         {[
           { label: 'Model type',   value: 'XGBoost',         sub: 'Gradient boosted trees' },
           { label: 'Training data', value: '946k+ rows',     sub: 'Statcast pitch-level data' },
@@ -112,7 +112,7 @@ export default async function ModelsPage() {
 
       {/* Data sources */}
       <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '10px' }}>Data sources</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: B }}>
+      <div className="sources-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', border: B }}>
         {[
           { name: 'Statcast',          desc: '946k+ pitch rows. Launch angle, exit velocity, spin rate.' },
           { name: 'MLB Stats API',      desc: 'Game results, inning scoring, lineup data, settlement.' },

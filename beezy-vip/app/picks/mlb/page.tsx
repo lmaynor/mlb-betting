@@ -32,7 +32,7 @@ export default async function MLBPicksPage() {
         <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>5 systems · DraftKings · Paper mode</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', border: B }}>
+      <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B }}>
         {items.map((s, i) => {
           const col = i % 3
           const row = Math.floor(i / 3)

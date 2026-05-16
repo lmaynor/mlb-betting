@@ -36,7 +36,7 @@ export default async function ResultsPage() {
       </div>
 
       {/* Summary stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', border: B, marginBottom: '20px' }}>
+      <div className="stats-strip" style={{ gridTemplateColumns: 'repeat(4,1fr)', border: B, marginBottom: '20px' }}>
         {[
           { label: 'Total bets', value: String(overall.bets) },
           { label: 'Win rate',   value: `${winRate}%` },

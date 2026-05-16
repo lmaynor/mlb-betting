@@ -25,7 +25,7 @@ export function PricingSection() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B }}>
+      <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B }}>
         {TIERS.map((t, i) => (
           <div key={t.name} style={{ padding: '24px', display: 'flex', flexDirection: 'column', borderRight: i < 2 ? B : undefined, background: t.featured ? 'rgba(16,185,129,0.04)' : '#0a0a0c', borderTop: t.featured ? '2px solid #10b981' : undefined }}>
             {t.featured && (
