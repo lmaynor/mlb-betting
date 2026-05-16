@@ -91,20 +91,12 @@ export async function ModelsGrid() {
           const meta = SYSTEM_META[s.system]
           if (!meta) return null
           const roiPos = s.roi >= 0
-          const col = i % 3
-          const row = Math.floor(i / 3)
-          const isLastRow = row === Math.floor((stats.length) / 3)
-
           return (
             <Link
               key={s.system}
               href={meta.href}
-              className="block p-4 transition-colors group"
-              style={{
-                background:   'var(--bg)',
-                borderRight:  col < 2 ? `.5px solid var(--border)` : undefined,
-                borderBottom: !isLastRow ? `.5px solid var(--border)` : undefined,
-              }}
+              className="block p-4 transition-colors group sys-grid-item"
+              style={{ background: 'var(--bg)' }}
             >
               <div className="flex items-start justify-between mb-3">
                 <span
