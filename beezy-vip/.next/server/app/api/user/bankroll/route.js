@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/user/bankroll/route.js")
+R.c("server/chunks/[root-of-the-server]__09ji3x~._.js")
+R.c("server/chunks/node_modules_next_11synfn._.js")
+R.c("server/chunks/node_modules_0gnf0qa._.js")
+R.c("server/chunks/node_modules_next_dist_0npcise._.js")
+R.c("server/chunks/[root-of-the-server]__0e6esfj._.js")
+R.c("server/chunks/node_modules_@clerk_0fb3c-5._.js")
+R.c("server/chunks/_next-internal_server_app_api_user_bankroll_route_actions_0uyewwh.js")
+R.m(12232)
+module.exports=R.m(12232).exports

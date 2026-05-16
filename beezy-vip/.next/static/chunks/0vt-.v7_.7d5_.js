@@ -1,0 +1,5 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,12974,t=>{"use strict";var e=t.i(43476),o=t.i(71645);t.s(["CheckoutButton",0,function({tier:t,label:r,featured:c=!1}){let[i,n]=(0,o.useState)(!1),[s,a]=(0,o.useState)("");async function l(){n(!0),a("");try{let e=await fetch("/api/stripe/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({tier:t})}),o=await e.json();if(!e.ok)throw Error(o.error??"Checkout failed");o.url&&(window.location.href=o.url)}catch(t){a(String(t)),n(!1)}}return(0,e.jsxs)("div",{children:[(0,e.jsx)("button",{onClick:l,disabled:i,className:`
+          block w-full text-center mono text-xs tracking-widest uppercase py-3 font-semibold
+          transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+          ${c?"bg-accent text-bg hover:bg-accent/90":"border border-[var(--border-bright)] text-text hover:border-accent hover:text-accent"}
+        `,children:i?"Redirecting…":r}),s&&(0,e.jsx)("p",{className:"mono text-xs text-loss mt-2 text-center",children:s})]})}])},74102,t=>{t.n(t.i(12974))}]);

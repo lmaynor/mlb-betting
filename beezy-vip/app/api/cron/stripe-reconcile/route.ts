@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 // Daily Stripe <-> Clerk reconciliation.
 // Catches cases where a webhook fired but Clerk wasn't updated (network blip, cold start, etc).
 // Runs at 03:00 UTC daily (see vercel.json).
@@ -36,7 +38,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: 'STRIPE_SECRET_KEY not set' })
   }
 
-  const stripe = getStripe()
   const clerk     = await clerkClient()
   const fixed:    string[] = []
   const errors:   string[] = []
@@ -44,7 +45,8 @@ export async function GET(req: Request) {
 
   try {
     // Fetch all active Stripe subscriptions
-    for await (const sub of stripe.subscriptions.list({ status: 'all', limit: 100, expand: ['data.customer'] })) {
+    const stripe = getStripe()
+  for await (const sub of stripe.subscriptions.list({ status: 'all', limit: 100, expand: ['data.customer'] })) {
       checked++
       const customer   = sub.customer as Stripe.Customer
       const clerkId    = (sub.metadata?.clerkUserId ?? customer.metadata?.clerkUserId) as string | undefined

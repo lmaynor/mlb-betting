@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 // Manual one-off reconciliation for a single user.
 // Use when a user emails saying "I paid but I'm not Pro."
 //
@@ -43,6 +45,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  const stripe = getStripe()
   try {
     const clerk = await clerkClient()
 
@@ -57,7 +60,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Get active subscriptions for this customer
-    const stripe = getStripe()
     const subs = await stripe.subscriptions.list({
       customer: customerId,
       status:   'all',

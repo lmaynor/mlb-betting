@@ -22,9 +22,9 @@ export function Nav() {
   return (
     <>
       {/* Paper mode banner */}
-      <div className="w-full bg-[#FFB800]/10 border-b border-[#FFB800]/20 text-center py-2">
-        <span className="mono text-xs text-[#FFB800] tracking-widest uppercase">
-          Paper Mode · All results are simulated · Not financial advice
+      <div className="w-full text-center py-1.5" style={{ background: '#1c1207', borderBottom: '.5px solid #3d2e0f' }}>
+        <span className="mono text-[10px] tracking-widest uppercase" style={{ color: '#f59e0b' }}>
+          Paper mode &middot; All results are simulated &middot; Not financial advice
         </span>
       </div>
 
@@ -33,10 +33,9 @@ export function Nav() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
-            <span className="mono text-lg font-bold text-accent tracking-tight">
-              BEEZY<span className="text-text">.VIP</span>
+            <span className="mono text-base font-semibold tracking-tight" style={{ color: 'var(--text)' }}>
+              BEEZY<span style={{ color: 'var(--accent)' }}>.VIP</span>
             </span>
-            <LiveDot />
           </Link>
 
           {/* Desktop nav */}
@@ -63,7 +62,7 @@ export function Nav() {
               href="https://discord.gg/beezy"
               target="_blank"
               rel="noopener noreferrer"
-              className="mono text-xs tracking-widest uppercase px-4 py-2 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
+              className="mono text-xs tracking-widest uppercase px-4 py-2 font-semibold transition-colors" style={{ background: 'var(--accent)', color: 'var(--bg)' }}
             >
               Join Discord
             </a>

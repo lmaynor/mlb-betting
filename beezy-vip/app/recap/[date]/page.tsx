@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { query }       from '@/lib/db'
 import { SystemBadge } from '@/components/ui/primitives'
 import { ogUrl }       from '@/lib/og'
@@ -5,8 +7,6 @@ import { notFound }    from 'next/navigation'
 import type { Metadata } from 'next'
 
 type Props = { params: { date: string } }
-
-export const dynamic = 'force-dynamic'
 
 export const revalidate = 3600
 

@@ -1,10 +1,10 @@
+export const dynamic = 'force-dynamic'
+
 import { Suspense }      from 'react'
 import { PicksFilterBar } from '@/components/picks/filter-bar'
 import { PicksTable }    from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import type { Metadata } from 'next'
-
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title:       'MLB Picks — All Systems',

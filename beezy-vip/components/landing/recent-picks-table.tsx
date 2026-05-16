@@ -1,120 +1,126 @@
-import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
-import { apiGetRecentSettled as getRecentSettled } from '@/lib/betting-api'
-import { formatOdds } from '@/lib/odds'
 import Link from 'next/link'
+import { apiGetRecentSettled } from '@/lib/betting-api'
 
-const SEED: Array<{
-  system: string
-  game:   string
-  pick:   string
-  line:   number
-  edge:   number
-  result: string
-  pnl:    number
-}> = [
-  { system: 'NRFI', game: 'NYY @ BOS', pick: 'NRFI',         line: -115, edge: 6.2, result: 'W', pnl:  0.87 },
-  { system: 'K',    game: 'HOU @ TEX', pick: 'Wheeler O7.5', line: -110, edge: 7.8, result: 'W', pnl:  0.91 },
-  { system: 'HR',   game: 'LAD @ SF',  pick: 'Betts HR',     line: +280, edge: 5.1, result: 'L', pnl: -1.00 },
-  { system: 'F5',   game: 'ATL @ PHI', pick: 'ATL -0.5',     line: -118, edge: 4.9, result: 'W', pnl:  0.85 },
-  { system: 'NRFI', game: 'CHC @ MIL', pick: 'NRFI',         line: -120, edge: 5.5, result: 'W', pnl:  0.83 },
-  { system: 'OUTS', game: 'SD @ COL',  pick: 'Snell O17.5',  line: -105, edge: 3.8, result: 'L', pnl: -1.00 },
-  { system: 'K',    game: 'SEA @ OAK', pick: 'Gilbert O6.5', line: -115, edge: 8.1, result: 'W', pnl:  0.87 },
-  { system: 'HR',   game: 'NYM @ WSH', pick: 'Alonso HR',    line: +230, edge: 6.3, result: 'W', pnl:  2.30 },
+const SYSTEM_PILL: Record<string, string> = {
+  NRFI: 'background:#052016;color:#10b981;border:.5px solid #0f6e56',
+  HR:   'background:#1c1207;color:#f59e0b;border:.5px solid #854f0b',
+  F5:   'background:#040e1c;color:#3b82f6;border:.5px solid #185fa5',
+  K:    'background:#0e0718;color:#a78bfa;border:.5px solid #534ab7',
+  OUTS: 'background:#1a0d05;color:#fb923c;border:.5px solid #9a3412',
+}
+
+const SEED = [
+  { system: 'NRFI', matchup: 'NYY @ BOS', result: 'win',  profit:  12.40 },
+  { system: 'OUTS', matchup: 'STL @ OAK', result: 'loss', profit: -22.43 },
+  { system: 'K',    matchup: 'LAD @ SF',  result: 'win',  profit:  18.20 },
+  { system: 'OUTS', matchup: 'WSH @ CIN', result: 'loss', profit: -19.20 },
+  { system: 'OUTS', matchup: 'SEA @ HOU', result: 'win',  profit:  27.46 },
+  { system: 'K',    matchup: 'SEA @ HOU', result: 'loss', profit: -41.45 },
+  { system: 'F5',   matchup: 'ATL @ NYM', result: 'win',  profit:   9.80 },
+  { system: 'HR',   matchup: 'TEX @ MIN', result: 'loss', profit: -10.00 },
 ]
 
 export async function RecentPicksTable() {
   let rows = SEED
 
   try {
-    const bets = await getRecentSettled(8)
+    const bets = await apiGetRecentSettled(8)
     if (bets.length > 0) {
       rows = bets.map(b => ({
-        system: b.system,
-        game:   b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`,
-        pick:   b.bet_type,
-        line:   b.odds,
-        edge:   Math.round((b.model_prob - b.market_prob) * 100 * 10) / 10,
-        result: b.result ?? 'PENDING',
-        pnl:    b.profit ?? 0,
+        system:  b.system,
+        matchup: b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`,
+        result:  b.result ?? 'pending',
+        profit:  b.profit ?? 0,
       }))
     }
   } catch { /* seed */ }
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-20 border-b border-[var(--border)]">
-      <div className="flex items-end justify-between mb-8">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight uppercase mb-2">Recent Picks</h2>
-          <p className="text-muted text-xs mono">All results shown. Wins and losses.</p>
-        </div>
-        <Link
-          href="/results"
-          className="mono text-xs tracking-widest uppercase text-muted hover:text-accent transition-colors"
-        >
-          Full History →
+    <section className="px-5 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1">
+        <span className="mono text-[10px] tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
+          Recent settled bets
+        </span>
+        <Link href="/results" className="text-xs" style={{ color: 'var(--info)' }}>
+          View all &rarr;
         </Link>
       </div>
+      <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+        Every result logged. Wins and losses, public.
+      </p>
 
-      <div className="relative border border-[var(--border)]">
-        {/* Table header */}
-        <div className="grid grid-cols-7 gap-0 border-b border-[var(--border)] bg-[var(--surface)]">
-          {['System', 'Game', 'Pick', 'Line', 'Edge', 'Result', 'P&L'].map(h => (
-            <div key={h} className="px-4 py-3 mono text-xs tracking-widest uppercase text-muted">
+      {/* Blotter */}
+      <div className="border" style={{ borderColor: 'var(--border)' }}>
+        {/* Column header */}
+        <div
+          className="grid grid-cols-[52px_52px_1fr_72px] gap-2 px-3 py-2 border-b"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          {['Result', 'System', 'Matchup', 'Units'].map((h, i) => (
+            <div
+              key={h}
+              className="mono text-[9px] tracking-widest uppercase"
+              style={{ color: 'var(--muted)', textAlign: i === 3 ? 'right' : 'left' }}
+            >
               {h}
             </div>
           ))}
         </div>
 
-        {/* Rows 1-4 — fully visible */}
-        {rows.slice(0, 4).map((row, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-7 gap-0 border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
-          >
-            <div className="px-4 py-3"><SystemBadge system={row.system} /></div>
-            <div className="px-4 py-3 mono text-xs text-muted">{row.game}</div>
-            <div className="px-4 py-3 mono text-xs text-text">{row.pick}</div>
-            <div className="px-4 py-3 mono text-xs text-text">{formatOdds(row.line)}</div>
-            <div className="px-4 py-3 mono text-xs text-accent">+{row.edge.toFixed(1)}%</div>
-            <div className="px-4 py-3"><ResultPill result={row.result} /></div>
-            <div className="px-4 py-3"><PnL value={row.pnl} /></div>
-          </div>
-        ))}
-
-        {/* Rows 5+ — blurred with gate */}
-        <div className="relative">
-          {rows.slice(4).map((row, i) => (
+        {/* Rows */}
+        {rows.map((row, i) => {
+          const isWin = row.result === 'win'
+          const pillStyle = SYSTEM_PILL[row.system] ?? 'background:#1f1f24;color:#a1a1aa'
+          return (
             <div
               key={i}
-              className="grid grid-cols-7 gap-0 border-b border-[var(--border)] select-none pointer-events-none"
-              style={{ filter: 'blur(3px)', opacity: 0.5 }}
+              className="grid grid-cols-[52px_52px_1fr_72px] gap-2 items-center px-3 py-2.5 border-b"
+              style={{
+                borderColor: 'var(--border)',
+                borderBottomWidth: i === rows.length - 1 ? 0 : undefined,
+              }}
             >
-              <div className="px-4 py-3"><SystemBadge system={row.system} /></div>
-              <div className="px-4 py-3 mono text-xs text-muted">{row.game}</div>
-              <div className="px-4 py-3 mono text-xs text-text">{row.pick}</div>
-              <div className="px-4 py-3 mono text-xs text-text">{formatOdds(row.line)}</div>
-              <div className="px-4 py-3 mono text-xs text-accent">+{row.edge.toFixed(1)}%</div>
-              <div className="px-4 py-3"><ResultPill result={row.result} /></div>
-              <div className="px-4 py-3"><PnL value={row.pnl} /></div>
-            </div>
-          ))}
-
-          {/* Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'linear-gradient(to bottom, transparent 0%, rgba(8,12,16,0.85) 40%, rgba(8,12,16,0.98) 100%)' }}
-          >
-            <div className="text-center mt-8">
-              <p className="text-text font-semibold mb-2">Join to unlock all picks</p>
-              <p className="text-muted text-xs mono mb-4">Full history · Stake sizing · Model probability</p>
-              <a
-                href="/signup"
-                className="mono text-xs tracking-widest uppercase px-5 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
+              {/* Result pill */}
+              <span
+                className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 text-center inline-block"
+                style={
+                  isWin
+                    ? { background: '#052016', color: '#10b981', border: '.5px solid #0f6e56' }
+                    : { background: '#200808', color: '#ef4444', border: '.5px solid #a32d2d' }
+                }
               >
-                Get Access
-              </a>
+                {isWin ? 'WIN' : 'LOSS'}
+              </span>
+
+              {/* System pill */}
+              <span
+                className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 text-center inline-block"
+                style={Object.fromEntries(
+                  pillStyle.split(';').filter(Boolean).map(s => {
+                    const [k, v] = s.split(':')
+                    return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), v.trim()]
+                  })
+                )}
+              >
+                {row.system}
+              </span>
+
+              {/* Matchup */}
+              <span className="text-xs" style={{ color: 'var(--sec)' }}>
+                {row.matchup}
+              </span>
+
+              {/* Units */}
+              <span
+                className="mono text-xs font-medium text-right"
+                style={{ color: isWin ? 'var(--win)' : 'var(--loss)' }}
+              >
+                {isWin ? '+' : ''}{row.profit.toFixed(2)}u
+              </span>
             </div>
-          </div>
-        </div>
+          )
+        })}
       </div>
     </section>
   )

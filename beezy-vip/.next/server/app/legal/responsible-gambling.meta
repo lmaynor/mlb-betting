@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/legal/layout,_N_T_/legal/responsible-gambling/layout,_N_T_/legal/responsible-gambling/page,_N_T_/legal/responsible-gambling"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/legal/responsible-gambling/__PAGE__",
+    "/legal/responsible-gambling",
+    "/legal",
+    "/_index",
+    "/_head"
+  ]
+}

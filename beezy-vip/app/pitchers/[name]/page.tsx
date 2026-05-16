@@ -1,11 +1,11 @@
+export const dynamic = 'force-dynamic'
+
 import { query }      from '@/lib/db'
 import { formatOdds } from '@/lib/odds'
 import { notFound }   from 'next/navigation'
 import type { Metadata } from 'next'
 
 type Props = { params: { name: string } }
-
-export const dynamic = 'force-dynamic'
 
 export const revalidate = 3600
 

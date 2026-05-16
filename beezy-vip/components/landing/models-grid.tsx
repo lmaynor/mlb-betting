@@ -1,4 +1,3 @@
-import { SystemBadge } from '@/components/ui/primitives'
 import { apiGetStats } from '@/lib/betting-api'
 import Link from 'next/link'
 
@@ -6,47 +5,56 @@ const SYSTEM_META: Record<string, {
   name:        string
   description: string
   href:        string
-  color:       string
+  pillStyle:   string
 }> = {
   NRFI: {
     name:        'No Run First Inning',
     description: 'Starter ERA, ump K-rate, weather, and park factors combine to predict scoreless first innings.',
     href:        '/picks/mlb/nrfi',
-    color:       '#00FF87',
+    pillStyle:   'background:#052016;color:#10b981;border:.5px solid #0f6e56',
   },
   HR: {
     name:        'Home Run Props',
-    description: 'Batter launch angle, exit velocity, and pitcher HR/9 data to identify +EV HR props.',
+    description: 'Launch angle, exit velocity, and barrel rate vs. pitcher HR/9.',
     href:        '/picks/mlb/hr',
-    color:       '#FFB800',
+    pillStyle:   'background:#1c1207;color:#f59e0b;border:.5px solid #854f0b',
   },
   F5: {
     name:        'First 5 Innings',
-    description: 'Starting pitcher quality, bullpen rest, and lineup data for F5 spreads and totals.',
+    description: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',
     href:        '/picks/mlb/f5',
-    color:       '#00B4FF',
+    pillStyle:   'background:#040e1c;color:#3b82f6;border:.5px solid #185fa5',
   },
   K: {
     name:        'Strikeout Props',
     description: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',
     href:        '/picks/mlb/k',
-    color:       '#BF5FFF',
+    pillStyle:   'background:#0e0718;color:#a78bfa;border:.5px solid #534ab7',
   },
   OUTS: {
-    name:        'Outs Props',
-    description: 'Pitcher efficiency metrics and game-state factors for outs recorded props.',
+    name:        'Pitcher Outs Props',
+    description: 'IP projection via Normal model for DraftKings pitcher outs markets.',
     href:        '/picks/mlb/outs',
-    color:       '#FF6B35',
+    pillStyle:   'background:#1a0d05;color:#fb923c;border:.5px solid #9a3412',
   },
 }
 
 const SEED_STATS = [
-  { system: 'NRFI', win_rate: 61.5, roi: 14.2, total_bets: 28 },
-  { system: 'HR',   win_rate: 54.0, roi: 8.1,  total_bets: 19 },
-  { system: 'F5',   win_rate: 58.3, roi: 11.7, total_bets: 18 },
-  { system: 'K',    win_rate: 62.5, roi: 16.3, total_bets: 14 },
-  { system: 'OUTS', win_rate: 50.0, roi: 4.2,  total_bets: 8  },
+  { system: 'NRFI', win_rate: 61.5, roi:  7.88, total_bets: 25 },
+  { system: 'HR',   win_rate: 54.0, roi:  3.76, total_bets: 18 },
+  { system: 'F5',   win_rate: 41.9, roi: -7.92, total_bets: 43 },
+  { system: 'K',    win_rate: 47.6, roi:-11.80, total_bets: 42 },
+  { system: 'OUTS', win_rate: 68.9, roi: 37.57, total_bets: 45 },
 ]
+
+function pillStyleToObj(s: string): Record<string, string> {
+  return Object.fromEntries(
+    s.split(';').filter(Boolean).map(p => {
+      const [k, v] = p.split(':')
+      return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), v.trim()]
+    })
+  )
+}
 
 export async function ModelsGrid() {
   let stats = SEED_STATS
@@ -64,72 +72,100 @@ export async function ModelsGrid() {
   } catch { /* seed */ }
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-20 border-b border-[var(--border)]">
-      <div className="flex items-end justify-between mb-10">
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight uppercase mb-2">Active Systems</h2>
-          <p className="text-muted text-sm mono">5 models live · MLB · DraftKings lines</p>
-        </div>
-        <Link href="/models" className="mono text-xs tracking-widest uppercase text-muted hover:text-accent transition-colors">
-          Full Methodology →
+    <section className="px-5 py-8 border-b" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="mono text-[10px] tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
+          Active systems
+        </span>
+        <Link href="/models" className="text-xs" style={{ color: 'var(--info)' }}>
+          Full methodology &rarr;
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {stats.map(s => {
+      {/* 3-col grid — 5 real cards + 1 "coming soon" ghost */}
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 border"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        {stats.map((s, i) => {
           const meta = SYSTEM_META[s.system]
           if (!meta) return null
+          const roiPos = s.roi >= 0
+          const col = i % 3
+          const row = Math.floor(i / 3)
+          const isLastRow = row === Math.floor((stats.length) / 3)
+
           return (
             <Link
               key={s.system}
               href={meta.href}
-              className="group block p-5 bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--border-bright)] transition-colors"
+              className="block p-4 transition-colors group"
+              style={{
+                background:   'var(--bg)',
+                borderRight:  col < 2 ? `.5px solid var(--border)` : undefined,
+                borderBottom: !isLastRow ? `.5px solid var(--border)` : undefined,
+              }}
             >
-              <div className="flex items-start justify-between mb-4">
-                <SystemBadge system={s.system} />
+              <div className="flex items-start justify-between mb-3">
+                <span
+                  className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 inline-block"
+                  style={pillStyleToObj(meta.pillStyle)}
+                >
+                  {s.system}
+                </span>
                 <span
                   className="mono text-xs font-semibold"
-                  style={{ color: meta.color }}
+                  style={{ color: roiPos ? 'var(--win)' : 'var(--loss)' }}
                 >
-                  {s.roi > 0 ? '+' : ''}{s.roi.toFixed(1)}% ROI
+                  {roiPos ? '+' : ''}{s.roi.toFixed(1)}%
                 </span>
               </div>
-
-              <h3 className="font-bold text-sm mb-2 group-hover:text-accent transition-colors">
+              <h3 className="font-semibold text-xs mb-1 transition-colors" style={{ color: 'var(--text)' }}>
                 {meta.name}
               </h3>
-              <p className="text-muted text-xs leading-relaxed mb-5">
+              <p className="text-xs leading-relaxed mb-4" style={{ color: 'var(--muted)' }}>
                 {meta.description}
               </p>
-
-              <div className="grid grid-cols-3 gap-2 pt-4 border-t border-[var(--border)]">
+              <div
+                className="pt-3 border-t grid grid-cols-3 gap-1"
+                style={{ borderColor: 'var(--border)' }}
+              >
                 <div>
-                  <p className="mono text-xs text-muted">Win Rate</p>
-                  <p className="mono text-sm font-semibold">{s.win_rate.toFixed(1)}%</p>
+                  <p className="mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>WR</p>
+                  <p className="mono text-xs font-semibold" style={{ color: 'var(--text)' }}>{s.win_rate.toFixed(1)}%</p>
                 </div>
                 <div>
-                  <p className="mono text-xs text-muted">Bets</p>
-                  <p className="mono text-sm font-semibold">{s.total_bets}</p>
+                  <p className="mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Bets</p>
+                  <p className="mono text-xs font-semibold" style={{ color: 'var(--text)' }}>{s.total_bets}</p>
                 </div>
                 <div>
-                  <p className="mono text-xs text-muted">Gate</p>
-                  <div className="mt-1">
-                    <div className="h-1 bg-[var(--border)] w-full">
-                      <div
-                        className="h-1 transition-all"
-                        style={{
-                          width:      `${Math.min(100, (s.total_bets / 200) * 100)}%`,
-                          background: meta.color,
-                        }}
-                      />
-                    </div>
-                    <p className="mono text-xs text-muted mt-1">{s.total_bets}/200</p>
-                  </div>
+                  <p className="mono text-[9px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Gate</p>
+                  <p className="mono text-xs font-semibold" style={{ color: 'var(--muted)' }}>{s.total_bets}/200</p>
                 </div>
               </div>
             </Link>
           )
         })}
+
+        {/* Ghost "more coming soon" card — 6th slot */}
+        <div
+          className="p-4 flex items-center justify-center"
+          style={{
+            background:   'var(--surface)',
+            borderLeft:   `.5px solid var(--border)`,
+            borderTop:    stats.length > 3 ? `.5px solid var(--border)` : undefined,
+            minHeight:    '140px',
+          }}
+        >
+          <div className="text-center">
+            <div className="mono text-[9px] tracking-widest uppercase mb-1" style={{ color: 'var(--border-bright)' }}>
+              More coming soon
+            </div>
+            <div className="text-[10px]" style={{ color: 'var(--border-bright)' }}>
+              Batter props &middot; Live models
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   )

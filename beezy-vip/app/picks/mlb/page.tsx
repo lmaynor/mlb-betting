@@ -1,9 +1,9 @@
+export const dynamic = 'force-dynamic'
+
 import Link          from 'next/link'
 import { apiGetStats } from '@/lib/betting-api'
 import { SystemBadge }     from '@/components/ui/primitives'
 import type { Metadata }   from 'next'
-
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title:       'MLB Picks Today — All Systems',

@@ -1,0 +1,409 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev;"
+        }
+      ],
+      "regex": "^(?:/(.*))(?:/)?$"
+    }
+  ],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/games/mlb/[date]",
+      "regex": "^/games/mlb/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdate": "nxtPdate"
+      },
+      "namedRegex": "^/games/mlb/(?<nxtPdate>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/learn/[slug]",
+      "regex": "^/learn/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/learn/(?<nxtPslug>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/models/[slug]",
+      "regex": "^/models/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/models/(?<nxtPslug>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/pitchers/[name]",
+      "regex": "^/pitchers/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPname": "nxtPname"
+      },
+      "namedRegex": "^/pitchers/(?<nxtPname>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/players/[name]",
+      "regex": "^/players/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPname": "nxtPname"
+      },
+      "namedRegex": "^/players/(?<nxtPname>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/recap/[date]",
+      "regex": "^/recap/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdate": "nxtPdate"
+      },
+      "namedRegex": "^/recap/(?<nxtPdate>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/results/[date]",
+      "regex": "^/results/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdate": "nxtPdate"
+      },
+      "namedRegex": "^/results/(?<nxtPdate>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/teams/[slug]",
+      "regex": "^/teams/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/teams/(?<nxtPslug>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/admin/learn/generate",
+      "regex": "^/api/admin/learn/generate(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/learn/generate(?:/)?$"
+    },
+    {
+      "page": "/api/admin/reconcile-user",
+      "regex": "^/api/admin/reconcile\\-user(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/reconcile\\-user(?:/)?$"
+    },
+    {
+      "page": "/api/cron/refresh-articles",
+      "regex": "^/api/cron/refresh\\-articles(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/refresh\\-articles(?:/)?$"
+    },
+    {
+      "page": "/api/cron/stripe-reconcile",
+      "regex": "^/api/cron/stripe\\-reconcile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/stripe\\-reconcile(?:/)?$"
+    },
+    {
+      "page": "/api/db/migrate",
+      "regex": "^/api/db/migrate(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/db/migrate(?:/)?$"
+    },
+    {
+      "page": "/api/og",
+      "regex": "^/api/og(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/og(?:/)?$"
+    },
+    {
+      "page": "/api/picks",
+      "regex": "^/api/picks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/picks(?:/)?$"
+    },
+    {
+      "page": "/api/picks/today",
+      "regex": "^/api/picks/today(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/picks/today(?:/)?$"
+    },
+    {
+      "page": "/api/stats/summary",
+      "regex": "^/api/stats/summary(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stats/summary(?:/)?$"
+    },
+    {
+      "page": "/api/stripe/checkout",
+      "regex": "^/api/stripe/checkout(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stripe/checkout(?:/)?$"
+    },
+    {
+      "page": "/api/stripe/portal",
+      "regex": "^/api/stripe/portal(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/stripe/portal(?:/)?$"
+    },
+    {
+      "page": "/api/tools/kelly",
+      "regex": "^/api/tools/kelly(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tools/kelly(?:/)?$"
+    },
+    {
+      "page": "/api/tools/odds-calc",
+      "regex": "^/api/tools/odds\\-calc(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tools/odds\\-calc(?:/)?$"
+    },
+    {
+      "page": "/api/user/bankroll",
+      "regex": "^/api/user/bankroll(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/user/bankroll(?:/)?$"
+    },
+    {
+      "page": "/api/webhooks/stripe",
+      "regex": "^/api/webhooks/stripe(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/webhooks/stripe(?:/)?$"
+    },
+    {
+      "page": "/blocked",
+      "regex": "^/blocked(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/blocked(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/dashboard/history",
+      "regex": "^/dashboard/history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/history(?:/)?$"
+    },
+    {
+      "page": "/dashboard/picks",
+      "regex": "^/dashboard/picks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/picks(?:/)?$"
+    },
+    {
+      "page": "/dashboard/settings",
+      "regex": "^/dashboard/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/settings(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/learn",
+      "regex": "^/learn(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/learn(?:/)?$"
+    },
+    {
+      "page": "/legal/privacy",
+      "regex": "^/legal/privacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/legal/privacy(?:/)?$"
+    },
+    {
+      "page": "/legal/refunds",
+      "regex": "^/legal/refunds(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/legal/refunds(?:/)?$"
+    },
+    {
+      "page": "/legal/responsible-gambling",
+      "regex": "^/legal/responsible\\-gambling(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/legal/responsible\\-gambling(?:/)?$"
+    },
+    {
+      "page": "/legal/terms",
+      "regex": "^/legal/terms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/legal/terms(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/models",
+      "regex": "^/models(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/models(?:/)?$"
+    },
+    {
+      "page": "/picks",
+      "regex": "^/picks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb",
+      "regex": "^/picks/mlb(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb/f5",
+      "regex": "^/picks/mlb/f5(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb/f5(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb/hr",
+      "regex": "^/picks/mlb/hr(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb/hr(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb/k",
+      "regex": "^/picks/mlb/k(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb/k(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb/nrfi",
+      "regex": "^/picks/mlb/nrfi(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb/nrfi(?:/)?$"
+    },
+    {
+      "page": "/picks/mlb/outs",
+      "regex": "^/picks/mlb/outs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/picks/mlb/outs(?:/)?$"
+    },
+    {
+      "page": "/results",
+      "regex": "^/results(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/results(?:/)?$"
+    },
+    {
+      "page": "/signup",
+      "regex": "^/signup(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/signup(?:/)?$"
+    },
+    {
+      "page": "/sitemap.xml",
+      "regex": "^/sitemap\\.xml(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/sitemap\\.xml(?:/)?$"
+    },
+    {
+      "page": "/tools",
+      "regex": "^/tools(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools(?:/)?$"
+    },
+    {
+      "page": "/tools/bet-tracker",
+      "regex": "^/tools/bet\\-tracker(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/bet\\-tracker(?:/)?$"
+    },
+    {
+      "page": "/tools/edge-finder",
+      "regex": "^/tools/edge\\-finder(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/edge\\-finder(?:/)?$"
+    },
+    {
+      "page": "/tools/kelly-calculator",
+      "regex": "^/tools/kelly\\-calculator(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/kelly\\-calculator(?:/)?$"
+    },
+    {
+      "page": "/tools/nrfi-conditions",
+      "regex": "^/tools/nrfi\\-conditions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/nrfi\\-conditions(?:/)?$"
+    },
+    {
+      "page": "/tools/odds-calculator",
+      "regex": "^/tools/odds\\-calculator(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/odds\\-calculator(?:/)?$"
+    },
+    {
+      "page": "/tools/pitcher-matchups",
+      "regex": "^/tools/pitcher\\-matchups(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/tools/pitcher\\-matchups(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

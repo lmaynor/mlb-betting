@@ -1,17 +1,20 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap');
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --bg:            #080C10;
-  --surface:       #0D1117;
-  --border:        rgba(255,255,255,0.06);
-  --border-bright: rgba(255,255,255,0.14);
-  --accent:        #00FF87;
-  --win:           #00FF87;
-  --loss:          #FF4757;
-  --text:          #F0F6FC;
-  --muted:         #7D8590;
+  --bg:            #0a0a0c;
+  --surface:       #111114;
+  --surface-2:     #16161a;
+  --border:        #1f1f24;
+  --border-bright: #2a2a31;
+  --accent:        #10b981;
+  --win:           #10b981;
+  --loss:          #ef4444;
+  --warn:          #f59e0b;
+  --info:          #3b82f6;
+  --text:          #f5f5f7;
+  --muted:         #71717a;
+  --sec:           #a1a1aa;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,20 +22,20 @@
 html {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Geist', sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 body { background: var(--bg); min-height: 100vh; }
 
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
 .grid-bg {
   background-image:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
   background-size: 40px 40px;
 }
-
-.mono { font-family: 'Geist Mono', monospace; }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
@@ -41,8 +44,8 @@ body { background: var(--bg); min-height: 100vh; }
 
 .live-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--accent);
   animation: pulse-dot 1.8s ease-in-out infinite;
