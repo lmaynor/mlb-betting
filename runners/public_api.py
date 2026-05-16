@@ -28,13 +28,16 @@ def get_today_picks(engine):
     return [dict(r) for r in rows]
 
 
-def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0):
+def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None):
     conditions = []
     params = {}
 
     if system:
         conditions.append("system = :system")
         params["system"] = system
+    if book:
+        conditions.append("book = :book")
+        params["book"] = book
 
     if date == "today":
         conditions.append("game_date = CURRENT_DATE")
@@ -62,7 +65,7 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0):
     sql = text(
         "SELECT id, system, game_date, game_pk, bet_type, player, "
         "away_team, home_team, odds, stake, model_prob, market_prob, "
-        "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
+        "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book "
         f"FROM bets {where} "
         "ORDER BY game_date DESC, created_at DESC "
         "LIMIT :limit OFFSET :offset"

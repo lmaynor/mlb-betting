@@ -541,6 +541,7 @@ def public_picks():
             status=request.args.get("status"),
             limit=request.args.get("limit", 50),
             offset=request.args.get("offset", 0),
+            book=request.args.get("book"),
         )
         resp = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
