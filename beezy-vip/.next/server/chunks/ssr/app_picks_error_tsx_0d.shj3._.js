@@ -1,3 +1,0 @@
-module.exports=[42645,a=>{"use strict";var b=a.i(87924);a.s(["default",0,function({error:a,reset:c}){return(0,b.jsxs)("div",{className:"max-w-7xl mx-auto px-4 py-24 text-center",children:[(0,b.jsx)("p",{className:"mono text-xs text-loss uppercase tracking-widest mb-3",children:"Error"}),(0,b.jsx)("p",{className:"text-sm text-muted mb-6",children:"Failed to load this page. Data may be temporarily unavailable."}),(0,b.jsx)("button",{onClick:c,className:"mono text-xs uppercase tracking-widest px-5 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors",children:"Retry"})]})}])}];
-
-//# sourceMappingURL=app_picks_error_tsx_0d.shj3._.js.map

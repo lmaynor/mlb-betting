@@ -1,3 +1,0 @@
-module.exports=[67614,a=>{"use strict";var b=a.i(87924),c=a.i(72131);a.s(["CopyBetButton",0,function({text:a}){let[d,e]=(0,c.useState)(!1);async function f(){try{await navigator.clipboard.writeText(a),e(!0),setTimeout(()=>e(!1),1500)}catch{let b=document.createElement("textarea");b.value=a,document.body.appendChild(b),b.select(),document.execCommand("copy"),document.body.removeChild(b),e(!0),setTimeout(()=>e(!1),1500)}}return(0,b.jsx)("button",{onClick:f,className:"mono text-xs text-muted border border-[var(--border)] px-2 py-0.5 hover:border-accent hover:text-accent transition-colors",children:d?"✓":"Copy"})}])}];
-
-//# sourceMappingURL=components_ui_copy-bet-button_tsx_0wzsd82._.js.map
