@@ -56,7 +56,7 @@ export function Nav() {
           </div>
 
           {/* Mobile toggle */}
-          <button onClick={() => setOpen(!open)} className="nav-mobile" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', display: 'flex', alignItems: 'center' }}>
+          <button onClick={() => setOpen(!open)} className="nav-mobile" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#71717a', alignItems: 'center' }}>
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
