@@ -922,3 +922,194 @@ Knowing these prevents incorrect settlement logic and bad model assumptions.
 - DK house rule change → §14
 
 **Don't put point-in-time state here.** That belongs in the session handoff.
+
+---
+
+## 13. Beezy.VIP -- the frontend
+
+`beezy-vip/` is the public-facing website for the betting service. It lives
+as a subdirectory of this repo and is deployed separately to Vercel.
+
+### What it is
+
+Next.js 16 / React 19 / Tailwind v4 frontend. Read-only -- it never writes
+to the production `bets` table. The one exception is `learn_articles`, which
+is the site's own data stored on Vercel Postgres.
+
+Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.vip
+pending DNS configuration).
+
+### Repo layout
+
+```
+beezy-vip/
+├── app/                          Next.js App Router pages
+│   ├── page.tsx                  Landing page
+│   ├── picks/                    Pick browser pages
+│   ├── results/                  Results history
+│   ├── models/                   Model methodology
+│   ├── tools/                    Betting calculators
+│   ├── learn/                    AI-generated articles
+│   ├── dashboard/                Auth-gated member pages
+│   ├── legal/                    Terms, privacy, responsible gambling, refunds
+│   ├── blocked/                  Geo-restriction landing page
+│   └── api/                      Route handlers (picks, stats, webhooks, cron)
+├── components/
+│   ├── landing/                  Hero, blotter, systems grid, how-it-works
+│   ├── layout/                   Nav (with paper-mode banner), footer
+│   ├── picks/                    Picks table, filter bar
+│   └── ui/                       Primitives: SystemBadge, ResultPill, PnL, StatCard
+├── lib/
+│   ├── betting-api.ts            Fetch-based client for Cloud Run public API
+│   ├── db.ts                     Postgres pool + query types (Bet, SystemStats)
+│   ├── learn-db.ts               Vercel Postgres pool for learn_articles
+│   ├── auth.ts                   Clerk auth helpers
+│   ├── odds.ts                   Kelly, implied prob, formatting utilities
+│   └── model-specs.ts            Static model metadata
+├── middleware.ts                 Clerk auth + geo-blocking
+├── next.config.ts
+├── tailwind.config.ts
+├── vercel.json                   Cron job definitions
+└── tests/
+    └── index.test.ts             Frontend unit tests (schema contract, geo, ResultPill)
+```
+
+### How the site gets its data
+
+The site does NOT connect to Cloud SQL directly. All bet data flows through
+the Cloud Run public API:
+
+```
+Vercel (beezy-vip) → GET /api/public/* → Cloud Run (mlb-betting) → Cloud SQL
+```
+
+The Cloud Run service exposes five read-only endpoints authenticated with
+`X-API-Key` header (secret: `site-api-key` in Secret Manager):
+
+| Endpoint | Cache | Description |
+|---|---|---|
+| `GET /api/public/picks/today` | 60s | Today's kelly-triggered picks |
+| `GET /api/public/picks` | 60s | Filtered picks (system, date, status, limit, offset) |
+| `GET /api/public/picks/recent` | 120s | Last N settled picks |
+| `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
+
+The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
+that call these are marked `export const dynamic = 'force-dynamic'` to
+prevent Next.js from prerendering them without the env vars.
+
+### Schema contract
+
+The site uses production column names from the `bets` table. Never use the
+old names -- they will cause silent data failures:
+
+| Correct (production) | Wrong (old site v1) |
+|---|---|
+| `odds` | `line` |
+| `profit` | `pnl` |
+| `market_prob` | `implied_prob` |
+| `result = 'win'/'loss'/'push'/'void'` | `result = 'W'/'L'/'P'` |
+
+This contract is enforced by `beezy-vip/tests/index.test.ts` (TypeScript
+compile-time) and `tests/test_public_api.py` (runtime, included in the
+pytest suite run by `./deploy/deploy_service.sh`).
+
+### Auth
+
+Clerk handles authentication. Keys are set as Vercel environment variables:
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+
+Protected routes: `/dashboard/**`, `/tools/bet-tracker/**`, `/api/admin/**`.
+Middleware in `middleware.ts` handles redirects.
+
+### Geo-blocking
+
+`middleware.ts` reads `BLOCKED_STATES` env var (comma-separated 2-letter US
+state codes, e.g. `NY,WA`). Reads `x-vercel-ip-country-region` header
+injected by Vercel's edge network (requires Vercel Pro plan). Default is
+empty -- blocks nothing. Applies to `/picks/**`, `/dashboard/**`,
+`/signup/**` only. Legal pages and tools remain accessible everywhere.
+
+### Stripe
+
+Stripe is wired but NOT active. `PRE_LAUNCH = true` in:
+- `app/signup/page.tsx`
+- `components/landing/pricing.tsx`
+
+Do not flip these to `false` without explicit confirmation. Gate criteria:
+1. >= 200 settled bets per system at gate criteria
+2. Legal review complete
+3. Geographic restrictions configured
+4. Stripe reconciliation cron running clean for 7 days
+5. Performance dashboard running clean for 14 days
+
+Stripe reconciliation cron runs daily at 03:00 UTC via Vercel cron
+(`/api/cron/stripe-reconcile`). Manual one-off: POST to
+`/api/admin/reconcile-user` with `x-admin-key` header.
+
+### learn_articles
+
+AI-generated educational content. Stored on Vercel Postgres (separate from
+Cloud SQL). DSN comes from `LEARN_DATABASE_URL` env var (auto-injected by
+Vercel after provisioning a Vercel Postgres database in the Storage tab).
+
+Table is created by POST to `/api/db/migrate` with `x-admin-key` header.
+This route ONLY manages `learn_articles` -- it never touches the `bets` table.
+
+### Design system
+
+Bloomberg Terminal meets PrizePicks aesthetic:
+- Fonts: Inter (prose/UI) + JetBrains Mono (data/numbers/tickers)
+- Background: `#0a0a0c`, Surface: `#111114`, Border: `#1f1f24`
+- Win/positive: `#10b981`, Loss/negative: `#ef4444`, Warning: `#f59e0b`
+- System pills: NRFI green, HR amber, F5 blue, K purple, OUTS orange
+- No drop shadows, no gradients, no glow effects
+- Depth via surface elevation and border tone only
+
+### Vercel deployment
+
+- Project: `mlb-betting` on Vercel (root directory set to `beezy-vip`)
+- Auto-deploys on push to `main` branch
+- Required env vars: `BETTING_API_URL`, `BETTING_API_KEY`, `LEARN_DATABASE_URL`,
+  `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `ADMIN_SECRET_KEY`,
+  `CRON_SECRET`, `STRIPE_*` keys, `NEXT_PUBLIC_BASE_URL`, `BLOCKED_STATES`
+
+### GCP resources added for beezy-vip
+
+Two new secrets in Secret Manager:
+- `site-api-key` -- API key for Cloud Run public API (version 1 is current)
+- `site-origin` -- allowed CORS origin (value: `https://beezy.vip`)
+
+Both mounted on the Cloud Run service via `--set-secrets` in
+`deploy/deploy_service.sh`. Service account `mlb-betting-sa` has
+`secretmanager.secretAccessor` on both.
+
+Cloud Run service is now open to unauthenticated invocations (`allUsers`
+has `roles/run.invoker`) so the public API endpoints are reachable from
+Vercel. The existing scheduler routes (`/run`, `/settle`, etc.) are still
+protected by OIDC tokens from the schedulers -- they just aren't blocked at
+the IAM level anymore. Add a secret check to those routes before going live.
+
+### Tailwind v4 gotchas
+
+- Use `@import "tailwindcss"` not `@tailwind base/components/utilities`
+- Arbitrary grid column values like `grid-cols-[7fr_5fr]` are NOT scanned
+  by Tailwind v4 at build time. Use `style={{ gridTemplateColumns: '...' }}`
+  instead for any dynamic or arbitrary column definitions.
+- `export const metadata` and `'use client'` cannot both be in the same file.
+  Put metadata in a `layout.tsx` sibling and keep `'use client'` in the page.
+- All data-fetching pages need `export const dynamic = 'force-dynamic'` or
+  Next.js will try to prerender them at build time without env vars.
+- Stripe, Clerk, and any SDK that initializes at module level with env vars
+  will crash the build. Use lazy initialization (`getStripe()` function) and
+  add `export const dynamic = 'force-dynamic'` to all affected routes.
+
+### When to update this section
+
+- Adding a new page or route → update repo layout table
+- Changing the public API endpoints → update the endpoint table
+- Changing the schema contract → update the schema contract table
+- New Vercel env var needed → update env vars list
+- New GCP resource → update GCP resources section
+- New Tailwind gotcha → add to gotchas list
+- PRE_LAUNCH flip → update the gate criteria status
