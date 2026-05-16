@@ -23,8 +23,7 @@ export async function Hero() {
   return (
     <section className="border-b" style={{ borderColor: 'var(--border)' }}>
       <div
-        className="grid" style={{ gridTemplateColumns: "minmax(0,7fr) minmax(0,5fr)" }}
-        style={{ borderColor: 'var(--border)' }}
+        className="grid" style={{ gridTemplateColumns: "minmax(0,7fr) minmax(0,5fr)", borderColor: 'var(--border)' }}
       >
         {/* Left: headline + copy + CTAs */}
         <div
