@@ -215,7 +215,8 @@ def test_extract_hr_props():
     assert "Mike Trout" in out, f"missing Trout (ou fallback). keys: {list(out.keys())}"
 
     martinez = out["Angel Martínez"]
-    assert martinez["odds"] == 840
+    assert martinez["odds"] == 920  # FanDuel best price
+    assert martinez["bookmaker"] == "fanduel"
     assert martinez["away_team"] == "Angels"
     assert martinez["home_team"] == "Guardians"
     assert martinez["event_id"] == "3aVfMmr4ceT43CTodkNV"
@@ -252,18 +253,20 @@ def test_normalize_name():
     print("  ✓ normalize_name")
 
 
-def test_skips_when_dk_unavailable():
-    """If DK has no price on a market, that player should be dropped."""
+def test_uses_best_onshore_book_when_dk_absent():
+    """If DK has no price, best onshore book (e.g. FanDuel) is used instead."""
     event = build_test_event()
     # Remove DK from Martínez yn-yes, leave only fanduel
     event["odds"]["batting_homeRuns-ANGEL_MARTINEZ_1_MLB-game-yn-yes"]["byBookmaker"] = {
         "fanduel": {"odds": "+920", "available": True},
     }
-    # Also remove the OU fallback so Martínez has no DK at all
+    # Also remove the OU fallback
     del event["odds"]["batting_homeRuns-ANGEL_MARTINEZ_1_MLB-game-ou-over"]
     out = sgo.extract_hr_props([event])
-    assert "Angel Martínez" not in out, "should drop player when DK unavailable"
-    print("  ✓ skips_when_dk_unavailable")
+    assert "Angel Martínez" in out, "should include player via fanduel when DK absent"
+    assert out["Angel Martínez"]["odds"] == 920
+    assert out["Angel Martínez"]["bookmaker"] == "fanduel"
+    print("  ✓ uses_best_onshore_book_when_dk_absent")
 
 
 def test_skips_when_dk_marked_unavailable():
