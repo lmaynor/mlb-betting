@@ -1,12 +1,14 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 
-const SYSTEM_PILL: Record<string, string> = {
-  NRFI: 'background:#052016;color:#10b981;border:.5px solid #0f6e56',
-  HR:   'background:#1c1207;color:#f59e0b;border:.5px solid #854f0b',
-  F5:   'background:#040e1c;color:#3b82f6;border:.5px solid #185fa5',
-  K:    'background:#0e0718;color:#a78bfa;border:.5px solid #534ab7',
-  OUTS: 'background:#1a0d05;color:#fb923c;border:.5px solid #9a3412',
+const B = '0.5px solid #1f1f24'
+
+const PILL: Record<string, { bg: string; color: string; border: string }> = {
+  NRFI: { bg: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' },
+  HR:   { bg: '#1c1207', color: '#f59e0b', border: '0.5px solid #854f0b' },
+  F5:   { bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
+  K:    { bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
+  OUTS: { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
 }
 
 const SEED = [
@@ -35,85 +37,45 @@ export async function RecentPicksTable() {
     }
   } catch { /* seed */ }
 
+  const COL = '52px 52px 1fr 72px'
+
   return (
-    <section className="px-5 py-8 border-b border-[#1f1f24]" style={{ borderColor: 'var(--border)' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-1">
-        <span className="mono text-[10px] tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
+    <section style={{ padding: '24px 20px', borderBottom: B }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
           Recent settled bets
         </span>
-        <Link href="/results" className="text-xs" style={{ color: 'var(--info)' }}>
+        <Link href="/results" style={{ fontSize: '11px', color: '#3b82f6', textDecoration: 'none' }}>
           View all &rarr;
         </Link>
       </div>
-      <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
+      <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
         Every result logged. Wins and losses, public.
       </p>
 
-      {/* Blotter */}
-      <div className="border" style={{ borderColor: 'var(--border)' }}>
-        {/* Column header */}
-        <div
-          className="grid gap-2 px-3 py-2 border-b border-[#1f1f24]" style={{ gridTemplateColumns: "52px 52px 1fr 72px", background: 'var(--surface)', borderColor: 'var(--border)' }}
-        >
-          {['Result', 'System', 'Matchup', 'Units'].map((h, i) => (
-            <div
-              key={h}
-              className="mono text-[9px] tracking-widest uppercase"
-              style={{ color: 'var(--muted)', textAlign: i === 3 ? 'right' : 'left' }}
-            >
+      <div style={{ border: B }}>
+        {/* Header */}
+        <div style={{ display: 'grid', gridTemplateColumns: COL, gap: '8px', padding: '8px 12px', background: '#111114', borderBottom: B }}>
+          {[['Result', 'left'], ['System', 'left'], ['Matchup', 'left'], ['Units', 'right']].map(([h, align]) => (
+            <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', textAlign: align as 'left' | 'right' }}>
               {h}
             </div>
           ))}
         </div>
 
-        {/* Rows */}
         {rows.map((row, i) => {
           const isWin = row.result === 'win'
-          const pillStyle = SYSTEM_PILL[row.system] ?? 'background:#1f1f24;color:#a1a1aa'
+          const pill  = PILL[row.system] ?? { bg: '#1f1f24', color: '#a1a1aa', border: B }
           return (
-            <div
-              key={i}
-              className="grid gap-2 items-center px-3 py-2.5 border-b border-[#1f1f24]" style={{ gridTemplateColumns: "52px 52px 1fr 72px",
-                borderColor: 'var(--border)',
-                borderBottomWidth: i === rows.length - 1 ? 0 : undefined,
-              }}
-            >
-              {/* Result pill */}
-              <span
-                className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 text-center inline-block"
-                style={
-                  isWin
-                    ? { background: '#052016', color: '#10b981', border: '.5px solid #0f6e56' }
-                    : { background: '#200808', color: '#ef4444', border: '.5px solid #a32d2d' }
-                }
-              >
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: COL, gap: '8px', alignItems: 'center', padding: '9px 12px', borderBottom: i < rows.length - 1 ? B : undefined }}>
+              <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 6px', textAlign: 'center', background: isWin ? '#052016' : '#200808', color: isWin ? '#10b981' : '#ef4444', border: isWin ? '0.5px solid #0f6e56' : '0.5px solid #a32d2d', display: 'inline-block' }}>
                 {isWin ? 'WIN' : 'LOSS'}
               </span>
-
-              {/* System pill */}
-              <span
-                className="mono text-[9px] font-semibold tracking-wider px-1.5 py-0.5 text-center inline-block"
-                style={Object.fromEntries(
-                  pillStyle.split(';').filter(Boolean).map(s => {
-                    const [k, v] = s.split(':')
-                    return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), v.trim()]
-                  })
-                )}
-              >
+              <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 6px', textAlign: 'center', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block' }}>
                 {row.system}
               </span>
-
-              {/* Matchup */}
-              <span className="text-xs" style={{ color: 'var(--sec)' }}>
-                {row.matchup}
-              </span>
-
-              {/* Units */}
-              <span
-                className="mono text-xs font-medium text-right"
-                style={{ color: isWin ? 'var(--win)' : 'var(--loss)' }}
-              >
+              <span style={{ fontSize: '12px', color: 'var(--sec)' }}>{row.matchup}</span>
+              <span className="mono" style={{ fontSize: '12px', fontWeight: 500, textAlign: 'right', color: isWin ? 'var(--win)' : 'var(--loss)' }}>
                 {isWin ? '+' : ''}{row.profit.toFixed(2)}u
               </span>
             </div>
