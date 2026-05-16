@@ -40,11 +40,11 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
         params["book"] = book
 
     if date == "today":
-        conditions.append("game_date = CURRENT_DATE")
+        conditions.append("game_date = CURRENT_DATE::text")
     elif date == "yesterday":
-        conditions.append("game_date = CURRENT_DATE - INTERVAL '1 day'")
+        conditions.append("game_date = (CURRENT_DATE - INTERVAL '1 day')::text")
     elif date == "last7":
-        conditions.append("game_date >= CURRENT_DATE - INTERVAL '7 days'")
+        conditions.append("game_date >= (CURRENT_DATE - INTERVAL '7 days')::text")
     elif date:
         conditions.append("game_date = :game_date")
         params["game_date"] = date
