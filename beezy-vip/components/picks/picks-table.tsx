@@ -3,7 +3,7 @@ import { formatOdds } from '@/lib/odds'
 import type { Bet } from '@/lib/db'
 
 const B = '0.5px solid #1f1f24'
-const COL = '90px 70px 1fr 90px 70px 60px 70px 70px'
+const COL = '80px 65px 160px 1fr 90px 60px 80px 70px 70px'
 
 export function PicksTable({ picks }: { picks: Bet[] }) {
   if (picks.length === 0) {
@@ -16,8 +16,8 @@ export function PicksTable({ picks }: { picks: Bet[] }) {
 
   return (
     <div style={{ border: B, overflowX: 'auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '700px', background: '#111114', borderBottom: B }}>
-        {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Result', 'P&L'].map(h => (
+      <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: '#111114', borderBottom: B }}>
+        {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Book', 'Result', 'P&L'].map(h => (
           <div key={h} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{h}</div>
         ))}
       </div>
@@ -65,7 +65,7 @@ export function PicksTable({ picks }: { picks: Bet[] }) {
           return bt
         })()
         return (
-          <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '700px', borderBottom: i < picks.length - 1 ? B : undefined, alignItems: 'center' }}>
+          <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: i < picks.length - 1 ? B : undefined, alignItems: 'center' }}>
             <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#71717a' }}>
               {new Date(bet.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
@@ -74,6 +74,7 @@ export function PicksTable({ picks }: { picks: Bet[] }) {
             <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>{pickLabel}</div>
             <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>{formatOdds(bet.odds)}</div>
             <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#10b981' }}>{parseFloat(edge) > 0 ? '+' : ''}{edge}%</div>
+            <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: '#71717a', textTransform: 'capitalize' }}>{(bet as any).book ?? '—'}</div>
             <div style={{ padding: '10px 12px' }}><ResultPill result={bet.result} /></div>
             <div style={{ padding: '10px 12px' }}><PnL value={bet.profit} /></div>
           </div>

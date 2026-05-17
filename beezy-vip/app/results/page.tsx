@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 
 const B = '0.5px solid #1f1f24'
-const COL = '80px 70px 1fr 180px 70px 60px 70px 70px'
+const COL = '80px 65px 160px 1fr 90px 60px 80px 70px 70px'
 const PILL: Record<string, string> = {
   NRFI: '#10b981', HR: '#f59e0b', F5: '#3b82f6', K: '#a78bfa', OUTS: '#fb923c', ALL: '#f5f5f7',
 }
@@ -229,12 +229,17 @@ export default function ResultsPage() {
             <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>
               Cumulative P&L
             </span>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              {system === 'ALL' && ['NRFI','HR','F5','K','OUTS'].map(s => (
-                <span key={s} className="mono" style={{ fontSize: '10px', color: PILL[s] }}>— {s}</span>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {(system === 'ALL' ? ['NRFI','HR','F5','K','OUTS','ALL'] : [system]).map(s => (
+                <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: PILL[s], flexShrink: 0, display: 'inline-block' }} />
+                  <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{s}</span>
+                </span>
               ))}
-              <span className="mono" style={{ fontSize: '10px', color: '#f5f5f7', fontWeight: 600 }}>— ALL</span>
-              <span className="mono" style={{ fontSize: '10px', color: '#ef444460' }}>▓ drawdown</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: '8px', height: '6px', background: '#ef444430', display: 'inline-block' }} />
+                <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>drawdown</span>
+              </span>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={200}>
@@ -356,8 +361,8 @@ export default function ResultsPage() {
         </div>
       ) : (
         <div style={{ border: B, overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '780px', background: '#111114', borderBottom: B }}>
-            {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Result', 'P&L'].map(h => (
+          <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: '#111114', borderBottom: B }}>
+            {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Book', 'Result', 'P&L'].map(h => (
               <div key={h} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{h}</div>
             ))}
           </div>
@@ -365,7 +370,7 @@ export default function ResultsPage() {
             const edge = ((bet.model_prob - bet.market_prob) * 100).toFixed(1)
             const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
             return (
-              <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '780px', borderBottom: i < filtered.length - 1 ? B : undefined, alignItems: 'center' }}>
+              <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: i < filtered.length - 1 ? B : undefined, alignItems: 'center' }}>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#71717a' }}>
                   {new Date(bet.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </div>
@@ -374,6 +379,7 @@ export default function ResultsPage() {
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickLabel(bet)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>{formatOdds(bet.odds)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#10b981' }}>{parseFloat(edge) > 0 ? '+' : ''}{edge}%</div>
+                <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: '#71717a', textTransform: 'capitalize' }}>{(bet as any).book ?? '—'}</div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
                 <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} /></div>
               </div>
