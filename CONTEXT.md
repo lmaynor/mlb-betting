@@ -718,6 +718,12 @@ All per-system Discord summaries showed K stats. Fixed with `text()` wrapper.
 paper_tag was removed from bet headlines. All bets treated as cash going forward.
 The `paper` column still exists in the DB for historical reference.
 
+**HR bets store full team names in `away_team`/`home_team`** (e.g. "Red Sox", "Braves")
+while all other systems store 3-letter abbrevs (e.g. "BOS", "ATL"). Root cause:
+HR runner gets teams from feature CSV which uses SGO medium names. Frontend works
+around this with `TEAM_ABBREV` lookup map in `picks-table.tsx` and `results/page.tsx`.
+Proper fix: normalize team names in `run_hr.py` at log time. Backlog item.
+
 **`game_date` was logged in UTC before 2026-05-17.** Bets logged at 22:00 UTC
 (5pm CT) on May 16 got `game_date=2026-05-17` because UTC date had rolled over.
 Fixed in `main.py` by using `date.today(_CT).isoformat()` (CT timezone). ~12 bets
@@ -1200,6 +1206,19 @@ P&L chart: cumulative units per system + ALL line + drawdown shading.
 Edge chart: 7-day rolling model edge vs realized ROI.
 Both use `ResponsiveContainer` with inline-styled tooltips matching design system.
 
+### Filter bar (picks page)
+
+Hierarchical: Type → Market → Book → Date/Result.
+Type chips: All, Game Lines (F5/NRFI), Player Props (HR/K/OUTS).
+Market chips are dynamic -- change based on selected Type.
+Clearing Type also clears Market. All chips are color-coded by system.
+Component: `components/picks/filter-bar.tsx`.
+
+### Sort (results page)
+
+Sort chips: Date, Edge, Odds, P&L. Click active sort to toggle ↑/↓.
+Default: Date ↓. Implemented as client-side sort on fetched picks array.
+
 ### Table columns (picks + results)
 
 Both tables share the same column layout (2026-05-17):
@@ -1216,6 +1235,31 @@ bet_type, update the `pickLabel` formatter:
 - K: `K_OVER_4.5` → "Over 4.5 Ks"
 - OUTS: `OUTS_UNDER_14.5` → "Under 14.5 Outs"
 - HR: `HR` → "HR Yes"
+
+### Pre-launch checklist
+
+- [ ] beezy.vip DNS → Vercel
+- [ ] Clerk production keys in Vercel env vars
+- [ ] beezy.vip added to Clerk allowed origins
+- [ ] Stripe production price IDs set
+- [ ] Legal review complete
+- [ ] `BLOCKED_STATES` configured
+- [ ] Stripe reconciliation cron clean 7 days
+- [ ] >= 200 settled bets per system at gate criteria
+- [ ] Flip `PRE_LAUNCH = false`
+
+### Backend backlog (not blocking launch)
+
+- GamblyBot real Discord bot token
+- Cloud Build GitHub trigger
+- `ump_k_boost_L30` proper derivation
+- F3/F7 moneyline models
+- Cross-system Kelly coordination before going live
+- Line movement signal from SGO snapshots
+- Runner-side sentinel check (abort if stale features)
+- `fetch_game_result` retry/backoff logic
+- HR `away_team`/`home_team` abbrev normalization in `run_hr.py`
+- Rate limiting on public API
 
 ### When to update this section
 
