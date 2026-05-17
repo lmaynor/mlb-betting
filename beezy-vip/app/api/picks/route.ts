@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const url = `${API_URL}/api/public/picks${qs ? `?${qs}` : ''}`
   const res = await fetch(url, {
     headers: { 'X-API-Key': API_KEY },
-    next: { revalidate: 60 },
+    cache: 'no-store',
   })
   const data = await res.json()
   return NextResponse.json(data)
