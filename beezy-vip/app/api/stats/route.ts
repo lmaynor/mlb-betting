@@ -5,11 +5,9 @@ const API_KEY = process.env.BETTING_API_KEY ?? ''
 
 export async function GET(req: NextRequest) {
   if (!API_URL) return NextResponse.json({ error: 'API not configured' }, { status: 500 })
-  const qs = req.nextUrl.searchParams.toString()
-  const url = `${API_URL}/api/public/picks${qs ? `?${qs}` : ''}`
-  const res = await fetch(url, {
+  const res = await fetch(`${API_URL}/api/public/stats/summary`, {
     headers: { 'X-API-Key': API_KEY },
-    next: { revalidate: 60 },
+    next: { revalidate: 300 },
   })
   const data = await res.json()
   return NextResponse.json(data)

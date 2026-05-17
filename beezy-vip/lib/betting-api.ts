@@ -8,13 +8,22 @@ const API_URL  = process.env.BETTING_API_URL  ?? ''
 const API_KEY  = process.env.BETTING_API_KEY  ?? ''
 
 async function apiFetch<T>(path: string, cacheSecs = 60): Promise<T> {
-  if (!API_URL) throw new Error('BETTING_API_URL is not set -- set this env var in Vercel')
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { 'X-API-Key': API_KEY },
-    next: { revalidate: cacheSecs },
+  // In browser (client components), use the Next.js proxy route to avoid
+  // exposing BETTING_API_URL and BETTING_API_KEY to the client bundle.
+  const isBrowser = typeof window !== 'undefined'
+  const url = isBrowser
+    ? (path.includes('/stats/') ? '/api/stats' : path.replace('/api/public/', '/api/'))
+    : `${API_URL}${path}`
+  if (!isBrowser && !API_URL) throw new Error('BETTING_API_URL is not set')
+  const headers: Record<string, string> = isBrowser
+    ? {}
+    : { 'X-API-Key': API_KEY }
+  const res = await fetch(url, {
+    headers,
+    next: isBrowser ? undefined : { revalidate: cacheSecs },
   })
   if (!res.ok) {
-    throw new Error(`Betting API error ${res.status} on ${path}`)
+    throw new Error(`Betting API error ${res.status} on ${url}`)
   }
   return res.json() as Promise<T>
 }
