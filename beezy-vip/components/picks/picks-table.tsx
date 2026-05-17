@@ -3,6 +3,16 @@ import { formatOdds } from '@/lib/odds'
 import type { Bet } from '@/lib/db'
 
 const B = '0.5px solid #1f1f24'
+const TEAM_ABBREV: Record<string, string> = {
+  'Angels': 'LAA', 'Astros': 'HOU', 'Athletics': 'OAK', 'Blue Jays': 'TOR',
+  'Braves': 'ATL', 'Brewers': 'MIL', 'Cardinals': 'STL', 'Cubs': 'CHC',
+  'Diamondbacks': 'ARI', 'Dodgers': 'LAD', 'Giants': 'SF', 'Guardians': 'CLE',
+  'Mariners': 'SEA', 'Marlins': 'MIA', 'Mets': 'NYM', 'Nationals': 'WSH',
+  'Orioles': 'BAL', 'Padres': 'SD', 'Phillies': 'PHI', 'Pirates': 'PIT',
+  'Rangers': 'TEX', 'Rays': 'TB', 'Red Sox': 'BOS', 'Reds': 'CIN',
+  'Rockies': 'COL', 'Royals': 'KC', 'Tigers': 'DET', 'Twins': 'MIN',
+  'White Sox': 'CWS', 'Yankees': 'NYY',
+}
 const COL = '80px 65px 160px 1fr 90px 60px 80px 70px 70px'
 
 export function PicksTable({ picks }: { picks: Bet[] }) {
@@ -34,7 +44,7 @@ export function PicksTable({ picks }: { picks: Bet[] }) {
           // player field doesn't include team so we guess from position --
           // away_team for away starter, home_team for home starter.
           // We store both and show whichever is shorter (abbrev).
-          const teamAbbv = away.length <= 3 ? away : home.length <= 3 ? home : away
+          const teamAbbv = TEAM_ABBREV[away] ?? TEAM_ABBREV[home] ?? (away.length <= 3 ? away : home.length <= 3 ? home : away)
 
           if (sys === 'NRFI') {
             if (bt === 'NRFI')    return 'No Run 1st Inning'

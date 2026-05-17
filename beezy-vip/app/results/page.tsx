@@ -11,6 +11,16 @@ import {
 } from 'recharts'
 
 const B = '0.5px solid #1f1f24'
+const TEAM_ABBREV: Record<string, string> = {
+  'Angels': 'LAA', 'Astros': 'HOU', 'Athletics': 'OAK', 'Blue Jays': 'TOR',
+  'Braves': 'ATL', 'Brewers': 'MIL', 'Cardinals': 'STL', 'Cubs': 'CHC',
+  'Diamondbacks': 'ARI', 'Dodgers': 'LAD', 'Giants': 'SF', 'Guardians': 'CLE',
+  'Mariners': 'SEA', 'Marlins': 'MIA', 'Mets': 'NYM', 'Nationals': 'WSH',
+  'Orioles': 'BAL', 'Padres': 'SD', 'Phillies': 'PHI', 'Pirates': 'PIT',
+  'Rangers': 'TEX', 'Rays': 'TB', 'Red Sox': 'BOS', 'Reds': 'CIN',
+  'Rockies': 'COL', 'Royals': 'KC', 'Tigers': 'DET', 'Twins': 'MIN',
+  'White Sox': 'CWS', 'Yankees': 'NYY',
+}
 const COL = '80px 65px 160px 1fr 90px 60px 80px 70px 70px'
 const PILL: Record<string, string> = {
   NRFI: '#10b981', HR: '#f59e0b', F5: '#3b82f6', K: '#a78bfa', OUTS: '#fb923c', ALL: '#f5f5f7',
