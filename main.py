@@ -78,7 +78,7 @@ def run_handler():
     body     = request.get_json(silent=True) or {}
     systems  = body.get("systems", list(VALID_SYSTEMS))
     run_type = body.get("run_type", "morning")
-    run_date = body.get("run_date", date.today(_CT).isoformat())
+    run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
 
     unknown = set(systems) - VALID_SYSTEMS
     if unknown:
