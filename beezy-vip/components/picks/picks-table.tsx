@@ -25,20 +25,43 @@ export function PicksTable({ picks }: { picks: Bet[] }) {
         const edge = ((bet.model_prob - bet.market_prob) * 100).toFixed(1)
         const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
         const pickLabel = (() => {
-          const bt = bet.bet_type ?? ''
+          const bt  = bet.bet_type ?? ''
           const sys = bet.system
-          if (sys === 'F5')   return bt === 'HOME' ? 'F5 Home ML' : bt === 'AWAY' ? 'F5 Away ML' : bt
+          const away = bet.away_team ?? ''
+          const home = bet.home_team ?? ''
+          const player = bet.player ?? ''
+          // Derive team abbrev for pitcher/batter props:
+          // player field doesn't include team so we guess from position --
+          // away_team for away starter, home_team for home starter.
+          // We store both and show whichever is shorter (abbrev).
+          const teamAbbv = away.length <= 3 ? away : home.length <= 3 ? home : away
+
           if (sys === 'NRFI') {
-            if (bt === 'NRFI') return 'NRFI'
-            if (bt === 'YRFI') return 'YRFI'
-            if (bt === '1I_HOME') return '1st Inn Home'
-            if (bt === '1I_AWAY') return '1st Inn Away'
-            if (bt === '1I_DRAW') return '1st Inn Draw'
+            if (bt === 'NRFI')    return 'No Run 1st Inning'
+            if (bt === 'YRFI')    return 'Run in 1st Inning'
+            if (bt === '1I_HOME') return `${home} 1st Inning Moneyline`
+            if (bt === '1I_AWAY') return `${away} 1st Inning Moneyline`
+            if (bt === '1I_DRAW') return 'Draw 1st Inning Moneyline'
             return bt
           }
-          if (sys === 'HR')   return 'HR Yes'
-          if (sys === 'K')    return bt.replace('K_OVER_', 'Over ').replace('K_UNDER_', 'Under ') + ' Ks'
-          if (sys === 'OUTS') return bt.replace('OUTS_OVER_', 'Over ').replace('OUTS_UNDER_', 'Under ') + ' Outs'
+          if (sys === 'F5') {
+            if (bt === 'HOME') return `${home} First 5 Innings Moneyline`
+            if (bt === 'AWAY') return `${away} First 5 Innings Moneyline`
+            return bt
+          }
+          if (sys === 'HR') {
+            return `${player} (${teamAbbv}) to Hit a Home Run`
+          }
+          if (sys === 'K') {
+            const side = bt.startsWith('K_OVER_') ? 'Over' : 'Under'
+            const line = bt.replace('K_OVER_', '').replace('K_UNDER_', '')
+            return `${player} (${teamAbbv}) ${side} ${line} Strikeouts`
+          }
+          if (sys === 'OUTS') {
+            const side = bt.startsWith('OUTS_OVER_') ? 'Over' : 'Under'
+            const line = bt.replace('OUTS_OVER_', '').replace('OUTS_UNDER_', '')
+            return `${player} (${teamAbbv}) ${side} ${line} Outs`
+          }
           return bt
         })()
         return (
