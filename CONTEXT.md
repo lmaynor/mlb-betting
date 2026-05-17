@@ -714,6 +714,11 @@ scoring_backfill_gcs("concrete-crow-445205-m4-mlb-data",
 **`BetTracker.summary()` was not filtering by system until 2026-05-14.**
 All per-system Discord summaries showed K stats. Fixed with `text()` wrapper.
 
+**`game_date` was logged in UTC before 2026-05-17.** Bets logged at 22:00 UTC
+(5pm CT) on May 16 got `game_date=2026-05-17` because UTC date had rolled over.
+Fixed in `main.py` by using `date.today(_CT).isoformat()` (CT timezone). ~12 bets
+in the DB have wrong dates -- not worth fixing in paper mode.
+
 **GitHub fetch can return stale cached content.** `web_fetch` on raw GitHub
 URLs can return an older version. Always read the local Cloud Shell file
 with `cat` or `sed` -- that is the source of truth when `git status` is clean.
@@ -985,8 +990,13 @@ beezy-vip/
 │   ├── layout/                   Nav (with paper-mode banner), footer
 │   ├── picks/                    Picks table, filter bar
 │   └── ui/                       Primitives: SystemBadge, ResultPill, PnL, StatCard
+├── app/
+│   ├── api/
+│   │   ├── picks/route.ts        Next.js proxy -- forwards ?params to Cloud Run
+│   │   └── stats/route.ts        Next.js proxy -- forwards to Cloud Run
 ├── lib/
-│   ├── betting-api.ts            Fetch-based client for Cloud Run public API
+│   ├── betting-api.ts            Fetch-based client. Server components call Cloud Run
+│   │                             directly. Client components use /api/* proxy routes.
 │   ├── db.ts                     Postgres pool + query types (Bet, SystemStats)
 │   ├── articles-static.ts        10 static articles (no DB needed)
 │   ├── learn-db.ts               Vercel Postgres pool for learn_articles (unused)
@@ -1007,8 +1017,14 @@ The site does NOT connect to Cloud SQL directly. All bet data flows through
 the Cloud Run public API:
 
 ```
-Vercel (beezy-vip) → GET /api/public/* → Cloud Run (mlb-betting) → Cloud SQL
+Server components:  Vercel SSR → GET /api/public/* → Cloud Run → Cloud SQL
+Client components:  Browser → GET /api/* (Next.js proxy) → Cloud Run → Cloud SQL
 ```
+
+**Critical:** `BETTING_API_URL` and `BETTING_API_KEY` are server-only env vars.
+Client components (`'use client'`) cannot access `process.env` at runtime.
+All client-side fetching must go through `app/api/picks/` and `app/api/stats/`.
+`betting-api.ts` auto-detects `typeof window !== 'undefined'` and routes accordingly.
 
 The Cloud Run service exposes five read-only endpoints authenticated with
 `X-API-Key` header (secret: `site-api-key` in Secret Manager):
@@ -1016,7 +1032,7 @@ The Cloud Run service exposes five read-only endpoints authenticated with
 | Endpoint | Cache | Description |
 |---|---|---|
 | `GET /api/public/picks/today` | 60s | Today's kelly-triggered picks |
-| `GET /api/public/picks` | 60s | Filtered picks (system, date, status, limit, offset) |
+| `GET /api/public/picks` | 60s | Filtered picks (system, date, status, book, limit, offset). Always filters to `kelly_triggered=true`. |
 | `GET /api/public/picks/recent` | 120s | Last N settled picks |
 | `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
 
@@ -1172,6 +1188,16 @@ Other gotchas:
 - `gap` in a CSS grid must be set via inline `style={{ gap: '...' }}` when
   the grid itself uses inline style. Tailwind `gap-2` on an inline-grid div
   will not apply.
+
+### Bet type display names
+
+`picks-table.tsx` maps raw `bet_type` to readable labels. When adding a new
+bet_type, update the `pickLabel` formatter:
+- F5: `HOME`/`AWAY` → "F5 Home ML" / "F5 Away ML"
+- NRFI: `1I_HOME`/`1I_AWAY`/`1I_DRAW` → "1st Inn Home/Away/Draw"
+- K: `K_OVER_4.5` → "Over 4.5 Ks"
+- OUTS: `OUTS_UNDER_14.5` → "Under 14.5 Outs"
+- HR: `HR` → "HR Yes"
 
 ### When to update this section
 
