@@ -21,7 +21,7 @@ const TEAM_ABBREV: Record<string, string> = {
   'Rockies': 'COL', 'Royals': 'KC', 'Tigers': 'DET', 'Twins': 'MIN',
   'White Sox': 'CWS', 'Yankees': 'NYY',
 }
-const COL = '80px 65px 160px 1fr 90px 60px 80px 70px 70px'
+const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
 const PILL: Record<string, string> = {
   NRFI: '#10b981', HR: '#f59e0b', F5: '#3b82f6', K: '#a78bfa', OUTS: '#fb923c', ALL: '#f5f5f7',
 }
@@ -179,6 +179,27 @@ const EdgeTooltip = ({ active, payload, label }: any) => {
       ))}
     </div>
   )
+}
+
+function exportCSV(bets: any[]) {
+  const headers = ['Date','System','Game','Pick','Odds','Edge Range','Stake','Book','Result','P&L (units)']
+  const edgeBin = (e: number) => e >= 0.10 ? '10%+' : e >= 0.05 ? '5-10%' : e >= 0 ? '0-5%' : '<0%'
+  const rows = bets.map((b: any) => {
+    const game = b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`
+    const pnl  = b.profit != null ? (parseFloat(String(b.profit)) / 10).toFixed(2) : ''
+    return [
+      b.game_date, b.system, game, pickLabel(b),
+      b.odds ?? '', b.edge != null ? edgeBin(b.edge) : '',
+      b.stake != null && b.stake > 0 ? b.stake.toFixed(0) : '',
+      b.book ?? '', b.result ?? 'pending', pnl,
+    ].map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  })
+  const csv = [headers.join(','), ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `beezy-results-${new Date().toISOString().slice(0,10)}.csv`; a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function ResultsPage() {
@@ -380,9 +401,18 @@ export default function ResultsPage() {
             </button>
           ))}
         </div>
-        <span className="mono" style={{ fontSize: '10px', color: '#71717a', marginLeft: 'auto' }}>
-          {loading ? 'loading...' : `${filtered.length} bets`}
-        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>
+            {loading ? 'loading...' : `${filtered.length} bets`}
+          </span>
+          {!loading && filtered.length > 0 && (
+            <button onClick={() => exportCSV(filtered)} className="mono" style={{
+              fontSize: '10px', padding: '4px 10px', cursor: 'pointer',
+              border: '0.5px solid #2a2a31', color: '#71717a', background: 'transparent',
+              letterSpacing: '0.05em', textTransform: 'uppercase' as const,
+            }}>Export CSV</button>
+          )}
+        </div>
       </div>
 
       {/* Bets table */}
@@ -397,7 +427,7 @@ export default function ResultsPage() {
       ) : (
         <div style={{ border: B, overflowX: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: '#111114', borderBottom: B }}>
-            {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Book', 'Result', 'P&L'].map(h => (
+            {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Stake', 'Book', 'Result', 'P&L'].map(h => (
               <div key={h} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{h}</div>
             ))}
           </div>
@@ -413,7 +443,12 @@ export default function ResultsPage() {
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickLabel(bet)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>{formatOdds(bet.odds)}</div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#10b981' }}>{parseFloat(edge) > 0 ? '+' : ''}{edge}%</div>
+                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#10b981' }}>
+                  {bet.edge != null ? (bet.edge >= 0.10 ? '10%+' : bet.edge >= 0.05 ? '5-10%' : bet.edge >= 0 ? '0-5%' : '<0%') : '—'}
+                </div>
+                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>
+                  {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '—'}
+                </div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: '#71717a', textTransform: 'capitalize' }}>{(bet as any).book ?? '—'}</div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
                 <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} /></div>
