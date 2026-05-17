@@ -171,6 +171,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   └── models/
 │       ├── xgb_f5_v5.json
 │       ├── model_meta_f5_v5.json
+│       ├── isotonic_calibrator_f5_v5.pkl
 │       └── archive/
 ├── K_Pro_System/
 │   ├── data/                           pitcher_k_features.csv, lineup_k_features.csv,
@@ -178,6 +179,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   └── models/
 │       ├── xgb_k_v1.json
 │       ├── model_meta_v1.json
+│       ├── lambda_calibrator_k_v1.pkl
 │       └── archive/
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
@@ -616,6 +618,8 @@ secretmanager.secretAccessor.
 - `mlb-retrain-hr-meta`
 - `mlb-retrain-nrfi-v17`
 - `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v17; run after any NRFI retrain)
+- `mlb-calibrate-f5` (fits isotonic calibrator for F5 v5; run after any F5 retrain)
+- `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
 - `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
