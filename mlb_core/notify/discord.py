@@ -190,12 +190,16 @@ def post_bets(
         edge_str  = f"{edge:+.1%}"      if edge       is not None else "N/A"
         stake_str = f"${stake:.0f}"     if stake is not None else "N/A"
         emoji     = _edge_emoji(edge)
-        paper_tag = " 📄" if paper else " 💵"
-
         headline = _format_bet_headline(b, system)
+        _book = (b.get("book") or b.get("bookmaker") or "").replace(
+            "draftkings","DraftKings").replace("fanduel","FanDuel").replace(
+            "caesars","Caesars").replace("betmgm","BetMGM").replace(
+            "espnbet","ESPN Bet").replace("thescore","theScore").replace(
+            "pointsbet","PointsBet")
+        book_tag = f" · {_book}" if _book else ""
         fields.append({
-            "name":   f"{emoji} {headline}{paper_tag}",
-            "value":  f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}** | stake: **{stake_str}**",
+            "name":   f"{emoji} {headline}",
+            "value":  f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}**{book_tag} | stake: **{stake_str}**",
             "inline": False,
         })
 
