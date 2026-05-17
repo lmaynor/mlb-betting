@@ -23,7 +23,7 @@ import os
 import json
 import logging
 import traceback
-from datetime import date
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 _CT = ZoneInfo("America/Chicago")
 
