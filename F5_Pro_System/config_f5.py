@@ -51,6 +51,7 @@ cfg = {
     "gcs_model_f5":          "F5_Pro_System/models/xgb_f5_v5.json",
     "gcs_model_meta":        "F5_Pro_System/models/model_meta_f5_v5.json",
     "gcs_model_features":    "F5_Pro_System/data/model_features.csv",
+    "gcs_calibrator":        "F5_Pro_System/models/isotonic_calibrator_f5_v5.pkl",
     "gcs_pitcher_starts":    "F5_Pro_System/data/pitcher_starts.csv",
     "gcs_team_offense":      "F5_Pro_System/data/team_offense.csv",
 

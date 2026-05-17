@@ -14,6 +14,7 @@ run() is called by main.py.
 """
 import json
 import logging
+import pickle
 import tempfile
 from datetime import date
 from pathlib import Path
@@ -58,6 +59,20 @@ def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict]:
                 f"feature_means={len(feature_means)} | "
                 f"AUC={meta.get('auc_oos', meta.get('wf_auc_mean', '?'))}")
     return booster, features, feature_means
+
+
+def _load_calibrator(cfg: dict):
+    """Load the isotonic calibrator if present in GCS. Returns None if absent."""
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import read_bytes, exists
+    gcs_key = cfg.get("gcs_calibrator")
+    if GCS_BUCKET and gcs_key and exists(gcs_key):
+        try:
+            return pickle.loads(read_bytes(gcs_key))
+        except Exception as e:
+            logger.warning(f"F5 calibrator load failed: {e}")
+            return None
+    return None
 
 
 def _fetch_today_weather(sched: pd.DataFrame) -> dict:
@@ -237,6 +252,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.odds.dk_scraper import resolve_team
 
     booster, features, feature_means = _load_model(cfg)
+    calibrator = _load_calibrator(cfg)
 
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
@@ -260,6 +276,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     p_home = _score(booster, features, feature_means, feat_df)
+    if calibrator is not None:
+        try:
+            p_home = calibrator.predict(p_home)
+            logger.info("F5: isotonic calibrator applied")
+        except Exception as e:
+            logger.warning(f"F5 calibrator predict failed: {e} -- using raw probs")
     feat_df = feat_df.copy()
     feat_df["p_home"] = p_home.clip(0.001, 0.999)
 

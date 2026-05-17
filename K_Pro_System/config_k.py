@@ -74,6 +74,7 @@ cfg = {
     # GCS keys — match the K_Pro_System/ layout in the bucket
     "gcs_pitcher_features": "K_Pro_System/data/pitcher_k_features.csv",
     "gcs_lineup_features":  "K_Pro_System/data/lineup_k_features.csv",
+    "gcs_calibrator":        "K_Pro_System/models/lambda_calibrator_k_v1.pkl",
     "gcs_model_features":   "K_Pro_System/data/model_features.csv",
     "gcs_model_k":          "K_Pro_System/models/xgb_k_v1.json",
     "gcs_model_meta":       "K_Pro_System/models/model_meta_v1.json",
