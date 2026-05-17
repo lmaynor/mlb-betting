@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-16 21:39 CST_
+_Last updated: 2026-05-16 22:00 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -165,7 +165,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 ├── NRFI_Pro_System/
 │   ├── data/
 │   └── models/                         xgb_halfinn_v17.json, model_meta_v17.json,
-│                                       isotonic_*.pkl
+│                                       isotonic_calibrator_v17.pkl
 ├── F5_Pro_System/
 │   ├── data/
 │   └── models/
@@ -615,6 +615,7 @@ secretmanager.secretAccessor.
 - `mlb-retrain-f5-meta`
 - `mlb-retrain-hr-meta`
 - `mlb-retrain-nrfi-v17`
+- `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v17; run after any NRFI retrain)
 - `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
