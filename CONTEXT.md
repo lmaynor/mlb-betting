@@ -1189,6 +1189,13 @@ Other gotchas:
   the grid itself uses inline style. Tailwind `gap-2` on an inline-grid div
   will not apply.
 
+### Charts
+
+Results page uses `recharts` (installed 2026-05-17). Available in beezy-vip.
+P&L chart: cumulative units per system + ALL line + drawdown shading.
+Edge chart: 7-day rolling model edge vs realized ROI.
+Both use `ResponsiveContainer` with inline-styled tooltips matching design system.
+
 ### Bet type display names
 
 `picks-table.tsx` maps raw `bet_type` to readable labels. When adding a new
