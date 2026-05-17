@@ -1209,10 +1209,20 @@ Both use `ResponsiveContainer` with inline-styled tooltips matching design syste
 ### Filter bar (picks page)
 
 Hierarchical: Type → Market → Book → Date/Result.
+Type and Market are on separate rows (combined row was too cramped).
 Type chips: All, Game Lines (F5/NRFI), Player Props (HR/K/OUTS).
 Market chips are dynamic -- change based on selected Type.
 Clearing Type also clears Market. All chips are color-coded by system.
 Component: `components/picks/filter-bar.tsx`.
+
+### Results page features
+
+- **CSV export**: client-side, triggers download of filtered bets as `.csv`.
+  Columns: Date, System, Game, Pick, Odds, Edge Range, Stake, Book, Result, P&L.
+  Edge is binned (`0-5%`, `5-10%`, `10%+`) -- model probabilities not exposed.
+- **Stake column**: shows dollar stake per bet.
+- **Binned edge**: exact edge hidden to protect model IP. Show exact values
+  only to authenticated Pro subscribers (post-launch, Option B).
 
 ### Sort (results page)
 
@@ -1235,6 +1245,13 @@ bet_type, update the `pickLabel` formatter:
 - K: `K_OVER_4.5` → "Over 4.5 Ks"
 - OUTS: `OUTS_UNDER_14.5` → "Under 14.5 Outs"
 - HR: `HR` → "HR Yes"
+
+### Model IP protection
+
+Current (paper mode): edge shown as bins (`0-5%`, `5-10%`, `10%+`). Model prob
+not exposed anywhere on the public site. Exact edge visible in Discord (members only).
+At launch: gate exact values behind Pro subscription via Clerk auth.
+CSV export uses same binned values as the UI.
 
 ### Pre-launch checklist
 
