@@ -19,12 +19,14 @@ const PILL: Record<string, { bg: string; color: string; border: string }> = {
   OUTS: { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
 }
 
-const MODEL_DETAIL = {
-  NRFI: { version: 'v17', desc: 'Predicts whether the first inning will be scoreless. Primary features: starter ERA/FIP/K%, umpire called-strike%, park factor, wind speed/direction, game-time temperature.', range: '2021–2025', auc: 0.618, href: '/models/nrfi' },
-  HR:   { version: 'v6',  desc: 'Predicts batter HR probability per PA. Primary features: barrel rate, hard-hit%, launch angle, pitcher HR/9, fly ball%, park HR factor, platoon split.', range: '2021–2025', auc: 0.603, href: '/models/hr' },
-  F5:   { version: 'v4',  desc: 'Predicts F5 winner. Primary features: starter SIERA, last-5 ERA, opponent wOBA, umpire run-scoring rate, weather.', range: '2022–2025', auc: 0.594, href: '/models/f5' },
-  K:    { version: 'v9',  desc: 'Predicts starter strikeout total. Primary features: SwStr%, Zone%, ChaseStr%, opponent K%, L5 avg Ks, home/away split.', range: '2021–2025', auc: 0.631, href: '/models/k' },
-  OUTS: { version: 'v3',  desc: 'Predicts outs recorded by a starter. Primary features: pitch efficiency, innings-per-start trend, bullpen availability, opponent OBP.', range: '2022–2025', auc: 0.587, href: '/models/outs' },
+// Metrics per CONTEXT.md ss1. K is Poisson regression -- metric is MAE not AUC.
+// OUTS is a proxy model (Normal IP simulation) -- no trained AUC.
+const MODEL_DETAIL: Record<string, { version: string; desc: string; range: string; metric: string; metricLabel: string; href: string }> = {
+  NRFI: { version: 'v17', desc: 'Predicts whether the first inning will be scoreless. Primary features: starter ERA/FIP/K%, umpire called-strike%, park factor, wind speed/direction, game-time temperature.', range: '2021-2025', metric: '0.577', metricLabel: 'OOS AUC', href: '/models/nrfi' },
+  HR:   { version: 'v6',  desc: 'Predicts batter HR probability per PA. Primary features: barrel rate, hard-hit%, launch angle, pitcher HR/9, fly ball%, park HR factor, platoon split.', range: '2021-2025', metric: '0.630', metricLabel: 'OOS AUC', href: '/models/hr' },
+  F5:   { version: 'v5',  desc: 'Predicts F5 winner. Primary features: starter SIERA, last-5 ERA, opponent wOBA, umpire run-scoring rate, weather.', range: '2022-2025', metric: '0.553', metricLabel: 'OOS AUC', href: '/models/f5' },
+  K:    { version: 'v1',  desc: 'Projects starter strikeout total (Poisson regression). Primary features: SwStr%, Zone%, ChaseStr%, opponent K%, L5 avg Ks, home/away split.', range: '2021-2025', metric: '1.807', metricLabel: 'OOS MAE', href: '/models/k' },
+  OUTS: { version: 'v1',  desc: 'Projects outs recorded by a starter (proxy: Normal IP simulation). Not a trained model -- derived from K system IP features.', range: '2021-2025', metric: 'Proxy', metricLabel: 'IP model', href: '/models/outs' },
 }
 
 export default async function ModelsPage() {
@@ -69,7 +71,7 @@ export default async function ModelsPage() {
         <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '10px' }}>Active systems</div>
         <div style={{ border: B }}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 80px 80px 70px', background: '#111114', borderBottom: B }}>
-            {['System', 'Description', 'OOS AUC', 'Training', 'Detail'].map(h => (
+            {['System', 'Description', 'OOS Metric', 'Training', 'Detail'].map(h => (
               <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', padding: '9px 12px' }}>{h}</div>
             ))}
           </div>
@@ -90,8 +92,8 @@ export default async function ModelsPage() {
                   <div style={{ fontSize: '11px', color: '#71717a' }}>{d.desc.split('.').slice(1).join('.').trim()}</div>
                 </div>
                 <div style={{ padding: '12px' }}>
-                  <div className="mono" style={{ fontSize: '16px', fontWeight: 600, color: '#f5f5f7' }}>{d.auc.toFixed(3)}</div>
-                  <div className="mono" style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>OOS AUC</div>
+                  <div className="mono" style={{ fontSize: '16px', fontWeight: 600, color: '#f5f5f7' }}>{d.metric}</div>
+                  <div className="mono" style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{d.metricLabel}</div>
                   {roi !== null && (
                     <div className="mono" style={{ fontSize: '11px', fontWeight: 600, marginTop: '2px', color: roi >= 0 ? '#10b981' : '#ef4444' }}>
                       {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%

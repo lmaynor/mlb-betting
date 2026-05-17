@@ -11,32 +11,21 @@ const PILL: Record<string, { bg: string; color: string; border: string }> = {
   OUTS: { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
 }
 
-const SEED = [
-  { system: 'NRFI', matchup: 'NYY @ BOS', result: 'win',  profit:  12.40 },
-  { system: 'OUTS', matchup: 'STL @ OAK', result: 'loss', profit: -22.43 },
-  { system: 'K',    matchup: 'LAD @ SF',  result: 'win',  profit:  18.20 },
-  { system: 'OUTS', matchup: 'WSH @ CIN', result: 'loss', profit: -19.20 },
-  { system: 'OUTS', matchup: 'SEA @ HOU', result: 'win',  profit:  27.46 },
-  { system: 'K',    matchup: 'SEA @ HOU', result: 'loss', profit: -41.45 },
-  { system: 'F5',   matchup: 'ATL @ NYM', result: 'win',  profit:   9.80 },
-  { system: 'HR',   matchup: 'TEX @ MIN', result: 'loss', profit: -10.00 },
-]
+// SEED removed -- P0.1: landing now shows real bets or empty state
 
 export async function RecentPicksTable() {
-  let rows = SEED
+  type Row = { system: string; matchup: string; result: string; profit: number }
+  let rows: Row[] = []
 
   try {
     const bets = await apiGetRecentSettled(16)
-    const settled = bets.filter(b => b.stake !== null && (b.stake ?? 0) > 0 && b.result !== null)
-    if (settled.length > 0) {
-      rows = settled.slice(0, 8).map(b => ({
-        system:  b.system,
-        matchup: b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`,
-        result:  b.result ?? 'pending',
-        profit:  b.profit ?? 0,
-      }))
-    }
-  } catch { /* seed */ }
+    rows = bets.slice(0, 8).map(b => ({
+      system:  b.system,
+      matchup: b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`,
+      result:  b.result ?? 'pending',
+      profit:  b.profit ?? 0,
+    }))
+  } catch { /* leave rows empty */ }
 
   const COL = '52px 52px 1fr 72px'
 
@@ -55,6 +44,12 @@ export async function RecentPicksTable() {
       </p>
 
       <div style={{ border: B }}>
+        {rows.length === 0 && (
+          <div style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--muted)', fontSize: '12px' }}>
+            No settled bets yet &mdash; check back after today&apos;s games.
+          </div>
+        )}
+        {rows.length > 0 && (<>
         {/* Header */}
         <div className="blotter-grid" style={{ display: 'grid', gridTemplateColumns: COL, gap: '10px', padding: '8px 12px', background: '#111114', borderBottom: B }}>
           {[['Result', 'left'], ['System', 'left'], ['Matchup', 'left'], ['P&L', 'right']].map(([h, align]) => (
@@ -82,6 +77,7 @@ export async function RecentPicksTable() {
             </div>
           )
         })}
+        </>)}
       </div>
     </section>
   )

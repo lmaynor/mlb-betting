@@ -13,13 +13,14 @@ async function getStats() {
       avg_edge:   parseFloat(raw.avg_edge).toFixed(1),
     }
   } catch {
-    return { total_bets: '173', win_rate: '46.6', roi: '5.68', avg_edge: '10.6' }
+    return { total_bets: '--', win_rate: '--', roi: '--', avg_edge: '--' }
   }
 }
 
 export async function Hero() {
   const stats = await getStats()
-  const roiNum = parseFloat(stats.roi)
+  const roiAvail = stats.roi !== '--'
+  const roiNum = roiAvail ? parseFloat(stats.roi) : 0
   const roiPos = roiNum >= 0
 
   return (
@@ -55,15 +56,15 @@ export async function Hero() {
         <div className="hero-stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div style={{ padding: '24px 18px', borderBottom: B, borderRight: B }}>
             <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Season ROI</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiPos ? 'var(--win)' : 'var(--loss)' }}>
-              {roiPos ? '+' : ''}{stats.roi}%
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiAvail ? (roiPos ? 'var(--win)' : 'var(--loss)') : 'var(--muted)' }}>
+              {roiAvail ? (roiPos ? '+' : '') + stats.roi + '%' : stats.roi}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{stats.total_bets} settled bets</div>
           </div>
           <div style={{ padding: '24px 18px', borderBottom: B }}>
             <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Win Rate</div>
             <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--text)' }}>
-              {stats.win_rate}%
+              {stats.win_rate !== '--' ? stats.win_rate + '%' : stats.win_rate}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>W / (W+L)</div>
           </div>
@@ -76,8 +77,8 @@ export async function Hero() {
           </div>
           <div style={{ padding: '24px 18px' }}>
             <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Avg Edge</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--win)' }}>
-              +{stats.avg_edge}%
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: stats.avg_edge !== '--' ? 'var(--win)' : 'var(--muted)' }}>
+              {stats.avg_edge !== '--' ? '+' + stats.avg_edge + '%' : stats.avg_edge}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Model vs implied</div>
           </div>

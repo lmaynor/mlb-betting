@@ -81,7 +81,8 @@ def get_recent_settled(engine, limit=20):
             "SELECT id, system, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
-            "FROM bets WHERE result IS NOT NULL "
+            "FROM bets "
+            "WHERE result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
             "ORDER BY game_date DESC, created_at DESC "
             "LIMIT :limit"
         ), {"limit": int(limit)}).mappings().all()
