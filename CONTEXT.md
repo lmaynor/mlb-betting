@@ -714,6 +714,10 @@ scoring_backfill_gcs("concrete-crow-445205-m4-mlb-data",
 **`BetTracker.summary()` was not filtering by system until 2026-05-14.**
 All per-system Discord summaries showed K stats. Fixed with `text()` wrapper.
 
+**Paper mode flag removed from Discord notifications (2026-05-17).** The 📄/💵
+paper_tag was removed from bet headlines. All bets treated as cash going forward.
+The `paper` column still exists in the DB for historical reference.
+
 **`game_date` was logged in UTC before 2026-05-17.** Bets logged at 22:00 UTC
 (5pm CT) on May 16 got `game_date=2026-05-17` because UTC date had rolled over.
 Fixed in `main.py` by using `date.today(_CT).isoformat()` (CT timezone). ~12 bets
@@ -1195,6 +1199,13 @@ Results page uses `recharts` (installed 2026-05-17). Available in beezy-vip.
 P&L chart: cumulative units per system + ALL line + drawdown shading.
 Edge chart: 7-day rolling model edge vs realized ROI.
 Both use `ResponsiveContainer` with inline-styled tooltips matching design system.
+
+### Table columns (picks + results)
+
+Both tables share the same column layout (2026-05-17):
+`Date | System | Game | Pick | Odds | Edge | Book | Result | P&L`
+`80px  65px    160px  1fr   90px  60px  80px  70px   70px`
+minWidth: 860px. Book column shows canonical book name or "—" if null.
 
 ### Bet type display names
 
