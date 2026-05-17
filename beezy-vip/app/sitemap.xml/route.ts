@@ -1,5 +1,4 @@
-import { getAllArticles } from '@/lib/learn-db'
-import { ARTICLE_SPECS }  from '@/lib/article-generator'
+import { ARTICLES } from '@/lib/articles-static'
 
 const BASE = 'https://beezy.vip'
 
@@ -14,22 +13,14 @@ const STATIC_ROUTES = [
   { path: '/picks/mlb/outs', priority: '0.8', changefreq: 'daily'   },
   { path: '/results',        priority: '0.8', changefreq: 'daily'   },
   { path: '/tools',          priority: '0.7', changefreq: 'weekly'  },
-  { path: '/tools/odds-calculator',    priority: '0.7', changefreq: 'monthly' },
-  { path: '/tools/kelly-calculator',   priority: '0.7', changefreq: 'monthly' },
-  // nrfi-conditions and pitcher-matchups deferred from sitemap (noindex) -- re-add in v2
+  { path: '/tools/odds-calculator',  priority: '0.7', changefreq: 'monthly' },
+  { path: '/tools/kelly-calculator', priority: '0.7', changefreq: 'monthly' },
   { path: '/models',         priority: '0.6', changefreq: 'weekly'  },
   { path: '/learn',          priority: '0.7', changefreq: 'weekly'  },
 ]
 
 export async function GET() {
-  let articles: { slug: string }[] = ARTICLE_SPECS.map(s => ({ slug: s.slug }))
-
-  try {
-    const db = await getAllArticles()
-    if (db.length > 0) articles = db
-  } catch { /* use spec fallback */ }
-
-  const learnRoutes = articles.map(a => ({
+  const learnRoutes = ARTICLES.map(a => ({
     path:       `/learn/${a.slug}`,
     priority:   '0.6',
     changefreq: 'monthly',
