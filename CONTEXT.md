@@ -39,7 +39,7 @@ mlb-betting/
 ├── main.py                       Flask entrypoint for Cloud Run service.
 │                                 Routes: /healthz, /run, /build-features,
 │                                         /snapshot-odds, /settle, /refresh-data,
-│                                         /monitor, /monitor-ops
+│                                         /monitor, /monitor-ops, /retrain-weekly
 ├── Dockerfile                    Single image. Used by Cloud Run service AND jobs.
 ├── requirements.txt              Pinned Python deps.
 ├── setup.py                      Makes mlb_core importable. Only prod deps --
@@ -620,6 +620,7 @@ secretmanager.secretAccessor.
 - `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v17; run after any NRFI retrain)
 - `mlb-calibrate-f5` (fits isotonic calibrator for F5 v5; run after any F5 retrain)
 - `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
+- `mlb-calibrate-hr` (fits isotonic calibrator for HR v6; run after any HR retrain)
 - `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
@@ -679,6 +680,12 @@ same-game batter stats as features in inning-1 models.
 **K build performance.** The opponent backfill pre-prepares the PA frame
 once (`_prepare_pa_for_opp_features`) before the per-date loop. Do not
 revert this -- the naive version was killed by gunicorn at 15min.
+
+**Retrain sequence: always run calibrate job after retrain.** Each system has a paired retrain + calibrate job. Running retrain without calibrate leaves the runner using a stale calibrator fit on the old booster's outputs. The /retrain-weekly route fires all four retrains immediately then all four calibrate jobs 30 min later via a background thread. Manual retrain sequence per system:
+  NRFI: mlb-retrain-nrfi-v17 -> mlb-calibrate-nrfi
+  F5:   mlb-retrain-f5-meta  -> mlb-calibrate-f5
+  K:    mlb-retrain-k-v1     -> mlb-calibrate-k
+  HR:   mlb-retrain-hr-meta  -> mlb-calibrate-hr
 
 **SGO API key is in Secret Manager version 3.** Version 1 was the old
 exposed key. Version 2 had invisible newlines causing `Invalid leading
@@ -868,6 +875,7 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-build-all-features` | `0 12 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
 | `mlb-monitor-ops` | `50 12 * * *` | `/monitor-ops` | 120s | `{}` |
+| `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}` |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
