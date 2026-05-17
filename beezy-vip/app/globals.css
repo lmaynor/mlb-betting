@@ -176,3 +176,8 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 .article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
 .article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
 .article-body a { color: #10b981; }
+
+.stats-strip { display: grid; }
+@media (max-width: 768px) {
+  .stats-strip { grid-template-columns: 1fr 1fr !important; }
+}
