@@ -187,6 +187,8 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true)
   const [system, setSystem]   = useState('ALL')
   const [result, setResult]   = useState('ALL')
+  const [sortBy, setSortBy]   = useState('date')
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc')
 
   useEffect(() => {
     Promise.all([
@@ -195,11 +197,21 @@ export default function ResultsPage() {
     ]).then(([p, s]) => { setPicks(p); setStats(s); setLoading(false) })
   }, [])
 
-  const filtered = useMemo(() => picks.filter(p => {
-    if (system !== 'ALL' && p.system !== system) return false
-    if (result !== 'ALL' && p.result?.toUpperCase() !== result) return false
-    return true
-  }), [picks, system, result])
+  const filtered = useMemo(() => {
+    const f = picks.filter(p => {
+      if (system !== 'ALL' && p.system !== system) return false
+      if (result !== 'ALL' && p.result?.toUpperCase() !== result) return false
+      return true
+    })
+    const dir = sortDir === 'desc' ? -1 : 1
+    return [...f].sort((a, b) => {
+      if (sortBy === 'date')  return dir * a.game_date.localeCompare(b.game_date)
+      if (sortBy === 'edge')  return dir * ((a.edge ?? 0) - (b.edge ?? 0))
+      if (sortBy === 'odds')  return dir * ((a.odds ?? 0) - (b.odds ?? 0))
+      if (sortBy === 'pnl')   return dir * ((parseFloat(String(a.profit ?? 0))) - (parseFloat(String(b.profit ?? 0))))
+      return 0
+    })
+  }, [picks, system, result, sortBy, sortDir])
 
   const { rows: pnlRows, systems: chartSystems } = useMemo(() => buildPnLChart(picks, system), [picks, system])
   const edgeRows = useMemo(() => buildEdgeChart(picks), [picks])
@@ -353,6 +365,19 @@ export default function ResultsPage() {
             <Chip key={r} label={r} active={result === r}
               color={r === 'WIN' ? '#10b981' : r === 'LOSS' ? '#ef4444' : r === 'VOID' ? '#71717a' : undefined}
               onClick={() => setResult(r)} />
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>Sort</span>
+          {(['date','edge','odds','pnl'] as const).map(s => (
+            <button key={s} onClick={() => { if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc'); else { setSortBy(s); setSortDir('desc') } }}
+              className="mono" style={{ fontSize: '11px', padding: '4px 10px', cursor: 'pointer',
+                border: `0.5px solid ${sortBy === s ? '#10b981' : '#1f1f24'}`,
+                color: sortBy === s ? '#10b981' : '#71717a',
+                background: sortBy === s ? '#10b98112' : 'transparent',
+                letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
+              {s}{sortBy === s ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+            </button>
           ))}
         </div>
         <span className="mono" style={{ fontSize: '10px', color: '#71717a', marginLeft: 'auto' }}>
