@@ -59,24 +59,22 @@ export function PicksFilterBar() {
     <div style={{ position: 'sticky', top: '48px', zIndex: 40, background: 'rgba(10,10,12,0.97)', borderBottom: B, padding: '10px 20px', backdropFilter: 'blur(8px)' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '7px' }}>
 
-        {/* Row 1: Type (hierarchy) + dynamic Market */}
-        <div style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '16px' }}>
-          <div style={rowStyle}>
-            <span style={labelStyle}>Type</span>
-            {TYPES.map(t => (
-              <Chip key={t} label={t} active={activeType === t}
-                onClick={() => set('type', t, ['market'])} />
-            ))}
-          </div>
-          <div style={rowStyle}>
-            <span style={{ ...labelStyle, color: '#2a2a31' }}>·</span>
-            <span style={labelStyle}>Market</span>
-            {markets.map(m => (
-              <Chip key={m} label={m} color={PILL[m]}
-                active={activeMarket === m || (m === 'All' && !sp.get('market'))}
-                onClick={() => set('market', m)} />
-            ))}
-          </div>
+        {/* Row 1: Type */}
+        <div style={rowStyle}>
+          <span style={labelStyle}>Type</span>
+          {TYPES.map(t => (
+            <Chip key={t} label={t} active={activeType === t}
+              onClick={() => set('type', t, ['market'])} />
+          ))}
+        </div>
+        {/* Row 2: Dynamic Market */}
+        <div style={rowStyle}>
+          <span style={labelStyle}>Market</span>
+          {markets.map(m => (
+            <Chip key={m} label={m} color={PILL[m]}
+              active={activeMarket === m || (m === 'All' && !sp.get('market'))}
+              onClick={() => set('market', m)} />
+          ))}
         </div>
 
         {/* Row 2: Book */}
