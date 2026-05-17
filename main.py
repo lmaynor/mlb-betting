@@ -24,6 +24,8 @@ import json
 import logging
 import traceback
 from datetime import date
+from zoneinfo import ZoneInfo
+_CT = ZoneInfo("America/Chicago")
 
 from flask import Flask, request, jsonify
 
@@ -76,7 +78,7 @@ def run_handler():
     body     = request.get_json(silent=True) or {}
     systems  = body.get("systems", list(VALID_SYSTEMS))
     run_type = body.get("run_type", "morning")
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
 
     unknown = set(systems) - VALID_SYSTEMS
     if unknown:
@@ -101,7 +103,7 @@ def run_handler():
 def build_features_handler():
     body     = request.get_json(silent=True) or {}
     system   = body.get("system", "HR")
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
 
     if system == "HR":
         from runners.build_hr_features import run
@@ -132,7 +134,7 @@ def build_all_features_handler():
     """
     import time
     body             = request.get_json(silent=True) or {}
-    run_date         = body.get("run_date", date.today().isoformat())
+    run_date         = body.get("run_date", date.today(_CT).isoformat())
     continue_on_err  = body.get("continue_on_error", False)
     default_order    = ["HR", "NRFI", "K", "F5"]
     systems          = body.get("systems", default_order)
@@ -177,7 +179,7 @@ def build_all_features_handler():
 @app.route("/snapshot-odds", methods=["POST"])
 def snapshot_odds_handler():
     body     = request.get_json(silent=True) or {}
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
     try:
         from runners.snapshot_odds import run as snapshot_run
         result = snapshot_run(run_date=run_date)
@@ -214,7 +216,7 @@ def settle_handler():
         try:
             from mlb_core.notify.discord import post_error
             post_error("SETTLE", f"Settlement crashed:\n```\n{tb[:1500]}\n```",
-                       settle_date or date.today().isoformat())
+                       settle_date or date.today(_CT).isoformat())
         except Exception:
             pass
         return jsonify({"status": "error", "error": str(e)}), 500
@@ -225,7 +227,7 @@ def settle_handler():
 @app.route("/refresh-data", methods=["POST"])
 def refresh_data_handler():
     body     = request.get_json(silent=True) or {}
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
     try:
         from mlb_core.data.weather import weather_nightly_gcs
         from mlb_core.data.umpires import umpires_nightly_gcs
@@ -247,7 +249,7 @@ def refresh_data_handler():
 def monitor_handler():
     """Rolling performance monitor — model health (ROI, hit rate)."""
     body     = request.get_json(silent=True) or {}
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
     try:
         from runners.monitor_performance import run as monitor_run
         result = monitor_run(run_date=run_date)
@@ -263,7 +265,7 @@ def monitor_handler():
 def monitor_ops_handler():
     """Infrastructure health monitor — schedulers, GCS freshness, model artifacts."""
     body     = request.get_json(silent=True) or {}
-    run_date = body.get("run_date", date.today().isoformat())
+    run_date = body.get("run_date", date.today(_CT).isoformat())
     try:
         from runners.monitor_ops import run as monitor_ops_run
         result = monitor_ops_run(run_date=run_date)
@@ -308,7 +310,7 @@ def reset_and_run():
     from runners.run_f5 import run as run_f5
     from runners.run_k import run as run_k
     body     = request.get_json(silent=True) or {}
-    run_date = body.get("date", date.today().isoformat())
+    run_date = body.get("date", date.today(_CT).isoformat())
     systems  = body.get("systems", ["HR", "NRFI", "F5", "K"])
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     deleted = {}
