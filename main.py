@@ -591,6 +591,92 @@ def public_stats_summary():
         return jsonify({"error": str(exc)}), 500
 
 
+
+
+@app.route("/retrain-weekly", methods=["POST"])
+def retrain_weekly():
+    """
+    Trigger weekly retrain + calibrate for all four systems.
+    Called by mlb-retrain-weekly scheduler every Monday 06:00 UTC.
+    Fires retrain jobs first, then calibrate jobs after a delay.
+    Uses Cloud Run Jobs API with SA credentials from metadata server.
+    """
+    import threading
+    import time
+    import google.auth
+    import google.auth.transport.requests
+
+    PROJECT  = "concrete-crow-445205-m4"
+    REGION   = "us-central1"
+    BASE_URL = f"https://{REGION}-run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs"
+
+    RETRAIN_JOBS  = [
+        "mlb-retrain-nrfi-v17",
+        "mlb-retrain-f5-meta",
+        "mlb-retrain-k-v1",
+        "mlb-retrain-hr-meta",
+    ]
+    CALIBRATE_JOBS = [
+        "mlb-calibrate-nrfi",
+        "mlb-calibrate-f5",
+        "mlb-calibrate-k",
+        "mlb-calibrate-hr",
+    ]
+    CALIBRATE_DELAY_S = 1800  # 30 min -- enough for all retrains to finish
+
+    def _get_token():
+        creds, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        req = google.auth.transport.requests.Request()
+        creds.refresh(req)
+        return creds.token
+
+    def _trigger_job(job_name: str, token: str) -> dict:
+        import requests as req_lib
+        url = f"{BASE_URL}/{job_name}:run"
+        r = req_lib.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={},
+            timeout=30,
+        )
+        return {"job": job_name, "status": r.status_code, "ok": r.status_code in (200, 201)}
+
+    def _run_calibrate_after_delay():
+        time.sleep(CALIBRATE_DELAY_S)
+        try:
+            token = _get_token()
+            for job in CALIBRATE_JOBS:
+                result = _trigger_job(job, token)
+                logger.info(f"retrain-weekly calibrate: {result}")
+        except Exception as e:
+            logger.error(f"retrain-weekly calibrate phase failed: {e}")
+
+    try:
+        token = _get_token()
+    except Exception as e:
+        logger.error(f"retrain-weekly: failed to get credentials: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    # Fire all retrain jobs immediately
+    retrain_results = []
+    for job in RETRAIN_JOBS:
+        result = _trigger_job(job, token)
+        retrain_results.append(result)
+        logger.info(f"retrain-weekly retrain: {result}")
+
+    # Fire calibrate jobs after delay in background thread
+    t = threading.Thread(target=_run_calibrate_after_delay, daemon=True)
+    t.start()
+
+    return jsonify({
+        "status":          "triggered",
+        "retrain_jobs":    retrain_results,
+        "calibrate_delay": f"{CALIBRATE_DELAY_S}s",
+        "calibrate_jobs":  CALIBRATE_JOBS,
+    })
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
