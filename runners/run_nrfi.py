@@ -235,10 +235,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     if calibrator is not None:
         try:
-            pivot["model_nrfi_prob"] = calibrator.predict(
-                pivot["model_nrfi_prob"].values
+            # Calibrator was fit on YRFI probs -> YRFI actuals
+            pivot["model_yrfi_prob"] = calibrator.predict(
+                pivot["model_yrfi_prob"].values
             )
-            pivot["model_yrfi_prob"] = 1.0 - pivot["model_nrfi_prob"]
+            pivot["model_nrfi_prob"] = 1.0 - pivot["model_yrfi_prob"]
             logger.info("NRFI: isotonic calibrator applied")
         except Exception as e:
             logger.warning(f"NRFI calibrator predict failed: {e} -- using raw probs")
