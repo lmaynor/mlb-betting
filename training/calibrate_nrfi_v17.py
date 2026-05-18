@@ -203,7 +203,9 @@ def run() -> dict:
     except Exception as e:
         return {"status": "error", "error": f"game-level build: {e}"}
 
-    # 5. OOS split -- same 80/20 time-based split as retrain_nrfi_v17.py
+    # 5. OOS split -- used for evaluation only, NOT for fitting.
+    # Fit calibrator on ALL data for full range coverage.
+    # OOS split is kept only to measure calibration improvement.
     game_df = game_df.sort_values("game_date").reset_index(drop=True)
     split_idx = int(len(game_df) * TRAIN_TEST_SPLIT)
     train_g = game_df.iloc[:split_idx]
@@ -225,11 +227,11 @@ def run() -> dict:
         return {"status": "error",
                 "error": f"OOS split too small ({len(oos_g)} games) -- need >= 50"}
 
-    # 6. Fit isotonic calibrator on OOS YRFI probs vs actuals
-    # Calibrating YRFI (not NRFI) because model outputs half-YRFI probs.
-    # The runner converts: model_nrfi_prob = 1 - calibrated_yrfi_prob.
+    # 6. Fit isotonic calibrator on ALL data for full range coverage.
+    # out_of_bounds='clip' causes boundary values to map to 0/1 on sparse extremes.
+    # Fitting on all data ensures the full model output range is covered.
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(oos_g["model_yrfi_prob"].values, oos_g["yrfi"].values)
+    iso.fit(game_df["model_yrfi_prob"].values, game_df["yrfi"].values)
 
     # 7. Evaluate calibration improvement
     raw_brier  = float(brier_score_loss(oos_g["yrfi"], oos_g["model_yrfi_prob"]))
