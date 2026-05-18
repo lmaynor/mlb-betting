@@ -112,7 +112,11 @@ mlb-betting/
 │   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
 │   ├── retrain_nrfi_v17.py       Full NRFI retrain.
 │   ├── retrain_k_v1.py           Full K retrain with walk-forward CV + leakage guard.
-│   └── retrain_hr_meta.py        Patches feature_means into HR model meta.
+│   ├── retrain_hr_meta.py        Patches feature_means into HR model meta.
+│   ├── calibrate_nrfi_v17.py     Fit isotonic calibrator for NRFI v17.
+│   ├── calibrate_f5_v5.py        Fit isotonic calibrator for F5 v5.
+│   ├── calibrate_k_v1.py         Fit lambda calibrator for K v1.
+│   └── calibrate_hr_v6.py        Fit isotonic calibrator for HR v6.
 │
 ├── HR_Pro/                       Per-system config dirs
 ├── NRFI_Pro_System/
@@ -681,6 +685,19 @@ same-game batter stats as features in inning-1 models.
 once (`_prepare_pa_for_opp_features`) before the per-date loop. Do not
 revert this -- the naive version was killed by gunicorn at 15min.
 
+**`CURRENT_DATE` vs text column type mismatch.** The `game_date` column is stored
+as `TEXT` (isoformat string). Comparing it to `CURRENT_DATE` (a Postgres `date`
+type) without a cast raises `operator does not exist: text = date`. Always cast:
+`game_date = CURRENT_DATE::text`. For parameterized queries, pass a Python
+`date.today().isoformat()` string as a named param -- never use `CURRENT_DATE`
+directly in parameterized queries.
+
+**Bookmaker must be explicitly propagated to the results dict in each runner.**
+`odds_info.get('bookmaker')` is available in the odds lookup dict but must be
+copied into the row/results dict explicitly. It is NOT automatically included
+in pivot tables (NRFI) or feature row merges (F5). Check each runner's
+`results.append()` or `log_bet()` call includes `bookmaker` when adding new markets.
+
 **Retrain sequence: always run calibrate job after retrain.** Each system has a paired retrain + calibrate job. Running retrain without calibrate leaves the runner using a stale calibrator fit on the old booster's outputs. The /retrain-weekly route fires all four retrains immediately then all four calibrate jobs 30 min later via a background thread. Manual retrain sequence per system:
   NRFI: mlb-retrain-nrfi-v17 -> mlb-calibrate-nrfi
   F5:   mlb-retrain-f5-meta  -> mlb-calibrate-f5
@@ -984,8 +1001,11 @@ as a subdirectory of this repo and is deployed separately to Vercel.
 
 ### What it is
 
-Next.js 16 / React 19 / Tailwind v4 frontend. Read-only -- it never writes
-to the production `bets` table. Articles are served statically from `beezy-vip/lib/articles-static.ts`
+Next.js 16 / React 19 frontend. Read-only -- it never writes
+to the production `bets` table.
+**All visible pages use pure inline styles** -- Tailwind v4 with `@tailwindcss/postcss`
+does not reliably generate CSS in this monorepo subdirectory. Migration completed
+2026-05-18. Dead pages (teams, players, pitchers, games, recap) deleted. Articles are served statically from `beezy-vip/lib/articles-static.ts`
 and `beezy-vip/content/learn/*.md` -- no DB needed.
 
 Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.vip
@@ -1048,7 +1068,8 @@ Client components (`'use client'`) cannot access `process.env` at runtime.
 All client-side fetching must go through `app/api/picks/` and `app/api/stats/`.
 `betting-api.ts` auto-detects `typeof window !== 'undefined'` and routes accordingly.
 
-The Cloud Run service exposes five read-only endpoints authenticated with
+The Cloud Run service exposes five read-only endpoints
+(six including sparkline) authenticated with
 `X-API-Key` header (secret: `site-api-key` in Secret Manager):
 
 | Endpoint | Cache | Description |
@@ -1057,6 +1078,7 @@ The Cloud Run service exposes five read-only endpoints authenticated with
 | `GET /api/public/picks` | 60s | Filtered picks (system, date, status, book, limit, offset). Always filters to `kelly_triggered=true`. |
 | `GET /api/public/picks/recent` | 120s | Last N settled picks |
 | `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
+| `GET /api/public/stats/sparkline` | 300s | Daily cumulative P&L last 30 days |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
 that call these are marked `export const dynamic = 'force-dynamic'` to
