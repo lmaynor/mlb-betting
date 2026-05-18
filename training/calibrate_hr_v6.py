@@ -145,9 +145,9 @@ def run() -> dict:
 
     # Fit isotonic calibrator
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(oos["model_prob"].values, oos[TARGET].values)
+    iso.fit(df["model_prob"].values, df[TARGET].values)  # fit on all data for full range coverage
 
-    # Evaluate
+    # Evaluate on OOS only
     raw_brier = float(brier_score_loss(oos[TARGET], oos["model_prob"]))
     cal_preds = iso.predict(oos["model_prob"].values)
     cal_brier = float(brier_score_loss(oos[TARGET], cal_preds))

@@ -163,7 +163,7 @@ def run() -> dict:
     # before the Monte Carlo step. IsotonicRegression is monotone so
     # the rank ordering of predictions is preserved.
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(oos["lambda_k"].values, oos[TARGET].values)
+    iso.fit(df["lambda_k"].values, df[TARGET].values)  # fit on all data for full range coverage
 
     cal_lambdas = iso.predict(oos["lambda_k"].values)
 

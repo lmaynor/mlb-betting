@@ -20,6 +20,7 @@ run() is called by main.py.
 from __future__ import annotations
 
 import json
+import pickle
 import logging
 import math
 import tempfile
@@ -76,6 +77,28 @@ def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict]:
 
 
 # ── Feature rows ──────────────────────────────────────────────────────────────
+
+
+def _load_calibrator(cfg: dict):
+    """Load the lambda calibrator if present in GCS. Returns None if absent."""
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import read_bytes, exists
+
+    gcs_key = cfg.get("gcs_calibrator")
+    if GCS_BUCKET and gcs_key and exists(gcs_key):
+        try:
+            return pickle.loads(read_bytes(gcs_key))
+        except Exception as e:
+            logger.warning(f"K calibrator load failed: {e}")
+            return None
+    local_path = cfg.get("calibrator")
+    if local_path and Path(local_path).exists():
+        try:
+            with open(local_path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            logger.warning(f"K calibrator load failed: {e}")
+    return None
 
 def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.config import GCS_BUCKET
@@ -228,6 +251,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
 
     booster, features, feature_means = _load_model(cfg)
+    calibrator = _load_calibrator(cfg)
 
     feat_df = _build_today_feature_rows(cfg, run_date)
     if feat_df.empty:
@@ -236,6 +260,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     lambdas = _score_lambda(booster, features, feature_means, feat_df)
     feat_df = feat_df.copy()
     feat_df["lambda_k"] = lambdas
+    if calibrator is not None:
+        try:
+            raw = feat_df["lambda_k"].values.copy()
+            in_range = (raw >= calibrator.X_min_) & (raw <= calibrator.X_max_)
+            cal = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
+            feat_df["lambda_k"] = cal
+            logger.info(f"K: lambda calibrator applied to {int(in_range.sum())}/{len(raw)} pitchers")
+        except Exception as e:
+            logger.warning(f"K calibrator predict failed: {e} -- using raw lambda")
 
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:

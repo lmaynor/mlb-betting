@@ -8,6 +8,7 @@ Model: xgb_hr_v6.json loaded from GCS
 run() is called by main.py.
 """
 import json
+import pickle
 import logging
 import tempfile
 from datetime import date, timedelta
@@ -112,6 +113,28 @@ def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict]:
                 f"AUC={meta.get('auc_oos', '?')}")
     return booster, features, feature_means
 
+
+
+def _load_calibrator(cfg: dict):
+    """Load the isotonic calibrator if present in GCS. Returns None if absent."""
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import read_bytes, exists
+
+    gcs_key = cfg.get("gcs_calibrator")
+    if GCS_BUCKET and gcs_key and exists(gcs_key):
+        try:
+            return pickle.loads(read_bytes(gcs_key))
+        except Exception as e:
+            logger.warning(f"HR calibrator load failed: {e}")
+            return None
+    local_path = cfg.get("calibrator")
+    if local_path and Path(local_path).exists():
+        try:
+            with open(local_path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            logger.warning(f"HR calibrator load failed: {e}")
+    return None
 
 def _normalize_name(name: str) -> str:
     """Match the notebook's name normalization: NFD + ASCII-fold + lower + strip."""
@@ -454,6 +477,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     # 1. Load model + its trained feature list
     booster, features, feature_means = _load_model(cfg)
+    calibrator = _load_calibrator(cfg)
 
     # 2. Build today's live feature rows
     feat_df = _build_today_feature_rows(cfg, run_date)
@@ -492,6 +516,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         preds = booster.predict(dm)
     feat_df = feat_df.copy()
     feat_df["model_prob"] = preds.clip(0.001, 0.999)
+    if calibrator is not None:
+        try:
+            raw = feat_df["model_prob"].values.copy()
+            in_range = (raw >= calibrator.X_min_) & (raw <= calibrator.X_max_)
+            cal = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
+            feat_df["model_prob"] = __import__("numpy").clip(cal, 0.001, 0.999)
+            logger.info(f"HR: isotonic calibrator applied to {int(in_range.sum())}/{len(raw)} players")
+        except Exception as e:
+            logger.warning(f"HR calibrator predict failed: {e} -- using raw probs")
 
     # 5. Match predictions to odds by normalized player name
     # Build a normalized-name index over feat_df once, then look up each odds player.
