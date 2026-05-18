@@ -233,9 +233,12 @@ def refresh_data_handler():
         from mlb_core.data.umpires import umpires_nightly_gcs
         from mlb_core.config import GCS_BUCKET
         from mlb_core.data.scoring import scoring_nightly_gcs
+        from mlb_core.data.statcast import statcast_nightly_gcs
         wx_result  = weather_nightly_gcs(GCS_BUCKET, "Weather/weather_master.csv")
         ump_result = umpires_nightly_gcs(GCS_BUCKET, "Umpires/umpscorecards_master.csv")
         scoring_nightly_gcs(GCS_BUCKET, "Scoring/scoring_master.csv")
+        if GCS_BUCKET:
+            statcast_nightly_gcs(GCS_BUCKET, "Statcast/statcast_master.csv")
         result = {"status": "ok"}
     except Exception as e:
         tb = traceback.format_exc()
