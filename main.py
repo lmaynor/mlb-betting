@@ -239,13 +239,59 @@ def refresh_data_handler():
         scoring_nightly_gcs(GCS_BUCKET, "Scoring/scoring_master.csv")
         if GCS_BUCKET:
             statcast_nightly_gcs(GCS_BUCKET, "Statcast/statcast_master.csv")
-        result = {"status": "ok"}
+        savant_results = {}
+        try:
+            from mlb_core.data.savant_leaderboards import savant_leaderboards_nightly_all_gcs
+            savant_results = savant_leaderboards_nightly_all_gcs()
+            ok_count = sum(1 for r in savant_results.values() if isinstance(r, dict) and r.get("status") == "ok")
+            logger.info(f"refresh-data: savant leaderboards {ok_count}/6 refreshed")
+        except Exception as se:
+            logger.error(f"refresh-data: savant_leaderboards failed: {se}")
+            savant_results = {"error": str(se)}
+        result = {"status": "ok", "savant_leaderboards": savant_results}
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"refresh-data failed:\n{tb}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
     return jsonify(result), 200
+
+@app.route("/backfill-savant", methods=["POST"])
+def backfill_savant_handler():
+    """One-time historical backfill for Savant leaderboard datasets.
+    Body: dataset (str, optional), start_year (int), end_year (int), force (bool).
+    """
+    body       = request.get_json(silent=True) or {}
+    dataset    = body.get("dataset")
+    start_year = body.get("start_year")
+    end_year   = body.get("end_year")
+    force      = body.get("force", False)
+    logger.info(f"backfill-savant: dataset={dataset or 'ALL'} start={start_year} end={end_year} force={force}")
+    try:
+        from mlb_core.data.savant_leaderboards import (
+            savant_leaderboard_backfill_gcs,
+            savant_leaderboards_backfill_all_gcs,
+            DATASET_START_YEAR,
+        )
+        if dataset:
+            if dataset not in DATASET_START_YEAR:
+                return jsonify({"error": f"Unknown dataset {dataset!r}", "valid": list(DATASET_START_YEAR)}), 400
+            results    = savant_leaderboard_backfill_gcs(dataset, start_year=start_year, end_year=end_year, force=force)
+            total_rows = sum(v for v in results.values() if isinstance(v, int) and v > 0)
+            return jsonify({"status": "ok", "dataset": dataset, "results": {str(k): v for k, v in results.items()}, "total_rows": total_rows}), 200
+        else:
+            results = savant_leaderboards_backfill_all_gcs(start_year=start_year, end_year=end_year, force=force)
+            summary = {}
+            for ds, res in results.items():
+                if isinstance(res, dict) and "error" not in res:
+                    summary[ds] = {"total_rows": sum(v for v in res.values() if isinstance(v, int) and v > 0)}
+                else:
+                    summary[ds] = res
+            return jsonify({"status": "ok", "summary": summary}), 200
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"backfill-savant failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @app.route("/monitor", methods=["POST"])
