@@ -701,7 +701,21 @@ copied into the row/results dict explicitly. It is NOT automatically included
 in pivot tables (NRFI) or feature row merges (F5). Check each runner's
 `results.append()` or `log_bet()` call includes `bookmaker` when adding new markets.
 
+**NRFI calibration ground truth (12,662 games):** The model systematically
+overestimates YRFI probability. When model says 40-45% YRFI, actual rate is
+only 17%. When model says 45-50% YRFI, actual is 24%. The isotonic calibrator
+is correct to map these down aggressively. High NRFI probs (80-86%) on
+low-model-YRFI games are legitimate and well-supported by historical data.
+Do not second-guess the calibrator on these -- it has 2,480+ games of support
+in the 0.40-0.45 model YRFI bin alone.
+
 **NRFI calibrator is fit on YRFI probs, not NRFI probs.** `calibrate_nrfi_v17.py` calls `iso.fit(oos_g['model_yrfi_prob'], oos_g['yrfi'])`. The runner must apply the calibrator to `model_yrfi_prob` and then derive `model_nrfi_prob = 1 - calibrated_yrfi`. Applying it to `model_nrfi_prob` produces a sign flip causing all games to show extreme YRFI probability. This is easy to get wrong -- the variable names look symmetric but are not.
+
+**Calibrate scripts fit on ALL data, not just OOS split.** Fitting on only
+the OOS split (20% of data) leaves sparse coverage at the extremes of the
+model output range. `out_of_bounds='clip'` then maps all out-of-range inputs
+to the boundary output value (0 or 1), producing extreme calibrated probs.
+Fix: fit on all data for full range coverage; use OOS split only for eval.
 
 **Calibrators must be refit after any model output range change.** Isotonic calibrators are fit on the OOS model output range. If the model is patched (feature_means fix, IP bug fix, etc.) without a full retrain, the output range may shift and the calibrator's X_min/X_max will no longer cover the new output range. sklearn clips out-of-bounds inputs to the nearest boundary value, mapping everything to 0 or 1. Always run the calibrate job after ANY change to model artifacts or feature_means, not just after a full retrain.
 
