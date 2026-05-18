@@ -21,6 +21,8 @@ Five MLB betting systems running daily in GCP:
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
 | **K Pro v1** | E[pitcher strikeouts] (Poisson) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
+| **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
+| **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
 | **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
 | **BATTER_HITS** | P(hits > line) Normal proxy via HR model quality | Batter hits O/U (best onshore book) | Live (log-only) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
@@ -390,6 +392,8 @@ This gives one clean daily embed covering all five systems (HR, NRFI, F5, K, OUT
 | F5 | side string | `"HOME"`, `"AWAY"` |
 | K | `"K_{SIDE}_{LINE}"` | `"K_OVER_7.5"`, `"K_UNDER_5.5"` |
 | OUTS | `"OUTS_{SIDE}_{LINE}"` | `"OUTS_OVER_14.5"`, `"OUTS_UNDER_17.5"` |
+| F1H | `"F1H_{SIDE}"` | `"F1H_HOME"`, `"F1H_AWAY"` |
+| GAME | `"GAME_{SIDE}"` | `"GAME_HOME"`, `"GAME_AWAY"` |
 | BATTER_TB | `"BATTER_TB_{SIDE}_{LINE}"` | `"BATTER_TB_OVER_1.5"`, `"BATTER_TB_UNDER_1.5"` |
 | BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
 | PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
@@ -410,6 +414,8 @@ result cached and shared across all systems in the same settle run.
 | HR | `batters[name].home_runs` | starter + HR > 0 = win; not starter = void |
 | K | `pitchers[name].strikeouts` | vs line O/U |
 | OUTS | `pitchers[name].outs` | vs line O/U |
+| F1H | `innings[0:4]` runs | home vs away; push on tie; void if < 4 innings |
+| GAME | all innings runs | home vs away; push on tie; void if < 5 innings (official) |
 | BATTER_TB | `batters[name].total_bases` | vs line O/U; void if not starter |
 | BATTER_HITS | `batters[name].hits` | vs line O/U; void if not starter |
 | PITCHER_ER | `pitchers[name].earned_runs` | vs line O/U; void if not in boxscore |
@@ -761,6 +767,12 @@ batting_strikeouts- over entries only appear on DraftKings; under entries only o
 BetMGM, and the player sets don't overlap. Result: 0 matched pairs after
 _best_book_odds_int(). Skip until book coverage improves.
 
+**F1H and GAME innings sub-markets are live log-only in run_f5.py.**
+F1H (first half, innings 1-4) and GAME (full game) use two-way SGO markets
+(`points-*-1h-ml-*` and `points-*-game-ml-*`) and the F5 scalar proxy.
+Both ship stake=0 until ~100 settled bets confirm calibration. To promote
+F1H to real sizing: remove "F1H" from LOG_ONLY_SYSTEMS in run_f5.py.
+
 **F3/F7 innings window markets are 3-way on SGO (draw/not_draw), not two-way ML.**
 The extractors in sgo_innings_extractors.py assume two-way home/away format matching
 extract_f5_ml_odds(). F3 and F7 need separate 3-way extractors before they can be
@@ -889,6 +901,7 @@ Posts weekly digest every Monday.
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
+- F1H: 52%, GAME: 52% (update after 100 settled bets; scalar proxy, treat as placeholder)
 - BATTER_TB: 52%, BATTER_HITS: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
 
 ---
