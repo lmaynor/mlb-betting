@@ -57,6 +57,19 @@ export async function apiGetRecentSettled(limit = 20): Promise<Bet[]> {
   return data.picks
 }
 
+export interface SparklinePoint {
+  date:      string
+  daily_pnl: number
+  cum_pnl:   number
+}
+
+export async function apiGetSparkline(days = 30): Promise<SparklinePoint[]> {
+  const data = await apiFetch<{ sparkline: SparklinePoint[] }>(
+    `/api/public/stats/sparkline?days=${days}`, 300
+  )
+  return data.sparkline ?? []
+}
+
 export async function apiGetStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>('/api/public/stats/summary', 300)
 }

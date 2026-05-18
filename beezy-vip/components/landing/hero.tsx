@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { apiGetStats } from '@/lib/betting-api'
+import { apiGetStats, apiGetSparkline } from '@/lib/betting-api'
+import { HeroSparkline } from '@/components/landing/hero-sparkline'
 
 const B = '0.5px solid #1f1f24'
 
@@ -18,7 +19,10 @@ async function getStats() {
 }
 
 export async function Hero() {
-  const stats = await getStats()
+  const [stats, sparkline] = await Promise.all([
+    getStats(),
+    apiGetSparkline(30).catch(() => []),
+  ])
   const roiAvail = stats.roi !== '--'
   const roiNum = roiAvail ? parseFloat(stats.roi) : 0
   const roiPos = roiNum >= 0
@@ -82,6 +86,7 @@ export async function Hero() {
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Model vs implied</div>
           </div>
+          <HeroSparkline data={sparkline} />
         </div>
 
       </div>

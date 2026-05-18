@@ -478,6 +478,7 @@ def dashboard():
 # ---------------------------------------------------------------------------
 
 from runners.public_api import (
+    get_pnl_sparkline,
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
 )
@@ -577,6 +578,25 @@ def public_picks_recent():
         return resp
     except Exception as exc:
         logger.exception("public_picks_recent failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/stats/sparkline", methods=["GET", "OPTIONS"])
+def public_stats_sparkline():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        days = int(request.args.get("days", 30))
+        data = get_pnl_sparkline(_get_engine(), days=days)
+        resp = jsonify({"sparkline": data, "days": days})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        logger.exception("public_stats_sparkline failed")
         return jsonify({"error": str(exc)}), 500
 
 
