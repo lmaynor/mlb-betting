@@ -223,7 +223,9 @@ def _settle_k(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
             pitcher_data = matches[0] if len(matches) == 1 else None
 
         if pitcher_data is None:
-            logger.info(f"settle K: {bet['player']} not found in boxscore for game_pk={gpk} -- skipping")
+            # Pitcher not in boxscore -- did not throw a pitch (scratch/void per DK rules)
+            logger.info(f"settle K: {bet['player']} not found in boxscore for game_pk={gpk} -- voiding")
+            outcomes.append({"id": bet["id"], "result": "void", "profit": 0.0})
             continue
 
         actual = pitcher_data[stat_key]
