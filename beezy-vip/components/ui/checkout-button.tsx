@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+const B = '0.5px solid #1f1f24'
+
 export function CheckoutButton({
   tier,
   label,
@@ -17,7 +19,6 @@ export function CheckoutButton({
   async function handleClick() {
     setLoading(true)
     setError('')
-
     try {
       const res  = await fetch('/api/stripe/checkout', {
         method:  'POST',
@@ -25,7 +26,6 @@ export function CheckoutButton({
         body:    JSON.stringify({ tier }),
       })
       const data = await res.json()
-
       if (!res.ok) throw new Error(data.error ?? 'Checkout failed')
       if (data.url) window.location.href = data.url
     } catch (err) {
@@ -39,17 +39,24 @@ export function CheckoutButton({
       <button
         onClick={handleClick}
         disabled={loading}
-        className={`
-          block w-full text-center mono text-xs tracking-widest uppercase py-3 font-semibold
-          transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-          ${featured
-            ? 'bg-accent text-bg hover:bg-accent/90'
-            : 'border border-[var(--border-bright)] text-text hover:border-accent hover:text-accent'}
-        `}
+        className="mono"
+        style={{
+          display: 'block', width: '100%', textAlign: 'center',
+          fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase',
+          padding: '12px 16px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
+          background: featured ? '#10b981' : 'transparent',
+          color:      featured ? '#0a0a0c' : '#f5f5f7',
+          border:     featured ? 'none' : B,
+        }}
       >
-        {loading ? 'Redirecting…' : label}
+        {loading ? 'Redirecting...' : label}
       </button>
-      {error && <p className="mono text-xs text-loss mt-2 text-center">{error}</p>}
+      {error && (
+        <p className="mono" style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px', textAlign: 'center' }}>
+          {error}
+        </p>
+      )}
     </div>
   )
 }

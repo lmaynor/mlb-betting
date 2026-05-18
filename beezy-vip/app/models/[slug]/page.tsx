@@ -1,42 +1,50 @@
-import { notFound }       from 'next/navigation'
-import { getModelSpec, MODEL_SPECS } from '@/lib/model-specs'
+import { notFound }                          from 'next/navigation'
+import { getModelSpec, MODEL_SPECS }          from '@/lib/model-specs'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
-import { PicksTable }                from '@/components/picks/picks-table'
-import { SystemBadge, StatCard }     from '@/components/ui/primitives'
-import { ogUrl }                     from '@/lib/og'
-import Link                          from 'next/link'
-import type { Metadata }             from 'next'
-
-type Props = { params: { slug: string } }
+import { PicksTable }                         from '@/components/picks/picks-table'
+import { SystemBadge }                        from '@/components/ui/primitives'
+import Link                                   from 'next/link'
+import type { Metadata }                      from 'next'
 
 export const dynamic = 'force-dynamic'
 
-export const revalidate = 3600
+type Props = { params: Promise<{ slug: string }> }
+
+const B = '0.5px solid #1f1f24'
 
 export async function generateStaticParams() {
   return MODEL_SPECS.map(m => ({ slug: m.slug }))
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const spec = getModelSpec(params.slug)
+  const { slug } = await params
+  const spec = getModelSpec(slug)
   if (!spec) return { title: 'Model Not Found' }
   return {
-    title:       `${spec.name} Model — Methodology & Results`,
-    description: `${spec.name} XGBoost model methodology, feature list, OOS AUC, and full settled bet history. Beezy.VIP ${spec.system} system.`,
-    openGraph: {
-      images: [{ url: ogUrl({ title: spec.name, sub: `${spec.system} System · OOS AUC ${spec.oosAUC}`, stat1: `Version:${spec.version}`, stat2: `Features:${spec.features.length}`, stat3: `Data:${spec.dataRange}` }), width: 1200, height: 630 }],
-    },
+    title:       `${spec.name} Model -- Methodology & Results`,
+    description: `${spec.name} XGBoost model methodology, feature list, OOS metric, and full settled bet history. Beezy.VIP ${spec.system} system.`,
   }
 }
 
-const IMPORTANCE_COLOR: Record<string, string> = {
-  High:   'text-win   border-win/30   bg-win/5',
-  Medium: 'text-[#FFB800] border-[#FFB800]/30 bg-[#FFB800]/5',
-  Low:    'text-muted border-muted/20 bg-muted/5',
+const IMPORTANCE: Record<string, { color: string; border: string; bg: string }> = {
+  High:   { color: '#10b981', border: '#0f6e56', bg: '#052016' },
+  Medium: { color: '#f59e0b', border: '#854f0b', bg: '#1c1207' },
+  Low:    { color: '#71717a', border: '#2a2a31', bg: 'transparent' },
+}
+
+function StatBlock({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+  return (
+    <div style={{ padding: '18px', borderRight: B }}>
+      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', marginBottom: '6px' }}>{label}</div>
+      <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? '#10b981' : '#f5f5f7' }}>{value}</div>
+      {sub && <div style={{ fontSize: '11px', color: '#71717a' }}>{sub}</div>}
+    </div>
+  )
 }
 
 export default async function ModelDetailPage({ params }: Props) {
-  const spec = getModelSpec(params.slug)
+  const { slug } = await params
+  const spec = getModelSpec(slug)
   if (!spec) notFound()
 
   const [allStats, history] = await Promise.all([
@@ -50,225 +58,191 @@ export default async function ModelDetailPage({ params }: Props) {
   const bets     = stat ? parseInt(String(stat.total_bets)) : 0
   const avgEdge  = stat ? parseFloat(String(stat.avg_edge)) : null
   const totalPnl = stat ? parseFloat(String(stat.total_pnl)) : null
+  const gatePct  = Math.min(100, (bets / 200) * 100)
 
-  // Build calibration buckets from history (model prob vs actual hit rate)
+  // Calibration buckets
   const buckets: Record<string, { count: number; wins: number }> = {}
   for (const pick of history) {
-    const bucket = `${Math.floor(pick.model_prob * 10) * 10}–${Math.floor(pick.model_prob * 10) * 10 + 10}%`
+    if (pick.model_prob == null) continue
+    const bucket = `${Math.floor(pick.model_prob * 10) * 10}-${Math.floor(pick.model_prob * 10) * 10 + 10}%`
     if (!buckets[bucket]) buckets[bucket] = { count: 0, wins: 0 }
     buckets[bucket].count++
     if (pick.result === 'win') buckets[bucket].wins++
   }
 
+  // OOS metric display -- K uses MAE, OUTS is proxy
+  const metricLabel = spec.system === 'K' ? 'OOS MAE' : spec.system === 'OUTS' ? 'Model' : 'OOS AUC'
+  const metricValue = spec.system === 'K' ? spec.oosAUC.toFixed(3) : spec.system === 'OUTS' ? 'Proxy' : spec.oosAUC.toFixed(3)
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mono text-xs text-muted mb-8">
-        <Link href="/models" className="hover:text-accent transition-colors">Models</Link>
-        <span>·</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+        <Link href="/models" className="mono" style={{ fontSize: '11px', color: '#71717a', textDecoration: 'none' }}>Models</Link>
+        <span className="mono" style={{ fontSize: '11px', color: '#2a2a31' }}>&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 
       {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-3 mb-3">
-          <h1 className="text-2xl font-extrabold uppercase tracking-tight">{spec.name}</h1>
-          <span className="mono text-xs text-muted border border-[var(--border)] px-2 py-0.5">
-            {spec.version}
-          </span>
+      <div style={{ marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', letterSpacing: '-0.01em' }}>{spec.name}</h1>
+          <span className="mono" style={{ fontSize: '10px', color: '#71717a', border: B, padding: '2px 8px' }}>{spec.version}</span>
         </div>
-        <p className="text-muted text-sm max-w-2xl leading-relaxed">{spec.description}</p>
+        <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65, maxWidth: '560px', marginBottom: '10px' }}>{spec.description}</p>
         {spec.learnSlug && (
-          <Link
-            href={`/learn/${spec.learnSlug}`}
-            className="mono text-xs text-muted hover:text-accent transition-colors mt-2 inline-block"
-          >
-            Read the betting guide →
+          <Link href={`/learn/${spec.learnSlug}`} className="mono" style={{ fontSize: '11px', color: '#71717a', textDecoration: 'none' }}>
+            Read the betting guide &rarr;
           </Link>
         )}
       </div>
 
       {/* Performance stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 border border-[var(--border)] mb-10">
-        <StatCard label="OOS AUC"   value={spec.oosAUC.toFixed(3)}        sub="Out-of-sample" />
-        <StatCard label="Bets"      value={String(bets)}                   sub="Paper mode" />
-        <StatCard
-          label="Win Rate"
-          value={winRate !== null ? `${winRate.toFixed(1)}%` : '—'}
-          sub="W / (W+L)"
-        />
-        <StatCard
-          label="ROI"
-          value={roi !== null ? `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%` : '—'}
-          sub="On settled bets"
-          accent={roi !== null && roi > 0}
-        />
-        <StatCard
-          label="Avg Edge"
-          value={avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '—'}
-          sub="Model vs implied"
-        />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', border: B, marginBottom: '28px' }}>
+        <StatBlock label={metricLabel}  value={metricValue}                                                    sub="Out-of-sample" />
+        <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
+        <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
+        <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
+        <div style={{ padding: '18px' }}>
+          <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', marginBottom: '6px' }}>Avg Edge</div>
+          <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>
+            {avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '--'}
+          </div>
+          <div style={{ fontSize: '11px', color: '#71717a' }}>Model vs implied</div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-        {/* Model config */}
-        <div className="border border-[var(--border)] p-5">
-          <h2 className="text-sm font-extrabold uppercase tracking-wide mb-5">Model Configuration</h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Algorithm',       value: 'XGBoost (gradient boosted trees)' },
-              { label: 'Training Data',   value: spec.dataRange },
-              { label: 'Validation',      value: 'Walk-forward cross-validation' },
-              { label: 'Edge Threshold',  value: `+${(spec.edgeThreshold * 100).toFixed(0)}% minimum` },
-              { label: 'Kelly Fraction',  value: `${spec.kellyFraction * 100}% Kelly` },
-              { label: 'Bet Gate',        value: `${bets}/200 (${bets >= 200 ? 'cleared' : 'in progress'})` },
-            ].map(row => (
-              <div key={row.label} className="flex justify-between items-center py-2 border-b border-[var(--border)]">
-                <span className="mono text-xs text-muted">{row.label}</span>
-                <span className={`mono text-xs font-semibold ${row.label === 'Bet Gate' && bets >= 200 ? 'text-win' : 'text-text'}`}>
-                  {row.value}
-                </span>
-              </div>
-            ))}
-          </div>
+      {/* Config + Calibration */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
+
+        {/* Config */}
+        <div style={{ border: B, padding: '20px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#f5f5f7', marginBottom: '16px' }}>Model Configuration</div>
+          {[
+            { label: 'Algorithm',      value: 'XGBoost (gradient boosted trees)' },
+            { label: 'Training Data',  value: spec.dataRange },
+            { label: 'Validation',     value: 'Walk-forward cross-validation' },
+            { label: 'Edge Threshold', value: `+${(spec.edgeThreshold * 100).toFixed(0)}% minimum` },
+            { label: 'Kelly Fraction', value: `${spec.kellyFraction * 100}% Kelly` },
+            { label: 'Bet Gate',       value: `${bets}/200 (${bets >= 200 ? 'cleared' : 'in progress'})` },
+          ].map((row, i, arr) => (
+            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < arr.length - 1 ? B : undefined }}>
+              <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>{row.label}</span>
+              <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: row.label === 'Bet Gate' && bets >= 200 ? '#10b981' : '#f5f5f7' }}>{row.value}</span>
+            </div>
+          ))}
         </div>
 
-        {/* Calibration table */}
-        <div className="border border-[var(--border)] p-5">
-          <h2 className="text-sm font-extrabold uppercase tracking-wide mb-5">
-            Calibration
-            <span className="mono text-xs text-muted font-normal ml-2">
-              Model prob vs actual hit rate
-            </span>
-          </h2>
+        {/* Calibration */}
+        <div style={{ border: B, padding: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#f5f5f7' }}>Calibration</span>
+            <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>Model prob vs actual hit rate</span>
+          </div>
           {Object.keys(buckets).length === 0 ? (
-            <p className="mono text-xs text-muted">
-              Calibration data available after more settled bets.
-            </p>
+            <p className="mono" style={{ fontSize: '11px', color: '#71717a' }}>Available after more settled bets.</p>
           ) : (
-            <div className="space-y-2">
+            <>
               {Object.entries(buckets).sort().map(([bucket, data]) => {
-                const hitRate  = data.count > 0 ? data.wins / data.count : 0
-                const barWidth = Math.round(hitRate * 100)
+                const hitRate = data.count > 0 ? data.wins / data.count : 0
                 return (
-                  <div key={bucket}>
-                    <div className="flex justify-between mb-1">
-                      <span className="mono text-xs text-muted">{bucket}</span>
-                      <span className="mono text-xs text-muted">
-                        {(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})
-                      </span>
+                  <div key={bucket} style={{ marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{bucket}</span>
+                      <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})</span>
                     </div>
-                    <div className="h-1.5 bg-[var(--border)]">
-                      <div
-                        className="h-1.5 bg-accent transition-all"
-                        style={{ width: `${barWidth}%` }}
-                      />
+                    <div style={{ height: '3px', background: '#1f1f24' }}>
+                      <div style={{ height: '3px', background: '#10b981', width: `${Math.round(hitRate * 100)}%` }} />
                     </div>
                   </div>
                 )
               })}
-              <p className="mono text-xs text-muted mt-3">
-                Well-calibrated model: bar width should match bucket label.
+              <p className="mono" style={{ fontSize: '10px', color: '#71717a', marginTop: '10px' }}>
+                Well-calibrated: bar width should match bucket label.
               </p>
-            </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Feature table */}
-      <div className="border border-[var(--border)] mb-10">
-        <div className="px-5 py-4 border-b border-[var(--border)] bg-[var(--surface)]">
-          <h2 className="text-sm font-extrabold uppercase tracking-wide">Feature List</h2>
-          <p className="mono text-xs text-muted mt-1">{spec.features.length} features · XGBoost importance ranking</p>
+      <div style={{ border: B, marginBottom: '28px' }}>
+        <div style={{ padding: '14px 18px', borderBottom: B, background: '#111114' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#f5f5f7' }}>Feature List</div>
+          <div className="mono" style={{ fontSize: '10px', color: '#71717a', marginTop: '3px' }}>{spec.features.length} features &middot; XGBoost importance ranking</div>
         </div>
-        <div className="grid grid-cols-3 border-b border-[var(--border)] bg-[var(--surface)]">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', background: '#111114', borderBottom: B }}>
           {['Feature', 'Description', 'Importance'].map(h => (
-            <div key={h} className="px-5 py-3 mono text-xs uppercase tracking-widest text-muted">{h}</div>
+            <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', padding: '9px 14px' }}>{h}</div>
           ))}
         </div>
         {spec.features.map((f, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-3 border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
-          >
-            <div className="px-5 py-3 mono text-xs font-semibold text-text">{f.name}</div>
-            <div className="px-5 py-3 text-xs text-muted">{f.description}</div>
-            <div className="px-5 py-3">
-              <span className={`mono text-xs font-semibold px-2 py-0.5 border ${IMPORTANCE_COLOR[f.importance]}`}>
-                {f.importance}
-              </span>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined, alignItems: 'center' }}>
+            <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: '#f5f5f7', padding: '10px 14px' }}>{f.name}</div>
+            <div style={{ fontSize: '11px', color: '#a1a1aa', padding: '10px 14px' }}>{f.description}</div>
+            <div style={{ padding: '10px 14px' }}>
+              <span className="mono" style={{
+                fontSize: '9px', fontWeight: 600, padding: '3px 8px',
+                color: IMPORTANCE[f.importance]?.color ?? '#71717a',
+                border: `0.5px solid ${IMPORTANCE[f.importance]?.border ?? '#2a2a31'}`,
+                background: IMPORTANCE[f.importance]?.bg ?? 'transparent',
+              }}>{f.importance}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* 200-bet gate progress */}
-      <div className="border border-[var(--border)] p-5 mb-10 flex items-center gap-6">
-        <div className="flex-1">
-          <div className="flex justify-between mb-1">
-            <span className="mono text-xs text-muted uppercase tracking-widest">200-Bet Gate Progress</span>
-            <span className="mono text-xs text-muted">{bets}/200</span>
+      {/* Gate progress */}
+      <div style={{ border: B, padding: '16px 18px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a' }}>200-Bet Gate Progress</span>
+            <span className="mono" style={{ fontSize: '9px', color: '#71717a' }}>{bets}/200</span>
           </div>
-          <div className="h-1 bg-[var(--border)]">
-            <div
-              className="h-1 transition-all"
-              style={{ width: `${Math.min(100, (bets / 200) * 100)}%`, background: spec.color }}
-            />
+          <div style={{ height: '2px', background: '#1f1f24' }}>
+            <div style={{ height: '2px', background: spec.color, width: `${gatePct}%` }} />
           </div>
         </div>
-        {bets >= 200 ? (
-          <span className="mono text-xs text-win border border-win/30 bg-win/5 px-3 py-1.5 font-semibold">
-            Gate Cleared — Live
-          </span>
-        ) : (
-          <span className="mono text-xs text-muted border border-[var(--border)] px-3 py-1.5">
-            Paper Mode
-          </span>
-        )}
+        <span className="mono" style={{
+          fontSize: '9px', letterSpacing: '0.08em', padding: '4px 10px',
+          border: bets >= 200 ? '0.5px solid #0f6e56' : B,
+          color: bets >= 200 ? '#10b981' : '#71717a',
+          background: bets >= 200 ? '#052016' : 'transparent',
+        }}>
+          {bets >= 200 ? 'Gate Cleared' : 'Paper Mode'}
+        </span>
       </div>
 
       {/* P&L summary */}
       {totalPnl !== null && (
-        <div className="grid grid-cols-2 md:grid-cols-4 border border-[var(--border)] mb-10">
-          <StatCard label="Total P&L"   value={`${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}u`} accent={totalPnl > 0} />
-          <StatCard label="Avg Edge"    value={avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '—'} />
-          <StatCard label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '—'} />
-          <StatCard label="Sample Size" value={String(bets)} sub="Settled bets" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', border: B, marginBottom: '28px' }}>
+          <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : ''}${(totalPnl / 10).toFixed(2)}u`} accent={totalPnl > 0} />
+          <StatBlock label="Avg Edge"    value={avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '--'} />
+          <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
+          <div style={{ padding: '18px' }}>
+            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', marginBottom: '6px' }}>Sample Size</div>
+            <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>{bets}</div>
+            <div style={{ fontSize: '11px', color: '#71717a' }}>Settled bets</div>
+          </div>
         </div>
       )}
 
       {/* Full bet history */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-extrabold uppercase tracking-wide">Full Settled History</h2>
-        <Link
-          href={`/picks/mlb/${spec.slug}`}
-          className="mono text-xs uppercase tracking-widest text-muted hover:text-accent transition-colors"
-        >
-          Today&apos;s Picks →
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <h2 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#f5f5f7' }}>Full Settled History</h2>
+        <Link href={`/picks/mlb/${spec.slug}`} className="mono" style={{ fontSize: '11px', color: '#71717a', textDecoration: 'none' }}>
+          Today&apos;s Picks &rarr;
         </Link>
       </div>
 
       {history.length === 0 ? (
-        <div className="border border-[var(--border)] p-12 text-center">
-          <p className="mono text-xs text-muted">No settled bets yet.</p>
+        <div style={{ border: B, padding: '48px', textAlign: 'center' as const }}>
+          <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No settled bets yet.</p>
         </div>
       ) : (
         <PicksTable picks={history} />
       )}
-
-      {/* Structured data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context':  'https://schema.org',
-            '@type':     'TechArticle',
-            headline:    `${spec.name} Model — Beezy.VIP`,
-            description: spec.description,
-            url:         `https://beezy.vip/models/${spec.slug}`,
-          }),
-        }}
-      />
     </div>
   )
 }
