@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-18 00:10 CST_
+_Last updated: 2026-05-18 00:30 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1003,6 +1003,17 @@ as a subdirectory of this repo and is deployed separately to Vercel.
 
 Next.js 16 / React 19 frontend. Read-only -- it never writes
 to the production `bets` table.
+**`lib/db.ts` deleted.** Types (`Bet`, `SystemStats`) are now in `lib/types.ts`.
+All data flows through the Cloud Run public API. Do not re-add `pg` as a dep.
+
+**`npm test` runs 31 tests** (4 skipped) via jest + ts-jest + jsdom.
+Config: `jest.config.ts`. Test file: `tests/index.test.tsx`.
+Run before any commit touching schema contracts or utility functions.
+
+**`app/results/page.tsx` is a server component.** Fetches picks + stats at
+request time, passes as props to `results-client.tsx` (client component).
+First paint is SSR with real data. Do not add useEffect fetches here.
+
 **All visible pages use pure inline styles** -- Tailwind v4 with `@tailwindcss/postcss`
 does not reliably generate CSS in this monorepo subdirectory. Migration completed
 2026-05-18. Dead pages (teams, players, pitchers, games, recap) deleted. Articles are served statically from `beezy-vip/lib/articles-static.ts`
@@ -1039,7 +1050,10 @@ beezy-vip/
 ├── lib/
 │   ├── betting-api.ts            Fetch-based client. Server components call Cloud Run
 │   │                             directly. Client components use /api/* proxy routes.
-│   ├── db.ts                     Postgres pool + query types (Bet, SystemStats)
+│   ├── types.ts                  Shared TypeScript interfaces: Bet, SystemStats.
+│   │                             Import from here. lib/db.ts has been deleted.
+│   ├── tokens.ts                 Design tokens: B, SYSTEM_COLOR, SYSTEM_PILL,
+│   │                             TEAM_ABBREV, pickLabel. Import from here.
 │   ├── articles-static.ts        10 static articles (no DB needed)
 │   ├── learn-db.ts               Vercel Postgres pool for learn_articles (unused)
 │   ├── auth.ts                   Clerk auth helpers
