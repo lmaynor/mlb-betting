@@ -738,6 +738,14 @@ Fix: fit on all data for full range coverage; use OOS split only for eval.
   K:    mlb-retrain-k-v1     -> mlb-calibrate-k
   HR:   mlb-retrain-hr-meta  -> mlb-calibrate-hr
 
+**F3/F7 innings window markets are 3-way on SGO (draw/not_draw), not two-way ML.**
+The extractors in sgo_innings_extractors.py assume two-way home/away format matching
+extract_f5_ml_odds(). F3 and F7 need separate 3-way extractors before they can be
+betted. F1H and GAME have two-way markets but the F5 proxy scalar (1.44/1.37) and
+poor calibration (cal_err up to -0.135) make them unsuitable for real Kelly sizing.
+All four innings window runners are shelved until dedicated models are trained.
+Settlement code is in place for when they eventually ship.
+
 **Savant leaderboards require a browser User-Agent on requests.get().**
 pandas.read_csv(url) returns 403. savant_leaderboards.py uses a Chrome-style
 User-Agent header. If Savant changes bot-detection, the HTML-response check
