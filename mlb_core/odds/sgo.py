@@ -725,3 +725,62 @@ def extract_pitcher_er_odds(events: list) -> dict:
     """Extract pitcher earned runs O/U odds."""
     return _extract_player_ou_props(events, _PITCHER_ER_PREFIX, "pitching_earnedRuns",
                                     "extract_pitcher_er_odds")
+
+
+# F1H and GAME innings-window two-way ML extractors.
+# F3 and F7 intentionally omitted -- SGO serves them as 3-way markets
+# (draw/not-draw) incompatible with the F5 home/away proxy model.
+# See CONTEXT.md §8.
+_F1H_ML_HOME_ID  = "points-home-1h-ml-home"
+_F1H_ML_AWAY_ID  = "points-away-1h-ml-away"
+_GAME_ML_HOME_ID = "points-home-game-ml-home"
+_GAME_ML_AWAY_ID = "points-away-game-ml-away"
+
+
+def _extract_two_sided_innings_ml(events: list, home_id: str,
+                                   away_id: str, log_label: str) -> dict:
+    """Shared helper for two-sided innings-window ML extraction.
+
+    Mirrors extract_f5_ml_odds() -- uses _best_book_odds_int for
+    multi-book best-odds selection.
+    """
+    out: dict = {}
+    for event in events:
+        odds       = event.get("odds") or {}
+        home_entry = odds.get(home_id)
+        away_entry = odds.get(away_id)
+        if not home_entry or not away_entry:
+            continue
+        home_odds, home_book = _best_book_odds_int(home_entry)
+        away_odds, away_book = _best_book_odds_int(away_entry)
+        if home_odds is None or away_odds is None:
+            continue
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        commence   = (event.get("status") or {}).get("startsAt", "")
+        out[event_id] = {
+            "away_team":     away,
+            "home_team":     home,
+            "commence_time": commence,
+            "home_odds":     home_odds,
+            "away_odds":     away_odds,
+            "bookmaker":     home_book or away_book,
+            "fair_home":     _safe_int(home_entry.get("fairOdds")),
+            "fair_away":     _safe_int(away_entry.get("fairOdds")),
+            "open_home":     _safe_int(home_entry.get("openBookOdds")),
+            "open_away":     _safe_int(away_entry.get("openBookOdds")),
+        }
+    logger.info(f"SGO {log_label}: {len(out)} events with onshore prices")
+    return out
+
+
+def extract_f1h_ml_odds(events: list) -> dict:
+    """Extract first-half (innings 1-4) two-way moneyline odds."""
+    return _extract_two_sided_innings_ml(
+        events, _F1H_ML_HOME_ID, _F1H_ML_AWAY_ID, "extract_f1h_ml_odds")
+
+
+def extract_game_ml_odds(events: list) -> dict:
+    """Extract full-game two-way moneyline odds."""
+    return _extract_two_sided_innings_ml(
+        events, _GAME_ML_HOME_ID, _GAME_ML_AWAY_ID, "extract_game_ml_odds")

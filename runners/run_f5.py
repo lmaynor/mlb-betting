@@ -356,6 +356,144 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     return out
 
 
+import json as _json
+import numpy as _np
+
+# F1H and GAME ship log-only (stake=0, kelly_triggered=False).
+# To promote F1H to real sizing: remove "F1H" from LOG_ONLY_SYSTEMS.
+LOG_ONLY_SYSTEMS = {"F1H", "GAME"}
+_SCALAR_FALLBACKS = {"F1H": 0.94, "GAME": 0.82}
+_INNINGS_SUBMARKET_CONFIG = [
+    ("F1H",  "extract_f1h_ml_odds",  "F1H",  "F1H"),
+    ("GAME", "extract_game_ml_odds", "GAME", "GAME"),
+]
+
+
+def _load_innings_scalars() -> dict:
+    from mlb_core.storage import read_bytes, exists
+    gcs_key = "F5_Pro_System/data/innings_window_scalars.json"
+    if not exists(gcs_key):
+        logger.info("innings scalars not in GCS -- using fallbacks")
+        return dict(_SCALAR_FALLBACKS)
+    try:
+        data = _json.loads(read_bytes(gcs_key))
+    except Exception as e:
+        logger.warning(f"innings scalars load failed: {e} -- using fallbacks")
+        return dict(_SCALAR_FALLBACKS)
+    scalars = {}
+    for window, info in data.items():
+        if window not in _SCALAR_FALLBACKS:
+            continue
+        if isinstance(info, dict) and info.get("scalar") is not None:
+            scalars[window] = float(info["scalar"])
+            logger.info(f"innings scalar {window}: {info['scalar']:.4f}")
+        else:
+            scalars[window] = _SCALAR_FALLBACKS[window]
+    return scalars
+
+
+def _score_innings_submarkets(predictions_df, scalars: dict,
+                               cfg: dict, run_date: str) -> dict:
+    from mlb_core.odds import sgo
+    from mlb_core.odds.sgo import extract_f1h_ml_odds, extract_game_ml_odds
+    from mlb_core.odds.utils import american_to_implied_prob, remove_vig
+    from mlb_core.odds.dk_scraper import resolve_team
+    from mlb_core.odds.utils import kelly_stake, kelly_pct as kpct
+
+    events = sgo.load_snapshot("Odds/sgo/latest.json")
+    if not events:
+        logger.warning("innings submarkets: SGO snapshot empty")
+        return {s: [] for s, _, _, _ in _INNINGS_SUBMARKET_CONFIG}
+
+    extractor_fns = {
+        "extract_f1h_ml_odds":  extract_f1h_ml_odds,
+        "extract_game_ml_odds": extract_game_ml_odds,
+    }
+    results = {s: [] for s, _, _, _ in _INNINGS_SUBMARKET_CONFIG}
+
+    game_probs: dict = {}
+    game_pks:   dict = {}
+    for _, row in predictions_df.iterrows():
+        p_h = float(row["p_home"]) if "p_home" in row and not pd.isna(row.get("p_home"))               else (float(row["model_prob"]) if row["side"] == "HOME"
+                    else 1.0 - float(row["model_prob"]))
+        key = (row["away_team"], row["home_team"])
+        game_probs[key] = p_h
+        game_pks[key]   = int(row["game_pk"])
+
+    for sys_key, extractor_name, bt_prefix, scalar_key in _INNINGS_SUBMARKET_CONFIG:
+        extractor = extractor_fns[extractor_name]
+        odds_map  = extractor(events)
+        scalar    = scalars.get(scalar_key, _SCALAR_FALLBACKS.get(scalar_key, 1.0))
+        log_only  = sys_key in LOG_ONLY_SYSTEMS
+
+        for event_id, odds_info in odds_map.items():
+            away_abbr = resolve_team(odds_info["away_team"])
+            home_abbr = resolve_team(odds_info["home_team"])
+            if not away_abbr or not home_abbr:
+                continue
+            key    = (away_abbr, home_abbr)
+            p_home = game_probs.get(key)
+            if p_home is None:
+                continue
+            game_pk = game_pks[key]
+
+            p_home_s = float(_np.clip(0.5 + (p_home - 0.5) * scalar, 0.02, 0.98))
+            p_away_s = 1.0 - p_home_s
+
+            ih = american_to_implied_prob(odds_info["home_odds"])
+            ia = american_to_implied_prob(odds_info["away_odds"])
+            if pd.isna(ih) or pd.isna(ia) or (ih + ia) <= 0:
+                continue
+            fair_home, fair_away = remove_vig(ih, ia)
+
+            if p_home_s - fair_home >= p_away_s - fair_away:
+                side, edge, fair, odds, model_prob = (
+                    "HOME", p_home_s - fair_home, fair_home,
+                    odds_info["home_odds"], p_home_s)
+            else:
+                side, edge, fair, odds, model_prob = (
+                    "AWAY", p_away_s - fair_away, fair_away,
+                    odds_info["away_odds"], p_away_s)
+
+            if edge < cfg["min_edge"]:
+                continue
+
+            k_pct_val = round(kpct(edge, odds, cfg["kelly_fraction"]), 4)
+            would_be  = kelly_stake(edge, odds,
+                                    bankroll=cfg["BANKROLL"],
+                                    fraction=cfg["kelly_fraction"],
+                                    min_pct=cfg["min_kelly_pct"],
+                                    max_pct=cfg["max_kelly_pct"])
+            stake = 0.0 if log_only else would_be
+
+            results[sys_key].append({
+                "player":          f"{away_abbr} @ {home_abbr} ({(home_abbr if side=='HOME' else away_abbr)} {bt_prefix})",
+                "game_pk":         game_pk,
+                "away_team":       away_abbr,
+                "home_team":       home_abbr,
+                "side":            side,
+                "bet_type":        f"{bt_prefix}_{side}",
+                "model_prob":      round(model_prob, 4),
+                "market_prob":     round(fair, 4),
+                "edge":            round(edge, 4),
+                "kelly_pct":       k_pct_val,
+                "odds":            int(odds),
+                "stake":           stake,
+                "kelly_triggered": not log_only,
+                "bookmaker":       odds_info.get("bookmaker"),
+                "notes":           _json.dumps({
+                    "p_home_f5":      round(p_home, 4),
+                    "scalar":         round(scalar, 4),
+                    "log_only":       log_only,
+                    "would_be_stake": round(would_be, 2),
+                }),
+            })
+
+        logger.info(f"innings submarkets {sys_key}: {len(results[sys_key])} qualifying bets "
+                    f"(scalar={scalar:.4f}, log_only={log_only})")
+    return results
+
+
 def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"F5 run | type={run_type} | date={run_date}")
@@ -402,5 +540,39 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     post_bets(bet_rows, system="F5", run_date=run_date)
 
-    logger.info(f"F5: {bets_logged} bets logged")
-    return {"bets_logged": bets_logged, "bet_rows": bet_rows}
+    # Innings sub-markets (F1H, GAME -- log-only until calibration confirmed)
+    scalars     = _load_innings_scalars()
+    sub_results = _score_innings_submarkets(today_df, scalars, cfg, run_date)
+    sub_logged  = {}
+    for sys_key, _, _, _ in _INNINGS_SUBMARKET_CONFIG:
+        sub_tracker  = BetTracker(cfg["bet_db"], system=sys_key)
+        logged       = 0
+        sub_rows     = []
+        for bet in sub_results.get(sys_key, []):
+            ret = sub_tracker.log_bet(
+                game_date        = run_date,
+                game_pk          = bet["game_pk"],
+                player           = bet["player"],
+                away_team        = bet["away_team"],
+                home_team        = bet["home_team"],
+                bet_type         = bet["bet_type"],
+                model_prob       = bet["model_prob"],
+                market_prob      = bet["market_prob"],
+                edge             = bet["edge"],
+                kelly_pct        = bet["kelly_pct"],
+                odds             = bet["odds"],
+                stake            = bet["stake"],
+                kelly_triggered  = bet["kelly_triggered"],
+                paper            = cfg["PAPER"],
+                book             = bet.get("bookmaker"),
+                notes            = bet.get("notes", ""),
+            )
+            if ret != -1:
+                logged += 1
+                sub_rows.append(bet)
+        sub_logged[sys_key] = logged
+        post_bets(sub_rows, system=sys_key, run_date=run_date)
+
+    logger.info(f"F5: {bets_logged} bets logged | " +
+                " | ".join(f"{k}: {v} (log-only)" for k, v in sub_logged.items()))
+    return {"bets_logged": bets_logged, "sub_logged": sub_logged, "bet_rows": bet_rows}
