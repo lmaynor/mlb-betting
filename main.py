@@ -486,9 +486,16 @@ SITE_API_KEY  = os.environ.get("SITE_API_KEY", "")
 ALLOWED_ORIGIN = os.environ.get("SITE_ORIGIN", "https://beezy.vip")
 
 
+# Module-level singleton -- one engine per gunicorn worker, not per request.
+# BetTracker init runs schema/migration once at startup, not on every API call.
+_PUBLIC_API_ENGINE = None
+
 def _get_engine():
-    from mlb_core.tracking.bet_tracker import BetTracker
-    return BetTracker(os.environ["MLB_DB_URL"], "HR").engine
+    global _PUBLIC_API_ENGINE
+    if _PUBLIC_API_ENGINE is None:
+        from mlb_core.tracking.bet_tracker import BetTracker
+        _PUBLIC_API_ENGINE = BetTracker(os.environ["MLB_DB_URL"], "HR").engine
+    return _PUBLIC_API_ENGINE
 
 
 
