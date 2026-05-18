@@ -701,6 +701,8 @@ copied into the row/results dict explicitly. It is NOT automatically included
 in pivot tables (NRFI) or feature row merges (F5). Check each runner's
 `results.append()` or `log_bet()` call includes `bookmaker` when adding new markets.
 
+**NRFI calibrator is fit on YRFI probs, not NRFI probs.** `calibrate_nrfi_v17.py` calls `iso.fit(oos_g['model_yrfi_prob'], oos_g['yrfi'])`. The runner must apply the calibrator to `model_yrfi_prob` and then derive `model_nrfi_prob = 1 - calibrated_yrfi`. Applying it to `model_nrfi_prob` produces a sign flip causing all games to show extreme YRFI probability. This is easy to get wrong -- the variable names look symmetric but are not.
+
 **Calibrators must be refit after any model output range change.** Isotonic calibrators are fit on the OOS model output range. If the model is patched (feature_means fix, IP bug fix, etc.) without a full retrain, the output range may shift and the calibrator's X_min/X_max will no longer cover the new output range. sklearn clips out-of-bounds inputs to the nearest boundary value, mapping everything to 0 or 1. Always run the calibrate job after ANY change to model artifacts or feature_means, not just after a full retrain.
 
 **Retrain sequence: always run calibrate job after retrain.** Each system has a paired retrain + calibrate job. Running retrain without calibrate leaves the runner using a stale calibrator fit on the old booster's outputs. The /retrain-weekly route fires all four retrains immediately then all four calibrate jobs 30 min later via a background thread. Manual retrain sequence per system:
