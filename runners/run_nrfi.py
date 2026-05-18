@@ -330,6 +330,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "odds":         odds,
             "stake":        stake if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
+            "bookmaker":    odds_info.get("bookmaker"),
         })
 
     if not results:
