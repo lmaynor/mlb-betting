@@ -59,6 +59,11 @@ mlb-betting/
 │   │   │                         weather_nightly_gcs() -- called by /refresh-data.
 │   │   ├── umpires.py            Umpire scorecard pulls.
 │   │   │                         umpires_nightly_gcs() -- called by /refresh-data.
+│   │   ├── savant_leaderboards.py    Six Baseball Savant leaderboard fetchers.
+│   │   │                             savant_leaderboards_nightly_all_gcs() called
+│   │   │                             by /refresh-data nightly (in-season only).
+│   │   │                             savant_leaderboard_backfill_gcs(dataset, ...)
+│   │   │                             for one-time fills via /backfill-savant.
 │   │   └── game_result.py        fetch_game_result(game_pk) -- MLB Stats API linescore
 │   │                             + boxscore. Returns innings/pitchers/batters dict.
 │   │                             Returns None if game not Final. Used by settle_bets.
@@ -148,7 +153,12 @@ Bucket: `concrete-crow-445205-m4-mlb-data`.
 gs://concrete-crow-445205-m4-mlb-data/
 ├── Statcast/
 │   ├── statcast_master.csv             946k+ pitch rows, 2021-current.
-│   └── cache_daily/
+│   ├── cache_daily/
+│   ├── savant_{dataset}_{YYYY}.csv        Per-season cache (6 datasets:
+│   │                                       exit_velocity_barrels, expected_statistics,
+│   │                                       pitch_arsenals, sprint_speed,
+│   │                                       bat_tracking, batter_arsenal_stats)
+│   └── savant_{dataset}_master.csv        All years combined
 ├── Scoring/
 │   └── scoring_master.csv              Per-(game_pk,inning,half) runs.
 │                                       AUTHORITATIVE for run targets.
@@ -208,6 +218,9 @@ Statcast was previously updated inside `build_hr_features.py`; moved to
 Scoring refresh runs at 08:00 UTC -- 2hr buffer after west coast games
 finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
 No Statcast -- that has its own nightly job inside `build_hr_features.py`.
+Also refreshes six Savant leaderboards for the current season via
+savant_leaderboards_nightly_all_gcs(). In-season: ~60s added to refresh time.
+Off-season (Dec-Feb): no-op, returns status="skipped".
 
 ### Loop B: Feature builds (12:00 UTC)
 | Time | Job | Notes |
@@ -724,6 +737,24 @@ Fix: fit on all data for full range coverage; use OOS split only for eval.
   F5:   mlb-retrain-f5-meta  -> mlb-calibrate-f5
   K:    mlb-retrain-k-v1     -> mlb-calibrate-k
   HR:   mlb-retrain-hr-meta  -> mlb-calibrate-hr
+
+**Savant leaderboards require a browser User-Agent on requests.get().**
+pandas.read_csv(url) returns 403. savant_leaderboards.py uses a Chrome-style
+User-Agent header. If Savant changes bot-detection, the HTML-response check
+(startswith '<!') will catch it and log a warning rather than writing bad data.
+
+**bat_tracking only available from 2023.**
+DATASET_START_YEAR["bat_tracking"] = 2023. Backfill before 2023 returns empty
+(not an error). Nightly refresh skips years before the dataset start year.
+
+**Savant leaderboard data is cumulative season-to-date.**
+Each nightly call overwrites the current season per-year cache file. Historic
+seasons are immutable once the season ends and never re-fetched unless force=True.
+
+**Backfill is slow by design.**
+BACKFILL_SLEEP_MIN=8s, BACKFILL_SLEEP_MAX=14s between calls. Full 6-dataset
+backfill takes 15-25 min. Run via /backfill-savant from Cloud Shell proxy only
+-- not a Scheduler job. Gunicorn timeout 3600s is adequate for a full backfill.
 
 **SGO API key is in Secret Manager version 3.** Version 1 was the old
 exposed key. Version 2 had invisible newlines causing `Invalid leading
