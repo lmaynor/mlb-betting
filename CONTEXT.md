@@ -199,8 +199,11 @@ OUTS shares K's GCS artifacts -- no separate model or feature CSV.
 
 ### Loop A: Data refresh (08:00 UTC -- `mlb-refresh-data`)
 Fetches yesterday's weather (Open-Meteo archive), umpire scorecards
-(umpscorecards.com), and inning-by-inning scoring (MLB Stats API) for
-yesterday's games. Appends all three to GCS masters.
+(umpscorecards.com), inning-by-inning scoring (MLB Stats API), and
+Statcast pitch data for yesterday's games. Appends all four to GCS masters.
+Feature builds only READ from GCS masters -- they never write them.
+Statcast was previously updated inside `build_hr_features.py`; moved to
+`/refresh-data` 2026-05-18 to decouple data refresh from feature builds.
 
 Scoring refresh runs at 08:00 UTC -- 2hr buffer after west coast games
 finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
