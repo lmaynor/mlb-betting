@@ -24,11 +24,19 @@ logger = logging.getLogger(__name__)
 
 # Colour codes per system for the embed sidebar
 _SYSTEM_COLORS = {
-    "NRFI": 0x5865F2,   # blurple
-    "HR":   0xED4245,   # red
-    "F5":   0x57F287,   # green
-    "K":    0xFEE75C,   # yellow
-    "OUTS": 0xE67E22,   # orange
+    "NRFI":        0x5865F2,   # blurple
+    "HR":          0xED4245,   # red
+    "F5":          0x57F287,   # green
+    "K":           0xFEE75C,   # yellow
+    "OUTS":        0xE67E22,   # orange
+    "F3":          0x1ABC9C,   # teal
+    "F1H":         0x3498DB,   # sky blue
+    "F7":          0x8E44AD,   # purple
+    "GAME":        0x2C3E50,   # dark slate
+    "BATTER_K":    0xF0B232,   # amber
+    "BATTER_TB":   0x3BA55D,   # lime green
+    "BATTER_HITS": 0x16A085,   # teal green
+    "PITCHER_ER":  0x9B59B6,   # violet
 }
 
 _DEFAULT_COLOR = 0x99AAB5  # grey
@@ -114,6 +122,52 @@ def _format_bet_headline(b: dict, system: str) -> str:
         line_str  = f" {line}" if line is not None else ""
         market = "Outs Recorded" if sys == "OUTS" or bt.startswith("OUTS_") else "Strikeouts"
         return f"{player}{team_tag} - {side_word}{line_str} {market}"
+
+    if sys in ("F3", "F1H", "F7", "GAME"):
+        _labels = {"F3": "First 3 Innings", "F1H": "First Half",
+                   "F7": "First 7 Innings", "GAME": "Full Game"}
+        label = _labels.get(sys, sys)
+        parts = bt.rsplit("_", 1)
+        side  = parts[1] if len(parts) == 2 else ""
+        if side == "HOME":
+            team_full = home_full
+        elif side == "AWAY":
+            team_full = away_full
+        else:
+            team_full = f"{away_full}/{home_full}"
+        return f"{team_full} - {label} Moneyline"
+
+    if sys == "BATTER_K":
+        player = b.get("player", "")
+        line   = b.get("line")
+        side   = (b.get("side") or "").upper()
+        side_word = "Over" if side == "OVER" else "Under"
+        line_str  = f" {line}" if line is not None else ""
+        return f"{player} - {side_word}{line_str} Strikeouts (Batter)"
+
+    if sys == "BATTER_TB":
+        player = b.get("player", "")
+        line   = b.get("line")
+        side   = (b.get("side") or "").upper()
+        side_word = "Over" if side == "OVER" else "Under"
+        line_str  = f" {line}" if line is not None else ""
+        return f"{player} - {side_word}{line_str} Total Bases"
+
+    if sys == "BATTER_HITS":
+        player = b.get("player", "")
+        line   = b.get("line")
+        side   = (b.get("side") or "").upper()
+        side_word = "Over" if side == "OVER" else "Under"
+        line_str  = f" {line}" if line is not None else ""
+        return f"{player} - {side_word}{line_str} Hits"
+
+    if sys == "PITCHER_ER":
+        player = b.get("player", "")
+        line   = b.get("line")
+        side   = (b.get("side") or "").upper()
+        side_word = "Over" if side == "OVER" else "Under"
+        line_str  = f" {line}" if line is not None else ""
+        return f"{player} - {side_word}{line_str} Earned Runs"
 
     # Fallback
     matchup = f"{b.get('player','')} - {away} @ {home}".strip(" -")

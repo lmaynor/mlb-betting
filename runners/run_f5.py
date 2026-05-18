@@ -208,6 +208,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
             row["_home_odds"] = None
             row["_away_odds"] = None
             row["_event_id"]  = None
+            row["bookmaker"]  = None
         rows.append(row)
 
     if not rows:
