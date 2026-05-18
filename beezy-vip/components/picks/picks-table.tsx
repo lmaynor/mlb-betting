@@ -1,6 +1,6 @@
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
-import type { Bet } from '@/lib/db'
+import type { Bet } from '@/lib/types'
 
 const B = '0.5px solid #1f1f24'
 const TEAM_ABBREV: Record<string, string> = {

@@ -4,8 +4,7 @@ import { useState, useMemo } from 'react'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
 import { B, SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
-import type { Bet } from '@/lib/db'
-import type { SystemStats } from '@/lib/db'
+import type { Bet, SystemStats } from '@/lib/types'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
   ResponsiveContainer, ComposedChart, Area,

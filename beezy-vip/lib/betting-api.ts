@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats } from '@/lib/db'
+import type { Bet, SystemStats } from '@/lib/types'
 
 const API_URL  = process.env.BETTING_API_URL  ?? ''
 const API_KEY  = process.env.BETTING_API_KEY  ?? ''

@@ -2,7 +2,7 @@
  * Design tokens shared across all beezy-vip components.
  * Import from here instead of redefining locally.
  */
-import type { Bet } from '@/lib/db'
+import type { Bet } from '@/lib/types'
 
 // Border constant
 export const B = '0.5px solid #1f1f24'
