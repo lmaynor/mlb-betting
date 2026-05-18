@@ -203,6 +203,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
             row["_home_odds"] = odds_info["home_odds"]
             row["_away_odds"] = odds_info["away_odds"]
             row["_event_id"]  = odds_info.get("event_id")
+            row["bookmaker"]  = odds_info.get("bookmaker")
         else:
             row["_home_odds"] = None
             row["_away_odds"] = None
