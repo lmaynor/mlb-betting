@@ -785,6 +785,8 @@ if any sentinel is stale or status=error. The morning scoring run at 16:00 UTC i
 `/build-features`. Adding runner-side sentinel checks (abort if stale, post Discord
 alert) is on the backlog.
 
+**K/OUTS settlement voids bets when pitcher not in boxscore.** If a pitcher is scratched before throwing a pitch, they won't appear in the MLB Stats API boxscore. The settler now voids the bet (result='void', profit=0) rather than leaving it pending indefinitely. This matches DK rules: pitcher must throw at least one pitch for props to grade.
+
 **HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
 calls the MLB Stats API per game_pk. If the game is not Final, the bet is
 skipped (retried tomorrow). If Final: player not in starting lineup -> void
