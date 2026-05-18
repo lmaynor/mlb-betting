@@ -21,6 +21,9 @@ Five MLB betting systems running daily in GCP:
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
 | **K Pro v1** | E[pitcher strikeouts] (Poisson) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
+| **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
+| **BATTER_HITS** | P(hits > line) Normal proxy via HR model quality | Batter hits O/U (best onshore book) | Live (log-only) |
+| **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
 
 OUTS is a sub-market of the K runner -- same feature CSV, same `run_k.py` -- but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
 
@@ -407,6 +410,9 @@ result cached and shared across all systems in the same settle run.
 | HR | `batters[name].home_runs` | starter + HR > 0 = win; not starter = void |
 | K | `pitchers[name].strikeouts` | vs line O/U |
 | OUTS | `pitchers[name].outs` | vs line O/U |
+| BATTER_TB | `batters[name].total_bases` | vs line O/U; void if not starter |
+| BATTER_HITS | `batters[name].hits` | vs line O/U; void if not starter |
+| PITCHER_ER | `pitchers[name].earned_runs` | vs line O/U; void if not in boxscore |
 
 ### SGO market coverage (all markets, settlement status)
 
@@ -883,6 +889,7 @@ Posts weekly digest every Monday.
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
+- BATTER_TB: 52%, BATTER_HITS: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
 
 ---
 
