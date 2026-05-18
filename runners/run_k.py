@@ -362,7 +362,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "edge":            round(edge, 4),
                         "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
                         "odds":            odds,
-                        "stake":           _stake if kelly_triggered else 0.0,
+                        "stake":           round(_stake, 4) if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
                         "market":          "K",
                         "bookmaker":       k_info.get("bookmaker"),
@@ -422,7 +422,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "edge":            round(edge, 4),
                         "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
                         "odds":            odds,
-                        "stake":           _stake if kelly_triggered else 0.0,
+                        "stake":           round(_stake, 4) if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
                         "market":          "OUTS",
                         "bookmaker":       outs_info.get("bookmaker"),
@@ -440,6 +440,110 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
 
 # ── Entry point ──────────────────────────────────────────────────────────────
+
+# STAGE 5 NOTE: PITCHER_ER ships log-only (stake=0, kelly_triggered=False)
+# for the first 2 weeks. The Gamma approximation via lambda_k proxy is a
+# placeholder -- enable real sizing only after post-hoc analysis confirms
+# edge predicts outcomes.
+
+_LEAGUE_ER_PER_9 = 4.5   # 2026 season -- derived from median DK ER line (2.5) over median starter IP (~5.0)
+
+def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
+    """Score PITCHER_ER sub-market from K model predictions.
+
+    Uses Gamma(shape=mu_er, scale=1) approximation where mu_er is derived
+    from lambda_k (quality proxy) and avg_ip_L5 (durability proxy).
+    Ships log-only until calibration is confirmed.
+    """
+    import math
+    import unicodedata
+    from scipy.stats import gamma as _gamma
+    from mlb_core.odds import sgo as _sgo
+    from mlb_core.odds.sgo import extract_pitcher_er_odds
+    from mlb_core.odds.utils import american_to_implied_prob, remove_vig
+
+    def _norm_name(s):
+        if not isinstance(s, str): return ""
+        import unicodedata as _ud
+        n = _ud.normalize("NFD", s)
+        n = "".join(c for c in n if _ud.category(c) != "Mn")
+        return n.encode("ascii", "ignore").decode().lower().strip()
+
+    events = _sgo.load_snapshot("Odds/sgo/latest.json")
+    if not events:
+        logger.warning("PITCHER_ER: SGO snapshot empty")
+        return []
+
+    er_map  = extract_pitcher_er_odds(events)
+    er_norm = {_norm_name(k): v for k, v in er_map.items()}
+
+    results = []
+    for _, row in predictions_df.iterrows():
+        norm_name = _norm_name(str(row.get("player", "")))
+        odds_info = er_norm.get(norm_name)
+        if odds_info is None:
+            continue
+        line = odds_info.get("line")
+        if line is None:
+            continue
+
+        avg_ip = row.get("avg_ip_L5")
+        if avg_ip is None or (isinstance(avg_ip, float) and math.isnan(avg_ip)):
+            avg_ip = 5.0
+        avg_ip = float(max(1.0, min(9.0, avg_ip)))
+
+        lambda_k = float(row.get("lambda_k", 5.5))
+        lambda_k = max(0.5, lambda_k)
+        quality_mult = (8.5 / 9.0) / (lambda_k / max(avg_ip, 1.0))
+        quality_mult = max(0.4, min(2.5, quality_mult))
+        mu_er = (avg_ip / 9.0) * _LEAGUE_ER_PER_9 * quality_mult
+        mu_er = max(0.1, mu_er)
+        shape = max(0.5, mu_er)
+
+        p_over  = float(1.0 - _gamma.cdf(line, a=shape, scale=1.0))
+        p_under = float(_gamma.cdf(line, a=shape, scale=1.0))
+
+        mkt_over  = american_to_implied_prob(odds_info["over_odds"])
+        mkt_under = american_to_implied_prob(odds_info["under_odds"])
+        total = mkt_over + mkt_under
+        if not total:
+            continue
+        fair_over, fair_under = mkt_over / total, mkt_under / total
+
+        edge_over  = p_over  - fair_over
+        edge_under = p_under - fair_under
+
+        if edge_over >= edge_under:
+            side, edge, fair, odds, model_prob = "OVER", edge_over, fair_over, odds_info["over_odds"], p_over
+        else:
+            side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
+
+        if edge < cfg["min_edge"]:
+            continue
+
+        results.append({
+            "player":          row["player"],
+            "game_pk":         int(row["game_pk"]),
+            "away_team":       row["away_team"],
+            "home_team":       row["home_team"],
+            "line":            float(line),
+            "side":            side,
+            "bet_type":        f"PITCHER_ER_{side}_{line}",
+            "model_prob":      round(model_prob, 4),
+            "market_prob":     round(fair, 4),
+            "edge":            round(edge, 4),
+            "kelly_pct":       0.0,
+            "odds":            odds,
+            "stake":           0.0,
+            "kelly_triggered": False,
+            "bookmaker":       odds_info.get("bookmaker"),
+            "lambda_k":        round(lambda_k, 3),
+            "mu_er":           round(mu_er, 3),
+        })
+
+    logger.info(f"PITCHER_ER: {len(results)} qualifying bets (log-only, stake=0)")
+    return results
+
 
 def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
