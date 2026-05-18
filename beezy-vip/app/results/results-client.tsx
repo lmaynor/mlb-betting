@@ -10,11 +10,45 @@ import {
   ResponsiveContainer, ComposedChart, Area,
 } from 'recharts'
 
-const COL     = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
-const PILL    = SYSTEM_COLOR
-const SYSTEMS = ['ALL', 'NRFI', 'HR', 'F5', 'K', 'OUTS']
+const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
+const PILL = SYSTEM_COLOR
+
+// All systems grouped by type for filter chips
+const SYSTEM_GROUPS = {
+  'Game Lines':      ['NRFI', 'F5'],
+  'Innings Windows': ['F3', 'F1H', 'F7', 'GAME'],
+  'Pitcher Props':   ['K', 'OUTS', 'PITCHER_ER'],
+  'Batter Props':    ['HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
+} as const
+
+// Flat list for the filter chip row: ALL + each system
+const ALL_SYSTEMS = ['ALL', ...Object.values(SYSTEM_GROUPS).flat()]
+
+// Chart shows primary trained models + OUTS (best performer) when ALL is
+// selected; sub-market proxies are omitted to keep lines legible.
+// Each system still appears on its own line when selected individually.
+const CHART_SYSTEMS_PRIMARY = ['NRFI', 'F5', 'K', 'OUTS', 'HR']
+
 const RESULTS = ['ALL', 'WIN', 'LOSS', 'VOID']
 const GATE    = 200
+
+// Short display labels for system filter chips
+const SYSTEM_LABEL: Record<string, string> = {
+  ALL:         'ALL',
+  NRFI:        'NRFI',
+  F5:          'F5',
+  F3:          'F3',
+  F1H:         '1H',
+  F7:          'F7',
+  GAME:        'Game',
+  K:           'K',
+  OUTS:        'Outs',
+  PITCHER_ER:  'Pitcher ER',
+  HR:          'HR',
+  BATTER_K:    'Batter K',
+  BATTER_TB:   'Total Bases',
+  BATTER_HITS: 'Hits',
+}
 
 function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
@@ -32,12 +66,28 @@ function Chip({ label, active, color, onClick }: {
   )
 }
 
+// Group divider label inside the system filter row
+function GroupLabel({ label }: { label: string }) {
+  return (
+    <span style={{
+      fontFamily: 'JetBrains Mono, monospace', fontSize: '9px',
+      letterSpacing: '0.1em', textTransform: 'uppercase' as const,
+      color: '#2a2a31', padding: '0 4px', whiteSpace: 'nowrap' as const,
+    }}>{label}</span>
+  )
+}
+
 function buildPnLChart(bets: Bet[], activeSystem: string) {
   const settled = bets
     .filter(b => b.result && b.result !== 'void' && b.profit != null)
     .sort((a, b) => a.game_date.localeCompare(b.game_date))
 
-  const systems = activeSystem === 'ALL' ? ['NRFI', 'HR', 'F5', 'K', 'OUTS'] : [activeSystem]
+  // When a specific system is selected, show only that system + ALL aggregate.
+  // When ALL is selected, show only primary chart systems to keep lines legible.
+  const systems = activeSystem === 'ALL'
+    ? CHART_SYSTEMS_PRIMARY
+    : [activeSystem]
+
   const cum: Record<string, number> = {}
   systems.forEach(s => cum[s] = 0)
   cum['ALL'] = 0
@@ -48,7 +98,10 @@ function buildPnLChart(bets: Bet[], activeSystem: string) {
     if (!byDate[date]) {
       const dates = Object.keys(byDate).sort()
       const prev = dates.length ? byDate[dates[dates.length - 1]] : {}
-      byDate[date] = { date, ALL: prev.ALL ?? 0, ...Object.fromEntries(systems.map(s => [s, prev[s] ?? 0])) }
+      byDate[date] = {
+        date, ALL: prev.ALL ?? 0,
+        ...Object.fromEntries(systems.map(s => [s, prev[s] ?? 0])),
+      }
     }
     const profit = parseFloat(String(bet.profit)) / 10
     cum['ALL'] += profit
@@ -87,14 +140,20 @@ function buildEdgeChart(bets: Bet[]) {
   const dates = Object.keys(byDate).sort()
   const result = []
   for (let i = 6; i < dates.length; i++) {
-    const window = dates.slice(i - 6, i + 1)
-    const allEdges   = window.flatMap(d => byDate[d].edges)
-    const allProfits = window.flatMap(d => byDate[d].profits)
-    const allStakes  = window.flatMap(d => byDate[d].stakes)
-    const avgEdge    = allEdges.reduce((s, v) => s + v, 0) / allEdges.length
+    const window      = dates.slice(i - 6, i + 1)
+    const allEdges    = window.flatMap(d => byDate[d].edges)
+    const allProfits  = window.flatMap(d => byDate[d].profits)
+    const allStakes   = window.flatMap(d => byDate[d].stakes)
+    const avgEdge     = allEdges.reduce((s, v) => s + v, 0) / allEdges.length
     const totalStaked = allStakes.reduce((s, v) => s + v, 0)
-    const roi = totalStaked > 0 ? allProfits.reduce((s, v) => s + v, 0) / totalStaked * 100 : 0
-    result.push({ date: dates[i], edge: parseFloat(avgEdge.toFixed(1)), roi: parseFloat(roi.toFixed(1)) })
+    const roi = totalStaked > 0
+      ? allProfits.reduce((s, v) => s + v, 0) / totalStaked * 100
+      : 0
+    result.push({
+      date: dates[i],
+      edge: parseFloat(avgEdge.toFixed(1)),
+      roi:  parseFloat(roi.toFixed(1)),
+    })
   }
   return result
 }
@@ -106,11 +165,13 @@ const PnLTooltip = ({ active, payload, label }: any) => {
   return (
     <div style={{ background: '#111114', border: B, padding: '10px 14px', fontSize: '11px', fontFamily: 'monospace', minWidth: '120px' }}>
       <div style={{ color: '#71717a', marginBottom: '6px' }}>{label}</div>
-      {payload.filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey)).map((p: any) => (
-        <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? '#f5f5f7', marginBottom: '2px' }}>
-          {p.dataKey}: {p.value >= 0 ? '+' : ''}{p.value.toFixed(1)}u
-        </div>
-      ))}
+      {payload
+        .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
+        .map((p: any) => (
+          <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? '#f5f5f7', marginBottom: '2px' }}>
+            {p.dataKey}: {p.value >= 0 ? '+' : ''}{p.value.toFixed(1)}u
+          </div>
+        ))}
     </div>
   )
 }
@@ -227,9 +288,9 @@ export function ResultsClient({
               Cumulative P&L
             </span>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {(system === 'ALL' ? ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'ALL'] : [system]).map(s => (
+              {[...chartSystems, 'ALL'].map(s => (
                 <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: PILL[s], flexShrink: 0, display: 'inline-block' }} />
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: PILL[s] ?? '#f5f5f7', flexShrink: 0, display: 'inline-block' }} />
                   <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{s}</span>
                 </span>
               ))}
@@ -251,8 +312,8 @@ export function ResultsClient({
               <ReferenceLine y={0} stroke="#2a2a31" strokeDasharray="3 3" />
               <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
               <Area dataKey="dd_bot" fill="#ef444420" stroke="none" legendType="none" />
-              {system === 'ALL' && chartSystems.map(s => (
-                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s]}
+              {chartSystems.map(s => (
+                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#a1a1aa'}
                   strokeWidth={1} dot={false} connectNulls strokeOpacity={0.6} />
               ))}
               <Line type="monotone" dataKey="ALL" stroke="#f5f5f7" strokeWidth={2.5} dot={false} connectNulls />
@@ -293,7 +354,7 @@ export function ResultsClient({
         </div>
       )}
 
-      {/* Per-system table */}
+      {/* Per-system stats table -- groups by type with subtle dividers */}
       {initialStats.length > 0 && (
         <div style={{ border: B, marginBottom: '24px', overflowX: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', background: '#111114', borderBottom: B }}>
@@ -301,69 +362,120 @@ export function ResultsClient({
               <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', padding: '9px 12px' }}>{h}</div>
             ))}
           </div>
-          {initialStats.map((s, i) => {
-            const r   = parseFloat(String(s.roi ?? 0))
-            const pnl = parseFloat(String(s.total_pnl ?? 0))
-            const pc  = PILL[s.system] ?? '#a1a1aa'
-            return (
-              <div key={s.system} style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', borderBottom: i < initialStats.length - 1 ? B : undefined, alignItems: 'center' }}>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>
-                  {s.total_bets}<span style={{ color: '#2a2a31' }}>/{GATE}</span>
+          {(() => {
+            // Render stats rows grouped by type, with group header rows
+            const groupOrder = ['Game Lines', 'Innings Windows', 'Pitcher Props', 'Batter Props']
+            const statsBySystem = Object.fromEntries(initialStats.map(s => [s.system, s]))
+            const rows: React.ReactNode[] = []
+
+            groupOrder.forEach(groupName => {
+              const groupSystems = SYSTEM_GROUPS[groupName as keyof typeof SYSTEM_GROUPS]
+              const groupStats   = groupSystems.map(s => statsBySystem[s]).filter(Boolean)
+              if (groupStats.length === 0) return
+
+              // Group header
+              rows.push(
+                <div key={`hdr-${groupName}`} style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
+                  borderBottom: B, background: '#0a0a0c',
+                }}>
+                  <div className="mono" style={{
+                    gridColumn: '1 / -1', padding: '6px 12px',
+                    fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
+                    color: '#2a2a31',
+                  }}>{groupName}</div>
                 </div>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r >= 0 ? '#10b981' : '#ef4444' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}%</div>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? '#10b981' : '#ef4444' }}>{pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u</div>
-                <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#10b981' }}>+{parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%</div>
-              </div>
-            )
-          })}
+              )
+
+              groupStats.forEach((s, i) => {
+                const r   = parseFloat(String(s.roi ?? 0))
+                const pnl = parseFloat(String(s.total_pnl ?? 0))
+                const pc  = PILL[s.system] ?? '#a1a1aa'
+                rows.push(
+                  <div key={s.system} style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
+                    borderBottom: B, alignItems: 'center',
+                  }}>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>
+                      {s.total_bets}<span style={{ color: '#2a2a31' }}>/{GATE}</span>
+                    </div>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r >= 0 ? '#10b981' : '#ef4444' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}%</div>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? '#10b981' : '#ef4444' }}>{pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u</div>
+                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#10b981' }}>+{parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%</div>
+                  </div>
+                )
+              })
+            })
+
+            return rows
+          })()}
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>System</span>
-          {SYSTEMS.map(s => <Chip key={s} label={s} active={system === s} color={PILL[s]} onClick={() => setSystem(s)} />)}
-        </div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>Result</span>
-          {RESULTS.map(r => (
-            <Chip key={r} label={r} active={result === r}
-              color={r === 'WIN' ? '#10b981' : r === 'LOSS' ? '#ef4444' : r === 'VOID' ? '#71717a' : undefined}
-              onClick={() => setResult(r)} />
+      {/* System filter chips -- grouped with labels */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', marginBottom: '10px' }}>
+
+          {/* ALL chip */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>System</span>
+            <Chip label="ALL" active={system === 'ALL'} onClick={() => setSystem('ALL')} />
+          </div>
+
+          {/* Grouped system chips */}
+          {Object.entries(SYSTEM_GROUPS).map(([groupName, systems]) => (
+            <div key={groupName} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <GroupLabel label={groupName} />
+              {systems.map(s => (
+                <Chip key={s} label={SYSTEM_LABEL[s] ?? s} active={system === s}
+                  color={PILL[s]} onClick={() => setSystem(s)} />
+              ))}
+            </div>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>Sort</span>
-          {(['date', 'edge', 'odds', 'pnl'] as const).map(s => (
-            <button key={s}
-              onClick={() => {
-                if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-                else { setSortBy(s); setSortDir('desc') }
-              }}
-              className="mono"
-              style={{
-                fontSize: '11px', padding: '4px 10px', cursor: 'pointer',
-                border: `0.5px solid ${sortBy === s ? '#10b981' : '#1f1f24'}`,
-                color: sortBy === s ? '#10b981' : '#71717a',
-                background: sortBy === s ? '#10b98112' : 'transparent',
-                letterSpacing: '0.04em', textTransform: 'uppercase' as const,
-              }}>
-              {s}{sortBy === s ? (sortDir === 'desc' ? ' \u2193' : ' \u2191') : ''}
-            </button>
-          ))}
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{filtered.length} bets</span>
-          {filtered.length > 0 && (
-            <button onClick={() => exportCSV(filtered)} className="mono" style={{
-              fontSize: '10px', padding: '4px 10px', cursor: 'pointer',
-              border: '0.5px solid #2a2a31', color: '#71717a', background: 'transparent',
-              letterSpacing: '0.05em', textTransform: 'uppercase' as const,
-            }}>Export CSV</button>
-          )}
+
+        {/* Result + Sort row */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>Result</span>
+            {RESULTS.map(r => (
+              <Chip key={r} label={r} active={result === r}
+                color={r === 'WIN' ? '#10b981' : r === 'LOSS' ? '#ef4444' : r === 'VOID' ? '#71717a' : undefined}
+                onClick={() => setResult(r)} />
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>Sort</span>
+            {(['date', 'edge', 'odds', 'pnl'] as const).map(s => (
+              <button key={s}
+                onClick={() => {
+                  if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+                  else { setSortBy(s); setSortDir('desc') }
+                }}
+                className="mono"
+                style={{
+                  fontSize: '11px', padding: '4px 10px', cursor: 'pointer',
+                  border: `0.5px solid ${sortBy === s ? '#10b981' : '#1f1f24'}`,
+                  color: sortBy === s ? '#10b981' : '#71717a',
+                  background: sortBy === s ? '#10b98112' : 'transparent',
+                  letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+                }}>
+                {s}{sortBy === s ? (sortDir === 'desc' ? ' v' : ' ^') : ''}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{filtered.length} bets</span>
+            {filtered.length > 0 && (
+              <button onClick={() => exportCSV(filtered)} className="mono" style={{
+                fontSize: '10px', padding: '4px 10px', cursor: 'pointer',
+                border: '0.5px solid #2a2a31', color: '#71717a', background: 'transparent',
+                letterSpacing: '0.05em', textTransform: 'uppercase' as const,
+              }}>Export CSV</button>
+            )}
+          </div>
         </div>
       </div>
 

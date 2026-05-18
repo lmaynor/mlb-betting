@@ -2,19 +2,53 @@
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 
+// ── Type -> Market mapping (four groups) ─────────────────────────────────
 const TYPE_MARKETS: Record<string, string[]> = {
-  'All':          ['All', 'NRFI', 'HR', 'F5', 'K', 'OUTS'],
-  'Game Lines':   ['All', 'F5', 'NRFI'],
-  'Player Props': ['All', 'HR', 'K', 'OUTS'],
+  'All':             ['All', 'NRFI', 'F5', 'F3', 'F1H', 'F7', 'GAME', 'K', 'OUTS', 'PITCHER_ER', 'HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
+  'Game Lines':      ['All', 'NRFI', 'F5'],
+  'Innings Windows': ['All', 'F3', 'F1H', 'F7', 'GAME'],
+  'Pitcher Props':   ['All', 'K', 'OUTS', 'PITCHER_ER'],
+  'Batter Props':    ['All', 'HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
 }
-const TYPES    = ['All', 'Game Lines', 'Player Props']
+const TYPES    = ['All', 'Game Lines', 'Innings Windows', 'Pitcher Props', 'Batter Props']
 const BOOKS    = ['All', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'theScore', 'PointsBet']
 const DATES    = [{ label: 'Today', value: 'today' }, { label: 'Yesterday', value: 'yesterday' }, { label: 'Last 7 Days', value: 'last7' }]
 const STATUSES = [{ label: 'All', value: 'all' }, { label: 'Pending', value: 'pending' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }]
 
-const PILL: Record<string, string> = {
-  NRFI: '#10b981', HR: '#f59e0b', F5: '#3b82f6', K: '#a78bfa', OUTS: '#fb923c',
+// Market display labels (shorter for the filter chip)
+const MARKET_LABEL: Record<string, string> = {
+  NRFI:       'NRFI',
+  F5:         'F5',
+  F3:         'F3',
+  F1H:        '1H',
+  F7:         'F7',
+  GAME:       'Game',
+  K:          'K',
+  OUTS:       'Outs',
+  PITCHER_ER: 'Pitcher ER',
+  HR:         'HR',
+  BATTER_K:   'Batter K',
+  BATTER_TB:  'Total Bases',
+  BATTER_HITS:'Hits',
 }
+
+// Per-market colors matching tokens.ts SYSTEM_COLOR
+const PILL: Record<string, string> = {
+  NRFI:       '#10b981',
+  F5:         '#3b82f6',
+  F3:         '#06b6d4',
+  F1H:        '#0ea5e9',
+  F7:         '#6366f1',
+  GAME:       '#94a3b8',
+  K:          '#a78bfa',
+  OUTS:       '#fb923c',
+  PITCHER_ER: '#f43f5e',
+  HR:         '#f59e0b',
+  BATTER_K:   '#e879f9',
+  BATTER_TB:  '#84cc16',
+  BATTER_HITS:'#14b8a6',
+}
+
 const B = '0.5px solid #1f1f24'
 
 function Chip({ label, active, disabled, color, onClick }: {
@@ -65,11 +99,14 @@ export function PicksFilterBar() {
   const activeMarket = get('market', 'All')
   const markets      = TYPE_MARKETS[activeType] ?? TYPE_MARKETS['All']
 
-  // Show "More filters" button as active if any non-default value is set
   const hasMoreActive = sp.get('type') || sp.get('book')
 
   return (
-    <div style={{ position: 'sticky', top: '48px', zIndex: 40, background: 'rgba(10,10,12,0.97)', borderBottom: B, padding: '10px 20px', backdropFilter: 'blur(8px)' }}>
+    <div style={{
+      position: 'sticky', top: '48px', zIndex: 40,
+      background: 'rgba(10,10,12,0.97)', borderBottom: B,
+      padding: '10px 20px', backdropFilter: 'blur(8px)',
+    }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
         {/* Row 1: Date + Result + More filters toggle */}
@@ -103,13 +140,17 @@ export function PicksFilterBar() {
           </button>
         </div>
 
-        {/* Row 2: Market (always visible, primary filter) */}
+        {/* Row 2: Market chips (driven by active type) */}
         <div style={rowStyle}>
           <span style={labelStyle}>Market</span>
           {markets.map(m => (
-            <Chip key={m} label={m} color={PILL[m]}
+            <Chip
+              key={m}
+              label={m === 'All' ? 'All' : (MARKET_LABEL[m] ?? m)}
+              color={PILL[m]}
               active={activeMarket === m || (m === 'All' && !sp.get('market'))}
-              onClick={() => set('market', m)} />
+              onClick={() => set('market', m)}
+            />
           ))}
         </div>
 
