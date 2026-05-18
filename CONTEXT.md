@@ -76,6 +76,9 @@ mlb-betting/
 │   │   │                           extract_f5_ml_odds()
 │   │   │                           extract_k_odds()
 │   │   │                           extract_outs_odds()
+│   │   │                           extract_batter_hits_odds()
+│   │   │                           extract_batter_tb_odds()
+│   │   │                           extract_pitcher_er_odds()
 │   │   ├── dk_scraper.py         LEGACY. Kept for resolve_team() only.
 │   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake.
 │   ├── notify/
@@ -384,6 +387,9 @@ This gives one clean daily embed covering all five systems (HR, NRFI, F5, K, OUT
 | F5 | side string | `"HOME"`, `"AWAY"` |
 | K | `"K_{SIDE}_{LINE}"` | `"K_OVER_7.5"`, `"K_UNDER_5.5"` |
 | OUTS | `"OUTS_{SIDE}_{LINE}"` | `"OUTS_OVER_14.5"`, `"OUTS_UNDER_17.5"` |
+| BATTER_TB | `"BATTER_TB_{SIDE}_{LINE}"` | `"BATTER_TB_OVER_1.5"`, `"BATTER_TB_UNDER_1.5"` |
+| BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
+| PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
 
 ### Settlement sources
 
@@ -410,15 +416,15 @@ Add new systems by extracting from SGO snapshot + reading from game_result dict.
 | SGO market | odd_id pattern | MLB API field | Status |
 |---|---|---|---|
 | HR yes/no | `batting_homeRuns-*-yn-yes` | `batters[name].home_runs` | Live |
-| Batter hits | `batting_hits-*-ou` | `batters[name].hits` | Backlog |
-| Batter total bases | `batting_totalBases-*-ou` | `batters[name].total_bases` | Backlog |
+| Batter hits | `batting_hits-*-ou` | `batters[name].hits` | Live (log-only) |
+| Batter total bases | `batting_totalBases-*-ou` | `batters[name].total_bases` | Live (log-only) |
 | Batter RBI | `batting_RBI-*-ou` | `batters[name].rbi` | Backlog |
 | Batter runs | `points-{PLAYER}-game-ou` | `batters[name].runs` | Backlog |
 | Batter strikeouts | `batting_strikeouts-*-ou` | `batters[name].strikeouts` | Backlog |
 | Stolen bases | `batting_stolenBases-*-ou` | `batters[name].stolen_bases` | Backlog |
 | Pitcher strikeouts | `pitching_strikeouts-*-ou` | `pitchers[name].strikeouts` | Live |
 | Pitcher outs | `pitching_outs-*-ou` | `pitchers[name].outs` | Live |
-| Pitcher earned runs | `pitching_earnedRuns-*-ou` | `pitchers[name].earned_runs` | Backlog |
+| Pitcher earned runs | `pitching_earnedRuns-*-ou` | `pitchers[name].earned_runs` | Live (log-only) |
 | Pitcher hits allowed | `pitching_hits-*-ou` | `pitchers[name].hits_allowed` | Backlog |
 | Pitcher walks | `pitching_basesOnBalls-*-ou` | `pitchers[name].walks` | Backlog |
 | Pitcher pitches | `pitching_pitchesThrown-*-ou` | `pitchers[name].pitches_thrown` | Backlog |
@@ -737,6 +743,17 @@ Fix: fit on all data for full range coverage; use OOS split only for eval.
   F5:   mlb-retrain-f5-meta  -> mlb-calibrate-f5
   K:    mlb-retrain-k-v1     -> mlb-calibrate-k
   HR:   mlb-retrain-hr-meta  -> mlb-calibrate-hr
+
+**BATTER_TB, BATTER_HITS, and PITCHER_ER ship log-only (stake=0, kelly_triggered=False).**
+All three use proxy models (Normal/Gamma approximations anchored to HR or K model output)
+rather than dedicated trained models. Do not enable real Kelly sizing until post-hoc
+analysis of ~100 settled bets confirms the proxy edge predicts outcomes. Gate is in
+the runner code -- set stake and kelly_triggered manually after review.
+
+**BATTER_K dropped -- no paired onshore book coverage.**
+batting_strikeouts- over entries only appear on DraftKings; under entries only on
+BetMGM, and the player sets don't overlap. Result: 0 matched pairs after
+_best_book_odds_int(). Skip until book coverage improves.
 
 **F3/F7 innings window markets are 3-way on SGO (draw/not_draw), not two-way ML.**
 The extractors in sgo_innings_extractors.py assume two-way home/away format matching

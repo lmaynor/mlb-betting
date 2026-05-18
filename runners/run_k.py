@@ -497,5 +497,33 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     post_bets(k_rows,    system="K",    run_date=run_date)
     post_bets(outs_rows, system="OUTS", run_date=run_date)
 
-    logger.info(f"K: {bets_logged} bets logged")
-    return {"bets_logged": bets_logged, "bet_rows": bet_rows}
+    # PITCHER_ER sub-market (log-only, stake=0 until calibration confirmed)
+    er_bets    = _score_pitcher_er(today_df, cfg, run_date)
+    er_tracker = BetTracker(cfg["bet_db"], system="PITCHER_ER")
+    er_logged  = 0
+    er_rows    = []
+    for bet in er_bets:
+        ret = er_tracker.log_bet(
+            game_date        = run_date,
+            game_pk          = bet["game_pk"],
+            player           = bet["player"],
+            away_team        = bet["away_team"],
+            home_team        = bet["home_team"],
+            bet_type         = bet["bet_type"],
+            model_prob       = bet["model_prob"],
+            market_prob      = bet["market_prob"],
+            edge             = bet["edge"],
+            kelly_pct        = bet["kelly_pct"],
+            odds             = bet["odds"],
+            stake            = bet["stake"],
+            kelly_triggered  = bet["kelly_triggered"],
+            paper            = cfg["PAPER"],
+            book             = bet.get("bookmaker"),
+        )
+        if ret != -1:
+            er_logged += 1
+            er_rows.append(bet)
+    post_bets(er_rows, system="PITCHER_ER", run_date=run_date)
+
+    logger.info(f"K: {bets_logged} bets logged | PITCHER_ER: {er_logged} (log-only)")
+    return {"bets_logged": bets_logged, "er_logged": er_logged, "bet_rows": bet_rows}

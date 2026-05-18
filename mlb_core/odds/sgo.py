@@ -76,6 +76,10 @@ _HR_YN_PREFIX     = "batting_homeRuns-"
 _HR_OU_PREFIX     = "batting_homeRuns-"
 _K_PREFIX         = "pitching_strikeouts-"
 _OUTS_PREFIX      = "pitching_outs-"
+_BATTER_HITS_PREFIX = "batting_hits-"
+_BATTER_TB_PREFIX   = "batting_totalBases-"
+_BATTER_K_PREFIX    = "batting_strikeouts-"
+_PITCHER_ER_PREFIX  = "pitching_earnedRuns-"
 _NRFI_OVER_ID     = "points-all-1i-ou-over"
 _NRFI_UNDER_ID    = "points-all-1i-ou-under"
 _1I_3WAY_AWAY_ID  = "points-away-1i-ml3way-away"   # away scores, home doesn't
@@ -636,3 +640,88 @@ def _safe_int(raw) -> Optional[int]:
         return int(str(raw).replace("\u2212", "-").strip())
     except (ValueError, TypeError):
         return None
+
+
+def _extract_player_ou_props(events: list, prefix: str, stat_id: str,
+                              log_label: str) -> dict:
+    """Generic player O/U extractor -- shared by all four new batter/pitcher markets.
+
+    Mirrors extract_k_odds() pattern exactly: two-pass over/under per playerID,
+    zip into output dict keyed by display name from event players block.
+    Uses _best_book_odds_int() for multi-book best-odds selection.
+    """
+    out: dict = {}
+    for event in events:
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        odds       = event.get("odds") or {}
+        over_map:  dict = {}
+        under_map: dict = {}
+        for odd_id, entry in odds.items():
+            if not odd_id.startswith(prefix):
+                continue
+            if entry.get("statID") != stat_id:
+                continue
+            if entry.get("betTypeID") != "ou":
+                continue
+            player_id = entry.get("playerID") or entry.get("statEntityID")
+            if not player_id:
+                continue
+            side = entry.get("sideID")
+            if side == "over":
+                over_map[player_id] = entry
+            elif side == "under":
+                under_map[player_id] = entry
+
+        for player_id, over_entry in over_map.items():
+            under_entry = under_map.get(player_id)
+            if not under_entry:
+                continue
+            over_odds,  over_book  = _best_book_odds_int(over_entry)
+            under_odds, under_book = _best_book_odds_int(under_entry)
+            if over_odds is None or under_odds is None:
+                continue
+            name = _player_name(event, player_id)
+            if not name:
+                continue
+            book = over_book or under_book
+            out[name] = {
+                "over_odds":  over_odds,
+                "under_odds": under_odds,
+                "line":       _dk_line_float(over_entry),
+                "away_team":  away,
+                "home_team":  home,
+                "event_id":   event_id,
+                "bookmaker":  book,
+                "fair_over":  _safe_int(over_entry.get("fairOdds")),
+                "fair_under": _safe_int(under_entry.get("fairOdds")),
+                "open_over":  _safe_int(over_entry.get("openBookOdds")),
+                "open_under": _safe_int(under_entry.get("openBookOdds")),
+            }
+
+    logger.info(f"SGO {log_label}: {len(out)} players with onshore prices")
+    return out
+
+
+def extract_batter_hits_odds(events: list) -> dict:
+    """Extract batter hits O/U odds. Returns {player_name: {over_odds, under_odds, line, ...}}"""
+    return _extract_player_ou_props(events, _BATTER_HITS_PREFIX, "batting_hits",
+                                    "extract_batter_hits_odds")
+
+
+def extract_batter_tb_odds(events: list) -> dict:
+    """Extract batter total bases O/U odds."""
+    return _extract_player_ou_props(events, _BATTER_TB_PREFIX, "batting_totalBases",
+                                    "extract_batter_tb_odds")
+
+
+def extract_batter_k_odds(events: list) -> dict:
+    """Extract batter strikeouts O/U odds."""
+    return _extract_player_ou_props(events, _BATTER_K_PREFIX, "batting_strikeouts",
+                                    "extract_batter_k_odds")
+
+
+def extract_pitcher_er_odds(events: list) -> dict:
+    """Extract pitcher earned runs O/U odds."""
+    return _extract_player_ou_props(events, _PITCHER_ER_PREFIX, "pitching_earnedRuns",
+                                    "extract_pitcher_er_odds")
