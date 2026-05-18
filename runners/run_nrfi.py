@@ -235,12 +235,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     if calibrator is not None:
         try:
-            # Calibrator was fit on YRFI probs -> YRFI actuals
-            pivot["model_yrfi_prob"] = calibrator.predict(
-                pivot["model_yrfi_prob"].values
-            )
+            # Calibrator was fit on YRFI probs -> YRFI actuals.
+            # Only apply to games within the calibrator's fitted X range;
+            # out-of-range games keep their raw probs to avoid boundary clipping.
+            raw_yrfi = pivot["model_yrfi_prob"].values.copy()
+            in_range = (raw_yrfi >= calibrator.X_min_) & (raw_yrfi <= calibrator.X_max_)
+            cal_yrfi = raw_yrfi.copy()
+            if in_range.any():
+                cal_yrfi[in_range] = calibrator.predict(raw_yrfi[in_range])
+            pivot["model_yrfi_prob"] = cal_yrfi
             pivot["model_nrfi_prob"] = 1.0 - pivot["model_yrfi_prob"]
-            logger.info("NRFI: isotonic calibrator applied")
+            n_cal = int(in_range.sum())
+            logger.info(f"NRFI: isotonic calibrator applied to {n_cal}/{len(raw_yrfi)} games")
         except Exception as e:
             logger.warning(f"NRFI calibrator predict failed: {e} -- using raw probs")
 
