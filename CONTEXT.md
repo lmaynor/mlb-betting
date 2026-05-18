@@ -1184,6 +1184,16 @@ Vercel. The existing scheduler routes (`/run`, `/settle`, etc.) are still
 protected by OIDC tokens from the schedulers -- they just aren't blocked at
 the IAM level anymore. Add a secret check to those routes before going live.
 
+### Dynamic system route
+Per-system pick pages (`/picks/mlb/nrfi` etc) are served by a single
+dynamic route at `app/picks/mlb/[system]/page.tsx`. Invalid slugs return
+404 via `notFound()`. Do not create individual static page files per system.
+
+### Design tokens
+Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or
+`pickLabel` locally in components. Import from `@/lib/tokens` instead.
+When adding a new system, update `lib/tokens.ts` only.
+
 ### Tailwind v4 gotchas
 
 **The core rule: use pure inline styles for everything in beezy-vip. Do not
