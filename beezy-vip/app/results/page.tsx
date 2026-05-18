@@ -43,40 +43,7 @@ function Chip({ label, active, color, onClick }: { label: string; active: boolea
   )
 }
 
-function pickLabel(bet: Bet): string {
-  const bt   = bet.bet_type ?? ''
-  const sys  = bet.system
-  const away = bet.away_team ?? ''
-  const home = bet.home_team ?? ''
-  const player = bet.player ?? ''
-  const team = away.length <= 3 ? away : home.length <= 3 ? home : away
-
-  if (sys === 'NRFI') {
-    if (bt === 'NRFI')    return 'No Run 1st Inning'
-    if (bt === 'YRFI')    return 'Run in 1st Inning'
-    if (bt === '1I_HOME') return `${home} 1st Inning Moneyline`
-    if (bt === '1I_AWAY') return `${away} 1st Inning Moneyline`
-    if (bt === '1I_DRAW') return 'Draw 1st Inning Moneyline'
-    return bt
-  }
-  if (sys === 'F5') {
-    if (bt === 'HOME') return `${home} First 5 Innings Moneyline`
-    if (bt === 'AWAY') return `${away} First 5 Innings Moneyline`
-    return bt
-  }
-  if (sys === 'HR')   return `${player} (${team}) to Hit a Home Run`
-  if (sys === 'K') {
-    const side = bt.startsWith('K_OVER_') ? 'Over' : 'Under'
-    const line = bt.replace('K_OVER_', '').replace('K_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Strikeouts`
-  }
-  if (sys === 'OUTS') {
-    const side = bt.startsWith('OUTS_OVER_') ? 'Over' : 'Under'
-    const line = bt.replace('OUTS_OVER_', '').replace('OUTS_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Outs`
-  }
-  return bt
-}
+// pickLabel imported from @/lib/tokens
 
 function buildPnLChart(bets: Bet[], activeSystem: string) {
   const settled = bets
