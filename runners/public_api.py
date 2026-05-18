@@ -22,7 +22,7 @@ def get_today_picks(engine):
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
             "FROM bets "
-            "WHERE game_date = CURRENT_DATE AND kelly_triggered = true "
+            "WHERE game_date = CURRENT_DATE::text AND kelly_triggered = true "
             "ORDER BY system, created_at DESC"
         )).mappings().all()
     return [dict(r) for r in rows]
