@@ -352,6 +352,9 @@ def backfill_statcast():
 @app.route("/reset-and-run", methods=["POST"])
 def reset_and_run():
     """Reset bets for a date and immediately rerun all systems. For recovery use only."""
+    err = _auth_required(request)
+    if err:
+        return err
     from sqlalchemy import text
     from mlb_core.tracking.bet_tracker import BetTracker
     from runners.run_hr import run as run_hr
@@ -383,6 +386,9 @@ def reset_and_run():
 @app.route("/reset-bets", methods=["POST"])
 def reset_bets():
     """Delete bets by date, system, player, or game_pk. Requires at least date."""
+    err = _auth_required(request)
+    if err:
+        return err
     from sqlalchemy import text
     from mlb_core.tracking.bet_tracker import BetTracker
     body    = request.get_json(silent=True) or {}
@@ -444,15 +450,22 @@ def dashboard():
             f"<td>${pnl:+.2f}</td><td>{avg_edge}</td></tr>"
         )
 
-    where = f"WHERE created_at >= NOW() - INTERVAL '{days} days'"
+    where_clause = f"WHERE created_at >= NOW() - INTERVAL '{days} days'"
+    bind_params: dict = {}
     if system_filter:
-        where += f" AND system = '{system_filter}'"
+        # Whitelist — never interpolate user input into SQL strings.
+        _VALID_SYSTEMS_DASH = {"HR","NRFI","F5","K","OUTS","F3","F1H","F7","GAME",
+                               "BATTER_K","BATTER_TB","BATTER_HITS","PITCHER_ER"}
+        if system_filter.upper() not in _VALID_SYSTEMS_DASH:
+            return jsonify({"error": f"Invalid system: {system_filter}"}), 400
+        where_clause += " AND system = :system_filter"
+        bind_params["system_filter"] = system_filter.upper()
     with bt.engine.connect() as conn:
         rows = conn.execute(text(
             f"SELECT id, system, game_date, player, bet_type, model_prob, market_prob, "
             f"edge, odds, stake, kelly_triggered, lambda_k, proj_k, result, profit "
-            f"FROM bets {where} ORDER BY game_date DESC, model_prob DESC LIMIT 500"
-        )).fetchall()
+            f"FROM bets {where_clause} ORDER BY game_date DESC, model_prob DESC LIMIT 500"
+        ), bind_params).fetchall()
 
     bet_rows_html = ""
     for b in [dict(r._mapping) for r in rows]:
@@ -669,6 +682,36 @@ def public_stats_summary():
 
 
 
+@app.route("/capture-closing", methods=["POST"])
+def capture_closing_handler():
+    """Capture closing lines for all open bets today. Run at T-5 min per game."""
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
+    try:
+        from runners.capture_closing_lines import run as capture_run
+        result = capture_run(run_date=run_date)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"capture-closing failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify(result), 200
+
+
+@app.route("/monitor-drift", methods=["POST"])
+def monitor_drift_handler():
+    """PSI feature drift monitor. Run weekly (Monday mornings)."""
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
+    try:
+        from runners.monitor_drift import run as drift_run
+        result = drift_run(run_date=run_date)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"monitor-drift failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify(result), 200
+
+
 @app.route("/retrain-weekly", methods=["POST"])
 def retrain_weekly():
     """
@@ -688,9 +731,9 @@ def retrain_weekly():
 
     RETRAIN_JOBS  = [
         "mlb-retrain-nrfi-v17",
-        "mlb-retrain-f5-meta",
+        "mlb-retrain-f5-v5",      # was mlb-retrain-f5-meta (T11: deprecated shim)
         "mlb-retrain-k-v1",
-        "mlb-retrain-hr-meta",
+        "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
     ]
     CALIBRATE_JOBS = [
         "mlb-calibrate-nrfi",
