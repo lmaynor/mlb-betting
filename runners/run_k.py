@@ -148,6 +148,14 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
                 logger.info(f"K: no feature snapshot for {pname} (id={pid})")
                 continue
             row = match.iloc[0].to_dict()
+            _last_app = match.iloc[0]["game_date"]
+            _days_since = (pd.Timestamp(run_date) - _last_app).days
+            if _days_since > 10:
+                logger.info(
+                    f"K: skipping {pname} -- last appearance {_days_since}d ago "
+                    f"(IL-return threshold)"
+                )
+                continue
             row["game_pk"]            = g["game_pk"]
             row["game_date"]          = pd.Timestamp(run_date)
             row["home_team"]          = g["home_team"]

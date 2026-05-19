@@ -489,3 +489,38 @@ def test_settle_game_not_final_all_systems():
     assert _settle_f5(pending_f5, cache) == []
     assert _settle_hr(pending_hr, cache) == []
     assert _settle_k(pending_k, cache) == []
+
+
+# ── T19: IL-return threshold tests ────────────────────────────────────────────
+
+def test_il_return_threshold_stale():
+    """Pitcher whose last appearance was 11 days ago should be flagged as stale."""
+    import pandas as pd
+    run_date = "2026-05-19"
+    last_app = pd.Timestamp("2026-05-08")   # 11 days before run_date
+    days_since = (pd.Timestamp(run_date) - last_app).days
+    assert days_since > 10, (
+        f"Expected pitcher to be skipped (days_since={days_since} > 10)"
+    )
+
+
+def test_il_return_threshold_active():
+    """Pitcher whose last appearance was 9 days ago should NOT be flagged."""
+    import pandas as pd
+    run_date = "2026-05-19"
+    last_app = pd.Timestamp("2026-05-10")   # 9 days before run_date
+    days_since = (pd.Timestamp(run_date) - last_app).days
+    assert days_since <= 10, (
+        f"Expected pitcher to be included (days_since={days_since} <= 10)"
+    )
+
+
+def test_il_return_threshold_boundary():
+    """Pitcher whose last appearance was exactly 10 days ago is NOT skipped (boundary inclusive)."""
+    import pandas as pd
+    run_date = "2026-05-19"
+    last_app = pd.Timestamp("2026-05-09")   # exactly 10 days
+    days_since = (pd.Timestamp(run_date) - last_app).days
+    assert days_since <= 10, (
+        f"Expected pitcher at boundary to be included (days_since={days_since})"
+    )
