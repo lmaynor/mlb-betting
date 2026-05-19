@@ -244,6 +244,40 @@ def load_snapshot(gcs_key: str) -> list[dict]:
         return []
 
 
+def check_snapshot_freshness(gcs_key: str, max_age_hours: float = 4.0) -> tuple[bool, str]:
+    """Return (is_fresh, reason). Runners should refuse to score if not fresh.
+
+    A stale snapshot causes all systems to price against yesterday's lines,
+    generating fictitious edge. Checking before scoring is cheap insurance.
+
+    Args:
+        gcs_key:       GCS path to the snapshot, e.g. 'Odds/sgo/latest.json'.
+        max_age_hours: Max acceptable age. Default 4h covers the gap between
+                       the 10:55 AM and 4:55 PM ET scheduled snapshot runs.
+
+    Returns:
+        (True, "ok: snapshot is X.Xh old")   — fresh enough, proceed
+        (False, "<reason>")                   — stale or missing, abort run
+    """
+    from mlb_core.storage import stat
+    from datetime import datetime, timezone
+
+    info = stat(gcs_key)
+    if info is None:
+        return False, f"snapshot missing: {gcs_key}"
+    mtime = info["mtime_utc"]
+    if mtime.tzinfo is None:
+        mtime = mtime.replace(tzinfo=timezone.utc)
+    age_hours = (datetime.now(timezone.utc) - mtime).total_seconds() / 3600
+    if age_hours > max_age_hours:
+        return False, (
+            f"snapshot is {age_hours:.1f}h old (max {max_age_hours}h) — "
+            f"Cloud Scheduler may have missed a snapshot run. "
+            f"Refusing to score against stale lines: {gcs_key}"
+        )
+    return True, f"snapshot is {age_hours:.1f}h old — ok"
+
+
 # ── Extractors ────────────────────────────────────────────────────────────
 
 def extract_hr_props(events: list[dict]) -> dict:

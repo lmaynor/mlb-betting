@@ -51,7 +51,10 @@ CREATE TABLE IF NOT EXISTS bets (
     created_at       TEXT,
     lambda_k         REAL,
     proj_k           REAL,
-    book             TEXT
+    book             TEXT,
+    closing_odds     REAL,
+    closing_prob     REAL,
+    clv_pct          REAL
 )
 """
 
@@ -71,6 +74,11 @@ ALTER TABLE bets ADD COLUMN proj_k REAL
 _MIGRATE_BOOK_SQL = """
 ALTER TABLE bets ADD COLUMN book TEXT
 """
+
+# Migration: add CLV columns (T08, 2026-05-19).
+_MIGRATE_CLOSING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN closing_odds REAL"
+_MIGRATE_CLOSING_PROB_SQL = "ALTER TABLE bets ADD COLUMN closing_prob REAL"
+_MIGRATE_CLV_PCT_SQL      = "ALTER TABLE bets ADD COLUMN clv_pct REAL"
 
 # Migration: add kelly_triggered to existing tables that predate v3.
 _MIGRATE_SQL = """
@@ -174,6 +182,13 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_BOOK_SQL))
         except Exception:
             pass
+        # Migrate CLV columns (T08, 2026-05-19).
+        for clv_sql in (_MIGRATE_CLOSING_ODDS_SQL, _MIGRATE_CLOSING_PROB_SQL, _MIGRATE_CLV_PCT_SQL):
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(text(clv_sql))
+            except Exception:
+                pass  # Column already exists.
         # Composite index for is_duplicate() -- idempotent.
         try:
             with self.engine.begin() as conn:
@@ -189,18 +204,45 @@ class BetTracker:
                 pass
 
 
-    def is_duplicate(self, game_date: str, game_pk: int, bet_type: str) -> bool:
-        """Return True if this (system, game_date, game_pk, bet_type) is already logged."""
-        with self.engine.connect() as conn:
-            row = conn.execute(
-                text("""
-                    SELECT 1 FROM bets
-                    WHERE system=:s AND game_date=:d AND game_pk=:g AND bet_type=:t
-                    LIMIT 1
-                """),
-                {"s": self.system, "d": game_date, "g": game_pk, "t": bet_type},
-            ).fetchone()
-        return row is not None
+    def is_duplicate(self, game_date: str, game_pk: int, bet_type: str,
+                     kelly_triggered: bool = False) -> bool:
+        """Return True if this prediction should be skipped.
+
+        Two modes:
+        - kelly_triggered=False: check any existing row (scored but not bet).
+          Prevents logging the same prediction twice in one run.
+        - kelly_triggered=True: check for an EXISTING kelly_triggered=TRUE row.
+          Prevents placing a second bet on the same market side between the
+          morning and evening runs. A non-triggered row does NOT block a
+          triggered bet later in the day (edge can cross the gate in the PM).
+
+        Keyed on (system, game_date, game_pk, bet_type).
+        """
+        if kelly_triggered:
+            # Only block if a triggered bet already exists for this market side.
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT 1 FROM bets
+                        WHERE system=:s AND game_date=:d AND game_pk=:g
+                          AND bet_type=:t AND kelly_triggered=TRUE
+                        LIMIT 1
+                    """),
+                    {"s": self.system, "d": game_date, "g": game_pk, "t": bet_type},
+                ).fetchone()
+            return row is not None
+        else:
+            # Block any duplicate regardless of triggered status.
+            with self.engine.connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT 1 FROM bets
+                        WHERE system=:s AND game_date=:d AND game_pk=:g AND bet_type=:t
+                        LIMIT 1
+                    """),
+                    {"s": self.system, "d": game_date, "g": game_pk, "t": bet_type},
+                ).fetchone()
+            return row is not None
 
     def log_bet(
         self,
@@ -225,7 +267,8 @@ class BetTracker:
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
         if game_pk is not None and bet_type is not None and game_date is not None:
-            if self.is_duplicate(game_date, game_pk, bet_type):
+            if self.is_duplicate(game_date, game_pk, bet_type,
+                                 kelly_triggered=kelly_triggered):
                 return -1
 
         with self.engine.begin() as conn:
@@ -273,6 +316,92 @@ class BetTracker:
                  "s": datetime.now().isoformat(), "id": bet_id},
             )
         print(f"  [{self.system}] Bet #{bet_id} settled: {result} (P&L: ${profit:+.2f})")
+
+    def write_closing_line(self, bet_id: int, closing_odds: float) -> None:
+        """Record the closing line for a bet and compute CLV.
+
+        CLV = (entry_fair_prob - closing_fair_prob) / closing_fair_prob * 100
+
+        Both sides must use NO-VIG (fair) probabilities for CLV to be meaningful.
+        Using raw vig-inclusive implied probs produces a number that conflates
+        line movement with vig changes — incorrect.
+
+        For two-sided markets (NRFI, F5): we use the market_prob stored at
+        bet time, which is already the no-vig fair prob (runners call remove_vig
+        before storing). For one-sided props (HR, K): market_prob stored is the
+        devigged fair prob from devig_unilateral. Either way, market_prob in the
+        DB is already the fair prob.
+
+        The closing_odds are vig-inclusive (raw American odds from SGO). We
+        apply the same devig method used at bet time:
+          - Two-sided markets: need both sides; approximate by assuming
+            symmetric vig → closing_fair ≈ closing_implied / (closing_implied
+            + (1 - closing_implied)) = closing_implied (simplifies to raw for
+            50/50 markets; for asymmetric markets this is an approximation).
+            The correct fix is to store the complementary side at closing time.
+          - One-sided props: use devig_unilateral with the same vig_pct.
+
+        TODO: For two-sided markets, capture_closing_lines.py should also
+        capture the complementary side's closing odds so remove_vig can be
+        applied properly. For now we use raw implied as a proxy and log a note.
+        """
+        from mlb_core.odds.utils import american_to_implied_prob, devig_unilateral
+
+        closing_implied = american_to_implied_prob(closing_odds)
+        if pd.isna(closing_implied):
+            logger.warning(f"write_closing_line: cannot parse closing_odds={closing_odds}")
+            return
+
+        with self.engine.begin() as conn:
+            row = conn.execute(
+                text("SELECT odds, market_prob, bet_type FROM bets WHERE id=:id"),
+                {"id": bet_id},
+            ).fetchone()
+        if row is None:
+            logger.warning(f"write_closing_line: bet_id={bet_id} not found")
+            return
+        entry_odds, entry_fair_prob, bet_type = row
+
+        # Determine closing fair prob using the same devig method as at entry.
+        # HR/K props: use devig_unilateral (vig_pct=0.07).
+        # All others: use raw implied as approximation (symmetric vig assumed).
+        bt_upper = (bet_type or "").upper()
+        is_prop  = bt_upper.startswith(("K_", "OUTS_", "HR", "BATTER_", "PITCHER_"))
+        if is_prop:
+            closing_fair_prob = devig_unilateral(closing_implied, vig_pct=0.07)
+        else:
+            # Two-sided market: raw implied is the best we can do without the
+            # complementary closing side. Mark as approximate.
+            closing_fair_prob = closing_implied
+
+        clv_pct = None
+        if (entry_fair_prob and entry_fair_prob > 0
+                and closing_fair_prob and closing_fair_prob > 0):
+            clv_pct = round(
+                (entry_fair_prob - closing_fair_prob) / closing_fair_prob * 100, 4
+            )
+
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("""
+                    UPDATE bets
+                       SET closing_odds=:co, closing_prob=:cp, clv_pct=:clv
+                     WHERE id=:id
+                """),
+                {
+                    "co":  closing_odds,
+                    "cp":  round(closing_fair_prob, 6),
+                    "clv": clv_pct,
+                    "id":  bet_id,
+                },
+            )
+        logger.debug(
+            f"  [{self.system}] Bet #{bet_id} closing: "
+            f"entry_fair={entry_fair_prob:.4f} "
+            f"closing_fair={closing_fair_prob:.4f} "
+            f"CLV={clv_pct:+.2f}%" if clv_pct is not None else
+            f"  [{self.system}] Bet #{bet_id} closing line recorded: {closing_odds}"
+        )
 
     def pending(self) -> pd.DataFrame:
         with self.engine.connect() as conn:

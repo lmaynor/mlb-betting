@@ -288,3 +288,73 @@ def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
     combined.to_csv(tmp, index=False)
     blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
     print(f"  Master updated: {len(combined):,} rows | through {yesterday}")
+
+def fetch_live_weather_for_slate(sched: "pd.DataFrame") -> dict:
+    """Fetch live Open-Meteo forecasts for today's slate, keyed by game_pk.
+
+    Shared utility used by run_hr.py and run_f5.py so retry logic and
+    roof handling live in one place. Uses _fetch_weather which already has
+    4-attempt exponential backoff with jitter.
+
+    Args:
+        sched: DataFrame with columns game_pk, home_team, game_time_utc.
+
+    Returns:
+        Dict[game_pk -> weather_dict] with keys:
+            temperature_f, wind_speed_mph, wind_dir_degrees, is_outdoor, roof.
+        Missing games are silently omitted (XGBoost handles NaN features).
+    """
+    import pandas as _pd
+    if sched.empty:
+        return {}
+
+    from datetime import date as _date
+
+    today_str = _date.today().isoformat()
+    out: dict = {}
+
+    for _, g in sched.iterrows():
+        home = g.get("home_team", "")
+        stadium = STADIUMS.get(home)
+        if stadium is None:
+            continue
+        lat, lon, roof, _tz = stadium
+
+        if roof == "dome":
+            out[g["game_pk"]] = {
+                "temperature_f":    72.0,
+                "wind_speed_mph":   0.0,
+                "wind_dir_degrees": 0.0,
+                "is_outdoor":       0,
+                "roof":             roof,
+            }
+            continue
+
+        # Parse game start hour in UTC for _fetch_weather's hour picker
+        try:
+            game_utc = _pd.to_datetime(g.get("game_time_utc", ""))
+            hour_utc = game_utc.hour if not _pd.isna(game_utc) else 22
+        except Exception:
+            hour_utc = 22
+
+        wx = _fetch_weather(lat, lon, today_str, hour_utc, is_forecast=True)
+        if wx is None:
+            continue
+
+        spd = wx["wind_speed_mph"]
+        out[g["game_pk"]] = {
+            "temperature_f":    wx["temperature_f"],
+            "wind_speed_mph":   spd,
+            "wind_dir_degrees": wx["wind_dir_degrees"],
+            # retractable roofs: default open; a full fix requires a live
+            # roof-status query from the MLB schedule API (TODO).
+            "is_outdoor":  1 if roof in ("open", "retractable") else 0,
+            "is_cold":     int(wx["temperature_f"] < 50),
+            "is_hot":      int(wx["temperature_f"] > 85),
+            "high_wind":   int(spd > 15),
+            "wind_out":    int(home in WIND_OUT_PARKS and spd > 10),
+            "wind_in":     int(home in WIND_IN_PARKS  and spd > 10),
+            "roof":        roof,
+        }
+
+    return out
