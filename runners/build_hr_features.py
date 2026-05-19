@@ -253,11 +253,20 @@ def build_player_game(sc: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
 
 # ── Section 7: Batter rolling + platoon ───────────────────────────────────
 
-def build_batter_rolling(sc: pd.DataFrame, existing: pd.DataFrame, lookback_days: int = 60) -> pd.DataFrame:
-    """Incremental batter rolling features."""
+def build_batter_rolling(sc: pd.DataFrame, existing: pd.DataFrame,
+                         lookback_days: int = 60,
+                         run_date: str | None = None) -> pd.DataFrame:
+    """Incremental batter rolling features.
+
+    Args:
+        run_date: ISO date string for the reference point of the lookback window.
+                  Defaults to today if not provided. Pass explicitly for historical
+                  replays / backfills to avoid using wall-clock time.
+    """
     logger.info("Building batter rolling features...")
 
-    cutoff = pd.Timestamp.today() - pd.Timedelta(days=lookback_days)
+    _ref = pd.Timestamp(run_date) if run_date else pd.Timestamp.today()
+    cutoff = _ref - pd.Timedelta(days=lookback_days)
     keep   = existing[existing["game_date"] < cutoff].copy() if not existing.empty else pd.DataFrame()
     logger.info(f"  Keeping {len(keep):,} rows outside {lookback_days}d window")
 
@@ -436,11 +445,14 @@ def build_platoon_features(sc: pd.DataFrame, pg: pd.DataFrame) -> pd.DataFrame:
 
 # ── Section 8: Pitcher rolling ─────────────────────────────────────────────
 
-def build_pitcher_features(sc: pd.DataFrame, existing: pd.DataFrame, lookback_days: int = 60) -> pd.DataFrame:
+def build_pitcher_features(sc: pd.DataFrame, existing: pd.DataFrame,
+                           lookback_days: int = 60,
+                           run_date: str | None = None) -> pd.DataFrame:
     """Incremental pitcher HR-allowed rolling features."""
     logger.info("Building pitcher features...")
 
-    cutoff = pd.Timestamp.today() - pd.Timedelta(days=lookback_days)
+    _ref = pd.Timestamp(run_date) if run_date else pd.Timestamp.today()
+    cutoff = _ref - pd.Timedelta(days=lookback_days)
     keep   = existing[existing["game_date"] < cutoff].copy() if not existing.empty else pd.DataFrame()
 
     sc = sc.copy()
@@ -624,31 +636,13 @@ def build_features(
             )
         logger.info(f"  After weather join: {df['temperature_f'].notna().sum():,} matched")
 
-    # Game features (moneylines / implied win pct)
+    # Game features (moneylines) removed 2026-05-19 (T03): market-derived
+    # features (team_moneyline, implied_win_pct) trained the model to mimic
+    # the betting line, eliminating closing-line edge by construction.
+    # If game_features data is available it may be useful for other purposes
+    # (e.g. team context), but the moneyline columns must not enter the model.
     if not gf.empty:
-        gf_c = gf.copy()
-        gf_c["game_pk"] = pd.to_numeric(gf_c["game_pk"], errors="coerce")
-
-        # Build per-side moneylines
-        gf_home = gf_c[["game_pk","home_team","home_odds","away_odds"]].copy()
-        gf_home["batter_side"] = "home"
-        gf_home["team_moneyline"] = gf_home["home_odds"]
-        gf_away = gf_c[["game_pk","away_team","home_odds","away_odds"]].copy()
-        gf_away["batter_side"] = "away"
-        gf_away["team_moneyline"] = gf_away["away_odds"]
-        gf_both = pd.concat([
-            gf_home[["game_pk","batter_side","team_moneyline"]],
-            gf_away[["game_pk","batter_side","team_moneyline"]],
-        ], ignore_index=True)
-
-        if "batter_side" in df.columns:
-            df = df.merge(gf_both, on=["game_pk","batter_side"], how="left")
-        else:
-            df = df.merge(gf_home[["game_pk","team_moneyline"]].drop_duplicates("game_pk"), on="game_pk", how="left")
-
-        df["team_moneyline"]  = pd.to_numeric(df.get("team_moneyline",""), errors="coerce")
-        df["implied_win_pct"] = df["team_moneyline"].apply(_american_to_implied)
-        logger.info(f"  After game features join: {df['implied_win_pct'].notna().sum():,} matched")
+        logger.info("  Game features loaded but moneyline columns excluded (T03)")
 
     # Batting order
     if not order_map.empty:
@@ -676,6 +670,13 @@ def build_features(
         logger.info(f"  After platoon join: 100.0% coverage")
 
     logger.info(f"  ✅ {len(df):,} rows | HR rate: {df.get('hr', pd.Series()).mean():.3f}")
+
+    # T13: Regime indicator — pitch clock rules 2023-03-30.
+    if "game_date" in df.columns:
+        df["post_pitch_clock"] = (
+            pd.to_datetime(df["game_date"]) >= pd.Timestamp("2023-03-30")
+        ).astype(int)
+
     return df
 
 
@@ -749,9 +750,9 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     # ── 4. Rebuild features ───────────────────────────────────────────────
     pg      = build_player_game(sc, pg_existing)
-    bf      = build_batter_rolling(sc, bf_existing)
+    bf      = build_batter_rolling(sc, bf_existing, run_date=run_date)
     platoon = build_platoon_features(sc, pg)
-    pf      = build_pitcher_features(sc, pf_existing)
+    pf      = build_pitcher_features(sc, pf_existing, run_date=run_date)
 
     # Moneylines
     ml = _fetch_moneylines(run_date)

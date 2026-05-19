@@ -359,6 +359,12 @@ def _apply_joins(outcomes_df: pd.DataFrame,
     gf["park_factor"] = gf["home_team"].map(PARK_FACTORS).fillna(1.0)
     gf["altitude_ft"] = gf["home_team"].map(ALTITUDE_FT).fillna(0)
 
+    # T13: Regime indicator — pitch clock rules 2023-03-30.
+    if "game_date" in gf.columns:
+        gf["post_pitch_clock"] = (
+            pd.to_datetime(gf["game_date"]) >= pd.Timestamp("2023-03-30")
+        ).astype(int)
+
     if "home_k_pct_L10" in gf.columns and "away_k_pct_L10" in gf.columns:
         gf["k_pct_diff_L10"] = gf["home_k_pct_L10"] - gf["away_k_pct_L10"]
     if "home_xwoba_L10" in gf.columns and "away_xwoba_L10" in gf.columns:
@@ -422,6 +428,89 @@ GCS_HR_GAME_FEATURES      = "HR_Pro/data/game_features_master.csv"
 GCS_F5_PITCHER_STARTS     = "F5_Pro_System/data/pitcher_starts.csv"
 GCS_F5_TEAM_OFFENSE       = "F5_Pro_System/data/team_offense.csv"
 GCS_F5_MODEL_FEATURES     = "F5_Pro_System/data/model_features.csv"
+GCS_STATCAST_MASTER_FULL  = "Statcast/statcast_master.csv"  # full master for bullpen
+
+
+def build_bullpen_rolling(sc_full: pd.DataFrame) -> pd.DataFrame:
+    """
+    Per-team bullpen rolling stats over last 30 games. (T16)
+
+    Reliever = any appearance with inning > 1 (or starter who only pitches
+    1 inning, treated conservatively as an opener/bulk appearance).
+    Aggregated to team-game level, then rolled L30 with shift(1).
+
+    Returns one row per (team, game_pk) with columns:
+        bullpen_xfip_L30, bullpen_k_pct_L30, bullpen_xwoba_L30
+
+    Note: xFIP proper requires league HR/FB rate lookup; we approximate
+    using xwOBA-allowed as a proxy for contact quality since that's already
+    in Statcast. True xFIP can be added when FanGraphs data is in the lake.
+    """
+    if sc_full is None or sc_full.empty:
+        logger.warning("F5 bullpen: no Statcast data — skipping bullpen features")
+        return pd.DataFrame()
+
+    sc = sc_full.copy()
+    sc["game_date"] = pd.to_datetime(sc["game_date"])
+    sc["inning"]    = pd.to_numeric(sc["inning"], errors="coerce")
+
+    # Relief appearances: inning > 1.
+    # Also include inning=1 appearances by pitchers who were NOT the game's
+    # primary starter (identified as: same pitcher appears in inning > 1).
+    # Simple proxy: just use inning > 1 to avoid complex starter detection.
+    relief = sc[sc["inning"] > 1].copy()
+    if relief.empty:
+        logger.warning("F5 bullpen: no relief appearances found")
+        return pd.DataFrame()
+
+    # Identify pitching team
+    # Pitcher faces batters from the batting team.
+    # inning_topbot == "Top" → away team bats → pitcher is on home team.
+    # inning_topbot == "Bot" → home team bats → pitcher is on away team.
+    relief["pitching_team"] = np.where(
+        relief["inning_topbot"] == "Top",
+        relief["home_team"],
+        relief["away_team"],
+    )
+
+    relief["is_k"]   = relief["events"].isin(["strikeout", "strikeout_double_play"]).astype(int)
+    relief["is_pa"]  = relief["events"].notna().astype(int)
+    relief["xwoba"]  = pd.to_numeric(
+        relief.get("estimated_woba_using_speedangle", pd.Series(dtype=float)),
+        errors="coerce",
+    )
+
+    # Aggregate to game-level per pitching team
+    game_bull = (
+        relief.groupby(["pitching_team", "game_pk", "game_date"])
+              .agg(
+                  bull_pa_count =("is_pa",  "sum"),
+                  bull_k_count  =("is_k",   "sum"),
+                  bull_xwoba    =("xwoba",  "mean"),
+              )
+              .reset_index()
+    )
+    game_bull["bull_k_pct"] = (
+        game_bull["bull_k_count"] / game_bull["bull_pa_count"].replace(0, np.nan)
+    )
+    game_bull = game_bull.sort_values(["pitching_team", "game_date"]).reset_index(drop=True)
+
+    # Rolling L30 with shift(1)
+    for col, alias in [("bull_k_pct", "bullpen_k_pct_L30"),
+                       ("bull_xwoba",  "bullpen_xwoba_L30")]:
+        game_bull[alias] = (
+            game_bull.groupby("pitching_team")[col]
+                     .transform(lambda x: x.shift(1).rolling(30, min_periods=5).mean())
+        )
+
+    keep = ["pitching_team", "game_pk",
+            "bullpen_k_pct_L30", "bullpen_xwoba_L30"]
+    result = game_bull[keep].copy()
+    logger.info(
+        f"F5 bullpen: {len(result):,} team-game rows | "
+        f"k_pct coverage {result['bullpen_k_pct_L30'].notna().mean():.1%}"
+    )
+    return result
 
 
 def run(run_date: str = None) -> dict:
@@ -485,6 +574,30 @@ def run(run_date: str = None) -> dict:
     except Exception as e:
         logger.warning(f"F5: team_offense upload failed: {e}")
 
+    # 3b. T16: Bullpen rolling features — requires full Statcast (all innings).
+    # The sc loaded above is filtered to inning<=5; reload the full master for
+    # bullpen (inning > 1 across all innings).
+    bullpen_home = pd.DataFrame()
+    bullpen_away = pd.DataFrame()
+    try:
+        sc_full = read_csv(GCS_STATCAST_MASTER_FULL, low_memory=False)
+        bull = build_bullpen_rolling(sc_full)
+        del sc_full  # free memory
+        if not bull.empty:
+            # Split into home/away bullpen perspectives for the game-level join
+            bullpen_home = bull.rename(columns={
+                "pitching_team": "home_team",
+                "bullpen_k_pct_L30":  "home_bullpen_k_pct_L30",
+                "bullpen_xwoba_L30":  "home_bullpen_xwoba_L30",
+            })
+            bullpen_away = bull.rename(columns={
+                "pitching_team": "away_team",
+                "bullpen_k_pct_L30":  "away_bullpen_k_pct_L30",
+                "bullpen_xwoba_L30":  "away_bullpen_xwoba_L30",
+            })
+    except Exception as e:
+        logger.warning(f"F5: bullpen feature build failed (non-fatal): {e}")
+
     # 4. Free Statcast before heavy joins (memory hygiene)
     del sc
 
@@ -516,6 +629,22 @@ def run(run_date: str = None) -> dict:
     gf = _apply_joins(outcomes, pitcher_starts, team_off, wx, ump, hr_gf)
     if gf.empty:
         return {"status": "error", "error": "F5 model_features empty after joins"}
+
+    # 6b. T16: Join bullpen features (home and away pitching teams)
+    if not bullpen_home.empty and "home_team" in gf.columns:
+        gf = gf.merge(
+            bullpen_home[["game_pk", "home_bullpen_k_pct_L30", "home_bullpen_xwoba_L30"]],
+            on="game_pk", how="left",
+        ).drop_duplicates("game_pk", keep="first")
+        cov = gf["home_bullpen_k_pct_L30"].notna().mean()
+        logger.info(f"F5: home bullpen joined | coverage {cov:.1%}")
+    if not bullpen_away.empty and "away_team" in gf.columns:
+        gf = gf.merge(
+            bullpen_away[["game_pk", "away_bullpen_k_pct_L30", "away_bullpen_xwoba_L30"]],
+            on="game_pk", how="left",
+        ).drop_duplicates("game_pk", keep="first")
+        cov = gf["away_bullpen_k_pct_L30"].notna().mean()
+        logger.info(f"F5: away bullpen joined | coverage {cov:.1%}")
 
     # 7. NRFI cross-system platoon / handedness join
     if exists(GCS_NRFI_PITCHER_FEATURES):

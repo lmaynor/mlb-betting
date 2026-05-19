@@ -526,7 +526,7 @@ def _attach_today_slate(pf: pd.DataFrame, sc: pd.DataFrame, run_date: str) -> pd
             row["bf"]         = np.nan
 
             row["is_home"] = 1 if side == "home" else 0
-            row["implied_win_pct"] = 0.5  # overridden by runner if available
+            # implied_win_pct removed 2026-05-19 (T02): market-derived feature.
 
             bat_team = g["away_team"] if side == "home" else g["home_team"]
             p_throws = row.get("p_throws", "R")
@@ -632,8 +632,16 @@ def _backfill_opponent_history(pf: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFra
     ).astype(int)
     # We don't track pitcher_team historically; infer from bat_team + home_team
     pf["is_home"] = np.where(pf["bat_team"] == pf["home_team"], 0, 1)
-    pf["implied_win_pct"] = 0.5  # historical placeholder; runner overrides
+    # implied_win_pct removed 2026-05-19 (T02): market-derived feature.
+    # Column is no longer in K_FEATURES; runner no longer sets it.
     pf["opp_platoon_k_edge"] = (pf["opp_lineup_pct_L"] - 0.5) * pf["k_pct_L10"].fillna(0.2)
+
+    # T13: Regime indicator — pitch clock rules 2023-03-30.
+    if "game_date" in pf.columns:
+        pf["post_pitch_clock"] = (
+            pd.to_datetime(pf["game_date"]) >= pd.Timestamp("2023-03-30")
+        ).astype(int)
+
     return pf
 
 

@@ -462,6 +462,15 @@ def build_feature_table(pitcher_features: pd.DataFrame,
     # Park factor
     df["park_factor"] = df["home_team"].map(PARK_FACTORS).fillna(1.0)
 
+    # T13: Regime indicator — pitch clock rules took effect 2023-03-30.
+    # Pre/post-clock data is not exchangeable (pace, K rate, SB success all
+    # changed materially). Treat as a binary feature so the model can learn
+    # separate base rates per regime.
+    if "game_date" in df.columns:
+        df["post_pitch_clock"] = (
+            pd.to_datetime(df["game_date"]) >= pd.Timestamp("2023-03-30")
+        ).astype(int)
+
     # Derived weather features (the notebook had these in weather_master already
     # for some rows; recompute here to be safe and consistent)
     if "temperature_f" in df.columns:
@@ -472,8 +481,20 @@ def build_feature_table(pitcher_features: pd.DataFrame,
     if "days_rest" in df.columns:
         df["short_rest"] = (df["days_rest"] <= 4).astype("Int64")
     if "ump_overall_accuracy_L30" in df.columns and "ump_total_run_impact_L30" in df.columns:
-        acc_thresh = df["ump_overall_accuracy_L30"].quantile(0.6)
-        run_thresh = df["ump_total_run_impact_L30"].quantile(0.4)
+        # Compute quantile thresholds using an expanding window to avoid
+        # in-sample leakage — thresholds are based only on games UP TO each
+        # row's date, not on the full dataset including future games.
+        # Sort order is guaranteed by build_feature_table (game_date sort above).
+        acc_thresh = (
+            df["ump_overall_accuracy_L30"]
+            .expanding(min_periods=50)
+            .quantile(0.60)
+        )
+        run_thresh = (
+            df["ump_total_run_impact_L30"]
+            .expanding(min_periods=50)
+            .quantile(0.40)
+        )
         df["ump_tight_zone"] = (
             (df["ump_overall_accuracy_L30"] > acc_thresh) &
             (df["ump_total_run_impact_L30"]  < run_thresh)
