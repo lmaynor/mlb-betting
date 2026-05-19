@@ -251,8 +251,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             logger.warning(f"NRFI calibrator predict failed: {e} -- using raw probs")
 
         # Clamp to avoid 0/1 saturation inflating edge calculations.
-        pivot["model_nrfi_prob"] = pivot["model_nrfi_prob"].clip(0.001, 0.999)
-        pivot["model_yrfi_prob"] = pivot["model_yrfi_prob"].clip(0.001, 0.999)
+        pivot["model_nrfi_prob"] = pivot["model_nrfi_prob"].clip(0.05, 0.95)
+        pivot["model_yrfi_prob"] = pivot["model_yrfi_prob"].clip(0.05, 0.95)
     # 3-way joint probabilities derived from per-half probs
     pivot["p_3way_away"] = pivot["away"] * (1.0 - pivot["home"])
     pivot["p_3way_home"] = pivot["home"] * (1.0 - pivot["away"])

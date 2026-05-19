@@ -462,7 +462,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         # No best_iteration in meta (e.g. bootstrapped meta) — use all trees.
         preds = booster.predict(dm)
     feat_df = feat_df.copy()
-    feat_df["model_prob"] = preds.clip(0.001, 0.999)
+    feat_df["model_prob"] = preds.clip(0.001, 0.95)
     if calibrator is not None:
         try:
             raw = feat_df["model_prob"].values.copy()
@@ -470,7 +470,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             cal = raw.copy()
             if in_range.any():
                 cal[in_range] = calibrator.predict(raw[in_range])
-            feat_df["model_prob"] = __import__("numpy").clip(cal, 0.001, 0.999)
+            feat_df["model_prob"] = __import__("numpy").clip(cal, 0.001, 0.95)
             logger.info(f"HR: isotonic calibrator applied to {int(in_range.sum())}/{len(raw)} players")
         except Exception as e:
             logger.warning(f"HR calibrator predict failed: {e} -- using raw probs")

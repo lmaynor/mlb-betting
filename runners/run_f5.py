@@ -244,7 +244,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             cal      = raw.copy()
             if in_range.any():
                 cal[in_range] = calibrator.predict(raw[in_range])
-            p_home = np.clip(cal, 0.001, 0.999)
+            p_home = np.clip(cal, 0.05, 0.95)
             logger.info(
                 f"F5: isotonic calibrator applied to "
                 f"{int(in_range.sum())}/{len(raw)} games"
@@ -252,7 +252,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         except Exception as e:
             logger.warning(f"F5 calibrator predict failed: {e} -- using raw probs")
     feat_df = feat_df.copy()
-    feat_df["p_home"] = p_home.clip(0.001, 0.999)
+    feat_df["p_home"] = p_home.clip(0.05, 0.95)
 
     results = []
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
