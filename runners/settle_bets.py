@@ -34,6 +34,18 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+import unicodedata as _unicodedata
+
+
+def _norm(s: str) -> str:
+    """Normalise a player name: NFD, strip diacritics, ASCII-fold, lower, strip."""
+    if not isinstance(s, str):
+        return ""
+    n = _unicodedata.normalize("NFD", s)
+    n = "".join(c for c in n if _unicodedata.category(c) != "Mn")
+    return n.encode("ascii", "ignore").decode().lower().strip()
+
+
 # ── Profit calculation ────────────────────────────────────────────────────────
 
 def _calc_profit(stake: float, odds: int, result: str) -> float:
@@ -130,14 +142,6 @@ def _settle_hr(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     DK rule: player must start. Non-starters -> void.
     Starter + HR -> win. Starter no HR -> loss.
     """
-    import unicodedata
-
-    def _norm(s):
-        if not isinstance(s, str): return ""
-        n = unicodedata.normalize("NFD", s)
-        n = "".join(c for c in n if unicodedata.category(c) != "Mn")
-        return n.encode("ascii", "ignore").decode().lower().strip()
-
     results = []
     for _, bet in pending.iterrows():
         gpk  = int(bet["game_pk"])
@@ -181,16 +185,12 @@ def _settle_k(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
       K_OVER_7.5 / K_UNDER_7.5       -- strikeout O/U
       OUTS_OVER_14.5 / OUTS_UNDER_14.5 -- outs recorded O/U
 
+    DK uses half-point lines for K/OUTS so pushes are impossible in practice.
+    A whole-number `line` in the bet_type string signals a parsing error, not
+    a genuine push — log a warning rather than grading as push.
+
     Matches pitcher by name from bet["player"] field.
     """
-    import unicodedata
-
-    def _norm(s):
-        if not isinstance(s, str): return ""
-        n = unicodedata.normalize("NFD", s)
-        n = "".join(c for c in n if unicodedata.category(c) != "Mn")
-        return n.encode("ascii", "ignore").decode().lower().strip()
-
     results = []
     for _, bet in pending.iterrows():
         gpk  = int(bet["game_pk"])
@@ -230,6 +230,15 @@ def _settle_k(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
 
         actual = pitcher_data[stat_key]
         if actual == line:
+            # DK uses half-point lines for K/OUTS props — a whole-number line
+            # means the bet_type was parsed incorrectly. Log a warning rather
+            # than grading as push, since DK does not offer push on these markets.
+            if line == int(line):
+                logger.warning(
+                    f"settle K: {bet['player']} game_pk={gpk} {stat_key}={actual} "
+                    f"line={line} — whole-number line suggests parsing error; "
+                    f"grading push but verify bet_type string: {bt}"
+                )
             result = "push"
         elif side == "OVER":
             result = "win" if actual > line else "loss"
@@ -357,12 +366,6 @@ def _settle_pitcher_er(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     bet_type format: PITCHER_ER_OVER_2.5, PITCHER_ER_UNDER_2.5
     DK rule: pitcher must appear in boxscore (threw at least one pitch) -- else void.
     """
-    import unicodedata
-    def _norm(s):
-        if not isinstance(s, str): return ""
-        n = unicodedata.normalize("NFD", s)
-        n = "".join(c for c in n if unicodedata.category(c) != "Mn")
-        return n.encode("ascii", "ignore").decode().lower().strip()
     results = []
     for _, bet in pending.iterrows():
         gpk    = int(bet["game_pk"])
@@ -432,14 +435,25 @@ def run(settle_date: str = None) -> dict:
     for gd, grp in pending_all.groupby("game_date"):
         logger.info(f"settle: pending breakdown -- game_date={gd} | {len(grp)} bets | systems={grp['system'].unique().tolist()}")
 
-    # Fetch game results once per game_pk -- shared across all systems
+    # Fetch game results — parallelised across game_pks (read-only, safe).
     all_game_pks = set(pending_all["game_pk"].dropna().astype(int))
     logger.info(f"settle: fetching MLB API results for {len(all_game_pks)} game_pks")
     game_cache: dict = {}
-    for gpk in sorted(all_game_pks):
-        game_cache[gpk] = fetch_game_result(gpk)
-        final = game_cache[gpk] is not None
-        logger.info(f"settle: game_pk={gpk} final={final}")
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    _MAX_WORKERS = min(8, len(all_game_pks)) if all_game_pks else 1
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        future_to_gpk = {pool.submit(fetch_game_result, gpk): gpk
+                         for gpk in sorted(all_game_pks)}
+        for future in as_completed(future_to_gpk):
+            gpk = future_to_gpk[future]
+            try:
+                game_cache[gpk] = future.result()
+            except Exception as e:
+                logger.warning(f"settle: fetch_game_result({gpk}) raised: {e}")
+                game_cache[gpk] = None
+            final = game_cache[gpk] is not None
+            logger.info(f"settle: game_pk={gpk} final={final}")
 
     all_outcomes: list[dict] = []
     for system, grp in pending_all.groupby("system"):

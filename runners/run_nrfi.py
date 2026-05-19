@@ -258,6 +258,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     pivot["p_3way_home"] = pivot["home"] * (1.0 - pivot["away"])
     pivot["p_3way_draw"] = pivot["model_nrfi_prob"]
 
+    # Abort if snapshot is stale — stale lines produce fictitious edge.
+    _SGO_KEY = "Odds/sgo/latest.json"
+    _fresh, _reason = sgo.check_snapshot_freshness(_SGO_KEY)
+    if not _fresh:
+        logger.error(f"aborting run — {_reason}")
+        return pd.DataFrame()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("NRFI: SGO snapshot empty or missing — skipping")

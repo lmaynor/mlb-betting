@@ -62,6 +62,25 @@ def _load_season_bets(season: str) -> pd.DataFrame:
     return df
 
 
+def _clv_stats(df: pd.DataFrame) -> dict:
+    """Compute CLV stats for bets that have a closing line. (T08)"""
+    clv_rows = df[df["clv_pct"].notna()].copy() if "clv_pct" in df.columns else pd.DataFrame()
+    if clv_rows.empty:
+        return {"clv_n": 0, "mean_clv": None, "clv_tstat": None}
+    import numpy as np
+    from scipy import stats as scipy_stats
+    vals = clv_rows["clv_pct"].values.astype(float)
+    n    = len(vals)
+    mean = float(np.mean(vals))
+    sem  = float(scipy_stats.sem(vals)) if n > 1 else 0.0
+    tstat = round(mean / sem, 3) if sem > 0 else None
+    return {
+        "clv_n":    n,
+        "mean_clv": round(mean, 4),
+        "clv_tstat": tstat,
+    }
+
+
 def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
     """Compute rolling stats over the last `window` settled bets."""
     resolved = df[df["result"].notna()].copy()
@@ -75,7 +94,7 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
     pnl    = recent["profit"].sum()
     roi    = pnl / staked * 100 if staked > 0 else 0.0
 
-    return {
+    stats = {
         "n":         n,
         "wins":      int(wins),
         "hit_rate":  wins / n if n > 0 else 0.0,
@@ -84,6 +103,8 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
         "avg_edge":  round(float(recent["edge"].mean()), 4),
         "pending":   int(df[df["result"].isna()].shape[0]),
     }
+    stats.update(_clv_stats(recent))
+    return stats
 
 
 def _season_stats(df: pd.DataFrame) -> dict:
@@ -95,7 +116,7 @@ def _season_stats(df: pd.DataFrame) -> dict:
     n      = len(resolved)
     staked = resolved["stake"].sum()
     pnl    = resolved["profit"].sum()
-    return {
+    stats = {
         "n":        n,
         "wins":     int(wins),
         "hit_rate": wins / n if n > 0 else 0.0,
@@ -104,9 +125,47 @@ def _season_stats(df: pd.DataFrame) -> dict:
         "avg_edge": round(float(resolved["edge"].mean()), 4),
         "pending":  int(df[df["result"].isna()].shape[0]),
     }
+    stats.update(_clv_stats(resolved))
+    return stats
 
 
-def _check_alerts(system: str, stats: dict) -> list[str]:
+def _per_book_stats(df: pd.DataFrame) -> dict[str, dict]:
+    """Per-book performance breakdown. (T15)
+
+    Groups settled bets by the `book` column and returns stats per book.
+    Detects potential profiling signal: any book with n >= 20 and ROI < -20%.
+    """
+    if "book" not in df.columns:
+        return {}
+    resolved = df[df["result"].notna()].copy()
+    if resolved.empty:
+        return {}
+
+    books = resolved["book"].dropna().unique()
+    result: dict[str, dict] = {}
+    for book in sorted(books):
+        rows = resolved[resolved["book"] == book]
+        n      = len(rows)
+        wins   = (rows["result"] == "win").sum()
+        staked = rows["stake"].sum()
+        pnl    = rows["profit"].sum()
+        roi    = pnl / staked * 100 if staked > 0 else 0.0
+        hr     = wins / n if n > 0 else 0.0
+
+        clv_rows = rows[rows["clv_pct"].notna()] if "clv_pct" in rows.columns else pd.DataFrame()
+        mean_clv = round(float(clv_rows["clv_pct"].mean()), 3) if not clv_rows.empty else None
+
+        profiling_signal = (n >= 20 and roi < -20.0)
+        result[book] = {
+            "n":            int(n),
+            "wins":         int(wins),
+            "hit_rate":     round(hr, 4),
+            "pnl":          round(pnl, 2),
+            "roi":          round(roi, 2),
+            "mean_clv":     mean_clv,
+            "profiling_flag": profiling_signal,
+        }
+    return result
     """Return list of alert messages for this system. Empty = healthy."""
     alerts = []
     n = stats.get("n", 0)
@@ -127,6 +186,19 @@ def _check_alerts(system: str, stats: dict) -> list[str]:
             f"Hit rate over last {n} bets: **{hit_rate:.1%}** "
             f"(expected ≥ {expected - HIT_RATE_DROP/100:.1%})"
         )
+
+    # CLV alert: if we have ≥ 20 CLV observations and mean CLV < 0, flag it.
+    # Negative CLV is a leading indicator of negative edge — acts earlier than ROI.
+    clv_n    = stats.get("clv_n", 0)
+    mean_clv = stats.get("mean_clv")
+    if clv_n >= 20 and mean_clv is not None and mean_clv < 0:
+        tstat = stats.get("clv_tstat")
+        tstat_str = f" (t={tstat:.2f})" if tstat else ""
+        alerts.append(
+            f"Mean CLV over last {clv_n} bets: **{mean_clv:+.2f}%**{tstat_str} — "
+            f"negative CLV suggests edge may not exist at closing line"
+        )
+
     return alerts
 
 
@@ -156,7 +228,8 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
     _post(webhook_url, {"embeds": [embed]})
 
 
-def _post_weekly_digest(system_stats: dict, run_date: str) -> None:
+def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
+                        run_date: str) -> None:
     """Post full season summary every Monday."""
     from mlb_core.notify.discord import _get_webhook, _post
 
@@ -173,13 +246,41 @@ def _post_weekly_digest(system_stats: dict, run_date: str) -> None:
             fields.append({"name": f"{dot} {system}", "value": "_no data_", "inline": False})
             continue
         total_pnl += stats["pnl"]
+        clv_str = ""
+        if stats.get("clv_n", 0) >= 5:
+            clv_str = f" | CLV: **{stats['mean_clv']:+.2f}%** (n={stats['clv_n']})"
         fields.append({
             "name":  f"{dot} {system}",
             "value": (f"`{stats['wins']}/{stats['n']} ({stats['hit_rate']:.0%})` "
                       f"P&L: **${stats['pnl']:+.2f}** | ROI: **{stats['roi']:+.1f}%** | "
-                      f"edge: {stats['avg_edge']:+.1%} | {stats['pending']} pending"),
+                      f"edge: {stats['avg_edge']:+.1%}{clv_str} | {stats['pending']} pending"),
             "inline": False,
         })
+
+    # Per-book summary (T15)
+    if per_book:
+        book_lines = []
+        profiling_flags = []
+        for book, bs in per_book.items():
+            clv_str = f" CLV:{bs['mean_clv']:+.2f}%" if bs.get("mean_clv") is not None else ""
+            flag = " ⚠️" if bs.get("profiling_flag") else ""
+            book_lines.append(
+                f"`{book}` n={bs['n']} ROI:{bs['roi']:+.1f}%{clv_str}{flag}"
+            )
+            if bs.get("profiling_flag"):
+                profiling_flags.append(book)
+        if book_lines:
+            fields.append({
+                "name":   "📚 Per-book",
+                "value":  "\n".join(book_lines),
+                "inline": False,
+            })
+        if profiling_flags:
+            fields.append({
+                "name":   "⚠️ Potential profiling",
+                "value":  f"Books with n≥20 and ROI<-20%: {', '.join(profiling_flags)}",
+                "inline": False,
+            })
 
     emoji = "📈" if total_pnl >= 0 else "📉"
     embed = {
@@ -245,7 +346,9 @@ def run(run_date: str = None) -> dict:
 
     if is_monday:
         logger.info("monitor: posting weekly digest")
-        _post_weekly_digest(weekly_stats, run_date)
+        # T15: Per-book stats across all systems
+        per_book = _per_book_stats(all_bets[all_bets["kelly_triggered"].fillna(True).astype(bool)])
+        _post_weekly_digest(weekly_stats, per_book, run_date)
 
     return {
         "status":       "ok",

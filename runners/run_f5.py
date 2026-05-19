@@ -76,62 +76,13 @@ def _load_calibrator(cfg: dict):
 
 
 def _fetch_today_weather(sched: pd.DataFrame) -> dict:
-    """Live weather per game keyed by game_pk. Same logic as run_hr."""
-    import requests
-    from mlb_core.data.weather import STADIUMS
+    """Live weather per game keyed by game_pk.
 
-    if sched.empty:
-        return {}
-    session = requests.Session()
-    session.headers.update({"User-Agent": "mlb-betting/1.0"})
-    out = {}
-    for _, g in sched.iterrows():
-        home = g["home_team"]
-        stadium = STADIUMS.get(home)
-        if stadium is None:
-            continue
-        lat, lon, roof, _ = stadium
-        if roof == "dome":
-            out[g["game_pk"]] = {
-                "temperature_f":   72.0,
-                "wind_speed_mph":  0.0,
-                "wind_dir_degrees": 0.0,
-                "is_outdoor":      0,
-                "roof":            roof,
-            }
-            continue
-        try:
-            r = session.get(
-                "https://api.open-meteo.com/v1/forecast",
-                params={
-                    "latitude":  lat,
-                    "longitude": lon,
-                    "hourly":    "temperature_2m,windspeed_10m,winddirection_10m",
-                    "timezone":  "UTC",
-                    "forecast_days": 2,
-                },
-                timeout=15,
-            )
-            r.raise_for_status()
-            hourly = r.json().get("hourly", {})
-        except Exception as e:
-            logger.warning(f"F5 weather fetch failed for {home}: {e}")
-            continue
-        times = hourly.get("time", [])
-        start = g.get("game_time_utc", "")
-        try:
-            target = pd.to_datetime(start).tz_convert(None) if start else pd.to_datetime("today")
-            time_dt = pd.to_datetime(times)
-            idx = (time_dt - target).abs().argmin()
-        except Exception:
-            idx = 0
-        out[g["game_pk"]] = {
-            "temperature_f":   hourly["temperature_2m"][idx] * 9 / 5 + 32,
-            "wind_speed_mph":  hourly["windspeed_10m"][idx] * 0.6214,
-            "wind_dir_degrees": hourly["winddirection_10m"][idx],
-            "is_outdoor":      1,
-            "roof":            roof,
-        }
+    Delegates to mlb_core.data.weather.fetch_live_weather_for_slate which
+    uses _fetch_weather's 4-attempt exponential backoff.
+    """
+    from mlb_core.data.weather import fetch_live_weather_for_slate
+    out = fetch_live_weather_for_slate(sched)
     logger.info(f"F5 weather: {len(out)}/{len(sched)} games")
     return out
 
@@ -256,6 +207,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     booster, features, feature_means = _load_model(cfg)
     calibrator = _load_calibrator(cfg)
 
+    # Abort if snapshot is stale — stale lines produce fictitious edge.
+    _SGO_KEY = "Odds/sgo/latest.json"
+    _fresh, _reason = sgo.check_snapshot_freshness(_SGO_KEY)
+    if not _fresh:
+        logger.error(f"aborting run — {_reason}")
+        return pd.DataFrame()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("F5: SGO snapshot empty or missing — skipping")
@@ -280,8 +237,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     p_home = _score(booster, features, feature_means, feat_df)
     if calibrator is not None:
         try:
-            p_home = calibrator.predict(p_home)
-            logger.info("F5: isotonic calibrator applied")
+            raw      = p_home.copy()
+            x_min    = getattr(calibrator, "X_min_", 0.0)
+            x_max    = getattr(calibrator, "X_max_", 1.0)
+            in_range = (raw >= x_min) & (raw <= x_max)
+            cal      = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
+            p_home = np.clip(cal, 0.001, 0.999)
+            logger.info(
+                f"F5: isotonic calibrator applied to "
+                f"{int(in_range.sum())}/{len(raw)} games"
+            )
         except Exception as e:
             logger.warning(f"F5 calibrator predict failed: {e} -- using raw probs")
     feat_df = feat_df.copy()

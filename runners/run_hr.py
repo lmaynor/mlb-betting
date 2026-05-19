@@ -46,6 +46,12 @@ def _fetch_hr_odds(run_date: str) -> dict:
     """
     from mlb_core.odds import sgo
 
+    # Abort if snapshot is stale — stale lines produce fictitious edge.
+    _SGO_KEY = "Odds/sgo/latest.json"
+    _fresh, _reason = sgo.check_snapshot_freshness(_SGO_KEY)
+    if not _fresh:
+        logger.error(f"aborting run — {_reason}")
+        return pd.DataFrame()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("HR odds: SGO snapshot empty or missing")
@@ -392,74 +398,14 @@ def _join_weather(df: pd.DataFrame, weather_today: dict) -> pd.DataFrame:
 
 
 def _fetch_today_weather(sched: pd.DataFrame) -> dict:
-    """
-    Fetch Open-Meteo forecast for today's games. Returns dict keyed by
-    game_pk with temperature_f, wind_speed_mph, wind_dir_degrees, altitude_ft,
-    air_density.
+    """Live weather per game keyed by game_pk.
 
-    Uses STADIUMS dict from mlb_core.data.weather for coordinates. Falls
-    back to no weather (empty dict) if any step fails — XGBoost handles
-    missing features.
+    Delegates to mlb_core.data.weather.fetch_live_weather_for_slate which
+    uses _fetch_weather's 4-attempt exponential backoff. Replacing the old
+    inline implementation that had no retries.
     """
-    from mlb_core.data.weather import STADIUMS
-    if sched.empty:
-        return {}
-    session = requests.Session()
-    session.headers.update({"User-Agent": "mlb-betting/1.0"})
-    out = {}
-    for _, g in sched.iterrows():
-        home = g["home_team"]
-        stadium = STADIUMS.get(home)
-        if stadium is None:
-            continue
-        lat, lon, roof, utc_offset = stadium
-        if roof == "dome":
-            # Domes: constant climate, no weather effect
-            out[g["game_pk"]] = {
-                "temperature_f":   72.0,
-                "wind_speed_mph":  0.0,
-                "wind_dir_degrees": 0.0,
-                "is_outdoor":      0,
-                "roof":            roof,
-            }
-            continue
-        # Open-Meteo forecast
-        try:
-            r = session.get(
-                "https://api.open-meteo.com/v1/forecast",
-                params={
-                    "latitude":  lat,
-                    "longitude": lon,
-                    "hourly":    "temperature_2m,windspeed_10m,winddirection_10m",
-                    "timezone":  "UTC",
-                    "forecast_days": 2,
-                },
-                timeout=15,
-            )
-            r.raise_for_status()
-            hourly = r.json().get("hourly", {})
-        except Exception as e:
-            logger.warning(f"HR weather fetch failed for {home}: {e}")
-            continue
-        # Pick the hour closest to game start
-        times = hourly.get("time", [])
-        start = g.get("game_time_utc", "")
-        try:
-            target = pd.to_datetime(start).tz_convert(None) if start else pd.to_datetime("today")
-            time_dt = pd.to_datetime(times)
-            idx = (time_dt - target).abs().argmin()
-        except Exception:
-            idx = 0
-        temp_c = hourly["temperature_2m"][idx]
-        wind_kmh = hourly["windspeed_10m"][idx]
-        wind_dir = hourly["winddirection_10m"][idx]
-        out[g["game_pk"]] = {
-            "temperature_f":   temp_c * 9 / 5 + 32,
-            "wind_speed_mph":  wind_kmh * 0.6214,
-            "wind_dir_degrees": wind_dir,
-            "is_outdoor":      1 if roof == "open" else 1,  # retractable open by default
-            "roof":            roof,
-        }
+    from mlb_core.data.weather import fetch_live_weather_for_slate
+    out = fetch_live_weather_for_slate(sched)
     logger.info(f"HR weather: forecast retrieved for {len(out)}/{len(sched)} games")
     return out
 
@@ -474,6 +420,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     Filtered to edge >= cfg["min_edge"].
     """
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
+    from mlb_core.odds.utils import devig_unilateral
 
     # 1. Load model + its trained feature list
     booster, features, feature_means = _load_model(cfg)
@@ -533,6 +480,28 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     feat_df["_name_key"] = feat_df["player_name"].apply(_normalize_name)
     name_to_idx = {n: i for i, n in enumerate(feat_df["_name_key"]) if n}
 
+    # Fuzzy fallback: if exact match fails, try difflib closest match
+    # (handles "Yordan Alvarez" vs "Yordan Alvarez Jr.", accent variants, etc.)
+    _all_known_keys = [k for k in name_to_idx if k]
+
+    def _resolve_name_idx(raw_name: str) -> int | None:
+        key = _normalize_name(raw_name)
+        if not key:
+            return None
+        idx = name_to_idx.get(key)
+        if idx is not None:
+            return idx
+        # Fuzzy fallback — difflib SequenceMatcher, cutoff 0.85
+        import difflib
+        matches = difflib.get_close_matches(key, _all_known_keys, n=1, cutoff=0.85)
+        if matches:
+            logger.debug(
+                f"HR name fuzzy match: '{raw_name}' → '{matches[0]}' "
+                f"(exact='{key}' not in feature table)"
+            )
+            return name_to_idx[matches[0]]
+        return None
+
     results = []
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
     from mlb_core.tracking.bet_tracker import _make_engine
@@ -541,8 +510,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="HR")
     _pending_stakes: dict[int, float] = {}
     for player_name, odds_info in player_odds.items():
-        key = _normalize_name(player_name)
-        idx = name_to_idx.get(key)
+        idx = _resolve_name_idx(player_name)
         if idx is None:
             continue
         row = feat_df.iloc[idx]
@@ -550,8 +518,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         odds        = odds_info["odds"]
         market_prob = american_to_implied_prob(odds)
 
-        # Vig removal: DK HR market is one-sided, use flat 7% vig strip
-        fair_prob   = market_prob / 1.07
+        # Remove vig from the one-sided HR prop market.
+        # DK HR props carry ~7% vig; devig_unilateral centralises this assumption.
+        # See mlb_core/odds/utils.py for the arithmetic justification.
+        # Calibrate HR_VIG_PCT periodically from closing-line analysis (T08/T15).
+        HR_VIG_PCT  = 0.07
+        fair_prob   = devig_unilateral(market_prob, vig_pct=HR_VIG_PCT)
         edge        = model_prob - fair_prob
         k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
