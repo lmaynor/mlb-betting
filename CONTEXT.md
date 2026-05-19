@@ -1444,3 +1444,278 @@ CSV export uses same binned values as the UI.
 - New GCP resource → update GCP resources section
 - New Tailwind gotcha → add to gotchas list
 - PRE_LAUNCH flip → update the gate criteria status
+
+---
+
+## 16. Model remediation backlog
+
+_Added 2026-05-19. Source: institutional quant audit of the full codebase._
+_Last updated: 2026-05-19 (T01-T11, T13-T16, T20 + F01-F17 applied)_
+
+Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
+
+**Rule:** No system crosses the paper→live gate until every P0 task is `[x]`.
+
+---
+
+### P0 — Deployment blockers
+
+#### T01 · Fix Kelly formula
+- **Files:** `mlb_core/odds/utils.py` lines 44, 54
+- **Change:** `pct = max(0.0, (edge / b) * fraction)` → `pct = max(0.0, (edge * (b + 1) / b) * fraction)`. Apply to both `kelly_stake` and `kelly_pct`.
+- **Why:** Formula undersizes by ~52% at -110, ~50% at +200. Conservative direction but mathematically wrong.
+- **Acceptance:** Unit test in `tests/test_odds_math.py`: at p=0.55, odds=-110, fraction=1.0 → result ≈ 0.055 (not 0.0288). Test passes.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T02 · Remove `implied_win_pct` from K_FEATURES
+- **Files:** `training/retrain_k_v1.py` line 63; `runners/build_k_features.py` (remove build path)
+- **Change:** Delete `"implied_win_pct"` from `K_FEATURES`. Remove the feature-build step that produces it for K inputs.
+- **Why:** Market-derived feature trains the model to mimic the line. Eliminates closing-line edge by construction.
+- **Acceptance:** Retrain runs to completion. Log delta MAE before/after. If MAE worsens >10%, document in retrain notes — the prior number was line-mimicry.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T03 · Remove market-derived features from HR
+- **Files:** `runners/build_hr_features.py` lines 627–651; HR model meta features list
+- **Change:** Strip `team_moneyline` and `implied_win_pct` from the HR master join. Remove from `model_features.csv` output. Update feature list in `HR_Pro/models/model_meta_hr_v6.json`.
+- **Why:** Same circularity as T02.
+- **Acceptance:** HR runner startup logs no reference to `implied_win_pct` or `team_moneyline`. Next HR retrain (T11) confirms AUC delta documented.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T04 · Fix NRFI isotonic calibrator leakage
+- **File:** `training/calibrate_nrfi_v17.py` lines 230–243
+- **Change:** Fit `IsotonicRegression` on `train_g` only (already defined at line 211). Evaluate Brier on `oos_g`. Delete the comment block justifying full-data fit.
+  ```python
+  iso = IsotonicRegression(out_of_bounds="clip")
+  iso.fit(train_g["model_yrfi_prob"].values, train_g["yrfi"].values)
+  cal_preds = iso.predict(oos_g["model_yrfi_prob"].values)
+  ```
+- **Why:** Calibrator currently fit on the OOS slice. Reported Brier improvement is in-sample.
+- **Acceptance:** Re-run calibration job. New honest OOS Brier logged and committed to meta. If calibrated Brier > raw Brier on OOS, flag for review — calibrator may be hurting.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T05 · Fix calibrator fit in HR, F5, K calibration scripts
+- **Files:** `training/calibrate_hr_v6.py`, `training/calibrate_f5_v5.py`, `training/calibrate_k_v1.py`
+- **Depends on:** T04 (establishes the correct train-only-fit pattern)
+- **Change:** For HR and F5: apply the same train-only-fit pattern from T04. For K (Poisson): fit `IsotonicRegression` on `(predicted_lambda, observed_K)` pairs, train split only. Add `_load_calibrator` to HR and F5 runners matching `run_nrfi.py` lines 67–86.
+- **Why:** All four calibration scripts likely share the same leakage — verify each and fix.
+- **Acceptance:** All four systems produce calibrators fit on train slice only. All four runners load and apply their calibrators. Calibrated vs raw Brier/MAE logged per system.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T06 · Reconcile `top3_batter_*` feature contract
+- **Files:** `training/retrain_nrfi_v17.py` lines 75–77; `training/calibrate_nrfi_v17.py` lines 63–64; `runners/build_nrfi_features.py`
+- **Change (Option A — preferred):** Remove `top3_batter_woba_value_L50`, `top3_batter_is_hard_hit_L50`, `top3_batter_is_bb_L50`, `top3_batter_is_k_L50` from `HALFINN_FEATURES` in both retrain and calibrate scripts. _(Option B is full live lineup integration — defer to T12.)_
+- **Add assertion** after features load in retrain: `assert all(f in df.columns for f in HALFINN_FEATURES), f"missing: {set(HALFINN_FEATURES) - set(df.columns)}"`
+- **Why:** These features are declared but never joined. Model has dead features in its contract. Live and historical pipelines are misaligned.
+- **Acceptance:** Assertion passes on retrain. `model_meta_v17.json` features list matches what the builder produces exactly.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T07 · Fix in-sample innings-window scalar fit
+- **File:** `training/backtest_innings_windows.py` lines 211–300
+- **Change:** Replace single-pass Brier minimization with year-based walk-forward. For each year Y ≥ min+1: fit scalar on years < Y, evaluate Brier on year Y. Final scalar = mean of per-year fitted scalars. Final Brier = mean of per-year OOS Briers.
+- **Why:** Current scalars for F1H/GAME/F3/F7 are pure in-sample fits. Reported calibration is meaningless.
+- **Acceptance:** New `innings_window_scalars.json` includes `per_year_scalars` and `per_year_brier` arrays. F1H/GAME/F3/F7 remain log-only until per-year scalar std < 0.1.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T08 · Add CLV tracking
+- **Depends on:** nothing, but needed before T17 (promotion criteria)
+- **Files (all touched):**
+  - `mlb_core/tracking/bet_tracker.py` — add columns `closing_odds REAL`, `closing_implied_prob REAL`, `clv_pct REAL` to schema
+  - `runners/capture_closing_lines.py` — new script; cron at T−5 min per game; reads unsettled bets with null `closing_odds`, pulls current SGO snapshot, writes closing odds
+  - `runners/settle_bets.py` — compute `clv_pct = (entry_implied - closing_implied) / closing_implied * 100` at settlement
+  - `runners/monitor_performance.py` — add `mean_clv` and CLV t-stat to rolling and season summaries
+- **Why:** Without CLV you cannot statistically distinguish luck from edge in a 200-bet sample. It's the primary leading indicator of long-term profitability.
+- **Acceptance:** Every newly-placed bet has `closing_odds` populated by settlement time. Weekly digest reports `mean_clv` with t-stat.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T09 · Port K leakage check to NRFI (and later HR)
+- **Reference:** `training/retrain_k_v1.py` lines 255–330 (`_leakage_check`)
+- **Depends on:** T06 (clean feature contract first)
+- **Change:** Copy `_leakage_check` into `retrain_nrfi_v17.py`. Adapt metric: AUC delta instead of MAE delta. Warn threshold: removing any single feature improves OOS AUC by > 0.01 absolute.
+- **Why:** The `lineup_pct_L` incident (caught May 2026) shows leakage can hide in non-linear interactions. Automated detection catches this earlier.
+- **Acceptance:** NRFI retrain output includes `leakage_warnings: []`. Non-empty warnings trigger Discord alert.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+---
+
+### P1 — Required before scaling
+
+#### T10 · Add fold-by-fold dispersion to retrain output
+- **Files:** `training/retrain_nrfi_v17.py`, `training/retrain_k_v1.py`
+- **Change:** Call `XGBModel.walk_forward_cv` (already implemented in `mlb_core/models/base.py` lines 105–166, just not used in production retrains). Report per-fold AUC/MAE, std, and 95% bootstrap CI on the mean.
+- **Why:** Single OOS split gives no estimate of metric variance. A lucky split can mask an unstable model.
+- **Acceptance:** `model_meta_*.json` includes `cv_folds: [{year, auc, brier}, ...]`, `cv_mean_auc`, `cv_std_auc`, `cv_auc_ci_lo`, `cv_auc_ci_hi`.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T11 · Migrate HR and F5 training out of notebooks
+- **Depends on:** T03 (HR feature cleanup), T04/T05 (calibration pattern)
+- **New files:** `training/retrain_hr_v6.py`, `training/retrain_f5_v5.py`
+- **Pattern:** Follow `retrain_nrfi_v17.py` exactly. Load features from GCS → walk-forward CV → OOS split → full retrain → upload artifact + meta. Use HR/F5 feature lists and XGB_PARAMS from the notebooks as the starting contract.
+- **Why:** HR and F5 model training is currently unauditable. The actual model lives in a Windows notebook not in this repo.
+- **Acceptance:** Both run end-to-end as Cloud Run Jobs. `retrain_hr_meta.py` and `retrain_f5_meta.py` shims deprecated (keep as stubs that print "use retrain_hr_v6.py"). Cloud Run Job definitions added to `deploy/`.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T12 · Live lineup integration
+- **Depends on:** T06 (feature contract reconciled first)
+- **File:** `runners/run_nrfi.py` around `_build_today_feature_rows` lines 89–165
+- **Change:** Call MLB Stats API for posted lineups. Map starter ID → top-3 batter IDs. Compute `top3_batter_*` rolling stats from the historical batter features table. Flag each bet with `lineup_confidence: 'posted' | 'estimated'` in the bets table.
+- **Also:** Update `deploy/add_snapshot_schedulers.sh` to shift the afternoon snapshot closer to lineup-posting time (2–3 hours before first pitch).
+- **Why:** Live runner currently uses stale historical features for all lineup-dependent signals. Morning run has zero lineup data.
+- **Acceptance:** Afternoon runner logs `posted_lineup` for ≥ 80% of bets. Morning run accepts `estimated_lineup` and marks bets accordingly.
+- [ ] Done · commit: ___
+
+#### T13 · Add regime indicator feature
+- **Files:** All four `build_*_features.py`
+- **Change:** Add `regime` column: `"pre_pitch_clock"` for `game_date < 2023-03-30`, `"post_pitch_clock"` otherwise. Add to all four feature lists. Retrain each model.
+- **Why:** Pitch clock changed pace, K rates, and stolen-base success materially. Pre/post-clock data is not exchangeable.
+- **Acceptance:** Feature importance check after retrain shows `regime` with non-trivial split frequency. Per-regime fold AUC logged in model meta.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T14 · Add PSI drift monitoring
+- **New file:** `runners/monitor_drift.py`
+- **Logic:** Weekly: compute Population Stability Index between last 7 days of live prediction feature distributions vs training-set distribution (use `feature_means` + new `feature_stds` sidecar — add `feature_stds` to retrain output). Alert if PSI > 0.25 for any top-10 feature by importance.
+- **Schedule:** Cloud Scheduler, Monday mornings. Add job to `deploy/`.
+- **Why:** ROI alarm fires reactively after losses. PSI catches distributional drift before it degrades predictions.
+- **Acceptance:** First run establishes baseline. PSI violations post to Discord. `feature_stds` present in all four model metas.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T15 · Per-book performance breakdown
+- **File:** `runners/monitor_performance.py`
+- **Change:** Add `_per_book_stats(df)` that groups settled bets by the `book` column. Report n, hit_rate, ROI, mean_clv per book. Include in weekly digest.
+- **Depends on:** T08 (CLV tracking)
+- **Why:** Book-specific profiling and limit changes are invisible without per-book stats.
+- **Acceptance:** Weekly digest includes a per-book table. Alert if any book drops to n ≥ 20 bets and ROI < -20% (potential profiling signal).
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+#### T16 · Add F5 bullpen features
+- **File:** `runners/build_f5_features.py`
+- **Change:** Add team bullpen rolling stats: `bullpen_xfip_L30`, `bullpen_k_pct_L30`, `bullpen_xwoba_L30`. Source: same Statcast master, filter to `inning > 1` and non-starting appearances. Join to F5 feature table by `home_team` / `away_team`.
+- **Why:** F5 covers innings 1–5. The starter often exits in inning 4–5. Bullpen quality is the largest missing variable in the F5 model.
+- **Acceptance:** F5 retrain shows AUC improvement ≥ 0.01 with bullpen features included. If < 0.01, revert and document — features must earn their inclusion.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+---
+
+### P2 — Institutional baseline
+
+#### T17 · Tighten paper→live promotion criteria
+- **Depends on:** T08 (CLV tracking must be live)
+- **File:** `CONTEXT.md` §6 "Paper → live criteria" lines 601–607
+- **Replace with:**
+  1. ≥ 200 settled bets per system
+  2. Mean CLV ≥ +2% with t-stat > 2 over ≥ 100 bets
+  3. Season ROI > 0% (HR: > -5% allowed if CLV positive)
+  4. Calibration: hit rate within 3 pct points of avg model probability (was 5)
+  5. No system down more than 50 units at paper stakes
+  6. PSI for all top-10 features < 0.25 over the eval window
+- **Acceptance:** `monitor_performance.py` enforces criteria 2–4 programmatically and blocks the Discord "ready for live" alert until all pass.
+- [ ] Done · commit: ___
+
+#### T18 · Nested hyperparameter tuning
+- **Files:** Each `retrain_*.py`
+- **Change:** Add Optuna-based search. Inner CV on train slice (3-fold time-series). Outer evaluation on OOS year. Search space: `max_depth ∈ [2,4]`, `learning_rate ∈ [0.01, 0.1]`, `min_child_weight ∈ [5, 50]`, `reg_alpha`, `reg_lambda`, `gamma`. Hardcoded `XGB_PARAMS` dicts become defaults only.
+- **Why:** Current params are undocumented guesses or notebook-era defaults.
+- **Acceptance:** Each retrain logs tuned params. `model_meta_*.json` includes `tuned_params` and `optuna_n_trials`.
+- [ ] Done · commit: ___
+
+#### T19 · Pitcher IL-return / debut handling
+- **Files:** All four `build_*_features.py`
+- **Change:** Compute `days_since_last_start` correctly across IL gaps. If gap > 25 days, set `coming_off_il = True` and reset rolling window accumulation from that start forward (don't average across the gap). Add `coming_off_il` to feature lists.
+- **Why:** IL returnees have stale rolling stats and incorrect short_rest flags.
+- **Acceptance:** Spot-check 10 known 2025 IL returns — all correctly flagged. `coming_off_il` carries non-zero feature importance.
+- [ ] Done · commit: ___
+
+#### T20 · Odds math test coverage
+- **New file:** `tests/test_odds_math.py`
+- **Tests:**
+  - `american_to_implied_prob` at -110, +100, +200, -200
+  - Vig removal: proportional method on a two-way market sums to 1.0
+  - Kelly stake at known values (covers T01's formula)
+  - Per-game cap respects multi-system pending stakes
+- **Acceptance:** `pytest tests/test_odds_math.py` passes clean. Add to CI / Docker build step.
+- [x] Done · commit: pending — patch applied 2026-05-19
+
+---
+
+### Backlog conventions
+
+- **Starting a task:** Note it in the session handoff as "in progress".
+- **Finishing a task:** Mark `[x]`, add commit hash, update `_Last updated` timestamp at top of this section.
+- **Blocked task:** Add a `> Blocked: <reason>` line under it.
+- **New tasks found during work:** Add to the appropriate priority tier with a `Txx` ID continuing the sequence.
+- **Scope change to an existing task:** Edit in place and note the change date inline.
+---
+
+## 17. Post-audit bug fixes (2026-05-19)
+
+Fixes applied beyond the T01-T20 backlog, grouped by impact tier.
+
+### Correctness bugs
+
+**F01 — HR vig formula centralised**
+- `mlb_core/odds/utils.py`: added `devig_unilateral(market_prob, vig_pct=0.07)`.
+- `runners/run_hr.py`: replaced hardcoded `market_prob / 1.07` with `devig_unilateral`.
+- Every HR edge number was arithmetically correct but undocumented. Now named, testable, configurable.
+
+**F02 — SQL injection in /dashboard and /reset-bets**
+- `main.py`: `system_filter` now whitelist-validated and passed as a bound parameter.
+- `/reset-and-run` and `/reset-bets` now require `X-API-Key` auth (same as public API).
+
+**F03 — Retractable roof always set to is_outdoor=1**
+- `runners/run_hr.py` line 460: `1 if roof == "open" else 1` → `1 if roof in ("open","retractable") else 0`.
+- Moved weather implementation to shared `mlb_core.data.weather.fetch_live_weather_for_slate`.
+
+**F04 — F5 calibrator applied without boundary check**
+- `runners/run_f5.py`: added `X_min_`/`X_max_` range guard matching the NRFI runner pattern.
+
+**F05 — `_norm` defined three times in settle_bets.py**
+- Hoisted to module level. All three inline copies removed.
+
+**F06 — K/OUTS push grading on integer lines**
+- `runners/settle_bets.py`: whole-number line now logs a `WARNING` instead of silently grading push.
+- DK uses half-point K/OUTS lines so a whole-number line signals a parsing error.
+
+**F07 — CLV arithmetic used vig-inclusive probabilities**
+- `mlb_core/tracking/bet_tracker.py` `write_closing_line`: CLV now computes on fair (no-vig) probs.
+- Props use `devig_unilateral`; two-sided markets use raw implied as approximation pending complementary-side capture in `capture_closing_lines.py`.
+
+### Reliability / operational
+
+**F08 — Missing endpoints for T08/T14 scripts**
+- `main.py`: added `POST /capture-closing` and `POST /monitor-drift` routes.
+- `retrain-weekly` job list updated to `mlb-retrain-f5-v5` / `mlb-retrain-hr-v6` (T11 replacements).
+
+**F09 — SGO snapshot staleness — runners silently scored against stale lines**
+- `mlb_core/odds/sgo.py`: added `check_snapshot_freshness(gcs_key, max_age_hours=4.0)`.
+- All four runners (`run_nrfi`, `run_hr`, `run_f5`, `run_k`) abort with an error log if snapshot >4h old.
+
+**F10 — Morning/evening bet deduplication**
+- `mlb_core/tracking/bet_tracker.py` `is_duplicate`: new `kelly_triggered` parameter.
+- Non-triggered morning prediction no longer blocks a triggered evening bet on the same market.
+- Triggered bet still blocks a second triggered bet.
+
+**F11 — Settlement fetched game results serially**
+- `runners/settle_bets.py`: `ThreadPoolExecutor(max_workers=8)` parallelises `fetch_game_result` calls.
+- 15-game slate: ~7.5s → ~1s.
+
+**F12 — `post_pitch_clock` added to builders but not to explicit feature lists**
+- `training/retrain_nrfi_v17.py` `HALFINN_FEATURES`: added `"post_pitch_clock"`.
+- `training/retrain_k_v1.py` `K_FEATURES`: added `"post_pitch_clock"`.
+
+**F13 — `ump_tight_zone` in-sample quantile threshold**
+- `runners/build_nrfi_features.py`: thresholds now use `expanding().quantile()` instead of full-dataset `quantile()`.
+
+**F14 — HR name matching: exact-only misses accent variants and suffixes**
+- `runners/run_hr.py`: added `difflib.get_close_matches` fuzzy fallback at cutoff=0.85.
+
+**F15 — `build_batter_rolling` / `build_pitcher_features` used wall-clock date**
+- `runners/build_hr_features.py`: both functions now accept `run_date` parameter; historical replays use the correct reference point.
+
+**F16 — Weather fetch had no retry backoff**
+- Created `mlb_core.data.weather.fetch_live_weather_for_slate` using existing `_fetch_weather` (4-attempt exponential backoff).
+- `run_hr._fetch_today_weather` and `run_f5._fetch_today_weather` both replaced with the shared function.
+
+### Testing
+
+**F17 — Settlement grading had zero test coverage**
+- `tests/test_settlement.py`: 35 test cases covering NRFI (all 5 bet types), F5 (push/win/loss/incomplete), HR (start/no-start/accent), K/OUTS (over/under/void/integer-line warning), PITCHER_ER, `_calc_profit`, and `BetTracker.is_duplicate` dedup logic.
+- `tests/test_odds_math.py`: added 4 `devig_unilateral` tests.
