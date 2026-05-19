@@ -29,6 +29,7 @@ SCHEDULER_JOBS = [
     "mlb-monitor-ops",
     "mlb-retrain-weekly",
     "mlb-snapshot-morning",
+    "mlb-snapshot-pregame",
     "mlb-betting-morning",
     "mlb-snapshot-evening",
     "mlb-betting-evening",
