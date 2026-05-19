@@ -25,15 +25,15 @@ SCHEDULER_JOBS = [
     "mlb-refresh-data",
     "mlb-settle",
     "mlb-monitor",
-    "mlb-hr-features",
-    "mlb-nrfi-features",
-    "mlb-k-features",
-    "mlb-f5-features",
+    "mlb-build-all-features",
+    "mlb-monitor-ops",
+    "mlb-retrain-weekly",
     "mlb-snapshot-morning",
     "mlb-betting-morning",
     "mlb-snapshot-evening",
     "mlb-betting-evening",
-    "mlb-monitor-ops",
+    "mlb-capture-closing",
+    "mlb-monitor-drift",
 ]
 
 FEATURE_KEYS = {
