@@ -265,15 +265,18 @@ performance summaries -- those come from the daily recap in `/settle`.
 
 | Time UTC | Scheduler job | What it does |
 |---|---|---|
-| 14:00 | `mlb-refresh-data` | Weather + umpire + scoring + Statcast masters |
 | 09:00 | `mlb-settle` | Settle bets, post daily recap |
 | 09:30 | `mlb-monitor` | Rolling perf check, alerts |
+| 14:00 | `mlb-refresh-data` | Weather + umpire + scoring + Statcast masters |
 | 14:30 | `mlb-build-all-features` | All feature builds: HR -> NRFI -> K -> F5 (dependency order) |
 | 15:20 | `mlb-monitor-ops` | Infra health check after feature builds |
-| 15:55 | `mlb-snapshot-morning` | SGO odds snapshot |
+| 15:55 | `mlb-snapshot-morning` | SGO odds snapshot (opening lines) |
 | 16:00 | `mlb-betting-morning` | Score all 4 runners |
-| 21:55 | `mlb-snapshot-evening` | SGO odds snapshot |
+| 19:00 | `mlb-snapshot-afternoon` | SGO odds snapshot (lineup confirmation) |
+| 21:55 | `mlb-snapshot-evening` | SGO odds snapshot (pre-evening bets) |
 | 22:00 | `mlb-betting-evening` | Score all 4 runners |
+| 23:30 | `mlb-snapshot-pregame` | SGO odds snapshot (closing lines ~1hr before first pitch) |
+| 00:00 | `mlb-capture-closing` | Capture closing lines for CLV calculation |
 
 ---
 
@@ -652,14 +655,16 @@ secretmanager.secretAccessor.
 - `discord-webhook-url` -- Discord webhook
 
 **Cloud Run Jobs:**
-- `mlb-retrain-f5-meta`
-- `mlb-retrain-hr-meta`
+- `mlb-retrain-f5-meta` (DEPRECATED -- exits non-zero; use mlb-retrain-f5-v5)
+- `mlb-retrain-hr-meta` (DEPRECATED -- exits non-zero; use mlb-retrain-hr-v6)
+- `mlb-retrain-f5-v5` (full F5 retrain; added 2026-05-19)
+- `mlb-retrain-hr-v6` (full HR retrain; added 2026-05-19)
 - `mlb-retrain-nrfi-v17`
+- `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
 - `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v17; run after any NRFI retrain)
 - `mlb-calibrate-f5` (fits isotonic calibrator for F5 v5; run after any F5 retrain)
 - `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
 - `mlb-calibrate-hr` (fits isotonic calibrator for HR v6; run after any HR retrain)
-- `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
 
@@ -752,9 +757,9 @@ Fix: fit on all data for full range coverage; use OOS split only for eval.
 
 **Retrain sequence: always run calibrate job after retrain.** Each system has a paired retrain + calibrate job. Running retrain without calibrate leaves the runner using a stale calibrator fit on the old booster's outputs. The /retrain-weekly route fires all four retrains immediately then all four calibrate jobs 30 min later via a background thread. Manual retrain sequence per system:
   NRFI: mlb-retrain-nrfi-v17 -> mlb-calibrate-nrfi
-  F5:   mlb-retrain-f5-meta  -> mlb-calibrate-f5
+  F5:   mlb-retrain-f5-v5    -> mlb-calibrate-f5
   K:    mlb-retrain-k-v1     -> mlb-calibrate-k
-  HR:   mlb-retrain-hr-meta  -> mlb-calibrate-hr
+  HR:   mlb-retrain-hr-v6    -> mlb-calibrate-hr
 
 **BATTER_TB, BATTER_HITS, and PITCHER_ER ship log-only (stake=0, kelly_triggered=False).**
 All three use proxy models (Normal/Gamma approximations anchored to HR or K model output)
@@ -939,8 +944,11 @@ Silent on clean run. Posts Discord alert only on failure.
 
 ### Quota (amateur tier)
 - 10 requests/minute -- client paces at 7s between calls
-- Monthly object limit -- each event returned = 1 object regardless of market count
-- Typical daily cost: ~15 objects per snapshot (15 games), 2 snapshots/day = ~30/day
+- Monthly entity limit: 2,500 entities/month (verified 2026-05-19 via /v2/account/usage/)
+- Each event returned = 1 entity regardless of market count
+- Typical daily cost: ~15 entities per snapshot (15 games max), 4 snapshots/day = ~60/day
+- Monthly projection: ~1,860 entities/month -- leaves ~640 headroom for doubleheaders
+- Do NOT add a 5th daily snapshot -- pushes to ~2,325/month, too close to the 2,500 limit
 
 ### Key methods
 ```python
@@ -986,16 +994,20 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 
 | Job | Schedule (UTC) | Endpoint | Deadline | Body |
 |---|---|---|---|---|
-| `mlb-refresh-data` | `0 8 * * *` | `/refresh-data` | 300s | `{}` |
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
-| `mlb-build-all-features` | `0 12 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
-| `mlb-monitor-ops` | `50 12 * * *` | `/monitor-ops` | 120s | `{}` |
+| `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
+| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
+| `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}` |
+| `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"evening"}` |
+| `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
+| `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
 
 ### status.code values
 - `-1` -- never run or ran successfully
