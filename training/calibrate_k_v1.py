@@ -54,7 +54,8 @@ K_FEATURES = [
     "opp_whiff_rate_L14", "opp_lineup_pct_L", "opp_platoon_k_edge",
     "opp_top3_k_rate_L50",
     "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30",
-    "is_home", "implied_win_pct", "temperature_f", "is_dome",
+    # implied_win_pct removed 2026-05-19 (T02): market circularity.
+    "is_home", "temperature_f", "is_dome",
 ]
 
 
@@ -158,12 +159,11 @@ def run() -> dict:
         return {"status": "error",
                 "error": f"OOS split too small ({len(oos)} rows) -- need >= 50"}
 
-    # Fit isotonic calibrator: lambda -> actual_ks
-    # After calibration, runner replaces raw lambda with calibrated lambda
-    # before the Monte Carlo step. IsotonicRegression is monotone so
-    # the rank ordering of predictions is preserved.
+    # Fit isotonic calibrator on TRAIN slice only (T05, 2026-05-19).
+    # lambda -> actual_ks mapping learned from historical training data only.
+    train_df = df.iloc[:split_idx].copy()
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(df["lambda_k"].values, df[TARGET].values)  # fit on all data for full range coverage
+    iso.fit(train_df["lambda_k"].values, train_df[TARGET].values)
 
     cal_lambdas = iso.predict(oos["lambda_k"].values)
 
@@ -188,6 +188,11 @@ def run() -> dict:
         logger.warning(
             f"calibrated mean still {gap:.3f} Ks from actual -- "
             f"calibrator may need more OOS data"
+        )
+    if cal_mae > raw_mae:
+        logger.warning(
+            f"CALIBRATOR DEGRADES OOS MAE ({raw_mae:.4f} → {cal_mae:.4f}). "
+            f"Raw lambda is more accurate on this split."
         )
 
     # Upload

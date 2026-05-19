@@ -143,9 +143,10 @@ def run() -> dict:
         return {"status": "error",
                 "error": f"OOS split too small ({len(oos)} rows) -- need >= 50"}
 
-    # Fit isotonic calibrator
+    # Fit isotonic calibrator on TRAIN slice only (T05, 2026-05-19).
+    train_df = df.iloc[:split_idx].copy()
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(df["model_prob"].values, df[TARGET].values)  # fit on all data for full range coverage
+    iso.fit(train_df["model_prob"].values, train_df[TARGET].values)
 
     # Evaluate on OOS only
     raw_brier = float(brier_score_loss(oos[TARGET], oos["model_prob"]))
@@ -167,6 +168,11 @@ def run() -> dict:
         logger.warning(
             f"calibrated mean still {gap:.4f} from actual -- "
             f"HR base rate is low so small absolute gaps are expected"
+        )
+    if cal_brier > raw_brier:
+        logger.warning(
+            f"CALIBRATOR DEGRADES OOS Brier ({raw_brier:.4f} → {cal_brier:.4f}). "
+            f"Raw model is better calibrated on this split."
         )
 
     # Upload -- overwrites existing calibrator in GCS

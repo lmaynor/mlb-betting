@@ -211,90 +211,124 @@ def derive_window_outcomes(scoring: pd.DataFrame,
 def compute_scalars(merged: pd.DataFrame) -> dict:
     """Derive empirical scalar for each window vs F5 reference.
 
-    Scalar = slope of OLS regression: actual_outcome ~ p_home_scaled
-    where p_home_scaled = 0.5 + (p_home_f5 - 0.5) * scalar
+    Walk-forward approach (T07, 2026-05-19): for each year Y, fit the
+    scalar on years < Y, evaluate Brier on year Y. Final scalar is the
+    mean of per-year fitted scalars; final Brier is mean of per-year OOS
+    Briers. This prevents the in-sample optimism of fitting on all data.
 
-    We fit the scalar that minimises Brier score between p_home_scaled
-    and actual_outcome.
-
-    Also computes calibration diagnostics per 0.05-wide probability bucket.
+    A window's scalar is only used in production when per_year_scalar_std < 0.1
+    (i.e., stable across years). Until then the market is logged-only.
     """
     from scipy.optimize import minimize_scalar
 
     scalars: dict = {}
+    merged = merged.copy()
+    merged["year"] = pd.to_datetime(merged["game_date"]).dt.year
+    all_years = sorted(merged["year"].unique())
 
     for window_name in WINDOWS:
         col = f"home_wins_{window_name}"
         if col not in merged.columns:
             continue
 
-        valid = merged[["p_home", col]].dropna()
-        if len(valid) < 50:
-            logger.warning(f"  {window_name}: only {len(valid)} valid games -- "
-                           f"scalar unreliable")
-            scalars[window_name] = {
-                "scalar": 1.0 if window_name == "F5" else None,
-                "n":      len(valid),
-                "note":   "insufficient data",
-            }
-            continue
-
-        p_f5    = valid["p_home"].values
-        actual  = valid[col].values
-
         if window_name == "F5":
-            # Reference -- scalar = 1.0 by definition
-            scaled  = p_f5
-            brier   = float(np.mean((scaled - actual) ** 2))
+            valid = merged[["p_home", col]].dropna()
+            if len(valid) < 50:
+                scalars[window_name] = {"scalar": 1.0, "n": len(valid), "note": "insufficient data"}
+                continue
+            p_f5   = valid["p_home"].values
+            actual = valid[col].values
+            brier  = float(np.mean((p_f5 - actual) ** 2))
             scalars[window_name] = {
-                "scalar":       1.0,
-                "n":            len(valid),
-                "brier":        round(brier, 5),
-                "actual_hw_rate": round(float(actual.mean()), 4),
-                "mean_p_home":  round(float(p_f5.mean()), 4),
+                "scalar":           1.0,
+                "n":                len(valid),
+                "brier":            round(brier, 5),
+                "actual_hw_rate":   round(float(actual.mean()), 4),
+                "mean_p_home":      round(float(p_f5.mean()), 4),
             }
             continue
 
-        def brier_loss(s):
-            scaled = 0.5 + (p_f5 - 0.5) * s
-            scaled = np.clip(scaled, 0.02, 0.98)
-            return float(np.mean((scaled - actual) ** 2))
+        per_year: list[dict] = []
+        for test_year in all_years:
+            train = merged[merged["year"] < test_year][["p_home", col]].dropna()
+            test  = merged[merged["year"] == test_year][["p_home", col]].dropna()
+            if len(train) < 50 or len(test) < 20:
+                continue
 
-        result  = minimize_scalar(brier_loss, bounds=(0.3, 1.5), method="bounded")
-        scalar  = float(result.x)
-        scaled  = np.clip(0.5 + (p_f5 - 0.5) * scalar, 0.02, 0.98)
-        brier   = float(np.mean((scaled - actual) ** 2))
+            p_train  = train["p_home"].values
+            a_train  = train[col].values
+            p_test   = test["p_home"].values
+            a_test   = test[col].values
 
-        # Calibration: actual hit rate per 0.05-wide bucket
+            def brier_loss(s):
+                scaled = np.clip(0.5 + (p_train - 0.5) * s, 0.02, 0.98)
+                return float(np.mean((scaled - a_train) ** 2))
+
+            result  = minimize_scalar(brier_loss, bounds=(0.3, 1.5), method="bounded")
+            scalar  = float(result.x)
+            scaled_test = np.clip(0.5 + (p_test - 0.5) * scalar, 0.02, 0.98)
+            oos_brier   = float(np.mean((scaled_test - a_test) ** 2))
+            per_year.append({
+                "year":   int(test_year),
+                "scalar": round(scalar, 4),
+                "brier":  round(oos_brier, 5),
+                "n_train": len(train),
+                "n_test":  len(test),
+            })
+
+        if not per_year:
+            scalars[window_name] = {
+                "scalar": None, "n": 0,
+                "note": "insufficient walk-forward data",
+            }
+            logger.warning(f"  {window_name}: no valid walk-forward folds")
+            continue
+
+        ys      = [f["scalar"] for f in per_year]
+        bs      = [f["brier"]  for f in per_year]
+        mean_s  = float(np.mean(ys))
+        std_s   = float(np.std(ys))
+        mean_b  = float(np.mean(bs))
+        n_total = sum(f["n_test"] for f in per_year)
+        stable  = std_s < 0.1
+
+        scalars[window_name] = {
+            "scalar":              round(mean_s, 4),
+            "per_year_scalar_std": round(std_s, 4),
+            "n":                   n_total,
+            "brier":               round(mean_b, 5),
+            "per_year_scalars":    per_year,
+            "production_ready":    stable,
+            "note": (
+                "stable — use in production" if stable
+                else f"unstable (std={std_s:.3f} >= 0.1) — log-only until more years available"
+            ),
+        }
+
+        # Calibration buckets on the full dataset using mean scalar
+        valid_all = merged[["p_home", col, "year"]].dropna()
+        p_all   = valid_all["p_home"].values
+        a_all   = valid_all[col].values
+        scaled_all = np.clip(0.5 + (p_all - 0.5) * mean_s, 0.02, 0.98)
         buckets: list[dict] = []
-        edges   = np.arange(0.3, 0.75, 0.05)
-        for lo in edges:
+        for lo in np.arange(0.3, 0.75, 0.05):
             hi   = lo + 0.05
-            mask = (scaled >= lo) & (scaled < hi)
+            mask = (scaled_all >= lo) & (scaled_all < hi)
             n    = int(mask.sum())
             if n >= 10:
                 buckets.append({
                     "bucket":      f"{lo:.2f}-{hi:.2f}",
                     "n":           n,
-                    "mean_p":      round(float(scaled[mask].mean()), 4),
-                    "actual_rate": round(float(actual[mask].mean()), 4),
-                    "cal_error":   round(float(scaled[mask].mean() - actual[mask].mean()), 4),
+                    "mean_p":      round(float(scaled_all[mask].mean()), 4),
+                    "actual_rate": round(float(a_all[mask].mean()), 4),
+                    "cal_error":   round(float(scaled_all[mask].mean() - a_all[mask].mean()), 4),
                 })
+        scalars[window_name]["calibration"] = buckets
 
-        scalars[window_name] = {
-            "scalar":         round(scalar, 4),
-            "n":              len(valid),
-            "brier":          round(brier, 5),
-            "actual_hw_rate": round(float(actual.mean()), 4),
-            "mean_p_home":    round(float(p_f5.mean()), 4),
-            "mean_p_scaled":  round(float(scaled.mean()), 4),
-            "calibration":    buckets,
-        }
         logger.info(
-            f"  {window_name}: scalar={scalar:.4f} | "
-            f"n={len(valid):,} | brier={brier:.5f} | "
-            f"actual_hw={actual.mean():.3f} | "
-            f"mean_p_scaled={scaled.mean():.3f}"
+            f"  {window_name}: scalar={mean_s:.4f} ± {std_s:.4f} | "
+            f"n={n_total:,} | brier={mean_b:.5f} | "
+            f"stable={stable} | folds={len(per_year)}"
         )
 
     return scalars

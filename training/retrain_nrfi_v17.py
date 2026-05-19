@@ -71,9 +71,12 @@ HALFINN_FEATURES = [
     "zone_pct_L10", "whiff_pct_L10", "k_pct_L10", "xwoba_allowed_L10", "velo_mean_L10",
     # Pitcher trend + context
     "velo_trend_L5", "days_rest", "short_rest", "arm_angle", "pitcher_is_home",
-    # Batter quality (top-3 rolling)
-    "top3_batter_woba_value_L50", "top3_batter_is_hard_hit_L50",
-    "top3_batter_is_bb_L50", "top3_batter_is_k_L50",
+    # top3_batter_* features removed 2026-05-19 (T06): declared in the feature
+    # contract but never joined by build_nrfi_features.py (live lineup
+    # integration is TODO / T12). Using them caused XGBoost to silently route
+    # all-NaN columns through default splits, contributing no signal while
+    # occupying contract slots. Re-add when T12 is complete and the live/
+    # historical batter rolling join is in place.
     # Weather
     "temperature_f", "wind_speed_mph", "is_outdoor", "wind_out", "wind_in",
     "is_cold", "is_hot", "high_wind",
@@ -83,7 +86,9 @@ HALFINN_FEATURES = [
     "ump_overall_accuracy_L30", "ump_total_run_impact_L30", "ump_consistency_L30",
     # Platoon splits
     "woba_vs_L_STD", "woba_vs_R_STD", "woba_split_STD",
-    "platoon_edge",  # lineup_pct_L removed 2026-05-12 — see comment above HALFINN_FEATURES
+    "platoon_edge",  # lineup_pct_L removed 2026-05-12 — see comment below
+    # T13: Regime indicator — pitch clock rules took effect 2023-03-30.
+    "post_pitch_clock",
 ]
 
 XGB_PARAMS = {
@@ -222,6 +227,86 @@ def _feature_means(X: pd.DataFrame, features: list) -> dict:
     return means
 
 
+def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
+                   threshold: float = 0.01) -> list[str]:
+    """Warn if zeroing any single feature improves OOS AUC by > threshold.
+
+    Ported from retrain_k_v1._leakage_check (T09, 2026-05-19).
+    For binary:logistic we use AUC delta instead of MAE delta.
+    A feature whose removal improves AUC by > 0.01 may carry target
+    information or be a proxy for the outcome variable.
+
+    Warning only — does not abort the retrain.
+    Skip with env var NRFI_SKIP_LEAKAGE_CHECK=1 for fast reruns.
+
+    Only checks features with > 50% non-NaN coverage to avoid false
+    positives from sparse columns (e.g. umpire features early in season).
+    """
+    import os
+    if os.getenv("NRFI_SKIP_LEAKAGE_CHECK") == "1":
+        logger.info("leakage check skipped (NRFI_SKIP_LEAKAGE_CHECK=1)")
+        return []
+
+    from sklearn.metrics import roc_auc_score as _auc
+
+    # Use the same OOS split as the main eval
+    split_idx    = int(len(df) * TRAIN_TEST_SPLIT)
+    df_tr        = df.iloc[:split_idx].copy()
+    df_te        = df.iloc[split_idx:].copy()
+    if len(df_te) < 50:
+        logger.info("leakage check: OOS split too small — skipping")
+        return []
+
+    best_iter    = oos["best_iteration"]
+    baseline_auc = oos["auc_oos"]
+    y_tr = df_tr[TARGET].astype(int)
+    y_te = df_te[TARGET].astype(int)
+    suspicious = []
+
+    logger.info(f"leakage check | baseline AUC={baseline_auc:.4f} | "
+                f"threshold={threshold:.3f} | checking {len(features)} features")
+
+    for feat in features:
+        coverage = df_tr[feat].notna().mean() if feat in df_tr.columns else 0.0
+        if coverage < 0.5:
+            continue
+
+        df_tr_z = df_tr.copy(); df_tr_z[feat] = 0.0
+        df_te_z = df_te.copy(); df_te_z[feat] = 0.0
+
+        dtrain_z = xgb.DMatrix(
+            df_tr_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_tr, feature_names=features)
+        dtest_z  = xgb.DMatrix(
+            df_te_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_te, feature_names=features)
+
+        b     = xgb.train(XGB_PARAMS, dtrain_z,
+                          num_boost_round=best_iter, verbose_eval=False)
+        preds = b.predict(dtest_z)
+        try:
+            auc_z = float(_auc(y_te, preds))
+        except Exception:
+            continue
+        improvement = auc_z - baseline_auc  # positive = zeroing improved AUC = suspect
+
+        if improvement > threshold:
+            suspicious.append(feat)
+            logger.warning(
+                f"  LEAKAGE SUSPECT: {feat!r} | "
+                f"AUC baseline={baseline_auc:.4f} zeroed={auc_z:.4f} "
+                f"(improvement={improvement:+.4f} > {threshold:.3f})"
+            )
+
+    if not suspicious:
+        logger.info("  leakage check passed — no suspicious features")
+    else:
+        logger.warning(
+            f"  leakage check: {len(suspicious)} suspicious feature(s): {suspicious}"
+        )
+    return suspicious
+
+
 def run() -> dict:
     """Orchestrate the retrain. Returns structured result for the Cloud Run Job."""
     from mlb_core.config import GCS_BUCKET
@@ -241,8 +326,73 @@ def run() -> dict:
     if missing:
         logger.warning(f"missing features (will be skipped): {missing}")
 
+    # T06: Hard contract check — features in HALFINN_FEATURES must be
+    # producible by the feature builder. If any are missing it means the
+    # live and training pipelines are misaligned. Fail loudly.
+    REQUIRED = [
+        f for f in HALFINN_FEATURES
+        if not f.startswith("top3_batter_")  # top3 are excluded until T12
+    ]
+    contract_missing = [f for f in REQUIRED if f not in df.columns]
+    if contract_missing:
+        return {
+            "status": "error",
+            "error": (
+                f"Feature contract violation: {len(contract_missing)} required features "
+                f"not in model_features.csv: {contract_missing}. "
+                f"Run /build-features for NRFI first, or update HALFINN_FEATURES."
+            ),
+        }
+
     X = df[available].apply(pd.to_numeric, errors="coerce")
     y = df[TARGET].astype(int)
+
+    # T10: Walk-forward CV across year folds — measures metric dispersion.
+    # Uses the shared XGBModel.walk_forward_cv from mlb_core.models.base.
+    # CV folds default to the last 3 available years so early seasons form
+    # the growing train window. Skipped if NRFI_SKIP_CV=1.
+    import os as _os
+    cv_summary: dict = {}
+    if _os.getenv("NRFI_SKIP_CV") != "1":
+        try:
+            from mlb_core.models.base import XGBModel
+            cv_model = XGBModel(params=XGB_PARAMS, features=available,
+                                meta={"version": VERSION})
+            df_cv = df.copy()
+            df_cv["game_date"] = pd.to_datetime(df_cv["game_date"])
+            years_avail = sorted(df_cv["game_date"].dt.year.unique())
+            cv_folds = [int(y) for y in years_avail if y >= years_avail[-1] - 2]
+            logger.info(f"Walk-forward CV folds: {cv_folds}")
+            raw_cv = cv_model.walk_forward_cv(
+                df_cv, folds=cv_folds, date_col="game_date", target_col=TARGET
+            )
+            aucs   = [f["auc"]   for f in raw_cv["folds"] if "auc"   in f]
+            briers = [f["brier"] for f in raw_cv["folds"] if "brier" in f]
+            if len(aucs) >= 2:
+                import scipy.stats as _st
+                ci_lo, ci_hi = _st.t.interval(
+                    0.95, len(aucs) - 1,
+                    loc=float(np.mean(aucs)),
+                    scale=float(_st.sem(aucs)),
+                )
+            else:
+                ci_lo = ci_hi = float(np.mean(aucs)) if aucs else None
+            cv_summary = {
+                "cv_folds":     raw_cv["folds"],
+                "cv_mean_auc":  round(float(np.mean(aucs)),   4) if aucs else None,
+                "cv_std_auc":   round(float(np.std(aucs)),    4) if aucs else None,
+                "cv_auc_ci_lo": round(float(ci_lo),           4) if ci_lo is not None else None,
+                "cv_auc_ci_hi": round(float(ci_hi),           4) if ci_hi is not None else None,
+                "cv_mean_brier": round(float(np.mean(briers)), 4) if briers else None,
+            }
+            logger.info(
+                f"CV AUC {cv_summary['cv_mean_auc']} ± {cv_summary['cv_std_auc']} "
+                f"95% CI [{cv_summary['cv_auc_ci_lo']}, {cv_summary['cv_auc_ci_hi']}]"
+            )
+        except Exception as e:
+            logger.warning(f"Walk-forward CV failed (non-fatal): {e}")
+    else:
+        logger.info("Walk-forward CV skipped (NRFI_SKIP_CV=1)")
 
     # 2. OOS eval (Section 8)
     try:
@@ -250,25 +400,36 @@ def run() -> dict:
     except Exception as e:
         return {"status": "error", "error": f"OOS eval: {e}"}
 
+    # T09: Leakage check — warn if any feature improves AUC when zeroed.
+    leakage_suspects = _leakage_check(df, available, oos)
+
     # 3. Full retrain (Section 8b)
     try:
         booster = _full_retrain(X, y, available, oos["best_iteration"])
     except Exception as e:
         return {"status": "error", "error": f"full retrain: {e}"}
 
-    # 4. feature_means
+    # 4. feature_means + feature_stds (T10/T14: stds needed for PSI drift monitor)
     fmeans = _feature_means(X, available)
+    fstds: dict = {}
+    for f in available:
+        v = X[f].std(skipna=True)
+        if not pd.isna(v):
+            fstds[f] = round(float(v), 6)
 
     # 5. Build meta
     meta = {
-        "version":      VERSION,
-        "model_type":   "halfinn",
-        "trained_at":   datetime.now(timezone.utc).isoformat(),
-        "full_retrain": True,
-        "features":     available,
+        "version":       VERSION,
+        "model_type":    "halfinn",
+        "trained_at":    datetime.now(timezone.utc).isoformat(),
+        "full_retrain":  True,
+        "features":      available,
         "feature_means": fmeans,
+        "feature_stds":  fstds,
         # OOS metrics from Section 8 — never overwritten by full retrain
         **oos,
+        # Walk-forward CV dispersion (T10)
+        **cv_summary,
     }
     meta_bytes = json.dumps(meta, indent=2, sort_keys=True).encode("utf-8")
 
@@ -315,11 +476,17 @@ def run() -> dict:
         "version":           VERSION,
         "features":          len(available),
         "feature_means":     len(fmeans),
+        "feature_stds":      len(fstds),
         "train_rows":        oos["train_rows"],
         "test_rows":         oos["test_rows"],
         "auc_oos":           oos["auc_oos"],
         "brier_oos":         oos["brier_oos"],
         "best_iteration":    oos["best_iteration"],
+        "cv_mean_auc":       cv_summary.get("cv_mean_auc"),
+        "cv_std_auc":        cv_summary.get("cv_std_auc"),
+        "cv_auc_ci_lo":      cv_summary.get("cv_auc_ci_lo"),
+        "cv_auc_ci_hi":      cv_summary.get("cv_auc_ci_hi"),
+        "leakage_suspects":  leakage_suspects,
         "booster_archive":   booster_archive_key,
         "meta_archive":      meta_archive_key,
         "booster_latest":    GCS_BOOSTER_LATEST,

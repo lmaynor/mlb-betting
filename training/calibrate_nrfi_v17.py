@@ -60,8 +60,7 @@ HALFINN_FEATURES = [
     "primary_whiff_rate_L3", "called_strike_pct_L3",
     "zone_pct_L10", "whiff_pct_L10", "k_pct_L10", "xwoba_allowed_L10", "velo_mean_L10",
     "velo_trend_L5", "days_rest", "short_rest", "arm_angle", "pitcher_is_home",
-    "top3_batter_woba_value_L50", "top3_batter_is_hard_hit_L50",
-    "top3_batter_is_bb_L50", "top3_batter_is_k_L50",
+    # top3_batter_* removed 2026-05-19 (T06): not joined by builder. Re-add with T12.
     "temperature_f", "wind_speed_mph", "is_outdoor", "wind_out", "wind_in",
     "is_cold", "is_hot", "high_wind",
     "park_factor",
@@ -227,11 +226,14 @@ def run() -> dict:
         return {"status": "error",
                 "error": f"OOS split too small ({len(oos_g)} games) -- need >= 50"}
 
-    # 6. Fit isotonic calibrator on ALL data for full range coverage.
-    # out_of_bounds='clip' causes boundary values to map to 0/1 on sparse extremes.
-    # Fitting on all data ensures the full model output range is covered.
+    # 6. Fit isotonic calibrator on TRAIN data only (T04, 2026-05-19).
+    # Prior version fit on all data "for full range coverage" — that caused
+    # the OOS Brier to be in-sample and overoptimistic. We now fit on
+    # train_g and evaluate on oos_g. If the calibrator degrades OOS Brier,
+    # the raw model is better calibrated than the isotonic fit and should be
+    # used directly (flag will appear in logs).
     iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(game_df["model_yrfi_prob"].values, game_df["yrfi"].values)
+    iso.fit(train_g["model_yrfi_prob"].values, train_g["yrfi"].values)
 
     # 7. Evaluate calibration improvement
     raw_brier  = float(brier_score_loss(oos_g["yrfi"], oos_g["model_yrfi_prob"]))
@@ -253,6 +255,14 @@ def run() -> dict:
         logger.warning(
             f"calibrated mean still {gap:.3f} from actual -- "
             f"calibrator may not have enough OOS data to converge"
+        )
+
+    # Warn if calibrator is hurting rather than helping on OOS (T04).
+    if cal_brier > raw_brier:
+        logger.warning(
+            f"CALIBRATOR DEGRADES OOS Brier ({raw_brier:.4f} → {cal_brier:.4f}). "
+            f"Raw model is better calibrated. Consider skipping calibrator upload "
+            f"or re-evaluating the train/OOS split boundary."
         )
 
     # 9. Upload calibrator to GCS

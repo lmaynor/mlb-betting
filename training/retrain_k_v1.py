@@ -60,7 +60,12 @@ K_FEATURES = [
     "opp_whiff_rate_L14", "opp_lineup_pct_L", "opp_platoon_k_edge",
     "opp_top3_k_rate_L50",
     "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30",
-    "is_home", "implied_win_pct", "temperature_f", "is_dome",
+    # implied_win_pct removed 2026-05-19 (T02): market-derived feature trains
+    # the model to mimic the line, eliminating closing-line edge by construction.
+    # is_home and context features kept; moneyline proxy removed.
+    "is_home", "temperature_f", "is_dome",
+    # T13: Regime indicator — pitch clock 2023-03-30.
+    "post_pitch_clock",
 ]
 
 XGB_PARAMS = {
@@ -357,6 +362,27 @@ def run() -> dict:
 
     fmeans = _feature_means(df, available)
 
+    # T10: feature_stds for PSI drift monitor (T14)
+    fstds: dict = {}
+    X_all = df[available].apply(pd.to_numeric, errors="coerce")
+    for f in available:
+        v = X_all[f].std(skipna=True)
+        if not pd.isna(v):
+            fstds[f] = round(float(v), 6)
+
+    # T10: Bootstrap 95% CI on CV mean MAE
+    cv_ci_lo = cv_ci_hi = None
+    if wf and len(wf) >= 2:
+        import scipy.stats as _st
+        maes = [f["mae"] for f in wf]
+        cv_ci_lo, cv_ci_hi = _st.t.interval(
+            0.95, len(maes) - 1,
+            loc=float(np.mean(maes)),
+            scale=float(_st.sem(maes)),
+        )
+        cv_ci_lo = round(float(cv_ci_lo), 4)
+        cv_ci_hi = round(float(cv_ci_hi), 4)
+
     wf_summary = {}
     if wf:
         wf_df = pd.DataFrame(wf)
@@ -376,7 +402,10 @@ def run() -> dict:
         "full_retrain":  True,
         "features":      available,
         "feature_means": fmeans,
+        "feature_stds":  fstds,
         "cv_folds":      CV_FOLDS,
+        "cv_mae_ci_lo":  cv_ci_lo,
+        "cv_mae_ci_hi":  cv_ci_hi,
         **oos,
         **wf_summary,
     }
