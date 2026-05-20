@@ -104,14 +104,51 @@ def _get_closing_odds_from_snapshot(
             for info in nrfi_info.values():
                 odds_val = info.get("yrfi_odds")
                 break
-        elif bet_type in ("F5_HOME", "F5_AWAY"):
-            f5_info = sgo.extract_f5_odds({ev.get("id", ""): ev})
-            for info in f5_info.values():
-                odds_val = info.get("home_odds") if bet_type == "F5_HOME" else info.get("away_odds")
-                break
-        # HR and K props are player-level — closing line capture for props
-        # requires matching by player name; skipped in v1 of this script.
-        # Add player-level matching in T08 follow-up.
+        elif bet_type in ("HOME", "AWAY"):
+            # F5 stores bet_type as "HOME"/"AWAY" (not "F5_HOME"/"F5_AWAY")
+            if (bet.get("system") or "").upper() == "F5":
+                f5_info = sgo.extract_f5_ml_odds({ev.get("id", ""): ev})
+                for info in f5_info.values():
+                    odds_val = info.get("home_odds") if bet_type == "HOME" else info.get("away_odds")
+                    break
+
+        elif (bet.get("system") or "").upper() == "HR":
+            hr_props = sgo.extract_hr_props([ev])
+            player_raw = (bet.get("player") or "")
+            def _norm(s):
+                import unicodedata as _ud
+                n = _ud.normalize("NFD", str(s))
+                n = "".join(c for c in n if _ud.category(c) != "Mn")
+                return n.encode("ascii", "ignore").decode().lower().strip()
+            player_norm = _norm(player_raw)
+            for prop_name, prop_info in hr_props.items():
+                if _norm(prop_name) == player_norm:
+                    odds_val = prop_info.get("odds")
+                    break
+
+        elif bt_upper.startswith(("K_", "OUTS_")):
+            parts = bt_upper.split("_")
+            market = parts[0]  # "K" or "OUTS"
+            side = parts[1]    # "OVER" or "UNDER"
+            try:
+                line = float(parts[2])
+            except (IndexError, ValueError):
+                line = None
+            extractor = sgo.extract_k_odds if market == "K" else sgo.extract_outs_odds
+            props = extractor([ev])
+            def _norm2(s):
+                import unicodedata as _ud
+                n = _ud.normalize("NFD", str(s))
+                n = "".join(c for c in n if _ud.category(c) != "Mn")
+                return n.encode("ascii", "ignore").decode().lower().strip()
+            player_norm = _norm2(bet.get("player") or "")
+            for prop_name, prop_info in props.items():
+                if _norm2(prop_name) == player_norm:
+                    if line is not None and prop_info.get("line") is not None:
+                        if abs(float(prop_info["line"]) - line) > 0.01:
+                            continue
+                    odds_val = prop_info.get("over_odds") if side == "OVER" else prop_info.get("under_odds")
+                    break
 
         if odds_val is not None:
             closing[int(bet["id"])] = float(odds_val)
@@ -153,7 +190,17 @@ def run(run_date: str = None) -> dict:
             logger.warning(f"capture_closing: failed to write closing line for bet_id={bid}: {e}")
             skipped += 1
 
-    logger.info(f"capture_closing: captured={captured} skipped={skipped}")
+    # Per-system breakdown for acceptance criterion (C05)
+    by_sys = {}
+    for _, bet in open_bets.iterrows():
+        s = (bet.get("system") or "?").upper()
+        bid = int(bet["id"])
+        if bid in closing_map:
+            by_sys[s] = by_sys.get(s, [0, 0]); by_sys[s][0] += 1
+        else:
+            by_sys[s] = by_sys.get(s, [0, 0]); by_sys[s][1] += 1
+    sys_str = " ".join(f"{s}={v[0]}/{v[0]+v[1]}" for s, v in sorted(by_sys.items()))
+    logger.info(f"capture_closing: {sys_str} | captured={captured} skipped={skipped}")
     return {
         "status":   "ok",
         "run_date": run_date,
