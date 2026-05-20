@@ -105,6 +105,8 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
+    from mlb_core.data.lineups import fetch_il_pitcher_ids
+    _il_ids = fetch_il_pitcher_ids()
 
     sched = get_today_schedule(run_date)
     if sched.empty:
@@ -289,8 +291,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         post_error(msg, system="NRFI")
         return pd.DataFrame()
     logger.info("NRFI: sentinel ok -- %s", _sreason)
-    from mlb_core.data.lineups import fetch_il_pitcher_ids
-    _il_ids = fetch_il_pitcher_ids()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("NRFI: SGO snapshot empty or missing — skipping")

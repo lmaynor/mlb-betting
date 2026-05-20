@@ -204,7 +204,7 @@ def check_build_sentinel(gcs_bucket, system_prefix, max_age_hours=26):
         logger.warning("sentinel check: could not read %s -- %s", key, exc)
         return True, f"sentinel unreadable ({exc})"
     status = sentinel.get("status", "")
-    if status != "success":
+    if status not in ("ok", "success"):
         return False, f"last build status={status!r}"
     ts_str = sentinel.get("timestamp", "")
     try:

@@ -61,7 +61,7 @@ def _fetch_hr_odds(run_date: str) -> dict:
         msg = f"HR: aborting run -- stale/failed feature build: {_sreason}"
         logger.error(msg)
         from mlb_core.notify.discord import post_error
-        post_error(msg, system="HR")
+        post_error("HR", msg)
         return pd.DataFrame()
     logger.info("HR: sentinel ok -- %s", _sreason)
     events = sgo.load_snapshot("Odds/sgo/latest.json")

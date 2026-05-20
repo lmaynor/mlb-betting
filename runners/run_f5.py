@@ -101,6 +101,8 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
+    from mlb_core.data.lineups import fetch_il_pitcher_ids
+    _il_ids = fetch_il_pitcher_ids()
     from mlb_core.odds import american_to_implied_prob, remove_vig
 
     sched = get_today_schedule(run_date)
@@ -221,7 +223,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         msg = f"F5: aborting run -- stale/failed feature build: {_sreason}"
         logger.error(msg)
         from mlb_core.notify.discord import post_error
-        post_error(msg, system="F5")
+        post_error("F5", msg)
         return pd.DataFrame()
     logger.info("F5: sentinel ok -- %s", _sreason)
     from mlb_core.data.lineups import fetch_il_pitcher_ids
@@ -274,8 +276,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
-    from mlb_core.data.lineups import fetch_il_pitcher_ids
-    _il_ids = fetch_il_pitcher_ids()
     _IL_DAYS = 10
 
     def _starter_stale(row, side: str, run_date: str) -> bool:
