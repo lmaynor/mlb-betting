@@ -276,7 +276,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
-    _IL_DAYS = 10
+    _IL_DAYS = 7
 
     def _starter_stale(row, side: str, run_date: str) -> bool:
         """Return True if starter's last appearance exceeds IL threshold."""

@@ -155,7 +155,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
             row = match.iloc[0].to_dict()
             _last_app = match.iloc[0]["game_date"]
             _days_since = (pd.Timestamp(run_date) - _last_app).days
-            if _days_since > 10:
+            if _days_since > 7:
                 if int(pid) not in _il_ids:
                     logger.info(
                         f"K: allowing {pname} -- {_days_since}d gap but NOT on IL"
