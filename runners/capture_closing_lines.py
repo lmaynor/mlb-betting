@@ -62,7 +62,8 @@ def _get_closing_odds_from_snapshot(
     """
     Pull the current SGO snapshot and match each open bet to its market odds.
 
-    Returns {bet_id: closing_american_odds}.
+    Returns {bet_id: (closing_american_odds, complement_american_odds)}.
+    complement_american_odds is None for prop markets.
     """
     from mlb_core.odds import sgo
     from mlb_core.odds.dk_scraper import resolve_team
@@ -82,7 +83,7 @@ def _get_closing_odds_from_snapshot(
         key = (away_abbr, home_abbr)
         market_map[key] = ev
 
-    closing: dict[int, float] = {}
+    closing: dict[int, tuple] = {}
     for _, bet in bets.iterrows():
         away = bet.get("away_team", "")
         home = bet.get("home_team", "")
@@ -94,22 +95,30 @@ def _get_closing_odds_from_snapshot(
         bet_type = (bet.get("bet_type") or "").upper()
         odds_val = None
 
+        complement_val = None
         if bet_type in ("NRFI",):
             nrfi_info = sgo.extract_nrfi_odds({ev.get("id", ""): ev})
             for info in nrfi_info.values():
                 odds_val = info.get("nrfi_odds")
+                complement_val = info.get("yrfi_odds")
                 break
         elif bet_type in ("YRFI",):
             nrfi_info = sgo.extract_nrfi_odds({ev.get("id", ""): ev})
             for info in nrfi_info.values():
                 odds_val = info.get("yrfi_odds")
+                complement_val = info.get("nrfi_odds")
                 break
         elif bet_type in ("HOME", "AWAY"):
             # F5 stores bet_type as "HOME"/"AWAY" (not "F5_HOME"/"F5_AWAY")
             if (bet.get("system") or "").upper() == "F5":
                 f5_info = sgo.extract_f5_ml_odds({ev.get("id", ""): ev})
                 for info in f5_info.values():
-                    odds_val = info.get("home_odds") if bet_type == "HOME" else info.get("away_odds")
+                    if bet_type == "HOME":
+                        odds_val = info.get("home_odds")
+                        complement_val = info.get("away_odds")
+                    else:
+                        odds_val = info.get("away_odds")
+                        complement_val = info.get("home_odds")
                     break
 
         elif (bet.get("system") or "").upper() == "HR":
@@ -151,7 +160,7 @@ def _get_closing_odds_from_snapshot(
                     break
 
         if odds_val is not None:
-            closing[int(bet["id"])] = float(odds_val)
+            closing[int(bet["id"])] = (float(odds_val), float(complement_val) if complement_val is not None else None)
 
     return closing
 
@@ -184,7 +193,8 @@ def run(run_date: str = None) -> dict:
         system = bet.get("system", "NRFI")
         tracker = BetTracker("unused", system=system)
         try:
-            tracker.write_closing_line(bid, closing_map[bid])
+            c_odds, comp_odds = closing_map[bid]
+            tracker.write_closing_line(bid, c_odds, complement_odds=comp_odds)
             captured += 1
         except Exception as e:
             logger.warning(f"capture_closing: failed to write closing line for bet_id={bid}: {e}")
