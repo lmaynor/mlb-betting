@@ -1473,11 +1473,9 @@ Component: `components/picks/filter-bar.tsx`.
 ### Results page features
 
 - **CSV export**: client-side, triggers download of filtered bets as `.csv`.
-  Columns: Date, System, Game, Pick, Odds, Edge Range, Stake, Book, Result, P&L.
-  Edge is binned (`0-5%`, `5-10%`, `10%+`) -- model probabilities not exposed.
+  Columns: Date, System, Game, Pick, Odds, Edge, Stake, Book, Result, P&L.
+  Edge shown as exact percentage. Model prob not exposed.
 - **Stake column**: shows dollar stake per bet.
-- **Binned edge**: exact edge hidden to protect model IP. Show exact values
-  only to authenticated Pro subscribers (post-launch, Option B).
 
 ### Sort (results page)
 
