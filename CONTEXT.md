@@ -915,11 +915,13 @@ feature and store under `"feature_dists"` in `model_meta`. `monitor_drift.py` us
 interpolation over these percentiles to reconstruct the training distribution for PSI binning.
 Falls back to Gaussian if `feature_dists` not in meta (old models). Takes effect after next retrain.
 
-**C08 (pending diagnostic): K lambda IP-scaling may be non-linear.**
-Current scaling: `lambda_k = base_lambda * (avg_ip_L5 / 5.0)`. Assumes linear K-per-IP.
-Diagnostic: plot residuals of `predicted_k / lambda_k` vs `actual_ip` on training set.
-If slope != 0, replace with historical `k_per_ip_L5` ratio. Blocked until retrain
-jobs complete so fresh predictions are available.
+**C08 (2026-05-20): K Monte Carlo IP scaling fixed -- k_per_9_L5 * avg_ip replaces lambda * (ip/5).**
+Diagnostic showed residual slope -1.13 vs IP: model over-predicted Ks at low IP, under-predicted
+at high IP. Root cause: naive `lambda_k * (avg_ip_L5 / 5.0)` assumes linear K-per-IP but K rate
+drops in later innings (fatigue, lineup cycling). Fix: `_simulate_k` now uses
+`k_per_9_L5 / 9.0 * avg_ip_L5` as the expected K count. Falls back to penalty-only scaling
+if `k_per_9_L5` is missing. `k_per_9_L5` is in `model_features.csv` and passed from `row`
+at the call site.
 
 ---
 
