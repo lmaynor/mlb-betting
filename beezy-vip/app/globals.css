@@ -41,7 +41,7 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
-body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
+body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
 
 .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
@@ -98,6 +98,12 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 .models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
 .results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; }
 
+.stats-strip     { display: grid; }
+.stats-4up       { display: grid; grid-template-columns: repeat(4, 1fr); }
+.sources-grid    { display: grid; grid-template-columns: repeat(4, 1fr); }
+.models-strip    { display: grid; grid-template-columns: repeat(3, 1fr); }
+.model-stats-5up   { display: grid; grid-template-columns: repeat(5, 1fr); }
+.model-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 /* nav/hero/steps consolidated into comprehensive 768px block below */
 
@@ -112,6 +118,13 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 @media (max-width: 600px) {
   .banner-short { display: inline; }
   .banner-full  { display: none; }
+}
+
+/* iOS: prevent auto-zoom on input focus (font-size must be >= 16px on touch) */
+@media (hover: none) and (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -145,6 +158,14 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
   /* Banner */
   .banner-full  { display: none; }
   .banner-short { display: inline; }
+
+  /* Stat grids */
+  .stats-strip     { grid-template-columns: 1fr 1fr !important; }
+  .stats-4up       { grid-template-columns: 1fr 1fr !important; }
+  .sources-grid    { grid-template-columns: 1fr 1fr !important; }
+  .models-strip    { grid-template-columns: 1fr !important; }
+  .model-stats-5up { grid-template-columns: 1fr 1fr !important; }
+  .model-config-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Article body */
@@ -159,8 +180,3 @@ body { background: var(--bg); min-height: 100vh; overflow-x: clip; }
 .article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
 .article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
 .article-body a { color: #10b981; }
-
-.stats-strip { display: grid; }
-@media (max-width: 768px) {
-  .stats-strip { grid-template-columns: 1fr 1fr !important; }
-}

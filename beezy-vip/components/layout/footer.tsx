@@ -1,24 +1,30 @@
 import Link from 'next/link'
+import { MessageCircle } from 'lucide-react'
 
 const B = '0.5px solid #1f1f24'
 
 export function Footer() {
   return (
-    <footer style={{ borderTop: B, background: '#111114', marginTop: '48px' }}>
+    <footer style={{ borderTop: B, background: '#111114', marginTop: '48px', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
         <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '32px', marginBottom: '32px' }}>
           <div>
             <div className="mono" style={{ fontSize: '14px', fontWeight: 600, color: '#f5f5f7', marginBottom: '8px' }}>
               BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
             </div>
-            <p style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6 }}>
+            <p style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6, marginBottom: '12px' }}>
               Machine learning models for sports betting. Built on data, not gut feelings.
             </p>
+            <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#71717a', textDecoration: 'none' }}
+              aria-label="Join Discord">
+              <MessageCircle size={16} aria-hidden="true" />
+            </a>
           </div>
           {[
             { title: 'Picks',   links: [['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['F5','/picks/mlb/f5'],['Strikeouts','/picks/mlb/k']] },
             { title: 'Tools',   links: [['Odds Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Edge Finder','/tools/edge-finder'],['NRFI Conditions','/tools/nrfi-conditions'],['Pitcher Matchups','/tools/pitcher-matchups']] },
-            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Learn','/learn'],['Discord','https://discord.gg/beezy']] },
+            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Learn','/learn']] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },
           ].map(col => (
             <div key={col.title}>

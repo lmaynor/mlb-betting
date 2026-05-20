@@ -15,9 +15,10 @@ const SYSTEM_META: Record<string, {
   OUTS: { name: 'Outs Props',           description: 'Pitch efficiency, innings-per-start trend, bullpen availability, and opponent OBP for outs recorded props.',                         color: '#fb923c', slug: 'outs' },
 }
 
-function StatBlock({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+// isLast removes the right border on the final cell so it doesn't bleed into the container border
+function StatBlock({ label, value, sub, accent, isLast }: { label: string; value: string; sub?: string; accent?: boolean; isLast?: boolean }) {
   return (
-    <div style={{ padding: '18px', borderRight: B }}>
+    <div style={{ padding: '18px', borderRight: isLast ? undefined : B }}>
       <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? '#10b981' : '#f5f5f7' }}>{value}</div>
       {sub && <div style={{ fontSize: '11px', color: '#71717a' }}>{sub}</div>}
@@ -69,11 +70,12 @@ export async function SystemPicksPage({ system }: { system: string }) {
         )}
       </div>
 
-      {/* Stats grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', border: B, marginBottom: '20px' }}>
+      {/* Stats grid — responsive via .stats-4up class */}
+      <div className="stats-4up" style={{ border: B, marginBottom: '20px' }}>
         <StatBlock label="Season ROI"  value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} />
         <StatBlock label="Win Rate"    value={winRate !== '--' ? `${winRate}%` : '--'} sub="W / (W+L)" />
         <StatBlock label="Total Bets"  value={String(totalBets)} sub="Paper mode" />
+        {/* Last cell: raw div so no isLast needed on StatBlock; raw div has no borderRight */}
         <div style={{ padding: '18px' }}>
           <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: '#71717a', marginBottom: '6px' }}>Avg Edge</div>
           <div className="mono" style={{ fontSize: '22px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>{avgEdge !== '--' ? `+${avgEdge}%` : '--'}</div>

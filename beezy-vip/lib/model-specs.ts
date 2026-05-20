@@ -6,7 +6,7 @@ export interface ModelSpec {
   color:       string
   description: string
   dataRange:   string
-  oosAUC:      number
+  oosAUC:      number   // for K: stores MAE; for OUTS: 0 (proxy)
   features:    Array<{ name: string; description: string; importance: string }>
   edgeThreshold: number
   kellyFraction: number
@@ -22,7 +22,7 @@ export const MODEL_SPECS: ModelSpec[] = [
     color:       '#00FF87',
     description: 'Predicts whether the first inning will be scoreless. Trained on pitch-level Statcast data from 2021–2025 with walk-forward cross-validation. Primary signal is the combination of both starters\' first-inning tendencies, umpire called-strike tendency, and atmospheric conditions.',
     dataRange:   '2021–2025',
-    oosAUC:      0.618,
+    oosAUC:      0.577,
     edgeThreshold: 0.04,
     kellyFraction: 0.5,
     learnSlug:   'what-is-nrfi',
@@ -49,13 +49,13 @@ export const MODEL_SPECS: ModelSpec[] = [
     color:       '#FFB800',
     description: 'Predicts batter HR probability per plate appearance. Combines batter Statcast quality-of-contact metrics with opposing pitcher HR vulnerability and ballpark factors. Platoon splits applied as a multiplicative adjustment.',
     dataRange:   '2021–2025',
-    oosAUC:      0.603,
+    oosAUC:      0.630,
     edgeThreshold: 0.03,
     kellyFraction: 0.33,
     learnSlug:   'home-run-props',
     features: [
       { name: 'Barrel Rate',          description: 'Batted ball barrel rate (ideal launch angle + exit velo combo)', importance: 'High' },
-      { name: 'Hard Hit %',           description: 'Batted ball hard-hit rate (exit velo ≥ 95 mph)',               importance: 'High' },
+      { name: 'Hard Hit %',           description: 'Batted ball hard-hit rate (exit velo >= 95 mph)',               importance: 'High' },
       { name: 'Launch Angle (avg)',   description: 'Season average launch angle',                                   importance: 'High' },
       { name: 'Pitcher HR/9',         description: 'Opposing pitcher HR allowed per 9 innings',                    importance: 'High' },
       { name: 'Pitcher FB Rate',      description: 'Opposing pitcher fly ball rate — more FB = more HR exposure',  importance: 'Medium' },
@@ -70,11 +70,11 @@ export const MODEL_SPECS: ModelSpec[] = [
     system:      'F5',
     slug:        'f5',
     name:        'First 5 Innings',
-    version:     'v4',
+    version:     'v5',
     color:       '#00B4FF',
     description: 'Predicts F5 spread and total outcomes. F5 bets isolate starting pitcher performance and remove bullpen variance. Model focuses on starter quality metrics, recent form, and opponent quality.',
     dataRange:   '2022–2025',
-    oosAUC:      0.594,
+    oosAUC:      0.553,
     edgeThreshold: 0.04,
     kellyFraction: 0.5,
     learnSlug:   'f5-betting',
@@ -93,11 +93,12 @@ export const MODEL_SPECS: ModelSpec[] = [
     system:      'K',
     slug:        'k',
     name:        'Strikeout Props',
-    version:     'v9',
+    version:     'v1',
     color:       '#BF5FFF',
-    description: 'Projects starter strikeout totals using pitch movement and command metrics alongside opponent lineup K vulnerability. The model accounts for game context factors like expected game pace and lineup construction.',
+    // oosAUC field stores MAE for K (Poisson regression -- AUC is not the right metric)
+    description: 'Projects starter strikeout totals using pitch movement and command metrics alongside opponent lineup K vulnerability. Poisson regression model; evaluated by MAE not AUC.',
     dataRange:   '2021–2025',
-    oosAUC:      0.631,
+    oosAUC:      1.807,
     edgeThreshold: 0.05,
     kellyFraction: 0.5,
     learnSlug:   'mlb-strikeout-props',
@@ -117,11 +118,12 @@ export const MODEL_SPECS: ModelSpec[] = [
     system:      'OUTS',
     slug:        'outs',
     name:        'Outs Props',
-    version:     'v3',
+    version:     'v1',
     color:       '#FF6B35',
-    description: 'Predicts total outs recorded by a starter. Combines efficiency metrics (pitches per out) with game-context factors including team win probability expectations and bullpen availability that might trigger an early hook.',
-    dataRange:   '2022–2025',
-    oosAUC:      0.587,
+    // oosAUC = 0 signals proxy model — no trained AUC. The detail page shows 'Proxy' when oosAUC === 0.
+    description: 'Projects outs recorded by a starter via Normal IP simulation (proxy model derived from K system features). Not a separately trained model.',
+    dataRange:   '2021–2025',
+    oosAUC:      0,
     edgeThreshold: 0.04,
     kellyFraction: 0.4,
     features: [

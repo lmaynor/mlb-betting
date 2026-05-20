@@ -11,23 +11,27 @@ const META: Record<string, { name: string; desc: string; href: string; bg: strin
   OUTS: { name: 'Pitcher Outs Props',    desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                              href: '/picks/mlb/outs', bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
 }
 
-const SEED = [
-  { system: 'NRFI', win_rate: 40.0, roi:  7.88, total_bets: 25 },
-  { system: 'HR',   win_rate: 54.0, roi:  0.0,  total_bets: 18 },
-  { system: 'F5',   win_rate: 41.9, roi: -7.92, total_bets: 43 },
-  { system: 'K',    win_rate: 47.6, roi:-11.80, total_bets: 42 },
-  { system: 'OUTS', win_rate: 68.9, roi: 37.57, total_bets: 45 },
-]
-
 export async function ModelsGrid() {
-  let stats = SEED
+  let stats: Array<{ system: string; win_rate: number; roi: number; total_bets: number }> = []
   try {
     const db = await apiGetStats().then(s => s.bySystem)
-    if (db.length > 0) stats = db.map(s => ({
+    stats = db.map(s => ({
       system: s.system, win_rate: parseFloat(String(s.win_rate)),
       roi: parseFloat(String(s.roi ?? 0)), total_bets: parseInt(String(s.total_bets)),
     }))
-  } catch { /* seed */ }
+  } catch { /* API unavailable -- render empty */ }
+
+  if (stats.length === 0) return (
+    <section style={{ padding: '24px 20px', borderBottom: B }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Active systems</span>
+        <Link href="/models" style={{ fontSize: '11px', color: '#3b82f6', textDecoration: 'none' }}>Full methodology &rarr;</Link>
+      </div>
+      <div style={{ border: B, padding: '40px', textAlign: 'center' }}>
+        <p className="mono" style={{ fontSize: '11px', color: '#71717a' }}>Loading systems&hellip;</p>
+      </div>
+    </section>
+  )
 
   const items = [...stats, null] // null = ghost card
 

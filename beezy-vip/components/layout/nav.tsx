@@ -20,8 +20,8 @@ export function Nav() {
 
   return (
     <>
-      {/* Paper mode banner */}
-      <div style={{ background: '#1c1207', borderBottom: '0.5px solid #3d2e0f', padding: '6px 16px', textAlign: 'center' }}>
+      {/* Paper mode banner — top padding accounts for notch/Dynamic Island */}
+      <div style={{ background: '#1c1207', borderBottom: '0.5px solid #3d2e0f', padding: 'max(6px, env(safe-area-inset-top)) 16px 6px', textAlign: 'center' }}>
         <span className="mono banner-text" style={{ fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#f59e0b' }}>
           <span className="banner-full">Paper mode &middot; All results are simulated &middot; Not financial advice</span>
           <span className="banner-short">Paper mode &middot; Not financial advice</span>
