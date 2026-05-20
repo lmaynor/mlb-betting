@@ -241,7 +241,7 @@ export default async function ModelDetailPage({ params }: Props) {
           <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No settled bets yet.</p>
         </div>
       ) : (
-        <PicksTable picks={history} />
+        <PicksTable bets={history} />
       )}
     </div>
   )

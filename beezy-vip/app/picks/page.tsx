@@ -20,7 +20,7 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
     book: sp.book && sp.book !== 'All' ? sp.book.toLowerCase().replace(/ /g, '') : undefined,
     limit:  100,
   }).catch(() => [])
-  return <PicksTable picks={picks} />
+  return <PicksTable bets={picks} />
 }
 
 export default function PicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
