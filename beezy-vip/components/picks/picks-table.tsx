@@ -105,7 +105,7 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="mono" style={{ padding: '10px 8px', fontSize: '12px', color: '#f5f5f7' }}>{fmtOdds(bet.odds)}</div>
-      <div className="mono" style={{ padding: '10px 8px', fontSize: '11px', color: '#a1a1aa' }}>{edgeBin(bet.edge ?? null)}</div>
+      <div className="mono" style={{ padding: '10px 8px', fontSize: '11px', color: '#a1a1aa' }}>{(bet.edge !== null && bet.edge !== undefined ? (bet.edge * 100).toFixed(1) + "%" : "—")}</div>
       <div className="mono" style={{ padding: '10px 8px', fontSize: '11px', color: '#a1a1aa' }}>{bet.book ?? '—'}</div>
 
       <div style={{ padding: '10px 8px' }}><ResultPill result={bet.result} /></div>
@@ -176,7 +176,7 @@ function BetCard({ bet }: { bet: Bet }) {
         </div>
         <div>
           <div style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: '#71717a', letterSpacing: '0.08em', marginBottom: '2px' }}>EDGE</div>
-          <div className="mono" style={{ fontSize: '13px', color: '#a1a1aa' }}>{edgeBin(bet.edge ?? null)}</div>
+          <div className="mono" style={{ fontSize: '13px', color: '#a1a1aa' }}>{(bet.edge !== null && bet.edge !== undefined ? (bet.edge * 100).toFixed(1) + "%" : "—")}</div>
         </div>
         <div>
           <div style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: '#71717a', letterSpacing: '0.08em', marginBottom: '2px' }}>BOOK</div>
