@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import requests
 import xgboost as xgb
+from mlb_core.odds.dk_scraper import resolve_team
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,16 @@ def _fetch_hr_odds(run_date: str) -> dict:
     if not _fresh:
         logger.error(f"aborting run — {_reason}")
         return pd.DataFrame()
+    # Sentinel check -- abort if feature build is stale or failed
+    from mlb_core.storage import check_build_sentinel
+    _sok, _sreason = check_build_sentinel(GCS_BUCKET, "HR_Pro")
+    if not _sok:
+        msg = f"HR: aborting run -- stale/failed feature build: {_sreason}"
+        logger.error(msg)
+        from mlb_core.notify.discord import post_error
+        post_error(msg, system="HR")
+        return pd.DataFrame()
+    logger.info("HR: sentinel ok -- %s", _sreason)
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("HR odds: SGO snapshot empty or missing")
@@ -687,8 +698,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             game_date        = run_date,
             game_pk          = row.get("game_pk"),
             player           = row.get("player"),
-            away_team        = row.get("away_team"),
-            home_team        = row.get("home_team"),
+            away_team        = resolve_team(row.get("away_team") or "") or row.get("away_team"),
+            home_team        = resolve_team(row.get("home_team") or "") or row.get("home_team"),
             bet_type         = "HR",
             model_prob       = row.get("model_prob"),
             market_prob      = row.get("market_prob"),
@@ -722,8 +733,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
                 game_date        = run_date,
                 game_pk          = bet["game_pk"],
                 player           = bet["player"],
-                away_team        = bet["away_team"],
-                home_team        = bet["home_team"],
+                away_team        = resolve_team(bet.get("away_team") or "") or bet.get("away_team"),
+                home_team        = resolve_team(bet.get("home_team") or "") or bet.get("away_team"),
                 bet_type         = bet["bet_type"],
                 model_prob       = bet["model_prob"],
                 market_prob      = bet["market_prob"],

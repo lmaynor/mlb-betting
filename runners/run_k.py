@@ -308,6 +308,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     if not _fresh:
         logger.error(f"aborting run — {_reason}")
         return pd.DataFrame()
+    # Sentinel check -- abort if feature build is stale or failed
+    from mlb_core.storage import check_build_sentinel
+    _sok, _sreason = check_build_sentinel(GCS_BUCKET, "K_Pro_System")
+    if not _sok:
+        msg = f"K: aborting run -- stale/failed feature build: {_sreason}"
+        logger.error(msg)
+        from mlb_core.notify.discord import post_error
+        post_error(msg, system="K")
+        return pd.DataFrame()
+    logger.info("K: sentinel ok -- %s", _sreason)
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("K: SGO snapshot empty or missing — skipping")

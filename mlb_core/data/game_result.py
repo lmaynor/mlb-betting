@@ -48,13 +48,21 @@ def _norm(s: str) -> str:
 
 
 def _get(path: str, params: dict = None) -> dict | None:
-    try:
-        r = _SESSION.get(f"{_MLB_API}{path}", params=params or {}, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        logger.warning(f"game_result: API call failed {path}: {e}")
-        return None
+    import time
+    _delays = (0, 2, 4, 8)  # 3 retries with backoff
+    last_exc = None
+    for attempt, delay in enumerate(_delays):
+        if delay:
+            time.sleep(delay)
+        try:
+            r = _SESSION.get(f"{_MLB_API}{path}", params=params or {}, timeout=10)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            last_exc = e
+            logger.warning(f"game_result: attempt {attempt + 1} failed {path}: {e}")
+    logger.error(f"game_result: all retries exhausted {path}: {last_exc}")
+    return None
 
 
 def fetch_game_result(game_pk: int) -> dict | None:

@@ -184,3 +184,37 @@ def write_build_sentinel(system: str, result: dict) -> None:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"write_build_sentinel failed for {system}: {e}")
+
+
+def check_build_sentinel(gcs_bucket, system_prefix, max_age_hours=26):
+    """
+    Read {system_prefix}/data/last_build.json from GCS.
+    Returns (ok: bool, reason: str).
+    ok=False means the runner should abort and alert.
+    Non-fatal on GCS read errors -- returns ok=True with a warning reason
+    so a transient GCS blip does not block betting.
+    """
+    import json, datetime, logging
+    logger = logging.getLogger(__name__)
+    key = f"{system_prefix}/data/last_build.json"
+    try:
+        raw = read_bytes(gcs_bucket, key)
+        sentinel = json.loads(raw)
+    except Exception as exc:
+        logger.warning("sentinel check: could not read %s -- %s", key, exc)
+        return True, f"sentinel unreadable ({exc})"
+    status = sentinel.get("status", "")
+    if status != "success":
+        return False, f"last build status={status!r}"
+    ts_str = sentinel.get("timestamp", "")
+    try:
+        ts = datetime.datetime.fromisoformat(ts_str)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        age_h = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 3600
+    except Exception:
+        return False, f"sentinel timestamp unparseable: {ts_str!r}"
+    if age_h > max_age_hours:
+        return False, f"sentinel age {age_h:.1f}h > {max_age_hours}h limit"
+    return True, f"ok (age {age_h:.1f}h)"
+
