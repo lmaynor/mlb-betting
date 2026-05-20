@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { Suspense } from 'react'
-import { PicksFilterBar } from '@/components/picks/filter-bar'
+import { FilterBar } from '@/components/picks/filter-bar'
 import { PicksTable } from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import type { Metadata } from 'next'
@@ -26,7 +26,7 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
 export default function PicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   return (
     <div>
-      <PicksFilterBar />
+      <FilterBar />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '18px', fontWeight: 600, color: '#f5f5f7' }}>Picks</h1>
