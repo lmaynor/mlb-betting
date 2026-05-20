@@ -198,7 +198,7 @@ def check_build_sentinel(gcs_bucket, system_prefix, max_age_hours=26):
     logger = logging.getLogger(__name__)
     key = f"{system_prefix}/data/last_build.json"
     try:
-        raw = read_bytes(gcs_bucket, key)
+        raw = read_bytes(key)
         sentinel = json.loads(raw)
     except Exception as exc:
         logger.warning("sentinel check: could not read %s -- %s", key, exc)
