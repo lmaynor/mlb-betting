@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-19 20:17 CST_
+_Last updated: 2026-05-20 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -908,6 +908,18 @@ moments: `alpha = clip((var - mu) / mu^2, 0.01, 0.50)`. Stored in `model_meta_v1
 as `"nb_alpha"`. `run_k.py` loads it and passes to `_simulate_k` via function
 attribute `_simulate_k._nb_alpha`. Falls back to Poisson if key missing (old meta).
 nb_alpha is only valid after the first retrain following this change (2026-05-20).
+
+**C04 (2026-05-20): retrain scripts store empirical percentile dists; PSI monitor uses interpolation.**
+All 4 retrain scripts now compute `fpdists` (p5/p10/p25/p50/p75/p90/p95 + prop_1) for every
+feature and store under `"feature_dists"` in `model_meta`. `monitor_drift.py` uses linear
+interpolation over these percentiles to reconstruct the training distribution for PSI binning.
+Falls back to Gaussian if `feature_dists` not in meta (old models). Takes effect after next retrain.
+
+**C08 (pending diagnostic): K lambda IP-scaling may be non-linear.**
+Current scaling: `lambda_k = base_lambda * (avg_ip_L5 / 5.0)`. Assumes linear K-per-IP.
+Diagnostic: plot residuals of `predicted_k / lambda_k` vs `actual_ip` on training set.
+If slope != 0, replace with historical `k_per_ip_L5` ratio. Blocked until retrain
+jobs complete so fresh predictions are available.
 
 ---
 
