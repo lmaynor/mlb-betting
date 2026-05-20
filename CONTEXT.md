@@ -747,11 +747,12 @@ in the 0.40-0.45 model YRFI bin alone.
 
 **NRFI calibrator is fit on YRFI probs, not NRFI probs.** `calibrate_nrfi_v17.py` calls `iso.fit(oos_g['model_yrfi_prob'], oos_g['yrfi'])`. The runner must apply the calibrator to `model_yrfi_prob` and then derive `model_nrfi_prob = 1 - calibrated_yrfi`. Applying it to `model_nrfi_prob` produces a sign flip causing all games to show extreme YRFI probability. This is easy to get wrong -- the variable names look symmetric but are not.
 
-**Calibrate scripts fit on ALL data, not just OOS split.** Fitting on only
-the OOS split (20% of data) leaves sparse coverage at the extremes of the
-model output range. `out_of_bounds='clip'` then maps all out-of-range inputs
-to the boundary output value (0 or 1), producing extreme calibrated probs.
-Fix: fit on all data for full range coverage; use OOS split only for eval.
+**Calibrate scripts fit on the TRAIN slice (70%), not OOS split.** After C03
+(2026-05-20) all retrain scripts use a 70/10/20 split: train (70%), val for
+early stopping (10%), test for honest eval (20%). Calibrators fit on the
+train slice only -- this gives adequate range coverage without leaking val/test.
+Do NOT change calibrate scripts to fit on full df -- that would leak test set
+into calibration.
 
 **Calibrators must be refit after any model output range change.** Isotonic calibrators are fit on the OOS model output range. If the model is patched (feature_means fix, IP bug fix, etc.) without a full retrain, the output range may shift and the calibrator's X_min/X_max will no longer cover the new output range. sklearn clips out-of-bounds inputs to the nearest boundary value, mapping everything to 0 or 1. Always run the calibrate job after ANY change to model artifacts or feature_means, not just after a full retrain.
 
