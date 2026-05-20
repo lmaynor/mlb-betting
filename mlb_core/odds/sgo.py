@@ -521,7 +521,7 @@ def extract_f5_ml_odds(events: list[dict]) -> dict:
             "commence_time": commence,
             "home_odds":     home_odds,
             "away_odds":     away_odds,
-            "bookmaker":     _home_book,
+            "bookmaker":     _home_book or _away_book,
             "fair_home":     _safe_int(home_entry.get("fairOdds")),
             "fair_away":     _safe_int(away_entry.get("fairOdds")),
             "open_home":     _safe_int(home_entry.get("openBookOdds")),
