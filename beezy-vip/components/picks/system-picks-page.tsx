@@ -115,7 +115,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
             <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '6px' }}>Model runs at 16:00 UTC after lineups post.</p>
           </div>
         ) : (
-          <PicksTable picks={picks} />
+          <PicksTable bets={picks} />
         )}
       </div>
 
@@ -130,7 +130,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
               Full History &rarr;
             </Link>
           </div>
-          <PicksTable picks={history} />
+          <PicksTable bets={history} />
         </div>
       )}
     </div>
