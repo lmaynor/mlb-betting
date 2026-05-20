@@ -877,11 +877,17 @@ the test suite -- only the downstream settlement and exposure math is tested.
 
 **`/build-all-features` is a single point of failure.** If it errors midway,
 downstream systems silently use yesterday's feature CSVs. The build sentinels
-(`{system}/data/last_build.json`) catch this -- `monitor_ops` at 12:50 UTC alerts
-if any sentinel is stale or status=error. The morning scoring run at 16:00 UTC is
-2h10m after the alert, giving time to manually re-run the failed system via
-`/build-features`. Adding runner-side sentinel checks (abort if stale, post Discord
-alert) is on the backlog.
+(`{system}/data/last_build.json`) catch this at two levels: `monitor_ops` at
+12:50 UTC alerts if any sentinel is stale or status=error, AND each runner now
+calls `check_build_sentinel()` from `mlb_core/storage.py` at run time -- aborting
+with a Discord alert rather than scoring on stale features.
+
+**`check_build_sentinel(gcs_bucket, system_prefix)` in `mlb_core/storage.py`.**
+Reads `{system_prefix}/data/last_build.json` via `read_bytes(key)` (single-arg
+signature -- do not pass bucket separately). Returns `(ok, reason)`. Non-fatal
+on GCS read errors (returns ok=True with warning) so a transient GCS blip does
+not block betting. Called in all 4 runners immediately after snapshot load,
+before any scoring work.
 
 **K/OUTS settlement voids bets when pitcher not in boxscore.** If a pitcher is scratched before throwing a pitch, they won't appear in the MLB Stats API boxscore. The settler now voids the bet (result='void', profit=0) rather than leaving it pending indefinitely. This matches DK rules: pitcher must throw at least one pitch for props to grade.
 
