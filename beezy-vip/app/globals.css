@@ -180,3 +180,12 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
 .article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
 .article-body a { color: #10b981; }
+/* ── Picks page: desktop table / mobile cards ──────────────────────── */
+
+.picks-desktop { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.picks-mobile  { display: none; }
+
+@media (max-width: 768px) {
+  .picks-desktop { display: none !important; }
+  .picks-mobile  { display: block !important; }
+}

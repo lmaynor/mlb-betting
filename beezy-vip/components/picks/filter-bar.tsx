@@ -1,181 +1,167 @@
 'use client'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useState } from 'react'
 
-// ── Type -> Market mapping (four groups) ─────────────────────────────────
-const TYPE_MARKETS: Record<string, string[]> = {
-  'All':             ['All', 'NRFI', 'F5', 'F3', 'F1H', 'F7', 'GAME', 'K', 'OUTS', 'PITCHER_ER', 'HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
-  'Game Lines':      ['All', 'NRFI', 'F5'],
-  'Innings Windows': ['All', 'F3', 'F1H', 'F7', 'GAME'],
-  'Pitcher Props':   ['All', 'K', 'OUTS', 'PITCHER_ER'],
-  'Batter Props':    ['All', 'HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
-}
-const TYPES    = ['All', 'Game Lines', 'Innings Windows', 'Pitcher Props', 'Batter Props']
-const BOOKS    = ['All', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'theScore', 'PointsBet']
-const DATES    = [{ label: 'Today', value: 'today' }, { label: 'Yesterday', value: 'yesterday' }, { label: 'Last 7 Days', value: 'last7' }]
-const STATUSES = [{ label: 'All', value: 'all' }, { label: 'Pending', value: 'pending' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }]
-
-// Market display labels (shorter for the filter chip)
-const MARKET_LABEL: Record<string, string> = {
-  NRFI:       'NRFI',
-  F5:         'F5',
-  F3:         'F3',
-  F1H:        '1H',
-  F7:         'F7',
-  GAME:       'Game',
-  K:          'K',
-  OUTS:       'Outs',
-  PITCHER_ER: 'Pitcher ER',
-  HR:         'HR',
-  BATTER_K:   'Batter K',
-  BATTER_TB:  'Total Bases',
-  BATTER_HITS:'Hits',
-}
-
-// Per-market colors matching tokens.ts SYSTEM_COLOR
-const PILL: Record<string, string> = {
-  NRFI:       '#10b981',
-  F5:         '#3b82f6',
-  F3:         '#06b6d4',
-  F1H:        '#0ea5e9',
-  F7:         '#6366f1',
-  GAME:       '#94a3b8',
-  K:          '#a78bfa',
-  OUTS:       '#fb923c',
-  PITCHER_ER: '#f43f5e',
-  HR:         '#f59e0b',
-  BATTER_K:   '#e879f9',
-  BATTER_TB:  '#84cc16',
-  BATTER_HITS:'#14b8a6',
-}
+import { useState } from 'react'
 
 const B = '0.5px solid #1f1f24'
 
-function Chip({ label, active, disabled, color, onClick }: {
-  label: string; active: boolean; disabled?: boolean; color?: string; onClick: () => void
-}) {
+const CHIP_BASE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '5px 10px',
+  borderRadius: '2px',
+  border: B,
+  background: '#111114',
+  color: '#a1a1aa',
+  fontSize: '11px',
+  fontFamily: 'var(--font-mono)',
+  letterSpacing: '0.06em',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap' as const,
+  userSelect: 'none' as const,
+  WebkitTapHighlightColor: 'transparent',
+  transition: 'color 0.1s, border-color 0.1s, background 0.1s',
+}
+
+const CHIP_ACTIVE: React.CSSProperties = {
+  ...CHIP_BASE,
+  color: '#f5f5f7',
+  borderColor: '#3f3f46',
+  background: '#18181b',
+}
+
+const SYSTEM_DOTS: Record<string, string> = {
+  ALL:  '#71717a',
+  NRFI: '#10b981',
+  HR:   '#f59e0b',
+  F5:   '#3b82f6',
+  K:    '#a78bfa',
+  OUTS: '#fb923c',
+}
+
+interface FilterBarProps {
+  system: string
+  setSystem: (s: string) => void
+  result: string
+  setResult: (r: string) => void
+  date: string
+  setDate: (d: string) => void
+  book: string
+  setBook: (b: string) => void
+}
+
+export function FilterBar({
+  system, setSystem,
+  result, setResult,
+  date, setDate,
+  book, setBook,
+}: FilterBarProps) {
+  const [open, setOpen] = useState(false)
+
+  const SYSTEMS = ['ALL', 'NRFI', 'HR', 'F5', 'K', 'OUTS']
+  const RESULTS = ['ALL', 'WIN', 'LOSS', 'PENDING']
+  const DATES   = ['TODAY', 'YESTERDAY', 'LAST7', 'ALL']
+  const BOOKS   = ['ALL', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'theScore']
+
+  const DATE_LABELS: Record<string, string>   = { TODAY: 'Today', YESTERDAY: 'Yesterday', LAST7: 'Last 7d', ALL: 'All Time' }
+  const RESULT_LABELS: Record<string, string> = { ALL: 'All', WIN: 'Win', LOSS: 'Loss', PENDING: 'Pending' }
+
+  // How many active non-default filters for the badge
+  const activeCount = [
+    system !== 'ALL',
+    result !== 'ALL',
+    date   !== 'ALL',
+    book   !== 'ALL',
+  ].filter(Boolean).length
+
+  function chip(label: string, active: boolean, onClick: () => void, dot?: string) {
+    return (
+      <button key={label} onClick={onClick} style={active ? CHIP_ACTIVE : CHIP_BASE}>
+        {dot && (
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot, flexShrink: 0 }} />
+        )}
+        {label}
+      </button>
+    )
+  }
+
+  function row(label: string, children: React.ReactNode) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: B }}>
+        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#71717a', letterSpacing: '0.08em', minWidth: '44px' }}>
+          {label}
+        </span>
+        {children}
+      </div>
+    )
+  }
+
   return (
-    <button onClick={onClick} disabled={disabled} className="mono" style={{
-      fontSize: '11px', letterSpacing: '0.04em', padding: '4px 10px',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      border: `0.5px solid ${active ? (color ?? '#10b981') : '#1f1f24'}`,
-      color: active ? (color ?? '#10b981') : '#71717a',
-      background: active ? `${color ?? '#10b981'}12` : 'transparent',
-      opacity: disabled ? 0.3 : 1,
-      whiteSpace: 'nowrap' as const,
-      transition: 'all 0.12s',
-    }}>{label}</button>
-  )
-}
+    <div style={{ borderBottom: B, background: '#0a0a0c' }}>
 
-const labelStyle: React.CSSProperties = {
-  fontFamily: 'var(--font-mono, monospace)', fontSize: '10px',
-  letterSpacing: '0.1em', textTransform: 'uppercase',
-  color: '#71717a', minWidth: '56px',
-}
-const rowStyle: React.CSSProperties = {
-  display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px',
-}
-const divider: React.CSSProperties = {
-  ...labelStyle, minWidth: 'auto', margin: '0 6px', color: '#2a2a31',
-}
-
-export function PicksFilterBar() {
-  const router = useRouter()
-  const sp     = useSearchParams()
-  const [showMore, setShowMore] = useState(false)
-
-  const get = (key: string, fallback = 'All') => sp.get(key) ?? fallback
-
-  const set = useCallback((key: string, value: string, clearKeys?: string[]) => {
-    const params = new URLSearchParams(sp.toString())
-    if (value === 'All' || value === 'all') params.delete(key)
-    else params.set(key, value)
-    clearKeys?.forEach(k => params.delete(k))
-    router.push(`?${params.toString()}`, { scroll: false })
-  }, [router, sp])
-
-  const activeType   = get('type', 'All')
-  const activeMarket = get('market', 'All')
-  const markets      = TYPE_MARKETS[activeType] ?? TYPE_MARKETS['All']
-
-  const hasMoreActive = sp.get('type') || sp.get('book')
-
-  return (
-    <div style={{
-      position: 'sticky', top: '48px', zIndex: 40,
-      background: 'rgba(10,10,12,0.97)', borderBottom: B,
-      padding: '10px 20px', backdropFilter: 'blur(8px)',
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-
-        {/* Row 1: Date + Result + More filters toggle */}
-        <div style={{ ...rowStyle, justifyContent: 'space-between' }}>
-          <div style={rowStyle}>
-            <span style={labelStyle}>Date</span>
-            {DATES.map(d => (
-              <Chip key={d.value} label={d.label} active={get('date', 'today') === d.value}
-                onClick={() => set('date', d.value)} />
-            ))}
-            <span style={divider}>·</span>
-            <span style={labelStyle}>Result</span>
-            {STATUSES.map(s => (
-              <Chip key={s.value} label={s.label}
-                active={get('status', 'all') === s.value}
-                color={s.value === 'won' ? '#10b981' : s.value === 'lost' ? '#ef4444' : undefined}
-                onClick={() => set('status', s.value)} />
-            ))}
-          </div>
-          <button
-            onClick={() => setShowMore(v => !v)}
-            className="mono"
-            style={{
-              fontSize: '10px', letterSpacing: '0.08em', padding: '4px 10px',
-              border: `0.5px solid ${hasMoreActive ? '#10b981' : '#1f1f24'}`,
-              color: hasMoreActive ? '#10b981' : '#71717a',
-              background: 'transparent', cursor: 'pointer',
-              whiteSpace: 'nowrap',
+      {/* ── Toggle bar — always visible ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px' }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            ...CHIP_BASE,
+            color: open ? '#f5f5f7' : '#a1a1aa',
+            borderColor: open ? '#3f3f46' : '#1f1f24',
+            background: open ? '#18181b' : '#111114',
+            gap: '8px',
+          }}
+        >
+          {/* Hamburger icon */}
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none" style={{ flexShrink: 0 }}>
+            <rect y="0" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect y="4.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect y="8.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+          </svg>
+          FILTERS
+          {activeCount > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '16px', height: '16px', borderRadius: '50%',
+              background: '#10b981', color: '#0a0a0c',
+              fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700,
             }}>
-            {showMore ? 'Less ↑' : `More filters${hasMoreActive ? ' ·' : ' ↓'}`}
-          </button>
-        </div>
+              {activeCount}
+            </span>
+          )}
+          <span style={{ fontSize: '9px', color: '#71717a' }}>{open ? '▴' : '▾'}</span>
+        </button>
 
-        {/* Row 2: Market chips (driven by active type) */}
-        <div style={rowStyle}>
-          <span style={labelStyle}>Market</span>
-          {markets.map(m => (
-            <Chip
-              key={m}
-              label={m === 'All' ? 'All' : (MARKET_LABEL[m] ?? m)}
-              color={PILL[m]}
-              active={activeMarket === m || (m === 'All' && !sp.get('market'))}
-              onClick={() => set('market', m)}
-            />
-          ))}
-        </div>
-
-        {/* Expandable: Type + Book */}
-        {showMore && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px', borderTop: B }}>
-            <div style={rowStyle}>
-              <span style={labelStyle}>Type</span>
-              {TYPES.map(t => (
-                <Chip key={t} label={t} active={activeType === t}
-                  onClick={() => set('type', t, ['market'])} />
-              ))}
-            </div>
-            <div style={rowStyle}>
-              <span style={labelStyle}>Book</span>
-              {BOOKS.map(b => (
-                <Chip key={b} label={b}
-                  active={get('book') === b || (b === 'All' && !sp.get('book'))}
-                  onClick={() => set('book', b)} />
-              ))}
-            </div>
+        {/* Active filter summary — shown when collapsed so you can see what's set */}
+        {!open && activeCount > 0 && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {system !== 'ALL' && (
+              <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: SYSTEM_DOTS[system], flexShrink: 0, display: 'inline-block' }} />
+                {system}
+              </span>
+            )}
+            {date !== 'ALL' && (
+              <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[date]}</span>
+            )}
+            {result !== 'ALL' && (
+              <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{RESULT_LABELS[result]}</span>
+            )}
+            {book !== 'ALL' && (
+              <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{book}</span>
+            )}
           </div>
         )}
-
       </div>
+
+      {/* ── Expandable filter rows ── */}
+      {open && (
+        <div style={{ borderTop: B }}>
+          {row('MARKET', SYSTEMS.map(s => chip(s, system === s, () => setSystem(s), SYSTEM_DOTS[s])))}
+          {row('DATE',   DATES.map(d => chip(DATE_LABELS[d], date === d, () => setDate(d))))}
+          {row('RESULT', RESULTS.map(r => chip(RESULT_LABELS[r], result === r, () => setResult(r))))}
+          {row('BOOK',   BOOKS.map(b => chip(b === 'ALL' ? 'All Books' : b, book === b, () => setBook(b))))}
+        </div>
+      )}
     </div>
   )
 }
