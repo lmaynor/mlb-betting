@@ -13,14 +13,28 @@ export const metadata: Metadata = {
 
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams
+
+  // date values are already lowercase from FilterBar (today/yesterday/last7)
+  const date   = sp.date   ?? 'today'
+  // status from FilterBar is uppercase (WIN/LOSS/PENDING/ALL) — API expects lowercase
+  const status = sp.status && sp.status !== 'ALL' ? sp.status.toLowerCase() : undefined
+  // market from FilterBar is uppercase (NRFI/HR/etc) — API expects as-is
+  const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
+  // book: FilterBar sends display name, API expects lowercase no-spaces
+  const book   = sp.book   && sp.book   !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
+  // sort + dir for client-side sort (passed as props to PicksTable)
+  const sort   = (sp.sort  ?? 'date') as 'date' | 'edge' | 'odds'
+  const dir    = (sp.dir   ?? 'desc') as 'asc' | 'desc'
+
   const picks = await getPicks({
-    system: sp.market && sp.market !== 'All' ? sp.market : undefined,
-    date:   sp.date ?? 'today',
-    status: sp.status && sp.status !== 'all' ? sp.status : undefined,
-    book: sp.book && sp.book !== 'All' ? sp.book.toLowerCase().replace(/ /g, '') : undefined,
-    limit:  100,
+    system: market,
+    date,
+    status,
+    book,
+    limit: 200,
   }).catch(() => [])
-  return <PicksTable bets={picks} />
+
+  return <PicksTable bets={picks} sort={sort} dir={dir} />
 }
 
 export default function PicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
