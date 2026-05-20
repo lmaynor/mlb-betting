@@ -19,7 +19,7 @@ Five MLB betting systems running daily in GCP:
 | **HR Pro v6** | P(batter hits HR in game) | HR yes/no props (best onshore book) | Live (paper) |
 | **NRFI Pro v17** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
-| **K Pro v1** | E[pitcher strikeouts] (Poisson) | K props O/U (best onshore book) | Live (paper) |
+| **K Pro v1** | E[pitcher strikeouts] (Negative Binomial) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
 | **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
@@ -889,6 +889,25 @@ calls the MLB Stats API per game_pk. If the game is not Final, the bet is
 skipped (retried tomorrow). If Final: player not in starting lineup -> void
 (DK voids non-starters); starter with HR -> win; starter without HR -> loss.
 No Statcast dependency for HR settlement.
+
+**C01 diagnostic (2026-05-20): `platoon_edge` carries genuine signal -- keep it.**
+Removing `platoon_edge` from NRFI HALFINN_FEATURES dropped OOS AUC 0.5791 -> 0.5314
+(-0.0477). The concern that it reconstructed `lineup_pct_L` leakage is resolved --
+the feature contributes independent platoon-matchup signal. Do not remove it.
+
+**C03 (2026-05-20): all 4 retrain scripts use 70/10/20 train/val/test split.**
+Early stopping now uses the val slice (last 1/8 of the train window); dtest is
+never seen during training or tuning. Prior scripts used dtest as the eval_set
+for early stopping, inflating reported AUC by ~0.003-0.005. CV loop in K retrain
+also fixed -- each fold carves val from df_tr for early stopping.
+
+**C07 (2026-05-20): K Monte Carlo uses Negative Binomial, not Poisson.**
+MLB strikeout counts over-disperse relative to Poisson (variance ~1.4-1.6x mean).
+`nb_alpha` is fit from full-data residuals in `retrain_k_v1.py` using method of
+moments: `alpha = clip((var - mu) / mu^2, 0.01, 0.50)`. Stored in `model_meta_v1.json`
+as `"nb_alpha"`. `run_k.py` loads it and passes to `_simulate_k` via function
+attribute `_simulate_k._nb_alpha`. Falls back to Poisson if key missing (old meta).
+nb_alpha is only valid after the first retrain following this change (2026-05-20).
 
 ---
 
