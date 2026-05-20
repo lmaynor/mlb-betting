@@ -371,6 +371,22 @@ def run() -> dict:
     except Exception as e:
         return {"status": "error", "error": f"full retrain: {e}"}
 
+    # C07: fit NB dispersion parameter from full-data residuals.
+    # NB(mu, alpha): var = mu + alpha*mu^2 -> alpha = (var - mu) / mu^2
+    # Clamp to [0.01, 0.50] -- values outside this range indicate data issues.
+    try:
+        X_all_nb = df[available].apply(pd.to_numeric, errors="coerce")
+        dm_all   = xgb.DMatrix(X_all_nb, feature_names=available)
+        y_all    = df[TARGET].astype(float).values
+        preds_all = booster.predict(dm_all)
+        resid_var = float(np.var(y_all - preds_all))
+        mu_mean   = float(np.mean(preds_all))
+        nb_alpha  = float(np.clip((resid_var - mu_mean) / max(mu_mean ** 2, 1e-6), 0.01, 0.50))
+        logger.info(f"NB dispersion | mu={mu_mean:.3f} resid_var={resid_var:.3f} nb_alpha={nb_alpha:.4f}")
+    except Exception as e:
+        nb_alpha = 0.10
+        logger.warning(f"nb_alpha fit failed ({e}) -- using default 0.10")
+
     fmeans = _feature_means(df, available)
 
     # T10: feature_stds for PSI drift monitor (T14)
@@ -412,6 +428,7 @@ def run() -> dict:
         "trained_at":    datetime.now(timezone.utc).isoformat(),
         "full_retrain":  True,
         "features":      available,
+        "nb_alpha":      nb_alpha,
         "feature_means": fmeans,
         "feature_stds":  fstds,
         "cv_folds":      CV_FOLDS,

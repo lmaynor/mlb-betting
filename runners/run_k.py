@@ -68,6 +68,9 @@ def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict]:
     features = meta.get("features")
     if not features:
         raise RuntimeError("model_meta_v1.json missing 'features' key")
+    # C07: attach NB dispersion parameter to _simulate_k for use in Monte Carlo.
+    _simulate_k._nb_alpha = float(meta.get("nb_alpha", 0.0))
+    logger.info(f"K: nb_alpha={_simulate_k._nb_alpha:.4f} loaded from meta")
     feature_means = meta.get("feature_means", {}) or {}
     booster.best_ntree_limit = meta.get("best_iteration", 0)
     logger.info(f"K model loaded | features={len(features)} | "
@@ -207,7 +210,17 @@ def _simulate_k(lambda_k: float, avg_ip_L5: float | None,
         lambda_k = max(lambda_k * (avg_ip_L5 / 5.0), 0.5)
     lambda_k = max(lambda_k, 0.1)
     rng = np.random.default_rng(seed)
-    samples = rng.poisson(lambda_k, size=n_sims)
+    # C07: use Negative Binomial to capture MLB K over-dispersion.
+    # Falls back to Poisson if nb_alpha not available or invalid.
+    nb_alpha = getattr(_simulate_k, "_nb_alpha", None)
+    if nb_alpha and nb_alpha > 0:
+        # NB parameterisation: n=1/alpha, p=1/(1+alpha*lambda_k)
+        nb_n = max(1.0 / nb_alpha, 0.1)
+        nb_p = 1.0 / (1.0 + nb_alpha * lambda_k)
+        nb_p = float(np.clip(nb_p, 1e-6, 1 - 1e-6))
+        samples = rng.negative_binomial(nb_n, nb_p, size=n_sims)
+    else:
+        samples = rng.poisson(lambda_k, size=n_sims)
     samples = np.clip(samples, 0, cap)
     out = {
         "lambda_k": float(lambda_k),
