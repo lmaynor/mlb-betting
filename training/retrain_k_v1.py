@@ -152,12 +152,18 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
         X_te = df_te[features].apply(pd.to_numeric, errors="coerce")
         y_te = df_te[TARGET].astype(float)
 
-        dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-        dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+        # C03: carve val from train for early stopping; dtest never seen during training.
+        _ntr = len(X_tr)
+        _nval = int(_ntr * (7 / 8))  # last 1/8 of train window = ~12.5% overall
+        X_tr_s  = X_tr.iloc[:_nval];  y_tr_s  = y_tr.iloc[:_nval]
+        X_val_s = X_tr.iloc[_nval:];  y_val_s = y_tr.iloc[_nval:]
+        dtrain_s = xgb.DMatrix(X_tr_s,  label=y_tr_s,  feature_names=features)
+        dval_s   = xgb.DMatrix(X_val_s, label=y_val_s, feature_names=features)
+        dtest    = xgb.DMatrix(X_te,    label=y_te,     feature_names=features)
         booster = xgb.train(
-            XGB_PARAMS, dtrain,
+            XGB_PARAMS, dtrain_s,
             num_boost_round=NUM_BOOST_ROUND,
-            evals=[(dtest, "test")],
+            evals=[(dtrain_s, "train"), (dval_s, "val")],
             early_stopping_rounds=EARLY_STOPPING_ROUNDS,
             verbose_eval=False,
         )
@@ -194,20 +200,25 @@ def _oos_eval(df: pd.DataFrame, features: list) -> dict:
     logger.info(f"OOS split | train={len(df_tr)} (years <{last}) | "
                 f"test={len(df_te)} (year={last}) | features={len(features)}")
 
-    dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-    dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+    # C03: carve val (last 1/8 of train) for early stopping; dtest never seen during training.
+    _nval = int(len(X_tr) * (7 / 8))
+    X_tr_s  = X_tr.iloc[:_nval];   y_tr_s  = y_tr.iloc[:_nval]
+    X_val_s = X_tr.iloc[_nval:];   y_val_s = y_tr.iloc[_nval:]
+    dtrain = xgb.DMatrix(X_tr_s,  label=y_tr_s,  feature_names=features)
+    dval   = xgb.DMatrix(X_val_s, label=y_val_s, feature_names=features)
+    dtest  = xgb.DMatrix(X_te,    label=y_te,     feature_names=features)
     booster = xgb.train(
         XGB_PARAMS, dtrain,
         num_boost_round=NUM_BOOST_ROUND,
-        evals=[(dtrain, "train"), (dtest, "test")],
+        evals=[(dtrain, "train"), (dval, "val")],
         early_stopping_rounds=EARLY_STOPPING_ROUNDS,
         verbose_eval=100,
     )
-    y_pred = booster.predict(dtest)
+    y_pred    = booster.predict(dtest)
     y_tr_pred = booster.predict(dtrain)
 
-    mae_oos    = _mae(y_te, y_pred)
-    mae_train  = _mae(y_tr, y_tr_pred)
+    mae_oos   = _mae(y_te, y_pred)
+    mae_train = _mae(y_tr_s, y_tr_pred)
     rmse_oos   = _rmse(y_te, y_pred)
     r2_oos     = _r2(y_te, y_pred)
     cal_oos    = float(np.mean(y_pred) - np.mean(y_te))
