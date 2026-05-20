@@ -296,7 +296,7 @@ def _apply_joins(outcomes_df: pd.DataFrame,
     """
     ROLLING_COLS = [c for c in pitcher_starts.columns
                     if c.endswith(("_L3", "_L5", "_L10", "_STD", "_L20"))]
-    BASE_COLS = (["pitcher", "game_pk", "p_throws", "days_rest", "arm_angle"]
+    BASE_COLS = (["pitcher", "game_pk", "game_date", "p_throws", "days_rest", "arm_angle"]
                  + ROLLING_COLS)
     BASE_COLS = [c for c in BASE_COLS if c in pitcher_starts.columns]
 

@@ -261,7 +261,26 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
+    _IL_DAYS = 10
+
+    def _starter_stale(row, side: str, run_date: str) -> bool:
+        """Return True if starter's last appearance exceeds IL threshold."""
+        from datetime import date as _d
+        raw = row.get(f"{side}_game_date")
+        if raw is None or pd.isna(raw):
+            return False
+        try:
+            return (_d.fromisoformat(run_date) - pd.Timestamp(raw).date()).days > _IL_DAYS
+        except Exception:
+            return False
+
     for _, row in feat_df.iterrows():
+        if _starter_stale(row, "home", run_date) or _starter_stale(row, "away", run_date):
+            logger.info(
+                f"F5: skipping game_pk={int(row['game_pk'])} -- "
+                f"starter last appearance >{_IL_DAYS}d ago (IL-return threshold)"
+            )
+            continue
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:
