@@ -166,6 +166,9 @@ def _per_book_stats(df: pd.DataFrame) -> dict[str, dict]:
             "profiling_flag": profiling_signal,
         }
     return result
+
+
+def _check_alerts(system: str, stats: dict) -> list[str]:
     """Return list of alert messages for this system. Empty = healthy."""
     alerts = []
     n = stats.get("n", 0)
