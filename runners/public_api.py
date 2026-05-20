@@ -4,15 +4,14 @@ All queries use text() wrapper -- required for pg8000 named params (CONTEXT.md s
 """
 import logging
 from datetime import date as _date, timedelta
-import pytz as _pytz
+from zoneinfo import ZoneInfo as _ZoneInfo
 from sqlalchemy import text
 
 
 def _ct_today() -> str:
     """Return today's date in US/Central as an isoformat string."""
     from datetime import datetime
-    ct = _pytz.timezone("America/Chicago")
-    return datetime.now(ct).date().isoformat()
+    return datetime.now(_ZoneInfo("America/Chicago")).date().isoformat()
 
 
 logger = logging.getLogger(__name__)
