@@ -23,6 +23,7 @@ export interface Bet {
   result:          'win' | 'loss' | 'push' | 'void' | null
   profit:          number | null
   paper:           boolean | null
+  book:            string | null
   notes:           string | null
   created_at:      string
 }
