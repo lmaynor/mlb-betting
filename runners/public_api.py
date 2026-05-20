@@ -3,7 +3,17 @@ Read-only query helpers for the public API endpoints in main.py.
 All queries use text() wrapper -- required for pg8000 named params (CONTEXT.md ss8).
 """
 import logging
+from datetime import date as _date, timedelta
+import pytz as _pytz
 from sqlalchemy import text
+
+
+def _ct_today() -> str:
+    """Return today's date in US/Central as an isoformat string."""
+    from datetime import datetime
+    ct = _pytz.timezone("America/Chicago")
+    return datetime.now(ct).date().isoformat()
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +32,9 @@ def get_today_picks(engine):
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
             "FROM bets "
-            "WHERE game_date = CURRENT_DATE::text AND kelly_triggered = true "
+            "WHERE game_date = :_today AND kelly_triggered = true "
             "ORDER BY system, created_at DESC"
-        )).mappings().all()
+        ), {"_today": _ct_today()}).mappings().all()
     return [dict(r) for r in rows]
 
 
@@ -40,16 +50,13 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
         params["book"] = book
 
     if date == "today":
-        from datetime import date as _date
-        params["_today"] = _date.today().isoformat()
+        params["_today"] = _ct_today()
         conditions.append("game_date = :_today")
     elif date == "yesterday":
-        from datetime import date as _date, timedelta
-        params["_yesterday"] = (_date.today() - timedelta(days=1)).isoformat()
+        params["_yesterday"] = (_date.fromisoformat(_ct_today()) - timedelta(days=1)).isoformat()
         conditions.append("game_date = :_yesterday")
     elif date == "last7":
-        from datetime import date as _date, timedelta
-        params["_last7"] = (_date.today() - timedelta(days=7)).isoformat()
+        params["_last7"] = (_date.fromisoformat(_ct_today()) - timedelta(days=7)).isoformat()
         conditions.append("game_date >= :_last7")
     elif date:
         conditions.append("game_date = :game_date")
