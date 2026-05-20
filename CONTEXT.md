@@ -19,7 +19,7 @@ Five MLB betting systems running daily in GCP:
 | **HR Pro v6** | P(batter hits HR in game) | HR yes/no props (best onshore book) | Live (paper) |
 | **NRFI Pro v17** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
-| **K Pro v1** | E[pitcher strikeouts] (Negative Binomial) | K props O/U (best onshore book) | Live (paper) |
+| **K Pro v1** | E[pitcher strikeouts] (NB; k_per_9_L5 * avg_ip scaling) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
 | **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
@@ -922,6 +922,12 @@ drops in later innings (fatigue, lineup cycling). Fix: `_simulate_k` now uses
 `k_per_9_L5 / 9.0 * avg_ip_L5` as the expected K count. Falls back to penalty-only scaling
 if `k_per_9_L5` is missing. `k_per_9_L5` is in `model_features.csv` and passed from `row`
 at the call site.
+
+**F5 IL-return (2026-05-20): `home_game_date` / `away_game_date` now in F5 feature CSV.**
+`game_date` added to `BASE_COLS` in `_apply_joins` in `build_f5_features.py`. Columns land
+as `home_game_date` and `away_game_date` in `model_features.csv`. `run_f5.py` skips any
+game where either starter's last appearance is >10 days before `run_date` -- same IL-return
+threshold as K and NRFI runners (T19). Takes effect after next F5 feature build (12:00 UTC).
 
 ---
 
