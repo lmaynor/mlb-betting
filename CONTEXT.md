@@ -1777,3 +1777,42 @@ Fixes applied beyond the T01-T20 backlog, grouped by impact tier.
 **F17 — Settlement grading had zero test coverage**
 - `tests/test_settlement.py`: 35 test cases covering NRFI (all 5 bet types), F5 (push/win/loss/incomplete), HR (start/no-start/accent), K/OUTS (over/under/void/integer-line warning), PITCHER_ER, `_calc_profit`, and `BetTracker.is_duplicate` dedup logic.
 - `tests/test_odds_math.py`: added 4 `devig_unilateral` tests.
+
+---
+
+## 18. Calibration remediation session (2026-05-20)
+
+### Root cause confirmed
+Edge-ROI gaps (NRFI 33pts, K 21pts, F5 19.5pts) traced to two calibrator failures:
+
+**NRFI isotonic calibrator (isotonic_calibrator_v17.pkl):**
+- Fitted X range was [0.6541, 0.8194] -- only 16 pct points wide
+- boundary_lo=0.0000, boundary_hi=1.0000 (saturated both ends)
+- 10/11 production games clipped to boundary -- outputting YRFI=0.0 or YRFI=1.0
+- Root cause: calibrator was fit on OOS-only slice (pre-C03), sparse tail coverage
+- Fix: re-ran mlb-calibrate-nrfi job -- new range [0.2927, 0.7952], Brier 0.2435->0.1929
+- Confirmed: NRFI runner now logs "isotonic calibrator applied to 11/11 games"
+
+**K lambda calibrator (lambda_calibrator_k_v1.pkl):**
+- boundary_hi=15.0 -- pitchers above X_max clipped to lambda=15 (near-certain OVER)
+- Non-monotonic mapping in 5-7 range (e.g. raw=8.5 -> cal=10.5, 2.2 unit jump)
+- Fix: re-ran mlb-calibrate-k job -- bias +0.064 -> -0.025, MAE 1.7007->1.6824
+- K edge inflation is NOT primarily lambda calibration -- model= vs NB sim gap of
+  0.10-0.18 likely from fair (market) prob calculation, not model prob inflation
+
+**nb_alpha misconfiguration (K system):**
+- Configured nb_alpha=0.01, data implies 0.0315 (VMR=1.166)
+- Under-dispersed by 3x but not the dominant source of edge inflation
+- Addressed in next retrain (C07 -- nb_alpha now fit from residuals)
+
+### mlb-reset-and-run-once scheduler job fix
+- Was using OIDC auth -- endpoint uses X-API-Key, not OIDC -> 401 on every trigger
+- Body had hardcoded date 2026-05-15
+- Fixed: switched to X-API-Key header, updated date to current
+- Feature build must complete before reset-and-run -- sentinel check aborts runners
+  on stale features. Trigger mlb-build-all-features first if running outside normal schedule.
+
+### Confirmed working after session
+- NRFI calibrator: 11/11 games in range (was 1/11)
+- K calibrator: 19/19 pitchers in range
+- Both calibrate jobs complete cleanly with no degradation warnings
