@@ -205,9 +205,18 @@ def _score_lambda(booster: xgb.Booster, features: list, feature_means: dict,
 # ── Monte Carlo: K distribution ───────────────────────────────────────────────
 
 def _simulate_k(lambda_k: float, avg_ip_L5: float | None,
-                n_sims: int, cap: int, seed: int = 42) -> dict:
-    if avg_ip_L5 is not None and not pd.isna(avg_ip_L5) and avg_ip_L5 < 5.0:
-        lambda_k = max(lambda_k * (avg_ip_L5 / 5.0), 0.5)
+                n_sims: int, cap: int, seed: int = 42,
+                k_per_9_L5: float | None = None) -> dict:
+    # C08: use k_per_9_L5 * expected_ip for scaling instead of lambda * (ip/5).
+    # Diagnostic showed slope -1.13 with naive linear scaling -- non-trivial bias.
+    if avg_ip_L5 is not None and not pd.isna(avg_ip_L5):
+        ip = float(avg_ip_L5)
+        if k_per_9_L5 is not None and not pd.isna(k_per_9_L5) and k_per_9_L5 > 0:
+            # Expected Ks = K/9 rate * expected IP
+            lambda_k = max(float(k_per_9_L5) / 9.0 * ip, 0.5)
+        elif ip < 5.0:
+            # Fallback: only apply penalty for short outings
+            lambda_k = max(lambda_k * (ip / 5.0), 0.5)
     lambda_k = max(lambda_k, 0.1)
     rng = np.random.default_rng(seed)
     # C07: use Negative Binomial to capture MLB K over-dispersion.
@@ -337,9 +346,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             over_odds  = k_info.get("over_odds")
             under_odds = k_info.get("under_odds")
             if line is not None and over_odds is not None and under_odds is not None:
+                k_per_9 = row.get("k_per_9_L5")
+                k_per_9_f = float(k_per_9) if k_per_9 is not None and not pd.isna(k_per_9) else None
                 probs = _simulate_k(
                     float(row["lambda_k"]), avg_ip,
                     n_sims=cfg["mc_sims"], cap=cfg["mc_cap"],
+                    k_per_9_L5=k_per_9_f,
                 )
                 p_over, p_under = _ou_probs(probs, float(line))
                 p_over  = min(max(p_over,  0.001), 0.999)
