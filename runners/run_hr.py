@@ -54,6 +54,7 @@ def _fetch_hr_odds(run_date: str) -> dict:
         logger.error(f"aborting run — {_reason}")
         return pd.DataFrame()
     # Sentinel check -- abort if feature build is stale or failed
+    from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import check_build_sentinel
     _sok, _sreason = check_build_sentinel(GCS_BUCKET, "HR_Pro")
     if not _sok:

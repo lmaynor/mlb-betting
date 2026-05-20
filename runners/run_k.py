@@ -309,6 +309,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.error(f"aborting run — {_reason}")
         return pd.DataFrame()
     # Sentinel check -- abort if feature build is stale or failed
+    from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import check_build_sentinel
     _sok, _sreason = check_build_sentinel(GCS_BUCKET, "K_Pro_System")
     if not _sok:
