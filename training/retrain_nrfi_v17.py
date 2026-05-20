@@ -108,7 +108,7 @@ XGB_PARAMS = {
 NUM_BOOST_ROUND = 800
 EARLY_STOPPING_ROUNDS = 50
 TARGET = "yrfi"
-TRAIN_TEST_SPLIT = 0.8
+TRAIN_TEST_SPLIT = 0.7  # 70% train, 10% val (early stopping), 20% test
 
 # GCS keys — match NRFI_Pro_System/config_nrfi.py exactly
 GCS_MODEL_FEATURES   = "NRFI_Pro_System/data/model_features.csv"

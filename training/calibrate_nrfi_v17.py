@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # ── Mirror retrain_nrfi_v17.py constants exactly ──────────────────────────────
 
 VERSION = "v17"
-TRAIN_TEST_SPLIT = 0.8   # same 80/20 time-based split as the retrain job
+TRAIN_TEST_SPLIT = 0.7   # same 70/10/20 time-based split as the retrain job
 TARGET = "yrfi"
 
 HALFINN_FEATURES = [
