@@ -1065,8 +1065,40 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 
 ### Manual triggers
 ```bash
-# Trigger a job immediately
+# Trigger a scheduler job immediately
 gcloud scheduler jobs run mlb-settle --location=us-central1
+
+# Delete today's bets (all systems) and re-run clean
+# Step 1: delete via /reset-bets (requires SITE_API_KEY)
+curl -s -X POST http://localhost:8081/reset-bets \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $(gcloud secrets versions access latest --secret=site-api-key)" \
+  -d '{"date": "2026-05-20"}' | python3 -m json.tool
+
+# Delete a specific system only
+curl -s -X POST http://localhost:8081/reset-bets \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $(gcloud secrets versions access latest --secret=site-api-key)" \
+  -d '{"date": "2026-05-20", "system": "NRFI"}' | python3 -m json.tool
+
+# Step 2: re-run all systems after reset
+gcloud scheduler jobs run mlb-snapshot-morning --location=us-central1
+sleep 10
+gcloud scheduler jobs run mlb-betting-morning --location=us-central1
+
+# Or trigger evening run
+gcloud scheduler jobs run mlb-snapshot-evening --location=us-central1
+sleep 10
+gcloud scheduler jobs run mlb-betting-evening --location=us-central1
+
+# Run all scheduled jobs manually in order (full daily cycle)
+gcloud scheduler jobs run mlb-refresh-data --location=us-central1
+sleep 30
+gcloud scheduler jobs run mlb-build-all-features --location=us-central1
+sleep 60
+gcloud scheduler jobs run mlb-monitor-ops --location=us-central1
+gcloud scheduler jobs run mlb-settle --location=us-central1
+gcloud scheduler jobs run mlb-monitor --location=us-central1
 
 # Talk to the service via proxy
 gcloud run services proxy mlb-betting --region=us-central1 --port=8081 &
