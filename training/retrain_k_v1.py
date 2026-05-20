@@ -396,6 +396,31 @@ def run() -> dict:
         v = X_all[f].std(skipna=True)
         if not pd.isna(v):
             fstds[f] = round(float(v), 6)
+    _feat_list = available
+
+    # C04: empirical percentiles for PSI drift monitor.
+    # Avoids Gaussian misfit for binary/bounded/bimodal features.
+    fpdists: dict = {}
+    for _f in _feat_list:
+        try:
+            _col = df[_f] if _f in df.columns else None
+            if _col is None:
+                continue
+            _col_num = pd.to_numeric(_col, errors="coerce").dropna()
+            if len(_col_num) < 10:
+                continue
+            fpdists[_f] = {
+                "p5":     round(float(np.percentile(_col_num,  5)), 6),
+                "p10":    round(float(np.percentile(_col_num, 10)), 6),
+                "p25":    round(float(np.percentile(_col_num, 25)), 6),
+                "p50":    round(float(np.percentile(_col_num, 50)), 6),
+                "p75":    round(float(np.percentile(_col_num, 75)), 6),
+                "p90":    round(float(np.percentile(_col_num, 90)), 6),
+                "p95":    round(float(np.percentile(_col_num, 95)), 6),
+                "prop_1": round(float((_col_num == 1).mean()), 6),
+            }
+        except Exception:
+            continue
 
     # T10: Bootstrap 95% CI on CV mean MAE
     cv_ci_lo = cv_ci_hi = None
@@ -429,6 +454,7 @@ def run() -> dict:
         "full_retrain":  True,
         "features":      available,
         "nb_alpha":      nb_alpha,
+        "feature_dists":  fpdists,
         "feature_means": fmeans,
         "feature_stds":  fstds,
         "cv_folds":      CV_FOLDS,

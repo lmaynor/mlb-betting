@@ -165,12 +165,24 @@ def _check_system(system: str, cfg: dict, run_date: str) -> dict:
         if mean is None or std is None or std < 1e-9:
             continue
 
-        # Reconstruct approximate training distribution from N(mean, std)
-        # using 10k samples — good enough for PSI binning.
-        rng = np.random.default_rng(seed=42)
-        train_approx = rng.normal(loc=mean, scale=std, size=10_000)
-
+        # C04: use empirical percentiles from model_meta if available.
+        # Falls back to Gaussian for backward compatibility with old meta.
+        feature_dists = meta.get("feature_dists", {})
+        fdist = feature_dists.get(feat)
         recent_vals = pd.to_numeric(recent[feat], errors="coerce").values
+        if fdist is not None:
+            ptiles = [fdist.get(k) for k in ("p5", "p10", "p25", "p50", "p75", "p90", "p95")]
+            if all(v is not None for v in ptiles):
+                quantiles = np.array([0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])
+                rng = np.random.default_rng(seed=42)
+                u = rng.uniform(0, 1, size=10_000)
+                train_approx = np.interp(u, quantiles, ptiles)
+            else:
+                rng = np.random.default_rng(seed=42)
+                train_approx = rng.normal(loc=mean, scale=std, size=10_000)
+        else:
+            rng = np.random.default_rng(seed=42)
+            train_approx = rng.normal(loc=mean, scale=std, size=10_000)
         psi_val = _psi(train_approx, recent_vals)
         if np.isnan(psi_val):
             continue

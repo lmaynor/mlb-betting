@@ -140,22 +140,26 @@ def _load_features():
 
 
 def _oos_eval(df, X, y, features):
-    split_idx = int(len(X) * TRAIN_TEST_SPLIT)
-    X_tr, X_te = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_tr, y_te = y.iloc[:split_idx], y.iloc[split_idx:]
-    train_through = df["game_date"].iloc[split_idx - 1].strftime("%Y-%m-%d")
-    test_from     = df["game_date"].iloc[split_idx].strftime("%Y-%m-%d")
+    # C03: 70/10/20 split -- val for early stopping, test never seen during training.
+    test_idx  = int(len(X) * TRAIN_TEST_SPLIT)
+    val_idx   = int(test_idx * (7/8))
+    X_tr, X_val, X_te = X.iloc[:val_idx], X.iloc[val_idx:test_idx], X.iloc[test_idx:]
+    y_tr, y_val, y_te = y.iloc[:val_idx], y.iloc[val_idx:test_idx], y.iloc[test_idx:]
+    train_through = df["game_date"].iloc[val_idx - 1].strftime("%Y-%m-%d")
+    val_through   = df["game_date"].iloc[test_idx - 1].strftime("%Y-%m-%d")
+    test_from     = df["game_date"].iloc[test_idx].strftime("%Y-%m-%d")
 
     logger.info(
-        f"OOS split | train={len(X_tr)} (thru {train_through}) | "
-        f"test={len(X_te)} (from {test_from})"
+        f"OOS split (70/10/20) | train={len(X_tr)} (thru {train_through}) | "
+        f"val={len(X_val)} (thru {val_through}) | test={len(X_te)} (from {test_from})"
     )
-    dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-    dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+    dtrain = xgb.DMatrix(X_tr,  label=y_tr,  feature_names=features)
+    dval   = xgb.DMatrix(X_val, label=y_val, feature_names=features)
+    dtest  = xgb.DMatrix(X_te,  label=y_te,  feature_names=features)
     booster = xgb.train(
         XGB_PARAMS, dtrain,
         num_boost_round=NUM_BOOST_ROUND,
-        evals=[(dtrain, "train"), (dtest, "test")],
+        evals=[(dtrain, "train"), (dval, "val")],
         early_stopping_rounds=EARLY_STOPPING,
         verbose_eval=100,
     )
@@ -304,6 +308,31 @@ def run() -> dict:
         return {"status": "error", "error": f"full retrain: {e}"}
 
     fmeans, fstds = _feature_stats(X, features)
+    _feat_list = features
+
+    # C04: empirical percentiles for PSI drift monitor.
+    # Avoids Gaussian misfit for binary/bounded/bimodal features.
+    fpdists: dict = {}
+    for _f in _feat_list:
+        try:
+            _col = df[_f] if _f in df.columns else None
+            if _col is None:
+                continue
+            _col_num = pd.to_numeric(_col, errors="coerce").dropna()
+            if len(_col_num) < 10:
+                continue
+            fpdists[_f] = {
+                "p5":     round(float(np.percentile(_col_num,  5)), 6),
+                "p10":    round(float(np.percentile(_col_num, 10)), 6),
+                "p25":    round(float(np.percentile(_col_num, 25)), 6),
+                "p50":    round(float(np.percentile(_col_num, 50)), 6),
+                "p75":    round(float(np.percentile(_col_num, 75)), 6),
+                "p90":    round(float(np.percentile(_col_num, 90)), 6),
+                "p95":    round(float(np.percentile(_col_num, 95)), 6),
+                "prop_1": round(float((_col_num == 1).mean()), 6),
+            }
+        except Exception:
+            continue
 
     ts = _ts()
     meta = {
@@ -312,6 +341,7 @@ def run() -> dict:
         "trained_at":    datetime.now(timezone.utc).isoformat(),
         "full_retrain":  True,
         "features":      features,
+        "feature_dists":  fpdists,
         "feature_means": fmeans,
         "feature_stds":  fstds,
         **oos,
