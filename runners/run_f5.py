@@ -274,6 +274,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
+    from mlb_core.data.lineups import fetch_il_pitcher_ids
+    _il_ids = fetch_il_pitcher_ids()
     _IL_DAYS = 10
 
     def _starter_stale(row, side: str, run_date: str) -> bool:
