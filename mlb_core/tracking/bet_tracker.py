@@ -317,7 +317,8 @@ class BetTracker:
             )
         print(f"  [{self.system}] Bet #{bet_id} settled: {result} (P&L: ${profit:+.2f})")
 
-    def write_closing_line(self, bet_id: int, closing_odds: float) -> None:
+    def write_closing_line(self, bet_id: int, closing_odds: float,
+                           complement_odds: float = None) -> None:
         """Record the closing line for a bet and compute CLV.
 
         CLV = (entry_fair_prob - closing_fair_prob) / closing_fair_prob * 100
@@ -366,12 +367,17 @@ class BetTracker:
         # HR/K props: use devig_unilateral (vig_pct=0.07).
         # All others: use raw implied as approximation (symmetric vig assumed).
         bt_upper = (bet_type or "").upper()
-        is_prop  = bt_upper.startswith(("K_", "OUTS_", "HR", "BATTER_", "PITCHER_"))
-        if is_prop:
+        is_prop = bt_upper.startswith(("K_", "OUTS_", "HR", "BATTER_", "PITCHER_"))
+        if complement_odds is not None and not is_prop:
+            # C06: devig two-sided market with complement for accurate CLV.
+            # Raw implied causes vig changes to appear as fake CLV movement.
+            from mlb_core.odds.utils import remove_vig
+            complement_implied = american_to_implied_prob(complement_odds)
+            closing_fair_prob, _ = remove_vig(closing_implied, complement_implied)
+        elif is_prop:
             closing_fair_prob = devig_unilateral(closing_implied, vig_pct=0.07)
         else:
-            # Two-sided market: raw implied is the best we can do without the
-            # complementary closing side. Mark as approximate.
+            # No complement captured -- raw implied as fallback.
             closing_fair_prob = closing_implied
 
         clv_pct = None
