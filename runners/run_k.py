@@ -154,11 +154,15 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
             _last_app = match.iloc[0]["game_date"]
             _days_since = (pd.Timestamp(run_date) - _last_app).days
             if _days_since > 10:
-                logger.info(
-                    f"K: skipping {pname} -- last appearance {_days_since}d ago "
-                    f"(IL-return threshold)"
-                )
-                continue
+                if int(pid) not in _il_ids:
+                    logger.info(
+                        f"K: allowing {pname} -- {_days_since}d gap but NOT on IL"
+                    )
+                else:
+                    logger.info(
+                        f"K: skipping {pname} -- {_days_since}d gap + confirmed on IL"
+                    )
+                    continue
             row["game_pk"]            = g["game_pk"]
             row["game_date"]          = pd.Timestamp(run_date)
             row["home_team"]          = g["home_team"]
@@ -319,6 +323,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         post_error(msg, system="K")
         return pd.DataFrame()
     logger.info("K: sentinel ok -- %s", _sreason)
+    from mlb_core.data.lineups import fetch_il_pitcher_ids
+    _il_ids = fetch_il_pitcher_ids()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("K: SGO snapshot empty or missing — skipping")

@@ -224,6 +224,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         post_error(msg, system="F5")
         return pd.DataFrame()
     logger.info("F5: sentinel ok -- %s", _sreason)
+    from mlb_core.data.lineups import fetch_il_pitcher_ids
+    _il_ids = fetch_il_pitcher_ids()
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("F5: SGO snapshot empty or missing — skipping")
@@ -287,11 +289,20 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     for _, row in feat_df.iterrows():
         if _starter_stale(row, "home", run_date) or _starter_stale(row, "away", run_date):
-            logger.info(
-                f"F5: skipping game_pk={int(row['game_pk'])} -- "
-                f"starter last appearance >{_IL_DAYS}d ago (IL-return threshold)"
-            )
-            continue
+            _home_pid = int(row.get("home_pitcher_id") or 0)
+            _away_pid = int(row.get("away_pitcher_id") or 0)
+            _on_il = (_home_pid and _home_pid in _il_ids) or (_away_pid and _away_pid in _il_ids)
+            if not _on_il:
+                logger.info(
+                    f"F5: allowing game_pk={int(row['game_pk'])} -- "
+                    f"starter gap >{_IL_DAYS}d but neither starter on IL"
+                )
+            else:
+                logger.info(
+                    f"F5: skipping game_pk={int(row['game_pk'])} -- "
+                    f"starter gap >{_IL_DAYS}d + confirmed on IL"
+                )
+                continue
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:

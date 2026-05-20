@@ -891,6 +891,8 @@ before any scoring work.
 
 **K/OUTS settlement voids bets when pitcher not in boxscore.** If a pitcher is scratched before throwing a pitch, they won't appear in the MLB Stats API boxscore. The settler now voids the bet (result='void', profit=0) rather than leaving it pending indefinitely. This matches DK rules: pitcher must throw at least one pitch for props to grade.
 
+**IL-return skip cross-references actual IL status (2026-05-20).** All three runners (NRFI, K, F5) skip a pitcher if `days_since_last_appearance > 10 AND pitcher_id in fetch_il_pitcher_ids()`. Previously the check was purely day-count based, which incorrectly blocked healthy starters mid-rotation (scheduled rest, rain delay, etc.). `fetch_il_pitcher_ids()` in `mlb_core/data/lineups.py` calls `/api/v1/teams/{teamId}/roster?rosterType=injured` for all 30 teams and returns the set of pitcher MLBAM IDs currently on IL. Fails open (returns empty set) on network error so a transient API blip never blocks betting.
+
 **HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
 calls the MLB Stats API per game_pk. If the game is not Final, the bet is
 skipped (retried tomorrow). If Final: player not in starting lineup -> void

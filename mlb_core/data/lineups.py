@@ -234,3 +234,36 @@ def lineup_rebuild_master(cache_dir: Path, master_path: Path,
     master.to_csv(master_path, index=False)
     n_games = master["game_pk"].nunique()
     print(f"  {len(master):,} lineup rows | {n_games:,} games | {skipped} empty days skipped")
+
+# MLB Stats API team IDs for all 30 franchises
+_MLB_TEAM_IDS = [
+    108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
+    118, 119, 120, 121, 133, 134, 135, 136, 137, 138,
+    139, 140, 141, 142, 143, 144, 145, 146, 147, 158,
+]
+
+def fetch_il_pitcher_ids() -> set:
+    """
+    Return the set of pitcher MLBAM IDs currently on the IL (any variant:
+    10-day, 15-day, 60-day) across all 30 MLB teams.
+    Uses /api/v1/teams/{teamId}/roster?rosterType=injured.
+    Returns empty set on any network error so callers degrade gracefully.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    il_ids = set()
+    base_url = "https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=injured"
+    for tid in _MLB_TEAM_IDS:
+        try:
+            r = _session.get(base_url.format(tid=tid), timeout=10)
+            r.raise_for_status()
+            for entry in r.json().get("roster", []):
+                pos = entry.get("position", {}).get("type", "")
+                pid = entry.get("person", {}).get("id")
+                if pid and pos == "Pitcher":
+                    il_ids.add(pid)
+        except Exception as exc:
+            logger.warning("fetch_il_pitcher_ids: team %d failed: %s", tid, exc)
+    logger.info("fetch_il_pitcher_ids: %d pitchers currently on IL", len(il_ids))
+    return il_ids
+
