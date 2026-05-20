@@ -720,6 +720,8 @@ F5. Dependency order enforced in `/build-all-features` code -- F5 always runs af
 run information into the half-inning target. Removed in retrain. Never add
 same-game batter stats as features in inning-1 models.
 
+**K `model_features.csv` pitcher column is MLBAM integer ID, not name string.** `.str.contains()` on the `pitcher` column raises `AttributeError: Can only use .str accessor with string values`. Filter by numeric ID directly. All other name-based lookups (SGO, boxscore) go through `_pitcher_name` / `_pitcher_name_norm` columns added by `_attach_today_slate`.
+
 **K build performance.** The opponent backfill pre-prepares the PA frame
 once (`_prepare_pa_for_opp_features`) before the per-date loop. Do not
 revert this -- the naive version was killed by gunicorn at 15min.
@@ -941,6 +943,10 @@ game where either starter's last appearance is >10 days before `run_date` -- sam
 threshold as K and NRFI runners (T19). Takes effect after next F5 feature build (12:00 UTC).
 
 ---
+
+**F5 ML extractor bookmaker used `_home_book` only.** Fixed 2026-05-20 to use
+`_home_book or _away_book`. 75 historic F5 bets backfilled via one-off
+`/backfill-f5-book` route (now removed). New F5 bets populate book correctly.
 
 ## 9. Performance monitor
 
@@ -1187,7 +1193,7 @@ Knowing these prevents incorrect settlement logic and bad model assumptions.
 
 ---
 
-## 13. Beezy.VIP -- the frontend
+## 16. Beezy.VIP -- the frontend
 
 `beezy-vip/` is the public-facing website for the betting service. It lives
 as a subdirectory of this repo and is deployed separately to Vercel.
@@ -1458,12 +1464,10 @@ Edge chart: 7-day rolling model edge vs realized ROI.
 Both use `ResponsiveContainer` with inline-styled tooltips matching design system.
 
 ### Filter bar (picks page)
-
-Hierarchical: Type → Market → Book → Date/Result.
-Type and Market are on separate rows (combined row was too cramped).
-Type chips: All, Game Lines (F5/NRFI), Player Props (HR/K/OUTS).
-Market chips are dynamic -- change based on selected Type.
-Clearing Type also clears Market. All chips are color-coded by system.
+Single FILTERS toggle button collapses/expands all four filter rows (Market,
+Date, Result, Book). Collapsed state shows active filter summary pills inline.
+Sort buttons (Date / Edge / Odds with direction toggle) always visible in the
+toggle bar. URL-param driven via useSearchParams/useRouter -- no props needed.
 Component: `components/picks/filter-bar.tsx`.
 
 ### Results page features
@@ -1482,7 +1486,7 @@ Default: Date ↓. Implemented as client-side sort on fetched picks array.
 
 ### Table columns (picks + results)
 
-Both tables share the same column layout (2026-05-17):
+Both tables share the same column layout (2026-05-20):
 `Date | System | Game | Pick | Odds | Edge | Book | Result | P&L`
 `80px  65px    160px  1fr   90px  60px  80px  70px   70px`
 minWidth: 860px. Book column shows canonical book name or "—" if null.
@@ -1499,10 +1503,9 @@ bet_type, update the `pickLabel` formatter:
 
 ### Model IP protection
 
-Current (paper mode): edge shown as bins (`0-5%`, `5-10%`, `10%+`). Model prob
-not exposed anywhere on the public site. Exact edge visible in Discord (members only).
-At launch: gate exact values behind Pro subscription via Clerk auth.
-CSV export uses same binned values as the UI.
+Current (paper mode): exact edge shown as percentage (e.g. "12.4%"). Model prob
+not exposed anywhere on the public site. At launch: gate model prob behind Pro
+subscription via Clerk auth. CSV export uses exact edge values.
 
 ### Pre-launch checklist
 
