@@ -480,11 +480,13 @@ def build_feature_table(pitcher_features: pd.DataFrame,
         df["high_wind"] = (df["wind_speed_mph"] > 15).astype("Int64")
     if "days_rest" in df.columns:
         df["short_rest"] = (df["days_rest"] <= 4).astype("Int64")
+    # C02: sort by game_date before expanding quantile (joins can reorder rows)
+    df = df.sort_values("game_date").reset_index(drop=True)
+
     if "ump_overall_accuracy_L30" in df.columns and "ump_total_run_impact_L30" in df.columns:
         # Compute quantile thresholds using an expanding window to avoid
         # in-sample leakage — thresholds are based only on games UP TO each
         # row's date, not on the full dataset including future games.
-        # Sort order is guaranteed by build_feature_table (game_date sort above).
         acc_thresh = (
             df["ump_overall_accuracy_L30"]
             .expanding(min_periods=50)
