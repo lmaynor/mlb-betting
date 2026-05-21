@@ -191,7 +191,7 @@ def run(run_date: str = None) -> dict:
         # Use a system-agnostic tracker instance — write_closing_line only
         # needs the engine, not system filtering.
         system = bet.get("system", "NRFI")
-        tracker = BetTracker("unused", system=system)
+        tracker = BetTracker(os.environ["MLB_DB_URL"], system=system)
         try:
             c_odds, comp_odds = closing_map[bid]
             tracker.write_closing_line(bid, c_odds, complement_odds=comp_odds)
@@ -239,7 +239,8 @@ def run(run_date: str = None) -> dict:
 
 
 def main():
-    import json, sys
+    import json
+import os, sys
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s — %(message)s")
     result = run()

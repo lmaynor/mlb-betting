@@ -545,6 +545,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             kelly_triggered  = triggered,
             paper            = cfg["PAPER"],
             book             = row.get("bookmaker"),
+            morning_odds     = row.get("morning_odds"),
         )
         if bet_id == -1:
             continue

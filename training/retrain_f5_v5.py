@@ -207,16 +207,23 @@ def _walk_forward_cv(df, features):
         te = df_cv[df_cv["_year"] == test_year]
         if len(tr) < 100 or len(te) < 50:
             continue
-        X_tr = tr[features].apply(pd.to_numeric, errors="coerce")
-        y_tr = tr[TARGET].astype(int)
-        X_te = te[features].apply(pd.to_numeric, errors="coerce")
-        y_te = te[TARGET].astype(int)
-        dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-        dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+        # C03: carve val from train -- never use test during early stopping
+        val_size     = max(50, len(tr) // 10)
+        tr_inner     = tr.iloc[:-val_size]
+        val_inner    = tr.iloc[-val_size:]
+        X_tr_inner   = tr_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_tr_inner   = tr_inner[TARGET].astype(int)
+        X_val_inner  = val_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_val_inner  = val_inner[TARGET].astype(int)
+        X_te         = te[features].apply(pd.to_numeric, errors="coerce")
+        y_te         = te[TARGET].astype(int)
+        dtrain_inner = xgb.DMatrix(X_tr_inner, label=y_tr_inner, feature_names=features)
+        dval_inner   = xgb.DMatrix(X_val_inner, label=y_val_inner, feature_names=features)
+        dtest        = xgb.DMatrix(X_te,        label=y_te,        feature_names=features)
         b = xgb.train(
-            XGB_PARAMS, dtrain,
+            XGB_PARAMS, dtrain_inner,
             num_boost_round=NUM_BOOST_ROUND,
-            evals=[(dtest, "test")],
+            evals=[(dtrain_inner, "train"), (dval_inner, "val")],
             early_stopping_rounds=EARLY_STOPPING,
             verbose_eval=False,
         )

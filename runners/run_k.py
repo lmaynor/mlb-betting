@@ -349,6 +349,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     booster, features, feature_means = _load_model(cfg)
     calibrator = _load_calibrator(cfg)
 
+    # E04: load OUTS trained model (falls back to Normal proxy if not found)
+    _outs_booster, _outs_features, _outs_feat_means, _outs_nb_alpha, _outs_cal = _load_outs_model(cfg)
+
+    # E10: load morning snapshot for line movement signal
+    from mlb_core.odds.line_movement import load_morning_odds
+    _morning_odds = load_morning_odds(run_date) if run_date else {}
+
     feat_df = _build_today_feature_rows(cfg, run_date)
     if feat_df.empty:
         return pd.DataFrame()
@@ -482,6 +489,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "kelly_triggered": kelly_triggered,
                         "market":          "K",
                         "bookmaker":       k_info.get("bookmaker"),
+                        "morning_odds":    _morning_odds.get(
+                            f"pitching_strikeouts-{row['_pitcher_id']}-game-ou-{side.lower()}"
+                        ),
                     })
 
         # ── Pitcher outs O/U ───────────────────────────────────────────────
@@ -566,6 +576,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "kelly_triggered": kelly_triggered,
                         "market":          "OUTS",
                         "bookmaker":       outs_info.get("bookmaker"),
+                        "morning_odds":    _morning_odds.get(
+                            f"pitching_outs-{row['_pitcher_id']}-game-ou-{side.lower()}"
+                        ),
                     })
 
     if not results:
@@ -729,6 +742,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             lambda_k         = row.get("lambda_k"),
             proj_k           = row.get("proj_k"),
             book             = row.get("bookmaker"),
+            morning_odds     = row.get("morning_odds"),
         )
         if bet_id == -1:
             continue

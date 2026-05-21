@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS bets (
     book             TEXT,
     closing_odds     REAL,
     closing_prob     REAL,
-    clv_pct          REAL
+    clv_pct          REAL,
+    morning_odds     INTEGER,
+    line_move_pct    REAL
 )
 """
 
@@ -268,6 +270,7 @@ class BetTracker:
         lambda_k: float = None,
         proj_k: float = None,
         book: str = None,
+        morning_odds: int = None,
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
         if game_pk is not None and bet_type is not None and game_date is not None:
@@ -281,11 +284,11 @@ class BetTracker:
                     INSERT INTO bets
                         (system, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
-                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book)
+                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book, morning_odds)
                     VALUES
                         (:system, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
-                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book)
+                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book, :morning_odds)
                 """),
                 {
                     "system": self.system, "game_date": game_date,
@@ -301,6 +304,7 @@ class BetTracker:
                     "lambda_k": lambda_k,
                     "proj_k": proj_k,
                     "book": book,
+                    "morning_odds": morning_odds,
                 },
             )
             bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \
