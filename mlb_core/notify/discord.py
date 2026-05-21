@@ -7,10 +7,13 @@ Usage:
     post_bets(bets_df, system="NRFI", date="2026-04-22")
     post_summary(stats, system="NRFI")
 
-Webhook URL is read from the DISCORD_WEBHOOK_URL environment variable
-(or DISCORD_WEBHOOK_<SYSTEM> for a per-system override, e.g.
-DISCORD_WEBHOOK_NRFI).  If no webhook is configured, calls are no-ops
-and a warning is logged.
+Webhook URLs read from environment variables:
+    DISCORD_WEBHOOK_URL         — default picks webhook (#daily-picks)
+    DISCORD_WEBHOOK_SUMMARY     — recap webhook (#daily-recap)
+    DISCORD_WEBHOOK_OPS         — ops/error webhook (#ops-alerts)
+    DISCORD_WEBHOOK_<SYSTEM>    — per-system override (e.g. DISCORD_WEBHOOK_NRFI)
+
+If no webhook is configured, calls are no-ops and a warning is logged.
 """
 import os
 import logging
@@ -41,7 +44,7 @@ _SYSTEM_COLORS = {
 
 _DEFAULT_COLOR = 0x99AAB5  # grey
 
-# Abbrev -> sportsbook-canonical nickname (the medium form DK/SGO use).
+# Abbrev -> sportsbook-canonical nickname
 TEAM_NICKNAME = {
     "ARI": "Diamondbacks", "ATL": "Braves",     "BAL": "Orioles",
     "BOS": "Red Sox",      "CHC": "Cubs",       "CWS": "White Sox",
@@ -57,7 +60,6 @@ TEAM_NICKNAME = {
 
 
 def _edge_emoji(edge: Optional[float]) -> str:
-    """Return an emoji reflecting edge strength."""
     if edge is None:
         return "📄"
     if edge >= 0.15:
@@ -72,7 +74,6 @@ def _edge_emoji(edge: Optional[float]) -> str:
 
 
 def _round_stake(stake: Optional[float]) -> Optional[float]:
-    """Round stake to nearest $5 for large stakes, $1 for small stakes."""
     if stake is None:
         return None
     if stake < 10:
@@ -81,7 +82,6 @@ def _round_stake(stake: Optional[float]) -> Optional[float]:
 
 
 def _format_bet_headline(b: dict, system: str) -> str:
-    """Return the canonical sportsbook-style headline for one bet row."""
     away = b.get("away_team", "")
     home = b.get("home_team", "")
     away_full = TEAM_NICKNAME.get(away, away)
@@ -171,13 +171,12 @@ def _format_bet_headline(b: dict, system: str) -> str:
         line_str  = f" {line}" if line is not None else ""
         return f"{player} - {side_word}{line_str} Earned Runs"
 
-    # Fallback
     matchup = f"{b.get('player','')} - {away} @ {home}".strip(" -")
     return f"{bt} - {matchup}"
 
 
 def _get_webhook(system: str) -> Optional[str]:
-    """Return webhook URL for this system, or None if not configured."""
+    """Return picks webhook URL for this system."""
     url = (
         os.getenv(f"DISCORD_WEBHOOK_{system.upper()}")
         or os.getenv("DISCORD_WEBHOOK_URL")
@@ -185,13 +184,23 @@ def _get_webhook(system: str) -> Optional[str]:
     if not url:
         logger.warning(
             f"No Discord webhook configured for {system}. "
-            "Set DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_{system}."
+            f"Set DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_{system.upper()}."
         )
     return url
 
 
+def _get_ops_webhook() -> Optional[str]:
+    """Return ops webhook URL (#ops-alerts). Falls back to main webhook."""
+    url = (
+        os.getenv("DISCORD_WEBHOOK_OPS")
+        or os.getenv("DISCORD_WEBHOOK_URL")
+    )
+    if not url:
+        logger.warning("No Discord ops webhook configured. Set DISCORD_WEBHOOK_OPS.")
+    return url
+
+
 def _post(webhook_url: str, payload: dict) -> bool:
-    """POST a Discord webhook payload. Returns True on success."""
     try:
         r = requests.post(webhook_url, json=payload, timeout=15)
         r.raise_for_status()
@@ -212,7 +221,7 @@ def post_bets(
     system: str,
     run_date: str = None,
 ) -> None:
-    """Post today's bet signals to Discord."""
+    """Post today's bet signals to Discord (#daily-picks)."""
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
@@ -270,7 +279,7 @@ def post_bets(
 
 
 def post_summary(stats: dict, system: str, run_date: str = None) -> None:
-    """Post a performance summary embed."""
+    """Post a performance summary embed (#daily-recap)."""
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
@@ -296,17 +305,17 @@ def post_summary(stats: dict, system: str, run_date: str = None) -> None:
         "color":  color,
         "fields": [
             {"name": "Record",   "value": f"{wins}/{bets} ({hit:.1%})", "inline": True},
-            {"name": "P&L",      "value": f"{pnl_emoji} ${pnl:+.2f}",   "inline": True},
-            {"name": "ROI",      "value": f"{roi:+.1f}%",               "inline": True},
-            {"name": "Avg edge", "value": edge_str,                      "inline": True},
+            {"name": "P&L",      "value": f"{pnl_emoji} ${pnl:+.2f}",  "inline": True},
+            {"name": "ROI",      "value": f"{roi:+.1f}%",              "inline": True},
+            {"name": "Avg edge", "value": edge_str,                     "inline": True},
         ],
     }
     _post(webhook_url, {"embeds": [embed]})
 
 
 def post_error(system: str, message: str, run_date: str = None) -> None:
-    """Post an error alert to Discord."""
-    webhook_url = _get_webhook(system)
+    """Post an error alert to #ops-alerts (not member-facing channels)."""
+    webhook_url = _get_ops_webhook()  # <-- now routes to ops channel
     if not webhook_url:
         return
     run_date = run_date or date.today().isoformat()
@@ -319,12 +328,28 @@ def post_error(system: str, message: str, run_date: str = None) -> None:
     })
 
 
+def post_ops_alert(message: str, run_date: str = None) -> None:
+    """Post a generic ops alert to #ops-alerts. Use for monitor_ops.py failures."""
+    webhook_url = _get_ops_webhook()
+    if not webhook_url:
+        return
+    run_date = run_date or date.today().isoformat()
+    _post(webhook_url, {
+        "embeds": [{
+            "title":       f"⚠️ Ops Alert | {run_date}",
+            "description": message[:2000],
+            "color":       0xED4245,
+            "footer":      {"text": "monitor_ops"},
+        }]
+    })
+
+
 def post_all_systems_summary(
     systems_stats: dict,
     run_date: str = None,
     settle_date: str = None,
 ) -> None:
-    """Post a daily recap embed after settlement. One field per system."""
+    """Post a daily recap embed after settlement (#daily-recap)."""
     webhook_url = (
         os.getenv("DISCORD_WEBHOOK_SUMMARY")
         or os.getenv("DISCORD_WEBHOOK_URL")
@@ -372,7 +397,6 @@ def post_all_systems_summary(
         )
         fields.append({"name": f"{icon} {system}", "value": value, "inline": True})
 
-    # Blank spacer so Discord renders 3-column inline layout cleanly
     if len(fields) % 3 == 2:
         fields.append({"name": "\u200b", "value": "\u200b", "inline": True})
 
