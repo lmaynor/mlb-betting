@@ -1853,3 +1853,193 @@ Edge-ROI gaps (NRFI 33pts, K 21pts, F5 19.5pts) traced to two calibrator failure
 - NRFI calibrator: 11/11 games in range (was 1/11)
 - K calibrator: 19/19 pitchers in range
 - Both calibrate jobs complete cleanly with no degradation warnings
+
+## 16. Discord server (beezy.vip)
+
+*Last configured: 2026-05-20*
+
+### What it is
+
+Community layer for beezy.vip. Receives pick signals and daily recaps via
+webhooks. Members opt into book-specific pings. Ops alerts are routed to an
+admin-only channel, never surfaced to members.
+
+Server ID: `1476027259956494533`
+Server name: `beezy.vip`
+
+---
+
+### Server structure
+
+```
+ONBOARDING
+  #verify        -- Entry gate. Unverified members see only this channel.
+  #preferences   -- Self-assign book roles for tailored pick pings.
+
+INFO
+  #welcome       -- What beezy.vip is, how to read picks. Carl-bot welcome
+                    message posts here on member join.
+  #announcements -- System updates, paper mode progress, launch news.
+  #rules         -- React with checkmark to get Paper Tester role and unlock
+                    the server.
+
+PICKS  (read-only for members, webhook-only posting)
+  #daily-picks   -- post_bets() output. One thread per day.
+  #daily-recap   -- post_all_systems_summary() after settlement.
+  #performance   -- monitor_performance.py alerts + Monday digest.
+                    Paid members only (Member, Member Pro).
+
+COMMUNITY
+  #general       -- Member discussion. Paper Testers read-only.
+  #betting-theory -- Forum channel for strategy discussion. Paid members only.
+  #paper-feedback -- Reactions to picks during paper mode. All members.
+
+OPS  (Admin only)
+  #ops-alerts    -- monitor_ops.py failures + post_error() output.
+  #deploys       -- Manual deploy notes.
+```
+
+---
+
+### Role hierarchy
+
+Ordered highest to lowest. Carl-bot can only assign roles below its own position.
+
+| Role | Color | Description |
+| --- | --- | --- |
+| Admin | Red `#ED4245` | Full access. You. |
+| Moderator | Pink `#EB459E` | Manage messages/kick/ban. No ops or picks config. |
+| Member Pro | Yellow `#FEE75C` | Paid tier post-launch. Mirrors Clerk Pro auth. |
+| Member | Green `#57F287` | Paid tier post-launch. Mirrors Clerk auth. |
+| Paper Tester | Blurple `#5865F2` | Free during paper mode. Assigned via #rules reaction. |
+| Bot | Grey | beezy-bot + webhook posting role. |
+| Carl-bot | Managed | Required for reaction roles and moderation. |
+| beezy-bot | Managed | The Discord bot account used by setup/cleanup scripts. |
+
+Book roles (grey, mentionable -- used for pick pings):
+`DraftKings`, `FanDuel`, `Caesars`, `BetMGM`, `theScore`, `PointsBet`
+
+These match `ONSHORE_BOOKS` in `mlb_core/odds/sgo.py` exactly. If a book
+is added or removed from SGO, update the Discord roles to match.
+
+State roles were considered but dropped -- book roles are sufficient for
+tailored pings and lower member friction.
+
+---
+
+### Webhook routing
+
+Three webhooks, each stored in Secret Manager and mounted on the Cloud Run
+service as environment variables:
+
+| Secret | Env var | Channel | Used by |
+| --- | --- | --- | --- |
+| `discord-webhook-url` | `DISCORD_WEBHOOK_URL` | `#daily-picks` | `post_bets()` |
+| `discord-webhook-summary` | `DISCORD_WEBHOOK_SUMMARY` | `#daily-recap` | `post_all_systems_summary()` |
+| `discord-ops-webhook-url` | `DISCORD_WEBHOOK_OPS` | `#ops-alerts` | `post_error()`, `post_ops_alert()` |
+
+`post_error()` previously routed to the main picks webhook. It now uses
+`DISCORD_WEBHOOK_OPS`, keeping errors out of member-facing channels.
+
+New function `post_ops_alert(message, run_date)` added for `monitor_ops.py`
+to call directly for infra health failures.
+
+Per-system webhook override still supported: `DISCORD_WEBHOOK_{SYSTEM}`
+(e.g. `DISCORD_WEBHOOK_NRFI`) takes priority over `DISCORD_WEBHOOK_URL`.
+
+---
+
+### Bot infrastructure
+
+**beezy-bot** -- Discord application bot account.
+- Token stored in Secret Manager as `discord-bot-token`.
+- Used by `setup_discord.py` (one-time server setup) and
+  `cleanup_discord.py` (role cleanup).
+- Not a persistent bot -- scripts run on-demand from Cloud Shell.
+- Does NOT handle real-time events. Webhook-only for all pick posting.
+- See CONTEXT.md §8 gotcha: webhook messages do not trigger Discord bots.
+  GamblyBot was the original bot and is still in the server but ignores
+  webhook content. Real bot needed for interactive commands (backlog).
+
+**Carl-bot** -- Third-party moderation and reaction role bot.
+- Dashboard: https://carl.gg
+- Handles: reaction roles (#rules gate, #preferences book roles),
+  welcome message, automod (Medium preset), modlogs to #ops-alerts.
+- Mute role: Moderator.
+- #rules and #preferences channels need explicit Carl-bot permission overrides
+  (Send Messages, Add Reactions, Manage Messages) because the default
+  everyone deny blocks Carl-bot otherwise.
+
+---
+
+### Scripts
+
+`setup_discord.py` -- One-time full server setup. Run from Cloud Shell.
+Creates all categories, channels, roles, and seeds starter content.
+Reads bot token from Secret Manager at runtime.
+
+```bash
+TOKEN=$(gcloud secrets versions access latest \
+  --secret=discord-bot-token \
+  --project=concrete-crow-445205-m4)
+python3 ~/mlb-betting/setup_discord.py --token "$TOKEN"
+```
+
+`cleanup_discord.py` -- Deletes junk roles (ran once after Carl-bot added
+platform template roles). Safe to re-run; only deletes roles not in the
+KEEP_ROLES allowlist.
+
+Both scripts live in the repo root. Do not commit bot tokens.
+
+---
+
+### Stripe -> Discord role sync (backlog)
+
+When a user pays on beezy.vip via Stripe/Clerk, they should automatically
+receive the `Member` or `Member Pro` Discord role. This requires:
+
+1. A Clerk/Stripe webhook hitting a Cloud Run endpoint
+2. A persistent bot (real token, not webhook) to assign roles via Discord API
+3. Mapping Clerk user ID -> Discord user ID (requires OAuth link at signup)
+
+Not blocking launch. Manual role assignment during early paid access is fine.
+Design the Clerk signup flow to prompt Discord OAuth link from day one.
+
+---
+
+### Gotchas
+
+**Webhook messages do not trigger Discord bots.** GamblyBot and beezy-bot
+both ignore webhook content. Carl-bot reaction roles work because Carl-bot
+listens to reaction events, not message content.
+
+**Carl-bot requires explicit channel permission overrides.** The #rules and
+#preferences channels have everyone deny at the channel level. Carl-bot
+must be added explicitly to each channel's permission overrides with Send
+Messages + Add Reactions + Manage Messages, or it gets a 403 on posting.
+
+**Carl-bot role hierarchy.** Carl-bot's role must be positioned above any
+role it assigns. If Paper Tester is moved above Carl-bot in the hierarchy,
+the reaction role assignment silently fails.
+
+**News channel and Forum channel require Community mode.** The setup script
+handles this gracefully with try/except -- falls back to text channel if
+Community mode is not enabled. Enable Community mode in Server Settings ->
+Community to unlock both channel types.
+
+**Book role pings require a real bot token.** post_bets() via webhook cannot
+ping roles. Role pings from webhooks are silently ignored by Discord.
+Implementing book-role pings requires replacing the webhook call with a
+bot API call using beezy-bot's token. This is the primary driver for
+eventually moving from webhooks to a persistent bot. (Backlog.)
+
+---
+
+### When to update this section
+
+- Adding or removing a book from ONSHORE_BOOKS -> update book roles
+- Changing webhook routing -> update webhook table
+- New channel added -> update server structure
+- Carl-bot config changes -> update Carl-bot subsection
+- Stripe/Discord role sync implemented -> update backlog item to Live
+- Real bot token wired for role pings -> update bot infrastructure section
