@@ -26,6 +26,17 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+
+def _auc(probs: list, outcomes: list) -> float | None:
+    """Mann-Whitney AUC -- no sklearn needed."""
+    pos = [p for p, o in zip(probs, outcomes) if o == 1]
+    neg = [p for p, o in zip(probs, outcomes) if o == 0]
+    if not pos or not neg:
+        return None
+    concordant = sum(1 for p in pos for n in neg if p > n)
+    tied       = sum(1 for p in pos for n in neg if p == n)
+    return (concordant + 0.5 * tied) / (len(pos) * len(neg))
+
 # Alert thresholds — override via env vars
 ROI_WARN_THRESHOLD    = float(os.getenv("MONITOR_ROI_WARN",    "-15"))   # %
 HIT_RATE_DROP         = float(os.getenv("MONITOR_HIT_RATE_DROP", "10"))  # pct points below model avg
@@ -94,6 +105,10 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
     pnl    = recent["profit"].sum()
     roi    = pnl / staked * 100 if staked > 0 else 0.0
 
+    probs    = recent["market_prob"].dropna().tolist()
+    outcomes = [1 if r == "win" else 0 for r in recent.loc[recent["market_prob"].notna(), "result"]]
+    auc_val  = _auc(probs, outcomes)
+
     stats = {
         "n":         n,
         "wins":      int(wins),
@@ -102,6 +117,7 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
         "roi":       round(roi, 2),
         "avg_edge":  round(float(recent["edge"].mean()), 4),
         "pending":   int(df[df["result"].isna()].shape[0]),
+        "auc":       round(auc_val, 4) if auc_val is not None else None,
     }
     stats.update(_clv_stats(recent))
     return stats
@@ -116,6 +132,10 @@ def _season_stats(df: pd.DataFrame) -> dict:
     n      = len(resolved)
     staked = resolved["stake"].sum()
     pnl    = resolved["profit"].sum()
+    probs    = resolved["market_prob"].dropna().tolist()
+    outcomes = [1 if r == "win" else 0 for r in resolved.loc[resolved["market_prob"].notna(), "result"]]
+    auc_val  = _auc(probs, outcomes)
+
     stats = {
         "n":        n,
         "wins":     int(wins),
@@ -124,6 +144,7 @@ def _season_stats(df: pd.DataFrame) -> dict:
         "roi":      round(pnl / staked * 100 if staked > 0 else 0.0, 2),
         "avg_edge": round(float(resolved["edge"].mean()), 4),
         "pending":  int(df[df["result"].isna()].shape[0]),
+        "auc":      round(auc_val, 4) if auc_val is not None else None,
     }
     stats.update(_clv_stats(resolved))
     return stats
@@ -190,6 +211,20 @@ def _check_alerts(system: str, stats: dict) -> list[str]:
             f"(expected ≥ {expected - HIT_RATE_DROP/100:.1%})"
         )
 
+    # AUC alert: < 0.50 means model is rank-ordering backwards -- structural failure.
+    auc_val = stats.get("auc")
+    if auc_val is not None and n >= MIN_BETS_FOR_ALERT:
+        if auc_val < 0.50:
+            alerts.append(
+                f"AUC over last {n} bets: **{auc_val:.3f}** -- model is rank-ordering "
+                f"backwards. Calibration cannot fix this; retrain required."
+            )
+        elif auc_val < 0.52:
+            alerts.append(
+                f"AUC over last {n} bets: **{auc_val:.3f}** -- near coin-flip discrimination. "
+                f"Edge may not exist."
+            )
+
     # CLV alert: if we have ≥ 20 CLV observations and mean CLV < 0, flag it.
     # Negative CLV is a leading indicator of negative edge — acts earlier than ROI.
     clv_n    = stats.get("clv_n", 0)
@@ -225,6 +260,7 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
             {"name": "P&L",      "value": f"${stats['pnl']:+.2f}", "inline": True},
             {"name": "ROI",      "value": f"{stats['roi']:+.1f}%", "inline": True},
             {"name": "Avg edge", "value": f"{stats['avg_edge']:+.1%}", "inline": True},
+            {"name": "AUC",      "value": f"{stats['auc']:.3f}" if stats.get('auc') is not None else "n/a", "inline": True},
         ],
         "footer": {"text": f"Last {ROLLING_WINDOW} settled bets | mlb-betting monitor"},
     }
@@ -253,11 +289,12 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
         clv_str = ""
         if stats.get("clv_n", 0) >= 5:
             clv_str = f" | CLV: **{stats['mean_clv']:+.2f}%** (n={stats['clv_n']})"
+        auc_str = f" | AUC: **{stats['auc']:.3f}**" if stats.get('auc') is not None else ""
         fields.append({
             "name":  f"{dot} {system}",
             "value": (f"`{stats['wins']}/{stats['n']} ({stats['hit_rate']:.0%})` "
                       f"P&L: **${stats['pnl']:+.2f}** | ROI: **{stats['roi']:+.1f}%** | "
-                      f"edge: {stats['avg_edge']:+.1%}{clv_str} | {stats['pending']} pending"),
+                      f"edge: {stats['avg_edge']:+.1%}{auc_str}{clv_str} | {stats['pending']} pending"),
             "inline": False,
         })
 
