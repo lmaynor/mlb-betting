@@ -2154,6 +2154,92 @@ Fix sequence after any data gap:
 
 ---
 
+
+## 22. Engineering backlog (2026-05-21)
+
+All items are engineering -- not data gaps. 5 years of training data (25k+ rows) is
+sufficient. Live bet sample (51-110 per system) grows daily and is not the bottleneck.
+
+Priority order within each tier. Work top-to-bottom.
+
+---
+
+### Immediate (this week)
+
+#### E01 · Fix K fair probability calculation [CLOSED -- not a bug]
+- Historical pre-T01 edge values inflating avg_edge. Current code correct.
+
+#### E02 · F5 CV loop C03 leak [x]
+- Fixed 2026-05-21. `retrain_f5_v5.py` CV loop now carves val from train.
+
+#### E03 · CLV pipeline -- bt_upper NameError + wrong DB engine [x]
+- Fixed 2026-05-21. `capture_closing_lines.py` bt_upper -> bet_type, real MLB_DB_URL.
+
+#### E04 · Build OUTS as proper regression model [x]
+- Fixed 2026-05-21. `training/retrain_outs_v1.py` -- NegBin count model on starter_outs.
+- `build_k_features.py` adds starter_outs column. OUTS_Pro_System/ config added.
+- Cloud Run Job: mlb-retrain-outs-v1. Run after rebuilding K features.
+- Runner falls back to Normal proxy if model not found in GCS.
+
+#### E05 · NRFI 2026 drift investigation
+- **Why:** Walk-forward CV shows AUC degrading: 2024=0.5985, 2025=0.5876, 2026=0.5394.
+  Weather fix will recover live AUC from 0.500 but the year-over-year decay needs
+  investigation. Pitch clock, opener usage, lineup construction all shifted.
+- **Approach:** Compare feature distributions year-by-year. Add opener usage flag,
+  pitch count efficiency, chase rate vs 2023 baseline.
+- **Acceptance:** 2026 fold AUC >= 0.560 after feature additions + retrain.
+- [ ] Done
+
+#### E06 · Fix deploy script traffic routing [x]
+- Fixed 2026-05-21. Added `gcloud run services update-traffic --to-latest` after deploy.
+- Also added missing Discord webhook secrets to --set-secrets flag.
+
+#### E07 · Verify mlb-capture-closing and mlb-refresh-data scheduler jobs are firing
+- **Why:** mlb-refresh-data had Last attempt: None causing the weather gap.
+  Same pattern likely affects mlb-capture-closing (explaining clv_n=0).
+- **Check:** `gcloud scheduler jobs describe mlb-refresh-data --location=us-central1`
+- **Fix if URI wrong:** `gcloud scheduler jobs update http mlb-refresh-data --location=us-central1 --uri=https://mlb-betting-628109313129.us-central1.run.app/refresh-data`
+- [ ] Done
+
+---
+
+### Short term (next 2 weeks)
+
+#### E08 · NRFI sub-model ensemble
+- Gated: only start after NRFI live AUC >= 0.54 with n >= 200 bets.
+- Split pitcher dominance / lineup quality / park+weather into sub-models.
+- Stacking layer: logistic regression combining three sub-model outputs.
+- [ ] Done
+
+#### E09 · Hyperparameter tuning via Optuna [x] -- script written, pending execution
+- `training/tune_hyperparams.py` written. Run after E02-E07 complete.
+- `pip install optuna --break-system-packages` then `python -m training.tune_hyperparams --system NRFI --n-trials 50`
+- Retrain scripts pick up tuned params automatically via `load_tuned_params()`.
+
+#### E10 · Pre-game line movement feature [x] -- schema + runners + capture wired
+- `bets` table: morning_odds INTEGER, line_move_pct REAL (auto-migrated).
+- `mlb_core/odds/line_movement.py`: load_morning_odds(), compute_line_move_pct().
+- All 4 runners load morning snapshot and store morning_odds per bet.
+- capture_closing_lines.py computes line_move_pct at capture time.
+- After 200+ bets with morning_odds populated: add to feature lists and retrain.
+
+---
+
+### Medium term
+
+#### E11 · Cross-system Kelly coordination
+- Global daily exposure cap: total stake across all systems <= 10% of bankroll per day.
+- Only needed before going live. Paper mode single-system caps are sufficient now.
+- [ ] Done
+
+---
+
+### Backlog conventions
+- Start a task: note in session handoff as "in progress"
+- Finish a task: mark [x], add date
+- New tasks: add with Exx ID continuing sequence
+- Blocked: add `> Blocked: reason` line
+
 ## 20. Common manual actions (code fragments)
 
 ### Deploy

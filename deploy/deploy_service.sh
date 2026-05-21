@@ -50,7 +50,13 @@ gcloud run services update "$SERVICE" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
   --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
-  --traffic=100 \
+   \
+  --project="$PROJECT_ID"
+
+# Route 100% traffic to new revision (separate command required)
+gcloud run services update-traffic "$SERVICE" \
+  --to-latest \
+  --region="$REGION" \
   --project="$PROJECT_ID"
 
 NEW_REV=$(gcloud run services describe "$SERVICE" --region="$REGION" \
