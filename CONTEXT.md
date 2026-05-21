@@ -44,7 +44,8 @@ mlb-betting/
 ├── main.py                       Flask entrypoint for Cloud Run service.
 │                                 Routes: /healthz, /run, /build-features,
 │                                         /snapshot-odds, /settle, /refresh-data,
-│                                         /monitor, /monitor-ops, /retrain-weekly
+│                                         /monitor, /monitor-ops, /retrain-weekly,
+│                                         /model-health, /backfill-data
 ├── Dockerfile                    Single image. Used by Cloud Run service AND jobs.
 ├── requirements.txt              Pinned Python deps.
 ├── setup.py                      Makes mlb_core importable. Only prod deps --
@@ -174,6 +175,8 @@ gs://concrete-crow-445205-m4-mlb-data/
 ├── Weather/
 │   └── weather_master.csv              Historical weather per game.
 │                                       Updated nightly by mlb-refresh-data.
+│                                       No dedicated backfill function -- use
+│                                       /backfill-data with systems=["weather"].
 ├── Umpires/
 │   └── umpscorecards_master.csv        Umpire scorecards.
 │                                       Updated nightly by mlb-refresh-data.
@@ -946,6 +949,24 @@ game where either starter's last appearance is >10 days before `run_date` -- sam
 threshold as K and NRFI runners (T19). Takes effect after next F5 feature build (12:00 UTC).
 
 ---
+
+**`mlb-refresh-data` scheduler job had never run (2026-05-21).** `Last attempt: None` despite `State: ENABLED`. Weather, scoring, umpires, and Statcast masters were only populated via manual backfills. Result: weather_master.csv had only 15 dates of 2026 coverage (193 rows), causing 85% null rate on weather features in NRFI/F5/HR feature CSVs. NRFI model_prob AUC collapsed to 0.500 (coin flip) due to feature imputation masking all weather signal. Fix: verify scheduler job URI and trigger manually after any deploy. Always check `/model-health` freshness block after a data gap.
+
+**`/refresh-data` response was missing weather/scoring/umpires/Statcast results (2026-05-21).** Route ran all four fetchers but only included `savant_leaderboards` in the JSON response. Silent failures in any fetcher were invisible. Fixed: each fetcher now wrapped in individual try/except with results included in response under `fetchers` key. Response now returns `status: "partial"` if any fetcher fails.
+
+**NRFI live AUC 0.425 despite retrain OOS AUC 0.5698 (2026-05-21).** Root cause: weather features 85% null in live feature CSV due to weather master gap (see above). XGBoost fills nulls with feature_means, collapsing all games to near-identical inputs and pushing model output toward base rate. AUC 0.500 = model outputting uniform probabilities. Fix: backfill weather master, rebuild features, retrain. Always run /model-health after a data gap to catch feature null rates before they silently kill model performance.
+
+**`market_prob` in NRFI bets stores the book fair probability, not the model probability.** The AUC script must use `model_prob` column for NRFI, not `market_prob`. For other systems (HR, K, F5, OUTS) both columns are similar. NRFI `market_prob` AUC of 0.425 was measuring book implied prob vs outcomes -- not model signal. Confirmed: NRFI `model_prob` AUC is 0.500 (weather null issue), not 0.425.
+
+**`fetch_il_pitcher_ids()` throws in Cloud Run causing `NameError: _il_ids` (2026-05-21).** Works locally (returns 390 IDs) but fails in Cloud Run cold start. Fixed: wrapped in try/except that fails open (empty set) in run_nrfi.py and run_k.py. The fail-open behavior matches the original design intent -- a transient API blip should never block betting.
+
+**`/model-health` route uses `X-API-Key` auth, not OIDC.** Call directly via Cloud Run URL without proxy: `curl -s "https://mlb-betting-628109313129.us-central1.run.app/model-health" -H "X-API-Key: $KEY"`. Same pattern as all `/api/public/*` endpoints.
+
+**AUC added to `monitor_performance.py` rolling and season stats (2026-05-21).** `_auc()` uses Mann-Whitney method (no sklearn). Alert thresholds: AUC < 0.50 = "rank-ordering backwards, retrain required"; AUC 0.50-0.52 = "near coin-flip" warning. Both appear in Discord alert embed and Monday digest. Use AUC as the primary leading indicator -- it detects model failure earlier than ROI or hit rate.
+
+**OUTS `market_prob` AUC (0.658) exceeds `model_prob` AUC (0.556).** The book's implied probability is a better predictor of OUTS outcomes than the model. OUTS wins are driven by betting market favorites, not genuine model edge. Vulnerable to line movement and book limits. Do not promote OUTS past paper gate on ROI alone -- require positive CLV t-stat > 2 first.
+
+**`/backfill-data` route added for weather/scoring/umpires (2026-05-21).** Accepts `start_date`, `end_date`, `systems` list. Weather loops date-by-date via `_pull_weather_date()`. Scoring resolves dates to game_pks then calls `scoring_backfill_gcs()`. Umpires calls `umpires_backfill_gcs()` directly. Run from Cloud Shell only -- not a Scheduler job. Example: `curl -s -X POST https://.../backfill-data -H "X-API-Key: $KEY" -d '{"start_date":"2026-04-01","systems":["weather"]}'`.
 
 **F5 ML extractor bookmaker used `_home_book` only.** Fixed 2026-05-20 to use
 `_home_book or _away_book`. 75 historic F5 bets backfilled via one-off
@@ -2051,6 +2072,60 @@ eventually moving from webhooks to a persistent bot. (Backlog.)
 
 ---
 
+## 21. Model health diagnostics session (2026-05-21)
+
+### What we learned
+
+Full AUC/Brier/calibration/CLV diagnostic run across all systems. Key findings:
+
+**Signal assessment (model_prob AUC):**
+- HR: 0.611 -- genuine signal, model adds value over market
+- OUTS: 0.556 -- marginal; market_prob AUC (0.658) beats model, wins driven by favorites not edge
+- K: 0.572 -- slight signal, needs ~200 more bets to confirm
+- F5: 0.550 -- noise range at n=72
+- NRFI: 0.500 -- coin flip, caused by 85% weather feature null rate (not model failure)
+
+**Diagnostic tooling added:**
+- `/model-health` route: AUC, Brier skill, cal error, ROI, edge-ROI gap, CLV, data freshness per system
+- `monitor_performance.py`: AUC added to rolling/season stats and alert thresholds
+- Feature null rate check script (inline, compares recent vs training means)
+
+**The correct AUC diagnostic workflow:**
+1. Check `model_prob` AUC, not `market_prob` AUC -- they differ materially for NRFI
+2. Check feature null rates before concluding model is broken
+3. AUC ~0.500 on a previously-working model = data pipeline problem, not model problem
+4. AUC < 0.500 = model rank-ordering backwards = retrain required
+
+### NRFI data gap root cause
+
+`mlb-refresh-data` scheduler job had `Last attempt: None` -- never ran. Weather master
+had only 15 dates of 2026 coverage. Feature null rates: temperature_f 84.7%, wind 84.7%,
+is_outdoor 78.8%, platoon_edge 35.5%, days_rest 30.9%. XGBoost imputes all with feature_means,
+making every game look identical -> model output clusters at base rate -> AUC 0.500.
+
+Fix sequence after any data gap:
+1. `/backfill-data` with affected systems
+2. `/build-all-features`
+3. Retrain + calibrate affected models
+4. `/model-health` to confirm AUC recovered
+
+### Session work completed
+- Added `/model-health` route to main.py
+- Added `/backfill-data` route for weather/scoring/umpires
+- Fixed `/refresh-data` response to include per-fetcher results
+- Added AUC to monitor_performance.py rolling/season stats and alerts
+- Fixed `fetch_il_pitcher_ids()` fail-open in run_nrfi.py and run_k.py
+- Identified weather master gap as root cause of NRFI AUC collapse
+
+### Pending after this session
+- Run `/backfill-data` for weather (2026-04-01 to 2026-05-19)
+- Rebuild features after backfill
+- Retrain + calibrate NRFI on complete weather data
+- Verify `/model-health` shows NRFI AUC recovering toward 0.54-0.57
+- Investigate why mlb-refresh-data scheduler job never ran
+
+---
+
 ## 20. Common manual actions (code fragments)
 
 ### Deploy
@@ -2159,6 +2234,34 @@ python3 ~/mlb-betting/setup_discord.py --token "$TOKEN"
 
 # Clean up junk roles
 python3 ~/mlb-betting/cleanup_discord.py --token "$TOKEN"
+```
+
+### Run model health check
+
+```bash
+KEY=$(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)
+curl -s "https://mlb-betting-628109313129.us-central1.run.app/model-health" \
+  -H "X-API-Key: $KEY" | python3 -m json.tool
+```
+
+### Backfill weather/scoring/umpires
+
+```bash
+KEY=$(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)
+
+# Weather only (most common gap)
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-data" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $KEY" \
+  -d '{"start_date": "2026-04-01", "end_date": "2026-05-19", "systems": ["weather"]}' \
+  | python3 -m json.tool
+
+# All three
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-data" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $KEY" \
+  -d '{"start_date": "2026-04-01", "systems": ["weather", "scoring", "umpires"]}' \
+  | python3 -m json.tool
 ```
 
 ### Commit CONTEXT.md
