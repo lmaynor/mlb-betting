@@ -290,6 +290,142 @@ def refresh_data_handler():
 
     return jsonify(result), 200
 
+@app.route("/backfill-data", methods=["POST"])
+def backfill_data_handler():
+    """
+    One-time backfill for weather, scoring, and umpires masters.
+    Body:
+      start_date: str  (required, e.g. "2026-04-01")
+      end_date:   str  (optional, defaults to yesterday)
+      systems:    list (optional, e.g. ["weather","scoring","umpires"], defaults to all)
+
+    Weather: loops date-by-date calling _pull_weather_date().
+    Scoring: resolves each date to game_pks then calls scoring_backfill_gcs().
+    Umpires: calls umpires_backfill_gcs() with the date range directly.
+
+    Runs synchronously -- use only from Cloud Shell proxy, not Scheduler.
+    Gunicorn timeout 3600s is adequate for a full season backfill.
+    """
+    from datetime import date as _date, timedelta as _td
+    body       = request.get_json(silent=True) or {}
+    start_date = body.get("start_date")
+    end_date   = body.get("end_date",
+                          (_date.today() - _td(days=1)).isoformat())
+    systems    = body.get("systems", ["weather", "scoring", "umpires"])
+
+    if not start_date:
+        return jsonify({"status": "error",
+                        "error": "start_date required"}), 400
+
+    from mlb_core.config import GCS_BUCKET
+    results = {}
+
+    # -- Weather backfill --
+    if "weather" in systems:
+        try:
+            import pandas as pd
+            from mlb_core.data.weather import _pull_weather_date
+            from google.cloud import storage as _gcs
+            WX_KEY = "Weather/weather_master.csv"
+            client = _gcs.Client()
+            bucket = client.bucket(GCS_BUCKET)
+            blob   = bucket.blob(WX_KEY)
+            existing = (pd.read_csv(blob.open("r"), low_memory=False)
+                        if blob.exists() else pd.DataFrame())
+            already  = set(existing["game_pk"].astype(str)) if not existing.empty else set()
+            frames   = [existing] if not existing.empty else []
+            cur = _date.fromisoformat(start_date)
+            end = _date.fromisoformat(end_date)
+            fetched, skipped, errors = 0, 0, 0
+            while cur <= end:
+                ds = cur.isoformat()
+                try:
+                    day_df = _pull_weather_date(ds, is_forecast=False)
+                    if day_df.empty:
+                        skipped += 1
+                    else:
+                        new_rows = day_df[~day_df["game_pk"].astype(str).isin(already)]
+                        if not new_rows.empty:
+                            frames.append(new_rows)
+                            already.update(new_rows["game_pk"].astype(str))
+                            fetched += len(new_rows)
+                except Exception as de:
+                    logger.warning(f"weather backfill: {ds} failed: {de}")
+                    errors += 1
+                cur += _td(days=1)
+            if frames:
+                combined = pd.concat(frames, ignore_index=True)
+                combined = combined.drop_duplicates(subset=["game_pk"], keep="last")
+                tmp = "/tmp/weather_backfill.csv"
+                combined.to_csv(tmp, index=False)
+                blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+                results["weather"] = {
+                    "status": "ok",
+                    "fetched": fetched,
+                    "skipped": skipped,
+                    "errors":  errors,
+                    "total_rows": len(combined),
+                }
+            else:
+                results["weather"] = {"status": "ok", "fetched": 0}
+        except Exception as e:
+            logger.error(f"backfill-data: weather failed: {e}")
+            results["weather"] = {"status": "error", "error": str(e)}
+
+    # -- Scoring backfill --
+    if "scoring" in systems:
+        try:
+            from mlb_core.data.lineups import _get_games_for_date
+            from mlb_core.data.scoring import scoring_backfill_gcs
+            import pandas as pd
+            cur = _date.fromisoformat(start_date)
+            end = _date.fromisoformat(end_date)
+            game_pks = []
+            while cur <= end:
+                try:
+                    games = _get_games_for_date(cur.isoformat())
+                    game_pks.extend(g["game_pk"] for g in games)
+                except Exception:
+                    pass
+                cur += _td(days=1)
+            game_pks = list(set(game_pks))
+            logger.info(f"backfill-data: scoring {len(game_pks)} game_pks "
+                        f"({start_date} -> {end_date})")
+            scoring_backfill_gcs(GCS_BUCKET, "Scoring/scoring_master.csv",
+                                 game_pks)
+            results["scoring"] = {
+                "status": "ok",
+                "game_pks": len(game_pks),
+            }
+        except Exception as e:
+            logger.error(f"backfill-data: scoring failed: {e}")
+            results["scoring"] = {"status": "error", "error": str(e)}
+
+    # -- Umpires backfill --
+    if "umpires" in systems:
+        try:
+            from mlb_core.data.umpires import umpires_backfill_gcs
+            df = umpires_backfill_gcs(
+                GCS_BUCKET, "Umpires/umpscorecards_master.csv",
+                start_date, end_date,
+            )
+            results["umpires"] = {
+                "status": "ok",
+                "rows": len(df),
+            }
+        except Exception as e:
+            logger.error(f"backfill-data: umpires failed: {e}")
+            results["umpires"] = {"status": "error", "error": str(e)}
+
+    all_ok = all(v.get("status") == "ok" for v in results.values())
+    return jsonify({
+        "status":     "ok" if all_ok else "partial",
+        "start_date": start_date,
+        "end_date":   end_date,
+        "results":    results,
+    }), 200
+
+
 @app.route("/backfill-savant", methods=["POST"])
 def backfill_savant_handler():
     """One-time historical backfill for Savant leaderboard datasets.
