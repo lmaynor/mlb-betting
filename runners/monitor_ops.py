@@ -223,7 +223,7 @@ def _check_model_artifacts() -> list[str]:
 # ── Discord ───────────────────────────────────────────────────────────────────
 
 def _post_ops_alert(failures: list[str], run_date: str) -> None:
-    from mlb_core.notify.discord import _get_webhook, _post
+    from mlb_core.notify.discord import _get_ops_webhook, _post
 
     webhook_url = _get_webhook("SUMMARY") or _get_webhook("HR")
     if not webhook_url:

@@ -206,10 +206,10 @@ def _check_alerts(system: str, stats: dict) -> list[str]:
 
 
 def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> None:
-    """Post a degradation alert to Discord."""
-    from mlb_core.notify.discord import _get_webhook, _post
+    """Post a degradation alert to Discord (#ops-alerts)."""
+    from mlb_core.notify.discord import _get_ops_webhook, _post
 
-    webhook_url = _get_webhook("SUMMARY") or _get_webhook("HR")
+    webhook_url = _get_ops_webhook()
     if not webhook_url:
         return
 
@@ -233,10 +233,11 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
 
 def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
                         run_date: str) -> None:
-    """Post full season summary every Monday."""
-    from mlb_core.notify.discord import _get_webhook, _post
+    """Post full season summary every Monday (#performance)."""
+    import os
+    from mlb_core.notify.discord import _get_ops_webhook, _post
 
-    webhook_url = _get_webhook("SUMMARY") or _get_webhook("HR")
+    webhook_url = os.getenv("DISCORD_WEBHOOK_PERFORMANCE") or _get_ops_webhook()
     if not webhook_url:
         return
 
