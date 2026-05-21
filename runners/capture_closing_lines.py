@@ -239,8 +239,7 @@ def run(run_date: str = None) -> dict:
 
 
 def main():
-    import json
-import os, sys
+    import json, os, sys
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s — %(message)s")
     result = run()
