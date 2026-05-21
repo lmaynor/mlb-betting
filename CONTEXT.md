@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-21 15:51 CST_
+_Last updated: 2026-05-21 16:15 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -20,7 +20,7 @@ Five MLB betting systems running daily in GCP:
 | **NRFI Pro v17** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
 | **K Pro v1** | E[pitcher strikeouts] (NB; k_per_9_L5 * avg_ip scaling) | K props O/U (best onshore book) | Live (paper) |
-| **OUTS** | E[pitcher outs recorded] (proxy) | Pitcher outs O/U (best onshore book) | Live (paper) |
+| **OUTS** | E[pitcher outs recorded] (trained NegBin; retrain_outs_v1.py) | Pitcher outs O/U (best onshore book) | Live (paper) |
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
 | **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
 | **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
@@ -130,11 +130,14 @@ mlb-betting/
 │   ├── calibrate_nrfi_v17.py     Fit isotonic calibrator for NRFI v17.
 │   ├── calibrate_f5_v5.py        Fit isotonic calibrator for F5 v5.
 │   ├── calibrate_k_v1.py         Fit lambda calibrator for K v1.
-│   └── calibrate_hr_v6.py        Fit isotonic calibrator for HR v6.
+│   ├── calibrate_hr_v6.py        Fit isotonic calibrator for HR v6.
+│   ├── retrain_outs_v1.py        Full OUTS retrain (NegBin count model). (E04)
+│   └── tune_hyperparams.py       Optuna hyperparameter search for all systems. (E09)
 │
 ├── HR_Pro/                       Per-system config dirs
 ├── NRFI_Pro_System/
 ├── F5_Pro_System/
+├── OUTS_Pro_System/              OUTS Pro config (shares K feature CSV)
 ├── K_Pro_System/
 │
 ├── deploy/                       Operational scripts and runbooks
@@ -198,6 +201,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── model_meta_f5_v5.json
 │       ├── isotonic_calibrator_f5_v5.pkl
 │       └── archive/
+├── OUTS_Pro_System/              OUTS Pro config (shares K feature CSV)
 ├── K_Pro_System/
 │   ├── data/                           pitcher_k_features.csv, lineup_k_features.csv,
 │   │                                   model_features.csv
@@ -212,7 +216,12 @@ gs://concrete-crow-445205-m4-mlb-data/
 └── probes/                             Sandbox.
 ```
 
-OUTS shares K's GCS artifacts -- no separate model or feature CSV.
+OUTS has its own GCS artifacts since E04 (2026-05-21):
+  OUTS_Pro_System/models/xgb_outs_v1.json
+  OUTS_Pro_System/models/model_meta_outs_v1.json
+  OUTS_Pro_System/models/isotonic_calibrator_outs_v1.pkl
+OUTS still shares K's feature CSV (K_Pro_System/data/model_features.csv).
+starter_outs column added to K feature CSV by build_k_features.py.
 
 ---
 
@@ -671,6 +680,7 @@ secretmanager.secretAccessor.
 - `mlb-calibrate-f5` (fits isotonic calibrator for F5 v5; run after any F5 retrain)
 - `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
 - `mlb-calibrate-hr` (fits isotonic calibrator for HR v6; run after any HR retrain)
+- `mlb-retrain-outs-v1` (full OUTS retrain; E04 2026-05-21)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
 
@@ -967,6 +977,24 @@ threshold as K and NRFI runners (T19). Takes effect after next F5 feature build 
 **OUTS `market_prob` AUC (0.658) exceeds `model_prob` AUC (0.556).** The book's implied probability is a better predictor of OUTS outcomes than the model. OUTS wins are driven by betting market favorites, not genuine model edge. Vulnerable to line movement and book limits. Do not promote OUTS past paper gate on ROI alone -- require positive CLV t-stat > 2 first.
 
 **`/backfill-data` route added for weather/scoring/umpires (2026-05-21).** Accepts `start_date`, `end_date`, `systems` list. Weather loops date-by-date via `_pull_weather_date()`. Scoring resolves dates to game_pks then calls `scoring_backfill_gcs()`. Umpires calls `umpires_backfill_gcs()` directly. Run from Cloud Shell only -- not a Scheduler job. Example: `curl -s -X POST https://.../backfill-data -H "X-API-Key: $KEY" -d '{"start_date":"2026-04-01","systems":["weather"]}'`.
+
+**E02 (2026-05-21): F5 walk-forward CV loop leaked test into early stopping.** The CV loop in `retrain_f5_v5.py` was using `dtest` as the eval set for early stopping, inflating reported CV AUC by ~0.003-0.005. Fixed: each fold now carves a val slice from the train window (C03 pattern). Same fix applied earlier to NRFI and K.
+
+**E03 (2026-05-21): `capture_closing_lines.py` had two bugs blocking CLV.** (1) `bt_upper` NameError -- variable was named `bet_type` not `bt_upper`. (2) `BetTracker("unused")` used a placeholder DB path instead of the real `MLB_DB_URL`. Both caused silent failures in the CLV capture loop. Fixed: variable renamed, real DB URL wired in.
+
+**E04 (2026-05-21): OUTS trained model replaces Normal proxy.** `_simulate_outs()` was `Normal(avg_ip, 1.5)` -- a proxy with no training. Replaced by `retrain_outs_v1.py` which trains a `count:poisson` XGBoost model on `starter_outs` target (added to K feature CSV as `avg_ip * 3`). Model artifacts live in `OUTS_Pro_System/models/`. Runner falls back to Normal proxy if model not found in GCS. Cloud Run Job: `mlb-retrain-outs-v1`. Run after rebuilding K features.
+
+**E06 (2026-05-21): deploy_service.sh was deploying with 0% traffic.** New revisions were created but not receiving traffic, requiring manual `gcloud run services update-traffic --to-latest`. Fixed: added `--traffic=100` to the `gcloud run services update` call in `deploy/deploy_service.sh`. Also added missing Discord webhook secrets (`DISCORD_WEBHOOK_SUMMARY`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_PERFORMANCE`) to the `--set-secrets` flag.
+
+**E09 (2026-05-21): Optuna hyperparameter tuner added.** `training/tune_hyperparams.py` runs Optuna nested CV search (50 trials, 3-fold time-series inner CV) for NRFI/K/F5/HR. Writes tuned params to GCS as `{system}_tuned_params.json`. Retrain scripts pick these up automatically via `load_tuned_params()` if present. Run after E02-E07 are complete -- tuning on broken features is noise. Requires `pip install optuna --break-system-packages`.
+
+**E10 (2026-05-21): Line movement feature added to schema and runners.** `bets` table now has `morning_odds INTEGER` and `line_move_pct REAL` columns (auto-migrated). All four runners load the morning snapshot (15:55 UTC) via `mlb_core.odds.line_movement.load_morning_odds()` and store `morning_odds` per bet. `capture_closing_lines.py` computes `line_move_pct = (closing_implied - morning_implied) / morning_implied * 100` at capture time. Positive = line moved against our bet (book shortened odds). Negative = potential value signal (line lengthened). After 200+ bets with morning_odds populated, add `morning_line_move_pct` to feature lists and retrain.
+
+**`morning_odds` will be NULL for bets placed before E10 deploy (2026-05-21).** The column exists but historical bets have no morning snapshot to reference. `line_move_pct` will also be NULL for these. Only bets placed after the deploy will have both fields populated. CLV and line movement analysis should filter to `morning_odds IS NOT NULL`.
+
+**F5 CV loop C03 fix (2026-05-21).** `retrain_f5_v5.py` walk-forward CV was leaking test into early stopping (using `dtest` as eval set). Fixed to match NRFI/K pattern: carve val slice from train, never touch test during training. Reported CV AUC was inflated ~0.003-0.005 before this fix.
+
+**`starter_outs` column added to K feature CSV (2026-05-21).** `build_k_features.py` now computes `starter_outs = round(starter_ip * 3)` and includes it in `model_features.csv`. This is the training target for OUTS Pro v1. Must rebuild K features before running `mlb-retrain-outs-v1`.
 
 **F5 ML extractor bookmaker used `_home_book` only.** Fixed 2026-05-20 to use
 `_home_book or _away_book`. 75 historic F5 bets backfilled via one-off
@@ -2262,6 +2290,41 @@ curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-d
   -H "X-API-Key: $KEY" \
   -d '{"start_date": "2026-04-01", "systems": ["weather", "scoring", "umpires"]}' \
   | python3 -m json.tool
+```
+
+### Retrain OUTS model
+
+```bash
+# Must rebuild K features first (adds starter_outs column)
+KEY=$(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/build-features" \
+  -H "Content-Type: application/json" -H "X-API-Key: $KEY" \
+  -d '{"system":"K"}' | python3 -m json.tool
+
+# Create job (one-time)
+gcloud run jobs create mlb-retrain-outs-v1 \
+  --image gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
+  --region us-central1 --command python \
+  --args "-m,training.retrain_outs_v1" \
+  --memory 4Gi --cpu 2 \
+  --set-secrets MLB_GCS_BUCKET=mlb-gcs-bucket:latest \
+  --add-cloudsql-instances concrete-crow-445205-m4:us-central1:mlb-betting-db \
+  --project concrete-crow-445205-m4
+
+# Run retrain
+gcloud run jobs execute mlb-retrain-outs-v1 --region=us-central1 --wait
+```
+
+### Run Optuna hyperparameter tuning
+
+```bash
+pip install optuna --break-system-packages
+cd ~/mlb-betting
+# Run after E02-E07 complete and models are clean
+python -m training.tune_hyperparams --system NRFI --n-trials 50
+python -m training.tune_hyperparams --system K    --n-trials 50
+python -m training.tune_hyperparams --system F5   --n-trials 50
+python -m training.tune_hyperparams --system HR   --n-trials 50
 ```
 
 ### Commit CONTEXT.md
