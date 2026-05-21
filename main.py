@@ -975,6 +975,7 @@ def model_health_handler():
 
         # Data master freshness
         from mlb_core.storage import exists
+        from mlb_core.config import GCS_BUCKET as _gcs_bucket
         import datetime as _dt
         now_utc = _dt.datetime.utcnow()
         freshness = {}
@@ -987,7 +988,7 @@ def model_health_handler():
             try:
                 from google.cloud import storage as gcs
                 client = gcs.Client()
-                bucket = client.bucket(GCS_BUCKET)
+                bucket = client.bucket(_gcs_bucket)
                 blob   = bucket.get_blob(key)
                 if blob and blob.updated:
                     age_h = round((now_utc - blob.updated.replace(tzinfo=None)).total_seconds() / 3600, 1)
