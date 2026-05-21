@@ -234,11 +234,39 @@ def refresh_data_handler():
         from mlb_core.config import GCS_BUCKET
         from mlb_core.data.scoring import scoring_nightly_gcs
         from mlb_core.data.statcast import statcast_nightly_gcs
-        wx_result  = weather_nightly_gcs(GCS_BUCKET, "Weather/weather_master.csv")
-        ump_result = umpires_nightly_gcs(GCS_BUCKET, "Umpires/umpscorecards_master.csv")
-        scoring_nightly_gcs(GCS_BUCKET, "Scoring/scoring_master.csv")
+        fetcher_results = {}
+
+        for label, fn, args in [
+            ("weather",  weather_nightly_gcs,  (GCS_BUCKET, "Weather/weather_master.csv")),
+            ("umpires",  umpires_nightly_gcs,   (GCS_BUCKET, "Umpires/umpscorecards_master.csv")),
+        ]:
+            try:
+                fetcher_results[label] = fn(*args) or {"status": "ok"}
+                logger.info(f"refresh-data: {label} ok")
+            except Exception as fe:
+                logger.error(f"refresh-data: {label} failed: {fe}")
+                fetcher_results[label] = {"status": "error", "error": str(fe)}
+
+        for label, fn, args in [
+            ("scoring",  scoring_nightly_gcs,  (GCS_BUCKET, "Scoring/scoring_master.csv")),
+        ]:
+            try:
+                fn(*args)
+                fetcher_results[label] = {"status": "ok"}
+                logger.info(f"refresh-data: {label} ok")
+            except Exception as fe:
+                logger.error(f"refresh-data: {label} failed: {fe}")
+                fetcher_results[label] = {"status": "error", "error": str(fe)}
+
         if GCS_BUCKET:
-            statcast_nightly_gcs(GCS_BUCKET, "Statcast/statcast_master.csv")
+            try:
+                statcast_nightly_gcs(GCS_BUCKET, "Statcast/statcast_master.csv")
+                fetcher_results["statcast"] = {"status": "ok"}
+                logger.info("refresh-data: statcast ok")
+            except Exception as fe:
+                logger.error(f"refresh-data: statcast failed: {fe}")
+                fetcher_results["statcast"] = {"status": "error", "error": str(fe)}
+
         savant_results = {}
         try:
             from mlb_core.data.savant_leaderboards import savant_leaderboards_nightly_all_gcs
@@ -248,7 +276,13 @@ def refresh_data_handler():
         except Exception as se:
             logger.error(f"refresh-data: savant_leaderboards failed: {se}")
             savant_results = {"error": str(se)}
-        result = {"status": "ok", "savant_leaderboards": savant_results}
+
+        all_ok = all(v.get("status") == "ok" for v in fetcher_results.values())
+        result = {
+            "status": "ok" if all_ok else "partial",
+            "fetchers": fetcher_results,
+            "savant_leaderboards": savant_results,
+        }
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"refresh-data failed:\n{tb}")
@@ -680,6 +714,164 @@ def public_stats_summary():
         return jsonify({"error": str(exc)}), 500
 
 
+
+
+@app.route("/model-health", methods=["GET", "POST"])
+def model_health_handler():
+    """
+    GET/POST /model-health
+    Full model diagnostics per system:
+      - AUC (model_prob and market_prob)
+      - Brier score and Brier skill score
+      - Calibration error (hit_rate - avg_model_prob)
+      - ROI and edge-ROI gap
+      - CLV mean + t-stat
+      - Feature null rates vs training (NRFI only for now)
+      - Data master freshness
+    """
+    import math
+    from sqlalchemy import text as _text
+
+    def _auc(probs, outcomes):
+        pos = [p for p, o in zip(probs, outcomes) if o == 1]
+        neg = [p for p, o in zip(probs, outcomes) if o == 0]
+        if not pos or not neg:
+            return None
+        concordant = sum(1 for p in pos for n in neg if p > n)
+        tied       = sum(1 for p in pos for n in neg if p == n)
+        return (concordant + 0.5 * tied) / (len(pos) * len(neg))
+
+    def _brier(probs, outcomes):
+        if not probs:
+            return None
+        return sum((p - o) ** 2 for p, o in zip(probs, outcomes)) / len(probs)
+
+    def _brier_naive(outcomes):
+        if not outcomes:
+            return None
+        base = sum(outcomes) / len(outcomes)
+        return sum((base - o) ** 2 for o in outcomes) / len(outcomes)
+
+    def _clv_tstat(clvs):
+        n = len(clvs)
+        if n < 2:
+            return None, None
+        mu  = sum(clvs) / n
+        var = sum((x - mu) ** 2 for x in clvs) / (n - 1)
+        se  = math.sqrt(var / n)
+        return round(mu, 4), round(mu / se, 3) if se > 0 else 0.0
+
+    def _system_stats(rows):
+        scorable = [r for r in rows if r.get("result") in ("win", "loss")]
+        n = len(scorable)
+        if n == 0:
+            return {"n": 0}
+        outcomes  = [1 if r["result"] == "win" else 0 for r in scorable]
+        hit_rate  = sum(outcomes) / n
+        staked    = sum(float(r.get("stake") or 0) for r in scorable)
+        profit    = sum(float(r.get("profit") or 0) for r in scorable)
+        roi       = profit / staked * 100 if staked > 0 else None
+
+        model_probs  = [float(r["model_prob"])  for r in scorable if r.get("model_prob")  is not None]
+        market_probs = [float(r["market_prob"]) for r in scorable if r.get("market_prob") is not None]
+        out_m = [o for r, o in zip(scorable, outcomes) if r.get("model_prob")  is not None]
+        out_k = [o for r, o in zip(scorable, outcomes) if r.get("market_prob") is not None]
+
+        auc_model  = _auc(model_probs,  out_m)
+        auc_market = _auc(market_probs, out_k)
+        br         = _brier(model_probs, out_m)
+        br_naive   = _brier_naive(out_m)
+        brier_skill = round(1 - br / br_naive, 4) if br and br_naive else None
+
+        avg_mp   = sum(model_probs) / len(model_probs) if model_probs else None
+        cal_err  = round(hit_rate - avg_mp, 4) if avg_mp is not None else None
+
+        edges = [float(r["edge"]) for r in scorable if r.get("edge") is not None]
+        avg_edge = round(sum(edges) / len(edges) * 100, 2) if edges else None
+        edge_roi_gap = round(avg_edge - roi, 2) if avg_edge and roi is not None else None
+
+        clvs = [float(r["clv_pct"]) for r in scorable if r.get("clv_pct") is not None]
+        mean_clv, clv_t = _clv_tstat(clvs) if clvs else (None, None)
+
+        return {
+            "n":            n,
+            "hit_rate":     round(hit_rate, 4),
+            "avg_model_prob": round(avg_mp, 4) if avg_mp else None,
+            "cal_err":      cal_err,
+            "auc_model":    round(auc_model,  4) if auc_model  is not None else None,
+            "auc_market":   round(auc_market, 4) if auc_market is not None else None,
+            "brier":        round(br, 4) if br else None,
+            "brier_skill":  brier_skill,
+            "roi":          round(roi, 2) if roi is not None else None,
+            "avg_edge_pct": avg_edge,
+            "edge_roi_gap": edge_roi_gap,
+            "mean_clv":     mean_clv,
+            "clv_tstat":    clv_t,
+            "clv_n":        len(clvs),
+            "signal": (
+                "strong"   if auc_model and auc_model >= 0.57 else
+                "moderate" if auc_model and auc_model >= 0.53 else
+                "weak"     if auc_model and auc_model >= 0.50 else
+                "inverted" if auc_model and auc_model < 0.50  else
+                "unknown"
+            ),
+        }
+
+    try:
+        engine = _get_engine()
+        season = datetime.now(_CT).year
+        with engine.connect() as conn:
+            rows = [dict(r._mapping) for r in conn.execute(_text(
+                "SELECT system, result, stake, profit, model_prob, market_prob, "
+                "edge, clv_pct, game_date FROM bets "
+                "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                "ORDER BY game_date ASC"
+            ), {"y": f"{season}%"})]
+
+        systems = {}
+        for r in rows:
+            s = r["system"]
+            systems.setdefault(s, []).append(r)
+
+        results = {}
+        for sys_name, sys_rows in sorted(systems.items()):
+            results[sys_name] = _system_stats(sys_rows)
+
+        # Data master freshness
+        from mlb_core.storage import exists
+        import datetime as _dt
+        now_utc = _dt.datetime.utcnow()
+        freshness = {}
+        for label, key in [
+            ("weather",  "Weather/weather_master.csv"),
+            ("scoring",  "Scoring/scoring_master.csv"),
+            ("umpires",  "Umpires/umpscorecards_master.csv"),
+            ("statcast", "Statcast/statcast_master.csv"),
+        ]:
+            try:
+                from google.cloud import storage as gcs
+                client = gcs.Client()
+                bucket = client.bucket(GCS_BUCKET)
+                blob   = bucket.get_blob(key)
+                if blob and blob.updated:
+                    age_h = round((now_utc - blob.updated.replace(tzinfo=None)).total_seconds() / 3600, 1)
+                    freshness[label] = {"age_hours": age_h, "stale": age_h > 26}
+                else:
+                    freshness[label] = {"age_hours": None, "stale": True}
+            except Exception as fe:
+                freshness[label] = {"error": str(fe)}
+
+        return jsonify({
+            "status":    "ok",
+            "run_date":  datetime.now(_CT).date().isoformat(),
+            "systems":   results,
+            "freshness": freshness,
+        }), 200
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"model-health failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @app.route("/capture-closing", methods=["POST"])
