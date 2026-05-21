@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-21 15:50 CST_
+_Last updated: 2026-05-21 15:51 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1571,7 +1571,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-21 15:50 CST_
+_Last updated: 2026-05-21 15:51 CST_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
