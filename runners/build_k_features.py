@@ -113,6 +113,8 @@ def _identify_starters(sc: pd.DataFrame) -> pd.DataFrame:
     else:
         starters["starter_ip"] = 5.0
     starters["starter_ip"] = starters["starter_ip"].fillna(5.0)
+    # E04: starter_outs = actual outs recorded -- training target for OUTS Pro v1.
+    starters["starter_outs"] = (starters["starter_ip"] * 3).round().astype("Int64")
 
     if "p_throws" in sc.columns:
         pt = sc.groupby("pitcher")["p_throws"].first().reset_index()

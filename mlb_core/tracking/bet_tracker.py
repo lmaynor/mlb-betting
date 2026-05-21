@@ -76,6 +76,9 @@ ALTER TABLE bets ADD COLUMN book TEXT
 """
 
 # Migration: add CLV columns (T08, 2026-05-19).
+# Migration: add line movement columns (E10, 2026-05-21).
+_MIGRATE_MORNING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN morning_odds INTEGER"
+_MIGRATE_LINE_MOVE_SQL    = "ALTER TABLE bets ADD COLUMN line_move_pct REAL"
 _MIGRATE_CLOSING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN closing_odds REAL"
 _MIGRATE_CLOSING_PROB_SQL = "ALTER TABLE bets ADD COLUMN closing_prob REAL"
 _MIGRATE_CLV_PCT_SQL      = "ALTER TABLE bets ADD COLUMN clv_pct REAL"
@@ -183,7 +186,8 @@ class BetTracker:
         except Exception:
             pass
         # Migrate CLV columns (T08, 2026-05-19).
-        for clv_sql in (_MIGRATE_CLOSING_ODDS_SQL, _MIGRATE_CLOSING_PROB_SQL, _MIGRATE_CLV_PCT_SQL):
+        for clv_sql in (_MIGRATE_CLOSING_ODDS_SQL, _MIGRATE_CLOSING_PROB_SQL, _MIGRATE_CLV_PCT_SQL,
+                       _MIGRATE_MORNING_ODDS_SQL, _MIGRATE_LINE_MOVE_SQL):
             try:
                 with self.engine.begin() as conn:
                     conn.execute(text(clv_sql))

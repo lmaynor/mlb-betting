@@ -228,6 +228,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     logger.info("F5: sentinel ok -- %s", _sreason)
     from mlb_core.data.lineups import fetch_il_pitcher_ids
     _il_ids = fetch_il_pitcher_ids()
+    # E10: load morning snapshot for line movement signal
+    from mlb_core.odds.line_movement import load_morning_odds
+    _morning_odds = load_morning_odds(run_date)
+
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("F5: SGO snapshot empty or missing — skipping")

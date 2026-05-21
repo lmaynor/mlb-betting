@@ -1041,6 +1041,26 @@ def monitor_drift_handler():
     return jsonify(result), 200
 
 
+@app.route("/retrain-outs", methods=["POST"])
+def retrain_outs_handler():
+    """Trigger OUTS Pro v1 retrain Cloud Run Job."""
+    import google.auth
+    import google.auth.transport.requests
+    import requests as _req_lib
+
+    PROJECT = "concrete-crow-445205-m4"
+    REGION  = "us-central1"
+    JOB     = "mlb-retrain-outs-v1"
+    url     = f"https://{REGION}-run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs/{JOB}:run"
+    try:
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(google.auth.transport.requests.Request())
+        r = _req_lib.post(url, headers={"Authorization": f"Bearer {creds.token}"}, json={}, timeout=30)
+        return jsonify({"status": "triggered", "job": JOB, "http": r.status_code}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/retrain-weekly", methods=["POST"])
 def retrain_weekly():
     """
@@ -1063,6 +1083,7 @@ def retrain_weekly():
         "mlb-retrain-f5-v5",      # was mlb-retrain-f5-meta (T11: deprecated shim)
         "mlb-retrain-k-v1",
         "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
+        "mlb-retrain-outs-v1",    # E04: OUTS trained model
     ]
     CALIBRATE_JOBS = [
         "mlb-calibrate-nrfi",

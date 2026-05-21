@@ -103,6 +103,47 @@ def _load_calibrator(cfg: dict):
             logger.warning(f"K calibrator load failed: {e}")
     return None
 
+def _load_outs_model(cfg: dict):
+    """Load OUTS Pro v1 booster + meta + calibrator.
+    Returns (booster, features, feature_means, nb_alpha, calibrator).
+    Falls back gracefully to Normal proxy if model not found.
+    """
+    import json
+    import tempfile
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import download_model, read_bytes, exists
+
+    gcs_booster = cfg.get("gcs_outs_model",      "OUTS_Pro_System/models/xgb_outs_v1.json")
+    gcs_meta    = cfg.get("gcs_outs_meta",        "OUTS_Pro_System/models/model_meta_outs_v1.json")
+    gcs_cal     = cfg.get("gcs_outs_calibrator",  "OUTS_Pro_System/models/isotonic_calibrator_outs_v1.pkl")
+
+    if not GCS_BUCKET or not exists(gcs_booster):
+        logger.info("OUTS: trained model not found -- using Normal proxy fallback")
+        return None, None, {}, 0.10, None
+    try:
+        booster = xgb.Booster()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local = download_model(gcs_booster, Path(tmpdir) / "xgb_outs.json")
+            booster.load_model(str(local))
+        meta        = json.loads(read_bytes(gcs_meta))
+        features    = meta.get("features", [])
+        feat_means  = meta.get("feature_means", {})
+        nb_alpha    = float(meta.get("nb_alpha", 0.10))
+        booster.best_ntree_limit = meta.get("best_iteration", 0)
+        logger.info(f"OUTS model loaded | features={len(features)} MAE={meta.get('mae_oos','?')} nb_alpha={nb_alpha:.4f}")
+        cal = None
+        if exists(gcs_cal):
+            try:
+                cal = pickle.loads(read_bytes(gcs_cal))
+                logger.info(f"OUTS calibrator loaded | X_min={cal.X_min_:.2f} X_max={cal.X_max_:.2f}")
+            except Exception as ce:
+                logger.warning(f"OUTS calibrator load failed: {ce}")
+        return booster, features, feat_means, nb_alpha, cal
+    except Exception as e:
+        logger.warning(f"OUTS model load failed: {e} -- using Normal proxy fallback")
+        return None, None, {}, 0.10, None
+
+
 def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
@@ -276,6 +317,21 @@ def _simulate_outs(avg_ip: float, n_sims: int = _OUTS_MC_SIMS,
     }
 
 
+def _simulate_outs_model(lambda_outs: float, nb_alpha: float,
+                        n_sims: int = _OUTS_MC_SIMS, seed: int = 43) -> dict:
+    """NegBin Monte Carlo from trained OUTS model lambda. Target range 0-27."""
+    lambda_outs = max(lambda_outs, 0.5)
+    rng = np.random.default_rng(seed)
+    if nb_alpha and nb_alpha > 0:
+        nb_n = max(1.0 / nb_alpha, 0.1)
+        nb_p = float(np.clip(1.0 / (1.0 + nb_alpha * lambda_outs), 1e-6, 1 - 1e-6))
+        samples = rng.negative_binomial(nb_n, nb_p, size=n_sims)
+    else:
+        samples = rng.poisson(lambda_outs, size=n_sims)
+    samples = np.clip(samples, 0, 27)
+    return {"mean_outs": float(np.mean(samples)), "_samples": samples}
+
+
 def _outs_ou_probs(dist: dict, line: float) -> tuple[float, float]:
     """P(outs > line) and P(outs < line). Exact hits are a push."""
     samples = dist["_samples"]
@@ -435,7 +491,31 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             over_odds  = outs_info.get("over_odds")
             under_odds = outs_info.get("under_odds")
             if line is not None and over_odds is not None and under_odds is not None:
-                dist = _simulate_outs(avg_ip_f)
+                # E04: use trained OUTS model if available, else Normal proxy
+                if _outs_booster is not None and _outs_features:
+                    _X_outs = pd.DataFrame([row.to_dict()]).reindex(columns=_outs_features)
+                    _X_outs = _X_outs.apply(pd.to_numeric, errors="coerce")
+                    for _fc in _outs_features:
+                        _fmv = _outs_feat_means.get(_fc)
+                        if _fmv is not None:
+                            _X_outs[_fc] = _X_outs[_fc].fillna(float(_fmv))
+                    _dm_outs = xgb.DMatrix(_X_outs, feature_names=_outs_features)
+                    _ntree_outs = getattr(_outs_booster, "best_ntree_limit", 0)
+                    _lam_outs = float(_outs_booster.predict(
+                        _dm_outs,
+                        iteration_range=(0, _ntree_outs) if _ntree_outs else None
+                    )[0])
+                    if _outs_cal is not None:
+                        try:
+                            _lam_outs = float(np.clip(
+                                _outs_cal.predict([_lam_outs])[0],
+                                _outs_cal.X_min_, _outs_cal.X_max_,
+                            ))
+                        except Exception:
+                            pass
+                    dist = _simulate_outs_model(_lam_outs, _outs_nb_alpha)
+                else:
+                    dist = _simulate_outs(avg_ip_f)
                 p_over, p_under = _outs_ou_probs(dist, float(line))
                 p_over  = min(max(p_over,  0.001), 0.999)
                 p_under = min(max(p_under, 0.001), 0.999)

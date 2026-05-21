@@ -64,6 +64,10 @@ def _fetch_hr_odds(run_date: str) -> dict:
         post_error("HR", msg)
         return pd.DataFrame()
     logger.info("HR: sentinel ok -- %s", _sreason)
+    # E10: load morning snapshot for line movement signal
+    from mlb_core.odds.line_movement import load_morning_odds
+    _morning_odds = load_morning_odds(run_date)
+
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("HR odds: SGO snapshot empty or missing")

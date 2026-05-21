@@ -135,7 +135,7 @@ def _get_closing_odds_from_snapshot(
                     odds_val = prop_info.get("odds")
                     break
 
-        elif bt_upper.startswith(("K_", "OUTS_")):
+        elif bet_type.startswith(("K_", "OUTS_")):
             parts = bt_upper.split("_")
             market = parts[0]  # "K" or "OUTS"
             side = parts[1]    # "OVER" or "UNDER"
@@ -195,6 +195,25 @@ def run(run_date: str = None) -> dict:
         try:
             c_odds, comp_odds = closing_map[bid]
             tracker.write_closing_line(bid, c_odds, complement_odds=comp_odds)
+            # E10: compute line_move_pct from morning_odds
+            try:
+                from mlb_core.odds.line_movement import compute_line_move_pct
+                from sqlalchemy import text as _lmt
+                with tracker.engine.connect() as _lmc:
+                    _morn = _lmc.execute(
+                        _lmt("SELECT morning_odds FROM bets WHERE id=:id"),
+                        {"id": bid}
+                    ).fetchone()
+                if _morn and _morn[0] is not None:
+                    _lm = compute_line_move_pct(_morn[0], c_odds)
+                    if _lm is not None:
+                        with tracker.engine.begin() as _lmw:
+                            _lmw.execute(
+                                _lmt("UPDATE bets SET line_move_pct=:lm WHERE id=:id"),
+                                {"lm": _lm, "id": bid}
+                            )
+            except Exception as _lme:
+                logger.warning(f"line_move_pct failed for bet_id={bid}: {_lme}")
             captured += 1
         except Exception as e:
             logger.warning(f"capture_closing: failed to write closing line for bet_id={bid}: {e}")

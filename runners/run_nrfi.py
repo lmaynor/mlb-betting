@@ -295,6 +295,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         post_error(msg, system="NRFI")
         return pd.DataFrame()
     logger.info("NRFI: sentinel ok -- %s", _sreason)
+    # E10: load morning snapshot for line movement signal
+    from mlb_core.odds.line_movement import load_morning_odds
+    _morning_odds = load_morning_odds(run_date)
+
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
         logger.warning("NRFI: SGO snapshot empty or missing — skipping")
@@ -369,6 +373,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "side":         side,
             "model_prob":   round(model_prob, 4),
             "market_prob":  round(fair, 4),
+            "morning_odds": _morning_odds.get(
+                f"points-all-1i-ou-{'over' if side == 'NRFI' else 'under'}"
+            ),
             "edge":         round(edge, 4),
             "kelly_pct":    round(k_pct, 4),
             "odds":         odds,
