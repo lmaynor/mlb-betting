@@ -978,6 +978,21 @@ threshold as K and NRFI runners (T19). Takes effect after next F5 feature build 
 
 **`/backfill-data` route added for weather/scoring/umpires (2026-05-21).** Accepts `start_date`, `end_date`, `systems` list. Weather loops date-by-date via `_pull_weather_date()`. Scoring resolves dates to game_pks then calls `scoring_backfill_gcs()`. Umpires calls `umpires_backfill_gcs()` directly. Run from Cloud Shell only -- not a Scheduler job. Example: `curl -s -X POST https://.../backfill-data -H "X-API-Key: $KEY" -d '{"start_date":"2026-04-01","systems":["weather"]}'`.
 
+**Cloud Run Job creation requires `--set-cloudsql-instances` not `--add-cloudsql-instances`.** The service also requires `--service-account=mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com` -- without it the job uses the default compute SA which lacks Secret Manager access. Full working command:
+```bash
+gcloud run jobs create JOB_NAME \
+  --image=gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
+  --region=us-central1 \
+  --command=python \
+  --args="-m,training.MODULE_NAME" \
+  --memory=4Gi --cpu=2 \
+  --set-secrets=MLB_GCS_BUCKET=mlb-gcs-bucket:latest,MLB_DB_URL=mlb-db-url:latest \
+  --set-cloudsql-instances=concrete-crow-445205-m4:us-central1:mlb-betting-db \
+  --service-account=mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com \
+  --project=concrete-crow-445205-m4
+```
+If job already exists in error state: `gcloud run jobs update JOB_NAME --region=us-central1 --service-account=mlb-betting-sa@...` then execute.
+
 **E02 (2026-05-21): F5 walk-forward CV loop leaked test into early stopping.** The CV loop in `retrain_f5_v5.py` was using `dtest` as the eval set for early stopping, inflating reported CV AUC by ~0.003-0.005. Fixed: each fold now carves a val slice from the train window (C03 pattern). Same fix applied earlier to NRFI and K.
 
 **E03 (2026-05-21): `capture_closing_lines.py` had two bugs blocking CLV.** (1) `bt_upper` NameError -- variable was named `bet_type` not `bt_upper`. (2) `BetTracker("unused")` used a placeholder DB path instead of the real `MLB_DB_URL`. Both caused silent failures in the CLV capture loop. Fixed: variable renamed, real DB URL wired in.
@@ -2319,6 +2334,21 @@ gcloud run services update mlb-betting   --region=us-central1   --project=concre
 
 ```bash
 gcloud scheduler jobs create http JOB_NAME   --location=us-central1   --schedule="CRON"   --uri="https://mlb-betting-628109313129.us-central1.run.app/ENDPOINT"   --message-body='{}'   --headers="Content-Type=application/json"   --oidc-service-account-email="scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com"   --oidc-token-audience="https://mlb-betting-628109313129.us-central1.run.app"   --attempt-deadline=300s
+```
+
+### Create a new Cloud Run Job
+
+```bash
+gcloud run jobs create JOB_NAME \
+  --image=gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
+  --region=us-central1 \
+  --command=python \
+  --args="-m,training.MODULE_NAME" \
+  --memory=4Gi --cpu=2 \
+  --set-secrets=MLB_GCS_BUCKET=mlb-gcs-bucket:latest,MLB_DB_URL=mlb-db-url:latest \
+  --set-cloudsql-instances=concrete-crow-445205-m4:us-central1:mlb-betting-db \
+  --service-account=mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com \
+  --project=concrete-crow-445205-m4
 ```
 
 ### Trigger a Cloud Run Job (retrain/calibrate)
