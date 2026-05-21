@@ -652,7 +652,10 @@ secretmanager.secretAccessor.
 - `mlb-gcs-bucket` -- bucket name
 - `sgo-api-key` -- SGO API key (version 3 is current -- v1 was exposed, v2
   had invisible newlines causing header errors)
-- `discord-webhook-url` -- Discord webhook
+- `discord-webhook-url` -- picks webhook (#daily-picks)
+- `discord-webhook-summary` -- recap webhook (#daily-recap)
+- `discord-ops-webhook-url` -- ops webhook (#ops-alerts)
+- `discord-webhook-performance` -- performance webhook (#performance)
 
 **Cloud Run Jobs:**
 - `mlb-retrain-f5-meta` (DEPRECATED -- exits non-zero; use mlb-retrain-f5-v5)
@@ -958,7 +961,8 @@ Alert thresholds (overrideable via env vars):
 - `MONITOR_MIN_BETS=20` -- minimum settled bets before alerting
 - `MONITOR_ROLLING_WINDOW=30` -- window size
 
-Posts weekly digest every Monday.
+Posts degradation alerts to #ops-alerts via DISCORD_WEBHOOK_OPS.
+Posts weekly digest every Monday to #performance via DISCORD_WEBHOOK_PERFORMANCE.
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
@@ -979,7 +983,7 @@ Checks (all post-feature-build):
 - All 4 model artifacts exist in GCS
 - Any bets pending > 3 days
 
-Silent on clean run. Posts Discord alert only on failure.
+Silent on clean run. Posts to #ops-alerts via DISCORD_WEBHOOK_OPS on failure.
 
 ---
 
@@ -1188,6 +1192,7 @@ Knowing these prevents incorrect settlement logic and bad model assumptions.
 - Scheduler job added/removed → §13 + update monitor_ops.SCHEDULER_JOBS
 - SGO API change → §12
 - DK house rule change → §14
+- Discord server change → §19
 
 **Don't put point-in-time state here.** That belongs in the session handoff.
 
@@ -1854,7 +1859,7 @@ Edge-ROI gaps (NRFI 33pts, K 21pts, F5 19.5pts) traced to two calibrator failure
 - K calibrator: 19/19 pitchers in range
 - Both calibrate jobs complete cleanly with no degradation warnings
 
-## 16. Discord server (beezy.vip)
+## 19. Discord server (beezy.vip)
 
 *Last configured: 2026-05-20*
 
@@ -2043,3 +2048,124 @@ eventually moving from webhooks to a persistent bot. (Backlog.)
 - Carl-bot config changes -> update Carl-bot subsection
 - Stripe/Discord role sync implemented -> update backlog item to Live
 - Real bot token wired for role pings -> update bot infrastructure section
+
+---
+
+## 20. Common manual actions (code fragments)
+
+### Deploy
+
+```bash
+cd ~/mlb-betting
+./deploy/deploy_service.sh
+```
+
+### Start Cloud Run proxy for curl tests
+
+```bash
+gcloud run services proxy mlb-betting --region=us-central1 --port=8081 &
+sleep 4
+```
+
+### Trigger a scheduler job immediately
+
+```bash
+gcloud scheduler jobs run mlb-settle             --location=us-central1
+gcloud scheduler jobs run mlb-betting-morning    --location=us-central1
+gcloud scheduler jobs run mlb-betting-evening    --location=us-central1
+gcloud scheduler jobs run mlb-build-all-features --location=us-central1
+gcloud scheduler jobs run mlb-refresh-data       --location=us-central1
+gcloud scheduler jobs run mlb-monitor            --location=us-central1
+gcloud scheduler jobs run mlb-monitor-ops        --location=us-central1
+```
+
+### Manually trigger an endpoint
+
+```bash
+curl -s -X POST http://localhost:8081/settle | python3 -m json.tool
+curl -s -X POST http://localhost:8081/monitor | python3 -m json.tool
+curl -s -X POST http://localhost:8081/monitor-ops | python3 -m json.tool
+curl -s -X POST http://localhost:8081/snapshot-odds | python3 -m json.tool
+
+curl -s -X POST http://localhost:8081/run   -H "Content-Type: application/json"   -d '{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}' | python3 -m json.tool
+
+curl -s -X POST http://localhost:8081/build-all-features   -H "Content-Type: application/json"   -d '{"systems":["HR","NRFI","K","F5"],"continue_on_error":true}' | python3 -m json.tool
+```
+
+### Delete bets and re-run clean
+
+```bash
+# Delete all bets for a date
+curl -s -X POST http://localhost:8081/reset-bets   -H "Content-Type: application/json"   -H "X-API-Key: $(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)"   -d '{"date": "2026-05-20"}' | python3 -m json.tool
+
+# Delete one system only
+curl -s -X POST http://localhost:8081/reset-bets   -H "Content-Type: application/json"   -H "X-API-Key: $(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)"   -d '{"date": "2026-05-20", "system": "NRFI"}' | python3 -m json.tool
+
+# Re-run after reset
+gcloud scheduler jobs run mlb-snapshot-evening --location=us-central1
+sleep 10
+gcloud scheduler jobs run mlb-betting-evening --location=us-central1
+```
+
+### Secrets -- read, create, update
+
+```bash
+# Read a secret (cat -A shows invisible newlines)
+gcloud secrets versions access latest --secret=discord-bot-token   --project=concrete-crow-445205-m4 | cat -A
+
+# Create a new secret
+echo -n "VALUE" | gcloud secrets create SECRET_NAME   --data-file=- --project=concrete-crow-445205-m4
+
+# Update an existing secret
+echo -n "VALUE" | gcloud secrets versions add SECRET_NAME   --data-file=- --project=concrete-crow-445205-m4
+```
+
+### Wire a secret to Cloud Run
+
+```bash
+gcloud run services update mlb-betting   --region=us-central1   --project=concrete-crow-445205-m4   --update-secrets=ENV_VAR_NAME=secret-name:latest
+```
+
+### Add a Cloud Scheduler job
+
+```bash
+gcloud scheduler jobs create http JOB_NAME   --location=us-central1   --schedule="CRON"   --uri="https://mlb-betting-628109313129.us-central1.run.app/ENDPOINT"   --message-body='{}'   --headers="Content-Type=application/json"   --oidc-service-account-email="scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com"   --oidc-token-audience="https://mlb-betting-628109313129.us-central1.run.app"   --attempt-deadline=300s
+```
+
+### Trigger a Cloud Run Job (retrain/calibrate)
+
+```bash
+# Always run calibrate immediately after retrain
+gcloud run jobs execute mlb-retrain-nrfi-v17 --region=us-central1
+gcloud run jobs execute mlb-calibrate-nrfi   --region=us-central1
+
+gcloud run jobs execute mlb-retrain-hr-v6    --region=us-central1
+gcloud run jobs execute mlb-calibrate-hr     --region=us-central1
+
+gcloud run jobs execute mlb-retrain-f5-v5    --region=us-central1
+gcloud run jobs execute mlb-calibrate-f5     --region=us-central1
+
+gcloud run jobs execute mlb-retrain-k-v1     --region=us-central1
+gcloud run jobs execute mlb-calibrate-k      --region=us-central1
+```
+
+### Discord bot scripts
+
+```bash
+TOKEN=$(gcloud secrets versions access latest   --secret=discord-bot-token --project=concrete-crow-445205-m4)
+
+# One-time server setup
+python3 ~/mlb-betting/setup_discord.py --token "$TOKEN"
+
+# Clean up junk roles
+python3 ~/mlb-betting/cleanup_discord.py --token "$TOKEN"
+```
+
+### Commit CONTEXT.md
+
+```bash
+cd ~/mlb-betting
+git add CONTEXT.md
+git commit -m "docs: update CONTEXT.md"
+git push
+```
