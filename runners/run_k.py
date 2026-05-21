@@ -108,7 +108,11 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
     from mlb_core.data.lineups import fetch_il_pitcher_ids
-    _il_ids = fetch_il_pitcher_ids()
+    try:
+        _il_ids = fetch_il_pitcher_ids()
+    except Exception as _ile:
+        logger.warning(f"K: fetch_il_pitcher_ids failed: {_ile} -- failing open")
+        _il_ids = set()
 
     sched = get_today_schedule(run_date)
     if sched.empty:
