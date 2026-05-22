@@ -1600,7 +1600,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 - [ ] Clerk production keys in Vercel env vars
 - [ ] beezy.vip added to Clerk allowed origins
 - [ ] Stripe production price IDs set
-- [ ] Legal review complete
+- [x] Legal pages drafted 2026-05-21 (terms, privacy, responsible-gambling, refunds). `{LAWYER_REVIEW}` markers in each file flag sections needing attorney sign-off before flipping PRE_LAUNCH.
 - [ ] `BLOCKED_STATES` configured
 - [ ] Stripe reconciliation cron clean 7 days
 - [ ] >= 200 settled bets per system at gate criteria
