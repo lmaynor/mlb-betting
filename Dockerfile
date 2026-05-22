@@ -21,6 +21,7 @@ COPY K_Pro_System/    ./K_Pro_System/
 COPY runners/         ./runners/
 COPY training/        ./training/
 COPY main.py          .
+COPY tweet_drafter.py .
 COPY setup.py         .
 
 # Install mlb_core as a package (eliminates all sys.path hacks)
