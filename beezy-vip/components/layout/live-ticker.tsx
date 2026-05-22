@@ -10,7 +10,7 @@ export async function LiveTicker() {
 
     for (const b of triggered) {
       const game = b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`
-      const entry = { system: b.system, game, pnl: b.profit ?? 0 }
+      const entry = { system: b.system, game, pnl: b.profit ?? 0, result: b.result ?? '' }
       if (b.result === 'win' && wins.length < 5) wins.push(entry)
       if (b.result === 'loss' && losses.length < 5) losses.push(entry)
       if (wins.length === 5 && losses.length === 5) break
