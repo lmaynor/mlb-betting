@@ -2500,3 +2500,164 @@ git add CONTEXT.md
 git commit -m "docs: update CONTEXT.md"
 git push
 ```
+
+---
+
+## 23. Twitter / X growth strategy (@beezy_vip)
+
+*Last updated: 2026-05-22*
+
+### What it is
+
+Automated content pipeline that builds a Twitter following and converts
+followers to beezy.vip members and Discord joiners. Two daily jobs run
+on Cloud Run, generating content from live model output.
+
+Twitter handle: @beezy_vip
+Discord invite: discord.gg/HfMYCmbmE
+Site: https://mlb-betting-rose.vercel.app (beezy.vip pending DNS)
+
+---
+
+### Content strategy
+
+**Brand voice:** Confident but not loud. Data-first. Let the numbers talk.
+Occasionally explain *why* the edge exists in plain English. No hype, no
+"LOCK", no "CASH IT". Think Bloomberg terminal meets someone who actually
+knows what they are doing.
+
+**Transparency is the brand.** We post the highest-edge pick every day
+win or lose. This is what separates beezy from tout accounts. Never
+cherry-pick winners after the fact.
+
+**Audience:** Sports bettors tired of tout accounts who want to see real
+edge and are curious how quant models apply to betting markets.
+
+**Content rotation (3 types):**
+- Picks tweet: in-depth breakdown of the single highest-edge pick
+- Recap tweet: honest day result, notable win or loss, season context
+- (Future) Model insight: mid-week educational content about the edge
+
+---
+
+### Daily automation
+
+Two Cloud Run jobs. Both use Gemini 2.0 Flash free tier for generation
+and Typefully API for draft management.
+
+| Job | Schedule | What it does |
+|---|---|---|
+| `mlb-tweet-picks` | 17:00 UTC (noon ET) | Card to Discord + tweet draft to Typefully |
+| `mlb-tweet-recap` | 10:00 UTC (5am ET) | Recap tweet draft to Typefully |
+
+**Picks job flow:**
+1. Fetches today's picks from `/api/public/picks/today`
+2. Sorts by edge descending -- takes single highest-edge pick
+3. Fetches picks card PNG from `/api/og/picks-card` (Vercel OG route)
+4. Posts card to Discord `#daily-picks` with link to site
+5. Calls Gemini to write 3 tweet variants about the top pick
+6. Pushes all 3 drafts to Typefully -- you pick one and schedule
+
+**Recap job flow:**
+1. Fetches recent settled bets
+2. Filters to today's settled, finds most notable result (biggest abs P&L)
+3. Calls Gemini to write 3 honest recap tweet variants
+4. Pushes to Typefully
+
+---
+
+### Picks card (OG image)
+
+1200x630 PNG served from Vercel edge runtime.
+Route: `GET /api/og/picks-card`
+File: `beezy-vip/app/api/og/picks-card/route.tsx`
+
+Shows:
+- beezy.vip wordmark + today's date
+- Top 5 picks: system pill, game, bet type, odds, edge %
+- Footer: season ROI, total bets, win rate
+- CTAs: beezy.vip (green) + discord.gg/HfMYCmbmE (purple)
+
+Uses `@vercel/og` (ImageResponse) -- no extra deps, runs on Vercel edge.
+Pulls live data from Cloud Run public API at render time.
+
+---
+
+### Typefully
+
+Free tier: 15 scheduled tweets/month.
+API key stored in Secret Manager as `typefully-api-key`.
+Drafts endpoint: `POST https://api.typefully.com/v1/drafts/`
+
+Each job pushes 3 draft variants. You open Typefully, pick the best one,
+schedule or post. The other two drafts count against the 15/month limit
+so delete the unused ones after choosing.
+
+At ~3 posts/week that is 12-13 tweets/month -- fits the free tier.
+If posting more frequently, upgrade Typefully or switch to Buffer.
+
+---
+
+### Secrets
+
+| Secret | Env var in job | Purpose |
+|---|---|---|
+| `gemini-api-key` | `GEMINI_API_KEY` | Gemini 2.0 Flash free tier |
+| `typefully-api-key` | `TYPEFULLY_API_KEY` | Typefully draft API |
+| `site-api-key` | `SITE_API_KEY` | beezy Cloud Run public API |
+| `discord-webhook-url` | `DISCORD_WEBHOOK_URL` | #daily-picks card post |
+
+---
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `tweet_drafter.py` | Main script. Runs in both Cloud Run jobs. |
+| `beezy-vip/app/api/og/picks-card/route.tsx` | Vercel OG card PNG route |
+
+---
+
+### Scheduler jobs
+
+```bash
+# Picks -- noon ET
+gcloud scheduler jobs create http mlb-tweet-picks-schedule \
+  --location=us-central1 \
+  --schedule="0 17 * * *" \
+  --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/concrete-crow-445205-m4/jobs/mlb-tweet-picks:run" \
+  --oauth-service-account-email="scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com" \
+  --attempt-deadline=300s
+
+# Recap -- 5am ET
+gcloud scheduler jobs create http mlb-tweet-recap-schedule \
+  --location=us-central1 \
+  --schedule="0 10 * * *" \
+  --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/concrete-crow-445205-m4/jobs/mlb-tweet-recap:run" \
+  --oauth-service-account-email="scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com" \
+  --attempt-deadline=300s
+```
+
+### Manual test
+
+```bash
+gcloud run jobs update mlb-tweet-picks \
+  --image=gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
+  --region=us-central1
+
+gcloud run jobs execute mlb-tweet-picks --region=us-central1 --wait
+```
+
+### When beezy.vip DNS is configured
+
+Update two places:
+1. `tweet_drafter.py` line: `BEEZY_SITE_URL = "https://beezy.vip"`
+2. Discord message in `post_card_to_discord()`: link to `https://beezy.vip/picks`
+
+### When to update this section
+
+- Twitter handle changes
+- Typefully replaced with another tool
+- Content strategy shifts
+- New tweet types added (threads, model insight posts)
+- DNS configured for beezy.vip
