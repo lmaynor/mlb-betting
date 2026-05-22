@@ -5,6 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
 import { Nav } from '@/components/layout/nav'
+import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
 
 export const viewport = {
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
       <body>
         <Nav />
+        <LiveTicker />
         <main>{children}</main>
         <Footer />
       </body>

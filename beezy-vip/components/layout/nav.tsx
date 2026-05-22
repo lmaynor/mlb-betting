@@ -20,14 +20,6 @@ export function Nav() {
 
   return (
     <>
-      {/* Paper mode banner — top padding accounts for notch/Dynamic Island */}
-      <div style={{ background: '#1c1207', borderBottom: '0.5px solid #3d2e0f', padding: 'max(6px, env(safe-area-inset-top)) 16px 6px', textAlign: 'center' }}>
-        <span className="mono banner-text" style={{ fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#f59e0b' }}>
-          <span className="banner-full">Paper mode &middot; All results are simulated &middot; Not financial advice</span>
-          <span className="banner-short">Paper mode &middot; Not financial advice</span>
-        </span>
-      </div>
-
       <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw', borderBottom: B, background: '#111114', overflow: 'hidden' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '52px' }}>
 
@@ -49,7 +41,7 @@ export function Nav() {
 
           {/* Desktop CTA */}
           <div className="nav-desktop">
-            <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer" className="mono"
+            <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
               style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 14px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
               Join Discord
             </a>
@@ -71,7 +63,7 @@ export function Nav() {
               </Link>
             ))}
             <div style={{ padding: '14px 20px' }}>
-              <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer" className="mono"
+              <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
                 style={{ display: 'block', textAlign: 'center', fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
                 Join Discord
               </a>
