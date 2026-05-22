@@ -1005,6 +1005,8 @@ If job already exists in error state: `gcloud run jobs update JOB_NAME --region=
 
 **E10 (2026-05-21): Line movement feature added to schema and runners.** `bets` table now has `morning_odds INTEGER` and `line_move_pct REAL` columns (auto-migrated). All four runners load the morning snapshot (15:55 UTC) via `mlb_core.odds.line_movement.load_morning_odds()` and store `morning_odds` per bet. `capture_closing_lines.py` computes `line_move_pct = (closing_implied - morning_implied) / morning_implied * 100` at capture time. Positive = line moved against our bet (book shortened odds). Negative = potential value signal (line lengthened). After 200+ bets with morning_odds populated, add `morning_line_move_pct` to feature lists and retrain.
 
+**`statcast_nightly_gcs` fetches `today-1` at 14:00 UTC (9am CT) but Statcast publishes yesterday's data around 2-3pm ET. The nightly refresh-data job silently returns 0 rows and logs "ok". Fix: dedicated `mlb-refresh-statcast` scheduler job at 21:00 UTC runs after Statcast publishes, feeding the next day's feature build.
+
 **`/backfill-data` does not support statcast.** Use `/backfill-statcast` with `{"dates":["YYYY-MM-DD",...]}` for Statcast pitch data. `/backfill-data` only handles weather, scoring, and umpires. `/backfill-savant` handles Savant leaderboards with `{"start_year":N,"end_year":N}`.
 
 **`/backfill-statcast` takes a `dates` list, not `start_date`/`end_date`.** Passing `{"start_date":"..."}` returns `{"error":"dates list required"}`. Correct call: `{"dates":["2026-05-19","2026-05-20"]}`.
@@ -1128,6 +1130,7 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
+| `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}` |
 | `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
