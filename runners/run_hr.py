@@ -681,6 +681,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     from HR_Pro.config_hr import cfg
     from mlb_core.tracking import BetTracker
+    from mlb_core.rationale import build_rationale
     from mlb_core.notify.discord import post_bets
 
     # 2. Predictions
@@ -716,6 +717,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             book             = row.get("bookmaker"),
             morning_odds     = row.get("morning_odds"),
+            notes            = build_rationale(row.to_dict() if hasattr(row, 'to_dict') else dict(row), "HR"),
         )
         if bet_id == -1:
             continue

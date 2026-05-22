@@ -94,6 +94,9 @@ function TableRow({ bet }: { bet: Bet }) {
         ) : (
           <span style={{ fontSize: '12px', color: '#f5f5f7' }}>{label}</span>
         )}
+        {bet.notes && (
+          <div className="mono" style={{ fontSize: '10px', color: '#52525b', marginTop: '2px' }}>{bet.notes}</div>
+        )}
       </div>
 
       <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', color: '#f5f5f7' }}>{fmtOdds(bet.odds)}</div>
@@ -148,6 +151,9 @@ function BetCard({ bet }: { bet: Bet }) {
           </>
         ) : (
           <span style={{ fontSize: '14px', fontWeight: 600, color: '#f5f5f7' }}>{label}</span>
+        )}
+        {bet.notes && (
+          <div className="mono" style={{ fontSize: '10px', color: '#52525b', marginTop: '3px' }}>{bet.notes}</div>
         )}
       </div>
 
