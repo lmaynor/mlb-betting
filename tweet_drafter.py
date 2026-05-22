@@ -1,0 +1,279 @@
+"""
+tweet_drafter.py — beezy_vip Twitter content automation
+Runs as a Cloud Run job. Pulls picks/results from the beezy API,
+generates tweet drafts via Gemini, pushes to Typefully as drafts.
+
+Secrets (Secret Manager):
+  site-api-key         -- beezy Cloud Run API key (already exists)
+  gemini-api-key       -- Gemini free tier key
+  typefully-api-key    -- Typefully API key
+
+Schedule (recommended):
+  Morning job (10:00 ET): picks tweet for today's slate
+  Evening job (23:30 ET): recap tweet after settlement
+"""
+
+import os
+import json
+import requests
+from datetime import date, datetime
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+BEEZY_API_URL = "https://mlb-betting-628109313129.us-central1.run.app"
+BEEZY_API_KEY = os.environ["SITE_API_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+TYPEFULLY_API_KEY = os.environ["TYPEFULLY_API_KEY"]
+
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/"
+    "models/gemini-2.0-flash:generateContent"
+)
+
+TYPEFULLY_URL = "https://api.typefully.com/v1/drafts/"
+
+MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
+
+# ── Brand voice system prompt ─────────────────────────────────────────────────
+
+SYSTEM_PROMPT = """
+You are the voice of @beezy_vip on Twitter — a model-driven MLB betting
+analytics account. beezy.vip runs 5 quantitative models (HR, NRFI, F5, K,
+OUTS) that publish every pick publicly with edge %, Kelly stake, and full
+results history. Paper mode now; launching when 200-bet gate is cleared.
+
+Voice: confident but not loud. Data-first. Let the numbers do the talking.
+Occasionally explain *why* the edge exists (1 sentence max). No hype, no
+emojis beyond one understated use, no "LOCK", no "CASH IT 🔥". Think
+Bloomberg terminal meets someone who actually knows what they're doing.
+
+Audience: sports bettors who are tired of tout accounts, want to see real
+edge, and are curious how quant models apply to betting markets.
+
+Goal: build credibility and followers who will convert to beezy.vip members.
+Always include beezy.vip in at least one tweet variant.
+
+Format rules:
+- Max 280 characters per tweet
+- Return exactly 3 tweet variants as a JSON array of strings
+- No markdown, no explanations outside the JSON
+- Each variant should have a slightly different angle (data-first / educational / understated)
+
+Example good tweet:
+"HR model flagged Stanton today: 62% vs market's 54%. +8.3% edge, 0.4u Kelly. 
+Running walk-forward since 2021. beezy.vip"
+
+Example bad tweet:
+"STANTON IS A LOCK TODAY 🔥🔥 BET THE HOUSE #MLB"
+"""
+
+# ── Fetch beezy data ──────────────────────────────────────────────────────────
+
+def get_today_picks():
+    resp = requests.get(
+        f"{BEEZY_API_URL}/api/public/picks/today",
+        headers={"X-API-Key": BEEZY_API_KEY},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_recent_settled():
+    resp = requests.get(
+        f"{BEEZY_API_URL}/api/public/picks/recent",
+        headers={"X-API-Key": BEEZY_API_KEY},
+        params={"limit": 10},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_stats():
+    resp = requests.get(
+        f"{BEEZY_API_URL}/api/public/stats/summary",
+        headers={"X-API-Key": BEEZY_API_KEY},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+# ── Build prompt from data ────────────────────────────────────────────────────
+
+def build_picks_prompt(picks):
+    if not picks:
+        return None
+
+    lines = [f"Today's beezy model picks ({date.today().strftime('%b %d')}):\n"]
+    for p in picks[:5]:  # cap at 5 so prompt stays tight
+        system = p.get("system", "")
+        game = p.get("game", "")
+        bet_type = p.get("bet_type", "")
+        odds = p.get("odds", "")
+        edge = p.get("edge", "")
+        stake = p.get("stake", "")
+        notes = p.get("notes", "")
+
+        line = f"  {system} | {game} | {bet_type} {odds} | edge {edge}% | {stake}u Kelly"
+        if notes:
+            line += f" | {notes}"
+        lines.append(line)
+
+    lines.append(
+        "\nWrite 3 tweet drafts for @beezy_vip announcing today's picks. "
+        "Return only a JSON array of 3 strings."
+    )
+    return "\n".join(lines)
+
+
+def build_recap_prompt(settled, stats):
+    if not settled:
+        return None
+
+    today_settled = [
+        p for p in settled
+        if p.get("game_date") == str(date.today())
+        and p.get("result") in ("win", "loss", "push")
+    ]
+
+    if not today_settled:
+        return None
+
+    wins = [p for p in today_settled if p["result"] == "win"]
+    losses = [p for p in today_settled if p["result"] == "loss"]
+    total_profit = sum(float(p.get("profit", 0)) for p in today_settled)
+    record = f"{len(wins)}-{len(losses)}"
+
+    overall = stats.get("overall", {})
+    season_roi = overall.get("roi", "N/A")
+    total_bets = overall.get("total_bets", "N/A")
+
+    prompt = (
+        f"Today's beezy results ({date.today().strftime('%b %d')}):\n"
+        f"  Record: {record}\n"
+        f"  P&L: {total_profit:+.2f}u\n"
+        f"  Season: {total_bets} bets, {season_roi}% ROI\n\n"
+    )
+
+    for p in today_settled[:3]:
+        icon = "✓" if p["result"] == "win" else "✗"
+        prompt += (
+            f"  {icon} {p.get('system')} | {p.get('game')} | "
+            f"{p.get('bet_type')} {p.get('odds')} | "
+            f"{float(p.get('profit', 0)):+.2f}u\n"
+        )
+
+    prompt += (
+        "\nWrite 3 tweet drafts for @beezy_vip recapping today's results. "
+        "Return only a JSON array of 3 strings."
+    )
+    return prompt
+
+
+# ── Call Gemini ───────────────────────────────────────────────────────────────
+
+def generate_tweets(user_prompt):
+    payload = {
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"parts": [{"text": user_prompt}]}],
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 512},
+    }
+
+    resp = requests.post(
+        GEMINI_URL,
+        headers={
+            "Content-Type": "application/json",
+            "X-goog-api-key": GEMINI_API_KEY,
+        },
+        json=payload,
+        timeout=30,
+    )
+    resp.raise_for_status()
+
+    raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    # Strip any markdown fences Gemini sometimes adds
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1]
+    if raw.endswith("```"):
+        raw = raw.rsplit("```", 1)[0]
+
+    tweets = json.loads(raw.strip())
+    return tweets
+
+
+# ── Push to Typefully ─────────────────────────────────────────────────────────
+
+def push_to_typefully(tweets, label):
+    """Push each tweet as a separate draft in Typefully."""
+    headers = {
+        "X-API-KEY": TYPEFULLY_API_KEY,
+        "Content-Type": "application/json",
+    }
+
+    pushed = []
+    for i, tweet in enumerate(tweets, 1):
+        payload = {"content": tweet, "threadify": False}
+        resp = requests.post(TYPEFULLY_URL, headers=headers, json=payload, timeout=10)
+
+        if resp.status_code in (200, 201):
+            pushed.append(f"  Draft {i} pushed: {tweet[:60]}...")
+        else:
+            pushed.append(f"  Draft {i} FAILED ({resp.status_code}): {resp.text[:100]}")
+
+    return pushed
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    print(f"[tweet_drafter] mode={MODE} date={date.today()}")
+
+    if MODE == "picks":
+        print("Fetching today's picks...")
+        picks = get_today_picks()
+        picks_list = picks if isinstance(picks, list) else picks.get("picks", [])
+
+        if not picks_list:
+            print("No picks today — skipping.")
+            return
+
+        prompt = build_picks_prompt(picks_list)
+        label = "picks"
+
+    elif MODE == "recap":
+        print("Fetching recent settled bets and stats...")
+        settled = get_recent_settled()
+        settled_list = settled if isinstance(settled, list) else settled.get("picks", [])
+        stats = get_stats()
+
+        prompt = build_recap_prompt(settled_list, stats)
+        label = "recap"
+
+        if not prompt:
+            print("No settled bets today — skipping.")
+            return
+
+    else:
+        raise ValueError(f"Unknown TWEET_MODE: {MODE}")
+
+    print(f"Generating tweets via Gemini...")
+    tweets = generate_tweets(prompt)
+
+    print(f"Generated {len(tweets)} drafts:")
+    for i, t in enumerate(tweets, 1):
+        print(f"  [{i}] {t}")
+
+    print("Pushing to Typefully...")
+    results = push_to_typefully(tweets, label)
+    for r in results:
+        print(r)
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
