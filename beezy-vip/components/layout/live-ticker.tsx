@@ -1,7 +1,7 @@
 import { apiGetRecentSettled } from '@/lib/betting-api'
 
 export async function LiveTicker() {
-  let wins: { system: string; game: string; pnl: number }[] = []
+  let wins: { system: string; game: string; pnl: number; result: string }[] = []
   let losses: typeof wins = []
 
   try {
