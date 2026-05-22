@@ -1005,6 +1005,10 @@ If job already exists in error state: `gcloud run jobs update JOB_NAME --region=
 
 **E10 (2026-05-21): Line movement feature added to schema and runners.** `bets` table now has `morning_odds INTEGER` and `line_move_pct REAL` columns (auto-migrated). All four runners load the morning snapshot (15:55 UTC) via `mlb_core.odds.line_movement.load_morning_odds()` and store `morning_odds` per bet. `capture_closing_lines.py` computes `line_move_pct = (closing_implied - morning_implied) / morning_implied * 100` at capture time. Positive = line moved against our bet (book shortened odds). Negative = potential value signal (line lengthened). After 200+ bets with morning_odds populated, add `morning_line_move_pct` to feature lists and retrain.
 
+**`/backfill-data` does not support statcast.** Use `/backfill-statcast` with `{"dates":["YYYY-MM-DD",...]}` for Statcast pitch data. `/backfill-data` only handles weather, scoring, and umpires. `/backfill-savant` handles Savant leaderboards with `{"start_year":N,"end_year":N}`.
+
+**`/backfill-statcast` takes a `dates` list, not `start_date`/`end_date`.** Passing `{"start_date":"..."}` returns `{"error":"dates list required"}`. Correct call: `{"dates":["2026-05-19","2026-05-20"]}`.
+
 **`morning_odds` will be NULL for bets placed before E10 deploy (2026-05-21).** The column exists but historical bets have no morning snapshot to reference. `line_move_pct` will also be NULL for these. Only bets placed after the deploy will have both fields populated. CLV and line movement analysis should filter to `morning_odds IS NOT NULL`.
 
 **F5 CV loop C03 fix (2026-05-21).** `retrain_f5_v5.py` walk-forward CV was leaking test into early stopping (using `dtest` as eval set). Fixed to match NRFI/K pattern: carve val slice from train, never touch test during training. Reported CV AUC was inflated ~0.003-0.005 before this fix.
@@ -2386,6 +2390,35 @@ python3 ~/mlb-betting/cleanup_discord.py --token "$TOKEN"
 KEY=$(gcloud secrets versions access latest --secret=site-api-key --project=concrete-crow-445205-m4)
 curl -s "https://mlb-betting-628109313129.us-central1.run.app/model-health" \
   -H "X-API-Key: $KEY" | python3 -m json.tool
+```
+
+### Backfill Statcast pitch data
+
+```bash
+# Takes a dates list -- NOT start_date/end_date
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-statcast" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $KEY" \
+  -d '{"dates":["2026-05-19","2026-05-20"]}' \
+  | python3 -m json.tool
+```
+
+### Backfill Savant leaderboards
+
+```bash
+# Backfill all 6 datasets for a year range (slow -- 15-25 min per year)
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-savant" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $KEY" \
+  -d '{"start_year":2024,"end_year":2026,"force":false}' \
+  | python3 -m json.tool
+
+# Backfill a single dataset
+curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-savant" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $KEY" \
+  -d '{"dataset":"exit_velocity_barrels","start_year":2026,"end_year":2026,"force":true}' \
+  | python3 -m json.tool
 ```
 
 ### Backfill weather/scoring/umpires
