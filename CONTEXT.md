@@ -95,6 +95,9 @@ mlb-betting/
 │   │   └── exposure.py           prefetch_exposure() + apply_cap().
 │   │                             One DB query per runner; _pending_stakes accumulator
 │   │                             tracks within-runner exposure correctly.
+│   ├── rationale.py              Canned rationale engine. Maps feature values to plain-English phrases.
+│       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
+│   │                             Extend by adding rules to _SYSTEM_RULES in rationale.py.
 │   └── tracking/
 │       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
 │                                 log_bet() dedup on (system, game_date, game_pk, bet_type).
@@ -589,6 +592,7 @@ To add a new betting system:
 5. Add icon/color to `discord.py` `_SYSTEM_COLORS` and `post_all_systems_summary`
 6. Add Cloud Scheduler jobs for feature build + wire into `/run`
 7. Update CONTEXT.md §1, §2, §3, §5
+8. Add rules to `mlb_core/rationale.py` `_SYSTEM_RULES` dict
 
 OUTS is the model for a sub-market of an existing system: same runner,
 separate tracker (`system="OUTS"`), no new feature build or model needed.
@@ -1574,6 +1578,15 @@ bet_type, update the `pickLabel` formatter:
 - K: `K_OVER_4.5` → "Over 4.5 Ks"
 - OUTS: `OUTS_UNDER_14.5` → "Under 14.5 Outs"
 - HR: `HR` → "HR Yes"
+
+### Pick rationale (notes column)
+
+`mlb_core/rationale.py` maps feature values to canned phrases at bet-log time.
+Stored in `notes TEXT` column (already in schema, public API SELECT, and `Bet` type).
+Wired: HR and NRFI. To wire K/OUTS/F5: import `build_rationale` inside the scoring
+function and pass `notes=build_rationale(dict(row), "K")` to `log_bet()` using the
+`morning_odds` line as the anchor. Frontend renders `bet.notes` as muted mono subtext
+under the pick label in `picks-table.tsx` (desktop + mobile). Null-guarded.
 
 ### Model IP protection
 
