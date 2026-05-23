@@ -371,6 +371,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
 
 import json as _json
+from mlb_core.rationale import build_rationale
 import numpy as _np
 
 # F1H and GAME ship log-only (stake=0, kelly_triggered=False).
@@ -495,12 +496,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                 "stake":           stake,
                 "kelly_triggered": not log_only,
                 "bookmaker":       odds_info.get("bookmaker"),
-                "notes":           _json.dumps({
-                    "p_home_f5":      round(p_home, 4),
-                    "scalar":         round(scalar, 4),
-                    "log_only":       log_only,
-                    "would_be_stake": round(would_be, 2),
-                }),
+                "notes":           build_rationale(dict(row), "F5"),
             })
 
         logger.info(f"innings submarkets {sys_key}: {len(results[sys_key])} qualifying bets "

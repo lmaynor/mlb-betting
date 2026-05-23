@@ -743,6 +743,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             proj_k           = row.get("proj_k"),
             book             = row.get("bookmaker"),
             morning_odds     = row.get("morning_odds"),
+            notes            = build_rationale(dict(row), market),
         )
         if bet_id == -1:
             continue
