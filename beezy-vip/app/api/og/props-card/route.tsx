@@ -4,7 +4,6 @@ export const runtime = "edge";
 const API = process.env.BETTING_API_URL!;
 const KEY = process.env.BETTING_API_KEY!;
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
 
 const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
   ARI: { p: "167,25,48",   s: "0,0,0",       slug: "ari" },
