@@ -47,8 +47,8 @@ const SYS: Record<string, { accent: string; bg: string }> = {
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
 function fmtEdge(e: any) { return `+${parseFloat(e).toFixed(1)}%`; }
 function fmtPick(bt: string, sys: string) {
-  if (bt === "NRFI") return "No Run 1st Inn";
-  if (bt === "YRFI") return "Run Scores 1st Inn";
+  if (bt === "NRFI") return "No Run 1st Inning";
+  if (bt === "YRFI") return "Run in 1st Inning";
   if (bt === "HOME") return sys === "F5" ? "F5 Home ML" : "Home ML";
   if (bt === "AWAY") return sys === "F5" ? "F5 Away ML" : "Away ML";
   if (bt === "1I_HOME") return "1st Inn Home";
