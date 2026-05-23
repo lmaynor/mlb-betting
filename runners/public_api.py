@@ -77,7 +77,8 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
     sql = text(
         "SELECT id, system, game_date, game_pk, bet_type, player, "
         "away_team, home_team, odds, stake, model_prob, market_prob, "
-        "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book "
+        "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
+        "closing_odds, clv_pct, morning_odds, line_move_pct "
         f"FROM bets {where} "
         "ORDER BY game_date DESC, created_at DESC "
         "LIMIT :limit OFFSET :offset"
@@ -92,7 +93,8 @@ def get_recent_settled(engine, limit=20):
         rows = conn.execute(text(
             "SELECT id, system, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
-            "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
+            "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
+            "closing_odds, clv_pct, morning_odds, line_move_pct "
             "FROM bets "
             "WHERE result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
             "ORDER BY game_date DESC, created_at DESC "
