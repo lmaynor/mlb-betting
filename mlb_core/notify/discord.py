@@ -91,7 +91,7 @@ def _format_bet_headline(b: dict, system: str) -> str:
     bt  = (b.get("bet_type") or "").upper()
 
     if sys == "NRFI":
-        side = "Under 0.5 Runs" if "NRFI" in bt else "Over 0.5 Runs"
+        side = "Under 0.5 Runs" if "NRFI" in bt or (b.get("side") or "").upper() == "NRFI" else "Over 0.5 Runs"
         return f"{away_full} @ {home_full} - 1st Inning - {side}"
 
     if sys == "F5":
