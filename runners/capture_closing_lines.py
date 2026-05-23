@@ -25,6 +25,7 @@ Entrypoint: python -m runners.capture_closing_lines
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date
 
 import pandas as pd
@@ -76,8 +77,11 @@ def _get_closing_odds_from_snapshot(
     # Build lookup by (away_abbr, home_abbr) -> market odds per bet_type
     market_map: dict = {}
     for ev in events:
-        away_abbr = resolve_team(ev.get("away_team", ""))
-        home_abbr = resolve_team(ev.get("home_team", ""))
+        _teams = ev.get("teams", {})
+        away_abbr = (_teams.get("away", {}).get("names", {}).get("short") or
+                     resolve_team(ev.get("away_team", "")))
+        home_abbr = (_teams.get("home", {}).get("names", {}).get("short") or
+                     resolve_team(ev.get("home_team", "")))
         if not away_abbr or not home_abbr:
             continue
         key = (away_abbr, home_abbr)
@@ -136,7 +140,7 @@ def _get_closing_odds_from_snapshot(
                     break
 
         elif bet_type.startswith(("K_", "OUTS_")):
-            parts = bt_upper.split("_")
+            parts = bet_type.split("_")
             market = parts[0]  # "K" or "OUTS"
             side = parts[1]    # "OVER" or "UNDER"
             try:
