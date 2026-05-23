@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-22 23:42 CST_
+_Last updated: 2026-05-23 00:25 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1015,6 +1015,26 @@ If job already exists in error state: `gcloud run jobs update JOB_NAME --region=
 
 **`/backfill-statcast` takes a `dates` list, not `start_date`/`end_date`.** Passing `{"start_date":"..."}` returns `{"error":"dates list required"}`. Correct call: `{"dates":["2026-05-19","2026-05-20"]}`.
 
+**`capture_closing_lines.py` had three bugs blocking CLV (2026-05-22).**
+(1) `bt_upper` NameError in K/OUTS branch -- E03 fix renamed the top-level
+variable but missed this reference. Fixed: `bt_upper` -> `bet_type`.
+(2) SGO team name lookup used `ev.get("away_team")` which is always None --
+SGO event structure uses `teams.away.names.short`. Fixed: read from
+`ev["teams"]["away"]["names"]["short"]` with resolve_team fallback.
+(3) NRFI and F5 extractor calls passed `{ev.get("id",""): ev}` (a dict) --
+extractors expect a list. Iterating a dict yields keys (strings), causing
+`AttributeError: 'str' object has no attribute 'get'`. Fixed: pass `[ev]`.
+
+**`public_api.get_picks` and `get_recent_settled` were missing CLV columns.**
+`closing_odds`, `clv_pct`, `morning_odds`, `line_move_pct` not in SELECT.
+CLV values written to DB correctly but never returned by public API. Fixed:
+added all four columns to both SELECTs in `runners/public_api.py`.
+
+**`mlb-capture-closing` scheduler job uses OIDC but `/capture-closing` has
+no auth check.** OIDC token is sent but ignored -- route is open. Job was
+returning `status: {}` (empty, meaning success) but CLV was 0 because the
+route was crashing inside due to the bugs above, not auth rejection.
+
 **`morning_odds` will be NULL for bets placed before E10 deploy (2026-05-21).** The column exists but historical bets have no morning snapshot to reference. `line_move_pct` will also be NULL for these. Only bets placed after the deploy will have both fields populated. CLV and line movement analysis should filter to `morning_odds IS NOT NULL`.
 
 **F5 CV loop C03 fix (2026-05-21).** `retrain_f5_v5.py` walk-forward CV was leaking test into early stopping (using `dtest` as eval set). Fixed to match NRFI/K pattern: carve val slice from train, never touch test during training. Reported CV AUC was inflated ~0.003-0.005 before this fix.
@@ -1634,7 +1654,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-22 23:42 CST_
+_Last updated: 2026-05-23 00:25 CST_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
@@ -2207,8 +2227,12 @@ Priority order within each tier. Work top-to-bottom.
 #### E02 · F5 CV loop C03 leak [x]
 - Fixed 2026-05-21. `retrain_f5_v5.py` CV loop now carves val from train.
 
-#### E03 · CLV pipeline -- bt_upper NameError + wrong DB engine [x]
-- Fixed 2026-05-21. `capture_closing_lines.py` bt_upper -> bet_type, real MLB_DB_URL.
+#### E03 · CLV pipeline bugs [x]
+- Fixed 2026-05-21: top-level bt_upper -> bet_type, real MLB_DB_URL.
+- Fixed 2026-05-22: bt_upper in K/OUTS branch, SGO team name lookup
+  (ev.get("away_team") -> teams.away.names.short), extractor list vs dict
+  ({id:ev} -> [ev] for NRFI and F5), CLV columns missing from public API
+  picks SELECT. CLV capturing from 2026-05-22 evening bets onward.
 
 #### E04 · Build OUTS as proper regression model [x]
 - Fixed 2026-05-21. `training/retrain_outs_v1.py` -- NegBin count model on starter_outs.
