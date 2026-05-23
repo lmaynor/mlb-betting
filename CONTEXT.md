@@ -917,6 +917,10 @@ before any scoring work.
 
 **MLB Stats API injured roster can lag activations by 1-2 days.** `/roster?rosterType=injured` may still list a pitcher who was recently activated (e.g. Jack Leiter showed Active on ESPN but still on injured roster via API). The 7-day threshold mitigates this -- a pitcher on normal 5-day rotation never hits the threshold regardless of roster API lag. Real 10-day IL stints always produce gaps >= 10 days.
 
+**F5 `home_game_date`/`away_game_date` must be reset to `run_date` after pulling historical row (2026-05-23).** `_build_today_feature_rows` takes `match.iloc[-1]` which carries old dates from the last time that team pair played. `_starter_stale()` then sees a 290+ day gap and skips every game. Fixed: both columns overwritten with `run_date` immediately after the historical row is loaded.
+
+**K/NRFI/F5 IL skip simplified to gap > 15d (2026-05-23).** The original dual-condition (gap > 7d AND on IL API) failed in two ways: (1) MLB API lags activations 1-2 days, causing healthy starters to be skipped; (2) the `historical` filter (rows where `starter_ks` is not null) excludes today's unplayed rows, inflating apparent gap for pitchers making their season debut or returning from IL. Simplified to single condition: gap > 15d. Genuine IL stints always exceed it; normal rotation never does.
+
 **HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
 calls the MLB Stats API per game_pk. If the game is not Final, the bet is
 skipped (retried tomorrow). If Final: player not in starting lineup -> void
