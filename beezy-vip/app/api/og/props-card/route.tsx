@@ -4,6 +4,7 @@ export const runtime = "edge";
 const API = process.env.BETTING_API_URL!;
 const KEY = process.env.BETTING_API_KEY!;
 const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
+const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
 
 const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
   ARI: { p: "167,25,48",   s: "0,0,0",       slug: "ari" },
@@ -44,6 +45,12 @@ const SYS: Record<string, { accent: string; bg: string; label: string }> = {
   OUTS: { accent: "#fb923c", bg: "#1a0d00", label: "PITCHER OUTS" },
 };
 
+function playerHeadshot(name: string, base: string): string | null {
+  if (!name) return null;
+  const key = name.toLowerCase().replace(/ /g, "_");
+  return `${base}/headshots/${key}.jpg`;
+}
+
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
 function fmtEdge(e: any) { return `+${parseFloat(e).toFixed(1)}%`; }
 function fmtPick(bt: string) {
@@ -59,6 +66,13 @@ function teamInfo(abbrev: string) {
 }
 
 export async function GET() {
+  // Load player name -> MLBAM id map for headshots
+  let playerMap: Record<string, number> = {};
+  try {
+    const mr = await fetch(`${BASE}/headshots/player_map.json`, { cache: "no-store" });
+    playerMap = await mr.json();
+  } catch {}
+
   const [pr, sr] = await Promise.all([
     fetch(`${API}/api/public/picks/today`, { headers: { "X-API-Key": KEY }, cache: "no-store" }),
     fetch(`${API}/api/public/stats/summary`, { headers: { "X-API-Key": KEY }, cache: "no-store" }),
@@ -136,8 +150,17 @@ export async function GET() {
                 {/* rank */}
                 <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.3)", fontWeight:700, minWidth:"20px" }}>#{i+1}</span>
 
-                {/* logo */}
-                <img src={logoUrl} width={64} height={64} style={{ objectFit:"contain" }} />
+                {/* logo + headshot */}
+                <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                  <img src={`${BASE}/logos/${team.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
+                  {pick.player && playerMap[pick.player?.toLowerCase().replace(/ /g,"_")] ? (
+                    <img
+                      src={`${BASE}/headshots/${playerMap[pick.player.toLowerCase().replace(/ /g,"_")]}.jpg`}
+                      width={72} height={72}
+                      style={{ objectFit:"cover", borderRadius:"50%", border:`2px solid ${sys.accent}40` }}
+                    />
+                  ) : null}
+                </div>
 
                 {/* player + pick info */}
                 <div style={{ display:"flex", flexDirection:"column", flex:1, gap:"6px" }}>
