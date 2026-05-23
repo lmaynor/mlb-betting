@@ -101,13 +101,13 @@ def _get_closing_odds_from_snapshot(
 
         complement_val = None
         if bet_type in ("NRFI",):
-            nrfi_info = sgo.extract_nrfi_odds({ev.get("id", ""): ev})
+            nrfi_info = sgo.extract_nrfi_odds([ev])
             for info in nrfi_info.values():
                 odds_val = info.get("nrfi_odds")
                 complement_val = info.get("yrfi_odds")
                 break
         elif bet_type in ("YRFI",):
-            nrfi_info = sgo.extract_nrfi_odds({ev.get("id", ""): ev})
+            nrfi_info = sgo.extract_nrfi_odds([ev])
             for info in nrfi_info.values():
                 odds_val = info.get("yrfi_odds")
                 complement_val = info.get("nrfi_odds")
@@ -115,7 +115,7 @@ def _get_closing_odds_from_snapshot(
         elif bet_type in ("HOME", "AWAY"):
             # F5 stores bet_type as "HOME"/"AWAY" (not "F5_HOME"/"F5_AWAY")
             if (bet.get("system") or "").upper() == "F5":
-                f5_info = sgo.extract_f5_ml_odds({ev.get("id", ""): ev})
+                f5_info = sgo.extract_f5_ml_odds([ev])
                 for info in f5_info.values():
                     if bet_type == "HOME":
                         odds_val = info.get("home_odds")
