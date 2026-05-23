@@ -135,10 +135,12 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
             logger.info(f"F5: no historical row for {away} @ {home}")
             continue
         row = match.iloc[-1].to_dict()
-        row["game_pk"]   = g["game_pk"]
-        row["game_date"] = pd.Timestamp(run_date)
-        row["home_team"] = home
-        row["away_team"] = away
+        row["game_pk"]        = g["game_pk"]
+        row["game_date"]      = pd.Timestamp(run_date)
+        row["home_game_date"] = run_date
+        row["away_game_date"] = run_date
+        row["home_team"]      = home
+        row["away_team"]      = away
 
         # Live weather override
         wx = weather_today.get(g["game_pk"])
@@ -280,7 +282,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
-    _IL_DAYS = 7
+    _IL_DAYS = 15
 
     def _starter_stale(row, side: str, run_date: str) -> bool:
         """Return True if starter's last appearance exceeds IL threshold."""
@@ -298,17 +300,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             _home_pid = int(row.get("home_pitcher_id") or 0)
             _away_pid = int(row.get("away_pitcher_id") or 0)
             _on_il = (_home_pid and _home_pid in _il_ids) or (_away_pid and _away_pid in _il_ids)
-            if not _on_il:
-                logger.info(
-                    f"F5: allowing game_pk={int(row['game_pk'])} -- "
-                    f"starter gap >{_IL_DAYS}d but neither starter on IL"
-                )
-            else:
-                logger.info(
-                    f"F5: skipping game_pk={int(row['game_pk'])} -- "
-                    f"starter gap >{_IL_DAYS}d + confirmed on IL"
-                )
-                continue
+            logger.info(
+                f"F5: skipping game_pk={int(row['game_pk'])} -- "
+                f"starter gap >{_IL_DAYS}d"
+            )
+            continue
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:

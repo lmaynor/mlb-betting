@@ -34,6 +34,8 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
+from mlb_core.rationale import build_rationale
+
 _IP_STD      = 1.5
 _OUTS_MC_SIMS = 10_000
 
@@ -200,16 +202,11 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
             row = match.iloc[0].to_dict()
             _last_app = match.iloc[0]["game_date"]
             _days_since = (pd.Timestamp(run_date) - _last_app).days
-            if _days_since > 7:
-                if int(pid) not in _il_ids:
-                    logger.info(
-                        f"K: allowing {pname} -- {_days_since}d gap but NOT on IL"
-                    )
-                else:
-                    logger.info(
-                        f"K: skipping {pname} -- {_days_since}d gap + confirmed on IL"
-                    )
-                    continue
+            if _days_since > 15:
+                logger.info(
+                    f"K: skipping {pname} -- {_days_since}d gap + confirmed on IL"
+                )
+                continue
             row["game_pk"]            = g["game_pk"]
             row["game_date"]          = pd.Timestamp(run_date)
             row["home_team"]          = g["home_team"]
