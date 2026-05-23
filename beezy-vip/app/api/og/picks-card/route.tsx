@@ -66,8 +66,8 @@ export async function GET() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 52px", height: `${HEADER_H}px`, borderBottom: "0.5px solid #1f1f24" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
           <div style={{ display: "flex", alignItems: "baseline" }}>
-            <span style={{ fontSize: "36px", fontWeight: 800, color: "#f5f5f7", letterSpacing: "-1.5px" }}>beezy</span>
-            <span style={{ fontSize: "36px", fontWeight: 800, color: "#10b981", letterSpacing: "-1.5px" }}>.vip</span>
+            <span style={{ fontSize: "36px", fontWeight: 800, color: "#f5f5f7", letterSpacing: "-1.5px" }}>BEEZY</span>
+            <span style={{ fontSize: "36px", fontWeight: 800, color: "#10b981", letterSpacing: "-1.5px" }}>.VIP</span>
           </div>
           <div style={{ display: "flex", width: "1px", height: "28px", background: "#2a2a31" }} />
           <span style={{ fontSize: "12px", color: "#52525b", letterSpacing: "2.5px" }}>MODEL-DRIVEN MLB PICKS</span>
