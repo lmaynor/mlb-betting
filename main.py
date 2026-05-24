@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-VALID_SYSTEMS = {"NRFI", "HR", "F5", "K"}
+VALID_SYSTEMS = {"NRFI", "HR", "F5", "K", "BATTER_HITS"}
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
@@ -51,6 +51,8 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
             from runners.run_f5 import run
         elif system == "K":
             from runners.run_k import run
+        elif system == "BATTER_HITS":
+            from runners.run_batter_hits import run
         else:
             return {"system": system, "status": "error", "error": "unknown system"}
 
@@ -113,6 +115,8 @@ def build_features_handler():
         from runners.build_f5_features import run
     elif system == "K":
         from runners.build_k_features import run
+    elif system == "BATTER_HITS":
+        from runners.build_batter_hits_features import run
     else:
         return jsonify({"status": "error", "error": f"Unknown system: {system}"}), 400
 
@@ -136,16 +140,17 @@ def build_all_features_handler():
     body             = request.get_json(silent=True) or {}
     run_date         = body.get("run_date", datetime.now(_CT).date().isoformat())
     continue_on_err  = body.get("continue_on_error", False)
-    default_order    = ["HR", "NRFI", "K", "F5"]
+    default_order    = ["HR", "NRFI", "K", "F5", "BATTER_HITS"]
     systems          = body.get("systems", default_order)
     # Enforce dependency order even if caller passes a subset
     ordered = [s for s in default_order if s in [x.upper() for x in systems]]
 
     builders = {
-        "HR":   "runners.build_hr_features",
-        "NRFI": "runners.build_nrfi_features",
-        "K":    "runners.build_k_features",
-        "F5":   "runners.build_f5_features",
+        "HR":          "runners.build_hr_features",
+        "NRFI":        "runners.build_nrfi_features",
+        "K":           "runners.build_k_features",
+        "F5":          "runners.build_f5_features",
+        "BATTER_HITS": "runners.build_batter_hits_features",
     }
 
     results = []
@@ -531,9 +536,10 @@ def reset_and_run():
     from runners.run_nrfi import run as run_nrfi
     from runners.run_f5 import run as run_f5
     from runners.run_k import run as run_k
+    from runners.run_batter_hits import run as run_batter_hits
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
-    systems  = body.get("systems", ["HR", "NRFI", "F5", "K"])
+    systems  = body.get("systems", ["HR", "NRFI", "F5", "K", "BATTER_HITS"])
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
@@ -544,7 +550,7 @@ def reset_and_run():
             deleted[sys] = r.rowcount
     logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
     results = {}
-    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k}
+    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits}
     for sys in systems:
         if sys in runner_map:
             try:
@@ -598,7 +604,7 @@ def dashboard():
     days = int(request.args.get("days", 7))
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
 
-    systems = ["HR", "NRFI", "F5", "K", "OUTS"]
+    systems = ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS"]
     summary_rows = ""
     for sys in systems:
         with bt.engine.connect() as conn:

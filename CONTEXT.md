@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-23 15:03 CST_
+_Last updated: 2026-05-24 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -24,7 +24,7 @@ Five MLB betting systems running daily in GCP:
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
 | **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
 | **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
-| **BATTER_HITS** | P(hits > line) Normal proxy via HR model quality | Batter hits O/U (best onshore book) | Live (log-only) |
+| **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
 
 OUTS is a sub-market of the K runner -- same feature CSV, same `run_k.py` -- but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
@@ -113,6 +113,9 @@ mlb-betting/
 │   ├── run_f5.py                 Score F5 ML, post bets.
 │   ├── run_k.py                  Score K O/U (system="K") + pitcher outs O/U
 │   │                             (system="OUTS") -- two trackers, one runner.
+│   ├── run_batter_hits.py        Score BATTER_HITS O/U via NegBin CDF. LOG_ONLY=True
+│   │                             until 200-bet gate cleared.
+│   ├── build_batter_hits_features.py  Nightly: build BATTER_HITS_System/data/model_features.csv.
 │   ├── snapshot_odds.py          Fetch SGO slate → GCS latest.json.
 │   ├── settle_bets.py            Nightly: settle all pending bets via MLB Stats API.
 │   │                             fetch_game_result() called once per game_pk, cached.
@@ -137,6 +140,8 @@ mlb-betting/
 │   ├── calibrate_k_v1.py         Fit lambda calibrator for K v1.
 │   ├── calibrate_hr_v6.py        Fit isotonic calibrator for HR v6.
 │   ├── retrain_outs_v1.py        Full OUTS retrain (NegBin count model). (E04)
+│   ├── retrain_batter_hits_v1.py Full BATTER_HITS retrain (NegBin count:poisson on batter_hits).
+│   ├── calibrate_batter_hits_v1.py  Fit isotonic lambda calibrator for BATTER_HITS v1.
 │   └── tune_hyperparams.py       Optuna hyperparameter search for all systems. (E09)
 │
 ├── HR_Pro/                       Per-system config dirs
@@ -144,6 +149,7 @@ mlb-betting/
 ├── F5_Pro_System/
 ├── OUTS_Pro_System/              OUTS Pro config (shares K feature CSV)
 ├── K_Pro_System/
+├── BATTER_HITS_System/           BATTER_HITS config (config_batter_hits.py + __init__.py)
 │
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
@@ -214,6 +220,14 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── xgb_k_v1.json
 │       ├── model_meta_v1.json
 │       ├── lambda_calibrator_k_v1.pkl
+│       └── archive/
+├── BATTER_HITS_System/
+│   ├── data/                           batter_hits_features.csv, pitcher_hits_features.csv,
+│   │                                   model_features.csv
+│   └── models/
+│       ├── xgb_batter_hits_v1.json
+│       ├── model_meta_batter_hits_v1.json  (includes nb_alpha for NegBin CDF)
+│       ├── lambda_calibrator_batter_hits_v1.pkl
 │       └── archive/
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
@@ -687,6 +701,8 @@ secretmanager.secretAccessor.
 - `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
 - `mlb-calibrate-hr` (fits isotonic calibrator for HR v6; run after any HR retrain)
 - `mlb-retrain-outs-v1` (full OUTS retrain; E04 2026-05-21)
+- `mlb-retrain-batter-hits` (full BATTER_HITS retrain; run after build_batter_hits_features)
+- `mlb-calibrate-batter-hits` (fit lambda calibrator for BATTER_HITS v1; run after retrain)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
 
@@ -786,11 +802,19 @@ into calibration.
   K:    mlb-retrain-k-v1     -> mlb-calibrate-k
   HR:   mlb-retrain-hr-v6    -> mlb-calibrate-hr
 
-**BATTER_TB, BATTER_HITS, and PITCHER_ER ship log-only (stake=0, kelly_triggered=False).**
-All three use proxy models (Normal/Gamma approximations anchored to HR or K model output)
+**BATTER_TB and PITCHER_ER ship log-only (stake=0, kelly_triggered=False).**
+Both use proxy models (Normal/Gamma approximations anchored to HR or K model output)
 rather than dedicated trained models. Do not enable real Kelly sizing until post-hoc
 analysis of ~100 settled bets confirms the proxy edge predicts outcomes. Gate is in
 the runner code -- set stake and kelly_triggered manually after review.
+
+**BATTER_HITS ships log-only via a trained NegBin model (LOG_ONLY=True gate).**
+`run_batter_hits.py` uses XGBoost `count:poisson` predicting expected hits (lambda),
+then applies NegBin CDF against the live book line. This is NOT a proxy -- it is a
+dedicated trained model (retrain_batter_hits_v1.py). LOG_ONLY remains True until
+200 settled bets confirm calibration. To promote: set `LOG_ONLY = False` in runner.
+Retrain sequence: build_batter_hits_features -> (optional) tune_hyperparams BATTER_HITS
+-> retrain_batter_hits_v1 -> calibrate_batter_hits_v1.
 
 **BATTER_K dropped -- no paired onshore book coverage.**
 batting_strikeouts- over entries only appear on DraftKings; under entries only on
@@ -1157,15 +1181,15 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
-| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5"],"continue_on_error":false}` |
+| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5","BATTER_HITS"],"continue_on_error":false}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}` |
+| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS"],"run_type":"morning"}` |
 | `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K"],"run_type":"evening"}` |
+| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS"],"run_type":"evening"}` |
 | `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
@@ -1660,7 +1684,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-23 15:03 CST_
+_Last updated: 2026-05-24 CST_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
@@ -2278,6 +2302,7 @@ Priority order within each tier. Work top-to-bottom.
 
 #### E09 · Hyperparameter tuning via Optuna [x] -- script written, pending execution
 - `training/tune_hyperparams.py` written. Run after E02-E07 complete.
+- BATTER_HITS system added to SYSTEM_CONFIG in tune_hyperparams.py.
 - `pip install optuna --break-system-packages` then `python -m training.tune_hyperparams --system NRFI --n-trials 50`
 - Retrain scripts pick up tuned params automatically via `load_tuned_params()`.
 
@@ -2296,6 +2321,18 @@ Priority order within each tier. Work top-to-bottom.
 - Global daily exposure cap: total stake across all systems <= 10% of bankroll per day.
 - Only needed before going live. Paper mode single-system caps are sufficient now.
 - [ ] Done
+
+#### E12 · BATTER_HITS first-run sequence [x] -- code complete, execution pending
+- All code written: build_batter_hits_features.py, retrain_batter_hits_v1.py,
+  calibrate_batter_hits_v1.py, run_batter_hits.py, config_batter_hits.py.
+- BATTER_HITS wired into main.py (VALID_SYSTEMS, _run_system, build_features_handler,
+  default_order, builders dict, dashboard, reset-and-run).
+- Optuna SYSTEM_CONFIG entry added.
+- First-run order: build features -> (optional) tune_hyperparams BATTER_HITS --n-trials 50
+  -> retrain_batter_hits_v1 -> calibrate_batter_hits_v1 -> verify runner with LOG_ONLY=True.
+- Cloud Run Jobs still to create: mlb-build-batter-hits-features, mlb-retrain-batter-hits,
+  mlb-calibrate-batter-hits.
+- [ ] First run executed and model artifacts verified in GCS
 
 ---
 
@@ -2341,9 +2378,9 @@ curl -s -X POST http://localhost:8081/monitor | python3 -m json.tool
 curl -s -X POST http://localhost:8081/monitor-ops | python3 -m json.tool
 curl -s -X POST http://localhost:8081/snapshot-odds | python3 -m json.tool
 
-curl -s -X POST http://localhost:8081/run   -H "Content-Type: application/json"   -d '{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}' | python3 -m json.tool
+curl -s -X POST http://localhost:8081/run   -H "Content-Type: application/json"   -d '{"systems":["NRFI","HR","F5","K","BATTER_HITS"],"run_type":"morning"}' | python3 -m json.tool
 
-curl -s -X POST http://localhost:8081/build-all-features   -H "Content-Type: application/json"   -d '{"systems":["HR","NRFI","K","F5"],"continue_on_error":true}' | python3 -m json.tool
+curl -s -X POST http://localhost:8081/build-all-features   -H "Content-Type: application/json"   -d '{"systems":["HR","NRFI","K","F5","BATTER_HITS"],"continue_on_error":true}' | python3 -m json.tool
 ```
 
 ### Delete bets and re-run clean

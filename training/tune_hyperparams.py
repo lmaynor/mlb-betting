@@ -122,6 +122,17 @@ SYSTEM_CONFIG = {
         "early_stopping": 30,
         "num_boost_round": 500,
     },
+    "BATTER_HITS": {
+        "gcs_features":  "BATTER_HITS_System/data/model_features.csv",
+        "target":        "batter_hits",
+        "objective":     "count:poisson",
+        "eval_metric":   "poisson-nloglik",
+        "metric_dir":    "min",
+        "gcs_output":    "BATTER_HITS_System/models/batter_hits_tuned_params.json",
+        "early_stopping": 30,
+        "num_boost_round": 2000,
+        "filter_col":    "batter_hits",
+    },
 }
 
 
