@@ -106,6 +106,20 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
         # YRFI: any run scored in inning 1 by batting team
         run_scored = int(g["post_bat_score"].max() > g["bat_score"].iloc[0])
 
+        # E05: pitch efficiency per batter faced in inning 1
+        _pitches_per_pa = safe_rate(pitches, pa_count)
+
+        # E05: first-pitch strike rate (pitch_number col present in modern Statcast)
+        if "pitch_number" in g.columns:
+            _fp = g[g["pitch_number"] == 1]
+            _fp_str = int(_fp["description"].isin([
+                "called_strike", "swinging_strike", "swinging_strike_blocked",
+                "foul", "foul_tip", "foul_bunt",
+            ]).sum())
+            _first_pitch_strike_pct = safe_rate(_fp_str, len(_fp))
+        else:
+            _first_pitch_strike_pct = np.nan
+
         return pd.Series({
             "pitcher":            g.name[0],
             "player_name":        g["player_name"].iloc[0],
@@ -140,8 +154,19 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
             "primary_pitch_pct":  pri_pct,
             "primary_whiff_rate": pri_whiff,
             "bat_speed_mean":     g["bat_speed"].mean() if "bat_speed" in g.columns else np.nan,
+            "pitches_per_pa":     _pitches_per_pa,
+            "first_pitch_strike_pct": _first_pitch_strike_pct,
             "yrfi":               run_scored,
         })
+
+    # E05: compute max inning pitched per start from full statcast (all innings).
+    # Used for avg_max_inning_L5 and opener_flag. Must run before inning=1 filter.
+    _depth = (
+        sc.assign(_inning=pd.to_numeric(sc["inning"], errors="coerce"))
+          .groupby(["pitcher", "game_pk"])["_inning"].max()
+          .reset_index()
+          .rename(columns={"_inning": "max_inning"})
+    )
 
     # Filter to inning=1 before grouping (NRFI is a 1st-inning model)
     sc_i1 = sc[pd.to_numeric(sc["inning"], errors="coerce") == 1].copy()
@@ -151,6 +176,7 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
              .apply(agg_start)
              .reset_index(drop=True)
     )
+    starts = starts.merge(_depth, on=["pitcher", "game_pk"], how="left")
 
     # inning_topbot == "Top" means the AWAY team is batting top of the 1st;
     # the pitcher facing them is the HOME pitcher. Verified 16/16 starts in
@@ -220,6 +246,21 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
             starts.groupby(["pitcher", "season"])[col]
                   .transform(lambda x: x.shift(1).expanding().mean())
         )
+
+    # E05: pitch efficiency (L5) and first-pitch strike rate (L5)
+    for _ecol in ["pitches_per_pa", "first_pitch_strike_pct"]:
+        starts[f"{_ecol}_L5"] = (
+            starts.groupby("pitcher")[_ecol]
+                  .transform(lambda x: x.shift(1).rolling(5, min_periods=2).mean())
+        )
+
+    # E05: opener detection via rolling max inning (L5 mean < 3.0 = typical opener/bulk usage)
+    starts["avg_max_inning_L5"] = (
+        starts.groupby("pitcher")["max_inning"]
+              .transform(lambda x: x.shift(1).rolling(5, min_periods=2).mean())
+    )
+    starts["opener_flag"] = starts["avg_max_inning_L5"].lt(3.0).astype(int)
+    starts.loc[starts["avg_max_inning_L5"].isna(), "opener_flag"] = 0
 
     logger.info(f"  ✅ {len(starts):,} pitcher starts | YRFI rate: {starts['yrfi'].mean():.3f}")
     return starts

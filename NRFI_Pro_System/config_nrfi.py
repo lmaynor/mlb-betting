@@ -15,7 +15,7 @@ from mlb_core.config import (
 BASE_DIR = Path(r"C:\Users\lmayn\Downloads\mlb-betting\NRFI_Pro_System")
 
 cfg = {
-    "version":            "v17",
+    "version":            "v18",
     "base_dir":           str(BASE_DIR),
 
     # Season
@@ -55,12 +55,19 @@ cfg = {
     "bet_db":             str(BASE_DIR / "data" / "nrfi_bets.db"),
 
     # GCS keys (Cloud Run uses these; local mode uses paths above)
+    # v17 keys kept for reference and fallback
     "gcs_model_halfinn":      "NRFI_Pro_System/models/xgb_halfinn_v17.json",
     "gcs_model_gamelevel":    "NRFI_Pro_System/models/xgb_gamelevel_v17.json",
     "gcs_model_meta":         "NRFI_Pro_System/models/model_meta_v17.json",
     "gcs_calibrator":         "NRFI_Pro_System/models/isotonic_calibrator_v17.pkl",
     "gcs_model_features":     "NRFI_Pro_System/data/model_features.csv",
     "gcs_pitcher_features":   "NRFI_Pro_System/data/pitcher_start_features.csv",
+    # v18 ensemble keys (runner auto-detects and prefers v18 when present)
+    "gcs_model_pitcher_v18":  "NRFI_Pro_System/models/xgb_pitcher_v18.json",
+    "gcs_model_lineup_v18":   "NRFI_Pro_System/models/xgb_lineup_v18.json",
+    "gcs_model_context_v18":  "NRFI_Pro_System/models/xgb_context_v18.json",
+    "gcs_model_meta_v18":     "NRFI_Pro_System/models/model_meta_v18.json",
+    "gcs_calibrator_v18":     "NRFI_Pro_System/models/isotonic_calibrator_v18.pkl",
 
     # Betting params
     "min_edge":           0.06,

@@ -1,14 +1,19 @@
 """
-runners/run_nrfi.py — NRFI Pro daily runner for Cloud Run.
+runners/run_nrfi.py -- NRFI Pro daily runner for Cloud Run.
 
 Odds source: SGO snapshot at Odds/sgo/latest.json
 Feature source: GCS NRFI_Pro_System/data/model_features.csv (built by
   runners.build_nrfi_features)
-Model: xgb_halfinn_v17.json loaded from GCS. Per-half YRFI probabilities
-  are combined to game-level NRFI: P(NRFI) = (1 - p_home) * (1 - p_away)
-  where each probability is the half-inning yrfi prob for the pitcher
-  facing that half. Optional isotonic calibrator applied to game-level
-  NRFI prob if present in GCS.
+
+Model loading order (v18 preferred, v17 fallback):
+  v18: 3-sub-model ensemble (pitcher/lineup/context) + logistic stacker.
+       xgb_pitcher/lineup/context_v18.json + model_meta_v18.json.
+       Calibrator: isotonic_calibrator_v18.pkl
+  v17: single half-inning XGBoost. Falls back if v18 artifacts absent in GCS.
+
+Per-half YRFI probabilities are combined to game-level:
+  P(YRFI) = 1 - (1 - p_home) * (1 - p_away)
+Isotonic calibrator applied to game-level YRFI prob when present.
 
 run() is called by main.py.
 """
@@ -83,6 +88,109 @@ def _load_calibrator(cfg: dict):
                 return pickle.load(f)
         except Exception as e:
             logger.warning(f"NRFI calibrator load failed: {e}")
+    return None
+
+
+_V18_META_KEY = "NRFI_Pro_System/models/model_meta_v18.json"
+_V18_BOOSTER_KEYS = {
+    "pitcher": "NRFI_Pro_System/models/xgb_pitcher_v18.json",
+    "lineup":  "NRFI_Pro_System/models/xgb_lineup_v18.json",
+    "context": "NRFI_Pro_System/models/xgb_context_v18.json",
+}
+_V18_CALIBRATOR_KEY = "NRFI_Pro_System/models/isotonic_calibrator_v18.pkl"
+
+
+def _load_v18_ensemble():
+    """Load v18 sub-model boosters + meta from GCS.
+
+    Returns (sub_boosters dict, meta dict) on success.
+    Returns (None, None) if v18 artifacts are not yet in GCS (v17 fallback).
+    """
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import download_model, read_bytes, exists
+
+    if not GCS_BUCKET or not exists(_V18_META_KEY):
+        return None, None
+
+    try:
+        meta = json.loads(read_bytes(_V18_META_KEY))
+    except Exception as e:
+        logger.warning(f"NRFI v18 meta load failed: {e} -- falling back to v17")
+        return None, None
+
+    sub_boosters: dict = {}
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for name, key in _V18_BOOSTER_KEYS.items():
+                b = xgb.Booster()
+                local = download_model(key, Path(tmpdir) / f"xgb_{name}.json")
+                b.load_model(str(local))
+                b.best_ntree_limit = meta["sub_models"][name].get("best_iteration", 0)
+                sub_boosters[name] = b
+    except Exception as e:
+        logger.warning(f"NRFI v18 booster load failed: {e} -- falling back to v17")
+        return None, None
+
+    logger.info(
+        f"NRFI v18 ensemble loaded | sub-models={list(sub_boosters)} | "
+        f"AUC_OOS={meta.get('auc_oos', '?')} | "
+        f"sub_aucs={meta.get('sub_model_aucs', {})}"
+    )
+    return sub_boosters, meta
+
+
+def _score_v18(sub_boosters: dict, meta: dict, df: pd.DataFrame) -> np.ndarray:
+    """Score half-inning rows using the v18 ensemble.
+
+    Applies each sub-model to its feature group, then runs the logistic
+    stacker to produce a single per-row half-inning YRFI probability.
+    """
+    sub_order = meta["stacker"]["sub_order"]
+    coef      = np.array(meta["stacker"]["coef"])
+    intercept = float(meta["stacker"]["intercept"])
+
+    sub_probs = []
+    for name in sub_order:
+        info          = meta["sub_models"][name]
+        features      = info["features"]
+        feature_means = info.get("feature_means", {})
+        best_iter     = info.get("best_iteration", 0)
+        booster       = sub_boosters[name]
+
+        avail   = [f for f in features if f in df.columns]
+        missing = set(features) - set(avail)
+        if missing:
+            logger.warning(
+                f"NRFI v18 [{name}]: {len(missing)} features missing: "
+                f"{sorted(missing)[:5]}"
+            )
+
+        X = df.reindex(columns=features).apply(pd.to_numeric, errors="coerce")
+        for col in features:
+            m = feature_means.get(col)
+            if m is not None:
+                X[col] = X[col].fillna(float(m))
+        dm = xgb.DMatrix(X.astype(float), feature_names=features)
+        if best_iter:
+            p = booster.predict(dm, iteration_range=(0, best_iter))
+        else:
+            p = booster.predict(dm)
+        sub_probs.append(p)
+
+    meta_X = np.column_stack(sub_probs)
+    logit  = meta_X @ coef + intercept
+    return 1.0 / (1.0 + np.exp(-logit))
+
+
+def _load_calibrator_by_key(gcs_key: str):
+    """Load an isotonic calibrator from a specific GCS key. Returns None on miss."""
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import read_bytes, exists
+    if GCS_BUCKET and gcs_key and exists(gcs_key):
+        try:
+            return pickle.loads(read_bytes(gcs_key))
+        except Exception as e:
+            logger.warning(f"NRFI calibrator load failed ({gcs_key}): {e}")
     return None
 
 
@@ -220,15 +328,25 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
     from mlb_core.odds.dk_scraper import resolve_team
 
-    booster, features, feature_means = _load_halfinn_model(cfg)
-    calibrator = _load_calibrator(cfg)
+    # Try v18 ensemble first; fall back to v17 if artifacts not yet in GCS.
+    _v18_boosters, _v18_meta = _load_v18_ensemble()
+    if _v18_boosters is not None:
+        logger.info("NRFI: scoring with v18 ensemble (pitcher/lineup/context stacked)")
+        calibrator = _load_calibrator_by_key(_V18_CALIBRATOR_KEY)
+    else:
+        logger.info("NRFI: v18 not found -- scoring with v17")
+        booster, features, feature_means = _load_halfinn_model(cfg)
+        calibrator = _load_calibrator(cfg)
 
     feat_df = _build_today_feature_rows(cfg, run_date)
     if feat_df.empty:
-        logger.warning("NRFI: no candidate starter rows — skipping predictions")
+        logger.warning("NRFI: no candidate starter rows -- skipping predictions")
         return pd.DataFrame()
 
-    p_half = _score(booster, features, feature_means, feat_df)
+    if _v18_boosters is not None:
+        p_half = _score_v18(_v18_boosters, _v18_meta, feat_df)
+    else:
+        p_half = _score(booster, features, feature_means, feat_df)
     feat_df = feat_df.copy()
     feat_df["p_half_yrfi"] = p_half
 
