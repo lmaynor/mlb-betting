@@ -2342,7 +2342,94 @@ Priority order within each tier. Work top-to-bottom.
 - New tasks: add with Exx ID continuing sequence
 - Blocked: add `> Blocked: reason` line
 
-## 20. Common manual actions (code fragments)
+## 20. Claude Code + Cloud Shell workflow
+
+Claude Code runs on the **local Mac** at `/Users/lmaynor/mlb-betting`.
+Deployment happens from **Cloud Shell** at `~/mlb-betting`.
+These are two separate git clones. Changes written by Claude Code must reach
+Cloud Shell before they can be deployed.
+
+### Normal flow (Claude Code session -> deploy)
+
+```
+1. Claude Code edits files on Mac, commits locally
+2. git push origin main   (from Mac -- works via macOS keychain)
+3. Cloud Shell: git pull && ./deploy/deploy_service.sh
+```
+
+If `git push` fails from Mac (no credential helper):
+```bash
+# Generate a PAT at github.com -> Settings -> Developer settings -> Fine-grained tokens
+# Scope: Contents read+write on lmaynor/mlb-betting
+git remote set-url origin https://lmaynor:<PAT>@github.com/lmaynor/mlb-betting.git
+git push origin main
+```
+
+### If you need to edit a file directly on Cloud Shell
+
+Use `sed -i` for targeted replacements -- do NOT use nano/vim for multi-line
+patches (copy-paste corruption). Always verify with `grep` after:
+
+```bash
+sed -i 's|OLD_STRING|NEW_STRING|' ~/mlb-betting/path/to/file.py
+grep -n "NEW_STRING" ~/mlb-betting/path/to/file.py
+```
+
+Then commit from Cloud Shell:
+```bash
+cd ~/mlb-betting
+git add path/to/file.py
+git commit -m "fix: description"
+./deploy/deploy_service.sh   # deploy stamps CONTEXT.md + pushes + builds + deploys
+```
+
+**Do not commit on both Mac and Cloud Shell without syncing first** -- diverged
+branches require a merge or rebase before deploy will push cleanly.
+
+### Dockerfile COPY rule -- add new system dirs here
+
+The Dockerfile has **explicit COPY lines** for every system package directory.
+`find_packages()` in `setup.py` is not sufficient -- if the directory is not
+in the Dockerfile it will not exist in the container.
+
+When adding a new system `FOO_System/`:
+1. Add `COPY FOO_System/ ./FOO_System/` to Dockerfile (after K_Pro_System line)
+2. Commit and redeploy -- the 500 `ModuleNotFoundError` is the symptom if missed
+
+Current system dirs in Dockerfile:
+```
+mlb_core/ NRFI_Pro_System/ HR_Pro/ F5_Pro_System/ K_Pro_System/
+OUTS_Pro_System/ BATTER_HITS_System/ runners/ training/ main.py setup.py
+```
+
+### Proxy gotchas
+
+- Always start proxy in the **foreground** (no `&`) in one tab, curl from a second tab
+- **Stale proxy returns Google 404** on `/healthz` -- kill and restart after any deploy
+- Port already in use: `pkill -f "run services proxy"` then restart on a new port
+- `sleep N && curl` in the same command races with `&` proxy startup -- run separately
+
+```bash
+# Tab 1
+pkill -f "run services proxy"
+gcloud run services proxy mlb-betting --region=us-central1 --port=8081
+
+# Tab 2
+curl -s http://localhost:8081/healthz   # must return {"status":"ok"} before anything else
+```
+
+### git identity on Mac (one-time)
+
+Claude Code commits require git identity. If `git commit` fails with
+"Author identity unknown":
+```bash
+git config --global user.email "lmaynor@users.noreply.github.com"
+git config --global user.name "lmaynor"
+```
+
+---
+
+## 23. Common manual actions (code fragments)
 
 ### Deploy
 
@@ -2354,8 +2441,10 @@ cd ~/mlb-betting
 ### Start Cloud Run proxy for curl tests
 
 ```bash
-gcloud run services proxy mlb-betting --region=us-central1 --port=8081 &
-sleep 4
+# Foreground in Tab 1 -- do NOT use & here
+gcloud run services proxy mlb-betting --region=us-central1 --port=8081
+# Tab 2: verify before any curl
+curl -s http://localhost:8081/healthz
 ```
 
 ### Trigger a scheduler job immediately
