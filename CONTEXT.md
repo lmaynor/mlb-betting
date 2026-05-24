@@ -17,7 +17,7 @@ Five MLB betting systems running daily in GCP:
 | System | What it predicts | Market | Status |
 |---|---|---|---|
 | **HR Pro v6** | P(batter hits HR in game) | HR yes/no props (best onshore book) | Live (paper) |
-| **NRFI Pro v17** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
+| **NRFI Pro v18** | P(no run scored in inning 1) | NRFI/YRFI O/U + 1st inning 3-way ML (best onshore book) | Live (paper) |
 | **F5 Pro v5** | P(home team wins first 5 innings) | F5 moneyline (best onshore book) | Live (paper) |
 | **K Pro v1** | E[pitcher strikeouts] (NB; k_per_9_L5 * avg_ip scaling) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (trained NegBin; retrain_outs_v1.py) | Pitcher outs O/U (best onshore book) | Live (paper) |
@@ -127,7 +127,9 @@ mlb-betting/
 │
 ├── training/                     RETRAIN PIPELINE
 │   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
-│   ├── retrain_nrfi_v17.py       Full NRFI retrain.
+│   ├── retrain_nrfi_v17.py       Full NRFI retrain. (v17 -- superseded)
+│   ├── retrain_nrfi_v18.py       Full NRFI v18 retrain (E05+E08: sub-model ensemble).
+│   ├── calibrate_nrfi_v18.py     Fit isotonic calibrator for NRFI v18.
 │   ├── retrain_k_v1.py           Full K retrain with walk-forward CV + leakage guard.
 │   ├── retrain_hr_meta.py        Patches feature_means into HR model meta.
 │   ├── calibrate_nrfi_v17.py     Fit isotonic calibrator for NRFI v17.
