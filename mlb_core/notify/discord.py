@@ -360,14 +360,14 @@ def post_all_systems_summary(
 
     run_date = run_date or settle_date or date.today().isoformat()
 
-    _SYSTEM_ICONS = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠"}
+    _SYSTEM_ICONS = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠", "BATTER_HITS": "🩵"}
 
     valid_stats = {k: v for k, v in systems_stats.items() if v}
     total_pnl   = sum(s.get("pnl", 0) for s in valid_stats.values())
     pnl_emoji   = "📈" if total_pnl >= 0 else "📉"
 
     fields = []
-    for system in ["HR", "NRFI", "F5", "K", "OUTS"]:
+    for system in ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS"]:
         stats = systems_stats.get(system)
         icon  = _SYSTEM_ICONS.get(system, "⚪")
         if not stats:

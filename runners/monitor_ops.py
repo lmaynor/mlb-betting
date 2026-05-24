@@ -40,17 +40,19 @@ SCHEDULER_JOBS = [
 ]
 
 FEATURE_KEYS = {
-    "HR":   "HR_Pro/data/model_features.csv",
-    "NRFI": "NRFI_Pro_System/data/model_features.csv",
-    "F5":   "F5_Pro_System/data/model_features.csv",
-    "K":    "K_Pro_System/data/model_features.csv",
+    "HR":          "HR_Pro/data/model_features.csv",
+    "NRFI":        "NRFI_Pro_System/data/model_features.csv",
+    "F5":          "F5_Pro_System/data/model_features.csv",
+    "K":           "K_Pro_System/data/model_features.csv",
+    "BATTER_HITS": "BATTER_HITS_System/data/model_features.csv",
 }
 
 MODEL_KEYS = {
-    "HR":   "HR_Pro/models/xgb_hr_v6.json",
-    "NRFI": "NRFI_Pro_System/models/xgb_halfinn_v17.json",
-    "F5":   "F5_Pro_System/models/xgb_f5_v5.json",
-    "K":    "K_Pro_System/models/xgb_k_v1.json",
+    "HR":          "HR_Pro/models/xgb_hr_v6.json",
+    "NRFI":        "NRFI_Pro_System/models/xgb_halfinn_v17.json",
+    "F5":          "F5_Pro_System/models/xgb_f5_v5.json",
+    "K":           "K_Pro_System/models/xgb_k_v1.json",
+    "BATTER_HITS": "BATTER_HITS_System/models/xgb_batter_hits_v1.json",
 }
 
 SGO_SNAPSHOT_KEY   = "Odds/sgo/latest.json"
@@ -156,10 +158,11 @@ def _check_build_sentinels() -> list[str]:
     import json
 
     SENTINELS = {
-        "HR":   "HR_Pro/data/last_build.json",
-        "NRFI": "NRFI_Pro_System/data/last_build.json",
-        "K":    "K_Pro_System/data/last_build.json",
-        "F5":   "F5_Pro_System/data/last_build.json",
+        "HR":          "HR_Pro/data/last_build.json",
+        "NRFI":        "NRFI_Pro_System/data/last_build.json",
+        "K":           "K_Pro_System/data/last_build.json",
+        "F5":          "F5_Pro_System/data/last_build.json",
+        "BATTER_HITS": "BATTER_HITS_System/data/last_build.json",
     }
     failures = []
     for system, key in SENTINELS.items():

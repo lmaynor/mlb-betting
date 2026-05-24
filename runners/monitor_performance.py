@@ -47,11 +47,12 @@ ROLLING_WINDOW        = int(os.getenv("MONITOR_ROLLING_WINDOW",  "30"))  # bets
 # These are conservative — the models haven't been live long enough
 # to establish true baselines. Update these after 200 bets per system.
 EXPECTED_HIT_RATES = {
-    "HR":   0.07,   # HR props are rare hits
-    "NRFI": 0.55,   # roughly coin flip + edge
-    "F5":   0.52,
-    "K":    0.52,
-    "OUTS": 0.52,
+    "HR":          0.07,   # HR props are rare hits
+    "NRFI":        0.55,   # roughly coin flip + edge
+    "F5":          0.52,
+    "K":           0.52,
+    "OUTS":        0.52,
+    "BATTER_HITS": 0.52,   # update after 200 settled bets; NegBin model, treat as placeholder
 }
 
 
@@ -248,7 +249,7 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
     if not webhook_url:
         return
 
-    color_dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠"}.get(system, "⚪")
+    color_dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠", "BATTER_HITS": "🩵"}.get(system, "⚪")
     alert_text = "\n".join(f"• {a}" for a in alerts)
 
     embed = {
@@ -279,9 +280,9 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
 
     fields = []
     total_pnl = 0.0
-    for system in ["HR", "NRFI", "F5", "K", "OUTS"]:
+    for system in ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS"]:
         stats = system_stats.get(system)
-        dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠"}.get(system, "⚪")
+        dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠", "BATTER_HITS": "🩵"}.get(system, "⚪")
         if not stats or stats.get("n", 0) == 0:
             fields.append({"name": f"{dot} {system}", "value": "_no data_", "inline": False})
             continue
@@ -359,7 +360,7 @@ def run(run_date: str = None) -> dict:
     total_alerts = 0
     weekly_stats = {}
 
-    for system in ["HR", "NRFI", "F5", "K", "OUTS"]:
+    for system in ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS"]:
         sys_bets = all_bets[all_bets["system"] == system]
         if sys_bets.empty:
             results[system] = {"status": "no_data"}

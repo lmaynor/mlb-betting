@@ -98,13 +98,33 @@ _F5_RULES = [
     ("pitcher_is_home",      lambda v: v == 1,     "home starter"),
 ]
 
+# ── BATTER_HITS rules ─────────────────────────────────────────────────────────
+_BATTER_HITS_RULES = [
+    ("hits_per_game_L20",       lambda v: v >= 1.5,   "averaging {v:.2f} hits/game L20"),
+    ("hits_per_game_L20",       lambda v: v >= 1.2,   "above-avg contact rate ({v:.2f} H/G L20)"),
+    ("babip_L20",                lambda v: v >= 0.330, "elevated BABIP ({v:.3f} L20)"),
+    ("babip_L20",                lambda v: v <= 0.250, "low BABIP ({v:.3f} L20) — regression risk"),
+    ("contact_pct_L20",          lambda v: v >= 0.80,  "high contact rate ({v:.0%} L20)"),
+    ("ld_rate_L20",              lambda v: v >= 0.25,  "line drive machine ({v:.0%} LD rate L20)"),
+    ("hard_hit_L20",             lambda v: v >= 0.45,  "hard contact ({v:.0%} hard-hit L20)"),
+    ("hits_vs_hand_season",      lambda v: v >= 0.280, "hitting {v:.3f} vs this hand type this season"),
+    ("pitcher_babip_allowed_L20",lambda v: v >= 0.320, "pitcher allowing high BABIP ({v:.3f} L20)"),
+    ("pitcher_hits_per_9_L20",   lambda v: v >= 9.0,   "pitcher allowing {v:.1f} H/9 L20"),
+    ("hits_park_factor",         lambda v: v >= 1.08,  "hitter-friendly park ({v:.2f}x hits factor)"),
+    ("hits_park_factor",         lambda v: v <= 0.92,  "pitcher-friendly park ({v:.2f}x) — suppressed"),
+    ("temperature_f",            lambda v: v >= 80,    "warm conditions ({v:.0f}F)"),
+    ("temperature_f",            lambda v: v <= 50,    "cold conditions ({v:.0f}F) — suppressed"),
+    ("ewma_batting_order",       lambda v: v <= 3.5,   "top-of-order spot ({v:.1f} avg batting order)"),
+]
+
 _SYSTEM_RULES = {
-    "HR":   _HR_RULES,
-    "NRFI": _NRFI_RULES,
-    "YRFI": _NRFI_RULES,
-    "K":    _K_RULES,
-    "OUTS": _OUTS_RULES,
-    "F5":   _F5_RULES,
+    "HR":          _HR_RULES,
+    "NRFI":        _NRFI_RULES,
+    "YRFI":        _NRFI_RULES,
+    "K":           _K_RULES,
+    "OUTS":        _OUTS_RULES,
+    "F5":          _F5_RULES,
+    "BATTER_HITS": _BATTER_HITS_RULES,
 }
 
 
