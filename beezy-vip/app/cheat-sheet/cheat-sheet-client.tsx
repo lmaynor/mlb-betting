@@ -58,6 +58,7 @@ function PickCard({ bet, rank, showRationale }: {
 }) {
   const color   = SYSTEM_COLOR[bet.system] ?? '#71717a'
   const isProp  = PLAYER_SYSTEMS.has(bet.system) || PITCHER_SYSTEMS.has(bet.system)
+  const isGame  = GAME_SYSTEMS.has(bet.system)
   const edge    = fmtEdge(bet.edge)
   const bullets = bet.notes ? bet.notes.split(' · ').filter(Boolean) : []
 
@@ -69,86 +70,105 @@ function PickCard({ bet, rank, showRationale }: {
 
   return (
     <div style={{
-      background: '#0e0e14',
-      borderLeft: `3px solid ${color}`,
-      marginBottom: '1px',
+      background: '#0c0c12',
+      borderBottom: '1px solid #16161e',
       display: 'flex',
       alignItems: 'stretch',
-      minHeight: '76px',
+      minHeight: '100px',
       overflow: 'hidden',
+      position: 'relative',
     }}>
-      {/* Rank */}
+      {/* Left panel — gradient bg + portrait or logos */}
       <div style={{
-        width: '26px', minWidth: '26px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRight: '1px solid #1a1a22',
+        width: '86px', minWidth: '86px',
+        position: 'relative',
+        overflow: 'hidden',
+        background: `linear-gradient(135deg, ${color}28 0%, #09090f 70%)`,
+        borderRight: `1px solid ${color}22`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
-        <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#2e2e3a', fontWeight: 700 }}>
+        {/* Rank badge — top-left corner */}
+        <span style={{
+          position: 'absolute', top: '5px', left: '6px',
+          fontFamily: 'monospace', fontSize: '8px', color: `${color}88`, fontWeight: 700,
+        }}>
           #{rank}
         </span>
-      </div>
 
-      {/* Headshot / Logos */}
-      <div style={{
-        width: '60px', minWidth: '60px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '8px 4px', borderRight: '1px solid #1a1a22',
-        background: '#0a0a0f',
-      }}>
         {isProp && bet.headshotUrl ? (
+          // Portrait — fills left panel, head at top, no circle
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={bet.headshotUrl}
             alt={bet.player ?? ''}
-            width={48}
-            height={48}
+            width={86}
+            height={100}
             style={{
-              borderRadius: '50%',
               objectFit: 'cover',
-              objectPosition: 'top',
-              border: `2px solid ${color}33`,
-              background: 'transparent',
+              objectPosition: 'top center',
+              width: '86px',
+              height: '100%',
+              position: 'absolute',
+              inset: 0,
             }}
           />
-        ) : !isProp && (bet.awayLogoUrl || bet.homeLogoUrl) ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+        ) : isGame && (bet.awayLogoUrl || bet.homeLogoUrl) ? (
+          // Two team logos stacked
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}>
             {bet.awayLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={bet.awayLogoUrl} alt={bet.away_team ?? ''} width={24} height={24} style={{ objectFit: 'contain' }} />
+              <img src={bet.awayLogoUrl} alt={bet.away_team ?? ''} width={32} height={32} style={{ objectFit: 'contain' }} />
             )}
+            <span style={{ fontFamily: 'monospace', fontSize: '7px', color: `${color}66` }}>@</span>
             {bet.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={bet.homeLogoUrl} alt={bet.home_team ?? ''} width={24} height={24} style={{ objectFit: 'contain' }} />
+              <img src={bet.homeLogoUrl} alt={bet.home_team ?? ''} width={32} height={32} style={{ objectFit: 'contain' }} />
             )}
           </div>
         ) : (
-          <span style={{ fontFamily: 'monospace', fontSize: '10px', color, fontWeight: 700 }}>
+          // Fallback: system label
+          <span style={{ fontFamily: 'monospace', fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>
             {SYSTEM_LABEL[bet.system] ?? bet.system}
           </span>
+        )}
+
+        {/* Bottom fade for portrait photos */}
+        {isProp && bet.headshotUrl && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: '30px',
+            background: 'linear-gradient(to top, #0c0c12, transparent)',
+            zIndex: 1,
+          }} />
         )}
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, padding: '9px 11px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-        {/* System badge + title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+      <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+        {/* System badge */}
+        <div style={{ marginBottom: '4px' }}>
           <span style={{
             fontFamily: 'monospace', fontSize: '8px', fontWeight: 700,
-            letterSpacing: '0.08em', padding: '2px 5px', flexShrink: 0,
-            background: `${color}18`, color, border: `1px solid ${color}44`,
+            letterSpacing: '0.1em', padding: '2px 6px',
+            background: `${color}20`, color, border: `1px solid ${color}44`,
           }}>
             {SYSTEM_LABEL[bet.system] ?? bet.system}
           </span>
-          <span style={{
-            fontSize: '13px', fontWeight: 700, color: '#f0f0f5',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {title}
-          </span>
+        </div>
+
+        {/* Player / matchup name */}
+        <div style={{
+          fontSize: '15px', fontWeight: 800, color: '#f5f5f7',
+          letterSpacing: '-0.01em', lineHeight: 1.1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          marginBottom: '3px',
+        }}>
+          {title}
         </div>
 
         {/* Bet type + odds */}
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#4a4a5e', marginBottom: (showRationale && bullets.length) ? '5px' : 0 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44445a', marginBottom: (showRationale && bullets.length) ? '6px' : 0 }}>
           {sub}
         </div>
 
@@ -156,25 +176,25 @@ function PickCard({ bet, rank, showRationale }: {
         {showRationale && bullets.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {bullets.slice(0, 3).map((b, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
                 <span style={{ color, fontSize: '8px', lineHeight: '14px', flexShrink: 0 }}>▸</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#7878a0', lineHeight: '14px' }}>{b}</span>
+                <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#6a6a8a', lineHeight: '14px' }}>{b}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Edge */}
+      {/* Edge panel */}
       {edge && (
         <div style={{
-          minWidth: '52px', display: 'flex', flexDirection: 'column',
+          minWidth: '56px', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          borderLeft: '1px solid #1a1a22', padding: '8px 5px',
-          background: '#08080d',
+          borderLeft: `1px solid ${color}18`, padding: '8px 6px',
+          background: `${color}08`,
         }}>
-          <span style={{ fontFamily: 'monospace', fontSize: '7px', color: '#2e2e3a', letterSpacing: '0.1em', marginBottom: '2px' }}>EDGE</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 700, color }}>{edge}</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '7px', color: `${color}55`, letterSpacing: '0.1em', marginBottom: '3px' }}>EDGE</span>
+          <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 800, color }}>{edge}</span>
         </div>
       )}
     </div>
