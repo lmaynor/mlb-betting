@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { SignedIn, SignedOut, UserButton, SignInButton } from '@clerk/nextjs'
+import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 
 const B = '0.5px solid #1f1f24'
 const NAV_LINKS = [
@@ -15,7 +15,8 @@ const NAV_LINKS = [
 ]
 
 export function Nav() {
-  const pathname = usePathname()
+  const pathname  = usePathname()
+  const { isSignedIn } = useUser()
 
   return (
     <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw', borderBottom: B, background: '#111114', overflow: 'hidden' }}>
@@ -43,33 +44,33 @@ export function Nav() {
             style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 14px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
             Join Discord
           </a>
-          <SignedIn>
-            <Link href="/dashboard" className="mono" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none', color: pathname.startsWith('/dashboard') ? '#10b981' : '#71717a' }}>
-              Dashboard
-            </Link>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-          <SignedOut>
+          {isSignedIn ? (
+            <>
+              <Link href="/dashboard" className="mono" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none', color: pathname.startsWith('/dashboard') ? '#10b981' : '#71717a' }}>
+                Dashboard
+              </Link>
+              <UserButton afterSignOutUrl="/" />
+            </>
+          ) : (
             <SignInButton mode="modal">
               <button className="mono" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', background: 'none', border: '0.5px solid #2a2a31', padding: '5px 12px', color: '#71717a', cursor: 'pointer' }}>
                 Sign In
               </button>
             </SignInButton>
-          </SignedOut>
+          )}
         </div>
 
         {/* Mobile: auth + Discord — BottomNav handles routing */}
         <div className="nav-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <SignedIn>
+          {isSignedIn ? (
             <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-          <SignedOut>
+          ) : (
             <SignInButton mode="modal">
               <button className="mono" style={{ fontSize: '10px', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'none', border: '0.5px solid #2a2a31', padding: '4px 8px', color: '#71717a', cursor: 'pointer' }}>
                 Sign In
               </button>
             </SignInButton>
-          </SignedOut>
+          )}
           <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
             style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '5px 10px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
             Discord
