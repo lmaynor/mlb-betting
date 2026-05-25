@@ -16,6 +16,7 @@ Entrypoint: run(run_date) -- called by main.py for {"system": "GAME"}.
 from __future__ import annotations
 
 import logging
+import os
 import warnings
 from datetime import date
 from pathlib import Path
@@ -784,7 +785,14 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info("GAME feature build | run_type=%s | run_date=%s", run_type, run_date)
 
-    LOOKBACK = 90
+    # Use a full historical lookback on first build so CV folds (2023/2024/2025) have data.
+    # Subsequent daily builds stay at 90 days (incremental keep+rebuild).
+    _is_first_build = not exists("GAME_Pro_System/data/model_features.csv")
+    LOOKBACK = int(os.getenv("GAME_LOOKBACK_DAYS", "1500" if _is_first_build else "90"))
+    if _is_first_build:
+        logger.info("GAME: no existing model_features.csv — full backfill (lookback=%d days)", LOOKBACK)
+    else:
+        logger.info("GAME: incremental build (lookback=%d days)", LOOKBACK)
 
     # -- 1. Load Statcast
     try:
