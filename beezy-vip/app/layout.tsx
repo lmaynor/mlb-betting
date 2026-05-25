@@ -4,6 +4,7 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
+import { ClerkProvider } from '@clerk/nextjs'
 import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
@@ -33,6 +34,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
+    <ClerkProvider>
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
       <body>
         <Nav />
@@ -42,5 +44,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <BottomNav />
       </body>
     </html>
+    </ClerkProvider>
   )
 }
