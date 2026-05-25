@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-24 23:02 CST_
+_Last updated: 2026-05-24 (session: GAME Pro v1 launch, BATTER_HITS pipeline, registry/schema layer)_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -96,8 +96,15 @@ mlb-betting/
 │   │                             One DB query per runner; _pending_stakes accumulator
 │   │                             tracks within-runner exposure correctly.
 │   ├── rationale.py              Canned rationale engine. Maps feature values to plain-English phrases.
-│       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
 │   │                             Extend by adding rules to _SYSTEM_RULES in rationale.py.
+│   ├── registry.py               Single source of truth for all system config (SystemConfig dataclass).
+│   │                             SYSTEMS dict + CANONICAL_ORDER + get_system() + active_systems().
+│   │                             Adding a new system requires ONE entry here instead of editing 8+ files.
+│   │                             Import: from mlb_core.registry import SYSTEMS, get_system, active_systems
+│   ├── schemas.py                Lightweight DataFrame validation. validate_df(df, schema_key, ...).
+│   │                             8 named schemas: statcast_raw, scoring_master, nrfi/f5/hr/k/
+│   │                             batter_hits/game model_features. Logs WARNING per violation;
+│   │                             raises ValueError if raise_on_error=True.
 │   └── tracking/
 │       └── bet_tracker.py        BetTracker(db_path, system). Writes to Postgres.
 │                                 log_bet() dedup on (system, game_date, game_pk, bet_type).
@@ -158,7 +165,11 @@ mlb-betting/
 ├── K_Pro_System/
 ├── BATTER_HITS_System/           BATTER_HITS config (config_batter_hits.py + __init__.py)
 ├── GAME_Pro_System/              GAME config (config_game.py + __init__.py)
-│                                 32 features: starters L3, bullpen L14, offense L20, park/weather
+│                                 42 features: starters L3 (xwOBA+whiff+hard-hit), bullpen L14
+│                                 (xwOBA/K%/BB%/whiff/hard-hit/fatigue), offense L20 (wOBA+hard-hit),
+│                                 park/weather. +10 vs original: whiff_pct_L3, hard_hit_allowed_L3
+│                                 (starters), bullpen_whiff_pct_L14, bullpen_hard_hit_L14,
+│                                 team_hard_hit_L20 (home+away = 10 columns)
 │
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
@@ -618,14 +629,24 @@ more logging; remove noise after the bug is fixed if needed.
 
 ### Adding a new system
 To add a new betting system:
-1. Add to §1 table and §5 bet type / settlement tables
-2. Create `runners/run_{sys}.py` and `runners/build_{sys}_features.py`
-3. Add system to `settle_bets.py` systems loop + statcast/scoring checks
-4. Add to `monitor_performance.py` systems list + `EXPECTED_HIT_RATES`
-5. Add icon/color to `discord.py` `_SYSTEM_COLORS` and `post_all_systems_summary`
+1. Add entry to `mlb_core/registry.py` SYSTEMS dict (required -- drives monitor_ops,
+   monitor_performance, discord, and future auto-wiring)
+2. Add to §1 table and §5 bet type / settlement tables
+3. Create `runners/run_{sys}.py` and `runners/build_{sys}_features.py`
+   - **Both** must have `if __name__ == "__main__":` block (required for Cloud Run Job invocation)
+4. Add system to `settle_bets.py` systems loop + statcast/scoring checks
+5. Add to `main.py` VALID_SYSTEMS, builders dict, _run_system, build_features_handler
+   (main.py is NOT yet driven by the registry -- update both until migration is done)
 6. Add Cloud Scheduler jobs for feature build + wire into `/run`
-7. Update CONTEXT.md §1, §2, §3, §5
-8. Add rules to `mlb_core/rationale.py` `_SYSTEM_RULES` dict
+7. Create Cloud Run Jobs (build + retrain + calibrate) with explicit task-timeout flags
+8. Update CONTEXT.md §1, §2, §3, §5
+9. Add rules to `mlb_core/rationale.py` `_SYSTEM_RULES` dict
+10. Add schema entry to `mlb_core/schemas.py` (SCHEMAS dict)
+
+Step 1 (registry) also auto-populates:
+- `monitor_ops.py` FEATURE_KEYS + MODEL_KEYS
+- `monitor_performance.py` EXPECTED_HIT_RATES + system loop
+- `discord.py` _SYSTEM_ICONS + post_all_systems_summary loop
 
 OUTS is the model for a sub-market of an existing system: same runner,
 separate tracker (`system="OUTS"`), no new feature build or model needed.
@@ -720,9 +741,14 @@ secretmanager.secretAccessor.
 - `mlb-retrain-outs-v1` (full OUTS retrain; E04 2026-05-21)
 - `mlb-retrain-batter-hits` (full BATTER_HITS retrain; run after build_batter_hits_features)
 - `mlb-calibrate-batter-hits` (fit lambda calibrator for BATTER_HITS v1; run after retrain)
-- `mlb-build-game-features` (nightly GAME feature build; must run before retrain)
+- `mlb-build-batter-hits-features` (nightly BATTER_HITS feature build; 8Gi/4CPU for full-width statcast from 2021)
+- `mlb-build-game-features` (nightly GAME feature build; 4Gi; usecols reduces statcast to 13 cols)
 - `mlb-retrain-game-v1` (full GAME Pro v1 retrain; binary:logistic on home_win)
 - `mlb-calibrate-game` (fit isotonic calibrator for GAME v1; run after retrain)
+
+All 20 Cloud Run Jobs have explicit task timeouts set (added 2026-05-24):
+retrain jobs: 7200s, calibrate jobs: 1800s, build jobs: 3600s, tweet jobs: 300s.
+Default 600s was silently allowing long retrains to be killed mid-run.
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
 
@@ -848,11 +874,12 @@ F1H to real sizing: remove "F1H" from LOG_ONLY_SYSTEMS in run_f5.py.
 
 **GAME Pro v1 is a dedicated model, NOT the F5 scalar proxy.**
 `runners/run_game.py` uses `GAME_Pro_System/models/xgb_game_v1.json` -- a binary:logistic
-model trained on `home_win` with 32 features including bullpen (xwOBA L14, K%, BB%, fatigue
-IP L7). `extract_game_ml_odds()` in `sgo.py` provides the full-game two-way ML odds.
-GAME ships LOG_ONLY=True until 200 settled bets confirm calibration.
-Retrain sequence: build_game_features -> retrain_game_v1 -> calibrate_game_v1.
-Jobs: mlb-build-game-features, mlb-retrain-game-v1, mlb-calibrate-game.
+model trained on `home_win` with 42 features including bullpen (xwOBA L14, K%, BB%, whiff_pct
+L14, hard_hit L14, fatigue IP L7), starter rolling stats (xwOBA+whiff+hard-hit L3), and team
+offense (wOBA+hard-hit L20). `extract_game_ml_odds()` in `sgo.py` provides the full-game
+two-way ML odds. GAME ships LOG_ONLY=True until 200 settled bets confirm calibration.
+First retrain metrics (2026-05-24): AUC OOS 0.5565, wf_AUC 0.5441, Brier 0.2451, best_iter=15.
+Retrain sequence: mlb-build-game-features -> mlb-retrain-game-v1 -> mlb-calibrate-game.
 
 **F3/F7 innings window markets are 3-way on SGO (draw/not_draw), not two-way ML.**
 The extractors in sgo_innings_extractors.py assume two-way home/away format matching
@@ -1108,6 +1135,73 @@ route was crashing inside due to the bugs above, not auth rejection.
 **F5 ML extractor bookmaker used `_home_book` only.** Fixed 2026-05-20 to use
 `_home_book or _away_book`. 75 historic F5 bets backfilled via one-off
 `/backfill-f5-book` route (now removed). New F5 bets populate book correctly.
+
+**Cloud Run Jobs executed via `python3 -m module` require `if __name__ == "__main__":` blocks.**
+When a Cloud Run Job runs `--command python3 --args="-m" --args="runners.build_game_features"`,
+Python imports the module and exits 0 silently if there is no `__main__` block. No error,
+no stack trace, no payload written -- the job shows COMPLETE: 1/1 but did nothing.
+All six build runners (`build_hr_features.py`, `build_nrfi_features.py`, `build_f5_features.py`,
+`build_k_features.py`, `build_batter_hits_features.py`, `build_game_features.py`) needed this
+block added. Training scripts (`retrain_*.py`, `calibrate_*.py`) are invoked as scripts and
+already had `__main__` blocks. Check any new runner you add as a Cloud Run Job.
+
+**Statcast `usecols` optimization reduces memory ~8x for feature builds.**
+`mlb_core/storage.read_csv` passes `**kwargs` through to `pd.read_csv`. Feature builders that
+only need a subset of the ~80 statcast columns should pass:
+`usecols=lambda c: c in _STATCAST_COLS` where `_STATCAST_COLS` is a set of the ~12 needed columns.
+Without this, a 1500-day backfill on `statcast_master.csv` (6M+ rows x 80+ cols) OOMs in 4Gi.
+With it, same load fits in ~500MB. Example: `build_game_features.py` uses 13 columns; full-width
+load was killed by signal 9 at row 3M.
+
+**BATTER_HITS statcast load is intentionally full-width (no `usecols`).** The batter-hits
+feature builder needs many statcast columns for contact rate/BABIP/launch metrics. Its Cloud Run
+Job is configured with 8Gi/4CPU to handle the full-width load. Do not add `usecols` restriction
+without verifying all needed columns are included.
+
+**`build_model_features()` team_map requires `game_meta` with `home_team`/`away_team`.**
+If starter DataFrames don't carry team columns, the team_map is empty and all team-level features
+(park factor, bullpen lookup) become NaN. Pattern: extract `game_meta` from statcast directly as
+`game_meta_df = statcast[["game_pk","home_team","away_team"]].drop_duplicates()` in `run()`, then
+pass as parameter to `build_model_features(game_meta=game_meta_df)`. Applied in `build_game_features.py`.
+
+**`write_build_sentinel` signature is `(system: str, result: dict)`, NOT `(bucket, system, date)`.**
+Calling it with 3 positional args causes a TypeError. Correct usage:
+`write_build_sentinel("GAME", {"status": "ok", "run_date": run_date})`
+The bucket is read from `GCS_BUCKET` env var internally. All 6 build runners use this 2-arg form.
+
+**BATTER_HITS `game_date` KeyError after merge collision.** `game_agg` and `opp_info` both
+have a `game_date` column. Merging them produces `game_date_x`/`game_date_y`, breaking any
+downstream `sort_values("game_date")`. Fix: `opp_info.drop(columns=["game_date"], errors="ignore")`
+before merging. Same pattern applies any time two DataFrames share a column name that you only
+need from one side.
+
+**`home_win` target for GAME must be derived from `scoring_master`, not `statcast`.**
+`statcast` has `bat_score`/`post_bat_score` which are 100% null for 2021-2025 (see §8 gotcha above).
+Derive via: load scoring_master, pivot `half` (top=away, bot=home), sum runs per half per game_pk,
+then `home_win = (bot_runs > top_runs).astype(int)`. Drop ties (bot == top). This gives ~58k rows
+for 2021-2025, all labeled. Building with `home_win = np.nan` for all rows produces 0 training rows.
+
+**Auto-detect first build for long lookback.** Feature builders that normally use a 90-day
+incremental lookback need a first-build branch with 1500 days (5 seasons) of data to populate
+the CV folds. Pattern:
+```python
+_is_first_build = not exists("GAME_Pro_System/data/model_features.csv")
+LOOKBACK = 1500 if _is_first_build else 90
+```
+Without this, the first retrain after a new system has only the current season (3-4 months)
+and walk-forward CV folds for 2023/2024/2025 have 0 rows each.
+
+**`mlb_core/registry.py` is the single source of truth for system config.** `monitor_ops.py`,
+`monitor_performance.py`, and `discord.py` all derive their system lists and icons from the registry
+via dict comprehensions. `main.py` still has hardcoded system lists (VALID_SYSTEMS, builders dict,
+etc.) -- migration is deferred because main.py has complex dynamic imports. When adding a new system,
+update both `registry.py` (required) AND `main.py` (until the migration is done).
+
+**GAME Pro v1 first retrain metrics (2026-05-24):** AUC OOS 0.5565, walk-forward AUC 0.5441,
+Brier 0.2451, 42 features, best_iteration=15. The low best_iter=15 signals the model is
+regularizing heavily with current data volume -- a candidate for Optuna tuning once the 200-bet
+gate clears. GAME ships LOG_ONLY=True. Retrain sequence:
+`mlb-build-game-features -> mlb-retrain-game-v1 -> mlb-calibrate-game`
 
 ## 9. Performance monitor
 
@@ -1718,7 +1812,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-24 23:02 CST_
+_Last updated: 2026-05-24 (session: GAME Pro v1 launch, BATTER_HITS pipeline, registry/schema layer)_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
@@ -2356,17 +2450,62 @@ Priority order within each tier. Work top-to-bottom.
 - Only needed before going live. Paper mode single-system caps are sufficient now.
 - [ ] Done
 
-#### E12 · BATTER_HITS first-run sequence [x] -- code complete, execution pending
+#### E12 · BATTER_HITS first-run sequence [x] -- complete 2026-05-24
 - All code written: build_batter_hits_features.py, retrain_batter_hits_v1.py,
   calibrate_batter_hits_v1.py, run_batter_hits.py, config_batter_hits.py.
 - BATTER_HITS wired into main.py (VALID_SYSTEMS, _run_system, build_features_handler,
   default_order, builders dict, dashboard, reset-and-run).
 - Optuna SYSTEM_CONFIG entry added.
-- First-run order: build features -> (optional) tune_hyperparams BATTER_HITS --n-trials 50
-  -> retrain_batter_hits_v1 -> calibrate_batter_hits_v1 -> verify runner with LOG_ONLY=True.
-- Cloud Run Jobs still to create: mlb-build-batter-hits-features, mlb-retrain-batter-hits,
-  mlb-calibrate-batter-hits.
-- [ ] First run executed and model artifacts verified in GCS
+- Cloud Run Jobs created: mlb-build-batter-hits-features (8Gi/4CPU),
+  mlb-retrain-batter-hits, mlb-calibrate-batter-hits.
+- Fixed game_date KeyError after merge collision in build_batter_hits_features.py
+  (opp_info.drop(columns=["game_date"], errors="ignore") before merge).
+- Added if __name__ == "__main__": block to build_batter_hits_features.py.
+- All three jobs executed successfully: model artifacts in GCS. LOG_ONLY=True.
+- [x] First run executed and model artifacts verified in GCS 2026-05-24
+
+#### E13 · Migrate main.py hardcoded system lists to registry
+- **Why:** main.py has VALID_SYSTEMS, builders dict, _run_system switch, build_features_handler,
+  dashboard list, reset-and-run list all hardcoded. Adding a new system requires editing 6+
+  places in main.py after updating the registry. Long-term: one registry entry = fully wired.
+- **Files:** `main.py` -- replace VALID_SYSTEMS, builders, _run_system with registry lookups.
+  Dynamic import via `importlib.import_module(cfg.builder_module)`.
+- **Blocked:** main.py has complex dynamic imports and the Flask route structure needs a
+  separate pass to avoid breaking the service. Do not rush this.
+- [ ] Done
+
+#### E14 · Migrate tune_hyperparams.py SYSTEM_CONFIG to registry
+- **Why:** tune_hyperparams.py has its own SYSTEM_CONFIG dict with target/objective/metric/
+  output fields that duplicate `mlb_core/registry.py` SystemConfig tune_* fields. Already kept
+  in sync manually -- divergence is a matter of when, not if.
+- **Files:** `training/tune_hyperparams.py` -- replace SYSTEM_CONFIG dict with
+  `{name: get_system(name) for name in active_systems()}` and read cfg.tune_target etc.
+- [ ] Done
+
+#### E15 · BATTER_HITS statcast usecols optimization
+- **Why:** `build_batter_hits_features.py` loads the full statcast_master.csv (~80 cols) to
+  compute contact rate, BABIP, launch metrics. Currently requires 8Gi/4CPU. Profiling may show
+  that only 20-30 cols are actually used -- `usecols` could halve memory, allowing a smaller Job.
+- **Action:** Add `_STATCAST_COLS` set; run build job with 4Gi to verify it stays under memory.
+  Only worth doing if daily build time or cost is a concern.
+- [ ] Done
+
+#### E16 · GAME Pro v1 Optuna tuning (post-gate)
+- **Why:** best_iteration=15 on first retrain indicates heavy regularization with 5 seasons of
+  data. Optuna nested CV will find better max_depth/min_child_weight/reg_alpha balance.
+- **Blocked:** Do not run until GAME clears 200-bet gate (LOG_ONLY gate). Tuning on a model
+  that may have calibration issues is wasted compute.
+- **Action:** `python -m training.tune_hyperparams --system GAME --n-trials 50` then
+  `mlb-retrain-game-v1 -> mlb-calibrate-game`.
+- [ ] Done
+
+#### E17 · BATTER_HITS nb_alpha calibration (post-gate)
+- **Why:** nb_alpha=0.01 (clamped to minimum) on first retrain means the model uses Poisson
+  CDF for bet sizing. Re-fit nb_alpha from 200+ settled predictions vs actual hit counts to
+  check whether underdispersion assumption holds in live data.
+- **Blocked:** Need 200 settled BATTER_HITS bets first.
+- **Action:** Compute `var/mean` on settled bets, update nb_alpha in model_meta, re-calibrate.
+- [ ] Done
 
 ---
 
@@ -2846,3 +2985,91 @@ Update two places:
 - DNS configured for beezy.vip
 - Content strategy shifts (new tweet types, threads)
 - Rationale wiring status changes
+
+---
+
+## 25. GAME Pro v1 + BATTER_HITS launch session (2026-05-24)
+
+_Session scope: GAME Pro v1 feature expansion to 42 features, first retrain, BATTER_HITS pipeline
+creation, registry/schema scalability layer, all 20 Cloud Run Job timeouts set._
+
+### New files
+
+| File | Purpose |
+|---|---|
+| `mlb_core/registry.py` | Single source of truth for system config. SYSTEMS dict, get_system(), active_systems() |
+| `mlb_core/schemas.py` | DataFrame validation. validate_df(df, schema_key). 8 named schemas |
+
+### GAME Pro v1: 42 features (was 32)
+
+10 new features added to both `training/retrain_game_v1.py` GAME_FEATURES and
+`GAME_Pro_System/config_game.py`:
+
+| Feature group | New columns (home + away) |
+|---|---|
+| Starter rolling L3 | `whiff_pct_L3`, `hard_hit_allowed_L3` |
+| Bullpen rolling L14 | `bullpen_whiff_pct_L14`, `bullpen_hard_hit_L14` |
+| Team offense L20 | `team_hard_hit_L20` |
+
+**First retrain metrics:**
+- AUC OOS: 0.5565 | Walk-forward AUC: 0.5441
+- Brier: 0.2451 | best_iteration: 15
+- Note: low best_iter=15 signals heavy regularization -- schedule Optuna tuning after 200-bet gate
+
+### BATTER_HITS Cloud Run Jobs created
+
+| Job | Memory | Notes |
+|---|---|---|
+| `mlb-build-batter-hits-features` | 8Gi / 4CPU | Full-width statcast (no usecols) |
+| `mlb-retrain-batter-hits` | 4Gi / 2CPU | |
+| `mlb-calibrate-batter-hits` | 4Gi / 2CPU | |
+
+All three executed successfully. Model artifacts in GCS. LOG_ONLY=True (200-bet gate).
+
+**First retrain metrics (2026-05-25):**
+- Train rows: 197,278 (years < 2025) | Test rows: 48,842 (year 2025) | Full retrain: 258,207
+- Features: 24 | best_iteration: 552 | version: v1
+- OOS: MAE 0.6803, RMSE 0.8544, R² 0.0327, cal bias +0.006
+- Walk-forward CV: fold 2023 MAE=0.686 / fold 2024 MAE=0.678 / fold 2025 MAE=0.681 → wf_MAE=0.6818
+- NB dispersion: mu=0.811, resid_var=0.715, nb_alpha=0.01 (clamped to min -- near-Poisson)
+- Leakage suspects: [] | val poisson-nloglik: 1.16175
+- Note: nb_alpha=0.01 means batter hits are nearly Poisson (low overdispersion vs K model).
+  R²=0.033 is modest but typical for per-batter-game regression; MAE < 0.68 hits/game.
+
+### Bug fixes applied this session
+
+| Bug | Root cause | Fix |
+|---|---|---|
+| All 6 build runners exited 0 with no output | Missing `if __name__ == "__main__":` block | Added to all 6 |
+| GAME team_map always empty (13 features all NaN) | `build_model_features()` had no team column source | Extract game_meta from statcast, pass as param |
+| GAME `home_win` all NaN (0 training rows) | Builder set `home_win = np.nan`, never populated | Derive from scoring_master pivot (top=away, bot=home) |
+| GAME CV folds 2023-2025 had 0 rows | LOOKBACK=90 captured only 2026 data | Auto-detect first build -> LOOKBACK=1500 |
+| GAME OOM on 1500-day backfill | 6M+ rows x 80 cols in 4Gi | `usecols=lambda c: c in _STATCAST_COLS` (13 cols) |
+| `write_build_sentinel` TypeError | Called with 3 args (bucket, system, date) -- signature is (system, dict) | Fixed to 2-arg form |
+| BATTER_HITS KeyError 'game_date' | game_agg + opp_info both had game_date -> merge collision | `opp_info.drop(columns=["game_date"], errors="ignore")` |
+
+### Pending scalability work (deferred)
+
+- **`main.py` migration**: Hardcoded system lists in VALID_SYSTEMS, builders dict, _run_system, etc.
+  Not yet driven by registry. Complex dynamic imports require a separate pass.
+- **`tune_hyperparams.py` migration**: SYSTEM_CONFIG dict duplicates registry. Migrate to read
+  from `mlb_core.registry.SYSTEMS` so tune fields are maintained in one place.
+- **Abstract base classes**: `mlb_core/base_builder.py`, `mlb_core/base_retrain.py` (Tier 2).
+- **Job provisioning script**: `scripts/provision_jobs.py` reads registry, creates/updates all
+  Cloud Run Jobs from config (Tier 2).
+- **BATTER_HITS usecols optimization**: Add `_STATCAST_COLS` restriction to reduce memory on daily
+  runs (currently 8Gi is adequate; optimize before scaling to more systems).
+
+### Registry design
+
+`mlb_core/registry.py` SystemConfig fields:
+- `builder_module`, `runner_module` -- module paths for dynamic import
+- `feature_csv`, `model_artifact`, `build_sentinel` -- GCS keys
+- `retrain_jobs`, `calibrate_jobs` -- Cloud Run Job name lists
+- `expected_hit_rate` -- baseline for monitor_performance
+- `log_only` -- True = LOG_ONLY gate active (new systems)
+- `active` -- include in daily build/run cycles
+- `tune_target`, `tune_objective`, `tune_metric`, `tune_metric_dir`, `tune_output` -- Optuna fields
+
+Consumers already migrated: `monitor_ops.py`, `monitor_performance.py`, `discord.py`.
+Still hardcoded: `main.py`, `tune_hyperparams.py`.
