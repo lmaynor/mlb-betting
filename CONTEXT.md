@@ -1042,17 +1042,24 @@ threshold as K and NRFI runners (T19). Takes effect after next F5 feature build 
 **Cloud Run Job creation requires `--set-cloudsql-instances` not `--add-cloudsql-instances`.** The service also requires `--service-account=mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com` -- without it the job uses the default compute SA which lacks Secret Manager access. Full working command:
 ```bash
 gcloud run jobs create JOB_NAME \
-  --image=gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
-  --region=us-central1 \
-  --command=python \
-  --args="-m,training.MODULE_NAME" \
-  --memory=4Gi --cpu=2 \
-  --set-secrets=MLB_GCS_BUCKET=mlb-gcs-bucket:latest,MLB_DB_URL=mlb-db-url:latest \
-  --set-cloudsql-instances=concrete-crow-445205-m4:us-central1:mlb-betting-db \
-  --service-account=mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com \
-  --project=concrete-crow-445205-m4
+  --image gcr.io/concrete-crow-445205-m4/mlb-betting:latest \
+  --region us-central1 \
+  --command python3 \
+  --args="-m" --args="training.MODULE_NAME" \
+  --memory 4Gi --cpu 2 \
+  --set-secrets MLB_DB_URL=mlb-db-url:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest \
+  --set-env-vars MLB_GCS_BUCKET=concrete-crow-445205-m4-mlb-data,GCP_PROJECT=concrete-crow-445205-m4 \
+  --set-cloudsql-instances concrete-crow-445205-m4:us-central1:mlb-betting-db \
+  --service-account mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com \
+  --task-timeout 7200 --max-retries 1
 ```
-If job already exists in error state: `gcloud run jobs update JOB_NAME --region=us-central1 --service-account=mlb-betting-sa@...` then execute.
+If job already exists: use `gcloud run jobs update JOB_NAME` with the same flags.
+
+**Image registry is `gcr.io`, NOT Artifact Registry.** Always use `gcr.io/concrete-crow-445205-m4/mlb-betting:latest` for job `--image`. The Artifact Registry path (`us-central1-docker.pkg.dev/concrete-crow-445205-m4/mlb-betting/mlb-betting:latest`) returns NOT_FOUND. The deploy script pushes to `gcr.io` -- confirm with `gcloud container images list --repository=gcr.io/concrete-crow-445205-m4`.
+
+**`--args` flag takes repeated values, not comma-separated.** `--args="-m,runners.build_game_features"` fails with "expected one argument". Correct form: `--args="-m" --args="runners.build_game_features"`.
+
+**Jobs created before the image is confirmed good will have the wrong image path.** If you create a job then immediately hit an image NOT_FOUND on execute, use `gcloud run jobs update JOB_NAME --image gcr.io/...` to fix it without deleting and recreating.
 
 **E02 (2026-05-21): F5 walk-forward CV loop leaked test into early stopping.** The CV loop in `retrain_f5_v5.py` was using `dtest` as the eval set for early stopping, inflating reported CV AUC by ~0.003-0.005. Fixed: each fold now carves a val slice from the train window (C03 pattern). Same fix applied earlier to NRFI and K.
 
