@@ -1160,6 +1160,94 @@ def retrain_weekly():
         "calibrate_jobs":  CALIBRATE_JOBS,
     })
 
+@app.route("/admin/backfill-notes", methods=["POST"])
+def backfill_notes_handler():
+    """
+    Backfill null notes for a given date by re-scoring picks from feature CSVs.
+    Body: { "date": "2026-05-25" }  (defaults to today)
+    Auth: X-API-Key required.
+    """
+    body     = request.get_json(silent=True) or {}
+    run_date = body.get("date", datetime.now(_CT).date().isoformat())
+
+    from mlb_core.registry   import SYSTEMS
+    from mlb_core.storage    import read_csv, exists
+    from mlb_core.rationale  import build_rationale
+    from mlb_core.tracking.bet_tracker import _make_engine
+    from sqlalchemy import text
+
+    engine = _make_engine(db_path="unused")
+    updated_total = 0
+    skipped_total = 0
+    results_out   = {}
+
+    # Load bets with null notes for the target date
+    with engine.connect() as conn:
+        null_bets = conn.execute(text(
+            "SELECT id, system, game_pk, player FROM bets "
+            "WHERE game_date = :d AND notes IS NULL"
+        ), {"d": run_date}).fetchall()
+
+    if not null_bets:
+        return jsonify({"status": "ok", "message": "no null-notes bets found", "date": run_date})
+
+    logger.info(f"backfill-notes: {len(null_bets)} null-notes bets for {run_date}")
+
+    # Index bets by (system, game_pk, player) for fast lookup
+    bet_index: dict[tuple, list[int]] = {}
+    for b in null_bets:
+        key = (b.system, int(b.game_pk), (b.player or "").strip().lower())
+        bet_index.setdefault(key, []).append(b.id)
+
+    # Process each active system's feature CSV
+    seen_csvs: set[str] = set()
+    for sys_name, cfg in SYSTEMS.items():
+        if not cfg.active or cfg.feature_csv in seen_csvs:
+            continue
+        seen_csvs.add(cfg.feature_csv)
+
+        if not exists(cfg.feature_csv):
+            logger.warning(f"backfill-notes: {cfg.feature_csv} not found")
+            continue
+
+        try:
+            df = read_csv(cfg.feature_csv)
+        except Exception as e:
+            logger.warning(f"backfill-notes: could not read {cfg.feature_csv}: {e}")
+            continue
+
+        # Filter to today's rows if game_date column exists
+        if "game_date" in df.columns:
+            df = df[df["game_date"].astype(str).str.startswith(run_date)]
+
+        updated = 0
+        with engine.begin() as conn:
+            for _, row in df.iterrows():
+                gp     = int(row.get("game_pk", 0))
+                player = str(row.get("player", "") or "").strip().lower()
+
+                for system_key in [sys_name, sys_name.replace("OUTS", "K")]:
+                    ids = bet_index.get((system_key, gp, player), [])
+                    for bet_id in ids:
+                        notes = build_rationale(row.to_dict(), system_key)
+                        if notes:
+                            conn.execute(text(
+                                "UPDATE bets SET notes = :n WHERE id = :id"
+                            ), {"n": notes, "id": bet_id})
+                            updated += 1
+
+        results_out[sys_name] = updated
+        updated_total += updated
+        logger.info(f"backfill-notes: {sys_name} updated {updated}")
+
+    return jsonify({
+        "status":  "ok",
+        "date":    run_date,
+        "updated": updated_total,
+        "by_system": results_out,
+    })
+
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
