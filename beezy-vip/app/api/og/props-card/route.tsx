@@ -94,101 +94,120 @@ export async function GET() {
   }).toUpperCase();
 
   const W = 900;
-  const HEADER_H = 140;
-  const ROW_H = 160;
-  const FOOTER_H = 90;
-  const GAP = 12;
-  const PAD = 24;
+  const HEADER_H = 150;
+  const ROW_H    = 190;
+  const FOOTER_H = 80;
+  const GAP  = 10;
+  const PAD  = 20;
   const H = HEADER_H + PAD + picks.length * ROW_H + (picks.length - 1) * GAP + PAD + FOOTER_H;
 
   return new ImageResponse((
-    <div style={{ width:`${W}px`, height:`${H}px`, background:"#08080a", display:"flex", flexDirection:"column", fontFamily:"monospace" }}>
+    <div style={{ width:`${W}px`, height:`${H}px`, background:"#06060a", display:"flex", flexDirection:"column", fontFamily:"monospace", position:"relative" }}>
 
-      {/* top accent */}
-      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"4px", background:"linear-gradient(90deg,#f59e0b,#a78bfa)" }} />
+      {/* top gradient bar */}
+      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"5px", background:"linear-gradient(90deg,#f59e0b 0%,#ec4899 40%,#a78bfa 100%)" }} />
 
       {/* HEADER */}
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"0.5px solid #1f1f24", gap:"8px" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:"4px" }}>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#f5f5f7", letterSpacing:"-2px" }}>BEEZY</span>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#10b981", letterSpacing:"-2px" }}>.VIP</span>
+      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #1a1a22", gap:"10px" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:"0px" }}>
+          <span style={{ fontSize:"52px", fontWeight:900, color:"#ffffff", letterSpacing:"-3px" }}>BEEZY</span>
+          <span style={{ fontSize:"52px", fontWeight:900, color:"#10b981", letterSpacing:"-3px" }}>.VIP</span>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-          <span style={{ fontSize:"13px", color:"#f59e0b", letterSpacing:"3px", fontWeight:700 }}>PLAYER PROPS</span>
-          <span style={{ fontSize:"13px", color:"#3f3f46" }}>·</span>
-          <span style={{ fontSize:"13px", color:"#52525b", letterSpacing:"1px" }}>{today}</span>
+        <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
+          <div style={{ display:"flex", background:"rgba(245,158,11,0.12)", border:"1px solid rgba(245,158,11,0.35)", borderRadius:"4px", padding:"4px 14px" }}>
+            <span style={{ fontSize:"12px", color:"#f59e0b", letterSpacing:"3px", fontWeight:800 }}>PLAYER PROPS</span>
+          </div>
+          <span style={{ fontSize:"12px", color:"#3f3f50", letterSpacing:"1px" }}>{today}</span>
         </div>
       </div>
 
       {/* PICKS */}
-      <div style={{ display:"flex", flexDirection:"column", padding:`${PAD}px 24px`, gap:`${GAP}px` }}>
+      <div style={{ display:"flex", flexDirection:"column", padding:`${PAD}px 20px`, gap:`${GAP}px` }}>
         {picks.length === 0 ? (
           <div style={{ display:"flex", height:`${ROW_H}px`, alignItems:"center", justifyContent:"center", color:"#3f3f46", fontSize:"18px", letterSpacing:"3px" }}>
             NO PLAYER PROPS TODAY
           </div>
         ) : picks.map((pick, i) => {
-          // For player props, use the team the player is on
-          // HR picks have home_team/away_team; use home_team as fallback
           const teamAbbrev = pick.home_team ?? pick.away_team ?? "NYY";
           const team = teamInfo(teamAbbrev);
-          const sys = SYS[pick.system] ?? { accent: "#71717a", bg: "#111114", label: pick.system };
-          const notes = (pick.notes ?? "").trim();
-          const playerName = (pick.player ?? pick.bet_type ?? "").toUpperCase();
-          const logoUrl = `${BASE}/logos/${team.slug}.png`;
+          const sys  = SYS[pick.system] ?? { accent:"#71717a", bg:"#111114", label:pick.system };
+          const bullets = (pick.notes ?? "").trim().split(" · ").filter(Boolean).slice(0, 3);
+          const playerName = (pick.player ?? "").toUpperCase();
+          const mlbamId = pick.player
+            ? playerMap[pick.player.toLowerCase().replace(/ /g,"_")]
+            : null;
 
           return (
-            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"12px", overflow:"hidden", position:"relative" }}>
+            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"14px", overflow:"hidden", position:"relative", border:`1px solid ${sys.accent}28` }}>
 
-              {/* team color gradient */}
-              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(135deg, rgba(${team.p},1) 0%, rgba(${team.s},0.9) 45%, #0e0e11 100%)` }} />
-              <div style={{ display:"flex", position:"absolute", inset:0, background:"linear-gradient(90deg, transparent 0%, rgba(8,8,10,0.65) 100%)" }} />
+              {/* team color gradient — stronger left bleed */}
+              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(120deg, rgba(${team.p},0.95) 0%, rgba(${team.p},0.5) 30%, rgba(${team.s},0.25) 55%, #09090d 100%)` }} />
+              {/* subtle glow on left edge */}
+              <div style={{ display:"flex", position:"absolute", top:0, left:0, bottom:0, width:"4px", background:`linear-gradient(180deg, ${sys.accent}, transparent)` }} />
 
-              {/* content */}
-              <div style={{ display:"flex", alignItems:"center", width:"100%", padding:"0 28px", gap:"20px", position:"relative", zIndex:1 }}>
+              {/* content row */}
+              <div style={{ display:"flex", alignItems:"center", width:"100%", padding:"0 24px 0 28px", gap:"18px", position:"relative", zIndex:1 }}>
 
                 {/* rank */}
-                <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.3)", fontWeight:700, minWidth:"20px" }}>#{i+1}</span>
+                <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.25)", fontWeight:700, minWidth:"18px" }}>#{i+1}</span>
 
-                {/* logo + headshot */}
-                <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-                  <img src={`${BASE}/logos/${team.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
-                  {pick.player && playerMap[pick.player?.toLowerCase().replace(/ /g,"_")] ? (
-                    <img
-                      src={`${BASE}/headshots/${playerMap[pick.player.toLowerCase().replace(/ /g,"_")]}.jpg`}
-                      width={72} height={72}
-                      style={{ objectFit:"cover", borderRadius:"50%", border:`2px solid ${sys.accent}40` }}
-                    />
-                  ) : null}
-                </div>
+                {/* headshot — large, prominent */}
+                {mlbamId ? (
+                  <img
+                    src={`${BASE}/headshots/${mlbamId}.jpg`}
+                    width={130} height={130}
+                    style={{ objectFit:"cover", borderRadius:"50%", border:`3px solid ${sys.accent}60`, flexShrink:0 }}
+                  />
+                ) : (
+                  <img
+                    src={`${BASE}/logos/${team.slug}.png`}
+                    width={100} height={100}
+                    style={{ objectFit:"contain", flexShrink:0, opacity:0.85 }}
+                  />
+                )}
 
-                {/* player + pick info */}
-                <div style={{ display:"flex", flexDirection:"column", flex:1, gap:"6px" }}>
+                {/* player info + bullets */}
+                <div style={{ display:"flex", flexDirection:"column", flex:1, gap:"7px" }}>
+                  {/* system pill + matchup */}
                   <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                    <div style={{ display:"flex", background:`${sys.bg}cc`, border:`1px solid ${sys.accent}50`, borderRadius:"4px", padding:"3px 10px" }}>
-                      <span style={{ fontSize:"11px", fontWeight:800, color:sys.accent, letterSpacing:"1px" }}>{sys.label}</span>
+                    <div style={{ display:"flex", background:`${sys.bg}dd`, border:`1px solid ${sys.accent}55`, borderRadius:"4px", padding:"3px 10px" }}>
+                      <span style={{ fontSize:"10px", fontWeight:800, color:sys.accent, letterSpacing:"1.5px" }}>{sys.label}</span>
                     </div>
                     {pick.away_team && pick.home_team && (
-                      <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.45)" }}>
+                      <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.4)", letterSpacing:"0.5px" }}>
                         {pick.away_team} @ {pick.home_team}
                       </span>
                     )}
                   </div>
-                  <span style={{ fontSize:"22px", fontWeight:900, color:"#ffffff", letterSpacing:"-0.5px" }}>
+
+                  {/* player name — big */}
+                  <span style={{ fontSize:"32px", fontWeight:900, color:"#ffffff", letterSpacing:"-1px", lineHeight:"1" }}>
                     {playerName || fmtPick(pick.bet_type)}
                   </span>
-                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.6)", fontWeight:600 }}>
+
+                  {/* pick line + odds */}
+                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.55)", fontWeight:600, letterSpacing:"0.3px" }}>
                     {fmtPick(pick.bet_type)} · {fmtOdds(pick.odds)}
                   </span>
-                  {notes !== "" && (
-                    <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.4)", fontStyle:"italic" }}>▸ {notes}</span>
+
+                  {/* stat bullets */}
+                  {bullets.length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
+                      {bullets.map((b, bi) => (
+                        <div key={bi} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          <span style={{ fontSize:"10px", color:sys.accent, fontWeight:800 }}>▸</span>
+                          <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", letterSpacing:"0.2px" }}>{b}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {/* edge hero */}
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.55)", border:`1px solid ${sys.accent}40`, borderRadius:"10px", padding:"12px 18px", gap:"4px" }}>
-                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.35)", letterSpacing:"2px" }}>EDGE</span>
-                  <span style={{ fontSize:"28px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
-                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.25)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
+                {/* edge hero box */}
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.6)", border:`1px solid ${sys.accent}50`, borderRadius:"12px", padding:"14px 20px", gap:"5px", flexShrink:0, boxShadow:`0 0 20px ${sys.accent}18` }}>
+                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.3)", letterSpacing:"2px" }}>EDGE</span>
+                  <span style={{ fontSize:"30px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
+                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.22)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
                 </div>
               </div>
             </div>
@@ -197,27 +216,27 @@ export async function GET() {
       </div>
 
       {/* FOOTER */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"0.5px solid #1f1f24" }}>
-        <div style={{ display:"flex", gap:"32px" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"1px solid #1a1a22" }}>
+        <div style={{ display:"flex", gap:"28px" }}>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>SEASON ROI</span>
+            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>SEASON ROI</span>
             <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#10b981" : "#ef4444") : "#f5f5f7" }}>
               {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—"}
             </span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>BETS TRACKED</span>
+            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>BETS TRACKED</span>
             <span style={{ fontSize:"20px", fontWeight:800, color:"#f5f5f7" }}>{ov.total_bets ?? "—"}</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>FULL PICKS</span>
+            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>FULL PICKS</span>
             <span style={{ fontSize:"18px", color:"#10b981", fontWeight:800 }}>beezy.vip</span>
           </div>
-          <div style={{ display:"flex", width:"1px", height:"36px", background:"#1f1f24" }} />
+          <div style={{ display:"flex", width:"1px", height:"32px", background:"#1a1a22" }} />
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>COMMUNITY</span>
+            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>COMMUNITY</span>
             <span style={{ fontSize:"18px", color:"#a78bfa", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
           </div>
         </div>
