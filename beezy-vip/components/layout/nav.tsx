@@ -7,11 +7,12 @@ import { Menu, X } from 'lucide-react'
 
 const B = '0.5px solid #1f1f24'
 const NAV_LINKS = [
-  { label: 'Picks',   href: '/picks' },
-  { label: 'Tools',   href: '/tools' },
-  { label: 'Models',  href: '/models' },
-  { label: 'Results', href: '/results' },
-  { label: 'Learn',   href: '/learn' },
+  { label: 'Picks',       href: '/picks' },
+  { label: 'Cheat Sheet', href: '/cheat-sheet' },
+  { label: 'Tools',       href: '/tools' },
+  { label: 'Models',      href: '/models' },
+  { label: 'Results',     href: '/results' },
+  { label: 'Learn',       href: '/learn' },
 ]
 
 export function Nav() {
