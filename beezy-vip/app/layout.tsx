@@ -7,6 +7,7 @@ const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' }
 import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
+import { BottomNav } from '@/components/layout/bottom-nav'
 
 export const viewport = {
   width: 'device-width',
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LiveTicker />
         <main>{children}</main>
         <Footer />
+        <BottomNav />
       </body>
     </html>
   )

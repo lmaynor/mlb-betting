@@ -100,6 +100,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 /* ── Desktop base grid rules ── */
 .nav-desktop    { display: flex; align-items: center; gap: 32px; }
 .nav-mobile     { display: none; }
+.mobile-only    { display: none; }
 
 .hero-grid      { display: grid; grid-template-columns: 1fr 1fr; min-height: 480px; }
 .hero-stats     { display: grid; grid-template-columns: 1fr 1fr; }
@@ -142,11 +143,14 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 }
 
 @media (max-width: 768px) {
-  body { overflow-x: clip; }
+  body { overflow-x: clip; padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
 
   /* Nav: hide desktop links, show burger */
   .nav-desktop { display: none !important; }
   .nav-mobile  { display: block !important; }
+
+  /* Bottom tab bar */
+  .mobile-only { display: flex !important; }
 
   /* Hero: force single column */
   .hero-grid  { display: block !important; }
