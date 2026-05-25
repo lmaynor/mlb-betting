@@ -550,6 +550,7 @@ def build_model_features(
     offense: pd.DataFrame,
     wx: dict,
     run_date: str | None = None,
+    game_meta: "pd.DataFrame | None" = None,
 ) -> pd.DataFrame:
     """
     Join starter, bullpen, offense, and weather features into one row per game.
@@ -589,19 +590,28 @@ def build_model_features(
     else:
         mf = home_s.copy()
 
+    # -- Build game_pk -> {home, away} team map (needed for bullpen + offense pivots)
+    # Primary source: game_meta passed from run() (extracted from statcast directly).
+    # Fallback: home_team / away_team columns on starter DataFrames (usually absent).
+    team_map: dict = {}
+    if game_meta is not None and not game_meta.empty:
+        for _, r in game_meta.iterrows():
+            gp = int(r["game_pk"]) if pd.notna(r.get("game_pk")) else -1
+            team_map[gp] = {
+                "home": str(r.get("home_team") or ""),
+                "away": str(r.get("away_team") or ""),
+            }
+    elif "home_team" in home_s.columns:
+        for _, r in home_s.iterrows():
+            team_map.setdefault(int(r["game_pk"]) if pd.notna(r["game_pk"]) else -1, {})["home"] = r.get("home_team")
+        if not away_s.empty and "away_team" in away_s.columns:
+            for _, r in away_s.iterrows():
+                team_map.setdefault(int(r["game_pk"]) if pd.notna(r["game_pk"]) else -1, {})["away"] = r.get("away_team")
+    logger.info("GAME team_map: %d games populated", len(team_map))
+
     # -- Step 2: Bullpen join
     if bullpen is not None and not bullpen.empty:
         bullpen["game_date"] = pd.to_datetime(bullpen["game_date"], errors="coerce")
-
-        # Need home_team / away_team on game_pk to join bullpen by side
-        # game_pk -> home_team / away_team inferred from starter rows
-        team_map = {}
-        if "home_team" in home_s.columns:
-            for _, r in home_s.iterrows():
-                team_map.setdefault(int(r["game_pk"]) if pd.notna(r["game_pk"]) else -1, {})["home"] = r.get("home_team")
-        if "away_team" in away_s.columns if not away_s.empty else False:
-            for _, r in away_s.iterrows():
-                team_map.setdefault(int(r["game_pk"]) if pd.notna(r["game_pk"]) else -1, {})["away"] = r.get("away_team")
 
         # Pivot bullpen to home/away columns
         bp_home_rows = []
@@ -645,7 +655,7 @@ def build_model_features(
         for _, off_row in offense.iterrows():
             gp   = int(off_row["game_pk"]) if pd.notna(off_row["game_pk"]) else -1
             team = off_row.get("team", "")
-            teams = team_map.get(gp, {}) if "team_map" in dir() else {}
+            teams = team_map.get(gp, {})
             home_t = teams.get("home", "")
             away_t = teams.get("away", "")
             row_d: dict = {"game_pk": gp}
@@ -667,6 +677,13 @@ def build_model_features(
             mf = mf.merge(off_df, on="game_pk", how="left")
 
     # -- Step 4: Park factor + dome
+    # Ensure home_team is on mf — starter_home doesn't carry it, so fall back to game_meta
+    if "home_team" not in mf.columns and game_meta is not None and not game_meta.empty \
+            and "home_team" in game_meta.columns:
+        _ht_map = game_meta.set_index("game_pk")["home_team"].to_dict()
+        mf["home_team"] = mf["game_pk"].apply(
+            lambda x: _ht_map.get(int(x) if pd.notna(x) else -1)
+        )
     if "home_team" in mf.columns:
         mf["park_factor"] = mf["home_team"].map(TEAM_NAME_TO_ABBR).map(PARK_FACTORS).fillna(1.0)
         mf["is_dome"]     = mf["home_team"].map(TEAM_NAME_TO_ABBR).isin(DOME_TEAMS).astype(int)
@@ -700,9 +717,39 @@ def build_model_features(
     mf["wind_out"]       = mf["wind_out"].fillna(0).astype(int)
     mf["wind_in"]        = mf["wind_in"].fillna(0).astype(int)
 
-    # -- Step 7: home_win target (NaN for today's slate; filled during retrain)
-    if "home_win" not in mf.columns:
-        mf["home_win"] = np.nan
+    # -- Step 7: home_win target — derive from scoring_master for historical rows
+    # Future / today's slate rows will remain NaN (retrain drops them).
+    mf["home_win"] = np.nan
+    try:
+        from mlb_core.storage import read_csv as _read_csv, exists as _exists
+        if _exists("Scoring/scoring_master.csv"):
+            _scoring = _read_csv("Scoring/scoring_master.csv", low_memory=False)
+            if not _scoring.empty and "half" in _scoring.columns and "runs" in _scoring.columns:
+                _fg = (
+                    _scoring.pivot_table(
+                        index="game_pk", columns="half",
+                        values="runs", aggfunc="sum", fill_value=0,
+                    ).reset_index()
+                )
+                _fg.columns.name = None
+                if "top" in _fg.columns and "bot" in _fg.columns:
+                    _fg = _fg[_fg["top"] != _fg["bot"]].copy()   # drop ties
+                    _fg["home_win"] = (_fg["bot"] > _fg["top"]).astype(int)
+                    _hw_map = _fg.set_index("game_pk")["home_win"].to_dict()
+                    mf["home_win"] = mf["game_pk"].apply(
+                        lambda x: _hw_map.get(int(x) if pd.notna(x) else -1)
+                    )
+                    _n = mf["home_win"].notna().sum()
+                    logger.info(
+                        "GAME: home_win derived for %d/%d rows (%.1f%%)",
+                        _n, len(mf), 100 * _n / max(len(mf), 1),
+                    )
+            else:
+                logger.warning("GAME: scoring_master missing 'half'/'runs' columns — home_win NaN")
+        else:
+            logger.warning("GAME: scoring_master not found — home_win will be NaN for all rows")
+    except Exception as _e:
+        logger.warning("GAME: home_win derivation failed: %s", _e)
 
     mf = mf.sort_values("game_date").reset_index(drop=True)
     logger.info("GAME model_features: %d rows | %d games",
@@ -747,6 +794,21 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
 
     if sc.empty:
         return {"status": "error", "error": "statcast master is empty"}
+
+    # Extract game_meta (game_pk -> home_team, away_team) for team_map in build_model_features
+    game_meta_df: pd.DataFrame = pd.DataFrame()
+    if all(c in sc.columns for c in ["game_pk", "home_team", "away_team"]):
+        try:
+            game_meta_df = (
+                sc.groupby("game_pk")
+                  .agg(home_team=("home_team", "first"), away_team=("away_team", "first"))
+                  .reset_index()
+            )
+            logger.info("GAME: game_meta extracted for %d games", len(game_meta_df))
+        except Exception as e:
+            logger.warning("GAME: game_meta extraction failed: %s", e)
+    else:
+        logger.warning("GAME: statcast missing home_team/away_team columns — team_map will be empty")
 
     # -- 2. Load existing features (incremental build)
     def _safe_read(key: str) -> pd.DataFrame:
@@ -800,7 +862,8 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
     # -- 7. Join into model_features
     try:
         model_feats = build_model_features(
-            starter_home, starter_away, bullpen, offense, wx, run_date=run_date
+            starter_home, starter_away, bullpen, offense, wx,
+            run_date=run_date, game_meta=game_meta_df,
         )
     except Exception as e:
         return {"status": "error", "error": f"model_features join: {e}"}
