@@ -230,7 +230,13 @@ def build_batter_hits_rolling(
             on=["batter", "game_pk"], how="left",
         )
 
-    game_agg = game_agg.merge(opp_info, on=["batter", "game_pk"], how="left")
+    # Drop game_date from opp_info before merge — game_agg already has it,
+    # and a duplicate column causes pandas to rename both to _x/_y, breaking
+    # the downstream sort_values(["batter", "game_date"]).
+    game_agg = game_agg.merge(
+        opp_info.drop(columns=["game_date"], errors="ignore"),
+        on=["batter", "game_pk"], how="left",
+    )
 
     combined = pd.concat([keep, game_agg], ignore_index=True)
     combined.drop_duplicates(subset=["batter", "game_pk"], keep="last", inplace=True)
