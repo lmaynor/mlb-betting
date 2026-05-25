@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-24 16:58 CST_
+_Last updated: 2026-05-24 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -22,7 +22,7 @@ Five MLB betting systems running daily in GCP:
 | **K Pro v1** | E[pitcher strikeouts] (NB; k_per_9_L5 * avg_ip scaling) | K props O/U (best onshore book) | Live (paper) |
 | **OUTS** | E[pitcher outs recorded] (trained NegBin; retrain_outs_v1.py) | Pitcher outs O/U (best onshore book) | Live (paper) |
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
-| **GAME** | P(home wins full game) via F5 scalar proxy | Full Game ML (best onshore book) | Live (log-only) |
+| **GAME Pro v1** | P(home wins full game) — binary:logistic with bullpen features (xwOBA L14, K%/BB%, fatigue IP L7) that F5 misses | Full Game ML (best onshore book) | Live (log-only, 200-bet gate) |
 | **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
@@ -116,6 +116,11 @@ mlb-betting/
 │   ├── run_batter_hits.py        Score BATTER_HITS O/U via NegBin CDF. LOG_ONLY=True
 │   │                             until 200-bet gate cleared.
 │   ├── build_batter_hits_features.py  Nightly: build BATTER_HITS_System/data/model_features.csv.
+│   ├── run_game.py               Score GAME ML (HOME/AWAY moneyline) via GAME Pro v1.
+│   │                             LOG_ONLY=True until 200-bet gate cleared.
+│   ├── build_game_features.py    Nightly: build GAME_Pro_System/data/model_features.csv.
+│   │                             Computes starter rolling stats (L3), bullpen rolling stats
+│   │                             (L14 xwOBA/K%/BB%, L7 fatigue IP), team offense wOBA (L20).
 │   ├── snapshot_odds.py          Fetch SGO slate → GCS latest.json.
 │   ├── settle_bets.py            Nightly: settle all pending bets via MLB Stats API.
 │   │                             fetch_game_result() called once per game_pk, cached.
@@ -142,6 +147,8 @@ mlb-betting/
 │   ├── retrain_outs_v1.py        Full OUTS retrain (NegBin count model). (E04)
 │   ├── retrain_batter_hits_v1.py Full BATTER_HITS retrain (NegBin count:poisson on batter_hits).
 │   ├── calibrate_batter_hits_v1.py  Fit isotonic lambda calibrator for BATTER_HITS v1.
+│   ├── retrain_game_v1.py        Full GAME retrain (binary:logistic on home_win, CV 2023-2025).
+│   ├── calibrate_game_v1.py      Fit IsotonicRegression calibrator for GAME v1 (Brier eval).
 │   └── tune_hyperparams.py       Optuna hyperparameter search for all systems. (E09)
 │
 ├── HR_Pro/                       Per-system config dirs
@@ -150,6 +157,8 @@ mlb-betting/
 ├── OUTS_Pro_System/              OUTS Pro config (shares K feature CSV)
 ├── K_Pro_System/
 ├── BATTER_HITS_System/           BATTER_HITS config (config_batter_hits.py + __init__.py)
+├── GAME_Pro_System/              GAME config (config_game.py + __init__.py)
+│                                 32 features: starters L3, bullpen L14, offense L20, park/weather
 │
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
@@ -228,6 +237,14 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── xgb_batter_hits_v1.json
 │       ├── model_meta_batter_hits_v1.json  (includes nb_alpha for NegBin CDF)
 │       ├── lambda_calibrator_batter_hits_v1.pkl
+│       └── archive/
+├── GAME_Pro_System/
+│   ├── data/                           starter_game_features.csv, bullpen_game_features.csv,
+│   │                                   team_offense_features.csv, model_features.csv
+│   └── models/
+│       ├── xgb_game_v1.json
+│       ├── model_meta_game_v1.json      (features, feature_means, best_iteration, auc_oos)
+│       ├── isotonic_calibrator_game_v1.pkl
 │       └── archive/
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
@@ -480,7 +497,7 @@ Add new systems by extracting from SGO snapshot + reading from game_result dict.
 | F3 moneyline | `points-*-1ix3-ml-*` | `innings[0:3]` runs | Backlog (needs model) |
 | F7 moneyline | `points-*-1ix7-ml-*` | `innings[0:7]` runs | Backlog |
 | 1st half ML | `points-*-1h-ml-*` | `innings[0:4]` runs | Backlog |
-| Full game ML | `points-*-game-ml-*` | all innings runs | Backlog |
+| Full game ML | `points-*-game-ml-*` | all innings runs | Live (log-only, GAME Pro v1) |
 | First to score | `firstToScore-*-game-ml-*` | `innings` scan | Backlog |
 | Last to score | `lastToScore-*-game-ml-*` | `innings` scan | Backlog |
 | DK fantasy score | `fantasyScore-*-game-ou` | computed from batting stats | Backlog |
@@ -703,6 +720,9 @@ secretmanager.secretAccessor.
 - `mlb-retrain-outs-v1` (full OUTS retrain; E04 2026-05-21)
 - `mlb-retrain-batter-hits` (full BATTER_HITS retrain; run after build_batter_hits_features)
 - `mlb-calibrate-batter-hits` (fit lambda calibrator for BATTER_HITS v1; run after retrain)
+- `mlb-build-game-features` (nightly GAME feature build; must run before retrain)
+- `mlb-retrain-game-v1` (full GAME Pro v1 retrain; binary:logistic on home_win)
+- `mlb-calibrate-game` (fit isotonic calibrator for GAME v1; run after retrain)
 
 **Cloud Build:** manual only (`gcloud builds submit`). No GitHub trigger yet.
 
@@ -821,11 +841,18 @@ batting_strikeouts- over entries only appear on DraftKings; under entries only o
 BetMGM, and the player sets don't overlap. Result: 0 matched pairs after
 _best_book_odds_int(). Skip until book coverage improves.
 
-**F1H and GAME innings sub-markets are live log-only in run_f5.py.**
-F1H (first half, innings 1-4) and GAME (full game) use two-way SGO markets
-(`points-*-1h-ml-*` and `points-*-game-ml-*`) and the F5 scalar proxy.
-Both ship stake=0 until ~100 settled bets confirm calibration. To promote
+**F1H innings sub-market is live log-only in run_f5.py (still uses F5 scalar proxy).**
+F1H (first half, innings 1-4) uses the two-way SGO market (`points-*-1h-ml-*`) and the
+F5 scalar proxy. Ships stake=0 until ~100 settled bets confirm calibration. To promote
 F1H to real sizing: remove "F1H" from LOG_ONLY_SYSTEMS in run_f5.py.
+
+**GAME Pro v1 is a dedicated model, NOT the F5 scalar proxy.**
+`runners/run_game.py` uses `GAME_Pro_System/models/xgb_game_v1.json` -- a binary:logistic
+model trained on `home_win` with 32 features including bullpen (xwOBA L14, K%, BB%, fatigue
+IP L7). `extract_game_ml_odds()` in `sgo.py` provides the full-game two-way ML odds.
+GAME ships LOG_ONLY=True until 200 settled bets confirm calibration.
+Retrain sequence: build_game_features -> retrain_game_v1 -> calibrate_game_v1.
+Jobs: mlb-build-game-features, mlb-retrain-game-v1, mlb-calibrate-game.
 
 **F3/F7 innings window markets are 3-way on SGO (draw/not_draw), not two-way ML.**
 The extractors in sgo_innings_extractors.py assume two-way home/away format matching
@@ -1090,8 +1117,8 @@ Posts weekly digest every Monday to #performance via DISCORD_WEBHOOK_PERFORMANCE
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
-- F1H: 52%, GAME: 52% (update after 100 settled bets; scalar proxy, treat as placeholder)
-- BATTER_TB: 52%, BATTER_HITS: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
+- BATTER_HITS: 52%, GAME: 52% (both update after 200 settled bets; dedicated trained models)
+- F1H: 52%, BATTER_TB: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
 
 ---
 
@@ -1181,15 +1208,15 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
-| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5","BATTER_HITS"],"continue_on_error":false}` |
+| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5","BATTER_HITS","GAME"],"continue_on_error":false}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS"],"run_type":"morning"}` |
+| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS","GAME"],"run_type":"morning"}` |
 | `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS"],"run_type":"evening"}` |
+| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS","GAME"],"run_type":"evening"}` |
 | `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
@@ -1684,7 +1711,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-24 16:58 CST_
+_Last updated: 2026-05-24 CST_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
