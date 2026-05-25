@@ -73,20 +73,29 @@ TEAM_NAME_TO_ABBR = {
 K_EVENTS  = frozenset(["strikeout", "strikeout_double_play"])
 BB_EVENTS = frozenset(["walk", "hit_by_pitch"])
 
+# Only load the columns GAME needs from the wide statcast CSV (~80 cols → 11 cols).
+# This cuts peak memory ~7-8x, making 1500-day backfill feasible in 4 Gi.
+_STATCAST_COLS = {
+    "game_pk", "game_date", "pitcher", "inning", "inning_topbot",
+    "at_bat_number", "events", "home_team", "away_team",
+    "estimated_woba_using_speedangle", "release_speed",
+}
+
 
 # -- Section 1: Statcast load -------------------------------------------------
 
 def _load_statcast(lookback_days: int = 90, run_date: str | None = None) -> pd.DataFrame:
     from mlb_core.storage import read_csv
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
-
-    if "bat_speed" in df.columns:
-        df = df.drop(columns=["bat_speed"])
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
 
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
-    _ref    = pd.Timestamp(run_date) if run_date else pd.Timestamp.today()
-    cutoff  = _ref - pd.Timedelta(days=lookback_days)
-    df      = df[df["game_date"] >= cutoff].copy()
+    _ref   = pd.Timestamp(run_date) if run_date else pd.Timestamp.today()
+    cutoff = _ref - pd.Timedelta(days=lookback_days)
+    df     = df[df["game_date"] >= cutoff].copy()
 
     logger.info(
         "GAME build: statcast %d rows | %s -> %s | %d pitchers | %d games",
@@ -893,7 +902,7 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
 
     # -- 9. Build sentinel
     try:
-        write_build_sentinel(GCS_BUCKET, "GAME", run_date)
+        write_build_sentinel("GAME", {"status": "ok", "run_date": run_date})
         logger.info("GAME: build sentinel written")
     except Exception as e:
         logger.warning("GAME: sentinel write failed: %s", e)
