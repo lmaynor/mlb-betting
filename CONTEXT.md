@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-25 16:54 CST_
+_Last updated: 2026-05-25 21:30 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1713,6 +1713,13 @@ The correct pattern for ALL components in beezy-vip:
 Define a module-level constant `const B = '0.5px solid #1f1f24'` at the top
 of each component file for consistent border values.
 
+**Inline `style={{ display }}` overrides CSS class `display` rules.** If a component has both `className="some-class"` (where the class sets `display: none`) and an inline `style={{ display: 'flex' }}`, the inline style wins due to CSS specificity. This is the root cause of the mobile nav CTA showing on desktop. Fix: remove `display` from the inline style and add `!important` to the CSS class's base rule (`display: none !important`) so even future inline styles can't accidentally override it.
+
+**Clerk v7 (`@clerk/nextjs`) API changes vs v5/v6:**
+- `SignedIn` and `SignedOut` are NOT exported from `@clerk/nextjs` for use in `'use client'` files. Use `const { isSignedIn } = useUser()` with conditional rendering instead.
+- `afterSignOutUrl` was removed from `<UserButton>` props. Set it on `<ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">` in `layout.tsx` instead.
+- Server components use `currentUser()` from `@clerk/nextjs/server` -- works independently of ClerkProvider.
+
 Other gotchas:
 - `export const metadata` and `'use client'` cannot both be in the same file.
   Put metadata in a `layout.tsx` sibling and keep `'use client'` in the page.
@@ -1906,7 +1913,7 @@ under the same slug `max_muncy` -- last write wins in the map.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-25 16:54 CST_
+_Last updated: 2026-05-25 21:30 CST_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
@@ -3661,12 +3668,47 @@ Split on `' · '` and render as small bullet list (same as cheat sheet logic):
 Sprint 0 (1-2 days):   Bugs -- B1 (game names), B2 (bankroll), B3 (edge values)
 Sprint 1 (1 week):     Design system -- radius, shadow, hover, confidence tier tokens (1.1-1.5)
 Sprint 2 (1 week):     Beezy Score -- lib/beezy-score.ts + ScoreBadge + wire into cheat sheet + dashboard (2.1-2.5)
-Sprint 3 (1 week):     Mobile shell -- BottomNav + body padding + nav simplification (3.1-3.3)
-Sprint 4 (1 week):     Today view -- ProbBar + slate strip + per-card accordion + summary row (4.1-4.4)
-Sprint 5 (1 week):     Table/filter UX -- sort headers, pagination, chip filters, date bar (6.1-6.6)
-Sprint 6 (1 week):     Visualization -- system sparklines + edge coloring + chart sync (5.1-5.3)
-Sprint 7 (ongoing):    Polish -- 7.1 through 7.6, pick 2-3 per sprint
+[x] Sprint 3 (DONE):   Mobile shell -- BottomNav + body padding + nav simplification (3.1-3.3)
+[x] Sprint 4+5 (DONE): Today view (4.1-4.4) + Visualization suite (5.1-5.3)
+[x] Sprint 6+7 (DONE): Table/filter UX (6.1-6.6) + Polish (7.1 notes bullets, 7.2 auth, 7.5 ticker, 7.6 mobile notes)
 ```
+
+### Completed sprint details (2026-05-25)
+
+**Sprint 3 -- Mobile shell**
+- `components/layout/bottom-nav.tsx` -- NEW. Fixed-bottom tab bar, 5 tabs (Today/Picks/Results/Tools/More), `.mobile-only` class controls visibility.
+- `app/layout.tsx` -- ClerkProvider wrapper added; `<BottomNav />` imported and rendered.
+- `app/globals.css` -- Added `.mobile-only { display: none !important }` + `display: flex !important` at ≤768px; `body { padding-bottom: calc(56px + env(safe-area-inset-bottom)) }` on mobile; `nav-desktop { display: none !important }` on mobile.
+- `components/layout/nav.tsx` -- Hamburger replaced with logo + auth-only on mobile. Uses `useUser()` hook (Clerk v7 -- `SignedIn`/`SignedOut` not exported for `'use client'`; use conditional `isSignedIn` instead). `afterSignOutUrl` moved from `<UserButton>` to `<ClerkProvider>`.
+
+**Sprints 4+5 -- Today view + Visualization**
+- `app/cheat-sheet/cheat-sheet-client.tsx` -- per-card expand (expandedIds Set + toggleCard/toggleAll), summary row (N PICKS · X STRONG · Y LEAN · BEST EDGE), chip filter tabs replacing `<select>`, edge magnitude coloring (≥15%: 15px/800; ≥8%: 13px/700; <8%: 9px/600/60% opacity), share button (↗) with navigator.share fallback, empty state with yesterday's settled picks.
+- `app/cheat-sheet/page.tsx` -- fetches yesterday's settled picks alongside today's; renders `<SlateStrip>` above client.
+- `components/today/slate-strip.tsx` -- NEW. Server component, horizontally scrollable game tiles grouped by game key.
+- `app/dashboard/picks/page.tsx` -- ProbBar replaces 3 plain-text columns (model/implied/edge).
+- `components/landing/system-sparkline.tsx` -- NEW. Client Recharts LineChart at 32px height, system color.
+- `components/landing/models-grid.tsx` -- fetches per-system sparklines via Promise.allSettled; renders SystemSparkline below stat row.
+- `app/results/results-client.tsx` -- edge chart now uses `filtered` bets (not all initialPicks) so it responds to system filter.
+- `lib/betting-api.ts` -- added `apiGetSparklineBySystem(system, days)`.
+
+**Sprints 6+7 -- Table UX + Polish**
+- `components/picks/picks-table.tsx` -- clickable sort headers (Date/Edge/Odds ↓↑), pagination (PAGE_SIZE=30), desktop notes as `' · '`-split bullets with system color ▸, mobile BetCard same bullet treatment.
+- `app/results/results-client.tsx` -- clickable sort headers (Date/Odds/Edge/P&L), pagination, per-system counts on filter chips `NRFI (38)`, date filter via `useSearchParams`.
+- `components/picks/date-bar.tsx` -- NEW. ← Prev / TODAY — DAY MONTH D / Next → (disabled at today). Wired into `/picks` and `/results` pages via `?date=` search param.
+- `components/layout/live-ticker.tsx` -- pinned `RECENT PICKS ◆` label with `position: sticky; left: 0`.
+- `components/landing/hero.tsx` -- primary CTA changed from "Join Discord" → "Today's Picks →".
+- `app/page.tsx` -- `<DiscordCTA>` section removed (was duplicating nav CTAs).
+
+**Bug fixes during sprint**
+- Clerk v7: `SignedIn`/`SignedOut` not exported from `@clerk/nextjs` in `'use client'` files -- replaced with `useUser()` + conditional rendering.
+- Clerk v7: `afterSignOutUrl` removed from `<UserButton>` props -- moved to `<ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">`.
+- Mobile nav CTAs showing on desktop: `className="nav-mobile" style={{ display: 'flex' }}` had inline style overriding `.nav-mobile { display: none }`. Fixed by switching to `className="mobile-only"` (no inline display) and adding `display: none !important` to the `.mobile-only` CSS base rule.
+
+**Remaining backlog (not yet started)**
+- Sprint 0: B1 (dashboard game names), B2 (bankroll Kelly), B3 (exact edge values in results)
+- Sprint 1: Design tokens -- radius, shadow, hover elevation (1.1-1.5)
+- Sprint 2: Beezy Score composite metric (2.1-2.5)
+- Epic 7 remaining: 7.3 (cheat sheet empty state richer), 7.4 (share button full integration)
 
 The fastest path to closing the gap with Mongoose: **Sprints 0-2**.
 B1+B2+B3 fix trust-breaking bugs. The design system tokens (radius, shadow, glow)
