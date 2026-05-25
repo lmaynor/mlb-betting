@@ -3168,3 +3168,509 @@ All three executed successfully. Model artifacts in GCS. LOG_ONLY=True (200-bet 
 
 Consumers already migrated: `monitor_ops.py`, `monitor_performance.py`, `discord.py`.
 Still hardcoded: `main.py`, `tune_hyperparams.py`.
+
+---
+
+## 14. Frontend UI/UX Backlog (beezy-vip)
+
+_Added 2026-05-25. Informed by Mongoose Bets UI/UX audit and full codebase review._
+_Frontend lives at `beezy-vip/` (Next.js 16, React 19, Tailwind CSS v4, Recharts)._
+_Deployed at https://mlb-betting-rose.vercel.app / https://beezy.vip_
+
+Mongoose Bets (mongoosebets.com) is the reference product: same category, more polished
+execution. Their core philosophy: "Surface actionable betting edges immediately" --
+decision-first, not data-first. Their UI compresses statistical complexity into emotionally
+legible signals (composite score, tier badges, glow intensity). The backlog below closes
+that gap in priority order.
+
+### Key files (read these first at the start of any frontend session)
+
+| File | Purpose |
+|---|---|
+| `beezy-vip/app/globals.css` | Design tokens (CSS vars), responsive grid classes, animations |
+| `beezy-vip/lib/tokens.ts` | System colors (SYSTEM_COLOR), pill styles (SYSTEM_PILL), team abbrevs, pickLabel() |
+| `beezy-vip/lib/types.ts` | Bet, SystemStats TypeScript interfaces |
+| `beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx` | Main mobile-optimized picks card (393 lines) |
+| `beezy-vip/components/picks/picks-table.tsx` | Desktop table + mobile cards for picks/results |
+| `beezy-vip/components/picks/filter-bar.tsx` | Hamburger toggle + chip filter rows for /picks |
+| `beezy-vip/app/results/results-client.tsx` | Results page: charts, system chips, bets table |
+| `beezy-vip/app/dashboard/picks/page.tsx` | Authenticated picks dashboard (today's picks + Kelly) |
+| `beezy-vip/components/layout/nav.tsx` | Sticky nav, hamburger mobile menu |
+| `beezy-vip/components/landing/models-grid.tsx` | System cards on landing page |
+| `beezy-vip/components/ui/primitives.tsx` | SystemBadge, StatCard, ResultPill, PnL, LiveDot |
+
+---
+
+### Epic 0 -- Bugs (fix immediately)
+
+**B1 -- Dashboard shows `Game {game_pk}` instead of matchup**
+File: `beezy-vip/app/dashboard/picks/page.tsx:72` (pending table) and `:112` (settled table).
+`away_team` / `home_team` exist on the pick object but are not rendered.
+Fix: replace `Game {pick.game_pk}` with `{pick.away_team} @ {pick.home_team}`.
+Same fix needed on both the pending picks grid (line 72) and the settled today grid (line 112).
+
+**B2 -- User bankroll never applied to Kelly calculation**
+File: `beezy-vip/app/dashboard/picks/page.tsx:16,61`.
+`const bankroll = (user?.publicMetadata?.bankroll as number) ?? DEFAULT_BANKROLL` is read
+correctly at line 23, but `kellyStake()` at line 61 still passes `DEFAULT_BANKROLL` (1000)
+instead of `bankroll`. Fix: pass `bankroll` to `kellyStake()`.
+
+**B3 -- Results table shows bucketed edge ranges instead of exact values**
+File: `beezy-vip/app/results/results-client.tsx:506`.
+Renders `"10%+"` / `"5-10%"` / `"0-5%"` / `"<0%"` when `bet.edge` is an exact float.
+Fix: replace with `bet.edge != null ? (bet.edge * 100).toFixed(1) + '%' : '--'`.
+
+---
+
+### Epic 1 -- Design System Tokens (do this before any visual work)
+
+Mongoose uses rounded cards, subtle elevation, and emissive glows. Beezy uses
+square corners, flat borders, and no elevation. All three gaps have one-line fixes
+in globals.css that cascade everywhere.
+
+**1.1 -- Add border radius scale to globals.css**
+Add to `:root` in `beezy-vip/app/globals.css`:
+```css
+--radius-sm: 6px;
+--radius:    10px;
+--radius-lg: 14px;
+```
+Apply `border-radius: var(--radius)` to:
+- Pick cards in `cheat-sheet-client.tsx:72` (the outer `<div style={{...}}>`)
+- Bet cards in `picks-table.tsx:121`
+- Stat cards in `components/ui/primitives.tsx` (StatCard component)
+- The outer cheat sheet wrapper at `cheat-sheet-client.tsx:237`
+- System badges everywhere (currently `borderRadius: '2px'`, change to `var(--radius-sm)`)
+
+**1.2 -- Add card elevation shadow tokens to globals.css**
+Add to `:root`:
+```css
+--shadow-card: 0 1px 3px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+--shadow-elevated: 0 4px 12px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+```
+Apply `box-shadow: var(--shadow-card)` to all card surfaces.
+The outer cheat sheet card at `cheat-sheet-client.tsx:242` already has a green
+glow shadow -- keep that AND add the base elevation.
+
+**1.3 -- Add hover elevation to interactive cards**
+Any card with an `href` or `onClick` should have:
+```css
+transition: transform .15s ease, box-shadow .15s ease;
+```
+On hover: `transform: translateY(-1px); box-shadow: var(--shadow-elevated)`.
+Files: `picks-table.tsx:121`, `models-grid.tsx:68`, `cheat-sheet-client.tsx:72`.
+For Tailwind-based components use `hover:-translate-y-px transition-transform`.
+
+**1.4 -- Add confidence tier color tokens**
+Add to `:root` in `globals.css` AND export from `lib/tokens.ts`:
+```css
+--strong: #22c55e;   /* Beezy Score 65+ */
+--lean:   #facc15;   /* Beezy Score 40-64 */
+--watch:  #94a3b8;   /* Beezy Score <40 */
+```
+These are separate from system colors. System colors identify WHAT a pick is.
+Confidence colors show HOW MUCH to trust it. Both layers coexist on every pick card.
+
+**1.5 -- Emissive glow keyed to confidence tier (not system)**
+Per pick card, apply a box shadow based on the pick's Beezy Score tier:
+```css
+/* Strong (65+) */
+box-shadow: 0 0 0 1px rgba(34,197,94,.25), 0 0 20px rgba(34,197,94,.10);
+/* Lean (40-64) */
+box-shadow: 0 0 0 1px rgba(250,204,21,.25), 0 0 20px rgba(250,204,21,.08);
+/* Watch / no score */
+box-shadow: var(--shadow-card);
+```
+Apply in `cheat-sheet-client.tsx:72` on the pick card outer div.
+Move the current static green glow (on the wrapper at line 242) inside to per-card.
+
+---
+
+### Epic 2 -- Composite Beezy Score (most important product gap)
+
+Mongoose's `77 STRONG PLAY` / `61 LEAN PLAY` pattern is a single composite score
+(0-100) that abstracts edge %, Kelly trigger, odds value, and model vs. market gap
+into one emotionally legible signal. This is the #1 reason Mongoose feels more
+accessible than Beezy to non-quant bettors.
+
+**2.1 -- Create `beezy-vip/lib/beezy-score.ts`**
+```typescript
+import type { Bet } from './types'
+
+export function beezyscore(bet: Bet): number {
+  // Edge component: max 40pts (edge*100*4, capped)
+  const edgePoints = Math.min(((bet.edge ?? 0) * 100) * 4, 40)
+  // Kelly trigger: 20pts if triggered, 10 if not
+  const kellyPoints = bet.kelly_triggered ? 20 : 10
+  // Odds value: favor moderate favorites, penalize big chalk
+  const oddsPoints = (bet.odds ?? -200) > -130 ? 20
+                   : (bet.odds ?? -200) > -180 ? 12 : 6
+  // Model vs market gap: max 20pts
+  const probGap = ((bet.model_prob ?? 0) - (bet.market_prob ?? 0)) * 100
+  const probPoints = Math.min(Math.max(probGap * 2, 0), 20)
+  return Math.round(Math.max(0, Math.min(100, edgePoints + kellyPoints + oddsPoints + probPoints)))
+}
+
+export type ScoreTier = 'strong' | 'lean' | 'watch'
+
+export function scoreTier(score: number): ScoreTier {
+  if (score >= 65) return 'strong'
+  if (score >= 40) return 'lean'
+  return 'watch'
+}
+
+export const TIER_COLOR: Record<ScoreTier, string> = {
+  strong: '#22c55e',
+  lean:   '#facc15',
+  watch:  '#94a3b8',
+}
+
+export const TIER_LABEL: Record<ScoreTier, string> = {
+  strong: 'STRONG PLAY',
+  lean:   'LEAN PLAY',
+  watch:  'WATCH',
+}
+```
+Tune the weights by backtesting against `results` -- the formula is a starting
+point. Adjust `edgePoints` multiplier until score distribution feels right across
+your settled bet set.
+
+**2.2 -- Add ScoreBadge component to `components/ui/primitives.tsx`**
+```tsx
+export function ScoreBadge({ bet }: { bet: Bet }) {
+  const score = beezyscore(bet)
+  const tier  = scoreTier(score)
+  const color = TIER_COLOR[tier]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '22px',
+                     fontWeight: 800, color, lineHeight: 1 }}>
+        {score}
+      </span>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '8px',
+                     fontWeight: 600, letterSpacing: '0.1em',
+                     padding: '2px 6px', border: `1px solid ${color}44`,
+                     background: `${color}12`, color }}>
+        {TIER_LABEL[tier]}
+      </span>
+    </div>
+  )
+}
+```
+
+**2.3 -- Wire ScoreBadge into cheat sheet pick cards**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:188-200`
+Replace the current `EDGE` side panel (56px column showing `+X%`) with a two-row panel:
+- Top row: score number (large, tier color)
+- Bottom row: `STRONG PLAY` / `LEAN PLAY` badge
+- Keep edge value as a smaller secondary label below the tier badge
+Apply the tier glow (see 1.5) to the card border based on `scoreTier(bet)`.
+
+**2.4 -- Wire ScoreBadge into dashboard pending picks**
+`beezy-vip/app/dashboard/picks/page.tsx:54-55`
+Add a `Score` column as the FIRST column in the pending picks grid (before System).
+Sort picks by score descending by default (replace current date-sort default).
+ScoreBadge renders server-side (no 'use client' needed since beezyscore is pure math).
+
+**2.5 -- Wire score onto landing recent picks table**
+`beezy-vip/components/landing/recent-picks-table.tsx`
+Add score + tier badge column. This is social proof for visitors -- the score
+communicates model confidence without requiring them to understand edge %.
+
+---
+
+### Epic 3 -- Mobile App Shell
+
+Mongoose feels like a native app (PrizePicks / DraftKings UX pattern).
+Beezy feels like a website. The fix is a persistent bottom tab bar on mobile.
+
+**3.1 -- Create `beezy-vip/components/layout/bottom-nav.tsx`**
+```tsx
+'use client'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+const TABS = [
+  { label: 'Today',   href: '/cheat-sheet', icon: '◆' },
+  { label: 'Picks',   href: '/picks',       icon: '≡' },
+  { label: 'Results', href: '/results',     icon: '▦' },
+  { label: 'Tools',   href: '/tools',       icon: '⚙' },
+  { label: 'More',    href: '/models',      icon: '···' },
+]
+
+export function BottomNav() {
+  const pathname = usePathname()
+  return (
+    <nav style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+      display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      height: '56px',
+      paddingBottom: 'env(safe-area-inset-bottom)',
+      background: 'rgba(10,10,12,.92)',
+      backdropFilter: 'blur(20px)',
+      borderTop: '0.5px solid rgba(255,255,255,.06)',
+    }}>
+      {TABS.map(tab => {
+        const active = pathname.startsWith(tab.href)
+        return (
+          <Link key={tab.href} href={tab.href} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
+            textDecoration: 'none', flex: 1, padding: '8px 0',
+            color: active ? '#10b981' : '#71717a',
+          }}>
+            <span style={{ fontSize: '16px' }}>{tab.icon}</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px',
+                           letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {tab.label}
+            </span>
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+```
+
+**3.2 -- Wire BottomNav into root layout**
+`beezy-vip/app/layout.tsx` -- import BottomNav and render it inside the layout body.
+Add this class to `globals.css` for mobile body padding:
+```css
+@media (max-width: 768px) {
+  body { padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+}
+```
+The BottomNav component should only render on mobile -- wrap with a CSS class
+`.mobile-only { display: none; } @media(max-width:768px) { .mobile-only { display: flex; } }`.
+
+**3.3 -- Simplify hamburger to logo + auth only on mobile**
+`beezy-vip/components/layout/nav.tsx`
+When BottomNav is present, the mobile hamburger is redundant. On `max-width: 768px`,
+collapse the nav to: Logo (left) + Sign In / UserButton (right). Remove the hamburger
+dropdown. The bottom tab bar handles all navigation.
+
+---
+
+### Epic 4 -- Today's Games View & Game Cards
+
+**4.1 -- Add win probability bar to dashboard picks**
+`beezy-vip/app/dashboard/picks/page.tsx:76-82`
+Currently `model_prob` and `market_prob` are plain text numbers side by side.
+Replace with a split horizontal bar component:
+```tsx
+function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: number }) {
+  const modelPct  = (modelProb  * 100).toFixed(1)
+  const marketPct = (marketProb * 100).toFixed(1)
+  const edgePct   = ((modelProb - marketProb) * 100).toFixed(1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' }}>
+      <div style={{ position: 'relative', height: '6px', background: '#1f1f24', borderRadius: '3px', overflow: 'hidden' }}>
+        {/* Market implied (baseline) */}
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0,
+                      width: `${marketProb * 100}%`, background: '#3b82f640' }} />
+        {/* Model probability (overlaid, green) */}
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0,
+                      width: `${modelProb * 100}%`, background: '#10b981' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'monospace', fontSize: '10px' }}>
+        <span style={{ color: '#10b981' }}>{modelPct}% model</span>
+        <span style={{ color: '#71717a' }}>{marketPct}% implied</span>
+        <span style={{ color: '#10b981', fontWeight: 700 }}>+{edgePct}%</span>
+      </div>
+    </div>
+  )
+}
+```
+Replace the current Model Prob + Implied + Edge columns with this single component.
+
+**4.2 -- Today's slate strip on cheat sheet and picks**
+New component: `beezy-vip/components/today/slate-strip.tsx`
+A horizontally scrolling row of today's games. Each tile: `AWAY @ HOME`, predicted
+total color-coded (blue=low, orange=high), confidence badge if you have a pick on it.
+This sits between the filter row and the first pick card on `/cheat-sheet` and `/picks`.
+Build as a server component -- fetch today's picks and group by game.
+
+**4.3 -- Per-card rationale accordion (replace global toggle)**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:54`
+The global `showRationale` toggle is too coarse for per-user use.
+Replace with per-card expand state: tapping the card body toggles its own rationale.
+Keep the global toggle as "EXPAND ALL / COLLAPSE ALL" for power users.
+Implementation: add `expandedCards: Set<number>` state, toggle on card click.
+
+**4.4 -- Today's summary row on cheat sheet**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx` -- between header and first pick:
+```tsx
+// Computed from picks array:
+// "{n} PICKS TODAY  ·  {strongCount} STRONG  ·  {leanCount} LEAN  ·  BEST EDGE +{maxEdge}%"
+```
+Computed server-side in `page.tsx` and passed as a prop to the client component.
+This also functions as a shareable callout (the line appears in OG images).
+
+---
+
+### Epic 5 -- Visualization Suite
+
+**5.1 -- Per-system sparklines on model cards**
+`beezy-vip/components/landing/models-grid.tsx:79`
+Each system card currently shows static `WR | Bets | Gate` numbers. Add a 30-day
+sparkline per card. Infrastructure exists: `apiGetSparkline(30)` already used by hero.
+Create a per-system endpoint or pass `?system=NRFI` param to the existing sparkline API.
+Use Recharts `LineChart` at `height: 32px` inside the card footer (below the 3-col stat row).
+Line color = `meta.color` for that system.
+
+**5.2 -- Edge magnitude coloring on cheat sheet**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:196`
+All edge values currently render in the same system color regardless of magnitude.
+A `+4%` pick and an `+18%` pick look identical. Scale the edge color/weight:
+- Edge >= 15%: full system color, `fontWeight: 800`, larger font (15px)
+- Edge >= 8%: full system color, `fontWeight: 700`, normal font (13px)
+- Edge < 8%: system color at 60% opacity, `fontWeight: 600`
+This creates visual hierarchy even before the composite score is implemented.
+
+**5.3 -- Results page: sync Edge vs ROI chart to system filter**
+`beezy-vip/app/results/results-client.tsx:326`
+The P&L chart (line 303) correctly filters by `system` state but the Edge vs ROI chart
+always shows ALL systems regardless of filter. Fix: pass `filtered` bets (not `initialPicks`)
+to `buildEdgeChart()` so the chart reflects the active system selection.
+
+---
+
+### Epic 6 -- Table & Filter UX
+
+**6.1 -- Clickable sort headers on picks table**
+`beezy-vip/components/picks/picks-table.tsx:219`
+Column headers are static divs. Add `onClick` + sort indicator (v / ^) to DATE, EDGE, ODDS.
+The `PicksTable` component already accepts `sort` and `dir` props -- wire them to an
+internal `useState` if parent doesn't control them, or lift state to the page.
+Minimal implementation: make each header a `<button>` that calls `setSortBy` + toggles `dir`.
+
+**6.2 -- Clickable sort headers on results table**
+`beezy-vip/app/results/results-client.tsx:489`
+Same pattern. Headers DATE, SYSTEM, ODDS, EDGE, P&L should sort the `filtered` array on click.
+The `sortBy` / `sortDir` state already exists (lines 225-226) -- just wire the table headers
+to call `setSortBy(col)` and `setSortDir(d => d === 'desc' ? 'asc' : 'desc')`.
+
+**6.3 -- Replace cheat sheet `<select>` filter with chip tabs**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:289`
+The raw `<select>` breaks iOS dark theme and looks out of place.
+Replace with a `<div>` of `<button>` chips using the same pattern as results-client.tsx:53:
+```tsx
+{FILTERS.map(f => (
+  <button key={f.key} onClick={() => { setFilter(f.key); setExpanded(false) }}
+    style={{
+      padding: '4px 12px', fontFamily: 'monospace', fontSize: '10px', cursor: 'pointer',
+      border: `0.5px solid ${filter === f.key ? '#10b981' : '#2a2a31'}`,
+      background: filter === f.key ? '#10b98118' : 'transparent',
+      color: filter === f.key ? '#10b981' : '#71717a',
+      letterSpacing: '0.06em', textTransform: 'uppercase',
+    }}>
+    {f.label}
+  </button>
+))}
+```
+
+**6.4 -- Add pagination to picks and results tables**
+`beezy-vip/components/picks/picks-table.tsx:198` and `results-client.tsx:488`
+All bets are rendered in a single DOM pass. At 500+ rows, this causes jank.
+Add simple pagination: 30 rows/page, `[<< Prev]  Page X of Y  [Next >>]` controls.
+Implementation: `const [page, setPage] = useState(0); const PAGE_SIZE = 30;`
+Slice: `const visible = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)`
+Show row count: `Showing {page*PAGE_SIZE+1}-{Math.min((page+1)*PAGE_SIZE, sorted.length)} of {sorted.length}`.
+Reset `page` to 0 whenever filters change.
+
+**6.5 -- Add per-system pick counts to filter chips**
+`beezy-vip/app/results/results-client.tsx:424`
+Filter chips show only the system label. Add a count badge: `NRFI (38)`.
+Compute from `initialPicks` filtered by system before the active filter is applied.
+Example:
+```tsx
+const countsBySystem = useMemo(() =>
+  Object.fromEntries(
+    ALL_SYSTEMS.map(s => [s, s === 'ALL' ? initialPicks.length
+      : initialPicks.filter(p => p.system === s).length])
+  ), [initialPicks])
+// Then render: `{SYSTEM_LABEL[s]} ({countsBySystem[s]})`
+```
+
+**6.6 -- Add date navigation bar to /picks and /results**
+New component: `beezy-vip/components/picks/date-bar.tsx`
+A slim strip between nav and content on `/picks` and `/results`:
+`[<< Prev]  [TODAY -- MON MAY 25]  [Next >>]`
+Controls a `date` search param. The existing filter system on `/picks` already reads
+date from URL params via `filter-bar.tsx` -- wire the date bar to set the same param.
+On `/results`, filter the `initialPicks` array client-side by `game_date`.
+
+---
+
+### Epic 7 -- Content & Polish
+
+**7.1 -- Fix notes/rationale display in picks table**
+`beezy-vip/components/picks/picks-table.tsx:98` (desktop) and `:154` (mobile card)
+`bet.notes` is rendered as a raw concatenated string (`"Starter ERA 2.1 · SwStr 14% · Park factor 0.94"`).
+The cheat sheet correctly splits on `' · '` to render as bullet points.
+Apply the same split in both the desktop `TableRow` and mobile `BetCard` components.
+
+**7.2 -- Auth state in nav**
+`beezy-vip/components/layout/nav.tsx:44`
+Nav renders identically for all users. Add:
+- Logged-in: `<UserButton />` (Clerk) + `Dashboard` link after the nav items
+- Logged-out: `Sign In` text link next to Discord CTA
+- Active subscriber: subtle green dot or "PRO" badge on avatar
+Import `{ SignedIn, SignedOut, UserButton }` from `@clerk/nextjs`.
+
+**7.3 -- Better empty state on cheat sheet**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:322`
+Current: "NO PICKS TODAY / Check back after 9 AM ET" -- dead end.
+Replace with:
+- Yesterday's top 3 settled results with a "SETTLED" ribbon/overlay badge
+- Win/loss summary: "Yesterday: 3W-1L, +2.8u"
+- Expected next update time
+This requires passing yesterday's picks as a prop from the server component.
+In `page.tsx`, call `apiGetRecentPicks({ limit: 5, date: 'yesterday' })` alongside today's picks.
+
+**7.4 -- Share button on cheat sheet**
+`beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx:54`
+Add a lucide `Share2` icon button to each pick card header area (top-right of card).
+On click: call `/api/og/picks-card` (already built) with the pick's ID to generate
+the OG card image. Download or copy to clipboard using the Web Share API with fallback.
+This is the social flywheel -- Discord screenshots are already happening, make it one tap.
+
+**7.5 -- Live ticker label**
+`beezy-vip/components/layout/live-ticker.tsx`
+The scrolling ticker has no context label. First-time visitors don't know what it shows.
+Prepend a pinned left-side label: `RECENT PICKS ◆` with a live dot animation.
+Use `position: sticky; left: 0` so the label stays visible while the ticker scrolls.
+
+**7.6 -- Mobile picks notes as bullets**
+`beezy-vip/components/picks/picks-table.tsx:154` (BetCard mobile component)
+`{bet.notes && <div ...>{bet.notes}</div>}` dumps raw notes string.
+Split on `' · '` and render as small bullet list (same as cheat sheet logic):
+```tsx
+{bet.notes && bet.notes.split(' · ').filter(Boolean).map((b, i) => (
+  <div key={i} style={{ display: 'flex', gap: '4px' }}>
+    <span style={{ color: pill.color, fontSize: '8px', flexShrink: 0 }}>▸</span>
+    <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#6a6a8a' }}>{b}</span>
+  </div>
+))}
+```
+
+---
+
+### Sprint order recommendation
+
+```
+Sprint 0 (1-2 days):   Bugs -- B1 (game names), B2 (bankroll), B3 (edge values)
+Sprint 1 (1 week):     Design system -- radius, shadow, hover, confidence tier tokens (1.1-1.5)
+Sprint 2 (1 week):     Beezy Score -- lib/beezy-score.ts + ScoreBadge + wire into cheat sheet + dashboard (2.1-2.5)
+Sprint 3 (1 week):     Mobile shell -- BottomNav + body padding + nav simplification (3.1-3.3)
+Sprint 4 (1 week):     Today view -- ProbBar + slate strip + per-card accordion + summary row (4.1-4.4)
+Sprint 5 (1 week):     Table/filter UX -- sort headers, pagination, chip filters, date bar (6.1-6.6)
+Sprint 6 (1 week):     Visualization -- system sparklines + edge coloring + chart sync (5.1-5.3)
+Sprint 7 (ongoing):    Polish -- 7.1 through 7.6, pick 2-3 per sprint
+```
+
+The fastest path to closing the gap with Mongoose: **Sprints 0-2**.
+B1+B2+B3 fix trust-breaking bugs. The design system tokens (radius, shadow, glow)
+change every surface in two hours. The Beezy Score closes the philosophical gap --
+it's the single change that makes the product feel like a recommendation engine
+rather than a data dump.
+
