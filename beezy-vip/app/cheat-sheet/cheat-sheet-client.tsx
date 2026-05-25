@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Bet } from '@/lib/types'
 import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
+import { ScoreBadge } from '@/components/ui/primitives'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -198,18 +199,18 @@ function PickCard({ bet, rank, showRationale }: {
         )}
       </div>
 
-      {/* Edge panel */}
-      {edge && (
-        <div style={{
-          minWidth: '56px', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          borderLeft: `1px solid ${color}18`, padding: '8px 6px',
-          background: `${color}08`,
-        }}>
-          <span style={{ fontFamily: 'monospace', fontSize: '7px', color: `${color}55`, letterSpacing: '0.1em', marginBottom: '3px' }}>EDGE</span>
-          <span style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 800, color }}>{edge}</span>
-        </div>
-      )}
+      {/* Score panel */}
+      <div style={{
+        minWidth: '68px', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: '4px',
+        borderLeft: `1px solid ${color}18`, padding: '8px 6px',
+        background: `${color}08`,
+      }}>
+        <ScoreBadge bet={bet} />
+        {edge && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: `${color}88`, letterSpacing: '0.05em' }}>{edge}</span>
+        )}
+      </div>
     </div>
   )
 }

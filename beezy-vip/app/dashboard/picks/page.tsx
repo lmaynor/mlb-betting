@@ -1,6 +1,7 @@
 import { apiGetTodayPicks as getTodayPicks, apiGetStats } from '@/lib/betting-api'
 import { kellyStake, formatOdds, formatProb } from '@/lib/odds'
-import { SystemBadge, StatCard, LiveDot }      from '@/components/ui/primitives'
+import { SystemBadge, StatCard, LiveDot, ScoreBadge } from '@/components/ui/primitives'
+import { beezyscore } from '@/lib/beezy-score'
 import { CopyBetButton }                        from '@/components/ui/copy-bet-button'
 import { currentUser }                         from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -22,7 +23,7 @@ export default async function DashboardPicksPage() {
 
   const bankroll = (user?.publicMetadata?.bankroll as number) ?? DEFAULT_BANKROLL
 
-  const pending = picks.filter(p => p.result === null)
+  const pending = picks.filter(p => p.result === null).sort((a, b) => beezyscore(b) - beezyscore(a))
   const settled = picks.filter(p => p.result !== null)
 
   return (
@@ -49,10 +50,10 @@ export default async function DashboardPicksPage() {
       ) : (
         <div className="border border-[var(--border)] mb-8 overflow-x-auto">
           <div
-            className="grid min-w-[900px] border-b border-[var(--border)] bg-[var(--surface)]"
-            style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
+            className="grid min-w-[960px] border-b border-[var(--border)] bg-[var(--surface)]"
+            style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
           >
-            {['System', 'Game', 'Pick', 'Line', 'Model Prob', 'Implied', 'Edge', 'Half Kelly', 'Stake ($1k)'].map(h => (
+            {['Score', 'System', 'Game', 'Pick', 'Line', 'Model Prob', 'Implied', 'Edge', 'Half Kelly', 'Stake ($1k)'].map(h => (
               <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-muted">{h}</div>
             ))}
           </div>
@@ -64,9 +65,10 @@ export default async function DashboardPicksPage() {
             return (
               <div
                 key={i}
-                className="grid min-w-[900px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
-                style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
+                className="grid min-w-[960px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
+                style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
               >
+                <div className="px-3 py-4 flex items-center justify-center"><ScoreBadge bet={pick} /></div>
                 <div className="px-3 py-4"><SystemBadge system={pick.system} /></div>
                 <div className="px-3 py-4 mono text-xs text-muted">
                   {pick.away_team && pick.home_team ? `${pick.away_team} @ ${pick.home_team}` : `Game ${pick.game_pk}`}

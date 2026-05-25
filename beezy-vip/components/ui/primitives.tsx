@@ -1,5 +1,8 @@
 'use client'
 
+import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import type { Bet } from '@/lib/types'
+
 const PILL: Record<string, { bg: string; color: string; border: string }> = {
   NRFI: { bg: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' },
   HR:   { bg: '#1c1207', color: '#f59e0b', border: '0.5px solid #854f0b' },
@@ -85,4 +88,20 @@ export function Button({ children, variant = 'primary', href, onClick }: { child
 
 export function Divider() {
   return <div style={{ width: '100%', height: '0.5px', background: '#1f1f24' }} />
+}
+
+export function ScoreBadge({ bet }: { bet: Bet }) {
+  const score = beezyscore(bet)
+  const tier  = scoreTier(score)
+  const color = TIER_COLOR[tier]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
+        {score}
+      </span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: 600, letterSpacing: '0.1em', padding: '2px 6px', border: `1px solid ${color}44`, background: `${color}12`, color }}>
+        {TIER_LABEL[tier]}
+      </span>
+    </div>
+  )
 }
