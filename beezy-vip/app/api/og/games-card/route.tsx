@@ -45,7 +45,7 @@ const SYS: Record<string, { accent: string; bg: string }> = {
 };
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
-function fmtEdge(e: any) { return `+${parseFloat(e).toFixed(1)}%`; }
+function fmtEdge(e: any) { return `+${(parseFloat(e) * 100).toFixed(1)}%`; }
 function fmtPick(bt: string, sys: string) {
   if (bt === "NRFI") return "No Run 1st Inning";
   if (bt === "YRFI") return "Run in 1st Inning";

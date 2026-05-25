@@ -51,7 +51,7 @@ function playerHeadshot(name: string, base: string): string | null {
 }
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
-function fmtEdge(e: any) { return `+${parseFloat(e).toFixed(1)}%`; }
+function fmtEdge(e: any) { return `+${(parseFloat(e) * 100).toFixed(1)}%`; }
 function fmtPick(bt: string) {
   if (bt === "HR") return "HR Yes";
   if (bt.startsWith("K_OVER"))     return `Over ${bt.split("_")[2]} Ks`;
