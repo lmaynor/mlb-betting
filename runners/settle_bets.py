@@ -454,6 +454,7 @@ def run(settle_date: str = None) -> dict:
     # Dispatch to per-system settlers
     SYSTEM_MAP = {
         "NRFI":       _settle_nrfi,
+        "1I":         _settle_nrfi,   # 1I_AWAY/HOME/DRAW settled by same linescore logic
         "F5":         _settle_f5,
         "HR":         _settle_hr,
         "K":          _settle_k,

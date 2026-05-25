@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-VALID_SYSTEMS = {"NRFI", "HR", "F5", "K", "BATTER_HITS", "GAME"}
+VALID_SYSTEMS = {"NRFI", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
@@ -55,6 +55,10 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
             from runners.run_batter_hits import run
         elif system == "GAME":
             from runners.run_game import run
+        elif system == "BATTER_TB":
+            from runners.run_batter_tb import run
+        elif system == "1I":
+            from runners.run_1i import run
         else:
             return {"system": system, "status": "error", "error": "unknown system"}
 
@@ -543,9 +547,11 @@ def reset_and_run():
     from runners.run_k import run as run_k
     from runners.run_batter_hits import run as run_batter_hits
     from runners.run_game import run as run_game
+    from runners.run_batter_tb import run as run_batter_tb
+    from runners.run_1i import run as run_1i
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
-    systems  = body.get("systems", ["HR", "NRFI", "F5", "K", "BATTER_HITS", "GAME"])
+    systems  = body.get("systems", ["HR", "NRFI", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"])
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
@@ -556,7 +562,7 @@ def reset_and_run():
             deleted[sys] = r.rowcount
     logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
     results = {}
-    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game}
+    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game, "BATTER_TB": run_batter_tb, "1I": run_1i}
     for sys in systems:
         if sys in runner_map:
             try:
