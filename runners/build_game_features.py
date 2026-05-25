@@ -98,6 +98,9 @@ def _load_statcast(lookback_days: int = 90, run_date: str | None = None) -> pd.D
     cutoff = _ref - pd.Timedelta(days=lookback_days)
     df     = df[df["game_date"] >= cutoff].copy()
 
+    from mlb_core.schemas import validate_df
+    validate_df(df, "statcast_raw", context="GAME _load_statcast")
+
     logger.info(
         "GAME build: statcast %d rows | %s -> %s | %d pitchers | %d games",
         len(df),
@@ -1073,6 +1076,13 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
 
     if model_feats.empty:
         return {"status": "error", "error": "model_features is empty after join"}
+
+    # Validate model_features before writing — raise_on_error=True so an
+    # all-NaN home_win (or missing required cols) aborts rather than persisting
+    # a broken CSV to GCS.
+    from mlb_core.schemas import validate_df
+    validate_df(model_feats, "game_model_features",
+                context="GAME build_model_features", raise_on_error=True)
 
     # -- 8. Write to GCS
     try:

@@ -19,6 +19,8 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from mlb_core.registry import SYSTEMS
+
 logger = logging.getLogger(__name__)
 
 SCHEDULER_JOBS = [
@@ -39,22 +41,19 @@ SCHEDULER_JOBS = [
     "mlb-monitor-drift",
 ]
 
+# Derived from registry — OUTS shares K's feature CSV so deduplicate by value.
+# Use a dict comprehension; OUTS will map to the same path as K (that's correct —
+# both share one CSV, so the freshness check fires once per unique path).
 FEATURE_KEYS = {
-    "HR":          "HR_Pro/data/model_features.csv",
-    "NRFI":        "NRFI_Pro_System/data/model_features.csv",
-    "F5":          "F5_Pro_System/data/model_features.csv",
-    "K":           "K_Pro_System/data/model_features.csv",
-    "BATTER_HITS": "BATTER_HITS_System/data/model_features.csv",
-    "GAME":        "GAME_Pro_System/data/model_features.csv",
+    s: cfg.feature_csv
+    for s, cfg in SYSTEMS.items()
+    if cfg.active and s != "OUTS"   # OUTS shares K's CSV; K check covers it
 }
 
 MODEL_KEYS = {
-    "HR":          "HR_Pro/models/xgb_hr_v6.json",
-    "NRFI":        "NRFI_Pro_System/models/xgb_halfinn_v17.json",
-    "F5":          "F5_Pro_System/models/xgb_f5_v5.json",
-    "K":           "K_Pro_System/models/xgb_k_v1.json",
-    "BATTER_HITS": "BATTER_HITS_System/models/xgb_batter_hits_v1.json",
-    "GAME":        "GAME_Pro_System/models/xgb_game_v1.json",
+    s: cfg.model_artifact
+    for s, cfg in SYSTEMS.items()
+    if cfg.active and s != "OUTS"   # OUTS uses K's model artifact in MODEL_KEYS
 }
 
 SGO_SNAPSHOT_KEY   = "Odds/sgo/latest.json"
@@ -159,14 +158,13 @@ def _check_build_sentinels() -> list[str]:
     from mlb_core.storage import stat, read_bytes, exists
     import json
 
-    SENTINELS = {
-        "HR":          "HR_Pro/data/last_build.json",
-        "NRFI":        "NRFI_Pro_System/data/last_build.json",
-        "K":           "K_Pro_System/data/last_build.json",
-        "F5":          "F5_Pro_System/data/last_build.json",
-        "BATTER_HITS": "BATTER_HITS_System/data/last_build.json",
-        "GAME":        "GAME_Pro_System/data/last_build.json",
-    }
+    # Build from registry; deduplicate by path (OUTS shares K's sentinel).
+    _seen: set[str] = set()
+    SENTINELS: dict[str, str] = {}
+    for s, cfg in SYSTEMS.items():
+        if cfg.active and cfg.build_sentinel not in _seen:
+            SENTINELS[s] = cfg.build_sentinel
+            _seen.add(cfg.build_sentinel)
     failures = []
     for system, key in SENTINELS.items():
         if not exists(key):

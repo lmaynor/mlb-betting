@@ -24,6 +24,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from mlb_core.registry import SYSTEMS, CANONICAL_ORDER
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,18 +45,10 @@ HIT_RATE_DROP         = float(os.getenv("MONITOR_HIT_RATE_DROP", "10"))  # pct p
 MIN_BETS_FOR_ALERT    = int(os.getenv("MONITOR_MIN_BETS",        "20"))  # min settled bets
 ROLLING_WINDOW        = int(os.getenv("MONITOR_ROLLING_WINDOW",  "30"))  # bets
 
-# Expected model hit rates (rough baselines for alert comparison)
-# These are conservative — the models haven't been live long enough
-# to establish true baselines. Update these after 200 bets per system.
-EXPECTED_HIT_RATES = {
-    "HR":          0.07,   # HR props are rare hits
-    "NRFI":        0.55,   # roughly coin flip + edge
-    "F5":          0.52,
-    "K":           0.52,
-    "OUTS":        0.52,
-    "BATTER_HITS": 0.52,   # update after 200 settled bets; NegBin model, treat as placeholder
-    "GAME":        0.52,   # binary moneyline; update after 200 settled bets
-}
+# Expected model hit rates — derived from registry.
+# These are conservative; update expected_hit_rate in mlb_core/registry.py
+# after 200+ settled bets per system rather than editing this file.
+EXPECTED_HIT_RATES = {s: cfg.expected_hit_rate for s, cfg in SYSTEMS.items()}
 
 
 def _load_season_bets(season: str) -> pd.DataFrame:
@@ -250,7 +244,7 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
     if not webhook_url:
         return
 
-    color_dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠", "BATTER_HITS": "🩵", "GAME": "🖤"}.get(system, "⚪")
+    color_dot = SYSTEMS[system].icon if system in SYSTEMS else "⚪"
     alert_text = "\n".join(f"• {a}" for a in alerts)
 
     embed = {
@@ -281,9 +275,9 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
 
     fields = []
     total_pnl = 0.0
-    for system in ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS", "GAME"]:
+    for system in CANONICAL_ORDER:
         stats = system_stats.get(system)
-        dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡", "OUTS": "🟠", "BATTER_HITS": "🩵", "GAME": "🖤"}.get(system, "⚪")
+        dot = SYSTEMS[system].icon if system in SYSTEMS else "⚪"
         if not stats or stats.get("n", 0) == 0:
             fields.append({"name": f"{dot} {system}", "value": "_no data_", "inline": False})
             continue
@@ -361,7 +355,7 @@ def run(run_date: str = None) -> dict:
     total_alerts = 0
     weekly_stats = {}
 
-    for system in ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS", "GAME"]:
+    for system in CANONICAL_ORDER:
         sys_bets = all_bets[all_bets["system"] == system]
         if sys_bets.empty:
             results[system] = {"status": "no_data"}
