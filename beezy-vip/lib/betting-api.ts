@@ -70,6 +70,13 @@ export async function apiGetSparkline(days = 30): Promise<SparklinePoint[]> {
   return data.sparkline ?? []
 }
 
+export async function apiGetSparklineBySystem(system: string, days = 30): Promise<SparklinePoint[]> {
+  const data = await apiFetch<{ sparkline: SparklinePoint[] }>(
+    `/api/public/stats/sparkline?days=${days}&system=${system}`, 300
+  )
+  return data.sparkline ?? []
+}
+
 export async function apiGetStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>('/api/public/stats/summary', 300)
 }

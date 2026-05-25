@@ -1,7 +1,26 @@
 import { apiGetTodayPicks as getTodayPicks, apiGetStats } from '@/lib/betting-api'
-import { kellyStake, formatOdds, formatProb } from '@/lib/odds'
+import { kellyStake, formatOdds } from '@/lib/odds'
 import { SystemBadge, StatCard, LiveDot, ScoreBadge } from '@/components/ui/primitives'
 import { beezyscore } from '@/lib/beezy-score'
+
+function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: number }) {
+  const modelPct  = (modelProb  * 100).toFixed(1)
+  const marketPct = (marketProb * 100).toFixed(1)
+  const edgePct   = ((modelProb - marketProb) * 100).toFixed(1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' }}>
+      <div style={{ position: 'relative', height: '6px', background: '#1f1f24', borderRadius: '3px', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: '#3b82f640' }} />
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: '#10b981' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'monospace', fontSize: '10px' }}>
+        <span style={{ color: '#10b981' }}>{modelPct}% model</span>
+        <span style={{ color: '#71717a' }}>{marketPct}% implied</span>
+        <span style={{ color: '#10b981', fontWeight: 700 }}>+{edgePct}%</span>
+      </div>
+    </div>
+  )
+}
 import { CopyBetButton }                        from '@/components/ui/copy-bet-button'
 import { currentUser }                         from '@clerk/nextjs/server'
 import type { Metadata } from 'next'
@@ -50,23 +69,22 @@ export default async function DashboardPicksPage() {
       ) : (
         <div className="border border-[var(--border)] mb-8 overflow-x-auto">
           <div
-            className="grid min-w-[960px] border-b border-[var(--border)] bg-[var(--surface)]"
-            style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
+            className="grid min-w-[900px] border-b border-[var(--border)] bg-[var(--surface)]"
+            style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.7fr 1.8fr 0.8fr 1fr' }}
           >
-            {['Score', 'System', 'Game', 'Pick', 'Line', 'Model Prob', 'Implied', 'Edge', 'Half Kelly', 'Stake ($1k)'].map(h => (
+            {['Score', 'System', 'Game', 'Pick', 'Line', 'Win Probability', 'Half Kelly', 'Stake ($1k)'].map(h => (
               <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-muted">{h}</div>
             ))}
           </div>
 
           {pending.map((pick, i) => {
             const kelly = kellyStake(bankroll, pick.odds, pick.model_prob)
-            const edge  = ((pick.model_prob - pick.market_prob) * 100).toFixed(1)
 
             return (
               <div
                 key={i}
-                className="grid min-w-[960px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
-                style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr' }}
+                className="grid min-w-[900px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
+                style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.7fr 1.8fr 0.8fr 1fr' }}
               >
                 <div className="px-3 py-4 flex items-center justify-center"><ScoreBadge bet={pick} /></div>
                 <div className="px-3 py-4"><SystemBadge system={pick.system} /></div>
@@ -75,14 +93,8 @@ export default async function DashboardPicksPage() {
                 </div>
                 <div className="px-3 py-4 mono text-xs font-semibold text-text">{pick.bet_type}</div>
                 <div className="px-3 py-4 mono text-xs text-text">{formatOdds(pick.odds)}</div>
-                <div className="px-3 py-4 mono text-sm font-bold text-accent">
-                  {formatProb(pick.model_prob)}
-                </div>
-                <div className="px-3 py-4 mono text-xs text-muted">
-                  {formatProb(pick.market_prob)}
-                </div>
-                <div className="px-3 py-4 mono text-xs font-semibold text-accent">
-                  +{edge}%
+                <div className="px-3 py-4">
+                  <ProbBar modelProb={pick.model_prob} marketProb={pick.market_prob} />
                 </div>
                 <div className="px-3 py-4 mono text-sm font-bold text-text">
                   {kelly.halfKelly}%

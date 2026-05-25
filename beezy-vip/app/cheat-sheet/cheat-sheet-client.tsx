@@ -53,10 +53,11 @@ export interface EnrichedBet extends Bet {
 
 // ── Pick card ─────────────────────────────────────────────────────────────────
 
-function PickCard({ bet, rank, showRationale }: {
+function PickCard({ bet, rank, expanded, onToggle }: {
   bet: EnrichedBet
   rank: number
-  showRationale: boolean
+  expanded: boolean
+  onToggle: () => void
 }) {
   const color   = SYSTEM_COLOR[bet.system] ?? '#71717a'
   const isProp  = PLAYER_SYSTEMS.has(bet.system) || PITCHER_SYSTEMS.has(bet.system)
@@ -79,8 +80,13 @@ function PickCard({ bet, rank, showRationale }: {
 
   const sub = [bet.bet_type, fmtOdds(bet.odds)].filter(Boolean).join(' · ')
 
+  const edgePct = bet.edge != null ? (Math.abs(bet.edge) < 2 ? bet.edge * 100 : bet.edge) : 0
+  const edgeFontSize   = edgePct >= 15 ? '15px' : edgePct >= 8 ? '13px' : '9px'
+  const edgeFontWeight = edgePct >= 15 ? 800    : edgePct >= 8 ? 700    : 600
+  const edgeColor      = edgePct >= 8  ? color  : `${color}88`
+
   return (
-    <div style={{
+    <div onClick={onToggle} style={{
       background: '#0c0c12',
       borderBottom: '1px solid #16161e',
       borderLeft: `3px solid ${tierColor}55`,
@@ -90,6 +96,7 @@ function PickCard({ bet, rank, showRationale }: {
       overflow: 'hidden',
       position: 'relative',
       boxShadow: tierGlow[tier],
+      cursor: 'pointer',
     }}>
       {/* Left panel — gradient bg + portrait or logos */}
       <div style={{
@@ -182,12 +189,12 @@ function PickCard({ bet, rank, showRationale }: {
         </div>
 
         {/* Bet type + odds */}
-        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44445a', marginBottom: (showRationale && bullets.length) ? '6px' : 0 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#44445a', marginBottom: (expanded && bullets.length) ? '6px' : 0 }}>
           {sub}
         </div>
 
         {/* Rationale bullets */}
-        {showRationale && bullets.length > 0 && (
+        {expanded && bullets.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {bullets.slice(0, 3).map((b, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
@@ -208,7 +215,7 @@ function PickCard({ bet, rank, showRationale }: {
       }}>
         <ScoreBadge bet={bet} />
         {edge && (
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: `${color}88`, letterSpacing: '0.05em' }}>{edge}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: edgeFontSize, fontWeight: edgeFontWeight, color: edgeColor, letterSpacing: '0.04em' }}>{edge}</span>
         )}
       </div>
     </div>
@@ -227,14 +234,40 @@ export function CheatSheetClient({
   today: string
 }) {
   const [filter, setFilter]         = useState<FilterKey>('all')
-  const [showRationale, setRationale] = useState(true)
-  const [expanded, setExpanded]     = useState(false)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
+  const [showMore, setShowMore]     = useState(false)
 
   const filtered = filterBets(picks, filter)
-  const displayed = expanded ? filtered : filtered.slice(0, DEFAULT_LIMIT)
+  const displayed = showMore ? filtered : filtered.slice(0, DEFAULT_LIMIT)
   const hiddenCount = filtered.length - DEFAULT_LIMIT
 
+  const allExpanded = filtered.length > 0 && filtered.every(b => expandedIds.has(b.id))
+
+  function toggleCard(id: number) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (allExpanded) {
+      setExpandedIds(new Set())
+    } else {
+      setExpandedIds(new Set(filtered.map(b => b.id)))
+    }
+  }
+
   const activeFilter = FILTERS.find(f => f.key === filter)!
+
+  // Summary stats for 4.4
+  const strongCount = filtered.filter(b => scoreTier(beezyscore(b)) === 'strong').length
+  const leanCount   = filtered.filter(b => scoreTier(beezyscore(b)) === 'lean').length
+  const maxEdgePct  = filtered.length > 0
+    ? Math.max(...filtered.map(b => b.edge != null ? (Math.abs(b.edge) < 2 ? b.edge * 100 : b.edge) : 0))
+    : 0
 
   return (
     <div style={{
@@ -281,42 +314,61 @@ export function CheatSheetClient({
               }}>
                 CHEAT SHEET
               </div>
-              {/* Rationale toggle */}
+              {/* Expand all toggle */}
               <button
-                onClick={() => setRationale(r => !r)}
+                onClick={toggleAll}
                 style={{
                   fontFamily: 'monospace', fontSize: '8px', letterSpacing: '0.08em',
-                  color: showRationale ? '#10b981' : '#3a3a48',
-                  background: 'none', border: `1px solid ${showRationale ? '#0f6e5644' : '#1a1a22'}`,
+                  color: allExpanded ? '#10b981' : '#3a3a48',
+                  background: 'none', border: `1px solid ${allExpanded ? '#0f6e5644' : '#1a1a22'}`,
                   padding: '3px 7px', cursor: 'pointer',
                 }}
               >
-                {showRationale ? '▸ ANALYSIS ON' : '▸ ANALYSIS OFF'}
+                {allExpanded ? '▾ COLLAPSE ALL' : '▸ EXPAND ALL'}
               </button>
             </div>
           </div>
 
-          {/* Filter dropdown */}
-          <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select
-              value={filter}
-              onChange={e => { setFilter(e.target.value as FilterKey); setExpanded(false) }}
-              style={{
-                fontFamily: 'monospace', fontSize: '10px', letterSpacing: '0.06em',
-                color: '#f0f0f5', background: '#0e0e14',
-                border: '1px solid #2a2a36', padding: '5px 10px 5px 8px',
-                cursor: 'pointer', outline: 'none', flex: 1,
-              }}
-            >
-              {FILTERS.map(f => (
-                <option key={f.key} value={f.key}>{f.label}</option>
-              ))}
-            </select>
-            <div style={{ fontFamily: 'monospace', fontSize: '9px', color: '#3a3a48', whiteSpace: 'nowrap' }}>
-              {activeFilter.sub}
-            </div>
+          {/* Filter chips */}
+          <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {FILTERS.map(f => (
+              <button key={f.key} onClick={() => { setFilter(f.key); setShowMore(false) }}
+                style={{
+                  padding: '4px 10px', fontFamily: 'monospace', fontSize: '9px', cursor: 'pointer',
+                  border: `0.5px solid ${filter === f.key ? '#10b981' : '#2a2a36'}`,
+                  background: filter === f.key ? '#10b98118' : 'transparent',
+                  color: filter === f.key ? '#10b981' : '#52525b',
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                }}>
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
+
+        {/* Summary row */}
+        {filtered.length > 0 && (
+          <div style={{ padding: '6px 16px', background: '#0a0a0f', borderBottom: '1px solid #1a1a22', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#52525b', letterSpacing: '0.08em' }}>
+              {filtered.length} PICKS
+            </span>
+            {strongCount > 0 && (
+              <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#22c55e', letterSpacing: '0.06em', fontWeight: 700 }}>
+                {strongCount} STRONG
+              </span>
+            )}
+            {leanCount > 0 && (
+              <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#facc15', letterSpacing: '0.06em' }}>
+                {leanCount} LEAN
+              </span>
+            )}
+            {maxEdgePct > 0 && (
+              <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#10b981', letterSpacing: '0.06em' }}>
+                BEST EDGE +{maxEdgePct.toFixed(1)}%
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Column labels */}
         <div style={{
@@ -326,10 +378,10 @@ export function CheatSheetClient({
           <div style={{ width: '26px', minWidth: '26px' }} />
           <div style={{ width: '60px', minWidth: '60px' }} />
           <div style={{ flex: 1, paddingLeft: '11px', fontFamily: 'monospace', fontSize: '8px', color: '#2e2e3a', letterSpacing: '0.1em' }}>
-            PICK {showRationale && filtered.length > 0 ? '· ANALYSIS' : ''}
+            PICK · TAP TO EXPAND
           </div>
           <div style={{ minWidth: '52px', textAlign: 'center', fontFamily: 'monospace', fontSize: '8px', color: '#2e2e3a', letterSpacing: '0.1em' }}>
-            EDGE
+            SCORE
           </div>
         </div>
 
@@ -346,13 +398,16 @@ export function CheatSheetClient({
         ) : (
           <div>
             {displayed.map((bet, i) => (
-              <PickCard key={bet.id} bet={bet} rank={i + 1} showRationale={showRationale} />
+              <PickCard key={bet.id} bet={bet} rank={i + 1}
+                expanded={expandedIds.has(bet.id)}
+                onToggle={() => toggleCard(bet.id)}
+              />
             ))}
 
-            {/* Expand / collapse */}
-            {!expanded && hiddenCount > 0 && (
+            {/* Show more / less */}
+            {!showMore && hiddenCount > 0 && (
               <button
-                onClick={() => setExpanded(true)}
+                onClick={() => setShowMore(true)}
                 style={{
                   width: '100%', padding: '10px',
                   fontFamily: 'monospace', fontSize: '10px', letterSpacing: '0.08em',
@@ -364,9 +419,9 @@ export function CheatSheetClient({
                 + {hiddenCount} MORE PICKS
               </button>
             )}
-            {expanded && filtered.length > DEFAULT_LIMIT && (
+            {showMore && filtered.length > DEFAULT_LIMIT && (
               <button
-                onClick={() => setExpanded(false)}
+                onClick={() => setShowMore(false)}
                 style={{
                   width: '100%', padding: '10px',
                   fontFamily: 'monospace', fontSize: '10px', letterSpacing: '0.08em',

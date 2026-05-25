@@ -1,5 +1,6 @@
-import { apiGetStats } from '@/lib/betting-api'
+import { apiGetStats, apiGetSparklineBySystem } from '@/lib/betting-api'
 import Link from 'next/link'
+import { SystemSparkline } from './system-sparkline'
 
 const B = '0.5px solid #1f1f24'
 
@@ -13,12 +14,19 @@ const META: Record<string, { name: string; desc: string; href: string; bg: strin
 
 export async function ModelsGrid() {
   let stats: Array<{ system: string; win_rate: number; roi: number; total_bets: number }> = []
+  let sparklines: Record<string, Awaited<ReturnType<typeof apiGetSparklineBySystem>>> = {}
   try {
     const db = await apiGetStats().then(s => s.bySystem)
     stats = db.map(s => ({
       system: s.system, win_rate: parseFloat(String(s.win_rate)),
       roi: parseFloat(String(s.roi ?? 0)), total_bets: parseInt(String(s.total_bets)),
     }))
+    const sparklineResults = await Promise.allSettled(
+      stats.map(s => apiGetSparklineBySystem(s.system, 30))
+    )
+    sparklineResults.forEach((r, i) => {
+      if (r.status === 'fulfilled') sparklines[stats[i].system] = r.value
+    })
   } catch { /* API unavailable -- render empty */ }
 
   if (stats.length === 0) return (
@@ -84,6 +92,9 @@ export async function ModelsGrid() {
                   </div>
                 ))}
               </div>
+              {sparklines[s.system] && (
+                <SystemSparkline data={sparklines[s.system]} color={meta.color} />
+              )}
             </Link>
           )
         })}

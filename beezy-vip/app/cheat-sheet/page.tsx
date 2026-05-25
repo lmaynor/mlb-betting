@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import { apiGetTodayPicks } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
+import { SlateStrip } from '@/components/today/slate-strip'
 
 export const metadata: Metadata = {
   title: 'Cheat Sheet — Beezy.VIP',
@@ -91,5 +92,10 @@ export default async function CheatSheetPage() {
     .sort((a, b) => ((b.edge ?? 0) - (a.edge ?? 0)))
     .map(enrich)
 
-  return <CheatSheetClient picks={picks} today={dateLabel()} />
+  return (
+    <>
+      <SlateStrip />
+      <CheatSheetClient picks={picks} today={dateLabel()} />
+    </>
+  )
 }

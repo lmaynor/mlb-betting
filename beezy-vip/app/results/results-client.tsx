@@ -244,7 +244,7 @@ export function ResultsClient({
   const { rows: pnlRows, systems: chartSystems } = useMemo(
     () => buildPnLChart(initialPicks, system), [initialPicks, system]
   )
-  const edgeRows = useMemo(() => buildEdgeChart(initialPicks), [initialPicks])
+  const edgeRows = useMemo(() => buildEdgeChart(filtered), [filtered])
 
   const overall = initialStats.reduce(
     (acc, s) => ({
