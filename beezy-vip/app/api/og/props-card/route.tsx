@@ -193,7 +193,7 @@ export async function GET() {
                   {/* stat bullets */}
                   {bullets.length > 0 && (
                     <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-                      {bullets.map((b, bi) => (
+                      {bullets.map((b: string, bi: number) => (
                         <div key={bi} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
                           <span style={{ fontSize:"10px", color:sys.accent, fontWeight:800 }}>▸</span>
                           <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", letterSpacing:"0.2px" }}>{b}</span>
