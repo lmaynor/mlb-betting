@@ -118,12 +118,12 @@ function BetCard({ bet }: { bet: Bet }) {
   const hasProp  = PROP_SYSTEMS.has(bet.system)
 
   return (
-    <div style={{ background: '#111114', border: B, borderRadius: '3px', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div className="card-hover" style={{ background: '#111114', border: B, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {/* Header: system + date | result + P&L */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{
-            padding: '2px 7px', borderRadius: '2px', fontSize: '10px',
+            padding: '2px 7px', borderRadius: 'var(--radius-sm)', fontSize: '10px',
             fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', fontWeight: 600,
             color: pill.color, background: pill.bg, border: `0.5px solid ${pill.color}33`,
           }}>{bet.system}</span>

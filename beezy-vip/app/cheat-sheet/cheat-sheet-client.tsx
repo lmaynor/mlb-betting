@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Bet } from '@/lib/types'
+import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,15 @@ function PickCard({ bet, rank, showRationale }: {
   const edge    = fmtEdge(bet.edge)
   const bullets = bet.notes ? bet.notes.split(' · ').filter(Boolean) : []
 
+  const tier      = scoreTier(beezyscore(bet))
+  const tierColor = TIER_COLOR[tier]
+
+  const tierGlow: Record<string, string> = {
+    strong: `0 0 0 1px ${tierColor}28, 0 0 16px ${tierColor}12`,
+    lean:   `0 0 0 1px ${tierColor}20, 0 0 12px ${tierColor}0a`,
+    watch:  'var(--shadow-card)',
+  }
+
   const title = isProp
     ? (bet.player ?? bet.bet_type ?? '—')
     : `${bet.away_team ?? '?'} @ ${bet.home_team ?? '?'}`
@@ -72,11 +82,13 @@ function PickCard({ bet, rank, showRationale }: {
     <div style={{
       background: '#0c0c12',
       borderBottom: '1px solid #16161e',
+      borderLeft: `3px solid ${tierColor}55`,
       display: 'flex',
       alignItems: 'stretch',
       minHeight: '100px',
       overflow: 'hidden',
       position: 'relative',
+      boxShadow: tierGlow[tier],
     }}>
       {/* Left panel — gradient bg + portrait or logos */}
       <div style={{
@@ -152,6 +164,7 @@ function PickCard({ bet, rank, showRationale }: {
             fontFamily: 'monospace', fontSize: '8px', fontWeight: 700,
             letterSpacing: '0.1em', padding: '2px 6px',
             background: `${color}20`, color, border: `1px solid ${color}44`,
+            borderRadius: 'var(--radius-sm)',
           }}>
             {SYSTEM_LABEL[bet.system] ?? bet.system}
           </span>
@@ -239,7 +252,8 @@ export function CheatSheetClient({
         maxWidth: '390px',
         border: '1px solid #22222e',
         background: '#08080d',
-        boxShadow: '0 0 40px 0 #10b98110, 0 0 0 1px #10b98108',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-card)',
         overflow: 'hidden',
       }}>
 

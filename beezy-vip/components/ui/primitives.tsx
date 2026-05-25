@@ -20,7 +20,7 @@ export function LiveDot({ label }: { label?: string }) {
 export function SystemBadge({ system }: { system: string }) {
   const p = PILL[system] ?? { bg: '#1f1f24', color: '#a1a1aa', border: '0.5px solid #2a2a31' }
   return (
-    <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}>
+    <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: p.bg, color: p.color, border: p.border, display: 'inline-block', borderRadius: 'var(--radius-sm)' }}>
       {system}
     </span>
   )
@@ -28,7 +28,7 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '20px', border: '0.5px solid #1f1f24', background: '#111114' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '20px', border: '0.5px solid #1f1f24', background: '#111114', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)' }}>
       <span style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{label}</span>
       <span className="mono" style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? '#10b981' : '#f5f5f7' }}>{value}</span>
       {sub && <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>{sub}</span>}

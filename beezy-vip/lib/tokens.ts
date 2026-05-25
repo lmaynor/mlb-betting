@@ -7,6 +7,19 @@ import type { Bet } from '@/lib/types'
 // Border constant
 export const B = '0.5px solid #1f1f24'
 
+// Confidence tier colors (mirror --strong/--lean/--watch in globals.css)
+export type ScoreTier = 'strong' | 'lean' | 'watch'
+export const TIER_COLOR: Record<ScoreTier, string> = {
+  strong: '#22c55e',
+  lean:   '#facc15',
+  watch:  '#94a3b8',
+}
+export const TIER_LABEL: Record<ScoreTier, string> = {
+  strong: 'STRONG PLAY',
+  lean:   'LEAN PLAY',
+  watch:  'WATCH',
+}
+
 // System solid colors (charts, text, filter chips)
 export const SYSTEM_COLOR: Record<string, string> = {
   // Game Lines

@@ -65,9 +65,9 @@ export async function ModelsGrid() {
           const roiPos = s.roi >= 0
 
           return (
-            <Link key={s.system} href={meta.href} style={{ ...cellStyle, display: 'block', padding: '16px', background: '#0a0a0c', textDecoration: 'none' }}>
+            <Link key={s.system} href={meta.href} className="card-hover" style={{ ...cellStyle, display: 'block', padding: '16px', background: '#0a0a0c', textDecoration: 'none', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
-                <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: meta.bg, color: meta.color, border: meta.border }}>
+                <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: meta.bg, color: meta.color, border: meta.border, borderRadius: 'var(--radius-sm)' }}>
                   {s.system}
                 </span>
                 <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roiPos ? '#10b981' : '#ef4444' }}>
