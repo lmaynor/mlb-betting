@@ -836,3 +836,11 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
         "model_rows":    len(model_feats),
         "games":         int(model_feats["game_pk"].nunique()) if not model_feats.empty else 0,
     }
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    _result = run()
+    print(json.dumps(_result, indent=2, default=str))
+    sys.exit(0 if _result.get("status") == "ok" else 1)

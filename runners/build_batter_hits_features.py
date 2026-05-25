@@ -541,3 +541,11 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     write_build_sentinel("BATTER_HITS", result)
     logger.info(f"BATTER_HITS feature build complete | {len(model_features):,} rows")
     return result
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    _result = run()
+    print(json.dumps(_result, indent=2, default=str))
+    sys.exit(0 if _result.get("status") == "ok" else 1)

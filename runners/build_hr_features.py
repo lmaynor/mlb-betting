@@ -797,3 +797,11 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     from mlb_core.storage import write_build_sentinel
     write_build_sentinel("HR", result)
     return result
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+    _result = run()
+    print(json.dumps(_result, indent=2, default=str))
+    sys.exit(0 if _result.get("status") == "ok" else 1)
