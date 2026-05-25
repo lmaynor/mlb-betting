@@ -84,6 +84,46 @@ def _normalize_name(name: str) -> str:
     return re.sub(r"[^a-z0-9 ]", "", n.lower()).strip()
 
 
+def _load_sprint_speed() -> pd.DataFrame:
+    """Load sprint speed leaderboard → (batter, year, sprint_speed_ft_sec).
+
+    Returns empty DataFrame if the leaderboard master is not in GCS yet.
+    """
+    try:
+        from mlb_core.data.savant_leaderboards import load_savant_leaderboard
+        df = load_savant_leaderboard("sprint_speed")
+    except Exception as e:
+        logger.warning(f"BATTER_HITS: could not load sprint_speed leaderboard: {e}")
+        return pd.DataFrame()
+
+    if df.empty:
+        logger.warning("BATTER_HITS: sprint_speed leaderboard is empty — skipping")
+        return pd.DataFrame()
+
+    id_col = next((c for c in ("player_id", "mlbam_id") if c in df.columns), None)
+    if id_col is None or "sprint_speed" not in df.columns or "year" not in df.columns:
+        logger.warning(
+            f"BATTER_HITS: sprint_speed leaderboard missing expected columns "
+            f"(got: {df.columns.tolist()})"
+        )
+        return pd.DataFrame()
+
+    out = df[[id_col, "year", "sprint_speed"]].copy()
+    out = out.rename(columns={id_col: "batter", "sprint_speed": "sprint_speed_ft_sec"})
+    out["batter"]             = pd.to_numeric(out["batter"],             errors="coerce")
+    out["year"]               = pd.to_numeric(out["year"],               errors="coerce")
+    out["sprint_speed_ft_sec"]= pd.to_numeric(out["sprint_speed_ft_sec"],errors="coerce")
+    out = out.dropna(subset=["batter", "year", "sprint_speed_ft_sec"])
+    out = out.sort_values(["batter", "year"]).reset_index(drop=True)
+
+    logger.info(
+        f"BATTER_HITS: sprint_speed loaded — {len(out):,} player-seasons "
+        f"({int(out['year'].min())}-{int(out['year'].max())}), "
+        f"median {out['sprint_speed_ft_sec'].median():.1f} ft/sec"
+    )
+    return out
+
+
 # ── Section 1: Statcast load ──────────────────────────────────────────────────
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
@@ -398,8 +438,9 @@ def build_model_features(
     pf: pd.DataFrame,
     wx: pd.DataFrame,
     order_map: pd.DataFrame,
+    sprint_speed: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Join batter rolling, pitcher rolling, weather, and context into model_features."""
+    """Join batter rolling, pitcher rolling, weather, sprint speed, and context into model_features."""
     logger.info(f"BATTER_HITS: building model features from {len(bf):,} batter-game rows...")
 
     df = bf.copy()
@@ -465,6 +506,44 @@ def build_model_features(
         "ewma_batting_order", pd.Series(5.0, index=df.index)
     ).fillna(5.0)
 
+    # Sprint speed join
+    # Primary key: (batter MLBAM ID, season year). Falls back to the player's
+    # most-recent available season so early-season games (before Savant publishes
+    # current-year data) still get a value. Remaining NaN → league median.
+    if sprint_speed is not None and not sprint_speed.empty:
+        df["season"] = pd.to_datetime(df["game_date"]).dt.year
+
+        # Latest-year lookup for fallback
+        latest_speed = (
+            sprint_speed.sort_values("year")
+            .drop_duplicates(subset="batter", keep="last")
+            .set_index("batter")["sprint_speed_ft_sec"]
+            .to_dict()
+        )
+
+        ss = sprint_speed.rename(columns={"year": "season"})
+        df = df.merge(ss[["batter", "season", "sprint_speed_ft_sec"]], on=["batter", "season"], how="left")
+
+        # Fallback: most-recent prior year (handles pre-publication window)
+        still_nan = df["sprint_speed_ft_sec"].isna()
+        if still_nan.any():
+            df.loc[still_nan, "sprint_speed_ft_sec"] = (
+                df.loc[still_nan, "batter"].map(latest_speed)
+            )
+
+        # Fill remaining (genuine newcomers / no data) with league median
+        league_median = df["sprint_speed_ft_sec"].median()
+        n_filled = df["sprint_speed_ft_sec"].isna().sum()
+        df["sprint_speed_ft_sec"] = df["sprint_speed_ft_sec"].fillna(league_median)
+        logger.info(
+            f"  sprint_speed: {(~still_nan).sum():,} exact-year, "
+            f"{still_nan.sum() - n_filled:,} prior-year fallback, "
+            f"{n_filled:,} median-filled ({league_median:.2f} ft/sec)"
+        )
+    else:
+        df["sprint_speed_ft_sec"] = np.nan
+        logger.warning("  sprint_speed not available — feature will be NaN at predict time")
+
     # Pitch clock regime indicator
     df["post_pitch_clock"] = (
         pd.to_datetime(df["game_date"]) >= pd.Timestamp("2023-03-30")
@@ -514,6 +593,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     order_map = _load_or_empty(
         cfg.get("gcs_player_order_map", ""), cfg.get("player_order_map", "")
     )
+    sprint_speed = _load_sprint_speed()
 
     for frame, col in [(bf_existing, "game_date"), (pf_existing, "game_date")]:
         if not frame.empty and col in frame.columns:
@@ -524,7 +604,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     # 3. Rebuild
     bf = build_batter_hits_rolling(sc, bf_existing, run_date=run_date)
     pf = build_pitcher_hits_features(sc, pf_existing, run_date=run_date)
-    model_features = build_model_features(bf, pf, wx, order_map)
+    model_features = build_model_features(bf, pf, wx, order_map, sprint_speed)
 
     # 4. Upload
     def _save(df, gcs_key, local_path):

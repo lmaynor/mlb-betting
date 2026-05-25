@@ -49,6 +49,7 @@ BATTER_HITS_FEATURES = [
     "pitcher_babip_allowed_L20", "pitcher_hits_per_9_L20",
     "pitcher_gb_rate_L20", "pitcher_k_pct_L20",
     "hits_park_factor",
+    "sprint_speed_ft_sec",
     "is_home", "temperature_f", "is_dome", "post_pitch_clock",
 ]
 
