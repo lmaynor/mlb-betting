@@ -100,7 +100,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 /* ── Desktop base grid rules ── */
 .nav-desktop    { display: flex; align-items: center; gap: 32px; }
 .nav-mobile     { display: none; }
-.mobile-only    { display: none; }
+.mobile-only    { display: none !important; }
 
 .hero-grid      { display: grid; grid-template-columns: 1fr 1fr; min-height: 480px; }
 .hero-stats     { display: grid; grid-template-columns: 1fr 1fr; }

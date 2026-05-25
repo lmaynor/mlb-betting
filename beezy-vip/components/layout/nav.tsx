@@ -61,7 +61,7 @@ export function Nav() {
         </div>
 
         {/* Mobile: auth + Discord — BottomNav handles routing */}
-        <div className="nav-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-only" style={{ alignItems: 'center', gap: '8px' }}>
           {isSignedIn ? (
             <UserButton  />
           ) : (
