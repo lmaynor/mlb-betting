@@ -68,6 +68,24 @@ def remove_background(img_bytes: bytes) -> bytes:
         raise RuntimeError('Install: pip install "rembg[cpu]"')
 
 
+def _process_by_key(key: str, mlbam_id: int) -> bool:
+    out_path = OUT_DIR / f"{key}.png"
+    if out_path.exists():
+        return True
+    url = HEADSHOT_URL.format(id=mlbam_id)
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            img_bytes = r.read()
+        print(f"  ⬇️  {key} ({len(img_bytes):,}B)", end="", flush=True)
+        result_bytes = remove_background(img_bytes)
+        out_path.write_bytes(result_bytes)
+        print(f" → saved ({len(result_bytes):,}B)")
+        return True
+    except Exception as e:
+        print(f"\n  ❌ {key}: {e}")
+        return False
+
+
 def process_player(name: str, player_map: dict) -> bool:
     key = slug(name)
     mlbam_id = player_map.get(key)
@@ -101,20 +119,68 @@ def process_player(name: str, player_map: dict) -> bool:
         return False
 
 
-def main():
+def refresh_player_map() -> dict:
+    """Merge active 2026 MLB roster into player_map.json and return updated map."""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    season = __import__('datetime').date.today().year
+    url = f"https://statsapi.mlb.com/api/v1/sports/1/players?season={season}"
+    try:
+        with urllib.request.urlopen(url, timeout=15, context=ctx) as r:
+            people = json.loads(r.read()).get("people", [])
+        print(f"  MLB API returned {len(people)} active players for {season}")
+    except Exception as e:
+        print(f"  ⚠️  Could not fetch active roster: {e}")
+        return {}
+
     with open(PLAYER_MAP) as f:
-        player_map = json.load(f)
+        existing = json.load(f)
+
+    added = 0
+    for p in people:
+        key = slug(p["fullName"])
+        if key not in existing:
+            existing[key] = p["id"]
+            added += 1
+
+    existing = dict(sorted(existing.items()))
+    with open(PLAYER_MAP, "w") as f:
+        json.dump(existing, f, indent=2, ensure_ascii=False)
+
+    print(f"  Added {added} new players → {len(existing)} total in player_map.json")
+    return existing
+
+
+def main():
+    if "--refresh-map" in sys.argv or "--sync" in sys.argv:
+        print("Refreshing player_map.json from MLB active roster...")
+        player_map = refresh_player_map()
+        if not player_map:
+            sys.exit(1)
+        print()
+    else:
+        with open(PLAYER_MAP) as f:
+            player_map = json.load(f)
 
     print(f"Player map: {len(player_map)} entries")
     print(f"Output dir: {OUT_DIR}")
     print()
 
     if "--all" in sys.argv:
-        # Convert snake_case keys back to names for display
-        names = [k.replace("_", " ").title() for k in player_map.keys()]
-        print(f"Processing ALL {len(names)} players...")
+        # Process directly by key to avoid slug round-trip errors
+        missing_keys = [(k, v) for k, v in player_map.items()
+                        if not (OUT_DIR / f"{k}.png").exists()]
+        print(f"Processing {len(missing_keys)} players without existing headshots...")
+        print()
+        ok = sum(1 for k, v in missing_keys if _process_by_key(k, v))
+        print(f"\nDone — {ok}/{len(missing_keys)} processed successfully")
+        print(f"Commit: git add beezy-vip/public/headshots/ && git push")
+        return
     elif len(sys.argv) > 1 and not sys.argv[1].startswith("--"):
-        names = sys.argv[1:]
+        names = [a for a in sys.argv[1:] if not a.startswith("--")]
         print(f"Processing {len(names)} specified player(s)...")
     else:
         print("Fetching today's picks to determine which players to process...")
