@@ -133,6 +133,16 @@ SYSTEM_CONFIG = {
         "num_boost_round": 2000,
         "filter_col":    "batter_hits",
     },
+    "GAME": {
+        "gcs_features":  "GAME_Pro_System/data/model_features.csv",
+        "target":        "home_win",
+        "objective":     "binary:logistic",
+        "eval_metric":   "auc",
+        "metric_dir":    "max",
+        "gcs_output":    "GAME_Pro_System/models/game_tuned_params.json",
+        "early_stopping": 30,
+        "num_boost_round": 500,
+    },
 }
 
 

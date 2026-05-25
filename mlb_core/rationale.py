@@ -117,6 +117,35 @@ _BATTER_HITS_RULES = [
     ("ewma_batting_order",       lambda v: v <= 3.5,   "top-of-order spot ({v:.1f} avg batting order)"),
 ]
 
+# ── GAME rules ────────────────────────────────────────────────────────────────
+_GAME_RULES = [
+    # Home starter edge
+    ("home_k_pct_L3",         lambda v: v >= 0.28,  "home starter K% {v:.0%} L3"),
+    ("home_xwoba_allowed_L3", lambda v: v <= 0.290, "home starter elite contact suppression (xwOBA {v:.3f})"),
+    ("home_xwoba_allowed_L3", lambda v: v <= 0.320, "home starter strong contact suppression (xwOBA {v:.3f})"),
+    ("home_velo_mean_L3",     lambda v: v >= 95,    "home starter high velo ({v:.1f} mph L3)"),
+    ("home_bb_pct_L3",        lambda v: v <= 0.06,  "home starter strong command ({v:.0%} BB L3)"),
+    ("home_starter_days_rest",lambda v: v >= 5,     "home starter well-rested ({v:.0f} days)"),
+    # Away starter weakness
+    ("away_k_pct_L3",         lambda v: v <= 0.18,  "away starter low K rate ({v:.0%} L3) — risk"),
+    ("away_xwoba_allowed_L3", lambda v: v >= 0.340, "away starter weak contact suppression (xwOBA {v:.3f})"),
+    ("away_bb_pct_L3",        lambda v: v >= 0.10,  "away starter high walk rate ({v:.0%} L3) — risk"),
+    # Bullpen edge (key differentiator)
+    ("home_bullpen_xwoba_L14",lambda v: v <= 0.300, "home bullpen elite (xwOBA {v:.3f} L14)"),
+    ("home_bullpen_ip_L7",    lambda v: v >= 12,    "home bullpen fresh ({v:.0f} IP L7)"),
+    ("away_bullpen_xwoba_L14",lambda v: v >= 0.340, "away bullpen weak (xwOBA {v:.3f} L14) — risk"),
+    ("away_bullpen_ip_L7",    lambda v: v >= 18,    "away bullpen fatigued ({v:.0f} IP L7) — risk"),
+    # Team offense
+    ("home_team_woba_L20",    lambda v: v >= 0.340, "home offense hot ({v:.3f} wOBA L20)"),
+    ("away_team_woba_L20",    lambda v: v <= 0.290, "away offense cold ({v:.3f} wOBA L20)"),
+    ("home_run_diff_L20",     lambda v: v >= 15,    "home run differential +{v:.0f} L20"),
+    # Park / weather
+    ("park_factor",           lambda v: v >= 1.08,  "hitter-friendly park ({v:.2f}x)"),
+    ("park_factor",           lambda v: v <= 0.92,  "pitcher-friendly park ({v:.2f}x)"),
+    ("temperature_f",         lambda v: v >= 80,    "warm conditions ({v:.0f}°F)"),
+    ("wind_out",              lambda v: v == 1,     "wind blowing out"),
+]
+
 _SYSTEM_RULES = {
     "HR":          _HR_RULES,
     "NRFI":        _NRFI_RULES,
@@ -125,6 +154,7 @@ _SYSTEM_RULES = {
     "OUTS":        _OUTS_RULES,
     "F5":          _F5_RULES,
     "BATTER_HITS": _BATTER_HITS_RULES,
+    "GAME":        _GAME_RULES,
 }
 
 
