@@ -98,20 +98,22 @@ function PickCard({ bet, rank, showRationale }: {
         </span>
 
         {isProp && bet.headshotUrl ? (
-          // Portrait — fills left panel, head at top, no circle
+          // Contained portrait — shows full head/shoulders, transparent bg shows gradient
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={bet.headshotUrl}
             alt={bet.player ?? ''}
-            width={86}
-            height={100}
+            width={72}
+            height={88}
             style={{
-              objectFit: 'cover',
-              objectPosition: 'top center',
-              width: '86px',
-              height: '100%',
+              objectFit: 'contain',
+              objectPosition: 'bottom center',
+              width: '72px',
+              height: '88px',
               position: 'absolute',
-              inset: 0,
+              bottom: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
             }}
           />
         ) : isGame && (bet.awayLogoUrl || bet.homeLogoUrl) ? (
@@ -134,14 +136,12 @@ function PickCard({ bet, rank, showRationale }: {
           </span>
         )}
 
-        {/* Bottom fade for portrait photos */}
-        {isProp && bet.headshotUrl && (
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0, height: '30px',
-            background: 'linear-gradient(to top, #0c0c12, transparent)',
-            zIndex: 1,
-          }} />
-        )}
+        {/* Subtle bottom fade */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: '20px',
+          background: 'linear-gradient(to top, #0c0c12cc, transparent)',
+          zIndex: 1,
+        }} />
       </div>
 
       {/* Content */}
