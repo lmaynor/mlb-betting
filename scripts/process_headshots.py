@@ -11,8 +11,8 @@ Usage:
     python scripts/process_headshots.py --all               # all players in player_map.json
 
 Requirements:
-    pip install backgroundremover pillow requests
-    (backgroundremover downloads a ~170 MB u2net model on first run)
+    pip install "rembg[cpu]" pillow requests
+    (downloads a ~170 MB u2net ONNX model on first run — no PyTorch/CUDA needed)
 
 Outputs:
     beezy-vip/public/headshots/{first_last}.png  (transparent background PNG)
@@ -56,29 +56,12 @@ def fetch_today_players() -> list[str]:
 
 
 def remove_background(img_bytes: bytes) -> bytes:
-    """Remove background using backgroundremover (u2net model)."""
+    """Remove background using rembg (lightweight ONNX, no PyTorch needed)."""
     try:
-        from backgroundremover.bg import remove as bg_remove
-        result = bg_remove(
-            img_bytes,
-            model_name="u2net_human_seg",   # best for portraits
-            alpha_matting=True,
-            alpha_matting_foreground_threshold=240,
-            alpha_matting_background_threshold=10,
-            alpha_matting_erode_structure_size=10,
-            alpha_matting_base_size=1000,
-        )
-        return result
+        from rembg import remove as rembg_remove
+        return rembg_remove(img_bytes)
     except ImportError:
-        print("  ⚠️  backgroundremover not installed — trying rembg fallback...")
-        try:
-            from rembg import remove as rembg_remove
-            return rembg_remove(img_bytes)
-        except ImportError:
-            raise RuntimeError(
-                "Install backgroundremover: pip install backgroundremover\n"
-                "Or alternatively: pip install rembg"
-            )
+        raise RuntimeError('Install: pip install "rembg[cpu]"')
 
 
 def process_player(name: str, player_map: dict) -> bool:
