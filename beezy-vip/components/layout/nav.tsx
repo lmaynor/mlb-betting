@@ -49,7 +49,7 @@ export function Nav() {
               <Link href="/dashboard" className="mono" style={{ fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none', color: pathname.startsWith('/dashboard') ? '#10b981' : '#71717a' }}>
                 Dashboard
               </Link>
-              <UserButton afterSignOutUrl="/" />
+              <UserButton  />
             </>
           ) : (
             <SignInButton mode="modal">
@@ -63,7 +63,7 @@ export function Nav() {
         {/* Mobile: auth + Discord — BottomNav handles routing */}
         <div className="nav-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {isSignedIn ? (
-            <UserButton afterSignOutUrl="/" />
+            <UserButton  />
           ) : (
             <SignInButton mode="modal">
               <button className="mono" style={{ fontSize: '10px', letterSpacing: '0.04em', textTransform: 'uppercase', background: 'none', border: '0.5px solid #2a2a31', padding: '4px 8px', color: '#71717a', cursor: 'pointer' }}>

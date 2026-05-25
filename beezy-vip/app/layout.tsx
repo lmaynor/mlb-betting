@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
       <body>
         <Nav />
