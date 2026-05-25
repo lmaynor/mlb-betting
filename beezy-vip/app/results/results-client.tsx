@@ -503,7 +503,7 @@ export function ResultsClient({
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickLabel(bet)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>{formatOdds(bet.odds)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#10b981' }}>
-                  {bet.edge != null ? (bet.edge >= 0.10 ? '10%+' : bet.edge >= 0.05 ? '5-10%' : bet.edge >= 0 ? '0-5%' : '<0%') : '--'}
+                  {bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--'}
                 </div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#f5f5f7' }}>
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}

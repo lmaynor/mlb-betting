@@ -58,7 +58,7 @@ export default async function DashboardPicksPage() {
           </div>
 
           {pending.map((pick, i) => {
-            const kelly = kellyStake(DEFAULT_BANKROLL, pick.odds, pick.model_prob)
+            const kelly = kellyStake(bankroll, pick.odds, pick.model_prob)
             const edge  = ((pick.model_prob - pick.market_prob) * 100).toFixed(1)
 
             return (
@@ -69,7 +69,7 @@ export default async function DashboardPicksPage() {
               >
                 <div className="px-3 py-4"><SystemBadge system={pick.system} /></div>
                 <div className="px-3 py-4 mono text-xs text-muted">
-                  Game {pick.game_pk}
+                  {pick.away_team && pick.home_team ? `${pick.away_team} @ ${pick.home_team}` : `Game ${pick.game_pk}`}
                 </div>
                 <div className="px-3 py-4 mono text-xs font-semibold text-text">{pick.bet_type}</div>
                 <div className="px-3 py-4 mono text-xs text-text">{formatOdds(pick.odds)}</div>
@@ -119,7 +119,9 @@ export default async function DashboardPicksPage() {
                 style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr' }}
               >
                 <div className="px-3 py-3"><SystemBadge system={pick.system} /></div>
-                <div className="px-3 py-3 mono text-xs text-muted">Game {pick.game_pk}</div>
+                <div className="px-3 py-3 mono text-xs text-muted">
+                  {pick.away_team && pick.home_team ? `${pick.away_team} @ ${pick.home_team}` : `Game ${pick.game_pk}`}
+                </div>
                 <div className="px-3 py-3 mono text-xs text-text">{pick.bet_type}</div>
                 <div className="px-3 py-3 mono text-xs text-text">{formatOdds(pick.odds)}</div>
                 <div className="px-3 py-3">
