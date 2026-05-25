@@ -45,10 +45,10 @@ export async function Hero() {
             200-bet validation gate.
           </p>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer"
+            <Link href="/cheat-sheet"
               className="mono" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '7px 16px', background: 'var(--accent)', color: 'var(--bg)', textDecoration: 'none' }}>
-              Join Discord
-            </a>
+              Today&apos;s Picks &rarr;
+            </Link>
             <Link href="/models"
               className="mono" style={{ fontSize: '11px', letterSpacing: '0.02em', padding: '7px 16px', border: B, color: 'var(--sec)', textDecoration: 'none' }}>
               View methodology &rarr;

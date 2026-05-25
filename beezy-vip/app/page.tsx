@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Hero }             from '@/components/landing/hero'
-import { HowItWorks, DiscordCTA } from '@/components/landing/how-it-works'
+import { HowItWorks } from '@/components/landing/how-it-works'
 import { ModelsGrid }       from '@/components/landing/models-grid'
 import { RecentPicksTable } from '@/components/landing/recent-picks-table'
 import { PricingSection }   from '@/components/landing/pricing'
@@ -25,7 +25,6 @@ export default function HomePage() {
         <ModelsGrid />
       </Suspense>
       <PricingSection />
-      <DiscordCTA />
     </>
   )
 }
