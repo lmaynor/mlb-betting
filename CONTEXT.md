@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-25 15:56 CST_HITS pipeline, registry/schema layer)_
+_Last updated: 2026-05-25 (cheat sheet, headshot reconciliation, player map sync)_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -949,6 +949,18 @@ All per-system Discord summaries showed K stats. Fixed with `text()` wrapper.
 paper_tag was removed from bet headlines. All bets treated as cash going forward.
 The `paper` column still exists in the DB for historical reference.
 
+**`/admin/backfill-notes` POST endpoint backfills null `notes` in the bets table.**
+Reads GCS feature CSVs for each active system, matches rows to bets by
+`(system, game_pk, player)`, runs `build_rationale()`, and UPDATEs the DB.
+Required after deploying a rationale fix to populate notes for bets logged before
+the fix. Body: `{"date": "YYYY-MM-DD"}`. Auth: `X-API-Key`. Must call via proxy --
+Cloud SQL unix socket only exists inside Cloud Run.
+
+**`playerSlug()` hyphen bug (fixed 2026-05-25).** The strip regex `[^\wÀ-ɏ]` also
+strips hyphens, so hyphen→_ conversion must run BEFORE the regex or hyphens disappear
+entirely. Affected: Ha-Seong Kim, Isiah Kiner-Falefa, Kai-Wei Teng, Sawyer Gipson-Long.
+player_map.json keys and process_headshots.py slug() were normalized simultaneously.
+
 **HR bets store full team names in `away_team`/`home_team`** (e.g. "Red Sox", "Braves")
 while all other systems store 3-letter abbrevs (e.g. "BOS", "ATL"). Root cause:
 HR runner gets teams from feature CSV which uses SGO medium names. Frontend works
@@ -1797,6 +1809,88 @@ subscription via Clerk auth. CSV export uses exact edge values.
 - HR `away_team`/`home_team` abbrev normalization in `run_hr.py`
 - Rate limiting on public API
 
+### Cheat sheet page (`/cheat-sheet`)
+
+Mobile-optimized, screenshot-ready pick card page. Added 2026-05-25.
+
+**Files:**
+- `beezy-vip/app/cheat-sheet/page.tsx` -- server component; resolves headshot and
+  logo URLs server-side, sorts by edge, passes enriched bets to client
+- `beezy-vip/app/cheat-sheet/cheat-sheet-client.tsx` -- interactive client component
+- `beezy-vip/app/cheat-sheet/layout.tsx` -- strips global nav/footer for clean screenshot
+
+**Features:**
+- Default limit: 5 picks, expandable
+- Filter dropdown: All / Game Picks (NRFI, F5) / Pitcher Props (K, OUTS) / Player Props (HR, HITS)
+- Rationale toggle: show/hide analysis bullets per card
+- 390px fixed-width card design optimized for iOS Twitter screenshots
+- Left panel (86px): headshot (`objectFit: contain`, bottom-anchored) or team logos for game picks
+- Rank badge overlaid top-left, system badge above player name, edge panel right
+
+**`playerSlug()` bug history:** The regex `[^\wÀ-ɏ]` was applied BEFORE `replace(/-/g, '_')`,
+so hyphens were stripped entirely (Ha-Seong Kim became `haseong_kim`, not `ha_seong_kim`).
+Fixed 2026-05-25: hyphen→_ conversion now runs before the strip regex. The same fix is
+applied in `process_headshots.py` slug() and must match exactly.
+
+**Correct slug logic (TypeScript and Python must match):**
+```
+lower -> space→_ -> hyphen→_ -> strip [^\wÀ-ɏ] (dots, apostrophes, etc.)
+```
+
+Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
+
+---
+
+### Headshot system
+
+Player headshots live in `beezy-vip/public/headshots/`.
+
+**player_map.json** (`beezy-vip/public/headshots/player_map.json`):
+- Maps `slug` -> MLB MLBAM integer ID
+- 1272 entries as of 2026-05-25 (full 2026 active roster + historical players)
+- Keys are normalized slugs (same algorithm as `playerSlug()` above) -- no dots,
+  apostrophes, or raw hyphens in any key
+- Updated from MLB Stats API via `python scripts/process_headshots.py --refresh-map`
+- `--refresh-map` merges active season roster without dropping existing entries
+  (retains IL/minors/retired players that may still appear in picks)
+
+**Headshot files:** `{slug}.png`, transparent background (rembg-processed).
+
+**Background removal tool:** `rembg[cpu]` (ONNX Runtime, ~50MB).
+Do NOT use `backgroundremover` -- it pulls PyTorch + CUDA + moviepy (~5GB).
+Install: `pip install "rembg[cpu]"`.
+
+**Scripts:**
+- `scripts/process_headshots.py` -- download + rembg-process headshots
+  - No args: today's picks only
+  - `player_name ...`: specific players
+  - `--all`: all missing (no existing PNG)
+  - `--refresh-map` / `--sync`: re-sync player_map from MLB API first, then process missing
+- `scripts/fetch_missing_headshots.sh` -- Cloud Shell bulk download, hardcoded list
+  of known missing players with their MLBAM IDs
+
+**Full reconciliation flow (Cloud Shell):**
+```bash
+cd ~/mlb-betting && git pull
+pip install "rembg[cpu]" -q
+python3 scripts/process_headshots.py --refresh-map --all
+git add beezy-vip/public/headshots/*.png beezy-vip/public/headshots/player_map.json
+git commit -m "headshots: refresh player map and process missing"
+git push
+```
+
+**Lookup in page.tsx:**
+`headshotUrl()` tries accented slug first (`randy_vásquez`), then NFD-normalized
+ASCII fallback (`randy_vasquez`), then MLB CDN via MLBAM ID. Local bg-removed PNG
+always wins over CDN. The NFD fallback handles cases where the player_map key has
+an accented char but the local file was saved under the ASCII slug.
+
+**Max Muncy duplicate:** Two players named Max Muncy (IDs 571970 and 691777).
+player_map keeps the first one encountered. Both will appear in player picks
+under the same slug `max_muncy` -- last write wins in the map.
+
+---
+
 ### When to update this section
 
 - Adding a new page or route → update repo layout table
@@ -1812,7 +1906,7 @@ subscription via Clerk auth. CSV export uses exact edge values.
 ## 16. Model remediation backlog
 
 _Added 2026-05-19. Source: institutional quant audit of the full codebase._
-_Last updated: 2026-05-25 15:56 CST_HITS pipeline, registry/schema layer)_
+_Last updated: 2026-05-25 (cheat sheet, headshot reconciliation, player map sync)_
 
 Work top-to-bottom within each priority tier. Later tasks may depend on earlier ones — dependency notes are inline. Mark tasks `[x]` when the acceptance criterion is verified in a commit. When a task is complete, add the commit hash next to it.
 
@@ -2898,10 +2992,11 @@ Downloaded from cdn.ssref.net. Abbrevs: ari, atl, bal, bos, chc, cws, cin,
 cle, col, det, hou, kc, laa, lad, mia, mil, min, nym, nyy, oak, phi, pit,
 sd, sf, sea, stl, tb, tex, tor, wsh.
 
-Player headshots: beezy-vip/public/headshots/{mlbam_id}.jpg (1315 files)
-Downloaded 2026-05-23 via MLB Stats API + headshot CDN with browser User-Agent.
-player_map.json maps "first_last" -> MLBAM integer ID.
-Refresh annually or when roster changes materially.
+Player headshots: beezy-vip/public/headshots/{slug}.png (1240+ files, bg-removed)
+Keys are normalized slugs (see §16 Headshot system for slug algorithm).
+player_map.json maps slug -> MLBAM integer ID (1272 entries, full 2026 roster).
+To refresh: `python3 scripts/process_headshots.py --refresh-map --all` on Cloud Shell.
+See §16 Headshot system for full details.
 
 ---
 
