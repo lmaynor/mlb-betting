@@ -357,6 +357,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "odds":        int(odds),
             "stake":       stake if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
+            # rationale features
+            "k_pct_L3":          row.get("k_pct_L3"),
+            "xwoba_allowed_L3":  row.get("xwoba_allowed_L3"),
+            "velo_mean_L3":      row.get("velo_mean_L3"),
+            "bb_pct_L3":         row.get("bb_pct_L3"),
+            "wind_out":          row.get("wind_out"),
+            "wind_in":           row.get("wind_in"),
+            "park_factor":       row.get("park_factor"),
+            "is_cold":           row.get("is_cold"),
+            "days_rest":         row.get("days_rest"),
+            "short_rest":        row.get("short_rest"),
+            "pitcher_is_home":   row.get("pitcher_is_home"),
         })
 
     if not results:
@@ -538,6 +550,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             book             = row.get("bookmaker"),
             morning_odds     = row.get("morning_odds"),
+            notes            = build_rationale(row.to_dict(), "F5"),
         )
         if bet_id == -1:
             continue

@@ -489,6 +489,15 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "morning_odds":    _morning_odds.get(
                             f"pitching_strikeouts-{row['_pitcher_id']}-game-ou-{side.lower()}"
                         ),
+                        # rationale features
+                        "k_pct_L3":               row.get("k_pct_L3"),
+                        "whiff_pct_L3":           row.get("whiff_pct_L3"),
+                        "velo_mean_L3":           row.get("velo_mean_L3"),
+                        "bb_pct_L3":              row.get("bb_pct_L3"),
+                        "xwoba_allowed_L3":       row.get("xwoba_allowed_L3"),
+                        "days_rest":              row.get("days_rest"),
+                        "short_rest":             row.get("short_rest"),
+                        "ump_total_run_impact_L30": row.get("ump_total_run_impact_L30"),
                     })
 
         # ── Pitcher outs O/U ───────────────────────────────────────────────
@@ -576,6 +585,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "morning_odds":    _morning_odds.get(
                             f"pitching_outs-{row['_pitcher_id']}-game-ou-{side.lower()}"
                         ),
+                        # rationale features
+                        "avg_ip_L5":              row.get("avg_ip_L5"),
+                        "k_pct_L3":               row.get("k_pct_L3"),
+                        "bb_pct_L3":              row.get("bb_pct_L3"),
+                        "velo_mean_L3":           row.get("velo_mean_L3"),
+                        "days_rest":              row.get("days_rest"),
+                        "short_rest":             row.get("short_rest"),
                     })
 
     if not results:

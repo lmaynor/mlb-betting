@@ -494,6 +494,21 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "stake":        stake if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
             "bookmaker":    odds_info.get("bookmaker"),
+            # rationale features
+            "k_pct_L3":               row.get("k_pct_L3"),
+            "whiff_pct_L3":           row.get("whiff_pct_L3"),
+            "bb_pct_L3":              row.get("bb_pct_L3"),
+            "xwoba_allowed_L3":       row.get("xwoba_allowed_L3"),
+            "velo_mean_L3":           row.get("velo_mean_L3"),
+            "wind_out":               row.get("wind_out"),
+            "wind_in":                row.get("wind_in"),
+            "wind_speed_mph":         row.get("wind_speed_mph"),
+            "is_cold":                row.get("is_cold"),
+            "park_factor":            row.get("park_factor"),
+            "ump_total_run_impact_L30": row.get("ump_total_run_impact_L30"),
+            "platoon_edge":           row.get("platoon_edge"),
+            "days_rest":              row.get("days_rest"),
+            "short_rest":             row.get("short_rest"),
         })
 
     if not results:

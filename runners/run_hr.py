@@ -577,6 +577,20 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "odds":            odds,
             "stake":           stake if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
+            # rationale features
+            "barrel_rate":       row.get("barrel_rate"),
+            "hard_hit":          row.get("hard_hit"),
+            "max_ev":            row.get("max_ev"),
+            "launch_speed":      row.get("launch_speed"),
+            "la_mean":           row.get("la_mean"),
+            "batter_hr_vs_lhp":  row.get("batter_hr_vs_lhp"),
+            "batter_hr_vs_rhp":  row.get("batter_hr_vs_rhp"),
+            "hr_park_factor":    row.get("hr_park_factor"),
+            "wind_out":          row.get("wind_out"),
+            "wind_speed_mph":    row.get("wind_speed_mph"),
+            "wind_in":           row.get("wind_in"),
+            "temperature_f":     row.get("temperature_f"),
+            "hr_rate":           row.get("hr_rate"),
         })
 
     if not results:
