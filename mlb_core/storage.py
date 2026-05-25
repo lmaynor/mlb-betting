@@ -160,16 +160,18 @@ def stat(key: str) -> dict | None:
 
 def write_build_sentinel(system: str, result: dict) -> None:
     """Write a build sentinel JSON to GCS after a successful feature build.
-    Key: {system}_Pro_System/data/last_build.json (or HR_Pro/data/last_build.json)
+    Key must match the build_sentinel path in mlb_core/registry.py exactly.
     """
     import json
     from datetime import datetime, timezone
 
     system_to_prefix = {
-        "HR":   "HR_Pro",
-        "NRFI": "NRFI_Pro_System",
-        "K":    "K_Pro_System",
-        "F5":   "F5_Pro_System",
+        "HR":          "HR_Pro",
+        "NRFI":        "NRFI_Pro_System",
+        "K":           "K_Pro_System",
+        "F5":          "F5_Pro_System",
+        "BATTER_HITS": "BATTER_HITS_System",   # registry: BATTER_HITS_System/data/last_build.json
+        "GAME":        "GAME_Pro_System",
     }
     prefix = system_to_prefix.get(system.upper(), f"{system}_Pro_System")
     key = f"{prefix}/data/last_build.json"
