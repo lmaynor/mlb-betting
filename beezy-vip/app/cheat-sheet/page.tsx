@@ -41,9 +41,8 @@ function logoUrl(abbrev: string | null): string | null {
 }
 
 function playerSlug(name: string): string {
-  // Preserve accented chars (é→é, á→á) so they match player_map keys and filenames.
-  // Only strip truly non-slug chars (punctuation, etc.) while keeping unicode letters.
-  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^\wÀ-ɏ]/g, '').replace(/-/g, '_')
+  // Preserve accented chars; convert hyphens→_ BEFORE stripping so Ha-Seong→ha_seong not haseong
+  return name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_').replace(/[^\wÀ-ɏ]/g, '')
 }
 
 function playerSlugNormalized(name: string): string {

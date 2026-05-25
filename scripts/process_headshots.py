@@ -35,7 +35,11 @@ BETTING_KEY  = os.getenv("BETTING_API_KEY", "")
 
 
 def slug(name: str) -> str:
-    return name.lower().replace(" ", "_").replace("'", "").replace(".", "").replace("-", "_")
+    import re
+    # Must match playerSlug() in page.tsx: hyphen→_ BEFORE stripping non-word chars
+    s = name.lower().replace(" ", "_").replace("-", "_")
+    s = re.sub(r"[^\wÀ-ɏ]", "", s)  # strips dots, apostrophes, etc. but keeps accents
+    return s
 
 
 def fetch_today_players() -> list[str]:
