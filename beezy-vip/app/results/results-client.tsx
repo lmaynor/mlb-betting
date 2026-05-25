@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
 import { B, SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
@@ -220,13 +221,27 @@ export function ResultsClient({
   initialPicks: Bet[]
   initialStats: SystemStats[]
 }) {
+  const sp = useSearchParams()
+  const dateFilter = sp.get('date') ?? null
+
   const [system,  setSystem]  = useState('ALL')
   const [result,  setResult]  = useState('ALL')
   const [sortBy,  setSortBy]  = useState<'date' | 'edge' | 'odds' | 'pnl'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [page,    setPage]    = useState(0)
+
+  const PAGE_SIZE = 30
+
+  const countsBySystem = useMemo(() =>
+    Object.fromEntries(
+      ALL_SYSTEMS.map(s => [s, s === 'ALL' ? initialPicks.length
+        : initialPicks.filter(p => p.system === s).length])
+    ), [initialPicks])
 
   const filtered = useMemo(() => {
+    setPage(0)
     const f = initialPicks.filter(p => {
+      if (dateFilter && p.game_date !== dateFilter) return false
       if (system !== 'ALL' && p.system !== system) return false
       if (result !== 'ALL' && p.result?.toUpperCase() !== result) return false
       return true
@@ -239,7 +254,7 @@ export function ResultsClient({
       if (sortBy === 'pnl')  return dir * (parseFloat(String(a.profit ?? 0)) - parseFloat(String(b.profit ?? 0)))
       return 0
     })
-  }, [initialPicks, system, result, sortBy, sortDir])
+  }, [initialPicks, system, result, sortBy, sortDir, dateFilter])
 
   const { rows: pnlRows, systems: chartSystems } = useMemo(
     () => buildPnLChart(initialPicks, system), [initialPicks, system]
@@ -421,7 +436,7 @@ export function ResultsClient({
           {/* ALL chip */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>System</span>
-            <Chip label="ALL" active={system === 'ALL'} onClick={() => setSystem('ALL')} />
+            <Chip label={`ALL (${countsBySystem['ALL'] ?? 0})`} active={system === 'ALL'} onClick={() => setSystem('ALL')} />
           </div>
 
           {/* Grouped system chips */}
@@ -429,7 +444,7 @@ export function ResultsClient({
             <div key={groupName} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
               <GroupLabel label={groupName} />
               {systems.map(s => (
-                <Chip key={s} label={SYSTEM_LABEL[s] ?? s} active={system === s}
+                <Chip key={s} label={`${SYSTEM_LABEL[s] ?? s}${countsBySystem[s] ? ` (${countsBySystem[s]})` : ''}`} active={system === s}
                   color={PILL[s]} onClick={() => setSystem(s)} />
               ))}
             </div>
@@ -487,14 +502,37 @@ export function ResultsClient({
       ) : (
         <div style={{ border: B, overflowX: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: '#111114', borderBottom: B }}>
-            {['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Stake', 'Book', 'Result', 'P&L'].map(h => (
-              <div key={h} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{h}</div>
+            {([
+              { label: 'Date',   key: 'date' as const },
+              { label: 'System' },
+              { label: 'Game' },
+              { label: 'Pick' },
+              { label: 'Odds',   key: 'odds' as const },
+              { label: 'Edge',   key: 'edge' as const },
+              { label: 'Stake' },
+              { label: 'Book' },
+              { label: 'Result' },
+              { label: 'P&L',    key: 'pnl' as const },
+            ] as Array<{ label: string; key?: 'date'|'edge'|'odds'|'pnl' }>).map(col => col.key ? (
+              <button key={col.label} onClick={() => {
+                if (sortBy === col.key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+                else { setSortBy(col.key!); setSortDir('desc') }
+                setPage(0)
+              }} className="mono" style={{
+                padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
+                color: sortBy === col.key ? '#f5f5f7' : '#71717a',
+                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+              }}>
+                {col.label}{sortBy === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+              </button>
+            ) : (
+              <div key={col.label} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{col.label}</div>
             ))}
           </div>
-          {filtered.map((bet, i) => {
+          {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((bet, i) => {
             const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
             return (
-              <div key={(bet as any).id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: i < filtered.length - 1 ? B : undefined, alignItems: 'center' }}>
+              <div key={(bet as any).id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: B, alignItems: 'center' }}>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#71717a' }}>
                   {new Date(bet.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </div>
@@ -516,6 +554,23 @@ export function ResultsClient({
               </div>
             )
           })}
+          {/* Pagination */}
+          {filtered.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: B, background: '#0a0a0c' }}>
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, background: 'transparent', color: page === 0 ? '#2a2a31' : '#71717a' }}>
+                ← Prev
+              </button>
+              <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <button onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / PAGE_SIZE) - 1, p + 1))}
+                disabled={page >= Math.ceil(filtered.length / PAGE_SIZE) - 1}
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: page >= Math.ceil(filtered.length / PAGE_SIZE) - 1 ? 'default' : 'pointer', border: B, background: 'transparent', color: page >= Math.ceil(filtered.length / PAGE_SIZE) - 1 ? '#2a2a31' : '#71717a' }}>
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

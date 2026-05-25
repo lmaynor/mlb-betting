@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { B, SYSTEM_PILL, TEAM_ABBREV, pickLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
+
+const PAGE_SIZE = 30
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -95,7 +98,14 @@ function TableRow({ bet }: { bet: Bet }) {
           <span style={{ fontSize: '12px', color: '#f5f5f7' }}>{label}</span>
         )}
         {bet.notes && (
-          <div className="mono" style={{ fontSize: '10px', color: '#52525b', marginTop: '2px' }}>{bet.notes}</div>
+          <div style={{ marginTop: '3px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            {bet.notes.split(' · ').filter(Boolean).map((n, i) => (
+              <div key={i} style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+                <span style={{ color: pill.color, fontSize: '7px', lineHeight: '14px', flexShrink: 0 }}>▸</span>
+                <span className="mono" style={{ fontSize: '9px', color: '#52525b', lineHeight: '14px' }}>{n}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -153,7 +163,14 @@ function BetCard({ bet }: { bet: Bet }) {
           <span style={{ fontSize: '14px', fontWeight: 600, color: '#f5f5f7' }}>{label}</span>
         )}
         {bet.notes && (
-          <div className="mono" style={{ fontSize: '10px', color: '#52525b', marginTop: '3px' }}>{bet.notes}</div>
+          <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {bet.notes.split(' · ').filter(Boolean).map((n, i) => (
+              <div key={i} style={{ display: 'flex', gap: '4px' }}>
+                <span style={{ color: pill.color, fontSize: '8px', flexShrink: 0 }}>▸</span>
+                <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#6a6a8a' }}>{n}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -195,10 +212,25 @@ interface PicksTableProps {
   dir?:  'asc' | 'desc'
 }
 
-export function PicksTable({ bets, sort = 'date', dir = 'desc' }: PicksTableProps) {
-  const sorted = sortBets(bets, sort, dir)
+type SortKey = 'date' | 'edge' | 'odds'
 
-  if (sorted.length === 0) {
+export function PicksTable({ bets, sort: initSort = 'date', dir: initDir = 'desc' }: PicksTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey>(initSort)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initDir)
+  const [page, setPage]       = useState(0)
+
+  const sorted  = sortBets(bets, sortKey, sortDir)
+  const total   = sorted.length
+  const pages   = Math.ceil(total / PAGE_SIZE)
+  const visible = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  function handleSort(col: SortKey) {
+    if (sortKey === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortKey(col); setSortDir('desc') }
+    setPage(0)
+  }
+
+  if (total === 0) {
     return (
       <div style={{ padding: '48px 24px', textAlign: 'center', color: '#71717a', fontFamily: 'var(--font-mono)', fontSize: '12px', border: B }}>
         No picks match the selected filters.
@@ -206,7 +238,20 @@ export function PicksTable({ bets, sort = 'date', dir = 'desc' }: PicksTableProp
     )
   }
 
-  const COL_HEADERS = ['DATE','SYSTEM','GAME','PICK','ODDS','EDGE','BOOK','RESULT','P&L']
+  const COLS: { label: string; sortKey?: SortKey }[] = [
+    { label: 'DATE',   sortKey: 'date' },
+    { label: 'SYSTEM' },
+    { label: 'GAME' },
+    { label: 'PICK' },
+    { label: 'ODDS',   sortKey: 'odds' },
+    { label: 'EDGE',   sortKey: 'edge' },
+    { label: 'BOOK' },
+    { label: 'RESULT' },
+    { label: 'P&L' },
+  ]
+
+  const sortIndicator = (col: SortKey) =>
+    sortKey === col ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
 
   return (
     <>
@@ -217,21 +262,46 @@ export function PicksTable({ bets, sort = 'date', dir = 'desc' }: PicksTableProp
           gridTemplateColumns: '72px 60px 120px 1fr 76px 60px 72px 68px 66px',
           borderBottom: B, minWidth: '820px',
         }}>
-          {COL_HEADERS.map(h => (
-            <div key={h} style={{ padding: '8px 10px', fontSize: '9px', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', color: '#71717a' }}>{h}</div>
+          {COLS.map(c => c.sortKey ? (
+            <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
+              padding: '8px 10px', fontSize: '9px', fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.1em', color: sortKey === c.sortKey ? '#f5f5f7' : '#71717a',
+              background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+            }}>
+              {c.label}{sortIndicator(c.sortKey)}
+            </button>
+          ) : (
+            <div key={c.label} style={{ padding: '8px 10px', fontSize: '9px', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', color: '#71717a' }}>{c.label}</div>
           ))}
         </div>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {sorted.map(bet => <TableRow key={bet.id} bet={bet} />)}
+          {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}
         </div>
       </div>
 
       {/* Mobile cards */}
       <div className="picks-mobile">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px' }}>
-          {sorted.map(bet => <BetCard key={bet.id} bet={bet} />)}
+          {visible.map(bet => <BetCard key={bet.id} bet={bet} />)}
         </div>
       </div>
+
+      {/* Pagination */}
+      {pages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: B }}>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '5px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, background: 'transparent', color: page === 0 ? '#2a2a31' : '#71717a' }}>
+            ← Prev
+          </button>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#71717a' }}>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          </span>
+          <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page === pages - 1}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '5px 12px', cursor: page === pages - 1 ? 'default' : 'pointer', border: B, background: 'transparent', color: page === pages - 1 ? '#2a2a31' : '#71717a' }}>
+            Next →
+          </button>
+        </div>
+      )}
     </>
   )
 }

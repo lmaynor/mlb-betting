@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import fs   from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks } from '@/lib/betting-api'
+import { apiGetTodayPicks, apiGetPicks } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
 import { SlateStrip } from '@/components/today/slate-strip'
@@ -87,15 +87,18 @@ function enrich(bet: Bet): EnrichedBet {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function CheatSheetPage() {
-  const raw   = await apiGetTodayPicks().catch(() => [] as Bet[])
-  const picks = raw
-    .sort((a, b) => ((b.edge ?? 0) - (a.edge ?? 0)))
-    .map(enrich)
+  const [raw, yesterdayRaw] = await Promise.all([
+    apiGetTodayPicks().catch(() => [] as Bet[]),
+    apiGetPicks({ date: 'yesterday', status: 'settled', limit: 5 }).catch(() => [] as Bet[]),
+  ])
+
+  const picks     = raw.sort((a, b) => ((b.edge ?? 0) - (a.edge ?? 0))).map(enrich)
+  const yesterday = yesterdayRaw.map(enrich)
 
   return (
     <>
       <SlateStrip />
-      <CheatSheetClient picks={picks} today={dateLabel()} />
+      <CheatSheetClient picks={picks} yesterday={yesterday} today={dateLabel()} />
     </>
   )
 }

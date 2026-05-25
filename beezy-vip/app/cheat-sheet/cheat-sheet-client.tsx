@@ -166,8 +166,8 @@ function PickCard({ bet, rank, expanded, onToggle }: {
 
       {/* Content */}
       <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-        {/* System badge */}
-        <div style={{ marginBottom: '4px' }}>
+        {/* System badge + share */}
+        <div style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{
             fontFamily: 'monospace', fontSize: '8px', fontWeight: 700,
             letterSpacing: '0.1em', padding: '2px 6px',
@@ -176,6 +176,18 @@ function PickCard({ bet, rank, expanded, onToggle }: {
           }}>
             {SYSTEM_LABEL[bet.system] ?? bet.system}
           </span>
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              const text = `${SYSTEM_LABEL[bet.system] ?? bet.system}: ${bet.player ?? `${bet.away_team} @ ${bet.home_team}`} · ${bet.bet_type} · ${fmtOdds(bet.odds)} · Edge ${fmtEdge(bet.edge)} — beezy.vip`
+              if (navigator.share) { navigator.share({ text }) }
+              else { navigator.clipboard.writeText(text) }
+            }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: `${color}66`, padding: '2px 4px', fontSize: '11px', lineHeight: 1 }}
+            title="Share pick"
+          >
+            ↗
+          </button>
         </div>
 
         {/* Player / matchup name */}
@@ -228,9 +240,11 @@ const DEFAULT_LIMIT = 5
 
 export function CheatSheetClient({
   picks,
+  yesterday = [],
   today,
 }: {
   picks: EnrichedBet[]
+  yesterday?: EnrichedBet[]
   today: string
 }) {
   const [filter, setFilter]         = useState<FilterKey>('all')
@@ -387,13 +401,42 @@ export function CheatSheetClient({
 
         {/* Picks */}
         {filtered.length === 0 ? (
-          <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-            <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#2e2e3a', letterSpacing: '0.08em' }}>
-              NO {filter.toUpperCase()} PICKS TODAY
+          <div style={{ padding: '24px 20px' }}>
+            <div style={{ fontFamily: 'monospace', fontSize: '10px', color: '#2e2e3a', letterSpacing: '0.08em', textAlign: 'center', marginBottom: '16px' }}>
+              NO {filter.toUpperCase()} PICKS TODAY · MODEL RUNS AT 13:00 UTC
             </div>
-            <div style={{ fontSize: '12px', color: '#1e1e26', marginTop: '6px' }}>
-              Check back after 9 AM ET
-            </div>
+            {yesterday.length > 0 && (() => {
+              const wins   = yesterday.filter(b => b.result === 'win').length
+              const losses = yesterday.filter(b => b.result === 'loss').length
+              const pnl    = yesterday.reduce((s, b) => s + (b.profit ?? 0), 0)
+              return (
+                <div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '9px', color: '#3a3a48', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Yesterday</span>
+                    <span style={{ color: pnl >= 0 ? '#10b981' : '#ef4444', fontWeight: 700 }}>
+                      {wins}W–{losses}L · {pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u
+                    </span>
+                  </div>
+                  {yesterday.slice(0, 3).map(b => {
+                    const isWin = b.result === 'win'
+                    const bc = SYSTEM_COLOR[b.system] ?? '#71717a'
+                    return (
+                      <div key={b.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #12121a', position: 'relative' }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isWin ? '#10b98108' : '#ef444408', pointerEvents: 'none' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 1 }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '8px', fontWeight: 700, padding: '2px 5px', background: `${bc}20`, color: bc, border: `0.5px solid ${bc}44` }}>{b.system}</span>
+                          <span style={{ fontSize: '11px', color: '#a1a1aa' }}>{b.player ?? `${b.away_team ?? '?'} @ ${b.home_team ?? '?'}`}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 1 }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '9px', fontWeight: 700, color: isWin ? '#10b981' : '#ef4444' }}>{isWin ? 'WIN' : 'LOSS'}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '9px', color: '#52525b', fontStyle: 'italic' }}>SETTLED</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <div>
