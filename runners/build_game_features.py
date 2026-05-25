@@ -73,12 +73,13 @@ TEAM_NAME_TO_ABBR = {
 K_EVENTS  = frozenset(["strikeout", "strikeout_double_play"])
 BB_EVENTS = frozenset(["walk", "hit_by_pitch"])
 
-# Only load the columns GAME needs from the wide statcast CSV (~80 cols → 11 cols).
+# Only load the columns GAME needs from the wide statcast CSV (~80 cols → 13 cols).
 # This cuts peak memory ~7-8x, making 1500-day backfill feasible in 4 Gi.
 _STATCAST_COLS = {
     "game_pk", "game_date", "pitcher", "inning", "inning_topbot",
     "at_bat_number", "events", "home_team", "away_team",
     "estimated_woba_using_speedangle", "release_speed",
+    "description", "launch_speed",   # NEW: whiff rate + hard-hit rate
 }
 
 
@@ -203,29 +204,27 @@ def build_starter_features(
     sc = sc.copy()
     sc["game_date"] = pd.to_datetime(sc["game_date"], errors="coerce")
 
-    # Filter to PA events only
-    pa = sc[sc["events"].notna()].copy()
-    if pa.empty:
-        return existing_home if existing_home is not None else pd.DataFrame(), \
-               existing_away if existing_away is not None else pd.DataFrame()
-
-    pa["k"]         = pa["events"].isin(K_EVENTS).astype(int)
-    pa["bb"]        = pa["events"].isin(BB_EVENTS).astype(int)
-    pa["xwoba"]     = pd.to_numeric(pa.get("estimated_woba_using_speedangle", pd.Series(dtype=float)), errors="coerce")
-    pa["velo"]      = pd.to_numeric(pa.get("release_speed", pd.Series(dtype=float)), errors="coerce")
-
     starters = _identify_starters(sc)
-    # Merge starter label onto PA rows
-    pa = pa.merge(starters, on=["game_pk", "inning_topbot"], how="left")
-    starter_pa = pa[pa["pitcher"] == pa["starter_id"]].copy()
 
-    if starter_pa.empty:
+    # Merge starter label onto ALL pitch rows (needed for whiff rate)
+    sc_labeled = sc.merge(starters, on=["game_pk", "inning_topbot"], how="left")
+    starter_all = sc_labeled[sc_labeled["pitcher"] == sc_labeled["starter_id"]].copy()
+
+    # PA events subset (for existing K%/BB%/xwOBA/velo/IP metrics)
+    pa_events = starter_all[starter_all["events"].notna()].copy()
+
+    if pa_events.empty:
         logger.warning("GAME: no starter PA rows found")
         return keep_home, keep_away
 
-    # Per game-pitcher: aggregate
+    pa_events["k"]     = pa_events["events"].isin(K_EVENTS).astype(int)
+    pa_events["bb"]    = pa_events["events"].isin(BB_EVENTS).astype(int)
+    pa_events["xwoba"] = pd.to_numeric(pa_events.get("estimated_woba_using_speedangle", pd.Series(dtype=float)), errors="coerce")
+    pa_events["velo"]  = pd.to_numeric(pa_events.get("release_speed", pd.Series(dtype=float)), errors="coerce")
+
+    # Per game-pitcher: PA-level aggregate (existing metrics)
     agg = (
-        starter_pa.groupby(["game_date", "game_pk", "pitcher", "inning_topbot"])
+        pa_events.groupby(["game_date", "game_pk", "pitcher", "inning_topbot"])
         .agg(
             pa_count   = ("events", "count"),
             k_sum      = ("k", "sum"),
@@ -238,6 +237,46 @@ def build_starter_features(
     agg["ip_proxy"]  = agg["pa_count"] / 3.0
     agg["k_pct"]     = agg["k_sum"] / agg["pa_count"].clip(lower=1)
     agg["bb_pct"]    = agg["bb_sum"] / agg["pa_count"].clip(lower=1)
+
+    # Per game-pitcher: pitch-level aggregate (whiff rate + hard-hit allowed)
+    _pitch_extra_cols: list[str] = []
+    if "description" in starter_all.columns:
+        _WHIFF_DESC = {"swinging_strike", "swinging_strike_blocked"}
+        starter_all["is_whiff"] = starter_all["description"].isin(_WHIFF_DESC).astype(int)
+        _pitch_extra_cols.append("is_whiff")
+    if "launch_speed" in starter_all.columns:
+        starter_all["launch_speed_num"] = pd.to_numeric(starter_all["launch_speed"], errors="coerce")
+        starter_all["is_hard_hit"] = (starter_all["launch_speed_num"] >= 95).astype(int)
+        starter_all["has_batted"]  = starter_all["launch_speed_num"].notna().astype(int)
+        _pitch_extra_cols.extend(["is_hard_hit", "has_batted"])
+
+    if _pitch_extra_cols:
+        _pitch_agg_dict: dict = {}
+        if "is_whiff" in starter_all.columns:
+            _pitch_agg_dict["pitch_count"] = ("is_whiff", "count")
+            _pitch_agg_dict["whiff_sum"]   = ("is_whiff", "sum")
+        if "is_hard_hit" in starter_all.columns:
+            _pitch_agg_dict["hard_hit_sum"] = ("is_hard_hit", "sum")
+            _pitch_agg_dict["batted_count"] = ("has_batted", "sum")
+
+        pitch_agg = (
+            starter_all.groupby(["game_date", "game_pk", "pitcher", "inning_topbot"])
+            .agg(**_pitch_agg_dict)
+            .reset_index()
+        )
+        if "pitch_count" in pitch_agg.columns and "whiff_sum" in pitch_agg.columns:
+            pitch_agg["whiff_pct"] = pitch_agg["whiff_sum"] / pitch_agg["pitch_count"].clip(lower=1)
+        if "hard_hit_sum" in pitch_agg.columns and "batted_count" in pitch_agg.columns:
+            pitch_agg["hard_hit_allowed"] = pitch_agg["hard_hit_sum"] / pitch_agg["batted_count"].clip(lower=1)
+
+        # Merge pitch-level agg into PA-level agg
+        _merge_pitch_cols = ["game_date", "game_pk", "pitcher", "inning_topbot"]
+        _extra_rate_cols  = [c for c in ["whiff_pct", "hard_hit_allowed"] if c in pitch_agg.columns]
+        if _extra_rate_cols:
+            agg = agg.merge(
+                pitch_agg[_merge_pitch_cols + _extra_rate_cols],
+                on=_merge_pitch_cols, how="left",
+            )
 
     # inning_topbot: Top = away pitcher, Bot = home pitcher
     agg["side"] = agg["inning_topbot"].map({"Top": "away", "Bot": "home"})
@@ -252,11 +291,13 @@ def build_starter_features(
     def _roll_pitcher(grp: pd.DataFrame) -> pd.DataFrame:
         grp = grp.sort_values("game_date").copy()
         for metric, window, suffix in [
-            ("k_pct",     3, "k_pct_L3"),
-            ("xwoba_mean", 3, "xwoba_allowed_L3"),
-            ("velo_mean",  3, "velo_mean_L3"),
-            ("bb_pct",    3, "bb_pct_L3"),
-            ("ip_proxy",  5, "starter_ip_avg_L5"),
+            ("k_pct",          3, "k_pct_L3"),
+            ("xwoba_mean",     3, "xwoba_allowed_L3"),
+            ("velo_mean",      3, "velo_mean_L3"),
+            ("bb_pct",         3, "bb_pct_L3"),
+            ("ip_proxy",       5, "starter_ip_avg_L5"),
+            ("whiff_pct",      3, "whiff_pct_L3"),
+            ("hard_hit_allowed", 3, "hard_hit_allowed_L3"),
         ]:
             if metric in grp.columns:
                 grp[suffix] = (
@@ -275,6 +316,7 @@ def build_starter_features(
         "game_date", "game_pk", "pitcher", "side",
         "k_pct_L3", "xwoba_allowed_L3", "velo_mean_L3",
         "bb_pct_L3", "starter_ip_avg_L5", "starter_days_rest",
+        "whiff_pct_L3", "hard_hit_allowed_L3",
     ]
     available = [c for c in feat_cols if c in rolled.columns]
     rolled = rolled[available].copy()
@@ -284,21 +326,24 @@ def build_starter_features(
 
     # Rename to home_/away_ prefix
     rename_home = {
-        "k_pct_L3":         "home_k_pct_L3",
-        "xwoba_allowed_L3": "home_xwoba_allowed_L3",
-        "velo_mean_L3":     "home_velo_mean_L3",
-        "bb_pct_L3":        "home_bb_pct_L3",
-        "starter_ip_avg_L5":"home_starter_ip_avg_L5",
-        "starter_days_rest":"home_starter_days_rest",
+        "k_pct_L3":           "home_k_pct_L3",
+        "xwoba_allowed_L3":   "home_xwoba_allowed_L3",
+        "velo_mean_L3":       "home_velo_mean_L3",
+        "bb_pct_L3":          "home_bb_pct_L3",
+        "starter_ip_avg_L5":  "home_starter_ip_avg_L5",
+        "starter_days_rest":  "home_starter_days_rest",
+        "whiff_pct_L3":       "home_whiff_pct_L3",
+        "hard_hit_allowed_L3":"home_hard_hit_allowed_L3",
     }
-    rename_away = {k: k.replace("home_", "away_") for k in rename_home}
     rename_away_map = {
-        "k_pct_L3":         "away_k_pct_L3",
-        "xwoba_allowed_L3": "away_xwoba_allowed_L3",
-        "velo_mean_L3":     "away_velo_mean_L3",
-        "bb_pct_L3":        "away_bb_pct_L3",
-        "starter_ip_avg_L5":"away_starter_ip_avg_L5",
-        "starter_days_rest":"away_starter_days_rest",
+        "k_pct_L3":           "away_k_pct_L3",
+        "xwoba_allowed_L3":   "away_xwoba_allowed_L3",
+        "velo_mean_L3":       "away_velo_mean_L3",
+        "bb_pct_L3":          "away_bb_pct_L3",
+        "starter_ip_avg_L5":  "away_starter_ip_avg_L5",
+        "starter_days_rest":  "away_starter_days_rest",
+        "whiff_pct_L3":       "away_whiff_pct_L3",
+        "hard_hit_allowed_L3":"away_hard_hit_allowed_L3",
     }
     home_df = home_df.rename(columns=rename_home)
     away_df = away_df.rename(columns=rename_away_map)
@@ -404,6 +449,66 @@ def build_bullpen_features(
     game_agg["bp_k_pct"]  = game_agg["bp_k"] / game_agg["bp_pa"].clip(lower=1)
     game_agg["bp_bb_pct"] = game_agg["bp_bb"] / game_agg["bp_pa"].clip(lower=1)
 
+    # Bullpen whiff rate and hard-hit allowed (all pitches by bullpen pitchers)
+    # Build bullpen all-pitch DataFrame (same team assignment as bullpen_pa)
+    sc_window_all = sc_window.copy()
+    sc_window_all["is_starter"] = sc_window_all.apply(
+        lambda r: (int(r["game_pk"]), int(r["pitcher"])) in starter_set, axis=1
+    )
+    bullpen_all = sc_window_all[~sc_window_all["is_starter"]].copy()
+    if "fielding_team" in bullpen_all.columns:
+        bullpen_all["team"] = bullpen_all["fielding_team"]
+    elif all(c in bullpen_all.columns for c in ["home_team", "away_team", "inning_topbot"]):
+        bullpen_all["team"] = np.where(
+            bullpen_all["inning_topbot"] == "Top",
+            bullpen_all["away_team"],
+            bullpen_all["home_team"],
+        )
+    else:
+        bullpen_all = pd.DataFrame()  # can't determine team, skip pitch-level agg
+
+    _bp_pitch_extra: list[str] = []
+    if not bullpen_all.empty and "description" in bullpen_all.columns:
+        _WHIFF_DESC = {"swinging_strike", "swinging_strike_blocked"}
+        bullpen_all["is_whiff"] = bullpen_all["description"].isin(_WHIFF_DESC).astype(int)
+        _bp_pitch_extra.append("is_whiff")
+    if not bullpen_all.empty and "launch_speed" in bullpen_all.columns:
+        bullpen_all["launch_speed_num"] = pd.to_numeric(bullpen_all["launch_speed"], errors="coerce")
+        bullpen_all["is_hard_hit"] = (bullpen_all["launch_speed_num"] >= 95).astype(int)
+        bullpen_all["has_batted"]  = bullpen_all["launch_speed_num"].notna().astype(int)
+        _bp_pitch_extra.extend(["is_hard_hit", "has_batted"])
+
+    if _bp_pitch_extra and not bullpen_all.empty and "team" in bullpen_all.columns:
+        _bp_pitch_agg_dict: dict = {}
+        if "is_whiff" in bullpen_all.columns:
+            _bp_pitch_agg_dict["bp_pitch_count"] = ("is_whiff", "count")
+            _bp_pitch_agg_dict["bp_whiff_sum"]   = ("is_whiff", "sum")
+        if "is_hard_hit" in bullpen_all.columns:
+            _bp_pitch_agg_dict["bp_hard_hit_sum"] = ("is_hard_hit", "sum")
+            _bp_pitch_agg_dict["bp_batted_count"] = ("has_batted", "sum")
+
+        bp_pitch_agg = (
+            bullpen_all.groupby(["game_date", "game_pk", "team"])
+            .agg(**_bp_pitch_agg_dict)
+            .reset_index()
+        )
+        if "bp_pitch_count" in bp_pitch_agg.columns and "bp_whiff_sum" in bp_pitch_agg.columns:
+            bp_pitch_agg["bp_whiff_pct"] = (
+                bp_pitch_agg["bp_whiff_sum"] / bp_pitch_agg["bp_pitch_count"].clip(lower=1)
+            )
+        if "bp_hard_hit_sum" in bp_pitch_agg.columns and "bp_batted_count" in bp_pitch_agg.columns:
+            bp_pitch_agg["bp_hard_hit"] = (
+                bp_pitch_agg["bp_hard_hit_sum"] / bp_pitch_agg["bp_batted_count"].clip(lower=1)
+            )
+
+        _bp_merge_cols = ["game_date", "game_pk", "team"]
+        _bp_rate_cols  = [c for c in ["bp_whiff_pct", "bp_hard_hit"] if c in bp_pitch_agg.columns]
+        if _bp_rate_cols:
+            game_agg = game_agg.merge(
+                bp_pitch_agg[_bp_merge_cols + _bp_rate_cols],
+                on=_bp_merge_cols, how="left",
+            )
+
     game_agg = game_agg.sort_values(["team", "game_date"]).reset_index(drop=True)
 
     # Rolling per team with shift(1) -- date-based windows
@@ -430,6 +535,18 @@ def build_bullpen_features(
                         .rolling(7, min_periods=1)
                         .sum()
         )
+        if "bp_whiff_pct" in grp.columns:
+            grp["bullpen_whiff_pct_L14"] = (
+                grp["bp_whiff_pct"].shift(1)
+                                   .rolling(14, min_periods=1)
+                                   .mean()
+            )
+        if "bp_hard_hit" in grp.columns:
+            grp["bullpen_hard_hit_L14"] = (
+                grp["bp_hard_hit"].shift(1)
+                                  .rolling(14, min_periods=1)
+                                  .mean()
+            )
         return grp
 
     rolled = game_agg.groupby("team", group_keys=False).apply(_roll_team)
@@ -438,6 +555,7 @@ def build_bullpen_features(
         "game_date", "game_pk", "team",
         "bullpen_xwoba_L14", "bullpen_k_pct_L14",
         "bullpen_bb_pct_L14", "bullpen_ip_L7",
+        "bullpen_whiff_pct_L14", "bullpen_hard_hit_L14",
     ]
     available = [c for c in out_cols if c in rolled.columns]
     rolled    = rolled[available].drop_duplicates(subset=["game_pk", "team"]).reset_index(drop=True)
@@ -500,22 +618,77 @@ def build_team_offense_features(
         logger.warning("GAME: cannot determine batting team; offense features will be empty")
         return pd.DataFrame()
 
+    # Hard-hit rate per batting team per game (launch_speed >= 95)
+    _off_pa_agg_dict: dict = {
+        "pa_count":   ("events", "count"),
+        "k_sum":      ("k", "sum"),
+        "xwoba_mean": ("xwoba", "mean"),
+    }
+    if "launch_speed" in pa.columns:
+        pa["launch_speed_num"] = pd.to_numeric(pa["launch_speed"], errors="coerce")
+        pa["is_hard_hit"] = (pa["launch_speed_num"] >= 95).astype(int)
+        pa["has_batted"]  = pa["launch_speed_num"].notna().astype(int)
+        _off_pa_agg_dict["hard_hit_sum"]  = ("is_hard_hit", "sum")
+        _off_pa_agg_dict["batted_count"]  = ("has_batted", "sum")
+
     # Per game-team aggregate
     game_agg = (
         pa.groupby(["game_date", "game_pk", "team"])
-        .agg(
-            pa_count   = ("events", "count"),
-            k_sum      = ("k", "sum"),
-            xwoba_mean = ("xwoba", "mean"),
-        )
+        .agg(**_off_pa_agg_dict)
         .reset_index()
     )
     game_agg["off_k_pct"] = game_agg["k_sum"] / game_agg["pa_count"].clip(lower=1)
 
-    # Run differential: try to extract from scoring columns or default 0
-    # scoring_master is joined downstream; here we default run_diff to 0
-    # and let build_model_features overlay it from scoring data if available.
+    if "hard_hit_sum" in game_agg.columns and "batted_count" in game_agg.columns:
+        game_agg["off_hard_hit"] = (
+            game_agg["hard_hit_sum"] / game_agg["batted_count"].clip(lower=1)
+        )
+
+    # Run differential: load from scoring_master (home = bot, away = top)
     game_agg["run_diff"] = 0.0
+    try:
+        from mlb_core.storage import read_csv as _sc_read_csv, exists as _sc_exists
+        if _sc_exists("Scoring/scoring_master.csv"):
+            _scoring = _sc_read_csv("Scoring/scoring_master.csv", low_memory=False)
+            if not _scoring.empty and "half" in _scoring.columns and "runs" in _scoring.columns:
+                _fg = (
+                    _scoring.pivot_table(
+                        index="game_pk", columns="half",
+                        values="runs", aggfunc="sum", fill_value=0,
+                    ).reset_index()
+                )
+                _fg.columns.name = None
+                # Need home_team / away_team per game_pk to assign run_diff per team
+                if all(c in sc_window.columns for c in ["game_pk", "home_team", "away_team"]):
+                    _gm = (
+                        sc_window.groupby("game_pk")
+                        .agg(home_team=("home_team", "first"), away_team=("away_team", "first"))
+                        .reset_index()
+                    )
+                    _fg = _fg.merge(_gm, on="game_pk", how="inner")
+                    if "top" in _fg.columns and "bot" in _fg.columns:
+                        # home_run_diff = bot (home bats in bottom) - top (away bats in top)
+                        _fg["home_rd"] = _fg["bot"] - _fg["top"]
+                        _fg["away_rd"] = _fg["top"] - _fg["bot"]
+                        # Build (game_pk, team) -> run_diff lookup
+                        _rd_rows: list[dict] = []
+                        for _, _r in _fg.iterrows():
+                            _rd_rows.append({"game_pk": _r["game_pk"], "team": _r["home_team"], "run_diff": _r["home_rd"]})
+                            _rd_rows.append({"game_pk": _r["game_pk"], "team": _r["away_team"], "run_diff": _r["away_rd"]})
+                        _rd_df = pd.DataFrame(_rd_rows)
+                        game_agg = game_agg.merge(_rd_df, on=["game_pk", "team"], how="left", suffixes=("_old", ""))
+                        # Use newly merged run_diff; drop old stub column
+                        if "run_diff_old" in game_agg.columns:
+                            game_agg["run_diff"] = game_agg["run_diff"].fillna(game_agg["run_diff_old"])
+                            game_agg = game_agg.drop(columns=["run_diff_old"])
+                        else:
+                            game_agg["run_diff"] = game_agg["run_diff"].fillna(0.0)
+                        logger.info("GAME offense: run_diff loaded from scoring_master for %d game-team rows",
+                                    _rd_df["run_diff"].notna().sum())
+        else:
+            logger.warning("GAME offense: scoring_master not found — run_diff defaults to 0")
+    except Exception as _e:
+        logger.warning("GAME offense: run_diff load failed: %s", _e)
 
     game_agg = game_agg.sort_values(["team", "game_date"]).reset_index(drop=True)
 
@@ -536,6 +709,12 @@ def build_team_offense_features(
                            .rolling(20, min_periods=1)
                            .mean()
         )
+        if "off_hard_hit" in grp.columns:
+            grp["team_hard_hit_L20"] = (
+                grp["off_hard_hit"].shift(1)
+                                   .rolling(20, min_periods=1)
+                                   .mean()
+            )
         return grp
 
     rolled = game_agg.groupby("team", group_keys=False).apply(_roll_team)
@@ -543,6 +722,7 @@ def build_team_offense_features(
     out_cols = [
         "game_date", "game_pk", "team",
         "team_woba_L20", "team_k_pct_L20", "run_diff_L20",
+        "team_hard_hit_L20",
     ]
     available = [c for c in out_cols if c in rolled.columns]
     rolled    = rolled[available].drop_duplicates(subset=["game_pk", "team"]).reset_index(drop=True)
@@ -634,19 +814,23 @@ def build_model_features(
             away_t = teams.get("away", "")
             if team == home_t:
                 bp_home_rows.append({
-                    "game_pk":              gp,
-                    "home_bullpen_xwoba_L14":   bp_row.get("bullpen_xwoba_L14"),
-                    "home_bullpen_k_pct_L14":   bp_row.get("bullpen_k_pct_L14"),
-                    "home_bullpen_bb_pct_L14":  bp_row.get("bullpen_bb_pct_L14"),
-                    "home_bullpen_ip_L7":        bp_row.get("bullpen_ip_L7"),
+                    "game_pk":                      gp,
+                    "home_bullpen_xwoba_L14":       bp_row.get("bullpen_xwoba_L14"),
+                    "home_bullpen_k_pct_L14":       bp_row.get("bullpen_k_pct_L14"),
+                    "home_bullpen_bb_pct_L14":      bp_row.get("bullpen_bb_pct_L14"),
+                    "home_bullpen_ip_L7":           bp_row.get("bullpen_ip_L7"),
+                    "home_bullpen_whiff_pct_L14":   bp_row.get("bullpen_whiff_pct_L14"),
+                    "home_bullpen_hard_hit_L14":    bp_row.get("bullpen_hard_hit_L14"),
                 })
             elif team == away_t:
                 bp_away_rows.append({
-                    "game_pk":              gp,
-                    "away_bullpen_xwoba_L14":   bp_row.get("bullpen_xwoba_L14"),
-                    "away_bullpen_k_pct_L14":   bp_row.get("bullpen_k_pct_L14"),
-                    "away_bullpen_bb_pct_L14":  bp_row.get("bullpen_bb_pct_L14"),
-                    "away_bullpen_ip_L7":        bp_row.get("bullpen_ip_L7"),
+                    "game_pk":                      gp,
+                    "away_bullpen_xwoba_L14":       bp_row.get("bullpen_xwoba_L14"),
+                    "away_bullpen_k_pct_L14":       bp_row.get("bullpen_k_pct_L14"),
+                    "away_bullpen_bb_pct_L14":      bp_row.get("bullpen_bb_pct_L14"),
+                    "away_bullpen_ip_L7":           bp_row.get("bullpen_ip_L7"),
+                    "away_bullpen_whiff_pct_L14":   bp_row.get("bullpen_whiff_pct_L14"),
+                    "away_bullpen_hard_hit_L14":    bp_row.get("bullpen_hard_hit_L14"),
                 })
 
         if bp_home_rows:
@@ -670,12 +854,14 @@ def build_model_features(
             away_t = teams.get("away", "")
             row_d: dict = {"game_pk": gp}
             if team == home_t:
-                row_d["home_team_woba_L20"]  = off_row.get("team_woba_L20")
-                row_d["home_team_k_pct_L20"] = off_row.get("team_k_pct_L20")
-                row_d["home_run_diff_L20"]   = off_row.get("run_diff_L20")
+                row_d["home_team_woba_L20"]     = off_row.get("team_woba_L20")
+                row_d["home_team_k_pct_L20"]    = off_row.get("team_k_pct_L20")
+                row_d["home_run_diff_L20"]       = off_row.get("run_diff_L20")
+                row_d["home_team_hard_hit_L20"]  = off_row.get("team_hard_hit_L20")
             elif team == away_t:
-                row_d["away_team_woba_L20"]  = off_row.get("team_woba_L20")
-                row_d["away_team_k_pct_L20"] = off_row.get("team_k_pct_L20")
+                row_d["away_team_woba_L20"]     = off_row.get("team_woba_L20")
+                row_d["away_team_k_pct_L20"]    = off_row.get("team_k_pct_L20")
+                row_d["away_team_hard_hit_L20"]  = off_row.get("team_hard_hit_L20")
             if len(row_d) > 1:
                 off_rows.append(row_d)
 

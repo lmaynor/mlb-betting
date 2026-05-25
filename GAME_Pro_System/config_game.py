@@ -17,7 +17,7 @@ from mlb_core.config import (
 BASE_DIR = Path(__file__).parent
 
 # -- Feature contract -- keep in lockstep with training/retrain_game_v1.py ---
-# 32 features. If you add/remove one here, mirror in training/retrain_game_v1.py.
+# 42 features. If you add/remove one here, mirror in training/retrain_game_v1.py.
 GAME_FEATURES = [
     # Home starter
     "home_k_pct_L3",
@@ -26,6 +26,8 @@ GAME_FEATURES = [
     "home_bb_pct_L3",
     "home_starter_ip_avg_L5",
     "home_starter_days_rest",
+    "home_whiff_pct_L3",
+    "home_hard_hit_allowed_L3",
     # Away starter
     "away_k_pct_L3",
     "away_xwoba_allowed_L3",
@@ -33,22 +35,30 @@ GAME_FEATURES = [
     "away_bb_pct_L3",
     "away_starter_ip_avg_L5",
     "away_starter_days_rest",
+    "away_whiff_pct_L3",
+    "away_hard_hit_allowed_L3",
     # Home bullpen (key differentiator from F5)
     "home_bullpen_xwoba_L14",
     "home_bullpen_k_pct_L14",
     "home_bullpen_bb_pct_L14",
     "home_bullpen_ip_L7",
+    "home_bullpen_whiff_pct_L14",
+    "home_bullpen_hard_hit_L14",
     # Away bullpen
     "away_bullpen_xwoba_L14",
     "away_bullpen_k_pct_L14",
     "away_bullpen_bb_pct_L14",
     "away_bullpen_ip_L7",
+    "away_bullpen_whiff_pct_L14",
+    "away_bullpen_hard_hit_L14",
     # Team offense
     "home_team_woba_L20",
     "away_team_woba_L20",
     "home_team_k_pct_L20",
     "away_team_k_pct_L20",
     "home_run_diff_L20",
+    "home_team_hard_hit_L20",
+    "away_team_hard_hit_L20",
     # Park / weather / context
     "park_factor",
     "temperature_f",
