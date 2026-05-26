@@ -202,11 +202,15 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
             row = match.iloc[0].to_dict()
             _last_app = match.iloc[0]["game_date"]
             _days_since = (pd.Timestamp(run_date) - _last_app).days
-            if _days_since > 15:
+            if _days_since > 15 and pid in _il_ids:
                 logger.info(
                     f"K: skipping {pname} -- {_days_since}d gap + confirmed on IL"
                 )
                 continue
+            if _days_since > 15:
+                logger.info(
+                    f"K: {pname} has {_days_since}d snapshot gap but NOT on IL -- including"
+                )
             row["game_pk"]            = g["game_pk"]
             row["game_date"]          = pd.Timestamp(run_date)
             row["home_team"]          = g["home_team"]

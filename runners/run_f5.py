@@ -300,11 +300,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             _home_pid = int(row.get("home_pitcher_id") or 0)
             _away_pid = int(row.get("away_pitcher_id") or 0)
             _on_il = (_home_pid and _home_pid in _il_ids) or (_away_pid and _away_pid in _il_ids)
+            if _on_il:
+                logger.info(
+                    f"F5: skipping game_pk={int(row['game_pk'])} -- "
+                    f"starter gap >{_IL_DAYS}d + confirmed on IL"
+                )
+                continue
             logger.info(
-                f"F5: skipping game_pk={int(row['game_pk'])} -- "
-                f"starter gap >{_IL_DAYS}d"
+                f"F5: game_pk={int(row['game_pk'])} has starter gap >{_IL_DAYS}d "
+                f"but NOT on IL -- including"
             )
-            continue
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:
