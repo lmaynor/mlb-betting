@@ -43,7 +43,7 @@ N_BINS = 10  # PSI binning
 
 
 SYSTEM_CONFIG = {
-    "NRFI": {
+    "1IOU": {
         "gcs_meta":     "NRFI_Pro_System/models/model_meta_v17.json",
         "gcs_features": "NRFI_Pro_System/data/model_features.csv",
     },
@@ -215,7 +215,7 @@ def _post_drift_alert(system: str, warnings: list[str], run_date: str) -> None:
     webhook_url = _get_webhook("SUMMARY") or _get_webhook("HR")
     if not webhook_url:
         return
-    color_dot = {"HR": "🔴", "NRFI": "🔵", "F5": "🟢", "K": "🟡"}.get(system, "⚪")
+    color_dot = {"HR": "🔴", "1IOU": "🔵", "F5": "🟢", "K": "🟡"}.get(system, "⚪")
     alert_text = "\n".join(f"• {w}" for w in warnings)
     embed = {
         "title":       f"⚠️ {color_dot} {system} Feature Drift Alert | {run_date}",

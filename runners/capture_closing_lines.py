@@ -32,7 +32,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-SYSTEMS = ["NRFI", "HR", "F5", "K", "OUTS"]
+SYSTEMS = ["1IOU", "HR", "F5", "K", "OUTS"]
 
 
 def _load_open_bets(run_date: str) -> pd.DataFrame:
@@ -194,7 +194,7 @@ def run(run_date: str = None) -> dict:
             continue
         # Use a system-agnostic tracker instance — write_closing_line only
         # needs the engine, not system filtering.
-        system = bet.get("system", "NRFI")
+        system = bet.get("system", "1IOU")
         tracker = BetTracker(os.environ["MLB_DB_URL"], system=system)
         try:
             c_odds, comp_odds = closing_map[bid]

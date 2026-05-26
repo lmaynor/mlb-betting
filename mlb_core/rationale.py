@@ -154,6 +154,7 @@ _GAME_RULES = [
 
 _SYSTEM_RULES = {
     "HR":          _HR_RULES,
+    "1IOU":        _NRFI_RULES,
     "NRFI":        _NRFI_RULES,
     "YRFI":        _NRFI_RULES,
     "K":           _K_RULES,

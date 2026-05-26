@@ -530,7 +530,7 @@ def run(settle_date: str = None) -> dict:
         )
 
     ALL_SYSTEMS = [
-        "HR", "NRFI", "F5", "K", "OUTS",
+        "HR", "1IOU", "F5", "K", "OUTS",
         "F3", "F1H", "F7", "GAME",
         "BATTER_K", "BATTER_TB", "BATTER_HITS", "PITCHER_ER",
     ]

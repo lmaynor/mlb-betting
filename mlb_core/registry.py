@@ -6,7 +6,7 @@ Adding a new system requires ONE entry here instead of editing 8+ files.
 Usage:
     from mlb_core.registry import SYSTEMS, get_system, active_systems
 
-    cfg = get_system("NRFI")
+    cfg = get_system("1IOU")
     print(cfg.feature_csv)   # "NRFI_Pro_System/data/model_features.csv"
 
     for name in active_systems():
@@ -43,7 +43,7 @@ class SystemConfig:
 
 
 # Canonical system order — used for ordered iteration, display, and digests.
-CANONICAL_ORDER = ["HR", "NRFI", "K", "OUTS", "F5", "BATTER_HITS", "GAME"]
+CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "F5", "BATTER_HITS", "GAME"]
 
 SYSTEMS: dict[str, SystemConfig] = {
 
@@ -65,8 +65,8 @@ SYSTEMS: dict[str, SystemConfig] = {
         tune_output="HR_Pro/models/hr_tuned_params.json",
     ),
 
-    "NRFI": SystemConfig(
-        name="NRFI",
+    "1IOU": SystemConfig(
+        name="1IOU",
         icon="🔵",
         builder_module="runners.build_nrfi_features",
         runner_module="runners.run_nrfi",

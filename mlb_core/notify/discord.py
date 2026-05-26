@@ -4,8 +4,8 @@ mlb_core.notify.discord — Discord webhook publisher.
 Usage:
     from mlb_core.notify.discord import post_bets, post_summary
 
-    post_bets(bets_df, system="NRFI", date="2026-04-22")
-    post_summary(stats, system="NRFI")
+    post_bets(bets_df, system="1IOU", date="2026-04-22")
+    post_summary(stats, system="1IOU")
 
 Webhook URLs read from environment variables:
     DISCORD_WEBHOOK_URL         — default picks webhook (#daily-picks)
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Colour codes per system for the embed sidebar
 _SYSTEM_COLORS = {
-    "NRFI":        0x5865F2,   # blurple
+    "1IOU":        0x5865F2,   # blurple
     "HR":          0xED4245,   # red
     "F5":          0x57F287,   # green
     "K":           0xFEE75C,   # yellow
@@ -92,7 +92,7 @@ def _format_bet_headline(b: dict, system: str) -> str:
     sys = (system or "").upper()
     bt  = (b.get("bet_type") or "").upper()
 
-    if sys == "NRFI":
+    if sys == "1IOU":
         side = "Under 0.5 Runs" if "NRFI" in bt or (b.get("side") or "").upper() == "NRFI" else "Over 0.5 Runs"
         return f"{away_full} @ {home_full} - 1st Inning - {side}"
 

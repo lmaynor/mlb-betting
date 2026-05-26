@@ -81,7 +81,7 @@ FIXED_PARAMS = {
 
 # Per-system config
 SYSTEM_CONFIG = {
-    "NRFI": {
+    "1IOU": {
         "gcs_features":  "NRFI_Pro_System/data/model_features.csv",
         "target":        "yrfi",
         "objective":     "binary:logistic",
@@ -325,7 +325,7 @@ def load_tuned_params(system: str) -> dict | None:
 
     Usage in retrain scripts:
         from training.tune_hyperparams import load_tuned_params
-        tuned = load_tuned_params("NRFI")
+        tuned = load_tuned_params("1IOU")
         if tuned:
             XGB_PARAMS = tuned["xgb_params"]
             logger.info(f"Using Optuna-tuned params (score={tuned['best_score']})")

@@ -37,13 +37,13 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-VALID_SYSTEMS = {"NRFI", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
+VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
     """Dispatch to the correct system runner. Returns result dict."""
     try:
-        if system == "NRFI":
+        if system == "1IOU":
             from runners.run_nrfi import run
         elif system == "HR":
             from runners.run_hr import run
@@ -115,7 +115,7 @@ def build_features_handler():
 
     if system == "HR":
         from runners.build_hr_features import run
-    elif system == "NRFI":
+    elif system == "1IOU":
         from runners.build_nrfi_features import run
     elif system == "F5":
         from runners.build_f5_features import run
@@ -148,7 +148,7 @@ def build_all_features_handler():
     body             = request.get_json(silent=True) or {}
     run_date         = body.get("run_date", datetime.now(_CT).date().isoformat())
     continue_on_err  = body.get("continue_on_error", False)
-    default_order    = ["HR", "NRFI", "K", "F5", "BATTER_HITS", "GAME"]
+    default_order    = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "GAME"]
     systems          = body.get("systems", default_order)
     # Enforce dependency order even if caller passes a subset
     ordered = [s for s in default_order if s in [x.upper() for x in systems]]
@@ -551,7 +551,7 @@ def reset_and_run():
     from runners.run_1i import run as run_1i
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
-    systems  = body.get("systems", ["HR", "NRFI", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"])
+    systems  = body.get("systems", ["HR", "1IOU", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"])
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
@@ -562,7 +562,7 @@ def reset_and_run():
             deleted[sys] = r.rowcount
     logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
     results = {}
-    runner_map = {"HR": run_hr, "NRFI": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game, "BATTER_TB": run_batter_tb, "1I": run_1i}
+    runner_map = {"HR": run_hr, "1IOU": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game, "BATTER_TB": run_batter_tb, "1I": run_1i}
     for sys in systems:
         if sys in runner_map:
             try:
@@ -616,7 +616,7 @@ def dashboard():
     days = int(request.args.get("days", 7))
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
 
-    systems = ["HR", "NRFI", "F5", "K", "OUTS", "BATTER_HITS", "GAME"]
+    systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "GAME"]
     summary_rows = ""
     for sys in systems:
         with bt.engine.connect() as conn:
@@ -642,7 +642,7 @@ def dashboard():
     bind_params: dict = {}
     if system_filter:
         # Whitelist — never interpolate user input into SQL strings.
-        _VALID_SYSTEMS_DASH = {"HR","NRFI","F5","K","OUTS","F3","F1H","F7","GAME",
+        _VALID_SYSTEMS_DASH = {"HR","1IOU","F5","K","OUTS","F3","F1H","F7","GAME",
                                "BATTER_K","BATTER_TB","BATTER_HITS","PITCHER_ER"}
         if system_filter.upper() not in _VALID_SYSTEMS_DASH:
             return jsonify({"error": f"Invalid system: {system_filter}"}), 400
