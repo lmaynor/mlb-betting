@@ -486,7 +486,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "model_prob":   round(model_prob, 4),
             "market_prob":  round(fair, 4),
             "morning_odds": _morning_odds.get(
-                f"points-all-1i-ou-{'over' if side == 'NRFI' else 'under'}"
+                f"points-all-1i-ou-{'under' if side == 'NRFI' else 'over'}"
             ),
             "edge":         round(edge, 4),
             "kelly_pct":    round(k_pct, 4),
