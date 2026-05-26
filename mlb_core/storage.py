@@ -168,6 +168,7 @@ def write_build_sentinel(system: str, result: dict) -> None:
     system_to_prefix = {
         "HR":          "HR_Pro",
         "NRFI":        "NRFI_Pro_System",
+        "1IOU":        "NRFI_Pro_System",
         "K":           "K_Pro_System",
         "F5":          "F5_Pro_System",
         "BATTER_HITS": "BATTER_HITS_System",   # registry: BATTER_HITS_System/data/last_build.json
