@@ -282,7 +282,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     # Feature build sentinel check
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import check_build_sentinel
-    _sok, _sreason = check_build_sentinel(GCS_BUCKET, "GAME")
+    _sok, _sreason = check_build_sentinel(GCS_BUCKET, "GAME_Pro_System")
     if not _sok:
         msg = f"GAME: aborting -- stale/failed feature build: {_sreason}"
         logger.error(msg)
