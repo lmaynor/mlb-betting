@@ -124,7 +124,7 @@ class BetTracker:
     Unified bet tracker. All systems use this class.
 
     Usage:
-        tracker = BetTracker("path/to/bets.db", system="NRFI")
+        tracker = BetTracker("path/to/bets.db", system="1IOU")
 
         # Log every scored prediction (qualifying or not):
         bet_id = tracker.log_bet(

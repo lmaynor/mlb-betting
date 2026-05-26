@@ -404,7 +404,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         msg = f"NRFI: aborting run -- stale/failed feature build: {_sreason}"
         logger.error(msg)
         from mlb_core.notify.discord import post_error
-        post_error(msg, system="NRFI")
+        post_error(msg, system="1IOU")
         return pd.DataFrame()
     logger.info("NRFI: sentinel ok -- %s", _sreason)
     # E10: load morning snapshot for line movement signal
@@ -434,7 +434,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
     _exposure_game_pks = list(pivot["game_pk"].dropna().astype(int).unique()) if "pivot" in dir() else []
-    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="NRFI")
+    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="1IOU")
     _pending_stakes: dict[int, float] = {}
     for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
@@ -532,10 +532,10 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     if today_df.empty:
         logger.info("NRFI: no qualifying bets today")
-        post_bets([], system="NRFI", run_date=run_date)
+        post_bets([], system="1IOU", run_date=run_date)
         return {"bets_logged": 0}
 
-    tracker     = BetTracker(cfg["bet_db"], system="NRFI")
+    tracker     = BetTracker(cfg["bet_db"], system="1IOU")
     bets_logged = 0
     bet_rows    = []
 
@@ -558,7 +558,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             book             = row.get("bookmaker"),
             morning_odds     = row.get("morning_odds"),
-            notes            = build_rationale(dict(row), "NRFI"),
+            notes            = build_rationale(dict(row), "1IOU"),
         )
         if bet_id == -1:
             continue
@@ -566,7 +566,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             bets_logged += 1
             bet_rows.append(row.to_dict())
 
-    post_bets(bet_rows, system="NRFI", run_date=run_date)
+    post_bets(bet_rows, system="1IOU", run_date=run_date)
 
     logger.info(f"NRFI: {bets_logged} bets logged")
     return {"bets_logged": bets_logged, "bet_rows": bet_rows}
