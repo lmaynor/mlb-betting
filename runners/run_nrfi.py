@@ -404,7 +404,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         msg = f"NRFI: aborting run -- stale/failed feature build: {_sreason}"
         logger.error(msg)
         from mlb_core.notify.discord import post_error
-        post_error(msg, system="1IOU")
+        post_error("1IOU", msg)
         return pd.DataFrame()
     logger.info("NRFI: sentinel ok -- %s", _sreason)
     # E10: load morning snapshot for line movement signal

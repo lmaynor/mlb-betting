@@ -390,7 +390,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         msg = f"K: aborting run -- stale/failed feature build: {_sreason}"
         logger.error(msg)
         from mlb_core.notify.discord import post_error
-        post_error(msg, system="K")
+        post_error("K", msg)
         return pd.DataFrame()
     logger.info("K: sentinel ok -- %s", _sreason)
     events = sgo.load_snapshot("Odds/sgo/latest.json")
