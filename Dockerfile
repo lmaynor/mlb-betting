@@ -7,9 +7,7 @@ WORKDIR /app
 
 # Install Python deps first (layer cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    # xgboost pulls in CUDA NCCL (~300MB) as an optional dep; Cloud Run is CPU-only.
-    && pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY mlb_core/      ./mlb_core/
@@ -27,7 +25,9 @@ COPY tweet_drafter.py .
 COPY setup.py         .
 
 # Install mlb_core as a package (eliminates all sys.path hacks)
-RUN pip install --no-cache-dir -e .
+# Uninstall NCCL here (after all pip steps) so it's only downloaded once.
+RUN pip install --no-cache-dir -e . \
+    && pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
 # Cloud Run listens on $PORT (default 8080)
 ENV PORT=8080
