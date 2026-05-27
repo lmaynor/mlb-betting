@@ -635,6 +635,18 @@ def run(run_date: str = None) -> dict:
         logger.error(f"model_features upload failed: {e}")
         return {"status": "error", "error": f"upload: {e}"}
 
+    # NaN rate audit -- log any feature column above 5% NaN
+    _numeric_cols = model_features.select_dtypes(include="number").columns.tolist()
+    _bad_nans = sorted(
+        ((c, float(model_features[c].isna().mean())) for c in _numeric_cols
+         if model_features[c].isna().mean() > 0.05),
+        key=lambda x: -x[1],
+    )
+    if _bad_nans:
+        logger.warning("NRFI build: high-NaN features -- " + ", ".join(f"{c}={r:.0%}" for c, r in _bad_nans[:15]))
+    else:
+        logger.info(f"NRFI build: NaN audit OK -- {len(_numeric_cols)} numeric features all < 5% NaN")
+
     logger.info(f"NRFI feature build complete | {len(model_features):,} rows")
     result = {"status": "ok", "rows": int(len(model_features)), "columns": int(len(model_features.columns))}
     from mlb_core.storage import write_build_sentinel

@@ -663,6 +663,18 @@ def run(run_date: str = None) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"F5 upload: {e}"}
 
+    # NaN rate audit -- log any feature column above 5% NaN
+    _numeric_cols = gf.select_dtypes(include="number").columns.tolist()
+    _bad_nans = sorted(
+        ((c, float(gf[c].isna().mean())) for c in _numeric_cols
+         if gf[c].isna().mean() > 0.05),
+        key=lambda x: -x[1],
+    )
+    if _bad_nans:
+        logger.warning("F5 build: high-NaN features -- " + ", ".join(f"{c}={r:.0%}" for c, r in _bad_nans[:15]))
+    else:
+        logger.info(f"F5 build: NaN audit OK -- {len(_numeric_cols)} numeric features all < 5% NaN")
+
     logger.info(f"F5: feature build complete | {len(gf):,} games")
     result = {"status": "ok", "rows": int(len(gf)), "columns": int(len(gf.columns)), "home_win_rate": round(float(home_rate), 4)}
     from mlb_core.storage import write_build_sentinel

@@ -792,6 +792,18 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     _save(gf,             cfg.get("gcs_game_features",  "HR_Pro/data/game_features_master.csv"),  cfg["game_features_master"])
     _save(model_features, cfg.get("gcs_model_features", "HR_Pro/data/model_features.csv"),        cfg["model_features"])
 
+    # NaN rate audit -- log any feature column above 5% NaN
+    _numeric_cols = model_features.select_dtypes(include="number").columns.tolist()
+    _bad_nans = sorted(
+        ((c, float(model_features[c].isna().mean())) for c in _numeric_cols
+         if model_features[c].isna().mean() > 0.05),
+        key=lambda x: -x[1],
+    )
+    if _bad_nans:
+        logger.warning("HR build: high-NaN features -- " + ", ".join(f"{c}={r:.0%}" for c, r in _bad_nans[:15]))
+    else:
+        logger.info(f"HR build: NaN audit OK -- {len(_numeric_cols)} numeric features all < 5% NaN")
+
     logger.info(f"HR feature build complete | {len(model_features):,} rows")
     result = {"status": "ok", "rows": len(model_features)}
     from mlb_core.storage import write_build_sentinel

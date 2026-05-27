@@ -779,6 +779,14 @@ def run(run_date: str | None = None) -> dict:
         logger.warning(f"K build: created NaN placeholder for "
                        f"{len(missing_cols)} unbuilt features: {missing_cols}")
 
+    # NaN rate audit -- log any K feature above 5% NaN so join failures are visible
+    _nan_rates = {c: float(pf[c].isna().mean()) for c in K_FEATURES if c in pf.columns}
+    _bad_nans = sorted(((c, r) for c, r in _nan_rates.items() if r > 0.05), key=lambda x: -x[1])
+    if _bad_nans:
+        logger.warning("K build: high-NaN features -- " + ", ".join(f"{c}={r:.0%}" for c, r in _bad_nans))
+    else:
+        logger.info(f"K build: NaN audit OK -- all {len(K_FEATURES)} features < 5% NaN")
+
     # Write outputs
     from mlb_core.storage import write_csv
     write_csv(pf, cfg["gcs_model_features"])
