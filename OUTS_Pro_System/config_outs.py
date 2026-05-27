@@ -16,7 +16,9 @@ cfg["gcs_outs_model"]       = "OUTS_Pro_System/models/xgb_outs_v1.json"
 cfg["gcs_outs_meta"]        = "OUTS_Pro_System/models/model_meta_outs_v1.json"
 cfg["gcs_outs_calibrator"]  = "OUTS_Pro_System/models/isotonic_calibrator_outs_v1.pkl"
 
-# OUTS feature list -- subset of K features focused on durability
+# OUTS feature list -- subset of K features focused on durability.
+# arsenal_* added 2026-05-27: pitch mix style affects outing length
+# (e.g. heavy-FB pitchers have different manager hooks vs. off-speed artists).
 OUTS_FEATURES = [
     "avg_ip_L5",
     "avg_bf_L5",
@@ -28,6 +30,10 @@ OUTS_FEATURES = [
     "velo_trend_L5",
     "fb_pct_L10",
     "breaking_pct_L10",
+    # Savant season-level pitch mix
+    "arsenal_fb_usage",
+    "arsenal_breaking_usage",
+    "arsenal_pitch_diversity",
     "opp_k_rate_L14",
     "opp_k_rate_vs_hand_L14",
     "opp_lineup_pct_L",

@@ -647,6 +647,99 @@ def _backfill_opponent_history(pf: pd.DataFrame, sc: pd.DataFrame) -> pd.DataFra
     return pf
 
 
+# ── Section 7 — Savant pitch arsenal features ────────────────────────────────
+
+def _join_pitch_arsenals(pf: pd.DataFrame) -> pd.DataFrame:
+    """Join Savant pitch_arsenals master to add season-level pitch-mix features.
+
+    New features (all default to NaN if master unavailable):
+      arsenal_fb_usage       -- FF+SI+FC fraction of all pitches thrown (0-1)
+      arsenal_breaking_usage -- SL+ST+CU+SV fraction (0-1)
+      arsenal_pitch_diversity -- normalized Shannon entropy of pitch mix (0=one-pitch, 1=fully varied)
+
+    Joins on (pitcher MLBAM ID, season year). Falls back to prior season
+    if current year not yet published (early-season gap, typically March).
+    """
+    from mlb_core.storage import read_csv, exists
+
+    new_cols = ["arsenal_fb_usage", "arsenal_breaking_usage", "arsenal_pitch_diversity"]
+    for c in new_cols:
+        if c not in pf.columns:
+            pf[c] = np.nan
+
+    key = "Statcast/savant_pitch_arsenals_master.csv"
+    if not exists(key):
+        logger.info("K build: pitch_arsenals master not found -- arsenal features NaN")
+        return pf
+
+    try:
+        ar = read_csv(key, low_memory=False)
+    except Exception as e:
+        logger.warning(f"K build: pitch_arsenals load failed: {e}")
+        return pf
+
+    if "player_id" not in ar.columns or "year" not in ar.columns:
+        logger.warning(f"K build: pitch_arsenals missing player_id/year -- cols: {ar.columns.tolist()[:15]}")
+        return pf
+
+    ar["player_id"] = pd.to_numeric(ar["player_id"], errors="coerce")
+    ar["year"] = pd.to_numeric(ar["year"], errors="coerce")
+    ar = ar.dropna(subset=["player_id", "year"]).copy()
+    ar["player_id"] = ar["player_id"].astype(int)
+    ar["year"] = ar["year"].astype(int)
+
+    # Identify n_* pitch usage columns (values are 0-100 percentages)
+    n_cols = [c for c in ar.columns if c.startswith("n_") and c != "n_pitches"]
+    if not n_cols:
+        logger.warning("K build: no n_* usage columns in pitch_arsenals master")
+        return pf
+
+    for c in n_cols:
+        ar[c] = pd.to_numeric(ar[c], errors="coerce").fillna(0.0)
+
+    fb_cols  = [c for c in n_cols if c in {"n_ff", "n_si", "n_fc"}]
+    brk_cols = [c for c in n_cols if c in {"n_sl", "n_st", "n_cu", "n_sv"}]
+
+    ar["arsenal_fb_usage"]       = (ar[fb_cols].sum(axis=1) if fb_cols else 0.0) / 100.0
+    ar["arsenal_breaking_usage"] = (ar[brk_cols].sum(axis=1) if brk_cols else 0.0) / 100.0
+
+    # Normalized Shannon entropy: 0 = all pitches are one type, 1 = perfectly mixed
+    usage_mat = ar[n_cols].values / 100.0
+    eps = 1e-9
+    safe = np.where(usage_mat > 0, usage_mat, eps)
+    raw_entropy = -(safe * np.log2(safe)).sum(axis=1)
+    n_active = np.maximum((ar[n_cols].values > 1.0).sum(axis=1), 2)
+    ar["arsenal_pitch_diversity"] = raw_entropy / np.log2(n_active)
+
+    ar_slim = ar[["player_id", "year", "arsenal_fb_usage",
+                   "arsenal_breaking_usage", "arsenal_pitch_diversity"]].copy()
+
+    pf = pf.copy()
+    pf["_ar_pid"]  = pd.to_numeric(pf["pitcher"], errors="coerce").fillna(-1).astype(int)
+    pf["_ar_year"] = pd.to_datetime(pf["game_date"], errors="coerce").dt.year.fillna(-1).astype(int)
+
+    # Try exact season first, then fall back to prior season
+    for year_delta in (0, 1):
+        missing = pf["arsenal_fb_usage"].isna()
+        if not missing.any():
+            break
+        sub = pf.loc[missing, ["_ar_pid", "_ar_year"]].copy()
+        sub["_lookup_year"] = sub["_ar_year"] - year_delta
+        merged = sub.merge(
+            ar_slim,
+            left_on=["_ar_pid", "_lookup_year"],
+            right_on=["player_id", "year"],
+            how="left",
+        )
+        for c in new_cols:
+            pf.loc[missing, c] = merged[c].values
+
+    pf = pf.drop(columns=["_ar_pid", "_ar_year"], errors="ignore")
+    n_filled = pf["arsenal_fb_usage"].notna().sum()
+    logger.info(f"K build: arsenal features -- {n_filled:,}/{len(pf):,} rows filled")
+    return pf
+
+
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 def run(run_date: str | None = None) -> dict:
@@ -675,6 +768,7 @@ def run(run_date: str | None = None) -> dict:
     pf = _join_umpires(pf, cfg)
     pf = _join_weather(pf)
     pf = _attach_today_slate(pf, sc, run_date)
+    pf = _join_pitch_arsenals(pf)
 
     # Ensure every K_FEATURES column exists (NaN if not built — XGBoost handles it)
     from K_Pro_System.config_k import K_FEATURES

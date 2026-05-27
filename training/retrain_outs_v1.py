@@ -76,12 +76,16 @@ OUTS_FEATURES = [
     "days_rest",
     "short_rest",
     # Pitcher quality (general, not K-specific)
-    "k_pct_L5",          # kept -- K rate correlates with pitcher domination -> deeper outings
+    "k_pct_L5",
     "k_pct_L10",
     "velo_mean_L5",
     "velo_trend_L5",
     "fb_pct_L10",
     "breaking_pct_L10",
+    # Savant season-level pitch mix (added 2026-05-27)
+    "arsenal_fb_usage",
+    "arsenal_breaking_usage",
+    "arsenal_pitch_diversity",
     # Opponent lineup
     "opp_k_rate_L14",
     "opp_k_rate_vs_hand_L14",
@@ -95,7 +99,7 @@ OUTS_FEATURES = [
     "is_home",
     "temperature_f",
     "is_dome",
-    "post_pitch_clock",   # T13: pitch clock reduced avg IP by ~0.3 in 2023+
+    "post_pitch_clock",
 ]
 
 XGB_PARAMS = {

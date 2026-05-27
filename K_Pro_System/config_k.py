@@ -19,8 +19,11 @@ from mlb_core.config import (
 BASE_DIR = Path(r"C:\Users\lmayn\Downloads\mlb-betting\K_Pro_System")
 
 # ── Feature contract — keep in lockstep with retrain_k_v1.py and the notebook
-# K_Pro_v1.ipynb Section 0. 34 features total. If you add/remove one here, mirror
+# K_Pro_v1.ipynb Section 0. 37 features total. If you add/remove one here, mirror
 # in training/retrain_k_v1.py and flag in the next handoff.
+# implied_win_pct removed 2026-05-19 (T02): market-derived, trains model to mimic line.
+# post_pitch_clock added 2026-05-19 (T13): regime indicator 2023-03-30.
+# arsenal_* added 2026-05-27: Savant season-level pitch mix from pitch_arsenals master.
 K_FEATURES = [
     # K rate
     "k_pct_L5", "k_pct_L10", "k_pct_STD", "k_per_9_L5", "k_per_9_L10",
@@ -29,8 +32,10 @@ K_FEATURES = [
     # Stuff
     "whiff_pct_L10", "zone_contact_pct_L10", "chase_pct_L10",
     "velo_mean_L5", "velo_trend_L5",
-    # Pitch mix
+    # Pitch mix (rolling game-level)
     "fb_pct_L10", "breaking_pct_L10", "primary_whiff_rate_L10",
+    # Savant season-level pitch mix
+    "arsenal_fb_usage", "arsenal_breaking_usage", "arsenal_pitch_diversity",
     # Durability
     "avg_ip_L5", "avg_bf_L5", "days_rest", "short_rest",
     # Opponent (today's lineup)
@@ -40,7 +45,7 @@ K_FEATURES = [
     # Umpire
     "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30",
     # Context
-    "is_home", "implied_win_pct", "temperature_f", "is_dome",
+    "is_home", "temperature_f", "is_dome", "post_pitch_clock",
 ]
 
 cfg = {

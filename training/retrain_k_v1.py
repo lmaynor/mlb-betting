@@ -54,7 +54,10 @@ K_FEATURES = [
     "first_pitch_strike_pct_L10", "hitter_count_rate_L10", "two_strike_k_rate_L10",
     "whiff_pct_L10", "zone_contact_pct_L10", "chase_pct_L10",
     "velo_mean_L5", "velo_trend_L5",
+    # Rolling game-level pitch mix
     "fb_pct_L10", "breaking_pct_L10", "primary_whiff_rate_L10",
+    # Savant season-level pitch mix (arsenal_* added 2026-05-27)
+    "arsenal_fb_usage", "arsenal_breaking_usage", "arsenal_pitch_diversity",
     "avg_ip_L5", "avg_bf_L5", "days_rest", "short_rest",
     "opp_k_rate_L14", "opp_k_rate_vs_hand_L14", "opp_chase_rate_L14",
     "opp_whiff_rate_L14", "opp_lineup_pct_L", "opp_platoon_k_edge",
@@ -62,9 +65,8 @@ K_FEATURES = [
     "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30",
     # implied_win_pct removed 2026-05-19 (T02): market-derived feature trains
     # the model to mimic the line, eliminating closing-line edge by construction.
-    # is_home and context features kept; moneyline proxy removed.
     "is_home", "temperature_f", "is_dome",
-    # T13: Regime indicator — pitch clock 2023-03-30.
+    # T13: Regime indicator -- pitch clock 2023-03-30.
     "post_pitch_clock",
 ]
 
