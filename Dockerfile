@@ -1,16 +1,15 @@
 FROM python:3.11-slim
 
-# System deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# No system build deps needed: pg8000 is pure-Python (no libpq),
+# all pip packages install from prebuilt manylinux wheels.
 
 WORKDIR /app
 
 # Install Python deps first (layer cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    # xgboost pulls in CUDA NCCL (~300MB) as an optional dep; Cloud Run is CPU-only.
+    && pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
 # Copy source
 COPY mlb_core/      ./mlb_core/
