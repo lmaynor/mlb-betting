@@ -631,3 +631,35 @@ def savant_leaderboard_backfill_local(
                     f"({len(master):,} rows)")
 
     return results
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+
+    parser = argparse.ArgumentParser(description="Backfill Savant leaderboard datasets to GCS")
+    parser.add_argument("dataset", nargs="?", default=None,
+                        help="Dataset name (e.g. pitch_arsenals). Omit to backfill all.")
+    parser.add_argument("--start-year", type=int, default=None)
+    parser.add_argument("--end-year",   type=int, default=None)
+    parser.add_argument("--force",      action="store_true",
+                        help="Re-fetch even if year file already cached in GCS")
+    args = parser.parse_args()
+
+    if args.dataset:
+        result = savant_leaderboard_backfill_gcs(
+            args.dataset,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            force=args.force,
+        )
+    else:
+        result = savant_leaderboards_backfill_all_gcs(
+            start_year=args.start_year,
+            end_year=args.end_year,
+            force=args.force,
+        )
+
+    print(json.dumps({str(k): v for k, v in result.items()}, indent=2))
