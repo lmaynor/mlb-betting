@@ -1,0 +1,22 @@
+# Files sent to Cloud Build as build context.
+# beezy-vip deploys to Vercel separately -- exclude entirely to avoid
+# uploading 2500+ headshot images on every Cloud Run deploy.
+.gcloudignore
+.git
+.gitignore
+
+# Vercel frontend -- not part of the Cloud Run image
+beezy-vip/
+
+# Notebooks and local dev artifacts
+*.ipynb
+ipynb_CONTEXT/
+handoffs/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local Windows data paths (never used in Cloud Run)
+*.db
+*.sqlite
