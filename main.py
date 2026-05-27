@@ -156,6 +156,7 @@ def build_all_features_handler():
     builders = {
         "HR":          "runners.build_hr_features",
         "NRFI":        "runners.build_nrfi_features",
+        "1IOU":        "runners.build_nrfi_features",  # 1IOU is the registry ID for NRFI
         "K":           "runners.build_k_features",
         "F5":          "runners.build_f5_features",
         "BATTER_HITS": "runners.build_batter_hits_features",
