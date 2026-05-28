@@ -259,17 +259,14 @@ def _score_lambda(booster: xgb.Booster, features: list, feature_means: dict,
 def _simulate_k(lambda_k: float, avg_ip_L5: float | None,
                 n_sims: int, cap: int, seed: int = 42,
                 k_per_9_L5: float | None = None) -> dict:
-    # C08: use k_per_9_L5 * expected_ip for scaling instead of lambda * (ip/5).
-    # Diagnostic showed slope -1.13 with naive linear scaling -- non-trivial bias.
-    if avg_ip_L5 is not None and not pd.isna(avg_ip_L5):
-        ip = float(avg_ip_L5)
-        if k_per_9_L5 is not None and not pd.isna(k_per_9_L5) and k_per_9_L5 > 0:
-            # Expected Ks = K/9 rate * expected IP
-            lambda_k = max(float(k_per_9_L5) / 9.0 * ip, 0.5)
-        elif ip < 5.0:
-            # Fallback: only apply penalty for short outings
-            lambda_k = max(lambda_k * (ip / 5.0), 0.5)
+    # The trained K model target is starter_ks, so calibrated lambda_k is the
+    # canonical expected count. avg_ip_L5 and k_per_9_L5 are already model
+    # features; overriding lambda here bypasses retraining/calibration and can
+    # inflate probabilities. Keep k_per_9_L5 only as a diagnostic comparison.
     lambda_k = max(lambda_k, 0.1)
+    proxy_lambda = None
+    if avg_ip_L5 is not None and not pd.isna(avg_ip_L5) and k_per_9_L5 is not None and not pd.isna(k_per_9_L5) and k_per_9_L5 > 0:
+        proxy_lambda = max(float(k_per_9_L5) / 9.0 * float(avg_ip_L5), 0.5)
     rng = np.random.default_rng(seed)
     # C07: use Negative Binomial to capture MLB K over-dispersion.
     # Falls back to Poisson if nb_alpha not available or invalid.
@@ -285,6 +282,7 @@ def _simulate_k(lambda_k: float, avg_ip_L5: float | None,
     samples = np.clip(samples, 0, cap)
     out = {
         "lambda_k": float(lambda_k),
+        "proxy_lambda_k": float(proxy_lambda) if proxy_lambda is not None else None,
         "mean":     float(np.mean(samples)),
         "median":   float(np.median(samples)),
     }
@@ -364,6 +362,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     lambdas = _score_lambda(booster, features, feature_means, feat_df)
     feat_df = feat_df.copy()
     feat_df["lambda_k"] = lambdas
+    feat_df["raw_lambda_k"] = feat_df["lambda_k"]
     if calibrator is not None:
         try:
             raw = feat_df["lambda_k"].values.copy()
@@ -372,9 +371,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             if in_range.any():
                 cal[in_range] = calibrator.predict(raw[in_range])
             feat_df["lambda_k"] = cal
+            feat_df["calibrator_in_range"] = in_range
             logger.info(f"K: lambda calibrator applied to {int(in_range.sum())}/{len(raw)} pitchers")
         except Exception as e:
             logger.warning(f"K calibrator predict failed: {e} -- using raw lambda")
+            feat_df["calibrator_in_range"] = False
+    else:
+        feat_df["calibrator_in_range"] = False
 
     # Abort if snapshot is stale — stale lines produce fictitious edge.
     _SGO_KEY = "Odds/sgo/latest.json"
@@ -456,6 +459,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                             "UNDER", edge_under, fair_under, under_odds, p_under)
                     logger.info(
                         f"K pred | {row['_pitcher_name']} | lam={row['lambda_k']:.2f} "
+                        f"raw_lam={row.get('raw_lambda_k', row['lambda_k']):.2f} "
+                        f"proxy_lam={probs.get('proxy_lambda_k')} "
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
@@ -479,7 +484,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "home_team":       row["home_team"],
                         "side":            side,
                         "line":            float(line),
+                        "raw_lambda_k":    round(float(row.get("raw_lambda_k", row["lambda_k"])), 3),
                         "lambda_k":        round(float(row["lambda_k"]), 3),
+                        "proxy_lambda_k":  round(float(probs["proxy_lambda_k"]), 3) if probs.get("proxy_lambda_k") is not None else None,
                         "proj_k":          round(probs["mean"], 3),
                         "model_prob":      round(model_prob, 4),
                         "market_prob":     round(fair, 4),
@@ -512,6 +519,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             under_odds = outs_info.get("under_odds")
             if line is not None and over_odds is not None and under_odds is not None:
                 # E04: use trained OUTS model if available, else Normal proxy
+                _raw_lam_outs = None
+                _outs_cal_in_range = False
                 if _outs_booster is not None and _outs_features:
                     _X_outs = pd.DataFrame([row.to_dict()]).reindex(columns=_outs_features)
                     _X_outs = _X_outs.apply(pd.to_numeric, errors="coerce")
@@ -525,12 +534,14 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         _dm_outs,
                         iteration_range=(0, _ntree_outs) if _ntree_outs else None
                     )[0])
+                    _raw_lam_outs = _lam_outs
                     if _outs_cal is not None:
                         try:
-                            _lam_outs = float(np.clip(
-                                _outs_cal.predict([_lam_outs])[0],
-                                _outs_cal.X_min_, _outs_cal.X_max_,
-                            ))
+                            _x_min = getattr(_outs_cal, "X_min_", None)
+                            _x_max = getattr(_outs_cal, "X_max_", None)
+                            if _x_min is None or _x_max is None or (_x_min <= _raw_lam_outs <= _x_max):
+                                _lam_outs = float(_outs_cal.predict([_raw_lam_outs])[0])
+                                _outs_cal_in_range = True
                         except Exception:
                             pass
                     dist = _simulate_outs_model(_lam_outs, _outs_nb_alpha)
@@ -555,6 +566,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
+                    logger.info(
+                        "OUTS pred | %s | raw_lam=%s lam=%s in_range=%s "
+                        "proj_outs=%.2f line=%.1f %s | model=%.3f fair=%.3f edge=%+.3f",
+                        row["_pitcher_name"],
+                        f"{_raw_lam_outs:.2f}" if _raw_lam_outs is not None else "proxy",
+                        f"{_lam_outs:.2f}" if _outs_booster is not None and _outs_features else "proxy",
+                        _outs_cal_in_range,
+                        dist["mean_outs"],
+                        float(line),
+                        side,
+                        model_prob, fair, edge,
+                    )
                     _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
                     _stake = min(kelly_stake(
                         edge, odds, bankroll=_bankroll,
@@ -575,6 +598,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "home_team":       row["home_team"],
                         "side":            side,
                         "line":            float(line),
+                        "raw_lambda_outs": round(float(_raw_lam_outs), 3) if _raw_lam_outs is not None else None,
+                        "lambda_outs":     round(float(_lam_outs), 3) if _outs_booster is not None and _outs_features else None,
+                        "outs_calibrator_in_range": _outs_cal_in_range,
                         "lambda_k":        round(float(row["lambda_k"]), 3),
                         "proj_k":          round(dist["mean_outs"] / 3, 3),
                         "model_prob":      round(model_prob, 4),

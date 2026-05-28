@@ -363,15 +363,33 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     feat_df = feat_df.copy()
     feat_df["lambda_hits"] = preds.clip(0.01, cfg.get("mc_cap", 10))
 
-    # Apply isotonic calibrator to lambda
+    # Apply isotonic calibrator to lambda only inside its fitted input range.
+    # sklearn's out_of_bounds="clip" is useful for offline evaluation but too
+    # aggressive for live betting, where distribution drift would otherwise
+    # snap lambdas to a boundary and inflate O/U probabilities.
+    feat_df["raw_lambda_hits"] = feat_df["lambda_hits"]
     if calibrator is not None:
         try:
             raw = feat_df["lambda_hits"].values.copy()
-            cal = calibrator.predict(raw)
+            x_min = getattr(calibrator, "X_min_", None)
+            x_max = getattr(calibrator, "X_max_", None)
+            in_range = np.ones(len(raw), dtype=bool)
+            if x_min is not None and x_max is not None:
+                in_range = (raw >= x_min) & (raw <= x_max)
+            cal = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
             feat_df["lambda_hits"] = np.clip(cal, 0.01, cfg.get("mc_cap", 10))
-            logger.info(f"BATTER_HITS: calibrator applied")
+            feat_df["calibrator_in_range"] = in_range
+            logger.info(
+                "BATTER_HITS: calibrator applied to %d/%d batters",
+                int(in_range.sum()), len(raw),
+            )
         except Exception as e:
             logger.warning(f"BATTER_HITS calibrator predict failed: {e}")
+            feat_df["calibrator_in_range"] = False
+    else:
+        feat_df["calibrator_in_range"] = False
 
     # Name index for odds matching
     if "player_name" not in feat_df.columns:
@@ -435,6 +453,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         else:
             side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
 
+        logger.info(
+            "BATTER_HITS pred | %s | raw_lam=%.3f lam=%.3f in_range=%s "
+            "line=%.1f %s | model=%.3f fair=%.3f edge=%+.3f",
+            player_name,
+            float(row.get("raw_lambda_hits", mu)),
+            mu,
+            bool(row.get("calibrator_in_range", False)),
+            float(line),
+            side,
+            model_prob, fair, edge,
+        )
+
         k_pct_val = kpct(edge, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(
             _bankroll, int(row["game_pk"]),
@@ -463,6 +493,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "line":            float(line),
             "side":            side,
             "bet_type":        f"BATTER_HITS_{side}_{line}",
+            "raw_lambda_hits": round(float(row.get("raw_lambda_hits", mu)), 4),
             "lambda_hits":     round(mu, 4),
             "model_prob":      round(model_prob, 4),
             "market_prob":     round(fair, 4),

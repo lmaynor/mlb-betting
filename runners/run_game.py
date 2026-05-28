@@ -325,17 +325,34 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     feat_df = feat_df.copy()
     feat_df["raw_prob_home"] = np.clip(raw_preds, 1e-4, 1 - 1e-4)
 
-    # Apply isotonic calibrator
+    # Apply isotonic calibrator only inside its fitted input range. The
+    # calibrator is trained with out_of_bounds="clip"; calling it on live
+    # out-of-range values would snap probabilities to a boundary and can create
+    # artificial 90%+ confidence.
     if calibrator is not None:
         try:
-            cal = calibrator.predict(feat_df["raw_prob_home"].values)
+            raw = feat_df["raw_prob_home"].values.copy()
+            x_min = getattr(calibrator, "X_min_", None)
+            x_max = getattr(calibrator, "X_max_", None)
+            in_range = np.ones(len(raw), dtype=bool)
+            if x_min is not None and x_max is not None:
+                in_range = (raw >= x_min) & (raw <= x_max)
+            cal = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
             feat_df["prob_home"] = np.clip(cal, 1e-4, 1 - 1e-4)
-            logger.info("GAME: calibrator applied")
+            feat_df["calibrator_in_range"] = in_range
+            logger.info(
+                "GAME: calibrator applied to %d/%d games",
+                int(in_range.sum()), len(raw),
+            )
         except Exception as e:
             logger.warning("GAME calibrator predict failed: %s", e)
             feat_df["prob_home"] = feat_df["raw_prob_home"]
+            feat_df["calibrator_in_range"] = False
     else:
         feat_df["prob_home"] = feat_df["raw_prob_home"]
+        feat_df["calibrator_in_range"] = False
 
     # Build a lookup: (home_team_abbr, away_team_abbr) -> row index
     from runners.build_game_features import TEAM_NAME_TO_ABBR as _ABBR
@@ -404,6 +421,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             odds      = away_odds_raw
             model_prob = prob_away
 
+        logger.info(
+            "GAME pred | %s @ %s | raw_home=%.3f cal_home=%.3f in_range=%s "
+            "%s | model=%.3f fair=%.3f edge=%+.3f",
+            away_t, home_t,
+            float(row.get("raw_prob_home", prob_home)),
+            prob_home,
+            bool(row.get("calibrator_in_range", False)),
+            side,
+            model_prob, fair, edge,
+        )
+
         k_pct_val = kpct(edge, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(
             _bankroll, game_pk,
@@ -444,6 +472,8 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "kelly_triggered":   kelly_triggered,
             "bookmaker":         odds_info.get("bookmaker"),
             "raw_prob_home":     round(float(row.get("raw_prob_home", prob_home)), 4),
+            "cal_prob_home":     round(prob_home, 4),
+            "calibrator_in_range": bool(row.get("calibrator_in_range", False)),
         })
 
     if not results:
