@@ -7,7 +7,7 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 const B = '0.5px solid #1f1f24'
 const NAV_LINKS = [
   { label: 'Picks',       href: '/picks' },
-  { label: 'Cheat Sheet', href: '/cheat-sheet' },
+  { label: 'Daily Card',  href: '/cheat-sheet' },
   { label: 'Tools',       href: '/tools' },
   { label: 'Models',      href: '/models' },
   { label: 'Results',     href: '/results' },
@@ -60,7 +60,7 @@ export function Nav() {
           )}
         </div>
 
-        {/* Mobile: auth + Discord — BottomNav handles routing */}
+        {/* Mobile: auth + Discord. BottomNav handles routing. */}
         <div className="mobile-only" style={{ alignItems: 'center', gap: '8px' }}>
           {isSignedIn ? (
             <UserButton  />

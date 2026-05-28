@@ -1,38 +1,33 @@
 export const dynamic = 'force-dynamic'
 
-import fs   from 'fs'
+import fs from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks, apiGetPicks } from '@/lib/betting-api'
+import { apiGetTodayPicks } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
+import { beezyscore } from '@/lib/beezy-score'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
 import { SlateStrip } from '@/components/today/slate-strip'
+import playerMap from '@/public/headshots/player_map.json'
 
 export const metadata: Metadata = {
-  title: 'Cheat Sheet — Beezy.VIP',
-  description: "Today's MLB picks — top 5 edge-ranked, filterable by game / pitcher / player props.",
+  title: 'Daily Card - Beezy.VIP',
+  description: "Today's MLB Daily Card - top Beezy Score picks, filterable by game, pitcher, and player props.",
   openGraph: {
-    title: "MLB Picks Cheat Sheet — Beezy.VIP",
-    description: 'Top picks by edge. NRFI · HR · F5 · K · OUTS.',
-    images: [{ url: '/api/og?title=MLB+Cheat+Sheet', width: 1200, height: 630 }],
+    title: 'MLB Daily Card - Beezy.VIP',
+    description: 'Top picks by Beezy Score. NRFI / HR / F5 / K / OUTS.',
   },
 }
 
-// ── Helpers (server-only) ────────────────────────────────────────────────────
-
 const TEAM_SLUG: Record<string, string> = {
-  ARI:'ari', ATL:'atl', BAL:'bal', BOS:'bos', CHC:'chc', CIN:'cin', CLE:'cle',
-  COL:'col', CWS:'cws', DET:'det', HOU:'hou', KC:'kc',  LAA:'laa', LAD:'lad',
-  MIA:'mia', MIL:'mil', MIN:'min', NYM:'nym', NYY:'nyy', OAK:'oak', PHI:'phi',
-  PIT:'pit', SD:'sd',  SEA:'sea', SF:'sf',  STL:'stl', TB:'tb',  TEX:'tex',
-  TOR:'tor', WSH:'wsh',
+  ARI: 'ari', ATL: 'atl', BAL: 'bal', BOS: 'bos', CHC: 'chc', CIN: 'cin', CLE: 'cle',
+  COL: 'col', CWS: 'cws', DET: 'det', HOU: 'hou', KC: 'kc', LAA: 'laa', LAD: 'lad',
+  MIA: 'mia', MIL: 'mil', MIN: 'min', NYM: 'nym', NYY: 'nyy', OAK: 'oak', PHI: 'phi',
+  PIT: 'pit', SD: 'sd', SEA: 'sea', SF: 'sf', STL: 'stl', TB: 'tb', TEX: 'tex',
+  TOR: 'tor', WSH: 'wsh',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const PLAYER_MAP: Record<string, number> = (() => {
-  try { return require('@/public/headshots/player_map.json') }
-  catch { return {} }
-})()
+const PLAYER_MAP = playerMap as Record<string, number>
 
 const PUBLIC_DIR = path.join(process.cwd(), 'public')
 
@@ -42,28 +37,30 @@ function logoUrl(abbrev: string | null): string | null {
 }
 
 function playerSlug(name: string): string {
-  // Preserve accented chars; convert hyphens→_ BEFORE stripping so Ha-Seong→ha_seong not haseong
-  return name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_').replace(/[^\wÀ-ɏ]/g, '')
+  return name.toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_')
+    .replace(/[^\p{L}\p{N}_]/gu, '')
 }
 
 function playerSlugNormalized(name: string): string {
-  // NFD-normalize then strip diacritics: Vásquez → vasquez. Used as fallback.
-  return name.normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  return name.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
 }
 
 function headshotUrl(name: string | null): string | null {
   if (!name) return null
-  const key      = playerSlug(name)
+  const key = playerSlug(name)
   const keyAscii = playerSlugNormalized(name)
 
-  // Prefer local bg-removed PNG; try accented key then ascii-normalized key
   for (const k of [key, keyAscii]) {
     const localPath = path.join(PUBLIC_DIR, 'headshots', `${k}.png`)
     if (fs.existsSync(localPath)) return `/headshots/${k}.png`
   }
 
-  // Fall back to MLB CDN via player_map
   const id = PLAYER_MAP[key] ?? PLAYER_MAP[keyAscii]
   if (!id) return null
   return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${id}/headshot/67/current`
@@ -71,7 +68,9 @@ function headshotUrl(name: string | null): string | null {
 
 function dateLabel(): string {
   return new Date().toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
   }).toUpperCase()
 }
 
@@ -84,21 +83,16 @@ function enrich(bet: Bet): EnrichedBet {
   }
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-
 export default async function CheatSheetPage() {
-  const [raw, yesterdayRaw] = await Promise.all([
-    apiGetTodayPicks().catch(() => [] as Bet[]),
-    apiGetPicks({ date: 'yesterday', status: 'settled', limit: 5 }).catch(() => [] as Bet[]),
-  ])
-
-  const picks     = raw.sort((a, b) => ((b.edge ?? 0) - (a.edge ?? 0))).map(enrich)
-  const yesterday = yesterdayRaw.map(enrich)
+  const raw = await apiGetTodayPicks().catch(() => [] as Bet[])
+  const picks = raw
+    .map(enrich)
+    .sort((a, b) => beezyscore(b) - beezyscore(a))
 
   return (
     <>
       <SlateStrip />
-      <CheatSheetClient picks={picks} yesterday={yesterday} today={dateLabel()} />
+      <CheatSheetClient picks={picks} today={dateLabel()} />
     </>
   )
 }
