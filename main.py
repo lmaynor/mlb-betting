@@ -1098,7 +1098,7 @@ def retrain_weekly():
     BASE_URL = f"https://{REGION}-run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs"
 
     RETRAIN_JOBS  = [
-        "mlb-retrain-nrfi-v17",
+        "mlb-retrain-nrfi-v18",
         "mlb-retrain-f5-v5",      # was mlb-retrain-f5-meta (T11: deprecated shim)
         "mlb-retrain-k-v1",
         "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
