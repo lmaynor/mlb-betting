@@ -154,7 +154,7 @@ gcloud scheduler jobs create http "${SERVICE_NAME}-morning" \
   --location="$REGION" \
   --schedule="0 13 * * *" \
   --uri="${SERVICE_URL}/run" \
-  --message-body='{"systems":["NRFI","HR","F5","K"],"run_type":"morning"}' \
+  --message-body='{"systems":["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","GAME","1I"],"run_type":"morning"}' \
   --headers="Content-Type=application/json" \
   --oidc-service-account-email="$SCHEDULER_SA" \
   --oidc-token-audience="$SERVICE_URL" \
@@ -166,7 +166,7 @@ gcloud scheduler jobs create http "${SERVICE_NAME}-evening" \
   --location="$REGION" \
   --schedule="0 21 * * *" \
   --uri="${SERVICE_URL}/run" \
-  --message-body='{"systems":["NRFI","HR","F5","K"],"run_type":"evening"}' \
+  --message-body='{"systems":["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","GAME","1I"],"run_type":"evening"}' \
   --headers="Content-Type=application/json" \
   --oidc-service-account-email="$SCHEDULER_SA" \
   --oidc-token-audience="$SERVICE_URL" \

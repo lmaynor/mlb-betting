@@ -38,6 +38,8 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
+DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
+DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "GAME"]
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
@@ -84,7 +86,7 @@ def healthz():
 @app.route("/run", methods=["POST"])
 def run_handler():
     body     = request.get_json(silent=True) or {}
-    systems  = body.get("systems", list(VALID_SYSTEMS))
+    systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
     run_type = body.get("run_type", "morning")
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
 
@@ -137,10 +139,11 @@ def build_all_features_handler():
     """Run all feature builders sequentially in dependency order.
 
     Dependency order: HR -> NRFI -> K -> F5 (F5 reads NRFI pitcher_start_features.csv).
-    HR and K are independent of each other and NRFI.
+    BATTER_TB uses HR features and 1I uses NRFI features, so neither needs a
+    separate feature build today.
 
     Body (all optional):
-        systems: list[str]  -- subset to run, default all four in order
+        systems: list[str]  -- subset to run, default trained feature builders
         continue_on_error: bool -- default false (fail fast)
     Returns HTTP 207 if any system errored, 200 if all clean.
     """
@@ -148,10 +151,9 @@ def build_all_features_handler():
     body             = request.get_json(silent=True) or {}
     run_date         = body.get("run_date", datetime.now(_CT).date().isoformat())
     continue_on_err  = body.get("continue_on_error", False)
-    default_order    = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "GAME"]
-    systems          = body.get("systems", default_order)
+    systems          = body.get("systems", DEFAULT_FEATURE_BUILD_SYSTEMS)
     # Enforce dependency order even if caller passes a subset
-    ordered = [s for s in default_order if s in [x.upper() for x in systems]]
+    ordered = [s for s in DEFAULT_FEATURE_BUILD_SYSTEMS if s in [x.upper() for x in systems]]
 
     builders = {
         "HR":          "runners.build_hr_features",
@@ -552,7 +554,7 @@ def reset_and_run():
     from runners.run_1i import run as run_1i
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
-    systems  = body.get("systems", ["HR", "1IOU", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"])
+    systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
@@ -617,7 +619,7 @@ def dashboard():
     days = int(request.args.get("days", 7))
     bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
 
-    systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "GAME"]
+    systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
     summary_rows = ""
     for sys in systems:
         with bt.engine.connect() as conn:
@@ -1083,7 +1085,7 @@ def retrain_outs_handler():
 @app.route("/retrain-weekly", methods=["POST"])
 def retrain_weekly():
     """
-    Trigger weekly retrain + calibrate for all four systems.
+    Trigger weekly retrain + calibrate for trained model systems.
     Called by mlb-retrain-weekly scheduler every Monday 06:00 UTC.
     Fires retrain jobs first, then calibrate jobs after a delay.
     Uses Cloud Run Jobs API with SA credentials from metadata server.
@@ -1104,6 +1106,9 @@ def retrain_weekly():
         "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
         "mlb-retrain-outs-v1",    # E04: OUTS trained model
         "mlb-retrain-game-v1",    # GAME Pro v1
+        "mlb-retrain-batter-hits",
+        # BATTER_TB currently uses the HR v6 artifact as a proxy; no separate
+        # retrain job exists until a true TB model pipeline is added.
     ]
     CALIBRATE_JOBS = [
         "mlb-calibrate-nrfi",
@@ -1111,6 +1116,7 @@ def retrain_weekly():
         "mlb-calibrate-k",
         "mlb-calibrate-hr",
         "mlb-calibrate-game",
+        "mlb-calibrate-batter-hits",
     ]
     CALIBRATE_DELAY_S = 1800  # 30 min -- enough for all retrains to finish
 
@@ -1258,4 +1264,3 @@ def backfill_notes_handler():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
-

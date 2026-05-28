@@ -40,6 +40,8 @@ Cloud Shell before they can be deployed.
 1. Claude Code edits files on Mac, commits locally
 2. git push origin main   (from Mac -- works via macOS keychain)
 3. Cloud Shell: git pull && ./deploy/deploy_service.sh
+4. Cloud Shell: ./deploy/setup_active_market_schedulers.sh
+5. Cloud Shell: ./deploy/setup_model_jobs.sh
 ```
 
 If `git push` fails from Mac (no credential helper):
@@ -87,6 +89,11 @@ mlb_core/ NRFI_Pro_System/ HR_Pro/ F5_Pro_System/ K_Pro_System/
 OUTS_Pro_System/ BATTER_HITS_System/ GAME_Pro_System/
 runners/ training/ main.py setup.py tweet_drafter.py
 ```
+
+`BATTER_TB` currently runs as an HR-proxy market and does not have a
+`BATTER_TB_System/` directory or standalone artifact. It is deployed through
+`runners/run_batter_tb.py` and covered by the HR feature/model jobs until a
+true TB model is added.
 
 ### Proxy gotchas
 
@@ -155,12 +162,15 @@ curl -s -X POST http://localhost:8081/snapshot-odds | python3 -m json.tool
 
 curl -s -X POST http://localhost:8081/run \
   -H "Content-Type: application/json" \
-  -d '{"systems":["NRFI","HR","F5","K","BATTER_HITS","GAME"],"run_type":"morning"}' | python3 -m json.tool
+  -d '{"systems":["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","GAME","1I"],"run_type":"morning"}' | python3 -m json.tool
 
 curl -s -X POST http://localhost:8081/build-all-features \
   -H "Content-Type: application/json" \
   -d '{"systems":["HR","NRFI","K","F5","BATTER_HITS","GAME"],"continue_on_error":true}' | python3 -m json.tool
 ```
+
+`BATTER_TB` and `1I` do not need separate feature builds today. `BATTER_TB`
+uses HR features; `1I` uses NRFI half-inning features.
 
 ### Delete bets and re-run clean
 
@@ -236,6 +246,16 @@ gcloud scheduler jobs create http JOB_NAME \
 
 Max `attempt-deadline`: 1800s.
 
+### Update active market schedulers
+
+```bash
+cd ~/mlb-betting
+PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_active_market_schedulers.sh
+```
+
+This updates/creates morning and evening `/run` jobs with:
+`HR, 1IOU, F5, K, BATTER_HITS, BATTER_TB, GAME, 1I`.
+
 ### Create a new Cloud Run Job
 
 ```bash
@@ -254,6 +274,17 @@ gcloud run jobs create JOB_NAME \
 
 Task timeouts by job category: retrain 7200s, calibrate 1800s, build 3600s, tweet 300s.
 If job already exists, use `gcloud run jobs update JOB_NAME` with the same flags.
+
+### Create/update all model jobs
+
+```bash
+cd ~/mlb-betting
+PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_model_jobs.sh
+```
+
+This configures retrain/calibrate jobs for NRFI, HR, F5, K, OUTS, GAME, and
+BATTER_HITS. `BATTER_TB` is active via the HR proxy model, so it is covered by
+`mlb-retrain-hr-v6` and `mlb-calibrate-hr` until a dedicated TB artifact exists.
 
 ### Trigger a Cloud Run Job (retrain/calibrate)
 
@@ -280,6 +311,15 @@ gcloud run jobs execute mlb-retrain-k-v1      --region=us-central1
 gcloud run jobs execute mlb-calibrate-k       --region=us-central1
 gcloud run jobs execute mlb-retrain-outs-v1   --region=us-central1
 # (no calibrate job for OUTS -- calibrator is fit inside retrain_outs_v1.py)
+
+gcloud run jobs execute mlb-retrain-game-v1   --region=us-central1
+gcloud run jobs execute mlb-calibrate-game    --region=us-central1
+
+gcloud run jobs execute mlb-retrain-batter-hits   --region=us-central1
+gcloud run jobs execute mlb-calibrate-batter-hits --region=us-central1
+
+# BATTER_TB currently uses the HR proxy artifact -- no dedicated retrain/calibrate
+# job exists until a true TB model pipeline is added.
 ```
 
 ### Discord bot scripts

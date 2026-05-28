@@ -43,7 +43,7 @@ class SystemConfig:
 
 
 # Canonical system order — used for ordered iteration, display, and digests.
-CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "F5", "BATTER_HITS", "GAME"]
+CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "F5", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
 
 SYSTEMS: dict[str, SystemConfig] = {
 
@@ -73,7 +73,7 @@ SYSTEMS: dict[str, SystemConfig] = {
         feature_csv="NRFI_Pro_System/data/model_features.csv",
         model_artifact="NRFI_Pro_System/models/xgb_halfinn_v17.json",
         build_sentinel="NRFI_Pro_System/data/last_build.json",
-        retrain_jobs=["mlb-retrain-nrfi-v17"],
+        retrain_jobs=["mlb-retrain-nrfi-v18"],
         calibrate_jobs=["mlb-calibrate-nrfi"],
         expected_hit_rate=0.55,
         tune_target="yrfi",
@@ -145,13 +145,25 @@ SYSTEMS: dict[str, SystemConfig] = {
         build_sentinel="BATTER_HITS_System/data/last_build.json",
         retrain_jobs=["mlb-retrain-batter-hits"],
         calibrate_jobs=["mlb-calibrate-batter-hits"],
-        log_only=True,           # LOG_ONLY gate: real stakes after 200 settled bets
         expected_hit_rate=0.52,  # update after 200 settled bets
         tune_target="batter_hits",
         tune_objective="count:poisson",
         tune_metric="poisson-nloglik",
         tune_metric_dir="min",
         tune_output="BATTER_HITS_System/models/batter_hits_tuned_params.json",
+    ),
+
+    "BATTER_TB": SystemConfig(
+        name="BATTER_TB",
+        icon="🟩",
+        builder_module="runners.build_hr_features",   # HR proxy model path
+        runner_module="runners.run_batter_tb",
+        feature_csv="HR_Pro/data/model_features.csv",
+        model_artifact="HR_Pro/models/xgb_hr_v6.json",
+        build_sentinel="HR_Pro/data/last_build.json",
+        retrain_jobs=["mlb-retrain-hr-v6"],            # proxy artifact
+        calibrate_jobs=["mlb-calibrate-hr"],
+        expected_hit_rate=0.52,
     ),
 
     "GAME": SystemConfig(
@@ -164,13 +176,25 @@ SYSTEMS: dict[str, SystemConfig] = {
         build_sentinel="GAME_Pro_System/data/last_build.json",
         retrain_jobs=["mlb-retrain-game-v1"],
         calibrate_jobs=["mlb-calibrate-game"],
-        log_only=True,           # LOG_ONLY gate: real stakes after 200 settled bets
         expected_hit_rate=0.52,  # binary moneyline; update after 200 settled bets
         tune_target="home_win",
         tune_objective="binary:logistic",
         tune_metric="auc",
         tune_metric_dir="max",
         tune_output="GAME_Pro_System/models/game_tuned_params.json",
+    ),
+
+    "1I": SystemConfig(
+        name="1I",
+        icon="1️⃣",
+        builder_module="runners.build_nrfi_features",  # derived from NRFI half-inning model
+        runner_module="runners.run_1i",
+        feature_csv="NRFI_Pro_System/data/model_features.csv",
+        model_artifact="NRFI_Pro_System/models/xgb_halfinn_v17.json",
+        build_sentinel="NRFI_Pro_System/data/last_build.json",
+        retrain_jobs=["mlb-retrain-nrfi-v18"],
+        calibrate_jobs=["mlb-calibrate-nrfi"],
+        expected_hit_rate=0.52,
     ),
 }
 
