@@ -12,8 +12,8 @@ Two-sided bet: HOME or AWAY moneyline.
 Edge = model_prob - fair_prob (after vig removal from both sides).
 Kelly sizing with cap from mlb_core.risk.exposure.
 
-Ships LOG_ONLY = True until 200 settled bets confirm calibration. Remove
-LOG_ONLY flag after post-hoc review.
+Active sizing is enabled; bets trigger when edge and Kelly sizing clear
+configured gates.
 
 run() is called by main.py for {"system": "GAME"}.
 """
@@ -32,8 +32,8 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
-# Log-only gate: remove once 200+ settled bets confirm calibration
-LOG_ONLY = True
+# Active sizing enabled.
+LOG_ONLY = False
 
 
 # -- Model + calibrator load --------------------------------------------------

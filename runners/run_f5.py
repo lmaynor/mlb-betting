@@ -387,13 +387,12 @@ import json as _json
 from mlb_core.rationale import build_rationale
 import numpy as _np
 
-# F1H and GAME ship log-only (stake=0, kelly_triggered=False).
-# To promote F1H to real sizing: remove "F1H" from LOG_ONLY_SYSTEMS.
-LOG_ONLY_SYSTEMS = {"F1H", "GAME"}
+# F1H ships as an active sub-market. GAME runs through runners/run_game.py
+# to avoid duplicate logging from this F5-derived proxy path.
+LOG_ONLY_SYSTEMS = set()
 _SCALAR_FALLBACKS = {"F1H": 0.94, "GAME": 0.82}
 _INNINGS_SUBMARKET_CONFIG = [
     ("F1H",  "extract_f1h_ml_odds",  "F1H",  "F1H"),
-    ("GAME", "extract_game_ml_odds", "GAME", "GAME"),
 ]
 
 
@@ -427,6 +426,8 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
     from mlb_core.odds.utils import american_to_implied_prob, remove_vig
     from mlb_core.odds.dk_scraper import resolve_team
     from mlb_core.odds.utils import kelly_stake, kelly_pct as kpct
+    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
+    from mlb_core.tracking.bet_tracker import _make_engine
 
     events = sgo.load_snapshot("Odds/sgo/latest.json")
     if not events:
@@ -438,6 +439,8 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
         "extract_game_ml_odds": extract_game_ml_odds,
     }
     results = {s: [] for s, _, _, _ in _INNINGS_SUBMARKET_CONFIG}
+    _engine = _make_engine("unused")
+    _all_game_pks = list(predictions_df["game_pk"].dropna().astype(int).unique())
 
     game_probs: dict = {}
     game_pks:   dict = {}
@@ -453,6 +456,8 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
         odds_map  = extractor(events)
         scalar    = scalars.get(scalar_key, _SCALAR_FALLBACKS.get(scalar_key, 1.0))
         log_only  = sys_key in LOG_ONLY_SYSTEMS
+        bankroll, prefetched = prefetch_exposure(_engine, _all_game_pks, run_date, system=sys_key)
+        pending: dict[int, float] = {}
 
         for event_id, odds_info in odds_map.items():
             away_abbr = resolve_team(odds_info["away_team"])
@@ -487,12 +492,22 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                 continue
 
             k_pct_val = round(kpct(edge, odds, cfg["kelly_fraction"]), 4)
-            would_be  = kelly_stake(edge, odds,
-                                    bankroll=cfg["BANKROLL"],
-                                    fraction=cfg["kelly_fraction"],
-                                    min_pct=cfg["min_kelly_pct"],
-                                    max_pct=cfg["max_kelly_pct"])
+            bankroll, cap = apply_cap(
+                bankroll, int(game_pk),
+                prefetched, pending,
+                cap_units=cfg.get("cap_units", 2.0),
+            )
+            would_be = min(kelly_stake(
+                edge, odds,
+                bankroll=bankroll,
+                fraction=cfg["kelly_fraction"],
+                min_pct=cfg["min_kelly_pct"],
+                max_pct=cfg["max_kelly_pct"],
+            ), cap)
             stake = 0.0 if log_only else would_be
+            kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0)
+            if kelly_triggered:
+                pending[game_pk] = pending.get(game_pk, 0.0) + stake
 
             results[sys_key].append({
                 "player":          f"{away_abbr} @ {home_abbr} ({(home_abbr if side=='HOME' else away_abbr)} {bt_prefix})",
@@ -507,7 +522,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                 "kelly_pct":       k_pct_val,
                 "odds":            int(odds),
                 "stake":           stake,
-                "kelly_triggered": not log_only,
+                "kelly_triggered": kelly_triggered,
                 "bookmaker":       odds_info.get("bookmaker"),
                 "notes":           build_rationale(dict(row), "F5"),
             })
@@ -565,7 +580,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     post_bets(bet_rows, system="F5", run_date=run_date)
 
-    # Innings sub-markets (F1H, GAME -- log-only until calibration confirmed)
+    # Innings sub-markets. GAME is handled by the standalone GAME runner.
     scalars     = _load_innings_scalars()
     sub_results = _score_innings_submarkets(today_df, scalars, cfg, run_date)
     sub_logged  = {}
@@ -599,5 +614,5 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
         post_bets(sub_rows, system=sys_key, run_date=run_date)
 
     logger.info(f"F5: {bets_logged} bets logged | " +
-                " | ".join(f"{k}: {v} (log-only)" for k, v in sub_logged.items()))
+                " | ".join(f"{k}: {v}" for k, v in sub_logged.items()))
     return {"bets_logged": bets_logged, "sub_logged": sub_logged, "bet_rows": bet_rows}

@@ -637,10 +637,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
-# STAGE 5 NOTE: PITCHER_ER ships log-only (stake=0, kelly_triggered=False)
-# for the first 2 weeks. The Gamma approximation via lambda_k proxy is a
-# placeholder -- enable real sizing only after post-hoc analysis confirms
-# edge predicts outcomes.
+# PITCHER_ER ships as an active K-derived sub-market.
 
 _LEAGUE_ER_PER_9 = 4.5   # 2026 season -- derived from median DK ER line (2.5) over median starter IP (~5.0)
 
@@ -649,14 +646,15 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
 
     Uses Gamma(shape=mu_er, scale=1) approximation where mu_er is derived
     from lambda_k (quality proxy) and avg_ip_L5 (durability proxy).
-    Ships log-only until calibration is confirmed.
     """
     import math
     import unicodedata
     from scipy.stats import gamma as _gamma
     from mlb_core.odds import sgo as _sgo
     from mlb_core.odds.sgo import extract_pitcher_er_odds
-    from mlb_core.odds.utils import american_to_implied_prob, remove_vig
+    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
+    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
+    from mlb_core.tracking.bet_tracker import _make_engine
 
     def _norm_name(s):
         if not isinstance(s, str): return ""
@@ -672,6 +670,11 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
 
     er_map  = extract_pitcher_er_odds(events)
     er_norm = {_norm_name(k): v for k, v in er_map.items()}
+
+    _engine = _make_engine("unused")
+    _game_pks = list(predictions_df["game_pk"].dropna().astype(int).unique())
+    _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="PITCHER_ER")
+    _pending: dict[int, float] = {}
 
     results = []
     for _, row in predictions_df.iterrows():
@@ -717,6 +720,23 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
         if edge < cfg["min_edge"]:
             continue
 
+        _bankroll, _cap = apply_cap(
+            _bankroll, int(row["game_pk"]),
+            _prefetched, _pending,
+            cap_units=cfg.get("cap_units", 2.0),
+        )
+        stake = min(kelly_stake(
+            edge, odds,
+            bankroll=_bankroll,
+            fraction=cfg["kelly_fraction"],
+            min_pct=cfg["min_kelly_pct"],
+            max_pct=cfg["max_kelly_pct"],
+        ), _cap)
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        if kelly_triggered and stake > 0:
+            gp = int(row.get("game_pk", 0))
+            _pending[gp] = _pending.get(gp, 0.0) + stake
+
         results.append({
             "player":          row["player"],
             "game_pk":         int(row["game_pk"]),
@@ -728,16 +748,16 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             "model_prob":      round(model_prob, 4),
             "market_prob":     round(fair, 4),
             "edge":            round(edge, 4),
-            "kelly_pct":       0.0,
+            "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
             "odds":            odds,
-            "stake":           0.0,
-            "kelly_triggered": False,
+            "stake":           round(stake, 4) if kelly_triggered else 0.0,
+            "kelly_triggered": kelly_triggered,
             "bookmaker":       odds_info.get("bookmaker"),
             "lambda_k":        round(lambda_k, 3),
             "mu_er":           round(mu_er, 3),
         })
 
-    logger.info(f"PITCHER_ER: {len(results)} qualifying bets (log-only, stake=0)")
+    logger.info(f"PITCHER_ER: {len(results)} qualifying bets")
     return results
 
 
@@ -799,7 +819,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     post_bets(k_rows,    system="K",    run_date=run_date)
     post_bets(outs_rows, system="OUTS", run_date=run_date)
 
-    # PITCHER_ER sub-market (log-only, stake=0 until calibration confirmed)
+    # PITCHER_ER sub-market
     er_bets    = _score_pitcher_er(today_df, cfg, run_date)
     er_tracker = BetTracker(cfg["bet_db"], system="PITCHER_ER")
     er_logged  = 0
@@ -827,5 +847,5 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             er_rows.append(bet)
     post_bets(er_rows, system="PITCHER_ER", run_date=run_date)
 
-    logger.info(f"K: {bets_logged} bets logged | PITCHER_ER: {er_logged} (log-only)")
+    logger.info(f"K: {bets_logged} bets logged | PITCHER_ER: {er_logged}")
     return {"bets_logged": bets_logged, "er_logged": er_logged, "bet_rows": bet_rows}

@@ -15,8 +15,8 @@ available, with a neutral fallback until richer run-count modeling lands.
 Bets are logged with bet_type in {"1I_AWAY", "1I_HOME", "1I_DRAW"}.
 settle_bets.py/_settle_nrfi already handles these bet types.
 
-Ships LOG_ONLY (stake=0, kelly_triggered=False) until calibration confirms
-edge. Flip LOG_ONLY = False once ~100 settled bets are in.
+Active sizing is enabled; bets trigger when edge and Kelly sizing clear
+configured gates.
 
 run() is called by main.py.
 """
@@ -29,8 +29,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Flip to False once ~100 settled bets confirm calibration
-LOG_ONLY = True
+# Active sizing enabled.
+LOG_ONLY = False
 
 _DEFAULT_BOTH_SCORE_SHARES = {"away": 1.0 / 3.0, "home": 1.0 / 3.0, "draw": 1.0 / 3.0}
 _SCORING_MASTER_KEYS = (

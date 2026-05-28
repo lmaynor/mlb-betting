@@ -6,8 +6,8 @@ Feature source: BATTER_HITS_System/data/model_features.csv
 Model: xgb_batter_hits_v1.json — count:poisson -> lambda (expected hits/game)
 Scoring: P(hits > line) = 1 - NegBin_CDF(floor(line), lambda, nb_alpha)
 
-Ships LOG-ONLY (stake=0, kelly_triggered=False) until 200 settled bets
-confirm calibration. Remove LOG_ONLY flag after post-hoc review.
+Active sizing is enabled; bets trigger when edge and Kelly sizing clear
+configured gates.
 
 run() is called by main.py.
 """
@@ -28,8 +28,8 @@ import xgboost as xgb
 
 logger = logging.getLogger(__name__)
 
-# Log-only gate: remove once 200+ settled bets confirm calibration
-LOG_ONLY = True
+# Active sizing enabled.
+LOG_ONLY = False
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

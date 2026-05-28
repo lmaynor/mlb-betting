@@ -6,9 +6,8 @@ Each batter's HR probability tilts a league-average discrete total-bases
 distribution. This keeps common 0.5 lines anchored to "records at least one
 total base" instead of treating total bases like a continuous Normal variable.
 
-Ships LOG_ONLY (stake=0, kelly_triggered=False) until post-hoc calibration
-confirms the proxy edge is real. Flip LOG_ONLY = False once ~100 settled bets
-are in and the ROI/AUC checks out.
+Active sizing is enabled; bets trigger when edge and Kelly sizing clear
+configured gates.
 
 run() is called by main.py.
 """
@@ -21,8 +20,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# Flip to False once ~100 settled bets confirm the proxy edge
-LOG_ONLY = True
+# Active sizing enabled.
+LOG_ONLY = False
 
 _LEAGUE_HR_RATE = 0.032
 _TB_VALUES = (0, 1, 2, 3, 4, 5, 6, 7, 8)
