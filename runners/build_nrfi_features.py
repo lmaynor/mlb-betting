@@ -109,13 +109,20 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
         # E05: pitch efficiency per batter faced in inning 1
         _pitches_per_pa = safe_rate(pitches, pa_count)
 
-        # E05: first-pitch strike rate (pitch_number col present in modern Statcast)
+        # E05: first-pitch strike rate. Use pitch_number if available; fall back to
+        # first row per at_bat_number (Statcast pitch master may omit pitch_number).
+        _strike_descs = {
+            "called_strike", "swinging_strike", "swinging_strike_blocked",
+            "foul", "foul_tip", "foul_bunt",
+        }
         if "pitch_number" in g.columns:
             _fp = g[g["pitch_number"] == 1]
-            _fp_str = int(_fp["description"].isin([
-                "called_strike", "swinging_strike", "swinging_strike_blocked",
-                "foul", "foul_tip", "foul_bunt",
-            ]).sum())
+        elif "at_bat_number" in g.columns:
+            _fp = g.groupby("at_bat_number", sort=False).head(1)
+        else:
+            _fp = g.iloc[:0]
+        if len(_fp) > 0:
+            _fp_str = int(_fp["description"].isin(_strike_descs).sum())
             _first_pitch_strike_pct = safe_rate(_fp_str, len(_fp))
         else:
             _first_pitch_strike_pct = np.nan
@@ -177,6 +184,13 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
              .reset_index(drop=True)
     )
     starts = starts.merge(_depth, on=["pitcher", "game_pk"], how="left")
+
+    # Compute days_rest from consecutive start dates. The statcast master does not
+    # contain pitcher_days_since_prev_game, so the agg_start value is always NaN.
+    starts = starts.sort_values(["pitcher", "game_date"]).reset_index(drop=True)
+    starts["days_rest"] = starts.groupby("pitcher")["game_date"].diff().dt.days
+    logger.info(f"  days_rest: computed from date diffs -- "
+                f"{starts['days_rest'].notna().sum():,}/{len(starts):,} starts filled")
 
     # inning_topbot == "Top" means the AWAY team is batting top of the 1st;
     # the pitcher facing them is the HOME pitcher. Verified 16/16 starts in
