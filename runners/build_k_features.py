@@ -279,6 +279,17 @@ def _build_pitcher_features(sc: pd.DataFrame) -> pd.DataFrame:
     starters["avg_ip_L5"] = _rolling_pitcher(starters, "starter_ip", 5)
     starters["avg_bf_L5"] = _rolling_pitcher(starters, "bf",         5)
 
+    # OUTS features: pitch volume and deep-outing tendency
+    starters["pitch_count_mean_L5"] = _rolling_pitcher(starters, "n_pitches", 5)
+    starters["pitch_count_std_L5"] = (
+        starters.groupby("pitcher")["n_pitches"]
+                .transform(lambda s: s.shift(1).rolling(5, min_periods=2).std())
+    )
+    starters["deep_outing_pct_L10"] = (
+        starters.groupby("pitcher")["starter_ip"]
+                .transform(lambda s: (s >= 5.0).astype(float).shift(1).rolling(10, min_periods=3).mean())
+    )
+
     starters["days_rest"] = (
         starters.groupby("pitcher")["game_date"]
                 .transform(lambda s: s.diff().dt.days.fillna(5))

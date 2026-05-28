@@ -17,13 +17,18 @@ cfg["gcs_outs_meta"]        = "OUTS_Pro_System/models/model_meta_outs_v1.json"
 cfg["gcs_outs_calibrator"]  = "OUTS_Pro_System/models/isotonic_calibrator_outs_v1.pkl"
 
 # OUTS feature list -- subset of K features focused on durability.
-# arsenal_* added 2026-05-27: pitch mix style affects outing length
-# (e.g. heavy-FB pitchers have different manager hooks vs. off-speed artists).
+# arsenal_* added 2026-05-27: pitch mix style affects outing length.
+# pitch_count_*/deep_outing_pct_L10 added 2026-05-28: direct pitch volume
+# and deep-outing tendency are the strongest signals for starter longevity.
 OUTS_FEATURES = [
     "avg_ip_L5",
     "avg_bf_L5",
     "days_rest",
     "short_rest",
+    # Pitch volume and deep-outing tendency (added 2026-05-28)
+    "pitch_count_mean_L5",
+    "pitch_count_std_L5",
+    "deep_outing_pct_L10",
     "k_pct_L5",
     "k_pct_L10",
     "velo_mean_L5",

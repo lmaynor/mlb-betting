@@ -75,6 +75,10 @@ OUTS_FEATURES = [
     "avg_bf_L5",
     "days_rest",
     "short_rest",
+    # Pitch volume and deep-outing tendency (added 2026-05-28)
+    "pitch_count_mean_L5",
+    "pitch_count_std_L5",
+    "deep_outing_pct_L10",
     # Pitcher quality (general, not K-specific)
     "k_pct_L5",
     "k_pct_L10",

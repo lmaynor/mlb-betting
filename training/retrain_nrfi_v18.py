@@ -79,6 +79,9 @@ PITCHER_FEATURES = [
     # E05: efficiency and opener detection
     "pitches_per_pa_L5", "first_pitch_strike_pct_L5",
     "avg_max_inning_L5", "opener_flag",
+    # Direct 1i outcome history (added 2026-05-28): fraction of recent starts where
+    # pitcher gave up a 1st-inning run -- most direct signal for P(NRFI/YRFI)
+    "i1_yrfi_rate_L5", "i1_yrfi_rate_L10",
     # Regime
     "post_pitch_clock",
 ]

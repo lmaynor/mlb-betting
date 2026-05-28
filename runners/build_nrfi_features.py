@@ -262,6 +262,17 @@ def build_pitcher_features(statcast_df: pd.DataFrame) -> pd.DataFrame:
     starts["opener_flag"] = starts["avg_max_inning_L5"].lt(3.0).astype(int)
     starts.loc[starts["avg_max_inning_L5"].isna(), "opener_flag"] = 0
 
+    # Direct 1i outcome history — fraction of recent starts where pitcher gave up a 1st-inning run.
+    # Most predictive NRFI feature: past behavior in the exact sub-market being priced.
+    starts["i1_yrfi_rate_L5"] = (
+        starts.groupby("pitcher")["yrfi"]
+              .transform(lambda x: x.shift(1).rolling(5, min_periods=1).mean())
+    )
+    starts["i1_yrfi_rate_L10"] = (
+        starts.groupby("pitcher")["yrfi"]
+              .transform(lambda x: x.shift(1).rolling(10, min_periods=1).mean())
+    )
+
     logger.info(f"  ✅ {len(starts):,} pitcher starts | YRFI rate: {starts['yrfi'].mean():.3f}")
     return starts
 
