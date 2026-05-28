@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-27 19:07 CST_
+_Last updated: 2026-05-28 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1699,6 +1699,17 @@ immutable once the season ends and never re-fetched unless force=True.
 between calls. Full 6-dataset backfill takes 15-25 min. Run via
 `/backfill-savant` from Cloud Shell proxy only -- not a Scheduler job.
 Gunicorn timeout 3600s is adequate for a full backfill.
+
+**`pitch_arsenals` CSV uses `pitcher` as the MLBAM ID column, not `player_id`.**
+The `_dedup_cols()` function formerly fell back to `["year"]`-only dedup when no
+named ID column matched, silently collapsing ~750 pitcher rows/season to 1.
+Fixed 2026-05-27 (commit 127a213): `["year","pitcher"]` added as a dedup
+candidate; year-only fallback removed entirely.
+To rebuild a corrupted master without re-fetching Savant (the per-year cache
+files are intact): call `/backfill-savant` with `{"dataset":"pitch_arsenals"}`
+and no `force` flag -- all years are skipped (already cached) but the master is
+rebuilt from the year files in ~5s. Expect `total_rows=0`, all years `-1`.
+If year files are also bad (< 50 rows), add `"force": true` to re-fetch Savant.
 
 **`scoring_master.csv` had no nightly refresh until 2026-05-14.** Bets logged
 before that date may have pending settlement for game_pks not in the master.

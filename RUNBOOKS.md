@@ -259,17 +259,20 @@ If job already exists, use `gcloud run jobs update JOB_NAME` with the same flags
 
 ```bash
 # Always run calibrate immediately after retrain
-gcloud run jobs execute mlb-retrain-nrfi-v17 --region=us-central1
-gcloud run jobs execute mlb-calibrate-nrfi   --region=us-central1
+gcloud run jobs execute mlb-retrain-nrfi-v17  --region=us-central1
+gcloud run jobs execute mlb-calibrate-nrfi    --region=us-central1
 
-gcloud run jobs execute mlb-retrain-hr-v6    --region=us-central1
-gcloud run jobs execute mlb-calibrate-hr     --region=us-central1
+gcloud run jobs execute mlb-retrain-hr-v6     --region=us-central1
+gcloud run jobs execute mlb-calibrate-hr      --region=us-central1
 
-gcloud run jobs execute mlb-retrain-f5-v5    --region=us-central1
-gcloud run jobs execute mlb-calibrate-f5     --region=us-central1
+gcloud run jobs execute mlb-retrain-f5-v5     --region=us-central1
+gcloud run jobs execute mlb-calibrate-f5      --region=us-central1
 
-gcloud run jobs execute mlb-retrain-k-v1     --region=us-central1
-gcloud run jobs execute mlb-calibrate-k      --region=us-central1
+# K and OUTS share model_features.csv -- rebuild K features first, then retrain both
+gcloud run jobs execute mlb-retrain-k-v1      --region=us-central1
+gcloud run jobs execute mlb-calibrate-k       --region=us-central1
+gcloud run jobs execute mlb-retrain-outs-v1   --region=us-central1
+# (no calibrate job for OUTS -- calibrator is fit inside retrain_outs_v1.py)
 ```
 
 ### Discord bot scripts
@@ -323,7 +326,19 @@ curl -s -X POST "https://mlb-betting-628109313129.us-central1.run.app/backfill-s
   -H "X-API-Key: $KEY" \
   -d '{"dataset":"exit_velocity_barrels","start_year":2026,"end_year":2026,"force":true}' \
   | python3 -m json.tool
+
+# Rebuild a corrupted master WITHOUT re-fetching Savant (instant, year files must be intact):
+# All years return -1 (skipped/cached) and master is rebuilt from them. total_rows=0 is correct.
+curl -s -X POST http://localhost:8081/backfill-savant \
+  -H "Content-Type: application/json" \
+  -d '{"dataset":"pitch_arsenals"}' \
+  | python3 -m json.tool
+# Verify: gsutil cat gs://BUCKET/Statcast/savant_pitch_arsenals_master.csv | wc -l  (expect ~8600+)
 ```
+
+Note: there is **no Cloud Run Job** named `savant-backfill`. Use the `/backfill-savant` endpoint
+only (direct URL with API key, or via proxy). The proxy times out after ~60s -- use the direct
+URL with `X-API-Key` for full multi-dataset backfills that take >60s.
 
 ### Backfill weather/scoring/umpires
 
