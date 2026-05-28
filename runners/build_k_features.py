@@ -422,15 +422,22 @@ def _build_opponent_team_features(sc: pd.DataFrame, target_date: pd.Timestamp,
 def _join_umpires(pf: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Join umpire L30 metrics (game-level) onto pitcher rows by game_pk.
 
-    The umpire master CSV in the lake carries L30 rolling per-umpire stats.
-    Notebook Section 2 also derives ump_k_boost_L30 from Statcast K rates;
-    we lift that derivation upstream into the umpire master if it's there,
-    otherwise leave NaN (XGBoost handles it).
+    Reads the raw umpscorecards master and computes rolling L30 features
+    per umpire before joining. The raw master has overall_accuracy,
+    total_run_impact, and consistency columns; L30 versions are derived here.
+
+    K_FEATURES uses ump_overall_accuracy_L30, ump_k_boost_L30, and
+    ump_consistency_L30. ump_k_boost_L30 is not in the scorecard master;
+    we substitute ump_total_run_impact_L30 (negative correlation with run
+    scoring proxies K-friendly zone) and alias it for config compatibility.
     """
     from mlb_core.storage import read_csv, exists
+
+    _ump_cols = ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30")
+
     if not exists("Umpires/umpscorecards_master.csv"):
         logger.info("K build: no umpire master — ump_* features will be NaN")
-        for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
+        for col in _ump_cols:
             if col not in pf.columns:
                 pf[col] = np.nan
         return pf
@@ -439,22 +446,53 @@ def _join_umpires(pf: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         umps = read_csv("Umpires/umpscorecards_master.csv", low_memory=False)
     except Exception as e:
         logger.warning(f"K build: umpire master read failed: {e}")
-        for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
+        for col in _ump_cols:
             if col not in pf.columns:
                 pf[col] = np.nan
         return pf
 
-    keep = ["game_pk"]
-    for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
-        if col in umps.columns:
-            keep.append(col)
-    if "game_pk" in umps.columns and len(keep) > 1:
-        umps["game_pk"] = pd.to_numeric(umps["game_pk"], errors="coerce")
-        umps = umps[keep].drop_duplicates("game_pk")
-        pf = pf.merge(umps, on="game_pk", how="left")
-    for col in ("ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"):
+    if "umpire" not in umps.columns or "game_pk" not in umps.columns:
+        logger.warning(f"K build: umpire master missing umpire/game_pk cols — {umps.columns.tolist()[:10]}")
+        for col in _ump_cols:
+            if col not in pf.columns:
+                pf[col] = np.nan
+        return pf
+
+    if "fully_valid" in umps.columns:
+        umps = umps[umps["fully_valid"] == True].copy()
+    umps["date"] = pd.to_datetime(umps["date"], errors="coerce")
+    umps = umps.sort_values(["umpire", "date"]).reset_index(drop=True)
+
+    # Compute rolling L30 from raw scorecard columns
+    for raw_col, out_col in [
+        ("overall_accuracy", "ump_overall_accuracy_L30"),
+        ("total_run_impact", "ump_total_run_impact_L30"),
+        ("consistency",      "ump_consistency_L30"),
+    ]:
+        if raw_col in umps.columns:
+            umps[out_col] = (
+                umps.groupby("umpire")[raw_col]
+                    .transform(lambda x: x.shift(1).rolling(30, min_periods=5).mean())
+            )
+        else:
+            umps[out_col] = np.nan
+
+    # ump_k_boost_L30 is not in scorecard data; alias total_run_impact as a proxy
+    # (lower run impact → tighter zone → more Ks). The alias keeps the feature
+    # name stable in K_FEATURES without requiring a config change.
+    umps["ump_k_boost_L30"] = umps.get("ump_total_run_impact_L30", np.nan)
+
+    keep_cols = ["game_pk", "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30"]
+    umps_slim = umps[[c for c in keep_cols if c in umps.columns]].drop_duplicates("game_pk")
+    umps_slim["game_pk"] = pd.to_numeric(umps_slim["game_pk"], errors="coerce")
+
+    pf = pf.merge(umps_slim, on="game_pk", how="left")
+    for col in _ump_cols:
         if col not in pf.columns:
             pf[col] = np.nan
+
+    n_matched = pf["ump_overall_accuracy_L30"].notna().sum()
+    logger.info(f"K build: ump features joined — {n_matched:,}/{len(pf):,} rows matched")
     return pf
 
 

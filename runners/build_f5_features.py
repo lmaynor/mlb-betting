@@ -158,6 +158,8 @@ def build_pitcher_rolling_features(sc: pd.DataFrame) -> pd.DataFrame:
                 .apply(agg_start)
                 .reset_index(drop=True))
     starts = starts.sort_values(["pitcher", "game_date"]).reset_index(drop=True)
+    # pitcher_days_since_prev_game is not in the statcast master; compute from dates.
+    starts["days_rest"] = starts.groupby("pitcher")["game_date"].diff().dt.days
 
     # Rolling windows
     RATE_COLS = ["k_pct", "bb_pct", "xwoba", "hard_hit_pct", "barrel_pct", "whiff_pct"]
