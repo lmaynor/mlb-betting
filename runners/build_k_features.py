@@ -678,21 +678,51 @@ def _join_pitch_arsenals(pf: pd.DataFrame) -> pd.DataFrame:
         logger.warning(f"K build: pitch_arsenals load failed: {e}")
         return pf
 
-    if "player_id" not in ar.columns or "year" not in ar.columns:
-        logger.warning(f"K build: pitch_arsenals missing player_id/year -- cols: {ar.columns.tolist()[:15]}")
+    # Strip leading/trailing spaces from column names (Savant CSVs sometimes have them)
+    ar.columns = [c.strip() for c in ar.columns]
+
+    logger.info(
+        f"K build: pitch_arsenals master loaded -- {len(ar):,} rows, "
+        f"{ar['year'].nunique() if 'year' in ar.columns else '?'} seasons, "
+        f"cols={ar.columns.tolist()[:20]}"
+    )
+
+    if len(ar) < 50:
+        logger.warning(
+            f"K build: pitch_arsenals master suspiciously small ({len(ar)} rows) -- "
+            f"likely corrupted. Re-run backfill with --force. Arsenal features NaN."
+        )
         return pf
 
-    ar["player_id"] = pd.to_numeric(ar["player_id"], errors="coerce")
+    # pitch_arsenals CSV uses "pitcher" as the ID column; generic datasets use "player_id"
+    id_col = next((c for c in ["player_id", "pitcher"] if c in ar.columns), None)
+    if id_col is None or "year" not in ar.columns:
+        logger.warning(
+            f"K build: pitch_arsenals missing ID column (player_id/pitcher) or year -- "
+            f"cols: {ar.columns.tolist()}"
+        )
+        return pf
+
+    ar[id_col] = pd.to_numeric(ar[id_col], errors="coerce")
     ar["year"] = pd.to_numeric(ar["year"], errors="coerce")
-    ar = ar.dropna(subset=["player_id", "year"]).copy()
-    ar["player_id"] = ar["player_id"].astype(int)
+    ar = ar.dropna(subset=[id_col, "year"]).copy()
+    ar[id_col] = ar[id_col].astype(int)
     ar["year"] = ar["year"].astype(int)
+
+    logger.info(
+        f"K build: pitch_arsenals valid rows={len(ar):,}, "
+        f"id_col={id_col!r}, "
+        f"years={sorted(ar['year'].unique().tolist())}, "
+        f"sample_ids={ar[id_col].head(5).tolist()}"
+    )
 
     # Identify n_* pitch usage columns (values are 0-100 percentages)
     n_cols = [c for c in ar.columns if c.startswith("n_") and c != "n_pitches"]
     if not n_cols:
-        logger.warning("K build: no n_* usage columns in pitch_arsenals master")
+        logger.warning(f"K build: no n_* usage columns in pitch_arsenals master -- cols: {ar.columns.tolist()}")
         return pf
+
+    logger.info(f"K build: pitch_arsenals n_cols found: {n_cols}")
 
     for c in n_cols:
         ar[c] = pd.to_numeric(ar[c], errors="coerce").fillna(0.0)
@@ -700,23 +730,36 @@ def _join_pitch_arsenals(pf: pd.DataFrame) -> pd.DataFrame:
     fb_cols  = [c for c in n_cols if c in {"n_ff", "n_si", "n_fc"}]
     brk_cols = [c for c in n_cols if c in {"n_sl", "n_st", "n_cu", "n_sv"}]
 
+    logger.info(f"K build: arsenal fb_cols={fb_cols}, brk_cols={brk_cols}")
+
     ar["arsenal_fb_usage"]       = (ar[fb_cols].sum(axis=1) if fb_cols else 0.0) / 100.0
     ar["arsenal_breaking_usage"] = (ar[brk_cols].sum(axis=1) if brk_cols else 0.0) / 100.0
 
-    # Normalized Shannon entropy: 0 = all pitches are one type, 1 = perfectly mixed
-    usage_mat = ar[n_cols].values / 100.0
+    # Normalized Shannon entropy over active pitch types only (usage > 1%)
+    # Use only active cols to avoid eps-inflation across unused pitch columns.
+    active_mask = ar[n_cols].values > 1.0
+    n_active = np.maximum(active_mask.sum(axis=1), 2)
+    usage_active = np.where(active_mask, ar[n_cols].values / 100.0, 0.0)
+    row_totals = usage_active.sum(axis=1, keepdims=True)
+    row_totals = np.where(row_totals > 0, row_totals, 1.0)
+    probs = usage_active / row_totals
     eps = 1e-9
-    safe = np.where(usage_mat > 0, usage_mat, eps)
-    raw_entropy = -(safe * np.log2(safe)).sum(axis=1)
-    n_active = np.maximum((ar[n_cols].values > 1.0).sum(axis=1), 2)
+    safe_probs = np.where(probs > 0, probs, eps)
+    raw_entropy = -(safe_probs * np.log2(safe_probs)).sum(axis=1)
     ar["arsenal_pitch_diversity"] = raw_entropy / np.log2(n_active)
 
-    ar_slim = ar[["player_id", "year", "arsenal_fb_usage",
+    ar_slim = ar[[id_col, "year", "arsenal_fb_usage",
                    "arsenal_breaking_usage", "arsenal_pitch_diversity"]].copy()
 
     pf = pf.copy()
     pf["_ar_pid"]  = pd.to_numeric(pf["pitcher"], errors="coerce").fillna(-1).astype(int)
     pf["_ar_year"] = pd.to_datetime(pf["game_date"], errors="coerce").dt.year.fillna(-1).astype(int)
+
+    logger.info(
+        f"K build: joining arsenal to pf -- "
+        f"pf pitchers sample={pf['_ar_pid'].head(5).tolist()}, "
+        f"pf years={sorted(pf['_ar_year'].unique().tolist())[:5]}"
+    )
 
     # Try exact season first, then fall back to prior season
     for year_delta in (0, 1):
@@ -728,7 +771,7 @@ def _join_pitch_arsenals(pf: pd.DataFrame) -> pd.DataFrame:
         merged = sub.merge(
             ar_slim,
             left_on=["_ar_pid", "_lookup_year"],
-            right_on=["player_id", "year"],
+            right_on=[id_col, "year"],
             how="left",
         )
         for c in new_cols:
@@ -737,6 +780,11 @@ def _join_pitch_arsenals(pf: pd.DataFrame) -> pd.DataFrame:
     pf = pf.drop(columns=["_ar_pid", "_ar_year"], errors="ignore")
     n_filled = pf["arsenal_fb_usage"].notna().sum()
     logger.info(f"K build: arsenal features -- {n_filled:,}/{len(pf):,} rows filled")
+    if n_filled == 0:
+        logger.warning(
+            "K build: arsenal features 0 rows filled -- "
+            "pitcher IDs or years may not match between pf and arsenal master"
+        )
     return pf
 
 

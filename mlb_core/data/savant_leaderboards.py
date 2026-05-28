@@ -299,6 +299,7 @@ def _dedup_cols(dataset: str, columns: list[str]) -> list[str]:
     """Return the best deduplication key columns available for this dataset."""
     candidates = [
         ["year", "player_id"],
+        ["year", "pitcher"],       # pitch_arsenals uses "pitcher" as the ID column
         ["year", "mlbam_id"],
         ["year", "last_name", "first_name"],
         ["year", "last_name"],
@@ -306,7 +307,9 @@ def _dedup_cols(dataset: str, columns: list[str]) -> list[str]:
     for candidate in candidates:
         if all(c in columns for c in candidate):
             return candidate
-    return ["year"] if "year" in columns else []
+    # Fallback to year-only is intentionally omitted -- it would dedup to 1 row/season.
+    logger.warning(f"savant_leaderboards: no valid dedup key found for {dataset} -- cols: {columns[:20]}")
+    return []
 
 
 # ── Public API: backfill ──────────────────────────────────────────────────
