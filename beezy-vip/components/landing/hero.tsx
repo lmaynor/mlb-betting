@@ -34,24 +34,23 @@ export async function Hero() {
         {/* Left: headline + copy + CTAs */}
         <div className="hero-left" style={{ padding: '48px 20px 40px', borderRight: B }}>
           <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>
-            5 models live &middot; Paper mode &middot; {stats.total_bets} settled bets
+            Daily MLB card / score-ranked picks / {stats.total_bets} settled bets
           </div>
-          <h1 className="hero-h1" style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1.12, letterSpacing: '-0.02em', color: 'var(--text)', marginBottom: '12px' }}>
-            MLB betting models<br />that show their work.
+          <h1 className="hero-h1" style={{ fontSize: '28px', fontWeight: 700, lineHeight: 1.12, color: 'var(--text)', marginBottom: '12px' }}>
+            Today&apos;s MLB card,<br />ranked by conviction.
           </h1>
           <p style={{ fontSize: '13px', lineHeight: 1.65, color: 'var(--sec)', marginBottom: '22px', maxWidth: '400px' }}>
-            Five XGBoost models built on 946k+ pitch rows. Every bet logged.
-            Every loss shown. Paid access opens after the first model clears a
-            200-bet validation gate.
+            Beezy turns model edge, market price, and Kelly signal into a simple
+            0-100 score so the best plays are easy to scan, screenshot, and track.
           </p>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <Link href="/cheat-sheet"
               className="mono" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '7px 16px', background: 'var(--accent)', color: 'var(--bg)', textDecoration: 'none' }}>
-              Today&apos;s Picks &rarr;
+              Open Daily Card
             </Link>
             <Link href="/models"
               className="mono" style={{ fontSize: '11px', letterSpacing: '0.02em', padding: '7px 16px', border: B, color: 'var(--sec)', textDecoration: 'none' }}>
-              View methodology &rarr;
+              View methodology
             </Link>
           </div>
         </div>

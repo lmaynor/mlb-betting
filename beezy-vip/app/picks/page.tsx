@@ -1,31 +1,26 @@
 export const dynamic = 'force-dynamic'
 
 import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { DateBar } from '@/components/picks/date-bar'
 import { FilterBar } from '@/components/picks/filter-bar'
-import { DateBar }   from '@/components/picks/date-bar'
 import { PicksTable } from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
-import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title:       'MLB Picks — All Systems',
+  title: 'MLB Picks - All Systems',
   description: 'Every MLB pick from all Beezy.VIP machine learning systems.',
 }
 
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams
 
-  // date values are already lowercase from FilterBar (today/yesterday/last7)
-  const date   = sp.date   ?? 'today'
-  // status from FilterBar is uppercase (WIN/LOSS/PENDING/ALL) — API expects lowercase
+  const date = sp.date ?? 'today'
   const status = sp.status && sp.status !== 'ALL' ? sp.status.toLowerCase() : undefined
-  // market from FilterBar is uppercase (NRFI/HR/etc) — API expects as-is
   const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
-  // book: FilterBar sends display name, API expects lowercase no-spaces
-  const book   = sp.book   && sp.book   !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
-  // sort + dir for client-side sort (passed as props to PicksTable)
-  const sort   = (sp.sort  ?? 'date') as 'date' | 'edge' | 'odds'
-  const dir    = (sp.dir   ?? 'desc') as 'asc' | 'desc'
+  const book = sp.book && sp.book !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
+  const sort = (sp.sort ?? 'score') as 'date' | 'score' | 'edge' | 'odds'
+  const dir = (sp.dir ?? 'desc') as 'asc' | 'desc'
 
   const picks = await getPicks({
     system: market,
@@ -44,13 +39,34 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
       <DateBar />
       <FilterBar />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: '#f5f5f7' }}>Picks</h1>
-          <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>MLB · All books · All systems</p>
+        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#f5f5f7' }}>Picks</h1>
+            <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>
+              MLB / all books / ranked by Beezy Score
+            </p>
+          </div>
+          <a
+            href="/cheat-sheet"
+            className="mono"
+            style={{
+              fontSize: '11px',
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: '#0a0a0c',
+              background: '#10b981',
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+            }}
+          >
+            Daily Card
+          </a>
         </div>
         <Suspense fallback={
-          <div style={{ padding: '40px', textAlign: 'center', border: '0.5px solid #1f1f24' }}>
-            <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>Loading picks…</p>
+          <div style={{ padding: '40px', textAlign: 'center', border: '0.5px solid #1f1f24', borderRadius: 'var(--radius)' }}>
+            <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>Loading picks...</p>
           </div>
         }>
           <PicksContent searchParams={searchParams} />
