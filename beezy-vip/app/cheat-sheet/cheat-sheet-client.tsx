@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { Bet } from '@/lib/types'
-import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
 import { pickLabel, SYSTEM_COLOR } from '@/lib/tokens'
 import { ScoreBadge } from '@/components/ui/primitives'
 
@@ -61,40 +61,6 @@ function splitNotes(notes: string | null | undefined) {
     .split(' / ')
     .map(s => s.trim())
     .filter(Boolean)
-}
-
-function tweetPickLine(bet: EnrichedBet, index: number) {
-  const score = beezyscore(bet)
-  const tier = TIER_LABEL[scoreTier(score)].replace(' PLAY', '')
-  const label = shorten(pickLabel(bet), 72)
-  const book = bet.book ? ` ${bet.book}` : ''
-  const edge = fmtEdge(bet.edge)
-  return `${index}. ${tier} ${score} - ${label} (${fmtOdds(bet.odds)}${book})${edge ? ` | Edge ${edge}` : ''}`
-}
-
-function shorten(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value
-  return `${value.slice(0, Math.max(0, maxLength - 3)).trim()}...`
-}
-
-function buildTweetText(picks: EnrichedBet[], today: string) {
-  if (picks.length === 0) {
-    return `Beezy MLB Daily Card - ${today}\n\nNo card today. Back for the next model run.\n\nbeezy.vip/cheat-sheet`
-  }
-
-  for (const count of [3, 2, 1]) {
-    const text = [
-      `Beezy MLB Daily Card - ${today}`,
-      '',
-      'Top plays:',
-      ...picks.slice(0, count).map((bet, i) => tweetPickLine(bet, i + 1)),
-      '',
-      'Full card: beezy.vip/cheat-sheet',
-      'Results: beezy.vip/results',
-    ].join('\n')
-    if (text.length <= 280 || count === 1) return text
-  }
-  return `Beezy MLB Daily Card - ${today}\n\nFull card: beezy.vip/cheat-sheet`
 }
 
 function PickCard({ bet, rank, expanded, onToggle }: {
@@ -287,7 +253,6 @@ export function CheatSheetClient({
   const [filter, setFilter] = useState<FilterKey>('all')
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
   const [showMore, setShowMore] = useState(false)
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
 
   const sorted = useMemo(() => [...picks].sort((a, b) => beezyscore(b) - beezyscore(a)), [picks])
   const filtered = filterBets(sorted, filter)
@@ -311,18 +276,6 @@ export function CheatSheetClient({
 
   function toggleAll() {
     setExpandedIds(allExpanded ? new Set() : new Set(filtered.map(b => b.id)))
-  }
-
-  async function copyTweet() {
-    const text = buildTweetText(filtered, today)
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopyState('copied')
-      window.setTimeout(() => setCopyState('idle'), 1800)
-    } catch {
-      setCopyState('error')
-      window.setTimeout(() => setCopyState('idle'), 2200)
-    }
   }
 
   return (
@@ -375,23 +328,21 @@ export function CheatSheetClient({
               }}>
                 DAILY CARD
               </div>
-              <button
-                onClick={copyTweet}
+              <div
                 className="mono"
                 style={{
                   fontSize: '8px',
                   fontWeight: 800,
                   letterSpacing: '0.08em',
-                  color: copyState === 'copied' ? '#0a0a0c' : '#0a0a0c',
-                  background: copyState === 'copied' ? '#facc15' : '#10b981',
-                  border: 'none',
+                  color: '#f5f5f7',
+                  background: '#111114',
+                  border: '1px solid #2a2a36',
                   borderRadius: 'var(--radius-sm)',
                   padding: '5px 9px',
-                  cursor: 'pointer',
                 }}
               >
-                {copyState === 'copied' ? 'COPIED' : copyState === 'error' ? 'COPY FAILED' : 'COPY TWEET'}
-              </button>
+                @BEEZYVIP
+              </div>
             </div>
           </div>
 
@@ -570,7 +521,7 @@ export function CheatSheetClient({
           background: '#06060a',
         }}>
           <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.08em' }}>
-            BEEZY.VIP / MLB PICKS
+            BEEZY.VIP / MLB DAILY CARD
           </span>
           <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.06em' }}>
             @BEEZYVIP

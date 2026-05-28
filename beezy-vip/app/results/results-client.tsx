@@ -426,25 +426,20 @@ export function ResultsClient({
 
       {/* Per-system stats table -- groups by type with subtle dividers */}
       {initialStats.length > 0 && (
-        <div style={{ border: B, marginBottom: '24px', overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', background: '#111114', borderBottom: B }}>
-            {['System', 'Bets', 'Win Rate', 'ROI', 'P&L', 'Avg Edge'].map(h => (
-              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', padding: '9px 12px' }}>{h}</div>
-            ))}
-          </div>
-          {(() => {
-            // Render stats rows grouped by type, with group header rows
-            const groupOrder = ['Game Lines', 'Innings Windows', 'Pitcher Props', 'Batter Props']
-            const statsBySystem = Object.fromEntries(initialStats.map(s => [s.system, s]))
-            const rows: React.ReactNode[] = []
+        <>
+          <div className="results-model-desktop" style={{ border: B, marginBottom: '24px', overflowX: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', background: '#111114', borderBottom: B }}>
+              {['System', 'Bets', 'Win Rate', 'ROI', 'P&L', 'Avg Edge'].map(h => (
+                <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', padding: '9px 12px' }}>{h}</div>
+              ))}
+            </div>
+            {Object.entries(SYSTEM_GROUPS).flatMap(([groupName, systems]) => {
+              const groupStats = systems
+                .map(s => initialStats.find(stat => stat.system === s))
+                .filter(Boolean) as SystemStats[]
+              if (groupStats.length === 0) return []
 
-            groupOrder.forEach(groupName => {
-              const groupSystems = SYSTEM_GROUPS[groupName as keyof typeof SYSTEM_GROUPS]
-              const groupStats   = groupSystems.map(s => statsBySystem[s]).filter(Boolean)
-              if (groupStats.length === 0) return
-
-              // Group header
-              rows.push(
+              return [
                 <div key={`hdr-${groupName}`} style={{
                   display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
                   borderBottom: B, background: '#0a0a0c',
@@ -454,34 +449,74 @@ export function ResultsClient({
                     fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
                     color: '#2a2a31',
                   }}>{groupName}</div>
+                </div>,
+                ...groupStats.map(s => {
+                  const r = parseFloat(String(s.roi ?? 0))
+                  const pnl = parseFloat(String(s.total_pnl ?? 0))
+                  const pc = PILL[s.system] ?? '#a1a1aa'
+                  return (
+                    <div key={s.system} style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
+                      borderBottom: B, alignItems: 'center',
+                    }}>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>
+                        {s.total_bets}<span style={{ color: '#2a2a31' }}>/{GATE}</span>
+                      </div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r >= 0 ? '#10b981' : '#ef4444' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}%</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? '#10b981' : '#ef4444' }}>{pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#10b981' }}>+{parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%</div>
+                    </div>
+                  )
+                }),
+              ]
+            })}
+          </div>
+
+          <div className="results-model-mobile" style={{ marginBottom: '24px' }}>
+            {Object.entries(SYSTEM_GROUPS).map(([groupName, systems]) => {
+              const groupStats = systems
+                .map(s => initialStats.find(stat => stat.system === s))
+                .filter(Boolean) as SystemStats[]
+              if (groupStats.length === 0) return null
+
+              return (
+                <div key={groupName} style={{ marginBottom: '14px' }}>
+                  <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '8px' }}>{groupName}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {groupStats.map(s => {
+                      const r = parseFloat(String(s.roi ?? 0))
+                      const pnl = parseFloat(String(s.total_pnl ?? 0))
+                      const pc = PILL[s.system] ?? '#a1a1aa'
+                      return (
+                        <div key={s.system} style={{ border: B, borderRadius: 'var(--radius)', background: '#0d0d12', padding: '12px 13px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
+                            <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: pc }}>{s.system}</span>
+                            <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: r >= 0 ? '#10b981' : '#ef4444' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}% ROI</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
+                            {[
+                              ['Bets', `${s.total_bets}/${GATE}`, '#f5f5f7'],
+                              ['Win', `${parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%`, '#f5f5f7'],
+                              ['P&L', `${pnl >= 0 ? '+' : ''}${(pnl / 10).toFixed(2)}u`, pnl >= 0 ? '#10b981' : '#ef4444'],
+                              ['Edge', `+${parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%`, '#10b981'],
+                            ].map(([label, value, color]) => (
+                              <div key={label}>
+                                <div className="mono" style={{ fontSize: '8px', color: '#71717a', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '3px' }}>{label}</div>
+                                <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color }}>{value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
-
-              groupStats.forEach(s => {
-                const r   = parseFloat(String(s.roi ?? 0))
-                const pnl = parseFloat(String(s.total_pnl ?? 0))
-                const pc  = PILL[s.system] ?? '#a1a1aa'
-                rows.push(
-                  <div key={s.system} style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
-                    borderBottom: B, alignItems: 'center',
-                  }}>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>
-                      {s.total_bets}<span style={{ color: '#2a2a31' }}>/{GATE}</span>
-                    </div>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#f5f5f7' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r >= 0 ? '#10b981' : '#ef4444' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}%</div>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? '#10b981' : '#ef4444' }}>{pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u</div>
-                    <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#10b981' }}>+{parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%</div>
-                  </div>
-                )
-              })
-            })
-
-            return rows
-          })()}
-        </div>
+            })}
+          </div>
+        </>
       )}
 
       {/* System filter chips -- grouped with labels */}

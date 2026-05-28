@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { DiscordMark } from '@/components/ui/discord-mark'
+import { XMark } from '@/components/ui/x-mark'
 
 const B = '0.5px solid #1f1f24'
+const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
+const X_URL = 'https://x.com/BeezyVIP'
 
 export function Footer() {
   return (
@@ -15,11 +18,18 @@ export function Footer() {
             <p style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6, marginBottom: '12px' }}>
               Machine learning models for sports betting. Built on data, not gut feelings.
             </p>
-            <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#5865f2', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}
-              aria-label="Join Discord">
-              <DiscordMark size={18} color="currentColor" />
-            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#5865f2', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}
+                aria-label="Join Discord">
+                <DiscordMark size={18} color="currentColor" />
+              </a>
+              <a href={X_URL} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}
+                aria-label="Follow Beezy.VIP on X">
+                <XMark size={15} color="currentColor" />
+              </a>
+            </div>
           </div>
           {[
             { title: 'Picks',   links: [['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['F5','/picks/mlb/f5'],['Strikeouts','/picks/mlb/k']] },

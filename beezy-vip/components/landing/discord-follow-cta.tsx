@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { DiscordMark } from '@/components/ui/discord-mark'
+import { XMark } from '@/components/ui/x-mark'
 
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
+const X_URL = 'https://x.com/BeezyVIP'
 
 export function DiscordFollowCTA() {
   return (
@@ -67,6 +69,30 @@ export function DiscordFollowCTA() {
           >
             <DiscordMark size={16} color="currentColor" />
             Join free
+          </a>
+          <a
+            href={X_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mono"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '7px',
+              fontSize: '11px',
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              padding: '7px 11px',
+              background: '#0a0a0c',
+              color: '#f5f5f7',
+              border: '0.5px solid #2a2a31',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+            }}
+          >
+            <XMark size={14} color="currentColor" />
+            Follow
           </a>
           <Link
             href="/results"

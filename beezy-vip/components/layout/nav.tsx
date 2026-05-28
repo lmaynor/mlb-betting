@@ -4,8 +4,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
+import { XMark } from '@/components/ui/x-mark'
 
 const B = '0.5px solid #1f1f24'
+const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
+const X_URL = 'https://x.com/BeezyVIP'
 const NAV_LINKS = [
   { label: 'Picks',       href: '/picks' },
   { label: 'Daily Card',  href: '/cheat-sheet' },
@@ -42,7 +45,11 @@ export function Nav() {
 
         {/* Desktop: Discord + auth */}
         <div className="nav-desktop" style={{ gap: '12px' }}>
-          <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" className="mono" aria-label="Follow Beezy.VIP on X"
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '29px', height: '29px', border: '0.5px solid #2a2a31', color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
+            <XMark size={14} color="currentColor" />
+          </a>
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="mono"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 12px', background: '#5865f2', color: '#fff', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
             <DiscordMark size={15} color="currentColor" />
             Discord
@@ -74,7 +81,11 @@ export function Nav() {
               </button>
             </SignInButton>
           )}
-          <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.VIP on X"
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '27px', height: '27px', border: '0.5px solid #2a2a31', color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
+            <XMark size={13} color="currentColor" />
+          </a>
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="mono"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '5px 9px', background: '#5865f2', color: '#fff', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
             <DiscordMark size={13} color="currentColor" />
             Discord

@@ -88,7 +88,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .ticker-track {
   display: flex;
   width: max-content;
-  animation: ticker-scroll 40s linear infinite;
+  animation: ticker-scroll 30s linear infinite;
 }
 
 .ticker-track:hover { animation-play-state: paused; }
@@ -184,6 +184,19 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   .models-strip    { grid-template-columns: 1fr !important; }
   .model-stats-5up { grid-template-columns: 1fr 1fr !important; }
   .model-config-grid { grid-template-columns: 1fr !important; }
+
+  .live-ticker-shell {
+    padding: 5px 0 !important;
+    max-height: 30px;
+  }
+
+  .live-ticker-shell .ticker-track {
+    animation-duration: 18s;
+  }
+
+  .live-ticker-shell span {
+    font-size: 9px !important;
+  }
 }
 
 /* Article body */
@@ -213,10 +226,19 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .picks-mobile  { display: none; }
 .results-desktop { display: block; }
 .results-mobile  { display: none; }
+.results-model-desktop { display: block; }
+.results-model-mobile  { display: none; }
+.models-table-desktop { display: block; }
+.models-cards-mobile { display: none; }
 
 @media (max-width: 768px) {
   .picks-desktop { display: none !important; }
   .picks-mobile  { display: block !important; }
   .results-desktop { display: none !important; }
   .results-mobile  { display: block !important; }
+  .results-model-desktop { display: none !important; }
+  .results-model-mobile  { display: block !important; }
+  .models-table-desktop { display: none !important; }
+  .models-cards-mobile { display: block !important; }
+  .pipeline-grid { grid-template-columns: 1fr !important; }
 }
