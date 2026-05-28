@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-27 22:37 CST_
+_Last updated: 2026-05-27 23:55 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -766,9 +766,9 @@ secretmanager.secretAccessor.
 - `mlb-retrain-hr-meta` (DEPRECATED -- exits non-zero; use mlb-retrain-hr-v6)
 - `mlb-retrain-f5-v5` (full F5 retrain; added 2026-05-19)
 - `mlb-retrain-hr-v6` (full HR retrain; added 2026-05-19)
-- `mlb-retrain-nrfi-v17`
+- `mlb-retrain-nrfi-v18`
 - `mlb-retrain-k-v1` (includes leakage guard; skip with K_SKIP_LEAKAGE_CHECK=1)
-- `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v17; run after any NRFI retrain)
+- `mlb-calibrate-nrfi` (fits isotonic calibrator for NRFI v18; run after any NRFI retrain)
 - `mlb-calibrate-f5` (fits isotonic calibrator for F5 v5; run after any F5 retrain)
 - `mlb-calibrate-k` (fits lambda calibrator for K v1; run after any K retrain)
 - `mlb-calibrate-hr` (fits isotonic calibrator for HR v6; run after any HR retrain)
@@ -1741,6 +1741,30 @@ inputs -> model output clusters at base rate. The right fix sequence after any
 data gap: `/backfill-data` -> `/build-all-features` -> retrain + calibrate ->
 `/model-health` to confirm.
 
+**Statcast master is PA-level (one row per plate appearance), not pitch-level.**
+Confirmed: 963,532 rows / 12,784 games ≈ 75.4 rows/game, matching MLB average
+~76 PAs/game. Columns like `pitch_number` and `pitcher_days_since_prev_game` do
+not exist in the master. Aggregations that call `len(g)` count plate appearances,
+not pitches -- so `pitch_count_mean_L5 ≈ 24` is actually batters faced, not the
+~90 pitches actually thrown. This makes `pitch_count_mean_L5` redundant with
+`avg_bf_L5`. No code fix needed (XGBoost uses the signal correctly), but do not
+interpret the raw value as a pitch count. Any feature that depends on pitch
+sequences (e.g. `pitch_number == 1`) requires the full per-pitch Statcast feed,
+not the PA-level master.
+
+**`pitcher_days_since_prev_game` does not exist in the statcast master.**
+NRFI and F5 builders formerly read this non-existent column, leaving `days_rest`
+97% NaN. Fix (commit a56dc53 / ebc088c): after `starts` is built via groupby,
+compute: `starts["days_rest"] = starts.groupby("pitcher")["game_date"].diff().dt.days`.
+Applied in both `build_nrfi_features.py` and `build_f5_features.py`.
+
+**`pitch_number` is absent from the statcast master.** The master stores one row
+per PA outcome; individual pitch rows are not retained. `first_pitch_strike_pct_L5`
+was 100% NaN because `g[g["pitch_number"] == 1]` always returned zero rows. Fix
+(commit a56dc53) in `build_nrfi_features.py`: fallback branch uses
+`g.groupby("at_bat_number", sort=False).head(1)` to approximate the first pitch
+per PA. Post-fix NaN rate is ~6% (matching ump feature NaN from game_pk join gaps).
+
 ### 15.5 Model artifacts and calibrators
 
 **Calibrators must be refit after any model output range change.** Isotonic
@@ -1758,7 +1782,7 @@ runner using a stale calibrator fit on the old booster's outputs. The
 calibrate jobs 30 min later via a background thread. Manual retrain sequence
 per system:
 ```
-NRFI: mlb-retrain-nrfi-v17 -> mlb-calibrate-nrfi
+NRFI: mlb-retrain-nrfi-v18 -> mlb-calibrate-nrfi
 F5:   mlb-retrain-f5-v5    -> mlb-calibrate-f5
 K:    mlb-retrain-k-v1     -> mlb-calibrate-k
 HR:   mlb-retrain-hr-v6    -> mlb-calibrate-hr
@@ -1834,11 +1858,24 @@ penalty-only scaling if `k_per_9_L5` is missing.
 run information into the half-inning target. Removed in retrain. Never add
 same-game batter stats as features in inning-1 models.
 
-**OUTS `market_prob` AUC (0.658) exceeds `model_prob` AUC (0.556).** The book's
-implied probability is a better predictor of OUTS outcomes than the model.
-OUTS wins are driven by betting market favorites, not genuine model edge.
-Vulnerable to line movement and book limits. Do not promote OUTS past paper
-gate on ROI alone -- require positive CLV t-stat > 2 first.
+**OUTS v1 retrain metrics (2026-05-27):** R²=0.042, MAE=2.388, RMSE=3.060,
+calibration_bias=+0.111, 27 features, best_iteration=708. `market_prob` AUC
+(0.637) substantially exceeds `model_prob` AUC (0.559). The book's implied
+probability is a far better predictor of starter durability than the pre-game
+model. OUTS wins are driven by betting market favorites, not genuine model edge.
+Vulnerable to line movement and book limits. Do not promote OUTS past the paper
+gate on ROI alone -- require positive CLV t-stat > 2 first. Longer-term fix
+candidates: binary P(≥5 IP) target, manager tendency features, or remove from
+active betting entirely until model improves.
+
+**NRFI v18 retrain metrics (2026-05-27):** cv_mean_auc=0.5698, auc_oos=0.5907,
+fold breakdown: 2024=0.5944, 2025=0.5834, 2026=0.5316 (1,287 samples -- thin).
+The 2026 fold decline (0.5316) is partly sample-size noise but also reflects
+the E05 drift concern. The `days_rest` and `first_pitch_strike_pct` fixes
+populated those features correctly but did not shift OOS AUC meaningfully
+(pre-fix run was 0.5908). Both features were already being seen by XGBoost via
+NaN imputation with feature_means; the fix changes the values but the signal
+was weak regardless.
 
 **GAME Pro v1 first retrain metrics (2026-05-24):** AUC OOS 0.5565, walk-forward
 AUC 0.5441, Brier 0.2451, 42 features, best_iteration=15. The low best_iter=15
@@ -2160,7 +2197,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-05-27 22:37 CST_
+_Last updated: 2026-05-27 23:55 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
