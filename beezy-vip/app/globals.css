@@ -211,8 +211,12 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 
 .picks-desktop { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .picks-mobile  { display: none; }
+.results-desktop { display: block; }
+.results-mobile  { display: none; }
 
 @media (max-width: 768px) {
   .picks-desktop { display: none !important; }
   .picks-mobile  { display: block !important; }
+  .results-desktop { display: none !important; }
+  .results-mobile  { display: block !important; }
 }

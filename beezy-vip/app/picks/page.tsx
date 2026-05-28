@@ -6,6 +6,7 @@ import { DateBar } from '@/components/picks/date-bar'
 import { FilterBar } from '@/components/picks/filter-bar'
 import { PicksTable } from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
+import { siteDateKey } from '@/lib/dates'
 
 export const metadata: Metadata = {
   title: 'MLB Picks - All Systems',
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams
 
-  const date = sp.date ?? 'today'
+  const date = sp.date ?? siteDateKey()
   const status = sp.status && sp.status !== 'ALL' ? sp.status.toLowerCase() : undefined
   const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
   const book = sp.book && sp.book !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined

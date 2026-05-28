@@ -1,6 +1,7 @@
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { PicksTable }   from '@/components/picks/picks-table'
 import { SystemBadge }  from '@/components/ui/primitives'
+import { siteDateKey }  from '@/lib/dates'
 import Link             from 'next/link'
 
 const B = '0.5px solid #1f1f24'
@@ -30,7 +31,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
   const meta = SYSTEM_META[system]
 
   const [picks, allStats] = await Promise.all([
-    getPicks({ system, date: 'today', limit: 50 }).catch(() => []),
+    getPicks({ system, date: siteDateKey(), limit: 50 }).catch(() => []),
     apiGetStats().then(s => s.bySystem).catch(() => []),
   ])
 
@@ -112,7 +113,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         {picks.length === 0 ? (
           <div style={{ border: B, padding: '40px', textAlign: 'center' as const }}>
             <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No qualifying {system} picks today.</p>
-            <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '6px' }}>Model runs at 16:00 UTC after lineups post.</p>
+            <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '6px' }}>Model runs in Central Time after lineups post.</p>
           </div>
         ) : (
           <PicksTable bets={picks} />

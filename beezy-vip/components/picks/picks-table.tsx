@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { B, SYSTEM_PILL, TEAM_ABBREV, pickLabel } from '@/lib/tokens'
+import { formatDateKey } from '@/lib/dates'
 import type { Bet } from '@/lib/types'
 
 const PAGE_SIZE = 30
@@ -81,7 +82,7 @@ function fmtOdds(o: number) {
 }
 
 function fmtDate(d: string) {
-  return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return formatDateKey(d, { month: 'short', day: 'numeric' })
 }
 
 function fmtEdge(e: number | null | undefined) {

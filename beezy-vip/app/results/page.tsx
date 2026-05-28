@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { ResultsClient } from './results-client'
-import { DateBar } from '@/components/picks/date-bar'
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 
@@ -18,9 +17,8 @@ export default async function ResultsPage() {
   ])
 
   return (
-    <>
-      <Suspense><DateBar /></Suspense>
+    <Suspense fallback={null}>
       <ResultsClient initialPicks={picks} initialStats={bySystem} />
-    </>
+    </Suspense>
   )
 }

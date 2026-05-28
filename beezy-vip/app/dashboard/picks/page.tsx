@@ -64,7 +64,7 @@ export default async function DashboardPicksPage() {
       {pending.length === 0 ? (
         <div className="border border-[var(--border)] p-12 text-center mb-8">
           <p className="mono text-xs text-muted">No qualifying picks for today yet.</p>
-          <p className="mono text-xs text-muted mt-1">Model runs at 13:00 UTC after lineups post.</p>
+          <p className="mono text-xs text-muted mt-1">Model runs in Central Time after lineups post.</p>
         </div>
       ) : (
         <div className="border border-[var(--border)] mb-8 overflow-x-auto">

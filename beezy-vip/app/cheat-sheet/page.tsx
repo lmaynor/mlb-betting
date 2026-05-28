@@ -8,6 +8,7 @@ import type { Bet } from '@/lib/types'
 import { beezyscore } from '@/lib/beezy-score'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
 import { SlateStrip } from '@/components/today/slate-strip'
+import { formatCentralDate } from '@/lib/dates'
 import playerMap from '@/public/headshots/player_map.json'
 
 export const metadata: Metadata = {
@@ -67,7 +68,7 @@ function headshotUrl(name: string | null): string | null {
 }
 
 function dateLabel(): string {
-  return new Date().toLocaleDateString('en-US', {
+  return formatCentralDate(new Date(), {
     weekday: 'long',
     month: 'long',
     day: 'numeric',

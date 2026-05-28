@@ -1,10 +1,13 @@
 'use client'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
 import { B, SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
+import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats } from '@/lib/types'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
@@ -160,6 +163,7 @@ function buildEdgeChart(bets: Bet[]) {
 }
 
 const fmtDate = (d: string) => { const p = d.split('-'); return `${p[1]}/${p[2]}` }
+const fmtDisplayDate = (d: string) => formatDateKey(d, { month: 'short', day: 'numeric' })
 
 const PnLTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
@@ -209,9 +213,58 @@ function exportCSV(bets: Bet[]) {
   const url  = URL.createObjectURL(blob)
   const a    = document.createElement('a')
   a.href = url
-  a.download = `beezy-results-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `beezy-results-${siteDateKey()}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function ResultBetCard({ bet }: { bet: Bet }) {
+  const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
+
+  return (
+    <div className="card-hover" style={{
+      border: B,
+      borderRadius: 'var(--radius)',
+      background: '#0d0d12',
+      boxShadow: 'var(--shadow-card)',
+      padding: '13px 14px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '11px',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 }}>
+          <SystemBadge system={bet.system} />
+          <span className="mono" style={{ fontSize: '11px', color: '#71717a', whiteSpace: 'nowrap' }}>
+            {fmtDisplayDate(bet.game_date)}
+          </span>
+        </div>
+        <ResultPill result={bet.result} />
+      </div>
+
+      <div>
+        <div className="mono" style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '5px' }}>{game}</div>
+        <div style={{ fontSize: '15px', lineHeight: 1.35, fontWeight: 750, color: '#f5f5f7' }}>{pickLabel(bet)}</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px', alignItems: 'end' }}>
+        {[
+          { label: 'Odds', value: formatOdds(bet.odds), color: '#f5f5f7' },
+          { label: 'Edge', value: bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--', color: '#10b981' },
+          { label: 'Book', value: bet.book ?? '--', color: '#a1a1aa' },
+        ].map(item => (
+          <div key={item.label} style={{ minWidth: 0 }}>
+            <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '3px' }}>{item.label}</div>
+            <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: item.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+          </div>
+        ))}
+        <div>
+          <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '3px' }}>P&L</div>
+          <PnL value={bet.profit} />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function ResultsClient({
@@ -239,7 +292,6 @@ export function ResultsClient({
     ), [initialPicks])
 
   const filtered = useMemo(() => {
-    setPage(0)
     const f = initialPicks.filter(p => {
       if (dateFilter && p.game_date !== dateFilter) return false
       if (system !== 'ALL' && p.system !== system) return false
@@ -260,6 +312,9 @@ export function ResultsClient({
     () => buildPnLChart(initialPicks, system), [initialPicks, system]
   )
   const edgeRows = useMemo(() => buildEdgeChart(filtered), [filtered])
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE)
+  const pageIndex = Math.min(page, Math.max(0, pageCount - 1))
+  const pageStart = pageIndex * PAGE_SIZE
 
   const overall = initialStats.reduce(
     (acc, s) => ({
@@ -276,7 +331,7 @@ export function ResultsClient({
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Results</h1>
         <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>
-          All settled bets &middot; Paper mode &middot; Past performance is not indicative of future results
+          All settled bets &middot; Central Time &middot; Paper mode &middot; Past performance is not indicative of future results
         </p>
       </div>
 
@@ -402,7 +457,7 @@ export function ResultsClient({
                 </div>
               )
 
-              groupStats.forEach((s, i) => {
+              groupStats.forEach(s => {
                 const r   = parseFloat(String(s.roi ?? 0))
                 const pnl = parseFloat(String(s.total_pnl ?? 0))
                 const pc  = PILL[s.system] ?? '#a1a1aa'
@@ -436,7 +491,7 @@ export function ResultsClient({
           {/* ALL chip */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginRight: '4px' }}>System</span>
-            <Chip label={`ALL (${countsBySystem['ALL'] ?? 0})`} active={system === 'ALL'} onClick={() => setSystem('ALL')} />
+            <Chip label={`ALL (${countsBySystem['ALL'] ?? 0})`} active={system === 'ALL'} onClick={() => { setSystem('ALL'); setPage(0) }} />
           </div>
 
           {/* Grouped system chips */}
@@ -445,7 +500,7 @@ export function ResultsClient({
               <GroupLabel label={groupName} />
               {systems.map(s => (
                 <Chip key={s} label={`${SYSTEM_LABEL[s] ?? s}${countsBySystem[s] ? ` (${countsBySystem[s]})` : ''}`} active={system === s}
-                  color={PILL[s]} onClick={() => setSystem(s)} />
+                  color={PILL[s]} onClick={() => { setSystem(s); setPage(0) }} />
               ))}
             </div>
           ))}
@@ -458,7 +513,7 @@ export function ResultsClient({
             {RESULTS.map(r => (
               <Chip key={r} label={r} active={result === r}
                 color={r === 'WIN' ? '#10b981' : r === 'LOSS' ? '#ef4444' : r === 'VOID' ? '#71717a' : undefined}
-                onClick={() => setResult(r)} />
+                onClick={() => { setResult(r); setPage(0) }} />
             ))}
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -500,7 +555,8 @@ export function ResultsClient({
           <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No bets found.</p>
         </div>
       ) : (
-        <div style={{ border: B, overflowX: 'auto' }}>
+        <>
+        <div className="results-desktop" style={{ border: B, overflowX: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: '#111114', borderBottom: B }}>
             {([
               { label: 'Date',   key: 'date' as const },
@@ -529,12 +585,12 @@ export function ResultsClient({
               <div key={col.label} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>{col.label}</div>
             ))}
           </div>
-          {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((bet, i) => {
+          {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => {
             const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
             return (
-              <div key={(bet as any).id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: B, alignItems: 'center' }}>
+              <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: B, alignItems: 'center' }}>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#71717a' }}>
-                  {new Date(bet.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {fmtDisplayDate(bet.game_date)}
                 </div>
                 <div style={{ padding: '8px 12px' }}><SystemBadge system={bet.system} /></div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game}</div>
@@ -547,7 +603,7 @@ export function ResultsClient({
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}
                 </div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: '#71717a', textTransform: 'capitalize' }}>
-                  {(bet as any).book ?? '--'}
+                  {bet.book ?? '--'}
                 </div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
                 <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} /></div>
@@ -557,21 +613,45 @@ export function ResultsClient({
           {/* Pagination */}
           {filtered.length > PAGE_SIZE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: B, background: '#0a0a0c' }}>
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, background: 'transparent', color: page === 0 ? '#2a2a31' : '#71717a' }}>
-                ← Prev
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex === 0 ? 'default' : 'pointer', border: B, background: 'transparent', color: pageIndex === 0 ? '#2a2a31' : '#71717a' }}>
+                Prev
               </button>
               <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
               </span>
-              <button onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / PAGE_SIZE) - 1, p + 1))}
-                disabled={page >= Math.ceil(filtered.length / PAGE_SIZE) - 1}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: page >= Math.ceil(filtered.length / PAGE_SIZE) - 1 ? 'default' : 'pointer', border: B, background: 'transparent', color: page >= Math.ceil(filtered.length / PAGE_SIZE) - 1 ? '#2a2a31' : '#71717a' }}>
-                Next →
+              <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                disabled={pageIndex >= pageCount - 1}
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex >= pageCount - 1 ? 'default' : 'pointer', border: B, background: 'transparent', color: pageIndex >= pageCount - 1 ? '#2a2a31' : '#71717a' }}>
+                Next
               </button>
             </div>
           )}
         </div>
+        <div className="results-mobile">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => (
+              <ResultBetCard key={bet.id ?? i} bet={bet} />
+            ))}
+          </div>
+          {filtered.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 2px', marginTop: '12px' }}>
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
+                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius-sm)', background: 'transparent', color: pageIndex === 0 ? '#2a2a31' : '#71717a' }}>
+                Prev
+              </button>
+              <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
+                {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                disabled={pageIndex >= pageCount - 1}
+                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex >= pageCount - 1 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius-sm)', background: 'transparent', color: pageIndex >= pageCount - 1 ? '#2a2a31' : '#71717a' }}>
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+        </>
       )}
     </div>
   )

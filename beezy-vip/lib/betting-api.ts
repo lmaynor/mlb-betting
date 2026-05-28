@@ -3,6 +3,7 @@
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
 import type { Bet, SystemStats } from '@/lib/types'
+import { siteDateKey } from '@/lib/dates'
 
 const API_URL  = process.env.BETTING_API_URL  ?? ''
 const API_KEY  = process.env.BETTING_API_KEY  ?? ''
@@ -48,7 +49,7 @@ export interface StatsResponse {
 // -- Public fetchers --
 
 export async function apiGetTodayPicks(): Promise<Bet[]> {
-  const data = await apiFetch<PicksResponse>('/api/public/picks/today', 60)
+  const data = await apiFetch<PicksResponse>(`/api/public/picks?date=${siteDateKey()}`, 60)
   return data.picks
 }
 
