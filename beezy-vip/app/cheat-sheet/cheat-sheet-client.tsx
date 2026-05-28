@@ -355,6 +355,9 @@ export function CheatSheetClient({
               <div style={{ fontSize: '22px', fontWeight: 850, color: '#f5f5f7', lineHeight: 1 }}>
                 BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
               </div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
+                MLB Daily Card
+              </div>
               <div className="mono" style={{ fontSize: '9px', color: '#737383', letterSpacing: '0.1em', marginTop: '5px' }}>
                 {today}
               </div>
@@ -393,9 +396,20 @@ export function CheatSheetClient({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
-            <p style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.45, maxWidth: '245px' }}>
-              Screenshot-ready top plays, ranked by Beezy Score.
-            </p>
+            {filtered.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <span className="mono" style={{ fontSize: '9px', color: '#737383', letterSpacing: '0.08em' }}>
+                  TOP PLAY
+                </span>
+                <span style={{ fontSize: '13px', color: '#d4d4d8', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {pickLabel(filtered[0])}
+                </span>
+              </div>
+            ) : (
+              <p style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.45, maxWidth: '245px' }}>
+                No card posted yet.
+              </p>
+            )}
             <button
               onClick={toggleAll}
               className="mono"
