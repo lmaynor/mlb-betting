@@ -133,6 +133,17 @@ SYSTEM_CONFIG = {
         "num_boost_round": 2000,
         "filter_col":    "batter_hits",
     },
+    "BATTER_TB": {
+        "gcs_features":  "BATTER_TB_System/data/model_features.csv",
+        "target":        "batter_total_bases",
+        "objective":     "count:poisson",
+        "eval_metric":   "poisson-nloglik",
+        "metric_dir":    "min",
+        "gcs_output":    "BATTER_TB_System/models/batter_tb_tuned_params.json",
+        "early_stopping": 30,
+        "num_boost_round": 2000,
+        "filter_col":    "batter_total_bases",
+    },
     "GAME": {
         "gcs_features":  "GAME_Pro_System/data/model_features.csv",
         "target":        "home_win",

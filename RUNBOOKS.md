@@ -86,14 +86,12 @@ When adding a new system `FOO_System/`:
 Current system dirs in Dockerfile:
 ```
 mlb_core/ NRFI_Pro_System/ HR_Pro/ F5_Pro_System/ K_Pro_System/
-OUTS_Pro_System/ BATTER_HITS_System/ GAME_Pro_System/
+OUTS_Pro_System/ BATTER_HITS_System/ BATTER_TB_System/ GAME_Pro_System/
 runners/ training/ main.py setup.py tweet_drafter.py
 ```
 
-`BATTER_TB` currently runs as an HR-proxy market and does not have a
-`BATTER_TB_System/` directory or standalone artifact. It is deployed through
-`runners/run_batter_tb.py` and covered by the HR feature/model jobs until a
-true TB model is added.
+`BATTER_TB` now has a dedicated `BATTER_TB_System/` package, feature table,
+model artifact, and lambda calibrator. It no longer uses the HR proxy artifact.
 
 ### Proxy gotchas
 
@@ -166,11 +164,11 @@ curl -s -X POST http://localhost:8081/run \
 
 curl -s -X POST http://localhost:8081/build-all-features \
   -H "Content-Type: application/json" \
-  -d '{"systems":["HR","NRFI","K","F5","BATTER_HITS","GAME"],"continue_on_error":true}' | python3 -m json.tool
+  -d '{"systems":["HR","NRFI","K","F5","BATTER_HITS","BATTER_TB","GAME"],"continue_on_error":true}' | python3 -m json.tool
 ```
 
-`BATTER_TB` and `1I` do not need separate feature builds today. `BATTER_TB`
-uses HR features; `1I` uses NRFI half-inning features.
+`1I` does not need a separate feature build today; it uses NRFI half-inning
+features. `BATTER_TB` has its own feature build and model artifact.
 
 ### Delete bets and re-run clean
 
@@ -282,9 +280,8 @@ cd ~/mlb-betting
 PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_model_jobs.sh
 ```
 
-This configures retrain/calibrate jobs for NRFI, HR, F5, K, OUTS, GAME, and
-BATTER_HITS. `BATTER_TB` is active via the HR proxy model, so it is covered by
-`mlb-retrain-hr-v6` and `mlb-calibrate-hr` until a dedicated TB artifact exists.
+This configures retrain/calibrate jobs for NRFI, HR, F5, K, OUTS, GAME,
+BATTER_HITS, and BATTER_TB.
 
 ### Trigger a Cloud Run Job (retrain/calibrate)
 
@@ -318,8 +315,8 @@ gcloud run jobs execute mlb-calibrate-game    --region=us-central1
 gcloud run jobs execute mlb-retrain-batter-hits   --region=us-central1
 gcloud run jobs execute mlb-calibrate-batter-hits --region=us-central1
 
-# BATTER_TB currently uses the HR proxy artifact -- no dedicated retrain/calibrate
-# job exists until a true TB model pipeline is added.
+gcloud run jobs execute mlb-retrain-batter-tb     --region=us-central1
+gcloud run jobs execute mlb-calibrate-batter-tb   --region=us-central1
 ```
 
 ### Discord bot scripts

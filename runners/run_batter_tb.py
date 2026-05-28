@@ -1,165 +1,342 @@
 """
-runners/run_batter_tb.py — BATTER_TB Pro v1 daily runner.
+runners/run_batter_tb.py - BATTER_TB Pro v1 daily runner.
 
-Scores batter total-bases O/U props using the HR v6 model as a quality proxy.
-Each batter's HR probability tilts a league-average discrete total-bases
-distribution. This keeps common 0.5 lines anchored to "records at least one
-total base" instead of treating total bases like a continuous Normal variable.
-
-Active sizing is enabled; bets trigger when edge and Kelly sizing clear
-configured gates.
-
-run() is called by main.py.
+Uses the dedicated BATTER_TB count model to estimate expected total bases and
+convert that lambda to O/U probabilities with a negative-binomial CDF.
 """
 from __future__ import annotations
 
+import json
 import logging
+import pickle
+import tempfile
 from datetime import date
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import xgboost as xgb
+
+from runners.run_batter_hits import (
+    _fetch_today_weather,
+    _join_pitcher_features,
+    _join_weather,
+    _negbin_p_over,
+    _negbin_p_under,
+    _normalize_name,
+)
 
 logger = logging.getLogger(__name__)
 
-# Active sizing enabled.
 LOG_ONLY = False
 
-_LEAGUE_HR_RATE = 0.032
-_TB_VALUES = (0, 1, 2, 3, 4, 5, 6, 7, 8)
-_TB_BASE_PROBS = (0.360, 0.255, 0.170, 0.055, 0.090, 0.025, 0.025, 0.012, 0.008)
-_TB_TILT_STRENGTH = 0.75
+
+def _load_model(cfg: dict) -> tuple[xgb.Booster, list[str], dict, float]:
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import download_model, read_bytes
+
+    booster = xgb.Booster()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if GCS_BUCKET:
+            local = download_model(cfg["gcs_model_xgb"], Path(tmpdir) / "xgb_tb.json")
+            booster.load_model(str(local))
+            meta_raw = read_bytes(cfg["gcs_model_meta"])
+        else:
+            booster.load_model(cfg["model_xgb"])
+            meta_raw = Path(cfg["model_meta"]).read_bytes()
+
+    meta = json.loads(meta_raw)
+    features = meta.get("features")
+    if not features:
+        raise RuntimeError("BATTER_TB model_meta missing 'features' key")
+    booster.best_ntree_limit = meta.get("best_iteration", 0)
+    nb_alpha = float(meta.get("nb_alpha", 0.15))
+    feature_means = meta.get("feature_means", {}) or {}
+    logger.info(
+        "BATTER_TB model loaded | features=%d | nb_alpha=%.4f | MAE=%s",
+        len(features), nb_alpha, meta.get("mae_oos", "?"),
+    )
+    return booster, features, feature_means, nb_alpha
 
 
-def _quality_mult_from_hr(model_hr_rate: float) -> float:
-    quality_mult = 1.0 + 0.25 * (model_hr_rate - _LEAGUE_HR_RATE) / _LEAGUE_HR_RATE
-    return max(0.6, min(1.6, quality_mult))
+def _load_calibrator(cfg: dict):
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.storage import exists, read_bytes
+
+    gcs_key = cfg.get("gcs_calibrator")
+    if GCS_BUCKET and gcs_key and exists(gcs_key):
+        try:
+            return pickle.loads(read_bytes(gcs_key))
+        except Exception as e:
+            logger.warning("BATTER_TB calibrator load failed: %s", e)
+            return None
+    local_path = cfg.get("calibrator")
+    if local_path and Path(local_path).exists():
+        try:
+            with open(local_path, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            logger.warning("BATTER_TB calibrator load failed: %s", e)
+    return None
 
 
-def _tb_distribution(model_hr_rate: float) -> dict[int, float]:
-    """Return a discrete total-bases distribution tilted by HR quality."""
-    import math
+def _candidates_from_lineups(sched, lineups, batter_latest):
+    rows = []
+    posted_game_pks = set()
 
-    quality_mult = _quality_mult_from_hr(float(model_hr_rate))
-    base_mean = sum(v * p for v, p in zip(_TB_VALUES, _TB_BASE_PROBS))
-    tilt = math.log(quality_mult)
-    weights = [
-        p * math.exp(_TB_TILT_STRENGTH * (v - base_mean) * tilt)
-        for v, p in zip(_TB_VALUES, _TB_BASE_PROBS)
-    ]
-    total = sum(weights)
-    if total <= 0:
-        return dict(zip(_TB_VALUES, _TB_BASE_PROBS))
-    return {v: w / total for v, w in zip(_TB_VALUES, weights)}
+    if not lineups.empty:
+        for _, r in lineups.iterrows():
+            game_pk = r["game_pk"]
+            posted_game_pks.add(game_pk)
+            batter_id = r["player_id"]
+            bat_row = batter_latest[batter_latest["batter"] == batter_id]
+            if bat_row.empty:
+                continue
+            bat = bat_row.iloc[0].to_dict()
+            bat.update({
+                "game_pk": game_pk,
+                "home_team": r.get("home_team"),
+                "away_team": r.get("away_team"),
+                "batter_team_side": r["team_side"],
+                "batting_order": int(r["batting_order"]),
+                "player_name": r["player_name"],
+            })
+            rows.append(bat)
+
+    if "ewma_batting_order" in batter_latest.columns:
+        for _, game in sched.iterrows():
+            if game["game_pk"] in posted_game_pks:
+                continue
+            for side, team in [("home", game["home_team"]), ("away", game["away_team"])]:
+                home_col = batter_latest["home_team"] if "home_team" in batter_latest.columns else pd.Series("", index=batter_latest.index)
+                away_col = batter_latest["away_team"] if "away_team" in batter_latest.columns else pd.Series("", index=batter_latest.index)
+                plausible = batter_latest[
+                    (home_col == team) | (away_col == team)
+                ]
+                for _, bat_r in plausible.sort_values("ewma_batting_order").head(9).iterrows():
+                    bat = bat_r.to_dict()
+                    bat.update({
+                        "game_pk": game["game_pk"],
+                        "home_team": game["home_team"],
+                        "away_team": game["away_team"],
+                        "batter_team_side": side,
+                        "batting_order": int(round(bat.get("ewma_batting_order", 5))),
+                    })
+                    rows.append(bat)
+
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows).drop_duplicates(subset=["batter", "game_pk"], keep="first")
+    out["is_home"] = (out["batter_team_side"] == "home").astype(int)
+    return out
 
 
-def _tb_p_over_under(line: float, model_hr_rate: float) -> tuple[float, float, float]:
-    """Return (P over, P under, projected TB) for an O/U line."""
-    dist = _tb_distribution(model_hr_rate)
-    p_over = sum(p for tb, p in dist.items() if tb > line)
-    p_under = sum(p for tb, p in dist.items() if tb < line)
-    proj_tb = sum(tb * p for tb, p in dist.items())
-    return float(p_over), float(p_under), float(proj_tb)
+def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.data.lineups import _pull_lineup_date, get_today_schedule
+    from mlb_core.storage import read_csv
+    from runners.build_batter_tb_features import TB_PARK_FACTORS
+    from runners.build_batter_hits_features import STADIUMS_ROOF, TEAM_NAME_TO_ABBR
+
+    sched = get_today_schedule(run_date)
+    if sched.empty:
+        logger.warning("BATTER_TB: no games for %s", run_date)
+        return pd.DataFrame()
+
+    feat_key = cfg.get("gcs_model_features", cfg["model_features"])
+    try:
+        feat_df = read_csv(feat_key, low_memory=False) if GCS_BUCKET else pd.read_csv(cfg["model_features"], low_memory=False)
+    except Exception as e:
+        logger.error("BATTER_TB: feature load failed: %s", e)
+        return pd.DataFrame()
+
+    feat_df["game_date"] = pd.to_datetime(feat_df["game_date"])
+    batter_latest = feat_df.sort_values("game_date").groupby("batter", as_index=False).last()
+
+    pitcher_latest = pd.DataFrame()
+    pf_key = cfg.get("gcs_pitcher_tb_features", cfg.get("pitcher_tb_features", ""))
+    if pf_key:
+        try:
+            pf_raw = read_csv(pf_key, low_memory=False) if GCS_BUCKET else pd.read_csv(cfg["pitcher_tb_features"], low_memory=False)
+            if not pf_raw.empty:
+                pf_raw["game_date"] = pd.to_datetime(pf_raw["game_date"])
+                pitcher_latest = pf_raw.sort_values("game_date").groupby("pitcher", as_index=False).last()
+        except Exception as e:
+            logger.warning("BATTER_TB: pitcher feature load failed: %s", e)
+
+    try:
+        lineups = _pull_lineup_date(run_date, verbose=False)
+    except Exception as e:
+        logger.warning("BATTER_TB: lineup fetch failed: %s", e)
+        lineups = pd.DataFrame()
+
+    candidates = _candidates_from_lineups(sched, lineups, batter_latest)
+    if candidates.empty:
+        return pd.DataFrame()
+
+    out = _join_pitcher_features(candidates, sched, pitcher_latest)
+    out = _join_weather(out, _fetch_today_weather(sched))
+
+    home_abbr = out["home_team"].map(TEAM_NAME_TO_ABBR)
+    out["tb_park_factor"] = home_abbr.map(TB_PARK_FACTORS).fillna(1.0)
+    out["is_dome"] = home_abbr.map(lambda t: 1 if STADIUMS_ROOF.get(t) else 0).fillna(0).astype(int)
+    out["temperature_f"] = out.get("temperature_f", pd.Series(70, index=out.index)).fillna(70)
+    out["post_pitch_clock"] = 1
+    return out
 
 
-def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.DataFrame:
-    """Score BATTER_TB O/U bets from HR model predictions.
-
-    predictions_df is the output of run_hr._build_predictions — one row per
-    HR-priced batter with model_prob = P(HR). We map model_prob through a
-    discrete TB distribution to get P(TB > line) / P(TB < line), then apply Kelly.
-    """
+def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
+    from mlb_core.config import GCS_BUCKET
+    from mlb_core.notify.discord import post_error
+    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
     from mlb_core.odds import sgo as _sgo
     from mlb_core.odds.sgo import extract_batter_tb_odds
-    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
-    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
+    from mlb_core.risk.exposure import apply_cap, prefetch_exposure
+    from mlb_core.storage import check_build_sentinel
     from mlb_core.tracking.bet_tracker import _make_engine
-    from runners.run_hr import _normalize_name
+
+    fresh, reason = _sgo.check_snapshot_freshness("Odds/sgo/latest.json")
+    if not fresh:
+        logger.error("BATTER_TB: aborting - %s", reason)
+        return pd.DataFrame()
+
+    sok, sreason = check_build_sentinel(GCS_BUCKET, "BATTER_TB_System")
+    if not sok:
+        msg = f"BATTER_TB: aborting - stale/failed feature build: {sreason}"
+        logger.error(msg)
+        post_error("BATTER_TB", msg)
+        return pd.DataFrame()
+
+    booster, features, feature_means, nb_alpha = _load_model(cfg)
+    calibrator = _load_calibrator(cfg)
+    feat_df = _build_today_feature_rows(cfg, run_date)
+    if feat_df.empty:
+        return pd.DataFrame()
 
     events = _sgo.load_snapshot("Odds/sgo/latest.json")
-    if not events:
-        logger.warning("BATTER_TB: SGO snapshot empty")
+    tb_odds = extract_batter_tb_odds(events) if events else {}
+    if not tb_odds:
+        logger.warning("BATTER_TB: no odds in SGO snapshot")
         return pd.DataFrame()
 
-    tb_map = extract_batter_tb_odds(events)
-    if not tb_map:
-        logger.warning("BATTER_TB: no TB odds in snapshot")
+    X = feat_df.reindex(columns=features).apply(pd.to_numeric, errors="coerce")
+    for col in features:
+        mean = feature_means.get(col)
+        if mean is not None:
+            X[col] = X[col].fillna(float(mean))
+    dm = xgb.DMatrix(X.astype(float), feature_names=features)
+    ntree = getattr(booster, "best_ntree_limit", 0)
+    preds = booster.predict(dm, iteration_range=(0, ntree)) if ntree else booster.predict(dm)
+
+    feat_df = feat_df.copy()
+    feat_df["lambda_tb"] = np.clip(preds, 0.01, cfg.get("mc_cap", 14))
+    feat_df["raw_lambda_tb"] = feat_df["lambda_tb"]
+    if calibrator is not None:
+        try:
+            raw = feat_df["lambda_tb"].values.copy()
+            x_min = getattr(calibrator, "X_min_", None)
+            x_max = getattr(calibrator, "X_max_", None)
+            in_range = np.ones(len(raw), dtype=bool)
+            if x_min is not None and x_max is not None:
+                in_range = (raw >= x_min) & (raw <= x_max)
+            cal = raw.copy()
+            if in_range.any():
+                cal[in_range] = calibrator.predict(raw[in_range])
+            feat_df["lambda_tb"] = np.clip(cal, 0.01, cfg.get("mc_cap", 14))
+            feat_df["calibrator_in_range"] = in_range
+        except Exception as e:
+            logger.warning("BATTER_TB calibrator predict failed: %s", e)
+            feat_df["calibrator_in_range"] = False
+    else:
+        feat_df["calibrator_in_range"] = False
+
+    if "player_name" not in feat_df.columns:
         return pd.DataFrame()
-    logger.info(f"BATTER_TB: {len(tb_map)} players with TB odds")
+    feat_df["_name_key"] = feat_df["player_name"].apply(_normalize_name)
+    name_to_idx = {n: i for i, n in enumerate(feat_df["_name_key"]) if n}
+    all_keys = list(name_to_idx)
 
-    _engine   = _make_engine("unused")
-    _game_pks = list(predictions_df["game_pk"].dropna().astype(int).unique())
-    _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="BATTER_TB")
-    _pending: dict[int, float] = {}
+    def _resolve(raw_name):
+        import difflib
 
+        key = _normalize_name(raw_name)
+        if not key:
+            return None
+        idx = name_to_idx.get(key)
+        if idx is not None:
+            return idx
+        matches = difflib.get_close_matches(key, all_keys, n=1, cutoff=0.85)
+        return name_to_idx[matches[0]] if matches else None
+
+    engine = _make_engine("unused")
+    game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
+    bankroll, prefetched = prefetch_exposure(engine, game_pks, run_date, system="BATTER_TB")
+    pending: dict[int, float] = {}
     results = []
-    for _, row in predictions_df.iterrows():
-        norm_name = _normalize_name(row["player"])
-        odds_info = tb_map.get(norm_name)
-        if odds_info is None:
+
+    for player_name, odds_info in tb_odds.items():
+        idx = _resolve(player_name)
+        if idx is None:
             continue
+        row = feat_df.iloc[idx]
+        mu = float(row["lambda_tb"])
         line = odds_info.get("line")
         if line is None:
             continue
 
-        model_hr_rate = float(row["model_prob"])
-        p_over, p_under, proj_tb = _tb_p_over_under(line, model_hr_rate)
-
-        mkt_over  = american_to_implied_prob(odds_info["over_odds"])
+        p_over = _negbin_p_over(line, mu, nb_alpha)
+        p_under = _negbin_p_under(line, mu, nb_alpha)
+        mkt_over = american_to_implied_prob(odds_info["over_odds"])
         mkt_under = american_to_implied_prob(odds_info["under_odds"])
         total = mkt_over + mkt_under
         if not total:
             continue
-        fair_over  = mkt_over  / total
+        fair_over = mkt_over / total
         fair_under = mkt_under / total
-
-        edge_over  = p_over  - fair_over
+        edge_over = p_over - fair_over
         edge_under = p_under - fair_under
 
         if edge_over >= edge_under:
-            side, edge, fair, odds, model_prob = "OVER",  edge_over,  fair_over,  odds_info["over_odds"],  p_over
+            side, edge, fair, odds, model_prob = "OVER", edge_over, fair_over, odds_info["over_odds"], p_over
         else:
             side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
 
-        if edge < cfg["min_edge"]:
-            continue
-
         k_pct_val = kpct(edge, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = apply_cap(
-            _bankroll, int(row["game_pk"]),
-            _prefetched, _pending,
+        bankroll, cap = apply_cap(
+            bankroll, int(row["game_pk"]), prefetched, pending,
             cap_units=cfg.get("cap_units", 10.0),
         )
         raw_stake = kelly_stake(
             edge, odds,
-            bankroll=_bankroll,
+            bankroll=bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         )
-        stake = min(raw_stake, _cap)
-
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY)
-        if kelly_triggered and stake > 0:
+        stake = min(raw_stake, cap)
+        triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY)
+        if triggered:
             gp = int(row.get("game_pk", 0))
-            _pending[gp] = _pending.get(gp, 0.0) + stake
+            pending[gp] = pending.get(gp, 0.0) + stake
 
         results.append({
-            "player":          row["player"],
-            "game_pk":         int(row["game_pk"]),
-            "away_team":       row["away_team"],
-            "home_team":       row["home_team"],
-            "line":            float(line),
-            "side":            side,
-            "bet_type":        f"BATTER_TB_{side}_{line}",
-            "proj_tb":         round(proj_tb, 4),
-            "hr_quality_mult": round(_quality_mult_from_hr(model_hr_rate), 4),
-            "model_prob":      round(model_prob, 4),
-            "market_prob":     round(fair, 4),
-            "edge":            round(edge, 4),
-            "kelly_pct":       round(k_pct_val, 4),
-            "odds":            odds,
-            "stake":           stake if kelly_triggered else 0.0,
-            "kelly_triggered": kelly_triggered,
-            "bookmaker":       odds_info.get("bookmaker"),
+            "player": player_name,
+            "game_pk": int(row.get("game_pk", 0)),
+            "away_team": odds_info["away_team"],
+            "home_team": odds_info["home_team"],
+            "line": float(line),
+            "side": side,
+            "bet_type": f"BATTER_TB_{side}_{line}",
+            "raw_lambda_tb": round(float(row.get("raw_lambda_tb", mu)), 4),
+            "lambda_tb": round(mu, 4),
+            "model_prob": round(model_prob, 4),
+            "market_prob": round(fair, 4),
+            "edge": round(edge, 4),
+            "kelly_pct": round(k_pct_val, 4),
+            "odds": odds,
+            "stake": stake if triggered else 0.0,
+            "kelly_triggered": triggered,
+            "bookmaker": odds_info.get("bookmaker"),
         })
 
     if not results:
@@ -169,79 +346,38 @@ def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.Data
 
 def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
-    logger.info(f"BATTER_TB run | type={run_type} | date={run_date} | log_only={LOG_ONLY}")
+    logger.info("BATTER_TB run | type=%s | date=%s | log_only=%s", run_type, run_date, LOG_ONLY)
 
-    from HR_Pro.config_hr import cfg
-    from mlb_core.odds import sgo as _sgo
-    from mlb_core.storage import check_build_sentinel
-    from mlb_core.config import GCS_BUCKET
+    from BATTER_TB_System.config_batter_tb import cfg
+    from mlb_core.notify.discord import post_bets
     from mlb_core.tracking import BetTracker
-    from mlb_core.notify.discord import post_bets, post_error
-    from runners.run_hr import _build_predictions as _hr_build_predictions
 
-    # Snapshot freshness (quick pre-check before the expensive HR pipeline)
-    _SGO_KEY = "Odds/sgo/latest.json"
-    _fresh, _reason = _sgo.check_snapshot_freshness(_SGO_KEY)
-    if not _fresh:
-        logger.error(f"BATTER_TB: aborting — {_reason}")
-        return {"bets_logged": 0}
-
-    # Shares the HR feature build sentinel
-    _sok, _sreason = check_build_sentinel(GCS_BUCKET, "HR_Pro")
-    if not _sok:
-        msg = f"BATTER_TB: aborting — stale HR feature build: {_sreason}"
-        logger.error(msg)
-        post_error("BATTER_TB", msg)
-        return {"bets_logged": 0}
-    logger.info("BATTER_TB: sentinel ok -- %s", _sreason)
-
-    # Run the full HR pipeline to get per-batter model_prob (TB quality proxy).
-    # All HR-priced players are returned regardless of HR edge.
-    hr_predictions = _hr_build_predictions(cfg, run_date)
-    if hr_predictions.empty:
-        logger.info("BATTER_TB: HR predictions empty — skipping")
-        post_bets([], system="BATTER_TB", run_date=run_date)
-        return {"bets_logged": 0}
-
-    # TB-specific betting params (slightly wider edge threshold than HR)
-    tb_cfg = {
-        **cfg,
-        "min_edge":     0.04,
-        "kelly_fraction": 0.25,
-        "min_kelly_pct":  0.005,
-        "max_kelly_pct":  0.04,
-        "cap_units":      10.0,
-    }
-
-    today_df = _score_tb(hr_predictions, tb_cfg, run_date)
-
+    today_df = _build_predictions(cfg, run_date)
     if today_df.empty:
-        logger.info("BATTER_TB: no qualifying bets today")
         post_bets([], system="BATTER_TB", run_date=run_date)
         return {"bets_logged": 0}
 
-    tracker     = BetTracker(cfg["bet_db"], system="BATTER_TB")
+    tracker = BetTracker(cfg["bet_db"], system="BATTER_TB")
     bets_logged = 0
-    bet_rows    = []
-
+    bet_rows = []
     for _, row in today_df.iterrows():
         triggered = bool(row.get("kelly_triggered", False))
         bet_id = tracker.log_bet(
-            game_date       = run_date,
-            game_pk         = row.get("game_pk"),
-            player          = row.get("player"),
-            away_team       = row.get("away_team"),
-            home_team       = row.get("home_team"),
-            bet_type        = row.get("bet_type"),
-            model_prob      = row.get("model_prob"),
-            market_prob     = row.get("market_prob"),
-            edge            = row.get("edge"),
-            kelly_pct       = row.get("kelly_pct"),
-            odds            = row.get("odds"),
-            stake           = row.get("stake"),
-            kelly_triggered = triggered,
-            paper           = cfg["PAPER"],
-            book            = row.get("bookmaker"),
+            game_date=run_date,
+            game_pk=row.get("game_pk"),
+            player=row.get("player"),
+            away_team=row.get("away_team"),
+            home_team=row.get("home_team"),
+            bet_type=row.get("bet_type"),
+            model_prob=row.get("model_prob"),
+            market_prob=row.get("market_prob"),
+            edge=row.get("edge"),
+            kelly_pct=row.get("kelly_pct"),
+            odds=row.get("odds"),
+            stake=row.get("stake"),
+            kelly_triggered=triggered,
+            paper=cfg["PAPER"],
+            book=row.get("bookmaker"),
         )
         if bet_id == -1:
             continue
@@ -249,8 +385,5 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
         if triggered:
             bet_rows.append(row.to_dict())
 
-    log_suffix = " (log-only — calibration gate not cleared)" if LOG_ONLY else ""
-    logger.info(f"BATTER_TB: {bets_logged} bets logged{log_suffix}")
     post_bets(bet_rows, system="BATTER_TB", run_date=run_date)
-
     return {"bets_logged": bets_logged, "log_only": LOG_ONLY, "bet_rows": bet_rows}

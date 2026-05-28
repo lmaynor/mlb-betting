@@ -4,9 +4,7 @@
 # Run from Cloud Shell after deploy/deploy_service.sh:
 #   PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_model_jobs.sh
 #
-# BATTER_TB is currently an active HR-proxy market, so it is covered by
-# mlb-retrain-hr-v6 and mlb-calibrate-hr. Add a dedicated TB job here only
-# after a true BATTER_TB model artifact exists.
+# Includes dedicated BATTER_TB jobs for the total-bases count model.
 
 set -euo pipefail
 
@@ -70,6 +68,7 @@ upsert_job "mlb-calibrate-game"         "training.calibrate_game_v1"       "2Gi"
 
 upsert_job "mlb-retrain-batter-hits"    "training.retrain_batter_hits_v1"  "4Gi" "2" "7200s"
 upsert_job "mlb-calibrate-batter-hits"  "training.calibrate_batter_hits_v1" "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-batter-tb"      "training.retrain_batter_tb_v1"    "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-batter-tb"    "training.calibrate_batter_tb_v1"  "2Gi" "1" "1800s"
 
 echo "Model jobs ready."
-echo "BATTER_TB: active via HR proxy; retrain/calibration covered by HR jobs."

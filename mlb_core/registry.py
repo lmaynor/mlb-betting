@@ -156,14 +156,19 @@ SYSTEMS: dict[str, SystemConfig] = {
     "BATTER_TB": SystemConfig(
         name="BATTER_TB",
         icon="🟩",
-        builder_module="runners.build_hr_features",   # HR proxy model path
+        builder_module="runners.build_batter_tb_features",
         runner_module="runners.run_batter_tb",
-        feature_csv="HR_Pro/data/model_features.csv",
-        model_artifact="HR_Pro/models/xgb_hr_v6.json",
-        build_sentinel="HR_Pro/data/last_build.json",
-        retrain_jobs=["mlb-retrain-hr-v6"],            # proxy artifact
-        calibrate_jobs=["mlb-calibrate-hr"],
+        feature_csv="BATTER_TB_System/data/model_features.csv",
+        model_artifact="BATTER_TB_System/models/xgb_batter_tb_v1.json",
+        build_sentinel="BATTER_TB_System/data/last_build.json",
+        retrain_jobs=["mlb-retrain-batter-tb"],
+        calibrate_jobs=["mlb-calibrate-batter-tb"],
         expected_hit_rate=0.52,
+        tune_target="batter_total_bases",
+        tune_objective="count:poisson",
+        tune_metric="poisson-nloglik",
+        tune_metric_dir="min",
+        tune_output="BATTER_TB_System/models/batter_tb_tuned_params.json",
     ),
 
     "GAME": SystemConfig(

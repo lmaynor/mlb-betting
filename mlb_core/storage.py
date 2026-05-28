@@ -172,6 +172,7 @@ def write_build_sentinel(system: str, result: dict) -> None:
         "K":           "K_Pro_System",
         "F5":          "F5_Pro_System",
         "BATTER_HITS": "BATTER_HITS_System",   # registry: BATTER_HITS_System/data/last_build.json
+        "BATTER_TB":   "BATTER_TB_System",
         "GAME":        "GAME_Pro_System",
     }
     prefix = system_to_prefix.get(system.upper(), f"{system}_Pro_System")
@@ -220,4 +221,3 @@ def check_build_sentinel(gcs_bucket, system_prefix, max_age_hours=26):
     if age_h > max_age_hours:
         return False, f"sentinel age {age_h:.1f}h > {max_age_hours}h limit"
     return True, f"ok (age {age_h:.1f}h)"
-

@@ -39,7 +39,7 @@ app = Flask(__name__)
 
 VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
 DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
-DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "GAME"]
+DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "BATTER_TB", "GAME"]
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
@@ -125,6 +125,8 @@ def build_features_handler():
         from runners.build_k_features import run
     elif system == "BATTER_HITS":
         from runners.build_batter_hits_features import run
+    elif system == "BATTER_TB":
+        from runners.build_batter_tb_features import run
     elif system == "GAME":
         from runners.build_game_features import run
     else:
@@ -139,8 +141,8 @@ def build_all_features_handler():
     """Run all feature builders sequentially in dependency order.
 
     Dependency order: HR -> NRFI -> K -> F5 (F5 reads NRFI pitcher_start_features.csv).
-    BATTER_TB uses HR features and 1I uses NRFI features, so neither needs a
-    separate feature build today.
+    1I uses NRFI half-inning features, so it does not need a separate feature
+    build today.
 
     Body (all optional):
         systems: list[str]  -- subset to run, default trained feature builders
@@ -152,8 +154,9 @@ def build_all_features_handler():
     run_date         = body.get("run_date", datetime.now(_CT).date().isoformat())
     continue_on_err  = body.get("continue_on_error", False)
     systems          = body.get("systems", DEFAULT_FEATURE_BUILD_SYSTEMS)
+    requested         = ["1IOU" if str(x).upper() == "NRFI" else str(x).upper() for x in systems]
     # Enforce dependency order even if caller passes a subset
-    ordered = [s for s in DEFAULT_FEATURE_BUILD_SYSTEMS if s in [x.upper() for x in systems]]
+    ordered = [s for s in DEFAULT_FEATURE_BUILD_SYSTEMS if s in requested]
 
     builders = {
         "HR":          "runners.build_hr_features",
@@ -162,6 +165,7 @@ def build_all_features_handler():
         "K":           "runners.build_k_features",
         "F5":          "runners.build_f5_features",
         "BATTER_HITS": "runners.build_batter_hits_features",
+        "BATTER_TB":   "runners.build_batter_tb_features",
         "GAME":        "runners.build_game_features",
     }
 
@@ -1107,8 +1111,7 @@ def retrain_weekly():
         "mlb-retrain-outs-v1",    # E04: OUTS trained model
         "mlb-retrain-game-v1",    # GAME Pro v1
         "mlb-retrain-batter-hits",
-        # BATTER_TB currently uses the HR v6 artifact as a proxy; no separate
-        # retrain job exists until a true TB model pipeline is added.
+        "mlb-retrain-batter-tb",
     ]
     CALIBRATE_JOBS = [
         "mlb-calibrate-nrfi",
@@ -1117,6 +1120,7 @@ def retrain_weekly():
         "mlb-calibrate-hr",
         "mlb-calibrate-game",
         "mlb-calibrate-batter-hits",
+        "mlb-calibrate-batter-tb",
     ]
     CALIBRATE_DELAY_S = 1800  # 30 min -- enough for all retrains to finish
 
