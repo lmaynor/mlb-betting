@@ -131,7 +131,13 @@ def _build_game_level(df: pd.DataFrame, p_half: np.ndarray) -> pd.DataFrame:
     pivot = pivot.reset_index()
     pivot = pivot.dropna(subset=["p_half_1", "p_half_0"])
     pivot["model_yrfi_prob"] = 1.0 - (1.0 - pivot["p_half_1"]) * (1.0 - pivot["p_half_0"])
-    pivot["yrfi"] = pivot[f"{TARGET}_1"].astype(int)
+    # Game-level YRFI actual: either half of the 1st inning scored.
+    # TARGET is half-inning YRFI in model_features, so using only one row here
+    # would calibrate a full-inning probability against a half-inning target and
+    # systematically inflate NRFI/Under confidence.
+    pivot["yrfi"] = (
+        pivot[f"{TARGET}_1"].astype(int) | pivot[f"{TARGET}_0"].astype(int)
+    ).astype(int)
     logger.info(f"game-level rows: {len(pivot):,} | YRFI rate {pivot['yrfi'].mean():.3f}")
     return pivot[["game_pk", "game_date", "model_yrfi_prob", "yrfi"]]
 

@@ -3,8 +3,18 @@ import types
 
 
 sys.modules.setdefault("xgboost", types.SimpleNamespace())
+sys.modules.setdefault("sklearn", types.SimpleNamespace())
+sys.modules.setdefault(
+    "sklearn.calibration",
+    types.SimpleNamespace(IsotonicRegression=object),
+)
+sys.modules.setdefault(
+    "sklearn.metrics",
+    types.SimpleNamespace(brier_score_loss=lambda y_true, y_pred: 0.0),
+)
 
 from runners.run_k import _simulate_k
+from training.calibrate_nrfi_v18 import _build_game_level
 
 
 def test_k_simulation_uses_calibrated_lambda_not_recent_rate_proxy():
@@ -22,3 +32,25 @@ def test_k_simulation_uses_calibrated_lambda_not_recent_rate_proxy():
 
     assert abs(dist["mean"] - 4.0) < 0.08
     assert dist["proxy_lambda_k"] == 12.0
+
+
+def test_nrfi_calibrator_uses_full_first_inning_actual():
+    """Game-level YRFI actual should be true if either half scores."""
+    import numpy as np
+    import pandas as pd
+
+    df = pd.DataFrame(
+        [
+            {"game_pk": 1, "game_date": "2026-05-01", "pitcher_is_home": 1, "yrfi": 1},
+            {"game_pk": 1, "game_date": "2026-05-01", "pitcher_is_home": 0, "yrfi": 0},
+            {"game_pk": 2, "game_date": "2026-05-01", "pitcher_is_home": 1, "yrfi": 0},
+            {"game_pk": 2, "game_date": "2026-05-01", "pitcher_is_home": 0, "yrfi": 1},
+            {"game_pk": 3, "game_date": "2026-05-01", "pitcher_is_home": 1, "yrfi": 0},
+            {"game_pk": 3, "game_date": "2026-05-01", "pitcher_is_home": 0, "yrfi": 0},
+        ]
+    )
+
+    out = _build_game_level(df, np.array([0.2, 0.3, 0.2, 0.3, 0.2, 0.3]))
+
+    actuals = dict(zip(out["game_pk"], out["yrfi"]))
+    assert actuals == {1: 1, 2: 1, 3: 0}
