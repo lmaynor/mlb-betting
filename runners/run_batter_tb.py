@@ -2,12 +2,9 @@
 runners/run_batter_tb.py — BATTER_TB Pro v1 daily runner.
 
 Scores batter total-bases O/U props using the HR v6 model as a quality proxy.
-Each batter's HR probability is mapped to an expected-TB-per-game via a
-Normal(mu, sigma) approximation:
-  mu    = TB_SCALE * quality_mult     (TB_SCALE = 1.6 league avg TB/game)
-  sigma = mu * 0.6
-  quality_mult = 1 + 0.25 * (model_hr_rate - league_hr_rate) / league_hr_rate
-  quality_mult = clipped to [0.6, 1.6]
+Each batter's HR probability tilts a league-average discrete total-bases
+distribution. This keeps common 0.5 lines anchored to "records at least one
+total base" instead of treating total bases like a continuous Normal variable.
 
 Ships LOG_ONLY (stake=0, kelly_triggered=False) until post-hoc calibration
 confirms the proxy edge is real. Flip LOG_ONLY = False once ~100 settled bets
@@ -28,7 +25,40 @@ logger = logging.getLogger(__name__)
 LOG_ONLY = True
 
 _LEAGUE_HR_RATE = 0.032
-_TB_SCALE       = 1.6    # league-average expected total bases per game
+_TB_VALUES = (0, 1, 2, 3, 4, 5, 6, 7, 8)
+_TB_BASE_PROBS = (0.360, 0.255, 0.170, 0.055, 0.090, 0.025, 0.025, 0.012, 0.008)
+_TB_TILT_STRENGTH = 0.75
+
+
+def _quality_mult_from_hr(model_hr_rate: float) -> float:
+    quality_mult = 1.0 + 0.25 * (model_hr_rate - _LEAGUE_HR_RATE) / _LEAGUE_HR_RATE
+    return max(0.6, min(1.6, quality_mult))
+
+
+def _tb_distribution(model_hr_rate: float) -> dict[int, float]:
+    """Return a discrete total-bases distribution tilted by HR quality."""
+    import math
+
+    quality_mult = _quality_mult_from_hr(float(model_hr_rate))
+    base_mean = sum(v * p for v, p in zip(_TB_VALUES, _TB_BASE_PROBS))
+    tilt = math.log(quality_mult)
+    weights = [
+        p * math.exp(_TB_TILT_STRENGTH * (v - base_mean) * tilt)
+        for v, p in zip(_TB_VALUES, _TB_BASE_PROBS)
+    ]
+    total = sum(weights)
+    if total <= 0:
+        return dict(zip(_TB_VALUES, _TB_BASE_PROBS))
+    return {v: w / total for v, w in zip(_TB_VALUES, weights)}
+
+
+def _tb_p_over_under(line: float, model_hr_rate: float) -> tuple[float, float, float]:
+    """Return (P over, P under, projected TB) for an O/U line."""
+    dist = _tb_distribution(model_hr_rate)
+    p_over = sum(p for tb, p in dist.items() if tb > line)
+    p_under = sum(p for tb, p in dist.items() if tb < line)
+    proj_tb = sum(tb * p for tb, p in dist.items())
+    return float(p_over), float(p_under), float(proj_tb)
 
 
 def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.DataFrame:
@@ -36,9 +66,8 @@ def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.Data
 
     predictions_df is the output of run_hr._build_predictions — one row per
     HR-priced batter with model_prob = P(HR). We map model_prob through a
-    Normal distribution to get P(TB > line) / P(TB < line), then apply Kelly.
+    discrete TB distribution to get P(TB > line) / P(TB < line), then apply Kelly.
     """
-    from scipy.stats import norm as _norm
     from mlb_core.odds import sgo as _sgo
     from mlb_core.odds.sgo import extract_batter_tb_odds
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
@@ -73,13 +102,7 @@ def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.Data
             continue
 
         model_hr_rate = float(row["model_prob"])
-        quality_mult  = 1.0 + 0.25 * (model_hr_rate - _LEAGUE_HR_RATE) / _LEAGUE_HR_RATE
-        quality_mult  = max(0.6, min(1.6, quality_mult))
-        mu    = _TB_SCALE * quality_mult
-        sigma = mu * 0.6
-
-        p_over  = float(1.0 - _norm.cdf(line, loc=mu, scale=sigma))
-        p_under = float(_norm.cdf(line, loc=mu, scale=sigma))
+        p_over, p_under, proj_tb = _tb_p_over_under(line, model_hr_rate)
 
         mkt_over  = american_to_implied_prob(odds_info["over_odds"])
         mkt_under = american_to_implied_prob(odds_info["under_odds"])
@@ -128,7 +151,8 @@ def _score_tb(predictions_df: pd.DataFrame, cfg: dict, run_date: str) -> pd.Data
             "line":            float(line),
             "side":            side,
             "bet_type":        f"BATTER_TB_{side}_{line}",
-            "proj_tb":         round(mu, 4),
+            "proj_tb":         round(proj_tb, 4),
+            "hr_quality_mult": round(_quality_mult_from_hr(model_hr_rate), 4),
             "model_prob":      round(model_prob, 4),
             "market_prob":     round(fair, 4),
             "edge":            round(edge, 4),

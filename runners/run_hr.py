@@ -742,38 +742,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     # 4. Discord
     post_bets(bet_rows, system="HR", run_date=run_date)
 
-    # 5. Batter sub-markets (log-only, stake=0 until calibration confirmed)
-    sub_results = _score_batter_ou_markets(today_df, cfg, run_date)
-    from mlb_core.tracking import BetTracker as _BT
-    sub_logged = {}
-    for sys_key, bets in sub_results.items():
-        sub_tracker = _BT(cfg["bet_db"], system=sys_key)
-        logged = 0
-        sub_rows = []
-        for bet in bets:
-            ret = sub_tracker.log_bet(
-                game_date        = run_date,
-                game_pk          = bet["game_pk"],
-                player           = bet["player"],
-                away_team        = resolve_team(bet.get("away_team") or "") or bet.get("away_team"),
-                home_team        = resolve_team(bet.get("home_team") or "") or bet.get("away_team"),
-                bet_type         = bet["bet_type"],
-                model_prob       = bet["model_prob"],
-                market_prob      = bet["market_prob"],
-                edge             = bet["edge"],
-                kelly_pct        = bet["kelly_pct"],
-                odds             = bet["odds"],
-                stake            = bet["stake"],
-                kelly_triggered  = bet["kelly_triggered"],
-                paper            = cfg["PAPER"],
-                book             = bet.get("bookmaker"),
-            )
-            if ret != -1:
-                logged += 1
-                sub_rows.append(bet)
-        sub_logged[sys_key] = logged
-        post_bets(sub_rows, system=sys_key, run_date=run_date)
-
-    logger.info(f"HR: {bets_logged} bets logged | " +
-                " | ".join(f"{k}: {v} (log-only)" for k, v in sub_logged.items()))
-    return {"bets_logged": bets_logged, "sub_logged": sub_logged, "bet_rows": bet_rows}
+    # Batter sub-markets now run through their dedicated runners. Keeping HR
+    # focused on HR prevents duplicate BATTER_TB/BATTER_HITS logs and stale
+    # proxy probabilities.
+    logger.info(f"HR: {bets_logged} bets logged")
+    return {"bets_logged": bets_logged, "bet_rows": bet_rows}

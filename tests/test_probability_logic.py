@@ -15,6 +15,7 @@ sys.modules.setdefault(
 
 from runners.run_k import _simulate_k
 from runners.run_1i import _derive_3way_probs
+from runners.run_batter_tb import _tb_p_over_under
 from training.calibrate_nrfi_v18 import _build_game_level
 
 
@@ -70,3 +71,12 @@ def test_1i_probs_allocate_both_score_slice_to_true_3way_outcomes():
     assert round(float(out["p_3way_home"]), 4) == 0.325
     assert round(float(out["p_3way_draw"]), 4) == 0.375
     assert round(float(out.sum()), 4) == 1.0
+
+
+def test_batter_tb_half_base_line_uses_discrete_zero_tb_mass():
+    """Average TB over 0.5 should not be inflated by a continuous Normal CDF."""
+    p_over, p_under, proj_tb = _tb_p_over_under(0.5, 0.032)
+
+    assert round(p_over, 4) == 0.64
+    assert round(p_under, 4) == 0.36
+    assert round(proj_tb, 4) == 1.543
