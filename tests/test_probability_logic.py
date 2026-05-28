@@ -14,6 +14,7 @@ sys.modules.setdefault(
 )
 
 from runners.run_k import _simulate_k
+from runners.run_1i import _derive_3way_probs
 from training.calibrate_nrfi_v18 import _build_game_level
 
 
@@ -54,3 +55,18 @@ def test_nrfi_calibrator_uses_full_first_inning_actual():
 
     actuals = dict(zip(out["game_pk"], out["yrfi"]))
     assert actuals == {1: 1, 2: 1, 3: 0}
+
+
+def test_1i_probs_allocate_both_score_slice_to_true_3way_outcomes():
+    """1I draw should include 1-1 style tied outcomes, not only NRFI."""
+    out = _derive_3way_probs(
+        p_away_score=[0.5],
+        p_home_score=[0.5],
+        p_nrfi_prob=[0.25],
+        both_score_shares={"away": 0.2, "home": 0.3, "draw": 0.5},
+    ).iloc[0]
+
+    assert round(float(out["p_3way_away"]), 4) == 0.3
+    assert round(float(out["p_3way_home"]), 4) == 0.325
+    assert round(float(out["p_3way_draw"]), 4) == 0.375
+    assert round(float(out.sum()), 4) == 1.0

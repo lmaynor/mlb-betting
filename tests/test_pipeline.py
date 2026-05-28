@@ -260,7 +260,7 @@ def test_settle_3way_away():
     from runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "1I_AWAY",
                               "stake": 10.0, "odds": 200}])
-    results = _settle_nrfi(pending, _make_game_cache(away_inn1=1, home_inn1=0))
+    results = _settle_nrfi(pending, _make_game_cache(away_inn1=2, home_inn1=1))
     assert results[0]["result"] == "win"
     assert results[0]["profit"] == 20.0
 
@@ -424,17 +424,17 @@ def test_settle_nrfi_yrfi_via_cache():
 
 
 def test_settle_3way_draw_via_cache():
-    """1I_DRAW: neither team scores in inning 1."""
+    """1I_DRAW: teams are tied after inning 1."""
     from runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "bet_type": "1I_DRAW", "stake": 10.0, "odds": 200},
         {"id": 2, "game_pk": GAME_PK, "bet_type": "1I_AWAY", "stake": 10.0, "odds": 250},
     ])
-    cache = _game_cache_full(away_inn1=0, home_inn1=0)
+    cache = _game_cache_full(away_inn1=1, home_inn1=1)
     results = _settle_nrfi(pending, cache)
     by_id = {r["id"]: r for r in results}
     assert by_id[1]["result"] == "win"    # draw wins
-    assert by_id[2]["result"] == "loss"   # away loses (no score)
+    assert by_id[2]["result"] == "loss"   # away loses because score is tied
 
 
 def test_settle_f5_away_win_via_cache():

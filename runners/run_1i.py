@@ -2,13 +2,15 @@
 runners/run_1i.py — 1st Inning 3-way ML daily runner.
 
 Uses NRFI v18/v17 per-half YRFI probabilities to derive game-level
-first-inning 3-way market probabilities:
-  P(away scores, home doesn't) = p_away * (1 - p_home)
-  P(home scores, away doesn't) = p_home * (1 - p_away)
-  P(neither scores / draw)     = (1 - p_away) * (1 - p_home)
+first-inning 3-way market probabilities by comparing first-inning scores:
+  P(away) = P(away runs > home runs)
+  P(home) = P(home runs > away runs)
+  P(draw) = P(away runs == home runs)
 
-The three raw probabilities are normalised to sum to 1 by dividing by
-their sum (which excludes P(both score), a case covered by no leg).
+The binary half-inning model directly identifies no-score, away-only, and
+home-only cells. When both teams score, this runner allocates that slice
+across away/home/draw using historical first-inning run comparisons when
+available, with a neutral fallback until richer run-count modeling lands.
 
 Bets are logged with bet_type in {"1I_AWAY", "1I_HOME", "1I_DRAW"}.
 settle_bets.py/_settle_nrfi already handles these bet types.
@@ -29,6 +31,103 @@ logger = logging.getLogger(__name__)
 
 # Flip to False once ~100 settled bets confirm calibration
 LOG_ONLY = True
+
+_DEFAULT_BOTH_SCORE_SHARES = {"away": 1.0 / 3.0, "home": 1.0 / 3.0, "draw": 1.0 / 3.0}
+_SCORING_MASTER_KEYS = (
+    "Scoring/scoring_master.csv",
+    "MLB/scoring_master.csv",
+    "scoring_master.csv",
+)
+
+
+def _normalise_shares(shares: dict | None) -> dict:
+    if not shares:
+        return dict(_DEFAULT_BOTH_SCORE_SHARES)
+    vals = {k: max(0.0, float(shares.get(k, 0.0))) for k in ("away", "home", "draw")}
+    total = sum(vals.values())
+    if total <= 0:
+        return dict(_DEFAULT_BOTH_SCORE_SHARES)
+    return {k: vals[k] / total for k in vals}
+
+
+def _find_run_col(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
+    lookup = {c.lower(): c for c in df.columns}
+    return next((lookup[c] for c in candidates if c in lookup), None)
+
+
+def _load_both_score_shares() -> dict:
+    """Estimate P(away/home/draw | both teams score in the 1st inning)."""
+    from mlb_core.storage import exists, read_csv
+
+    for key in _SCORING_MASTER_KEYS:
+        try:
+            if not exists(key):
+                continue
+            df = read_csv(key)
+        except Exception as exc:
+            logger.warning("1I: could not read %s for both-score shares: %s", key, exc)
+            continue
+
+        inning_col = _find_run_col(df, ("inning", "inning_number", "inn"))
+        if inning_col:
+            df = df[pd.to_numeric(df[inning_col], errors="coerce") == 1]
+
+        away_col = _find_run_col(df, ("away_runs", "away_r", "away_score", "away_runs_1i"))
+        home_col = _find_run_col(df, ("home_runs", "home_r", "home_score", "home_runs_1i"))
+        if not away_col or not home_col:
+            logger.warning("1I: %s lacks first-inning away/home run columns; using fallback shares", key)
+            continue
+
+        runs = pd.DataFrame({
+            "away": pd.to_numeric(df[away_col], errors="coerce"),
+            "home": pd.to_numeric(df[home_col], errors="coerce"),
+        }).dropna()
+        both = runs[(runs["away"] > 0) & (runs["home"] > 0)]
+        if both.empty:
+            logger.warning("1I: %s has no both-score first innings; using fallback shares", key)
+            continue
+
+        shares = {
+            "away": float((both["away"] > both["home"]).mean()),
+            "home": float((both["home"] > both["away"]).mean()),
+            "draw": float((both["away"] == both["home"]).mean()),
+        }
+        logger.info("1I: loaded both-score outcome shares from %s: %s", key, shares)
+        return _normalise_shares(shares)
+
+    logger.info("1I: using neutral both-score outcome shares")
+    return dict(_DEFAULT_BOTH_SCORE_SHARES)
+
+
+def _derive_3way_probs(
+    p_away_score,
+    p_home_score,
+    p_nrfi_prob,
+    both_score_shares: dict | None = None,
+) -> pd.DataFrame:
+    """Convert half-inning score/no-score probabilities into 3-way ML probs."""
+    shares = _normalise_shares(both_score_shares)
+    p_away_score = pd.Series(p_away_score, dtype=float).clip(0.0, 1.0)
+    p_home_score = pd.Series(p_home_score, dtype=float).clip(0.0, 1.0)
+    p_nrfi_prob = pd.Series(p_nrfi_prob, dtype=float).clip(0.0, 1.0)
+
+    raw_away_only = p_away_score * (1.0 - p_home_score)
+    raw_home_only = p_home_score * (1.0 - p_away_score)
+    raw_both = p_away_score * p_home_score
+    raw_yrfi = (raw_away_only + raw_home_only + raw_both).clip(lower=1e-9)
+
+    p_yrfi_prob = 1.0 - p_nrfi_prob
+    away_only = raw_away_only / raw_yrfi * p_yrfi_prob
+    home_only = raw_home_only / raw_yrfi * p_yrfi_prob
+    both = raw_both / raw_yrfi * p_yrfi_prob
+
+    out = pd.DataFrame({
+        "p_3way_away": away_only + both * shares["away"],
+        "p_3way_home": home_only + both * shares["home"],
+        "p_3way_draw": p_nrfi_prob + both * shares["draw"],
+    })
+    norm = out.sum(axis=1).clip(lower=1e-9)
+    return out.div(norm, axis=0).clip(0.0, 1.0)
 
 
 def _build_game_probs(cfg: dict, run_date: str) -> pd.DataFrame:
@@ -98,16 +197,19 @@ def _build_game_probs(cfg: dict, run_date: str) -> pd.DataFrame:
         except Exception as e:
             logger.warning(f"1I: calibrator failed: {e} — using raw probs")
 
-    # 3-way raw probs from per-half independence assumption
-    p_away_raw = pivot["away"] * (1.0 - pivot["home"])
-    p_home_raw = pivot["home"] * (1.0 - pivot["away"])
-    p_draw_raw = pivot["model_nrfi_prob"]
-
-    # Normalise so the three legs sum to 1 (drops the P(both score) slice)
-    norm_factor = (p_away_raw + p_home_raw + p_draw_raw).clip(lower=1e-9)
-    pivot["p_3way_away"] = p_away_raw / norm_factor
-    pivot["p_3way_home"] = p_home_raw / norm_factor
-    pivot["p_3way_draw"] = p_draw_raw / norm_factor
+    # _side is pitcher-side: home pitcher faces away batters in the top half,
+    # away pitcher faces home batters in the bottom half.
+    p_away_score = pivot["home"]
+    p_home_score = pivot["away"]
+    probs = _derive_3way_probs(
+        p_away_score,
+        p_home_score,
+        pivot["model_nrfi_prob"],
+        both_score_shares=_load_both_score_shares(),
+    )
+    pivot["p_3way_away"] = probs["p_3way_away"].values
+    pivot["p_3way_home"] = probs["p_3way_home"].values
+    pivot["p_3way_draw"] = probs["p_3way_draw"].values
 
     logger.info(f"1I: {len(pivot)} games with 3-way probs computed")
     return pivot[["game_pk", "away_team", "home_team",

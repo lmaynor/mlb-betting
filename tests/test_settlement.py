@@ -105,17 +105,19 @@ class TestSettleNrfi:
         assert self._settle("YRFI", 0, 0)[0]["result"] == "loss"
 
     def test_1i_away_win(self):
-        # Away scores, home doesn't
-        assert self._settle("1I_AWAY", 1, 0)[0]["result"] == "win"
+        assert self._settle("1I_AWAY", 2, 1)[0]["result"] == "win"
 
-    def test_1i_away_loss_both_score(self):
+    def test_1i_away_loss_tied(self):
         assert self._settle("1I_AWAY", 1, 1)[0]["result"] == "loss"
 
     def test_1i_home_win(self):
-        assert self._settle("1I_HOME", 0, 1)[0]["result"] == "win"
+        assert self._settle("1I_HOME", 1, 2)[0]["result"] == "win"
 
-    def test_1i_draw_win(self):
+    def test_1i_draw_win_scoreless(self):
         assert self._settle("1I_DRAW", 0, 0)[0]["result"] == "win"
+
+    def test_1i_draw_win_both_score_tie(self):
+        assert self._settle("1I_DRAW", 1, 1)[0]["result"] == "win"
 
     def test_1i_draw_loss(self):
         assert self._settle("1I_DRAW", 1, 0)[0]["result"] == "loss"

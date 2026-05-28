@@ -82,9 +82,9 @@ _BATTER_K_PREFIX    = "batting_strikeouts-"
 _PITCHER_ER_PREFIX  = "pitching_earnedRuns-"
 _NRFI_OVER_ID     = "points-all-1i-ou-over"
 _NRFI_UNDER_ID    = "points-all-1i-ou-under"
-_1I_3WAY_AWAY_ID  = "points-away-1i-ml3way-away"   # away scores, home doesn't
-_1I_3WAY_HOME_ID  = "points-home-1i-ml3way-home"   # home scores, away doesn't
-_1I_3WAY_DRAW_ID  = "points-all-1i-ml3way-draw"    # neither scores (= NRFI)
+_1I_3WAY_AWAY_ID  = "points-away-1i-ml3way-away"   # away leads after 1st
+_1I_3WAY_HOME_ID  = "points-home-1i-ml3way-home"   # home leads after 1st
+_1I_3WAY_DRAW_ID  = "points-all-1i-ml3way-draw"    # tied after 1st
 _F5_OVER_ID       = "points-all-1ix5-ou-over"
 _F5_UNDER_ID      = "points-all-1ix5-ou-under"
 _F5_ML_HOME_ID    = "points-home-1ix5-ml-home"
@@ -399,10 +399,10 @@ def extract_nrfi_odds(events: list[dict]) -> dict:
 def extract_1i_3way_odds(events: list[dict]) -> dict:
     """Extract first-inning 3-way moneyline odds for every event.
 
-    The three legs and their market IDs (confirmed 2026-05-13):
-      away scores, home doesn't  → points-away-1i-ml3way-away
-      home scores, away doesn't  → points-home-1i-ml3way-home
-      neither scores (draw)      → points-all-1i-ml3way-draw
+    The three legs and their market IDs:
+      away leads after 1st  -> points-away-1i-ml3way-away
+      home leads after 1st  -> points-home-1i-ml3way-home
+      tied after 1st        -> points-all-1i-ml3way-draw
 
     Returns:
         {
@@ -410,9 +410,9 @@ def extract_1i_3way_odds(events: list[dict]) -> dict:
             "away_team":     str,
             "home_team":     str,
             "commence_time": str,
-            "away_odds":     int,   # DK American — away scores, home doesn't
-            "home_odds":     int,   # DK American — home scores, away doesn't
-            "draw_odds":     int,   # DK American — neither scores
+            "away_odds":     int,   # DK American -- away leads after 1st
+            "home_odds":     int,   # DK American -- home leads after 1st
+            "draw_odds":     int,   # DK American -- tied after 1st
             "bookmaker":     "draftkings",
             "fair_away":     int,
             "fair_home":     int,

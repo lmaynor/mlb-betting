@@ -74,11 +74,11 @@ def _settle_nrfi(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
         bt = (bet["bet_type"] or "").upper()
 
         if bt == "1I_AWAY":
-            result = "win" if away_r > 0 and home_r == 0 else "loss"
+            result = "win" if away_r > home_r else "loss"
         elif bt == "1I_HOME":
-            result = "win" if home_r > 0 and away_r == 0 else "loss"
+            result = "win" if home_r > away_r else "loss"
         elif bt == "1I_DRAW":
-            result = "win" if away_r == 0 and home_r == 0 else "loss"
+            result = "win" if away_r == home_r else "loss"
         else:
             actual = "YRFI" if (away_r + home_r) > 0 else "NRFI"
             result = "win" if bt == actual else "loss"
