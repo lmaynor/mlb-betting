@@ -2,6 +2,7 @@
 
 const PRE_LAUNCH = true
 const B = '0.5px solid #1f1f24'
+const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 
 import dynamic from 'next/dynamic'
 const CheckoutButton = dynamic(
@@ -10,22 +11,22 @@ const CheckoutButton = dynamic(
 )
 
 const TIERS = [
-  { name: 'Starter', price: '$29', period: '/mo',     tier: 'starter' as const, featured: false, features: ['1 system picks daily', 'Full results history', 'All free tools', 'Discord access'] },
-  { name: 'Pro',     price: '$79', period: '/mo',     tier: 'pro'     as const, featured: true,  features: ['All 5 system picks', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export', 'Edge finder (full)'] },
-  { name: 'Season',  price: '$499',period: '/season', tier: 'season'  as const, featured: false, features: ['Everything in Pro', 'Full 2026 MLB season', 'Best per-month value', 'Priority Discord role'] },
+  { name: 'Starter', price: '$29', period: '/mo', tier: 'starter' as const, featured: false, features: ['1 system picks daily', 'Full results history', 'All free tools', 'Discord access'] },
+  { name: 'Pro', price: '$79', period: '/mo', tier: 'pro' as const, featured: true, features: ['All 5 system picks', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export', 'Edge finder (full)'] },
+  { name: 'Season', price: '$499', period: '/season', tier: 'season' as const, featured: false, features: ['Everything in Pro', 'Full 2026 MLB season', 'Best per-month value', 'Priority Discord role'] },
 ]
 
 export function PricingSection() {
   return (
     <section style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 20px', borderBottom: B }}>
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Pricing</h2>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f5f5f7', marginBottom: '6px' }}>Pricing</h1>
         <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>
-          {PRE_LAUNCH ? 'Pre-launch · Join the waitlist · Prices lock at launch' : 'All plans include a 7-day money-back guarantee'}
+          {PRE_LAUNCH ? 'Pre-launch / Join the waitlist / Prices lock at launch' : 'All plans include a 7-day money-back guarantee'}
         </p>
       </div>
 
-      <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B }}>
+      <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B, borderRadius: 'var(--radius)', overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
         {TIERS.map((t, i) => (
           <div key={t.name} style={{ padding: '24px', display: 'flex', flexDirection: 'column', borderRight: i < 2 ? B : undefined, background: t.featured ? 'rgba(16,185,129,0.04)' : '#0a0a0c', borderTop: t.featured ? '2px solid #10b981' : undefined }}>
             {t.featured && (
@@ -44,8 +45,8 @@ export function PricingSection() {
               ))}
             </ul>
             {PRE_LAUNCH ? (
-              <a href="https://discord.gg/beezy" className="mono" style={{ display: 'block', textAlign: 'center', fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px', fontWeight: 600, textDecoration: 'none', background: t.featured ? '#10b981' : 'transparent', color: t.featured ? '#0a0a0c' : '#f5f5f7', border: t.featured ? 'none' : B }}>
-                Join Waitlist
+              <a href={DISCORD_URL} className="mono" style={{ display: 'block', textAlign: 'center', fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px', fontWeight: 700, textDecoration: 'none', background: t.featured ? '#10b981' : 'transparent', color: t.featured ? '#0a0a0c' : '#f5f5f7', border: t.featured ? 'none' : B, borderRadius: 'var(--radius-sm)' }}>
+                Join waitlist
               </a>
             ) : (
               <CheckoutButton tier={t.tier} label={`Get ${t.name}`} featured={t.featured} />

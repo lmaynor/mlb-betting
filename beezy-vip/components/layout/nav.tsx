@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
+import { DiscordMark } from '@/components/ui/discord-mark'
 
 const B = '0.5px solid #1f1f24'
 const NAV_LINKS = [
@@ -11,6 +12,7 @@ const NAV_LINKS = [
   { label: 'Tools',       href: '/tools' },
   { label: 'Models',      href: '/models' },
   { label: 'Results',     href: '/results' },
+  { label: 'Pricing',     href: '/pricing' },
   { label: 'Learn',       href: '/learn' },
 ]
 
@@ -41,8 +43,9 @@ export function Nav() {
         {/* Desktop: Discord + auth */}
         <div className="nav-desktop" style={{ gap: '12px' }}>
           <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
-            style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 14px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
-            Join Discord
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '6px 12px', background: '#5865f2', color: '#fff', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
+            <DiscordMark size={15} color="currentColor" />
+            Discord
           </a>
           {isSignedIn ? (
             <>
@@ -72,7 +75,8 @@ export function Nav() {
             </SignInButton>
           )}
           <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer" className="mono"
-            style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '5px 10px', background: '#10b981', color: '#0a0a0c', textDecoration: 'none' }}>
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '5px 9px', background: '#5865f2', color: '#fff', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
+            <DiscordMark size={13} color="currentColor" />
             Discord
           </a>
         </div>

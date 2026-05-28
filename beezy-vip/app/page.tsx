@@ -3,7 +3,7 @@ import { Hero }             from '@/components/landing/hero'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { ModelsGrid }       from '@/components/landing/models-grid'
 import { RecentPicksTable } from '@/components/landing/recent-picks-table'
-import { PricingSection }   from '@/components/landing/pricing'
+import { DiscordFollowCTA } from '@/components/landing/discord-follow-cta'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,11 +20,11 @@ export default function HomePage() {
       <Suspense fallback={null}>
         <RecentPicksTable />
       </Suspense>
+      <DiscordFollowCTA />
       <HowItWorks />
       <Suspense fallback={null}>
         <ModelsGrid />
       </Suspense>
-      <PricingSection />
     </>
   )
 }

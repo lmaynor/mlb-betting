@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MessageCircle } from 'lucide-react'
+import { DiscordMark } from '@/components/ui/discord-mark'
 
 const B = '0.5px solid #1f1f24'
 
@@ -15,16 +15,16 @@ export function Footer() {
             <p style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6, marginBottom: '12px' }}>
               Machine learning models for sports betting. Built on data, not gut feelings.
             </p>
-            <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#71717a', textDecoration: 'none' }}
+            <a href="https://discord.gg/HfMYCmbmE" target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#5865f2', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}
               aria-label="Join Discord">
-              <MessageCircle size={16} aria-hidden="true" />
+              <DiscordMark size={18} color="currentColor" />
             </a>
           </div>
           {[
             { title: 'Picks',   links: [['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['F5','/picks/mlb/f5'],['Strikeouts','/picks/mlb/k']] },
             { title: 'Tools',   links: [['Odds Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Edge Finder','/tools/edge-finder'],['NRFI Conditions','/tools/nrfi-conditions'],['Pitcher Matchups','/tools/pitcher-matchups']] },
-            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Learn','/learn']] },
+            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },
           ].map(col => (
             <div key={col.title}>
