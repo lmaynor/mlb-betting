@@ -15,7 +15,7 @@ sys.modules.setdefault(
 
 from runners.run_k import _simulate_k
 from runners.run_1i import _derive_3way_probs
-from runners.run_batter_tb import _tb_p_over_under
+from runners.run_batter_tb import _negbin_p_over, _negbin_p_under
 from training.calibrate_nrfi_v18 import _build_game_level
 
 
@@ -73,10 +73,11 @@ def test_1i_probs_allocate_both_score_slice_to_true_3way_outcomes():
     assert round(float(out.sum()), 4) == 1.0
 
 
-def test_batter_tb_half_base_line_uses_discrete_zero_tb_mass():
-    """Average TB over 0.5 should not be inflated by a continuous Normal CDF."""
-    p_over, p_under, proj_tb = _tb_p_over_under(0.5, 0.032)
+def test_batter_tb_half_base_line_uses_count_distribution():
+    """TB O/U probabilities should come from the count distribution, not Normal CDF."""
+    p_over = _negbin_p_over(0.5, mu=1.0, nb_alpha=0.0)
+    p_under = _negbin_p_under(0.5, mu=1.0, nb_alpha=0.0)
 
-    assert round(p_over, 4) == 0.64
-    assert round(p_under, 4) == 0.36
-    assert round(proj_tb, 4) == 1.543
+    assert round(p_over, 4) == 0.6321
+    assert round(p_under, 4) == 0.3679
+    assert round(p_over + p_under, 4) == 1.0
