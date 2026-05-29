@@ -5,8 +5,14 @@
 import type { Bet, SystemStats } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 
-const API_URL  = process.env.BETTING_API_URL  ?? ''
-const API_KEY  = process.env.BETTING_API_KEY  ?? ''
+function normalizeApiUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+const API_URL = normalizeApiUrl(process.env.BETTING_API_URL ?? '')
+const API_KEY = process.env.BETTING_API_KEY ?? ''
 
 async function apiFetch<T>(path: string, cacheSecs = 60): Promise<T> {
   // In browser (client components), use the Next.js proxy route to avoid
