@@ -10,11 +10,20 @@ const META: Record<string, { name: string; desc: string; href: string; bg: strin
   F5:   { name: 'First 5 Innings',       desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                      href: '/picks/mlb/f5',   bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
   K:    { name: 'Strikeout Props',        desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                   href: '/picks/mlb/k',    bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
   OUTS: { name: 'Pitcher Outs Props',    desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                              href: '/picks/mlb/outs', bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
+  GAME: { name: 'Full Game',             desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                         href: '/models', bg: '#09111f', color: '#60a5fa', border: '0.5px solid #1d4ed8' },
+  F3:   { name: 'First 3 Innings',        desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',                  href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  F1H:  { name: 'First Half',             desc: 'Hybrid innings window before bullpen noise dominates the projection.',                            href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  F7:   { name: 'First 7 Innings',        desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                            href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  BATTER_K: { name: 'Batter Strikeouts',  desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                        href: '/models', bg: '#130d1c', color: '#c084fc', border: '0.5px solid #6b21a8' },
+  BATTER_TB: { name: 'Total Bases',       desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                   href: '/models', bg: '#1c1207', color: '#fbbf24', border: '0.5px solid #a16207' },
+  BATTER_HITS: { name: 'Hits Props',      desc: 'Contact rate, expected average, platoon split, and park context for hits props.',                  href: '/models', bg: '#141006', color: '#fde047', border: '0.5px solid #a16207' },
+  PITCHER_ER: { name: 'Pitcher ER Props', desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',                href: '/models', bg: '#1a0d05', color: '#fb7185', border: '0.5px solid #be123c' },
+  '2I': { name: 'Second Inning',          desc: 'Pipeline inning-window pricing for early-game markets.',                                           href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
 }
 
 export async function ModelsGrid() {
   let stats: Array<{ system: string; win_rate: number; roi: number; total_bets: number }> = []
-  let sparklines: Record<string, Awaited<ReturnType<typeof apiGetSparklineBySystem>>> = {}
+  const sparklines: Record<string, Awaited<ReturnType<typeof apiGetSparklineBySystem>>> = {}
   try {
     const db = await apiGetStats().then(s => s.bySystem)
     stats = db.map(s => ({

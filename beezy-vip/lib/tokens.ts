@@ -62,6 +62,8 @@ export const SYSTEM_PILL: Record<string, { bg: string; color: string; border: st
   BATTER_K:    { bg: '#1a0518', color: '#e879f9', border: '0.5px solid #86198f' },
   BATTER_TB:   { bg: '#071505', color: '#84cc16', border: '0.5px solid #3f6212' },
   BATTER_HITS: { bg: '#041412', color: '#14b8a6', border: '0.5px solid #0f766e' },
+  // Fallback for unknown or newly-pipelined systems.
+  ALL:          { bg: '#1f1f24', color: '#a1a1aa', border: '0.5px solid #2a2a31' },
 }
 
 // Team full name -> 3-letter abbreviation
