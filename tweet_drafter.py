@@ -20,7 +20,8 @@ from datetime import date, datetime
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-BEEZY_API_URL = "https://mlb-betting-628109313129.us-central1.run.app"
+BEEZY_API_URL = os.environ.get("BEEZY_API_URL", "https://api.beezy.fyi").rstrip("/")
+BEEZY_SITE_URL = os.environ.get("BEEZY_SITE_URL", "https://beezy.fyi").rstrip("/")
 BEEZY_API_KEY = os.environ["SITE_API_KEY"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 TYPEFULLY_API_KEY = os.environ["TYPEFULLY_API_KEY"]
@@ -38,9 +39,9 @@ MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
 
 SYSTEM_PROMPT = """
 You are the voice of @beezy_fyi on Twitter — a model-driven MLB betting
-analytics account. beezy.fyi runs 5 quantitative models (HR, NRFI, F5, K,
-OUTS) that publish every pick publicly with edge %, Kelly stake, and full
-results history. Paper mode now; launching when 200-bet gate is cleared.
+analytics account. beezy.fyi publishes quantitative MLB picks across game
+markets, pitcher props, and batter props with edge %, Kelly stake, and full
+results history. Paper mode now; launching when validation gates are cleared.
 
 Voice: confident but not loud. Data-first. Let the numbers do the talking.
 Occasionally explain *why* the edge exists (1 sentence max). No hype, no
@@ -123,6 +124,7 @@ def build_picks_prompt(picks):
 
     lines.append(
         "\nWrite 3 tweet drafts for @beezy_fyi announcing today's picks. "
+        f"Use {BEEZY_SITE_URL} as the site URL when linking. "
         "Return only a JSON array of 3 strings."
     )
     return "\n".join(lines)
@@ -167,6 +169,7 @@ def build_recap_prompt(settled, stats):
 
     prompt += (
         "\nWrite 3 tweet drafts for @beezy_fyi recapping today's results. "
+        f"Use {BEEZY_SITE_URL} as the site URL when linking. "
         "Return only a JSON array of 3 strings."
     )
     return prompt

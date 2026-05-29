@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-28 22:03 CST_
+_Last updated: 2026-05-29 00:35 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1005,10 +1005,11 @@ does not reliably generate CSS in this monorepo subdirectory. Migration complete
 2026-05-18. Dead pages (teams, players, pitchers, games, recap) deleted. Articles are served statically from `beezy-vip/lib/articles-static.ts`
 and `beezy-vip/content/learn/*.md` -- no DB needed.
 
-Production URL: https://mlb-betting-rose.vercel.app. Canonical custom domain:
-`https://beezy.fyi`; `https://www.beezy.fyi` should redirect to the apex once
-Vercel DNS propagation completes. Backend public API canonical domain:
-`https://api.beezy.fyi`.
+Production URL: `https://beezy.fyi`. `https://www.beezy.fyi` is attached in
+Vercel and redirects to the apex. The old Vercel preview domain
+`https://mlb-betting-rose.vercel.app` may still exist, but do not use it in
+public copy, OG cards, Discord copy, or tweet drafts. Backend public API
+canonical domain: `https://api.beezy.fyi`.
 
 Public social handle: X/Twitter `@beezy_fyi`
 (`https://x.com/beezy_fyi`). Keep site links, OG cards, Discord copy, and
@@ -1169,12 +1170,12 @@ Bloomberg Terminal meets PrizePicks aesthetic:
 - Project: `mlb-betting` on Vercel (root directory set to `beezy-vip`)
 - Auto-deploys on push to `main` branch
 - Canonical domain: `beezy.fyi` (apex), with `www.beezy.fyi` attached as the
-  secondary domain. Porkbun nameserver delegation may take time to propagate.
+  secondary domain and redirecting to the apex.
 - Required env vars: `BETTING_API_URL`, `BETTING_API_KEY`, `LEARN_DATABASE_URL`,
   `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `ADMIN_SECRET_KEY`,
   `CRON_SECRET`, `STRIPE_*` keys, `NEXT_PUBLIC_BASE_URL`, `BLOCKED_STATES`
 - Set `NEXT_PUBLIC_BASE_URL=https://beezy.fyi`.
-- Set `BETTING_API_URL=https://api.beezy.fyi` once Cloud Run domain mapping is live.
+- Set `BETTING_API_URL=https://api.beezy.fyi`.
 
 ### GCP resources for beezy-vip
 
@@ -1193,14 +1194,22 @@ protected by OIDC tokens from the schedulers -- they just aren't blocked at
 the IAM level anymore.
 
 ### Dynamic system route
-Per-system pick pages (`/picks/mlb/nrfi` etc) are served by a single
-dynamic route at `app/picks/mlb/[system]/page.tsx`. Invalid slugs return
+Per-system pick pages (`/picks/mlb/nrfi`, `/picks/mlb/hr`,
+`/picks/mlb/batter-tb`, etc.) are served by a single dynamic route at
+`app/picks/mlb/[system]/page.tsx`. `lib/pick-systems.ts` is the source of
+truth for valid slug -> system mappings and powers the all-model grid at
+`/picks/mlb`, the filter bar, and per-system metadata. Invalid slugs return
 404 via `notFound()`. Do not create individual static page files per system.
+
+As of 2026-05-29, the public all-model route covers:
+`NRFI`, `1I`, `F3`, `F5`, `F1H`, `F7`, `GAME`, `HR`, `BATTER_TB`,
+`BATTER_HITS`, `BATTER_K`, `K`, `OUTS`, and `PITCHER_ER`.
 
 ### Design tokens
 Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or
 `pickLabel` locally in components. Import from `@/lib/tokens` instead.
-When adding a new system, update `lib/tokens.ts` only.
+When adding a new system, update `lib/tokens.ts` for colors/labels and
+`lib/pick-systems.ts` for public picks-page routing/catalog metadata.
 
 ### Charts
 

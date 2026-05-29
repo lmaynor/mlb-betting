@@ -471,7 +471,7 @@ git push
 
 ## 4. Social media content pipeline
 
-_Last updated: 2026-05-23_
+_Last updated: 2026-05-29_
 
 ### Overview
 
@@ -482,7 +482,8 @@ drafts via Gemini and post picks cards to Discord.
 
 Twitter handle: @beezy_fyi
 Discord invite: discord.gg/HfMYCmbmE
-Site: https://mlb-betting-rose.vercel.app (beezy.fyi pending DNS)
+Site: https://beezy.fyi
+Public API: https://api.beezy.fyi
 
 ### OG image cards (Vercel edge, @vercel/og)
 
@@ -562,6 +563,10 @@ Secrets on both jobs:
 - `TYPEFULLY_API_KEY = typefully-api-key:latest`
 - `DISCORD_WEBHOOK_URL = discord-webhook-url:latest`
 
+Env vars on both jobs:
+- `BEEZY_API_URL=https://api.beezy.fyi`
+- `BEEZY_SITE_URL=https://beezy.fyi`
+
 Scheduler jobs (already created):
 - `mlb-tweet-picks-schedule` -- `0 17 * * *`
 - `mlb-tweet-recap-schedule` -- `0 10 * * *`
@@ -595,11 +600,48 @@ Frontend null-guards this -- old JSON strings show as-is. Not worth backfilling.
 - Always include beezy.fyi in at least one variant
 - Always include discord.gg/HfMYCmbmE in at least one variant
 
-### When beezy.fyi DNS is configured
+### Website domain wiring
 
-Update two places:
-1. `tweet_drafter.py`: `BEEZY_SITE_URL = "https://beezy.fyi"`
-2. Discord message in `post_card_to_discord()`: link to `https://beezy.fyi/picks`
+The public site is `https://beezy.fyi`; `https://www.beezy.fyi` redirects to
+the apex. Vercel should keep:
+- `NEXT_PUBLIC_BASE_URL=https://beezy.fyi`
+- `BETTING_API_URL=https://api.beezy.fyi`
+
+The Cloud Run public API should keep Secret Manager `site-origin` set to:
+`https://beezy.fyi,https://www.beezy.fyi`
+
+The social Cloud Run jobs should keep:
+- `BEEZY_API_URL=https://api.beezy.fyi`
+- `BEEZY_SITE_URL=https://beezy.fyi`
+
+One-shot Cloud Shell update after domain or tweet job code changes:
+
+```bash
+PROJECT_ID="concrete-crow-445205-m4"
+REGION="us-central1"
+IMAGE="gcr.io/$PROJECT_ID/mlb-betting:latest"
+
+gcloud config set project "$PROJECT_ID"
+
+echo -n "https://beezy.fyi,https://www.beezy.fyi" | \
+  gcloud secrets versions add site-origin --data-file=-
+
+gcloud run services update mlb-betting \
+  --region "$REGION" \
+  --update-secrets SITE_ORIGIN=site-origin:latest
+
+gcloud builds submit --tag "$IMAGE" --project "$PROJECT_ID"
+
+for JOB in mlb-tweet-picks mlb-tweet-recap; do
+  gcloud run jobs update "$JOB" \
+    --region "$REGION" \
+    --image "$IMAGE" \
+    --set-env-vars BEEZY_API_URL=https://api.beezy.fyi,BEEZY_SITE_URL=https://beezy.fyi
+done
+
+curl -i https://api.beezy.fyi/healthz
+curl -i https://beezy.fyi/api/stats/summary
+```
 
 ---
 
@@ -611,7 +653,7 @@ Update two places:
 - Headshots refreshed (update date in §4) -> §3 + §4
 - Typefully replaced with another tool -> §4 Cloud Run jobs
 - Gemini API key rotated or provider changed -> §4 Cloud Run jobs
-- DNS configured for beezy.fyi -> §4 When beezy.fyi DNS is configured
+- Domain/API wiring changes -> §4 Website domain wiring
 - Rationale wiring status changes -> §4 Rationale / notes wiring
 
 **Don't put architecture or contracts here.** That belongs in CONTEXT.md.
