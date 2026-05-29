@@ -1,6 +1,6 @@
 # Runbooks
 
-_Last updated: 2026-05-25 21:30 CST_
+_Last updated: 2026-05-28 18:45 CST_
 
 Common manual actions and operational workflows for `lmaynor/mlb-betting`.
 CONTEXT.md is the contract; this is the cookbook. If something here
@@ -170,6 +170,11 @@ curl -s -X POST http://localhost:8081/build-all-features \
 `1I` does not need a separate feature build today; it uses NRFI half-inning
 features. `BATTER_TB` has its own feature build and model artifact.
 
+`BATTER_HITS` and `BATTER_TB` require confirmed MLB lineup rows for live
+candidate generation. If lineups are not posted yet, they skip the unsafe
+historical-team fallback and may return fewer or zero bets. This is intentional:
+do not force a batter prop run by matching old feature rows to today's teams.
+
 ### Delete bets and re-run clean
 
 ```bash
@@ -318,6 +323,18 @@ gcloud run jobs execute mlb-calibrate-batter-hits --region=us-central1
 gcloud run jobs execute mlb-retrain-batter-tb     --region=us-central1
 gcloud run jobs execute mlb-calibrate-batter-tb   --region=us-central1
 ```
+
+After `BATTER_TB` retrain/calibrate, run a TB-only smoke test after lineups are
+posted:
+
+```bash
+curl -s -X POST https://mlb-betting-628109313129.us-central1.run.app/run \
+  -H "Content-Type: application/json" \
+  -d '{"systems":["BATTER_TB"],"run_type":"morning"}' | python3 -m json.tool
+```
+
+Sanity check that every returned player belongs to the listed game. The runner
+also enforces `SGO event_id == feature game_pk` before logging a bet.
 
 ### Discord bot scripts
 

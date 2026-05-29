@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-28 18:03 CST_
+_Last updated: 2026-05-28 18:45 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -46,9 +46,14 @@ Ten MLB betting systems running daily in GCP:
 | **OUTS** | E[pitcher outs recorded] (trained NegBin; retrain_outs_v1.py) | Pitcher outs O/U (best onshore book) | Live (paper) |
 | **F1H** | P(home wins innings 1-4) via F5 scalar proxy | First Half ML (best onshore book) | Live (log-only) |
 | **GAME Pro v1** | P(home wins full game) -- binary:logistic with bullpen features (xwOBA L14, K%/BB%, fatigue IP L7) that F5 misses | Full Game ML (best onshore book) | Live (log-only, 200-bet gate) |
-| **BATTER_TB** | P(total bases > line) Normal proxy via HR model quality | Batter TB O/U (best onshore book) | Live (log-only) |
+| **BATTER_TB** | E[batter total bases] NegBin count regressor (lambda; XBH/contact/platoon/pitcher features) | Batter TB O/U (best onshore book) | Live (paper) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
+
+Batter prop runners (`BATTER_HITS`, `BATTER_TB`) require confirmed lineup
+candidates and skip any SGO prop whose `event_id` does not match the feature
+row `game_pk`. Do not restore historical-team fallback matching; it can assign
+players to the wrong game when lineups are missing.
 
 OUTS is a sub-market of the K runner -- same feature CSV, same `run_k.py` -- but logged as a separate system (`system="OUTS"`) for independent tracking and settlement.
 
@@ -57,6 +62,9 @@ All systems are paper-mode-only until each clears a 200-settled-bet gate.
 The system has three responsibilities: **build features daily**, **score / size bets twice daily**, and **settle bets + monitor performance nightly**.
 
 Model training itself is human-driven (notebooks on Windows) but is being migrated to a Cloud Run Jobs pipeline (`training/`).
+`BATTER_TB` is now first-class in that pipeline via `BATTER_TB_System/`,
+`runners/build_batter_tb_features.py`, `training/retrain_batter_tb_v1.py`, and
+`training/calibrate_batter_tb_v1.py`.
 
 ---
 
@@ -946,8 +954,8 @@ ROI, mean_clv per book. Alert if any book reaches n >= 20 and ROI < -20%
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
-- BATTER_HITS: 52%, GAME: 52% (both update after 200 settled bets; dedicated trained models)
-- F1H: 52%, BATTER_TB: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
+- BATTER_HITS: 52%, BATTER_TB: 52%, GAME: 52% (update after 200 settled bets; dedicated trained models)
+- F1H: 52%, PITCHER_ER: 52% (update after 100 settled bets each; proxy models, treat baselines as placeholders)
 
 ---
 
@@ -1907,11 +1915,17 @@ The math: `p_away = p_away_half * (1 - p_home_half)`, etc.
 (2026-05-21) replaced this with a trained `count:poisson` XGBoost model on
 `starter_outs` target. Runner falls back to Normal proxy if model not found in GCS.
 
-**BATTER_TB and PITCHER_ER ship log-only (stake=0, kelly_triggered=False).**
-Both use proxy models (Normal/Gamma approximations anchored to HR or K model output)
-rather than dedicated trained models. Do not enable real Kelly sizing until post-hoc
-analysis of ~100 settled bets confirms the proxy edge predicts outcomes. Gate is in
-the runner code -- set stake and kelly_triggered manually after review.
+**BATTER_TB is a dedicated trained NegBin count model.** `run_batter_tb.py`
+uses XGBoost `count:poisson` predicting expected total bases (lambda), then
+applies NegBin CDF against the live book line. It requires confirmed lineup
+candidates and skips any prop where SGO `event_id` does not match feature
+`game_pk`. Do not restore the old historical-team fallback; it can assign a
+player to the wrong game.
+
+**PITCHER_ER ships log-only (stake=0, kelly_triggered=False).** It uses a Gamma
+proxy anchored to K model output rather than a dedicated trained model. Do not
+enable real Kelly sizing until post-hoc analysis of ~100 settled bets confirms
+the proxy edge predicts outcomes.
 
 **BATTER_HITS ships log-only via a trained NegBin model (LOG_ONLY=True gate).**
 `run_batter_hits.py` uses XGBoost `count:poisson` predicting expected hits
