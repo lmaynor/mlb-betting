@@ -14,9 +14,7 @@ import Stripe                        from 'stripe'
 import { clerkClient }               from '@clerk/nextjs/server'
 
 function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-05-27.dahlia',
-  })
+  return new Stripe(process.env.STRIPE_SECRET_KEY!)
 }
 
 const PRICE_TO_TIER: Record<string, string> = {

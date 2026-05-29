@@ -6,9 +6,7 @@ import { currentUser }  from '@clerk/nextjs/server'
 import { redirect }     from 'next/navigation'
 
 function getStripe() {
-  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-05-27.dahlia',
-  })
+  return new Stripe(process.env.STRIPE_SECRET_KEY!)
 }
 
 export async function GET() {
