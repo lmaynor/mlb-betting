@@ -2,19 +2,11 @@ import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { PicksTable }   from '@/components/picks/picks-table'
 import { SystemBadge }  from '@/components/ui/primitives'
 import { siteDateKey }  from '@/lib/dates'
+import { getPickSystemByKey } from '@/lib/pick-systems'
+import { SYSTEM_COLOR } from '@/lib/tokens'
 import Link             from 'next/link'
 
 const B = '0.5px solid #1f1f24'
-
-const SYSTEM_META: Record<string, {
-  name: string; description: string; color: string; slug: string; learnSlug?: string
-}> = {
-  NRFI: { name: 'No Run First Inning', description: 'XGBoost model combining starter ERA/FIP/K%, umpire called-strike rate, park factor, and weather to predict scoreless first innings.', color: '#10b981', slug: 'nrfi', learnSlug: 'what-is-nrfi' },
-  HR:   { name: 'Home Run Props',       description: 'Barrel rate, exit velocity, launch angle, pitcher HR/9, park HR factor, and platoon splits identify +EV home run props.',             color: '#f59e0b', slug: 'hr',   learnSlug: 'home-run-props' },
-  F5:   { name: 'First 5 Innings',      description: 'Starting pitcher SIERA, L5 ERA, opponent wOBA, and umpire run-scoring tendency for F5 spread and total bets.',                       color: '#3b82f6', slug: 'f5',   learnSlug: 'f5-betting' },
-  K:    { name: 'Strikeout Props',      description: 'SwStr%, Zone%, ChaseStr%, opponent K% per lineup, and L5 average strikeouts project starter K totals.',                              color: '#a78bfa', slug: 'k',    learnSlug: 'mlb-strikeout-props' },
-  OUTS: { name: 'Outs Props',           description: 'Pitch efficiency, innings-per-start trend, bullpen availability, and opponent OBP for outs recorded props.',                         color: '#fb923c', slug: 'outs' },
-}
 
 // isLast removes the right border on the final cell so it doesn't bleed into the container border
 function StatBlock({ label, value, sub, accent, isLast }: { label: string; value: string; sub?: string; accent?: boolean; isLast?: boolean }) {
@@ -28,7 +20,14 @@ function StatBlock({ label, value, sub, accent, isLast }: { label: string; value
 }
 
 export async function SystemPicksPage({ system }: { system: string }) {
-  const meta = SYSTEM_META[system]
+  const meta = getPickSystemByKey(system) ?? {
+    key: system,
+    slug: system.toLowerCase(),
+    name: system,
+    shortName: system,
+    description: 'Today\'s model-qualified picks from Beezy.FYI.',
+  }
+  const systemColor = SYSTEM_COLOR[system] ?? '#10b981'
 
   const [picks, allStats] = await Promise.all([
     getPicks({ system, date: siteDateKey(), limit: 50 }).catch(() => []),
@@ -66,7 +65,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         </p>
         {meta.learnSlug && (
           <Link href={`/learn/${meta.learnSlug}`} className="mono" style={{ fontSize: '11px', color: '#71717a', textDecoration: 'none' }}>
-            Learn about {system} betting &rarr;
+            Learn about {meta.shortName} betting &rarr;
           </Link>
         )}
       </div>
@@ -92,7 +91,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
             <span className="mono" style={{ fontSize: '9px', color: '#71717a' }}>{totalBets}/200</span>
           </div>
           <div style={{ height: '2px', background: '#1f1f24' }}>
-            <div style={{ height: '2px', background: meta.color, width: `${gatePct}%`, transition: 'width 0.3s' }} />
+            <div style={{ height: '2px', background: systemColor, width: `${gatePct}%`, transition: 'width 0.3s' }} />
           </div>
         </div>
         <span className="mono" style={{
@@ -108,11 +107,11 @@ export async function SystemPicksPage({ system }: { system: string }) {
       {/* Today's picks */}
       <div style={{ marginBottom: '36px' }}>
         <h2 style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7', letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: '14px' }}>
-          Today&apos;s {system} Picks
+          Today&apos;s {meta.shortName} Picks
         </h2>
         {picks.length === 0 ? (
           <div style={{ border: B, padding: '40px', textAlign: 'center' as const }}>
-            <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No qualifying {system} picks today.</p>
+            <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>No qualifying {meta.shortName} picks today.</p>
             <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '6px' }}>Model runs in Central Time after lineups post.</p>
           </div>
         ) : (

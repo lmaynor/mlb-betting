@@ -10,15 +10,15 @@ const META: Record<string, { name: string; desc: string; href: string; bg: strin
   F5:   { name: 'First 5 Innings',       desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                      href: '/picks/mlb/f5',   bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
   K:    { name: 'Strikeout Props',        desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                   href: '/picks/mlb/k',    bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
   OUTS: { name: 'Pitcher Outs Props',    desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                              href: '/picks/mlb/outs', bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
-  GAME: { name: 'Full Game',             desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                         href: '/models', bg: '#09111f', color: '#60a5fa', border: '0.5px solid #1d4ed8' },
-  F3:   { name: 'First 3 Innings',        desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',                  href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
-  F1H:  { name: 'First Half',             desc: 'Hybrid innings window before bullpen noise dominates the projection.',                            href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
-  F7:   { name: 'First 7 Innings',        desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                            href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
-  BATTER_K: { name: 'Batter Strikeouts',  desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                        href: '/models', bg: '#130d1c', color: '#c084fc', border: '0.5px solid #6b21a8' },
-  BATTER_TB: { name: 'Total Bases',       desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                   href: '/models', bg: '#1c1207', color: '#fbbf24', border: '0.5px solid #a16207' },
-  BATTER_HITS: { name: 'Hits Props',      desc: 'Contact rate, expected average, platoon split, and park context for hits props.',                  href: '/models', bg: '#141006', color: '#fde047', border: '0.5px solid #a16207' },
-  PITCHER_ER: { name: 'Pitcher ER Props', desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',                href: '/models', bg: '#1a0d05', color: '#fb7185', border: '0.5px solid #be123c' },
-  '2I': { name: 'Second Inning',          desc: 'Pipeline inning-window pricing for early-game markets.',                                           href: '/models', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  GAME: { name: 'Full Game',             desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                         href: '/picks/mlb/game', bg: '#09111f', color: '#60a5fa', border: '0.5px solid #1d4ed8' },
+  F3:   { name: 'First 3 Innings',        desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',                  href: '/picks/mlb/f3', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  F1H:  { name: 'First Half',             desc: 'Hybrid innings window before bullpen noise dominates the projection.',                            href: '/picks/mlb/f1h', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  F7:   { name: 'First 7 Innings',        desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                            href: '/picks/mlb/f7', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
+  BATTER_K: { name: 'Batter Strikeouts',  desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                        href: '/picks/mlb/batter-k', bg: '#130d1c', color: '#c084fc', border: '0.5px solid #6b21a8' },
+  BATTER_TB: { name: 'Total Bases',       desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                   href: '/picks/mlb/batter-tb', bg: '#1c1207', color: '#fbbf24', border: '0.5px solid #a16207' },
+  BATTER_HITS: { name: 'Hits Props',      desc: 'Contact rate, expected average, platoon split, and park context for hits props.',                  href: '/picks/mlb/batter-hits', bg: '#141006', color: '#fde047', border: '0.5px solid #a16207' },
+  PITCHER_ER: { name: 'Pitcher ER Props', desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',                href: '/picks/mlb/pitcher-er', bg: '#1a0d05', color: '#fb7185', border: '0.5px solid #be123c' },
+  '1I': { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing for home, away, or draw outcomes.',                                href: '/picks/mlb/1i', bg: '#101827', color: '#38bdf8', border: '0.5px solid #0e7490' },
 }
 
 export async function ModelsGrid() {
@@ -50,7 +50,8 @@ export async function ModelsGrid() {
     </section>
   )
 
-  const items = [...stats, null] // null = ghost card
+  const columns = 3
+  const rows = Math.ceil(stats.length / columns)
 
   return (
     <section style={{ padding: '24px 20px', borderBottom: B }}>
@@ -60,22 +61,13 @@ export async function ModelsGrid() {
       </div>
 
       <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
-        {items.map((s, i) => {
-          const col = i % 3
-          const row = Math.floor(i / 3)
+        {stats.map((s, i) => {
+          const col = i % columns
+          const row = Math.floor(i / columns)
           const cellStyle: React.CSSProperties = {
-            borderRight:  col < 2 ? B : undefined,
-            borderBottom: row < 1 ? B : undefined,
+            borderRight:  col < columns - 1 ? B : undefined,
+            borderBottom: row < rows - 1 ? B : undefined,
           }
-
-          if (!s) return (
-            <div key="more" style={{ ...cellStyle, background: '#0d0d0f', minHeight: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#2a2a31', marginBottom: '4px' }}>More coming soon</div>
-                <div style={{ fontSize: '10px', color: '#2a2a31' }}>Batter props &middot; Live models</div>
-              </div>
-            </div>
-          )
 
           const meta = META[s.system]
           if (!meta) return null

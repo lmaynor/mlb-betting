@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { PICK_SYSTEMS } from '@/lib/pick-systems'
+import { SYSTEM_COLOR } from '@/lib/tokens'
 
 const B = '0.5px solid #1f1f24'
 
@@ -32,12 +34,8 @@ const CHIP_ACTIVE: React.CSSProperties = {
 }
 
 const SYSTEM_DOTS: Record<string, string> = {
-  ALL:  '#71717a',
-  NRFI: '#10b981',
-  HR:   '#f59e0b',
-  F5:   '#3b82f6',
-  K:    '#a78bfa',
-  OUTS: '#fb923c',
+  ALL: '#71717a',
+  ...Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, SYSTEM_COLOR[system.key] ?? '#71717a'])),
 }
 
 // Sort options shown inline in the toggle bar
@@ -81,7 +79,7 @@ export function FilterBar() {
     router.push('/picks?' + params.toString())
   }, [router, sp, sort, dir])
 
-  const SYSTEMS = ['ALL', 'NRFI', 'HR', 'F5', 'K', 'OUTS']
+  const SYSTEMS = ['ALL', ...PICK_SYSTEMS.map(system => system.key)]
   const RESULTS = ['ALL', 'WIN', 'LOSS', 'PENDING']
   // Removed 'ALL' (All Time) — results page handles full history
   const DATES   = ['today', 'yesterday', 'last7']

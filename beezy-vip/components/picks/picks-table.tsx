@@ -4,10 +4,13 @@ import { useState } from 'react'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { B, SYSTEM_PILL, TEAM_ABBREV, pickLabel } from '@/lib/tokens'
 import { formatDateKey } from '@/lib/dates'
+import { getPickSystemByKey } from '@/lib/pick-systems'
 import type { Bet } from '@/lib/types'
 
 const PAGE_SIZE = 30
-const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER'])
+const TABLE_GRID = '72px 72px 112px 96px minmax(330px, 1fr) 76px 72px 88px 72px 70px'
+const TABLE_MIN_WIDTH = '1120px'
+const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER'])
 
 function ResultPill({ result }: { result: string | null }) {
   const cfg: Record<string, { label: string; color: string; bg: string }> = {
@@ -103,7 +106,27 @@ function splitNotes(notes: string | null | undefined) {
 
 function pickDetail(label: string, player: string | null) {
   if (!player) return label
-  return label.replace(player, '').trim().replace(/^[-\s]+/, '')
+  return label
+    .replace(player, '')
+    .replace(/^\s*\([^)]+\)\s*/, '')
+    .trim()
+    .replace(/^[-\s]+/, '')
+}
+
+function systemDisplay(system: string) {
+  return getPickSystemByKey(system)?.shortName ?? system
+}
+
+function pickDescription(bet: Bet, detail: string) {
+  if (bet.system === 'HR') return 'Home run prop'
+  if (bet.system === 'BATTER_TB') return detail || 'Total bases prop'
+  if (bet.system === 'BATTER_HITS') return detail || 'Hits prop'
+  if (bet.system === 'BATTER_K') return detail || 'Batter strikeout prop'
+  if (bet.system === 'K') return detail || 'Pitcher strikeout prop'
+  if (bet.system === 'OUTS') return detail || 'Pitcher outs prop'
+  if (bet.system === 'PITCHER_ER') return detail || 'Earned runs prop'
+  if (bet.system === 'NRFI') return 'First inning run market'
+  return detail
 }
 
 function TableRow({ bet }: { bet: Bet }) {
@@ -113,14 +136,16 @@ function TableRow({ bet }: { bet: Bet }) {
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(bet.system)
   const notes = splitNotes(bet.notes)
+  const detail = pickDetail(label, bet.player)
+  const description = pickDescription(bet, detail)
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '72px 70px 64px 112px minmax(220px, 1fr) 76px 68px 76px 72px 70px',
+      gridTemplateColumns: TABLE_GRID,
       alignItems: 'center',
       borderBottom: B,
-      minWidth: '980px',
+      minWidth: TABLE_MIN_WIDTH,
       background: '#0d0d11',
     }}>
       <div className="mono" style={{ padding: '11px 10px', fontSize: '11px', color: '#71717a' }}>
@@ -133,6 +158,8 @@ function TableRow({ bet }: { bet: Bet }) {
 
       <div style={{ padding: '10px 6px' }}>
         <span className="mono" style={{
+          display: 'inline-flex',
+          maxWidth: '96px',
           padding: '2px 7px',
           borderRadius: 'var(--radius-sm)',
           fontSize: '10px',
@@ -141,8 +168,11 @@ function TableRow({ bet }: { bet: Bet }) {
           color: pill.color,
           background: pill.bg,
           border: `0.5px solid ${pill.color}33`,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}>
-          {bet.system}
+          {systemDisplay(bet.system)}
         </span>
       </div>
 
@@ -152,14 +182,17 @@ function TableRow({ bet }: { bet: Bet }) {
 
       <div style={{ padding: '10px 6px', minWidth: 0 }}>
         {hasProp && bet.player ? (
-          <>
-            <span style={{ fontSize: '12px', fontWeight: 750, color: '#f5f5f7' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '11px', color: '#a1a1aa', marginLeft: '6px' }}>
-              {pickDetail(label, bet.player)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+            <span style={{ fontSize: '12px', fontWeight: 750, color: '#f5f5f7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bet.player}</span>
+            <span className="mono" style={{ fontSize: '10px', color: '#a1a1aa', lineHeight: 1.4 }}>
+              {description}
             </span>
-          </>
+          </div>
         ) : (
-          <span style={{ fontSize: '12px', color: '#f5f5f7', fontWeight: 650 }}>{label}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+            <span style={{ fontSize: '12px', color: '#f5f5f7', fontWeight: 650 }}>{label}</span>
+            {description && <span className="mono" style={{ fontSize: '10px', color: '#71717a' }}>{description}</span>}
+          </div>
         )}
         {notes.length > 0 && (
           <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
@@ -197,6 +230,8 @@ function BetCard({ bet }: { bet: Bet }) {
   const notes = splitNotes(bet.notes)
   const score = beezyscore(bet)
   const tierColor = TIER_COLOR[scoreTier(score)]
+  const detail = pickDetail(label, bet.player)
+  const description = pickDescription(bet, detail)
 
   return (
     <div className="card-hover" style={{
@@ -222,7 +257,7 @@ function BetCard({ bet }: { bet: Bet }) {
             background: pill.bg,
             border: `0.5px solid ${pill.color}33`,
           }}>
-            {bet.system}
+            {systemDisplay(bet.system)}
           </span>
           <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>{fmtDate(bet.game_date)}</span>
         </div>
@@ -235,14 +270,17 @@ function BetCard({ bet }: { bet: Bet }) {
 
       <div>
         {hasProp && bet.player ? (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '12px', color: '#a1a1aa', marginLeft: '6px' }}>
-              {pickDetail(label, bet.player)}
+            <span className="mono" style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.45 }}>
+              {description}
             </span>
-          </>
+          </div>
         ) : (
-          <span style={{ fontSize: '15px', fontWeight: 750, color: '#f5f5f7' }}>{label}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '15px', fontWeight: 750, color: '#f5f5f7' }}>{label}</span>
+            {description && <span className="mono" style={{ fontSize: '12px', color: '#71717a' }}>{description}</span>}
+          </div>
         )}
         {notes.length > 0 && (
           <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -336,32 +374,32 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
   return (
     <>
       <div className="picks-desktop" style={{ border: B, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)', background: '#0a0a0c' }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '72px 70px 64px 112px minmax(220px, 1fr) 76px 68px 76px 72px 70px',
-          borderBottom: B,
-          minWidth: '980px',
-          background: '#111114',
-        }}>
-          {COLS.map(c => c.sortKey ? (
-            <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
-              padding: '8px 10px',
-              fontSize: '9px',
-              fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.1em',
-              color: sortKey === c.sortKey ? '#f5f5f7' : '#71717a',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}>
-              {c.label}{sortIndicator(c.sortKey)}
-            </button>
-          ) : (
-            <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '9px', letterSpacing: '0.1em', color: '#71717a' }}>{c.label}</div>
-          ))}
-        </div>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: TABLE_GRID,
+            borderBottom: B,
+            minWidth: TABLE_MIN_WIDTH,
+            background: '#111114',
+          }}>
+            {COLS.map(c => c.sortKey ? (
+              <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
+                padding: '8px 10px',
+                fontSize: '9px',
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.1em',
+                color: sortKey === c.sortKey ? '#f5f5f7' : '#71717a',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}>
+                {c.label}{sortIndicator(c.sortKey)}
+              </button>
+            ) : (
+              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '9px', letterSpacing: '0.1em', color: '#71717a' }}>{c.label}</div>
+            ))}
+          </div>
           {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}
         </div>
       </div>

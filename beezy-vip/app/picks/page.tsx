@@ -7,6 +7,7 @@ import { FilterBar } from '@/components/picks/filter-bar'
 import { PicksTable } from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import { siteDateKey } from '@/lib/dates'
+import { PICK_SYSTEMS } from '@/lib/pick-systems'
 
 export const metadata: Metadata = {
   title: 'MLB Picks - All Systems',
@@ -43,8 +44,8 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#f5f5f7' }}>Picks</h1>
-            <p className="mono" style={{ fontSize: '12px', color: '#71717a', marginTop: '4px' }}>
-              MLB / all books / ranked by Beezy Score
+            <p style={{ fontSize: '13px', color: '#a1a1aa', marginTop: '5px', maxWidth: '560px', lineHeight: 1.55 }}>
+              Every model-qualified MLB play across {PICK_SYSTEMS.length} systems, ranked by Beezy Score with market, book, edge, and result context.
             </p>
           </div>
           <a

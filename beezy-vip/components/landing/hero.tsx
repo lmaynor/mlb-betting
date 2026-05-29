@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { apiGetStats, apiGetSparkline } from '@/lib/betting-api'
 import { HeroSparkline } from '@/components/landing/hero-sparkline'
+import { PICK_SYSTEMS } from '@/lib/pick-systems'
 
 const B = '0.5px solid #1f1f24'
 
@@ -76,7 +77,7 @@ export async function Hero() {
             <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--text)' }}>
               {stats.total_bets}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>5 systems &middot; MLB</div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{PICK_SYSTEMS.length} systems &middot; MLB</div>
           </div>
           <div style={{ padding: '24px 18px' }}>
             <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Avg Edge</div>

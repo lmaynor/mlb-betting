@@ -1,33 +1,29 @@
-import { notFound }        from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { SystemPicksPage } from '@/components/picks/system-picks-page'
-import type { Metadata }   from 'next'
-
-const VALID = ['nrfi', 'hr', 'f5', 'k', 'outs'] as const
-type Slug   = typeof VALID[number]
-
-const META: Record<Slug, { name: string; desc: string }> = {
-  nrfi: { name: 'No Run First Inning', desc: "Today's NRFI picks from the Beezy.FYI XGBoost model." },
-  hr:   { name: 'Home Run Props',      desc: "Today's HR prop picks from the Beezy.FYI model." },
-  f5:   { name: 'First 5 Innings',     desc: "Today's F5 moneyline picks from the Beezy.FYI model." },
-  k:    { name: 'Strikeout Props',     desc: "Today's pitcher strikeout picks from the Beezy.FYI model." },
-  outs: { name: 'Outs Props',          desc: "Today's pitcher outs picks from the Beezy.FYI model." },
-}
+import { PICK_SYSTEMS, getPickSystemBySlug } from '@/lib/pick-systems'
+import type { Metadata } from 'next'
 
 type Props = { params: Promise<{ system: string }> }
 
+export function generateStaticParams() {
+  return PICK_SYSTEMS.map(system => ({ system: system.slug }))
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { system } = await params
-  const slug = system.toLowerCase() as Slug
-  if (!VALID.includes(slug)) return { title: 'Not Found' }
+  const spec = getPickSystemBySlug(system)
+  if (!spec) return { title: 'Not Found' }
+
   return {
-    title:       `${META[slug].name} Picks -- Beezy.FYI`,
-    description: META[slug].desc,
+    title: `${spec.name} Picks -- Beezy.FYI`,
+    description: `Today's ${spec.name} picks from Beezy.FYI. ${spec.description}`,
   }
 }
 
 export default async function SystemPage({ params }: Props) {
   const { system } = await params
-  const slug = system.toLowerCase()
-  if (!VALID.includes(slug as Slug)) notFound()
-  return <SystemPicksPage system={slug.toUpperCase()} />
+  const spec = getPickSystemBySlug(system)
+  if (!spec) notFound()
+
+  return <SystemPicksPage system={spec.key} />
 }
