@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 import unicodedata as _unicodedata
 
+RAINOUT_AUTO_VOID_DAYS = 2
+
 
 def _norm(s: str) -> str:
     """Normalise a player name: NFD, strip diacritics, ASCII-fold, lower, strip."""
@@ -49,6 +51,60 @@ def _calc_profit(stake: float, odds: int, result: str) -> float:
         return round(stake * odds / 100, 2)
     else:
         return round(stake * 100 / abs(odds), 2)
+
+
+def _parse_game_date(value) -> date | None:
+    """Parse DB game_date values that may arrive as str/date/Timestamp."""
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date()
+
+
+def _void_stale_nonfinal_bets(
+    pending: pd.DataFrame,
+    game_cache: dict,
+    settle_date: str,
+    grace_days: int = RAINOUT_AUTO_VOID_DAYS,
+) -> list[dict]:
+    """Void pending bets when MLB still has no final game after the grace period."""
+    settle_dt = _parse_game_date(settle_date)
+    if settle_dt is None:
+        logger.warning(f"settle: unable to parse settle_date={settle_date}; stale void check skipped")
+        return []
+
+    outcomes: list[dict] = []
+    for _, bet in pending.iterrows():
+        try:
+            gpk = int(bet["game_pk"])
+        except (TypeError, ValueError):
+            continue
+
+        if game_cache.get(gpk) is not None:
+            continue
+
+        game_dt = _parse_game_date(bet.get("game_date"))
+        if game_dt is None:
+            logger.warning(
+                f"settle: unable to parse game_date={bet.get('game_date')} "
+                f"for bet_id={bet.get('id')}; stale void check skipped"
+            )
+            continue
+
+        age_days = (settle_dt - game_dt).days
+        if age_days >= grace_days:
+            outcomes.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
+            logger.info(
+                f"settle: auto-voiding stale non-final bet id={bet['id']} "
+                f"game_pk={gpk} game_date={game_dt.isoformat()} age_days={age_days}"
+            )
+    return outcomes
 
 
 # ── Settlement functions ──────────────────────────────────────────────────────
@@ -425,6 +481,7 @@ def run(settle_date: str = None) -> dict:
 
     today_count = (pending_all["game_date"] == settle_date).sum()
     retry_count = (pending_all["game_date"] < settle_date).sum()
+    original_pending_count = len(pending_all)
     logger.info(f"settle: {today_count} bets for {settle_date}, "
                 f"{retry_count} stale pending bets being retried")
     for gd, grp in pending_all.groupby("game_date"):
@@ -451,9 +508,16 @@ def run(settle_date: str = None) -> dict:
                 game_cache[gpk] = None
             logger.info(f"settle: game_pk={gpk} final={game_cache[gpk] is not None}")
 
+    stale_void_outcomes = _void_stale_nonfinal_bets(pending_all, game_cache, settle_date)
+    if stale_void_outcomes:
+        stale_void_ids = {int(o["id"]) for o in stale_void_outcomes}
+        pending_all = pending_all[~pending_all["id"].astype(int).isin(stale_void_ids)]
+        logger.info(f"settle: auto-voided {len(stale_void_outcomes)} stale non-final bets")
+
     # Dispatch to per-system settlers
     SYSTEM_MAP = {
         "NRFI":       _settle_nrfi,
+        "1IOU":       _settle_nrfi,
         "1I":         _settle_nrfi,   # 1I_AWAY/HOME/DRAW settled by same linescore logic
         "F5":         _settle_f5,
         "HR":         _settle_hr,
@@ -472,7 +536,7 @@ def run(settle_date: str = None) -> dict:
     # Group batter props so they are settled together (single pass over boxscore)
     BATTER_PROP_SYSTEMS = {"BATTER_K", "BATTER_TB", "BATTER_HITS"}
 
-    all_outcomes: list[dict] = []
+    all_outcomes: list[dict] = list(stale_void_outcomes)
     batter_prop_pending = pending_all[pending_all["system"].isin(BATTER_PROP_SYSTEMS)]
     non_batter_pending  = pending_all[~pending_all["system"].isin(BATTER_PROP_SYSTEMS)]
 
@@ -530,7 +594,7 @@ def run(settle_date: str = None) -> dict:
         )
 
     ALL_SYSTEMS = [
-        "HR", "1IOU", "F5", "K", "OUTS",
+        "HR", "1IOU", "1I", "F5", "K", "OUTS",
         "F3", "F1H", "F7", "GAME",
         "BATTER_K", "BATTER_TB", "BATTER_HITS", "PITCHER_ER",
     ]
@@ -563,6 +627,6 @@ def run(settle_date: str = None) -> dict:
         "settle_date": settle_date,
         "settled":     len(all_outcomes),
         "retried":     int(retry_count),
-        "skipped":     len(pending_all) - len(all_outcomes),
+        "skipped":     original_pending_count - len(all_outcomes),
         "systems":     {k: (v or {}) for k, v in system_stats.items()},
     }

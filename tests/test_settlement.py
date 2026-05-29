@@ -17,7 +17,9 @@ from runners.settle_bets import (
     _settle_f5,
     _settle_hr,
     _settle_k,
+    _settle_batter_props,
     _settle_pitcher_er,
+    _void_stale_nonfinal_bets,
 )
 
 
@@ -277,6 +279,60 @@ class TestSettleK:
         pitchers = {"jose berrios": {"strikeouts": 8, "outs": 18, "earned_runs": 2}}
         results  = self._settle("K_OVER_6.5", "José Berríos", pitchers)
         assert results[0]["result"] == "win"
+
+
+# ── Batter props ──────────────────────────────────────────────────────────────
+
+class TestSettleBatterProps:
+    def _make_batters(self, name, starter=True, strikeouts=1, hits=1, total_bases=2):
+        return {
+            name: {
+                "starter": starter,
+                "strikeouts": strikeouts,
+                "hits": hits,
+                "total_bases": total_bases,
+            }
+        }
+
+    def _settle(self, bet_type, player, batters):
+        pending = _make_pending([{"id": 1, "player": player, "bet_type": bet_type}])
+        cache = {100: _boxscore(batters=batters)}
+        return _settle_batter_props(pending, cache)
+
+    def test_batter_tb_over_win(self):
+        batters = self._make_batters("aaron judge", total_bases=2)
+        results = self._settle("BATTER_TB_OVER_1.5", "Aaron Judge", batters)
+        assert results[0]["result"] == "win"
+
+    def test_batter_tb_under_loss(self):
+        batters = self._make_batters("aaron judge", total_bases=2)
+        results = self._settle("BATTER_TB_UNDER_1.5", "Aaron Judge", batters)
+        assert results[0]["result"] == "loss"
+
+    def test_batter_tb_non_starter_void(self):
+        batters = self._make_batters("aaron judge", starter=False, total_bases=0)
+        results = self._settle("BATTER_TB_OVER_1.5", "Aaron Judge", batters)
+        assert results[0]["result"] == "void"
+        assert results[0]["profit"] == 0.0
+
+
+# ── Stale non-final voids ─────────────────────────────────────────────────────
+
+class TestStaleNonFinalVoids:
+    def test_nonfinal_game_auto_voids_after_two_days(self):
+        pending = _make_pending([{"id": 1, "game_date": "2026-05-01"}])
+        results = _void_stale_nonfinal_bets(pending, {100: None}, "2026-05-03")
+        assert results == [{"id": 1, "result": "void", "profit": 0.0}]
+
+    def test_nonfinal_game_inside_grace_period_stays_pending(self):
+        pending = _make_pending([{"id": 1, "game_date": "2026-05-02"}])
+        results = _void_stale_nonfinal_bets(pending, {100: None}, "2026-05-03")
+        assert results == []
+
+    def test_final_game_does_not_auto_void_even_when_stale(self):
+        pending = _make_pending([{"id": 1, "game_date": "2026-05-01"}])
+        results = _void_stale_nonfinal_bets(pending, {100: _boxscore()}, "2026-05-03")
+        assert results == []
 
 
 # ── PITCHER_ER ───────────────────────────────────────────────────────────────
