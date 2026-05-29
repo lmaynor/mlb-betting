@@ -1,5 +1,5 @@
 """
-tweet_drafter.py — beezy_vip Twitter content automation
+tweet_drafter.py — beezy_fyi Twitter content automation
 Runs as a Cloud Run job. Pulls picks/results from the beezy API,
 generates tweet drafts via Gemini, pushes to Typefully as drafts.
 
@@ -37,7 +37,7 @@ MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
 # ── Brand voice system prompt ─────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """
-You are the voice of @beezy_vip on Twitter — a model-driven MLB betting
+You are the voice of @beezy_fyi on Twitter — a model-driven MLB betting
 analytics account. beezy.fyi runs 5 quantitative models (HR, NRFI, F5, K,
 OUTS) that publish every pick publicly with edge %, Kelly stake, and full
 results history. Paper mode now; launching when 200-bet gate is cleared.
@@ -122,7 +122,7 @@ def build_picks_prompt(picks):
         lines.append(line)
 
     lines.append(
-        "\nWrite 3 tweet drafts for @beezy_vip announcing today's picks. "
+        "\nWrite 3 tweet drafts for @beezy_fyi announcing today's picks. "
         "Return only a JSON array of 3 strings."
     )
     return "\n".join(lines)
@@ -166,7 +166,7 @@ def build_recap_prompt(settled, stats):
         )
 
     prompt += (
-        "\nWrite 3 tweet drafts for @beezy_vip recapping today's results. "
+        "\nWrite 3 tweet drafts for @beezy_fyi recapping today's results. "
         "Return only a JSON array of 3 strings."
     )
     return prompt

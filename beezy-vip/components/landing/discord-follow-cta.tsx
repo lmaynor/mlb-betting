@@ -3,7 +3,7 @@ import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
-const X_URL = 'https://x.com/BeezyVIP'
+const X_URL = 'https://x.com/beezy_fyi'
 
 export function DiscordFollowCTA() {
   return (

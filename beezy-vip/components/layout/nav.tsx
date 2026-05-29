@@ -8,7 +8,7 @@ import { XMark } from '@/components/ui/x-mark'
 
 const B = '0.5px solid #1f1f24'
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
-const X_URL = 'https://x.com/BeezyVIP'
+const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
   { label: 'Picks',       href: '/picks' },
   { label: 'Daily Card',  href: '/cheat-sheet' },

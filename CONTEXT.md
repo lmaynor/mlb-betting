@@ -1005,8 +1005,14 @@ does not reliably generate CSS in this monorepo subdirectory. Migration complete
 2026-05-18. Dead pages (teams, players, pitchers, games, recap) deleted. Articles are served statically from `beezy-vip/lib/articles-static.ts`
 and `beezy-vip/content/learn/*.md` -- no DB needed.
 
-Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.fyi
-pending DNS configuration).
+Production URL: https://mlb-betting-rose.vercel.app. Canonical custom domain:
+`https://beezy.fyi`; `https://www.beezy.fyi` should redirect to the apex once
+Vercel DNS propagation completes. Backend public API canonical domain:
+`https://api.beezy.fyi`.
+
+Public social handle: X/Twitter `@beezy_fyi`
+(`https://x.com/beezy_fyi`). Keep site links, OG cards, Discord copy, and
+tweet drafts aligned to `beezy.fyi` / `@beezy_fyi`.
 
 ### Repo layout
 
@@ -1162,9 +1168,13 @@ Bloomberg Terminal meets PrizePicks aesthetic:
 
 - Project: `mlb-betting` on Vercel (root directory set to `beezy-vip`)
 - Auto-deploys on push to `main` branch
+- Canonical domain: `beezy.fyi` (apex), with `www.beezy.fyi` attached as the
+  secondary domain. Porkbun nameserver delegation may take time to propagate.
 - Required env vars: `BETTING_API_URL`, `BETTING_API_KEY`, `LEARN_DATABASE_URL`,
   `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `ADMIN_SECRET_KEY`,
   `CRON_SECRET`, `STRIPE_*` keys, `NEXT_PUBLIC_BASE_URL`, `BLOCKED_STATES`
+- Set `NEXT_PUBLIC_BASE_URL=https://beezy.fyi`.
+- Set `BETTING_API_URL=https://api.beezy.fyi` once Cloud Run domain mapping is live.
 
 ### GCP resources for beezy-vip
 
@@ -1252,7 +1262,8 @@ subscription via Clerk auth. CSV export uses exact edge values.
 
 ### Pre-launch checklist
 
-- [ ] beezy.fyi DNS -> Vercel
+- [ ] beezy.fyi DNS -> Vercel nameservers fully propagated
+- [ ] api.beezy.fyi mapped to Cloud Run public API
 - [ ] Clerk production keys in Vercel env vars
 - [ ] beezy.fyi added to Clerk allowed origins
 - [ ] Stripe production price IDs set

@@ -480,7 +480,7 @@ followers to beezy.fyi members and Discord joiners. Three OG image cards
 served from Vercel edge runtime + two Cloud Run jobs that generate tweet
 drafts via Gemini and post picks cards to Discord.
 
-Twitter handle: @beezy_vip
+Twitter handle: @beezy_fyi
 Discord invite: discord.gg/HfMYCmbmE
 Site: https://mlb-betting-rose.vercel.app (beezy.fyi pending DNS)
 
