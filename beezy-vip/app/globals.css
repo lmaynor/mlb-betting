@@ -230,6 +230,8 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .results-model-mobile  { display: none; }
 .models-table-desktop { display: block; }
 .models-cards-mobile { display: none; }
+.home-recent-desktop { display: block; }
+.home-recent-mobile { display: none; }
 
 @media (max-width: 768px) {
   .picks-desktop { display: none !important; }
@@ -240,5 +242,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   .results-model-mobile  { display: block !important; }
   .models-table-desktop { display: none !important; }
   .models-cards-mobile { display: block !important; }
+  .home-recent-desktop { display: none !important; }
+  .home-recent-mobile { display: block !important; }
   .pipeline-grid { grid-template-columns: 1fr !important; }
 }
