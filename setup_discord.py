@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Discord server setup script for beezy.vip
+Discord server setup script for beezy.fyi
 Run once from Cloud Shell after bot is added to server.
 
 Usage:
@@ -232,7 +232,7 @@ async def run_setup(guild: discord.Guild):
     await guild.create_text_channel(
         "welcome",
         category=cat_info,
-        topic="What is beezy.vip and how to read picks.",
+        topic="What is beezy.fyi and how to read picks.",
         overwrites=read_only(*all_members),
     )
     print("  Created: #welcome")
@@ -381,7 +381,7 @@ async def run_setup(guild: discord.Guild):
     welcome_ch = discord.utils.get(guild.text_channels, name="welcome")
     if welcome_ch:
         await welcome_ch.send(
-            "**Welcome to beezy.vip**\n\n"
+            "**Welcome to beezy.fyi**\n\n"
             "Five MLB betting systems running daily:\n"
             "• **HR Pro** — home run yes/no props\n"
             "• **NRFI Pro** — no run first inning\n"
@@ -391,7 +391,7 @@ async def run_setup(guild: discord.Guild):
             "All systems are in **paper mode** until each clears 200 settled bets.\n\n"
             "→ Start in <#verify> to unlock the server.\n"
             "→ Then visit <#preferences> to opt into book and state pings.\n"
-            "→ Full pick history and stats at https://beezy.vip"
+            "→ Full pick history and stats at https://beezy.fyi"
         )
         print("  Seeded #welcome")
 

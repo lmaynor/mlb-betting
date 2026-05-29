@@ -30,7 +30,7 @@ export function Nav() {
         {/* Logo */}
         <Link href="/" style={{ textDecoration: 'none' }}>
           <span className="mono" style={{ fontSize: '15px', fontWeight: 600, color: '#f5f5f7' }}>
-            BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
+            BEEZY<span style={{ color: '#10b981' }}>.FYI</span>
           </span>
         </Link>
 
@@ -45,7 +45,7 @@ export function Nav() {
 
         {/* Desktop: Discord + auth */}
         <div className="nav-desktop" style={{ gap: '12px' }}>
-          <a href={X_URL} target="_blank" rel="noopener noreferrer" className="mono" aria-label="Follow Beezy.VIP on X"
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" className="mono" aria-label="Follow Beezy.FYI on X"
             style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '29px', height: '29px', border: '0.5px solid #2a2a31', color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
             <XMark size={14} color="currentColor" />
           </a>
@@ -81,7 +81,7 @@ export function Nav() {
               </button>
             </SignInButton>
           )}
-          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.VIP on X"
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.FYI on X"
             style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '27px', height: '27px', border: '0.5px solid #2a2a31', color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}>
             <XMark size={13} color="currentColor" />
           </a>

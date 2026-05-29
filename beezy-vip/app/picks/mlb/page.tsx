@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title:       'MLB Picks Today — All Systems',
-  description: "Today's MLB picks from all Beezy.VIP machine learning systems: NRFI, HR, F5, K, and OUTS.",
+  description: "Today's MLB picks from all Beezy.FYI machine learning systems: NRFI, HR, F5, K, and OUTS.",
 }
 
 const B = '0.5px solid #1f1f24'

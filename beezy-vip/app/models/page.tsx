@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Models - Methodology & Transparency',
-  description: 'How Beezy.VIP builds MLB betting models. Walk-forward CV, Kelly gating, 200-bet gate, and pipeline systems.',
+  description: 'How Beezy.FYI builds MLB betting models. Walk-forward CV, Kelly gating, 200-bet gate, and pipeline systems.',
 }
 
 const B = '0.5px solid #1f1f24'

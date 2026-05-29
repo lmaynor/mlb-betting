@@ -111,7 +111,7 @@ export async function GET() {
       <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #1a1a22", gap:"10px" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:"0px" }}>
           <span style={{ fontSize:"52px", fontWeight:900, color:"#ffffff", letterSpacing:"-3px" }}>BEEZY</span>
-          <span style={{ fontSize:"52px", fontWeight:900, color:"#10b981", letterSpacing:"-3px" }}>.VIP</span>
+          <span style={{ fontSize:"52px", fontWeight:900, color:"#10b981", letterSpacing:"-3px" }}>.FYI</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
           <div style={{ display:"flex", background:"rgba(245,158,11,0.12)", border:"1px solid rgba(245,158,11,0.35)", borderRadius:"4px", padding:"4px 14px" }}>
@@ -232,7 +232,7 @@ export async function GET() {
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>FULL PICKS</span>
-            <span style={{ fontSize:"18px", color:"#10b981", fontWeight:800 }}>beezy.vip</span>
+            <span style={{ fontSize:"18px", color:"#10b981", fontWeight:800 }}>beezy.fyi</span>
           </div>
           <div style={{ display:"flex", width:"1px", height:"32px", background:"#1a1a22" }} />
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>

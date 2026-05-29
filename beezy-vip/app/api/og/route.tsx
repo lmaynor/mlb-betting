@@ -5,7 +5,7 @@ export const runtime = 'edge'
 
 export async function GET(req: NextRequest) {
   const sp    = req.nextUrl.searchParams
-  const title = sp.get('title') ?? 'Beezy.VIP'
+  const title = sp.get('title') ?? 'Beezy.FYI'
   const sub   = sp.get('sub')   ?? 'MLB Picks · Backed by Machine Learning'
   const stat1 = sp.get('stat1') ?? ''
   const stat2 = sp.get('stat2') ?? ''
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '48px' }}>
           <span style={{ fontSize: '20px', fontWeight: 700, color: '#00FF87', letterSpacing: '-0.5px' }}>
-            BEEZY<span style={{ color: '#F0F6FC' }}>.VIP</span>
+            BEEZY<span style={{ color: '#F0F6FC' }}>.FYI</span>
           </span>
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00FF87' }} />
           <span style={{ fontSize: '12px', color: '#7D8590', letterSpacing: '3px', textTransform: 'uppercase' }}>

@@ -67,7 +67,7 @@ export async function GET() {
         <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
           <div style={{ display: "flex", alignItems: "baseline" }}>
             <span style={{ fontSize: "36px", fontWeight: 800, color: "#f5f5f7", letterSpacing: "-1.5px" }}>BEEZY</span>
-            <span style={{ fontSize: "36px", fontWeight: 800, color: "#10b981", letterSpacing: "-1.5px" }}>.VIP</span>
+            <span style={{ fontSize: "36px", fontWeight: 800, color: "#10b981", letterSpacing: "-1.5px" }}>.FYI</span>
           </div>
           <div style={{ display: "flex", width: "1px", height: "28px", background: "#2a2a31" }} />
           <span style={{ fontSize: "12px", color: "#52525b", letterSpacing: "2.5px" }}>MODEL-DRIVEN MLB PICKS</span>
@@ -145,7 +145,7 @@ export async function GET() {
         <div style={{ display: "flex", gap: "32px", alignItems: "center" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
             <span style={{ fontSize: "9px", color: "#3f3f46", letterSpacing: "2px" }}>FULL PICKS + METHODOLOGY</span>
-            <span style={{ fontSize: "20px", color: "#10b981", fontWeight: 800, letterSpacing: "-0.5px" }}>beezy.vip</span>
+            <span style={{ fontSize: "20px", color: "#10b981", fontWeight: 800, letterSpacing: "-0.5px" }}>beezy.fyi</span>
           </div>
           <div style={{ display: "flex", width: "1px", height: "40px", background: "#1f1f24" }} />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>

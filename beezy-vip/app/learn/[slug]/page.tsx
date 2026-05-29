@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const article = getArticle(slug)
   if (!article) return {}
-  return { title: `${article.title} — Beezy.VIP`, description: article.description }
+  return { title: `${article.title} — Beezy.FYI`, description: article.description }
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {

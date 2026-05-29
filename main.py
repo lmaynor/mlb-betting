@@ -731,7 +731,7 @@ def dashboard():
 
 # ---------------------------------------------------------------------------
 # Public API -- read-only, authenticated with X-API-Key header
-# Used by beezy.vip frontend.
+# Used by the Beezy frontend.
 # ---------------------------------------------------------------------------
 
 from runners.public_api import (
@@ -740,8 +740,13 @@ from runners.public_api import (
     get_summary_stats, _require_api_key,
 )
 
-SITE_API_KEY  = os.environ.get("SITE_API_KEY", "")
-ALLOWED_ORIGIN = os.environ.get("SITE_ORIGIN", "https://beezy.vip")
+SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
+DEFAULT_SITE_ORIGINS = "https://beezy.fyi,https://www.beezy.fyi"
+ALLOWED_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("SITE_ORIGINS", os.environ.get("SITE_ORIGIN", DEFAULT_SITE_ORIGINS)).split(",")
+    if origin.strip()
+}
 
 
 # Module-level singleton -- one engine per gunicorn worker, not per request.
@@ -760,10 +765,13 @@ def _get_engine():
 
 
 def _cors_headers():
+    origin = request.headers.get("Origin", "").rstrip("/")
+    allow_origin = origin if origin in ALLOWED_ORIGINS else "https://beezy.fyi"
     return {
-        "Access-Control-Allow-Origin":  ALLOWED_ORIGIN,
+        "Access-Control-Allow-Origin":  allow_origin,
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+        "Vary": "Origin",
     }
 
 

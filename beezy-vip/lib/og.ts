@@ -1,4 +1,4 @@
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.vip'
+const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.fyi'
 
 export function ogUrl(params: {
   title: string

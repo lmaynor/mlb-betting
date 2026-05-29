@@ -32,7 +32,7 @@ export default async function DashboardLayout({
           <span className="mono text-xs text-muted">·</span>
           <span className="mono text-xs text-muted uppercase tracking-widest">Dashboard</span>
         </div>
-        <h1 className="text-xl font-extrabold uppercase tracking-tight">Beezy.VIP</h1>
+        <h1 className="text-xl font-extrabold uppercase tracking-tight">Beezy.FYI</h1>
       </div>
 
       {/* Tab bar */}

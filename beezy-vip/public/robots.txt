@@ -14,4 +14,4 @@ Disallow: /recap
 Disallow: /teams
 Disallow: /games
 
-Sitemap: https://beezy.vip/sitemap.xml
+Sitemap: https://beezy.fyi/sitemap.xml

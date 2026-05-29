@@ -476,13 +476,13 @@ _Last updated: 2026-05-23_
 ### Overview
 
 Automated daily content pipeline that builds Twitter/X following and converts
-followers to beezy.vip members and Discord joiners. Three OG image cards
+followers to beezy.fyi members and Discord joiners. Three OG image cards
 served from Vercel edge runtime + two Cloud Run jobs that generate tweet
 drafts via Gemini and post picks cards to Discord.
 
 Twitter handle: @beezy_vip
 Discord invite: discord.gg/HfMYCmbmE
-Site: https://mlb-betting-rose.vercel.app (beezy.vip pending DNS)
+Site: https://mlb-betting-rose.vercel.app (beezy.fyi pending DNS)
 
 ### OG image cards (Vercel edge, @vercel/og)
 
@@ -500,7 +500,7 @@ All three:
 - Use NEXT_PUBLIC_BASE_URL for self-referencing assets (logos, headshots)
 - Every div with multiple children must have explicit display:flex -- @vercel/og hard requirement
 - No conditional null returns inside JSX -- use empty string checks instead
-- Card title text: BEEZY.VIP (all caps, matches site header)
+- Card title text: BEEZY.FYI (all caps, matches site header)
 
 Team color gradients: All 30 MLB teams hardcoded as `{ p: "R,G,B", s: "R,G,B", slug: "xxx" }`
 in each card route. Primary color fades to secondary to `#0e0e11`.
@@ -592,14 +592,14 @@ Frontend null-guards this -- old JSON strings show as-is. Not worth backfilling.
 - Occasionally explain WHY the edge exists (1 sentence max)
 - No hype, no LOCK, no CASH IT
 - Think Bloomberg terminal meets someone who actually knows what they are doing
-- Always include beezy.vip in at least one variant
+- Always include beezy.fyi in at least one variant
 - Always include discord.gg/HfMYCmbmE in at least one variant
 
-### When beezy.vip DNS is configured
+### When beezy.fyi DNS is configured
 
 Update two places:
-1. `tweet_drafter.py`: `BEEZY_SITE_URL = "https://beezy.vip"`
-2. Discord message in `post_card_to_discord()`: link to `https://beezy.vip/picks`
+1. `tweet_drafter.py`: `BEEZY_SITE_URL = "https://beezy.fyi"`
+2. Discord message in `post_card_to_discord()`: link to `https://beezy.fyi/picks`
 
 ---
 
@@ -611,7 +611,7 @@ Update two places:
 - Headshots refreshed (update date in §4) -> §3 + §4
 - Typefully replaced with another tool -> §4 Cloud Run jobs
 - Gemini API key rotated or provider changed -> §4 Cloud Run jobs
-- DNS configured for beezy.vip -> §4 When beezy.vip DNS is configured
+- DNS configured for beezy.fyi -> §4 When beezy.fyi DNS is configured
 - Rationale wiring status changes -> §4 Rationale / notes wiring
 
 **Don't put architecture or contracts here.** That belongs in CONTEXT.md.

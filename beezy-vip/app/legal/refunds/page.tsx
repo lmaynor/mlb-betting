@@ -39,7 +39,7 @@ export default function RefundsPage() {
           New subscribers may request a full refund of their initial subscription payment
           within <strong>7 calendar days</strong> of the original purchase date
           ("Guarantee Period"). No reason is required. To request a refund under this
-          guarantee, contact us at <strong>[support@beezy.vip]</strong> before the
+          guarantee, contact us at <strong>[support@beezy.fyi]</strong> before the
           Guarantee Period expires. Refunds are issued to the original payment method
           within 5–10 business days, subject to your card issuer's processing time.
         </p>
@@ -96,7 +96,7 @@ export default function RefundsPage() {
           Filing a chargeback with your payment provider without first contacting us to
           resolve the issue constitutes a breach of these Terms. We reserve the right to
           permanently suspend accounts associated with fraudulent chargebacks. If you have
-          a billing dispute, please contact us first at <strong>[support@beezy.vip]</strong>
+          a billing dispute, please contact us first at <strong>[support@beezy.fyi]</strong>
           and we will work to resolve it promptly.
         </p>
 
@@ -116,7 +116,7 @@ export default function RefundsPage() {
 
         <h2>7. How to Request a Refund</h2>
         <p>
-          Email <strong>[support@beezy.vip]</strong> with the subject line
+          Email <strong>[support@beezy.fyi]</strong> with the subject line
           "Refund Request" and include:
         </p>
         <ul>

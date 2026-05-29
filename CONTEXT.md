@@ -24,8 +24,8 @@ If you change something here, treat it as a contract change -- flag it in the ne
 10. [DK grading rules (MLB props)](#10-dk-grading-rules-mlb-props)
 11. [Performance monitor](#11-performance-monitor)
 12. [Ops monitor](#12-ops-monitor)
-13. [Beezy.VIP -- the frontend](#13-beezyvip----the-frontend)
-14. [Discord server (beezy.vip)](#14-discord-server-beezyvip)
+13. [Beezy.FYI -- the frontend](#13-beezyvip----the-frontend)
+14. [Discord server (beezy.fyi)](#14-discord-server-beezyvip)
 15. [Gotchas](#15-gotchas)
 16. [Backlogs](#16-backlogs)
 17. [Pointers to other docs](#17-pointers-to-other-docs)
@@ -764,7 +764,7 @@ secretmanager.secretAccessor.
 - `discord-ops-webhook-url` -- ops webhook (#ops-alerts)
 - `discord-webhook-performance` -- performance webhook (#performance)
 - `site-api-key` -- API key for Cloud Run public API
-- `site-origin` -- allowed CORS origin
+- `site-origin` -- allowed CORS origin(s), comma-separated when both apex and www are enabled
 - `discord-bot-token` -- beezy-bot bot account
 - `gemini-api-key` -- tweet drafting (see RUNBOOKS.md social pipeline)
 - `typefully-api-key` -- tweet scheduling
@@ -980,7 +980,7 @@ Alerts if PSI > 0.25 for any top-10 feature by importance.
 
 ---
 
-## 13. Beezy.VIP -- the frontend
+## 13. Beezy.FYI -- the frontend
 
 `beezy-vip/` is the public-facing website for the betting service. It lives
 as a subdirectory of this repo and is deployed separately to Vercel.
@@ -1005,7 +1005,7 @@ does not reliably generate CSS in this monorepo subdirectory. Migration complete
 2026-05-18. Dead pages (teams, players, pitchers, games, recap) deleted. Articles are served statically from `beezy-vip/lib/articles-static.ts`
 and `beezy-vip/content/learn/*.md` -- no DB needed.
 
-Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.vip
+Production URL: https://mlb-betting-rose.vercel.app (custom domain beezy.fyi
 pending DNS configuration).
 
 ### Repo layout
@@ -1170,7 +1170,7 @@ Bloomberg Terminal meets PrizePicks aesthetic:
 
 Two new secrets in Secret Manager:
 - `site-api-key` -- API key for Cloud Run public API (version 1 is current)
-- `site-origin` -- allowed CORS origin (value: `https://beezy.vip`)
+- `site-origin` -- allowed CORS origins (comma-separated; value: `https://beezy.fyi,https://www.beezy.fyi`)
 
 Both mounted on the Cloud Run service via `--set-secrets` in
 `deploy/deploy_service.sh`. Service account `mlb-betting-sa` has
@@ -1252,9 +1252,9 @@ subscription via Clerk auth. CSV export uses exact edge values.
 
 ### Pre-launch checklist
 
-- [ ] beezy.vip DNS -> Vercel
+- [ ] beezy.fyi DNS -> Vercel
 - [ ] Clerk production keys in Vercel env vars
-- [ ] beezy.vip added to Clerk allowed origins
+- [ ] beezy.fyi added to Clerk allowed origins
 - [ ] Stripe production price IDs set
 - [x] Legal pages drafted 2026-05-21 (terms, privacy, responsible-gambling, refunds). `{LAWYER_REVIEW}` markers in each file flag sections needing attorney sign-off before flipping PRE_LAUNCH.
 - [ ] `BLOCKED_STATES` configured
@@ -1343,18 +1343,18 @@ inline styles everywhere**.
 
 ---
 
-## 14. Discord server (beezy.vip)
+## 14. Discord server (beezy.fyi)
 
 *Last configured: 2026-05-20*
 
 ### What it is
 
-Community layer for beezy.vip. Receives pick signals and daily recaps via
+Community layer for beezy.fyi. Receives pick signals and daily recaps via
 webhooks. Members opt into book-specific pings. Ops alerts are routed to an
 admin-only channel, never surfaced to members.
 
 Server ID: `1476027259956494533`
-Server name: `beezy.vip`
+Server name: `beezy.fyi`
 
 ### Server structure
 
@@ -1364,7 +1364,7 @@ ONBOARDING
   #preferences   -- Self-assign book roles for tailored pick pings.
 
 INFO
-  #welcome       -- What beezy.vip is, how to read picks. Carl-bot welcome
+  #welcome       -- What beezy.fyi is, how to read picks. Carl-bot welcome
                     message posts here on member join.
   #announcements -- System updates, paper mode progress, launch news.
   #rules         -- React with checkmark to get Paper Tester role and unlock
@@ -1453,7 +1453,7 @@ Per-system webhook override still supported: `DISCORD_WEBHOOK_{SYSTEM}`
 
 ### Stripe -> Discord role sync (backlog)
 
-When a user pays on beezy.vip via Stripe/Clerk, they should automatically
+When a user pays on beezy.fyi via Stripe/Clerk, they should automatically
 receive the `Member` or `Member Pro` Discord role. This requires:
 
 1. A Clerk/Stripe webhook hitting a Cloud Run endpoint

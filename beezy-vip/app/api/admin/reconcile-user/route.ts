@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 // Use when a user emails saying "I paid but I'm not Pro."
 //
 // Usage:
-//   curl -X POST https://beezy.vip/api/admin/reconcile-user \
+//   curl -X POST https://beezy.fyi/api/admin/reconcile-user \
 //     -H "x-admin-key: $ADMIN_SECRET_KEY" \
 //     -H "Content-Type: application/json" \
 //     -d '{"stripe_customer_id": "cus_..."}'

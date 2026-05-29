@@ -306,7 +306,7 @@ export function CheatSheetClient({
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
             <div>
               <div style={{ fontSize: '22px', fontWeight: 850, color: '#f5f5f7', lineHeight: 1 }}>
-                BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
+                BEEZY<span style={{ color: '#10b981' }}>.FYI</span>
               </div>
               <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
                 MLB Daily Card
@@ -341,7 +341,7 @@ export function CheatSheetClient({
                   padding: '5px 9px',
                 }}
               >
-                @BEEZYVIP
+                beezy.fyi
               </div>
             </div>
           </div>
@@ -521,10 +521,10 @@ export function CheatSheetClient({
           background: '#06060a',
         }}>
           <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.08em' }}>
-            BEEZY.VIP / MLB DAILY CARD
+            BEEZY.FYI / MLB DAILY CARD
           </span>
           <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.06em' }}>
-            @BEEZYVIP
+            beezy.fyi
           </span>
         </div>
       </div>

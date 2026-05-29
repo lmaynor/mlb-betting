@@ -19,15 +19,15 @@ export const viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default:  'Beezy.VIP — MLB Picks Backed by Machine Learning',
-    template: '%s — Beezy.VIP',
+    default:  'Beezy.FYI — MLB Picks Backed by Machine Learning',
+    template: '%s — Beezy.FYI',
   },
   description:
     'Five XGBoost models scoring MLB games daily. NRFI, HR, F5, K, and OUTS systems. Real data, real results, no gut feelings.',
-  metadataBase: new URL('https://beezy.vip'),
+  metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
     images: [{ url: '/api/og?title=MLB+Picks+%2F+Backed+by+Data', width: 1200, height: 630 }],
-    siteName: 'Beezy.VIP',
+    siteName: 'Beezy.FYI',
     type:     'website',
   },
 }

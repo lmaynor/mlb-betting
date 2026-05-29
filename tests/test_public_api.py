@@ -112,11 +112,11 @@ class TestCORS:
         assert r.status_code == 200
         assert "Access-Control-Allow-Origin" in r.headers
 
-    def test_cors_origin_is_beezy_vip(self, client):
+    def test_cors_origin_is_beezy_fyi(self, client):
         with patch("main.get_summary_stats", return_value=SAMPLE_STATS):
             r = client.get("/api/public/stats/summary",
                            headers={"X-API-Key": VALID_KEY})
-        assert "beezy.vip" in r.headers.get("Access-Control-Allow-Origin", "")
+        assert "beezy.fyi" in r.headers.get("Access-Control-Allow-Origin", "")
 
     def test_preflight_cors_headers(self, client):
         r = client.options("/api/public/picks/today")

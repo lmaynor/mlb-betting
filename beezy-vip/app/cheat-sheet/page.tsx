@@ -12,10 +12,10 @@ import { formatCentralDate } from '@/lib/dates'
 import playerMap from '@/public/headshots/player_map.json'
 
 export const metadata: Metadata = {
-  title: 'Daily Card - Beezy.VIP',
+  title: 'Daily Card - Beezy.FYI',
   description: "Today's MLB Daily Card - top Beezy Score picks, filterable by game, pitcher, and player props.",
   openGraph: {
-    title: 'MLB Daily Card - Beezy.VIP',
+    title: 'MLB Daily Card - Beezy.FYI',
     description: 'Top picks by Beezy Score. NRFI / HR / F5 / K / OUTS.',
   },
 }

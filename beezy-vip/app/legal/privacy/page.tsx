@@ -37,7 +37,7 @@ export default function PrivacyPage() {
         <h2>1. Scope and Controller Identity</h2>
         <p>
           This Privacy Policy describes how <strong>[Operator Name]</strong> ("we," "us," or "our"),
-          the operator of Beezy.VIP, collects, uses, and discloses personal information when you
+          the operator of Beezy.FYI, collects, uses, and discloses personal information when you
           use the Service. For purposes of applicable privacy law, <strong>[Operator Name]</strong>
           is the data controller.
         </p>
@@ -171,7 +171,7 @@ export default function PrivacyPage() {
             marketing email or by contacting us directly.</li>
         </ul>
         <p>
-          To exercise any of these rights, contact us at <strong>[legal@beezy.vip]</strong>.
+          To exercise any of these rights, contact us at <strong>[legal@beezy.fyi]</strong>.
           We will respond within a reasonable timeframe consistent with applicable law.
         </p>
         <p>
@@ -205,7 +205,7 @@ export default function PrivacyPage() {
         <p>
           {/* {LAWYER_REVIEW} — A physical mailing address is required under CAN-SPAM and
               is best practice for any privacy policy. Add before launch. */}
-          Privacy inquiries: <strong>[legal@beezy.vip]</strong>
+          Privacy inquiries: <strong>[legal@beezy.fyi]</strong>
         </p>
 
       </div>

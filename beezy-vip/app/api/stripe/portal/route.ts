@@ -27,7 +27,7 @@ export async function GET() {
     const stripe = getStripe()
   const session = await stripe.billingPortal.sessions.create({
       customer:   customerId,
-      return_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.vip'}/dashboard/settings`,
+      return_url: `${process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.fyi'}/dashboard/settings`,
     })
     return NextResponse.redirect(session.url)
   } catch (err) {

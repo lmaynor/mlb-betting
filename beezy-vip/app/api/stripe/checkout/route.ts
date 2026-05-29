@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const user     = await currentUser()
   const email    = user?.emailAddresses[0]?.emailAddress
-  const base     = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.vip'
+  const base     = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.fyi'
 
   // Reuse existing Stripe customer if they have one
   const existingCustomerId = user?.privateMetadata?.stripeCustomerId as string | undefined

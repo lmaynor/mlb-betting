@@ -13,7 +13,7 @@ export function Footer() {
         <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '32px', marginBottom: '32px' }}>
           <div>
             <div className="mono" style={{ fontSize: '14px', fontWeight: 600, color: '#f5f5f7', marginBottom: '8px' }}>
-              BEEZY<span style={{ color: '#10b981' }}>.VIP</span>
+              BEEZY<span style={{ color: '#10b981' }}>.FYI</span>
             </div>
             <p style={{ fontSize: '11px', color: '#71717a', lineHeight: 1.6, marginBottom: '12px' }}>
               Machine learning models for sports betting. Built on data, not gut feelings.
@@ -26,7 +26,7 @@ export function Footer() {
               </a>
               <a href={X_URL} target="_blank" rel="noopener noreferrer"
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', border: B, color: '#f5f5f7', textDecoration: 'none', borderRadius: 'var(--radius-sm)' }}
-                aria-label="Follow Beezy.VIP on X">
+                aria-label="Follow Beezy.FYI on X">
                 <XMark size={15} color="currentColor" />
               </a>
             </div>
@@ -49,14 +49,14 @@ export function Footer() {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px', border: B, marginBottom: '20px' }}>
           <span className="mono" style={{ fontSize: '10px', fontWeight: 700, color: '#10b981', flexShrink: 0 }}>PAPER MODE</span>
           <p className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
-            Beezy.VIP is in pre-launch paper mode. No real money is being wagered or transacted. Paid access opens when the first system clears its 200-bet validation gate.
+            Beezy.FYI is in pre-launch paper mode. No real money is being wagered or transacted. Paid access opens when the first system clears its 200-bet validation gate.
           </p>
         </div>
 
         <div style={{ borderTop: B, paddingTop: '16px' }}>
           <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginBottom: '4px' }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
           <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginBottom: '4px' }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet.</p>
-          <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '12px' }}>&copy; {new Date().getFullYear()} Beezy.VIP &middot; All rights reserved</p>
+          <p className="mono" style={{ fontSize: '11px', color: '#71717a', marginTop: '12px' }}>&copy; {new Date().getFullYear()} Beezy.FYI &middot; All rights reserved</p>
         </div>
       </div>
     </footer>

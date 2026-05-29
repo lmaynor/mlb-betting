@@ -71,7 +71,7 @@ export default function ResponsibleGamblingPage() {
 
         <h2>1. Our Service Is Not a Sportsbook</h2>
         <p>
-          Beezy.VIP is a <strong>subscription content service</strong>. We publish
+          Beezy.FYI is a <strong>subscription content service</strong>. We publish
           machine-learning-generated statistical analyses of MLB games for entertainment and
           educational purposes. We do not accept wagers, facilitate gambling transactions, or
           provide legally regulated financial or betting advice. Any decision to place a wager
@@ -135,7 +135,7 @@ export default function ResponsibleGamblingPage() {
           <a href="https://www.igb.illinois.gov" target="_blank" rel="noopener noreferrer">igb.illinois.gov</a>.
         </p>
 
-        <h2>5. Beezy.VIP Commitments</h2>
+        <h2>5. Beezy.FYI Commitments</h2>
         <p>
           Although we are not a licensed gambling operator, we voluntarily commit to the
           following:
@@ -165,7 +165,7 @@ export default function ResponsibleGamblingPage() {
         <h2>7. Contact</h2>
         <p>
           To report a responsible gambling concern or request account cancellation for
-          problem gambling reasons, contact us at <strong>[legal@beezy.vip]</strong>.
+          problem gambling reasons, contact us at <strong>[legal@beezy.fyi]</strong>.
         </p>
 
       </div>

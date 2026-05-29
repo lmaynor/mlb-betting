@@ -1,6 +1,6 @@
 import { ARTICLES } from '@/lib/articles-static'
 
-const BASE = 'https://beezy.vip'
+const BASE = 'https://beezy.fyi'
 
 const STATIC_ROUTES = [
   { path: '/',               priority: '1.0', changefreq: 'daily'   },

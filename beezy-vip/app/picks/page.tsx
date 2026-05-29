@@ -10,7 +10,7 @@ import { siteDateKey } from '@/lib/dates'
 
 export const metadata: Metadata = {
   title: 'MLB Picks - All Systems',
-  description: 'Every MLB pick from all Beezy.VIP machine learning systems.',
+  description: 'Every MLB pick from all Beezy.FYI machine learning systems.',
 }
 
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {

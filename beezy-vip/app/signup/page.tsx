@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { apiGetStats } from '@/lib/betting-api'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Join Beezy.VIP' }
+export const metadata: Metadata = { title: 'Join Beezy.FYI' }
 
 const PRE_LAUNCH = true
 const B = '0.5px solid #1f1f24'

@@ -7,7 +7,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title:       'Results -- All Settled Bets',
-  description: 'Every settled bet from all Beezy.VIP MLB machine learning systems. Full P&L history, win rates, and edge vs ROI analysis.',
+  description: 'Every settled bet from all Beezy.FYI MLB machine learning systems. Full P&L history, win rates, and edge vs ROI analysis.',
 }
 
 export default async function ResultsPage() {

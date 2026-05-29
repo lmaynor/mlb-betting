@@ -36,7 +36,7 @@ export default function TermsPage() {
 
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By accessing or using Beezy.VIP (the "Service"), operated by <strong>[Operator Name]</strong>
+          By accessing or using Beezy.FYI (the "Service"), operated by <strong>[Operator Name]</strong>
           ("we," "us," or "our"), you agree to be bound by these Terms of Service ("Terms").
           If you do not agree, do not use the Service. These Terms constitute a binding legal
           agreement between you and <strong>[Operator Name]</strong> under the laws of the
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
         <h2>3. Description of Service</h2>
         <p>
-          Beezy.VIP is a <strong>paid subscription content service</strong>. We publish
+          Beezy.FYI is a <strong>paid subscription content service</strong>. We publish
           machine-learning-generated statistical analyses and model outputs related to Major
           League Baseball ("MLB") games. All content is provided <strong>for entertainment
           and educational purposes only</strong>. The Service is not a sportsbook, sports
@@ -209,7 +209,7 @@ export default function TermsPage() {
         <p>
           {/* {LAWYER_REVIEW} — Add legal mailing address before launch (required for GDPR,
               CAN-SPAM, and Illinois disclosure requirements). */}
-          Questions regarding these Terms may be directed to: <strong>[legal@beezy.vip]</strong>
+          Questions regarding these Terms may be directed to: <strong>[legal@beezy.fyi]</strong>
         </p>
 
       </div>

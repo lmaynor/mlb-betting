@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!spec) return { title: 'Model Not Found' }
   return {
     title:       `${spec.name} Model -- Methodology & Results`,
-    description: `${spec.name} XGBoost model methodology, feature list, OOS metric, and full settled bet history. Beezy.VIP ${spec.system} system.`,
+    description: `${spec.name} XGBoost model methodology, feature list, OOS metric, and full settled bet history. Beezy.FYI ${spec.system} system.`,
   }
 }
 

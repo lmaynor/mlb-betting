@@ -24,7 +24,7 @@ export default function BlockedPage({
           Not Available Here
         </h1>
         <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65, marginBottom: '24px' }}>
-          Beezy.VIP is not currently available in <strong style={{ color: '#f5f5f7' }}>{region}</strong>{' '}
+          Beezy.FYI is not currently available in <strong style={{ color: '#f5f5f7' }}>{region}</strong>{' '}
           due to local regulations. We&apos;re working to expand availability.
         </p>
         <p className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
