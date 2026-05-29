@@ -82,12 +82,10 @@ def _load_calibrator(cfg: dict):
 
 def _candidates_from_lineups(sched, lineups, batter_latest):
     rows = []
-    posted_game_pks = set()
 
     if not lineups.empty:
         for _, r in lineups.iterrows():
             game_pk = r["game_pk"]
-            posted_game_pks.add(game_pk)
             batter_id = r["player_id"]
             bat_row = batter_latest[batter_latest["batter"] == batter_id]
             if bat_row.empty:
@@ -103,28 +101,8 @@ def _candidates_from_lineups(sched, lineups, batter_latest):
             })
             rows.append(bat)
 
-    if "ewma_batting_order" in batter_latest.columns:
-        for _, game in sched.iterrows():
-            if game["game_pk"] in posted_game_pks:
-                continue
-            for side, team in [("home", game["home_team"]), ("away", game["away_team"])]:
-                home_col = batter_latest["home_team"] if "home_team" in batter_latest.columns else pd.Series("", index=batter_latest.index)
-                away_col = batter_latest["away_team"] if "away_team" in batter_latest.columns else pd.Series("", index=batter_latest.index)
-                plausible = batter_latest[
-                    (home_col == team) | (away_col == team)
-                ]
-                for _, bat_r in plausible.sort_values("ewma_batting_order").head(9).iterrows():
-                    bat = bat_r.to_dict()
-                    bat.update({
-                        "game_pk": game["game_pk"],
-                        "home_team": game["home_team"],
-                        "away_team": game["away_team"],
-                        "batter_team_side": side,
-                        "batting_order": int(round(bat.get("ewma_batting_order", 5))),
-                    })
-                    rows.append(bat)
-
     if not rows:
+        logger.warning("BATTER_TB: no confirmed lineup candidates; skipping unsafe historical-team fallback")
         return pd.DataFrame()
     out = pd.DataFrame(rows).drop_duplicates(subset=["batter", "game_pk"], keep="first")
     out["is_home"] = (out["batter_team_side"] == "home").astype(int)
@@ -279,6 +257,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         if idx is None:
             continue
         row = feat_df.iloc[idx]
+        try:
+            event_id = int(odds_info.get("event_id"))
+            row_game_pk = int(row.get("game_pk"))
+            if event_id != row_game_pk:
+                logger.warning(
+                    "BATTER_TB: skipping %s due event/game mismatch odds_event=%s feature_game=%s",
+                    player_name, event_id, row_game_pk,
+                )
+                continue
+        except (TypeError, ValueError):
+            pass
         mu = float(row["lambda_tb"])
         line = odds_info.get("line")
         if line is None:
