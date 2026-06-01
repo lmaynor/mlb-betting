@@ -857,7 +857,7 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
-| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","NRFI","K","F5","BATTER_HITS","GAME"],"continue_on_error":false}` |
+| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","1IOU","K","F5","BATTER_HITS","GAME","BATTER_TB"],"continue_on_error":false}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
