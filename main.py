@@ -78,6 +78,17 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
         return {"system": system, "status": "error", "error": str(e)}
 
 
+@app.after_request
+def add_noindex_header(response):
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@app.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    return "User-agent: *\nDisallow: /\n", 200, {"Content-Type": "text/plain"}
+
+
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return jsonify({"status": "ok"}), 200
