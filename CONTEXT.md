@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-05-29 00:35 CST_
+_Last updated: 2026-06-01 16:52 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -2231,7 +2231,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-05-28 22:03 CST_
+_Last updated: 2026-06-01 16:52 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
