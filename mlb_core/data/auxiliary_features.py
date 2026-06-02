@@ -3,10 +3,10 @@ mlb_core.data.auxiliary_features -- Additional free data sources for feature enr
 
 Four sources, all free, all cached to GCS:
 
-  1. FanGraphs Plate Discipline (pitcher, per season)
-     SwStr%, O-Swing%, Z-Swing%, Zone%, F-Strike%, Contact%
+  1. Baseball Reference Pitcher Quality (via pybaseball, per season)
+     FIP, ERA, WHIP, SO9 (K/9), BB9, HR9
      GCS: AuxData/fangraphs_pitching_{year}.csv / fangraphs_pitching_master.csv
-     Available: 2015+
+     Available: 2015+  (FanGraphs was blocked from Cloud IPs; B-Ref is not)
 
   2. Savant Swing-Take Leaderboard (pitcher, per season)
      chase_rate, heart_swing_rate, shadow_swing_rate, chase_rv, heart_rv
@@ -37,10 +37,10 @@ Load helpers (for feature builders):
   load_team_schedule(years=None)       -> DataFrame keyed (team, game_pk)
   load_manager_hooks()                 -> DataFrame keyed (team, game_date)
 
-FanGraphs URL note:
-  type=5 is the Plate Discipline table on the pitchers leaderboard.
-  If the fetch returns without SwStr%/O-Swing% columns the endpoint has
-  changed -- check manually and update _fetch_fangraphs_pitching().
+Baseball Reference note:
+  Uses pybaseball.pitching_stats_bref(season) -- B-Ref is not bot-protected
+  like FanGraphs. Key columns: FIP, SO9, BB9, WHIP, ERA.
+  If fetch fails, check pybaseball version or B-Ref schema changes.
 
 Swing-Take URL note:
   Baseball Savant /leaderboard/swing-take was added in 2024. If the
@@ -344,119 +344,113 @@ def _nightly_generic(prefix: str, start_year: int, fetch_fn,
 # 1. FanGraphs Plate Discipline (via pybaseball)
 # ===========================================================================
 
-# Columns expected from pybaseball.pitching_stats plate discipline table.
-# pybaseball returns the full FanGraphs leader board -- these must be present.
-_FG_REQUIRED_COLS = {"O-Swing%", "SwStr%"}
+# B-Ref columns that must be present after the fetch.
+_FG_REQUIRED_COLS = {"FIP", "SO9"}
 
-# pybaseball column name candidates for pitcher display name, checked in order.
+# pybaseball / B-Ref column name candidates for pitcher display name.
 _FG_NAME_COLS = ["Name", "PlayerName", "playerName"]
+
+# B-Ref columns to keep (anything extra is noise for our use case).
+_BREF_KEEP_COLS = [
+    "year", "name_norm", "Name", "Tm",
+    "IP", "ERA", "FIP", "WHIP", "SO9", "BB9", "HR9", "ERA+",
+    "G", "GS", "W", "L", "SV",
+]
 
 
 def _fetch_fangraphs_pitching(year: int) -> pd.DataFrame | None:
-    """Fetch pitcher plate discipline from FanGraphs via pybaseball.
+    """Fetch pitcher quality metrics from Baseball Reference via pybaseball.
 
-    pybaseball.pitching_stats() handles FanGraphs session management and
-    caching internally. Returns the full FanGraphs pitcher leader board
-    (all stat tables merged), which includes plate discipline columns:
-    O-Swing%, Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%,
-    Zone%, F-Strike%, SwStr%, Pace.
+    FanGraphs blocks all requests from Cloud IPs (HTTP 403). Baseball
+    Reference does not. pybaseball.pitching_stats_bref(season) returns
+    seasonal pitcher stats from B-Ref: ERA, FIP, WHIP, SO9, BB9, HR9.
 
-    qual=_FANGRAPHS_MIN_IP filters to pitchers with >= 20 IP.
-    ind=1 returns one row per pitcher per season (not cumulative).
-
-    Requires: pip install pybaseball (in requirements.txt).
-    Returns None if pybaseball unavailable or FanGraphs fetch fails.
+    Filters to pitchers with >= _FANGRAPHS_MIN_IP innings pitched.
+    Returns None if pybaseball unavailable or the fetch fails.
     """
     try:
         import pybaseball
     except ImportError:
         logger.error(
-            "auxiliary_features: pybaseball not installed -- "
-            "cannot fetch FanGraphs plate discipline. "
+            "auxiliary_features: pybaseball not installed. "
             "Run: pip install pybaseball==2.2.7"
         )
         return None
 
-    logger.info(
-        f"auxiliary_features: pybaseball.pitching_stats "
-        f"{year} qual={_FANGRAPHS_MIN_IP}"
-    )
-
-    # pybaseball caches to ~/.pybaseball/ -- avoids re-fetching during backfill
-    try:
-        pybaseball.cache.enable()
-    except Exception:
-        pass   # cache module optional; non-fatal
+    logger.info(f"auxiliary_features: pybaseball.pitching_stats_bref {year}")
 
     try:
-        df = pybaseball.pitching_stats(
-            year, year,
-            qual=_FANGRAPHS_MIN_IP,
-            ind=1,       # individual seasons, not cumulative
-        )
+        df = pybaseball.pitching_stats_bref(year)
     except Exception as e:
         logger.warning(
-            f"auxiliary_features: pybaseball.pitching_stats {year} failed: {e}"
+            f"auxiliary_features: pybaseball.pitching_stats_bref {year} failed: {e}"
         )
         return None
 
     if df is None or (hasattr(df, "empty") and df.empty):
         logger.info(
-            f"auxiliary_features: pybaseball.pitching_stats {year} "
-            f"returned empty (off-season or no qualifiers)"
+            f"auxiliary_features: pitching_stats_bref {year} returned empty"
         )
         return None
 
     logger.info(
-        f"auxiliary_features: pybaseball.pitching_stats {year} -> "
-        f"{len(df):,} rows | first cols: {list(df.columns[:14])}"
+        f"auxiliary_features: pitching_stats_bref {year} -> "
+        f"{len(df):,} rows | cols: {list(df.columns[:16])}"
     )
+
+    # Filter to minimum IP
+    if "IP" in df.columns:
+        df = df.copy()
+        df["IP"] = pd.to_numeric(df["IP"], errors="coerce")
+        before = len(df)
+        df = df[df["IP"] >= _FANGRAPHS_MIN_IP]
+        logger.debug(
+            f"auxiliary_features: bref {year} IP>={_FANGRAPHS_MIN_IP} "
+            f"filter: {before:,} -> {len(df):,}"
+        )
+
+    if df.empty:
+        logger.info(f"auxiliary_features: bref {year} empty after IP filter")
+        return None
 
     missing = _FG_REQUIRED_COLS - set(df.columns)
     if missing:
         logger.warning(
-            f"auxiliary_features: fangraphs_pitching {year} -- "
+            f"auxiliary_features: bref_pitching {year} -- "
             f"required cols {missing} absent. Got: {list(df.columns[:20])}. "
-            f"Check pybaseball version or FanGraphs schema change."
+            f"Check pybaseball version or B-Ref schema change."
         )
         return None
 
     if "year" not in df.columns:
         df.insert(0, "year", year)
 
-    # name_norm for cross-source joins on pitcher name
     name_col = next((c for c in _FG_NAME_COLS if c in df.columns), None)
     if name_col:
         df["name_norm"] = df[name_col].apply(_norm_name)
         logger.debug(
-            f"auxiliary_features: fangraphs {year} name_norm "
+            f"auxiliary_features: bref {year} name_norm "
             f"from '{name_col}': {df['name_norm'].iloc[:3].tolist()}"
         )
     else:
         logger.warning(
-            f"auxiliary_features: fangraphs {year} -- no name column found, "
+            f"auxiliary_features: bref {year} -- no name column found, "
             f"name_norm absent (join will fail)"
         )
 
-    # pybaseball returns pct cols as 0-100 floats; normalise to 0-1
-    pct_cols = [c for c in df.columns if isinstance(c, str) and c.endswith("%")]
-    for col in pct_cols:
-        if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-            if df[col].dropna().mean() > 1.0:
-                df[col] = df[col] / 100.0
-                logger.debug(
-                    f"auxiliary_features: fangraphs {year} "
-                    f"normalised {col} 0-100 -> 0-1"
-                )
+    # Keep only the columns we care about (plus any extras present)
+    keep = [c for c in _BREF_KEEP_COLS if c in df.columns]
+    extra = [c for c in df.columns if c not in _BREF_KEEP_COLS]
+    df = df[keep + extra].copy()
 
-    swstr_mean  = df["SwStr%"].mean()
-    oswing_mean = df["O-Swing%"].mean()
-    nan_swstr   = int(df["SwStr%"].isna().sum())
+    fip_mean = df["FIP"].mean()
+    so9_mean = df["SO9"].mean()
+    nan_fip  = int(df["FIP"].isna().sum())
     logger.info(
-        f"auxiliary_features: fangraphs_pitching {year} -- "
+        f"auxiliary_features: bref_pitching {year} -- "
         f"{len(df):,} pitchers | "
-        f"SwStr% mean={swstr_mean:.4f} NaN={nan_swstr} | "
-        f"O-Swing% mean={oswing_mean:.4f}"
+        f"FIP mean={fip_mean:.3f} NaN={nan_fip} | "
+        f"SO9 mean={so9_mean:.2f}"
     )
     return df
 
@@ -466,7 +460,7 @@ def fangraphs_backfill_gcs(
     end_year: int | None = None,
     force: bool = False,
 ) -> dict:
-    """Backfill FanGraphs pitcher plate discipline to GCS.
+    """Backfill Baseball Reference pitcher stats (FIP, K/9, BB/9, WHIP) to GCS.
 
     Args:
         start_year: First season to fetch (default: 2015).
@@ -481,31 +475,31 @@ def fangraphs_backfill_gcs(
     return _backfill_generic(
         _FG_PREFIX, start, end,
         _fetch_fangraphs_pitching,
-        id_cols=["year", "playerid"],
+        id_cols=["year", "name_norm"],
         force=force,
     )
 
 
 def fangraphs_nightly_gcs() -> dict:
-    """Nightly refresh of current season FanGraphs plate discipline."""
+    """Nightly refresh of current season B-Ref pitcher stats."""
     return _nightly_generic(
         _FG_PREFIX, _FANGRAPHS_START_YEAR,
         _fetch_fangraphs_pitching,
-        id_cols=["year", "playerid"],
-        source_name="fangraphs_pitching",
+        id_cols=["year", "name_norm"],
+        source_name="bref_pitching",
     )
 
 
 def load_fangraphs_pitching(years: list[int] | None = None) -> pd.DataFrame:
     """Load FanGraphs pitcher plate discipline master from GCS/local.
 
-    Feature builders join on (name_norm, year) to get SwStr%, O-Swing%, etc.
+    Feature builders join on (name_norm, year) to get FIP, SO9, BB9, WHIP, etc.
 
     Args:
         years: If provided, filter to these seasons only.
 
     Returns:
-        DataFrame with name_norm, year, SwStr%, O-Swing%, Z-Swing%, etc.
+        DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, etc.
         Empty DataFrame if master not found.
     """
     from mlb_core.storage import read_csv, exists
