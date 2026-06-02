@@ -63,10 +63,12 @@ def _local_path(key: str) -> Path:
 # Public API
 # ---------------------------------------------------------------------------
 
+_GCS_TIMEOUT = 600   # seconds -- statcast_master is ~300 MB; default 120s times out
+
 def read_bytes(key: str) -> bytes:
     """Read raw bytes from GCS or local disk."""
     if _get_bucket():
-        return _gcs_blob(key).download_as_bytes()
+        return _gcs_blob(key).download_as_bytes(timeout=_GCS_TIMEOUT)
     path = _local_path(key)
     return path.read_bytes()
 
@@ -74,7 +76,7 @@ def read_bytes(key: str) -> bytes:
 def write_bytes(data: bytes, key: str) -> None:
     """Write raw bytes to GCS or local disk."""
     if _get_bucket():
-        _gcs_blob(key).upload_from_string(data)
+        _gcs_blob(key).upload_from_string(data, timeout=_GCS_TIMEOUT)
         return
     path = _local_path(key)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -84,7 +86,7 @@ def write_bytes(data: bytes, key: str) -> None:
 def read_csv(key: str, **kwargs) -> pd.DataFrame:
     """Read a CSV into a DataFrame from GCS or local disk."""
     if _get_bucket():
-        raw = _gcs_blob(key).download_as_bytes()
+        raw = _gcs_blob(key).download_as_bytes(timeout=_GCS_TIMEOUT)
         return pd.read_csv(io.BytesIO(raw), **kwargs)
     path = _local_path(key)
     return pd.read_csv(path, **kwargs)
@@ -94,7 +96,7 @@ def write_csv(df: pd.DataFrame, key: str, index: bool = False) -> None:
     """Write a DataFrame as CSV to GCS or local disk."""
     buf = df.to_csv(index=index).encode()
     if _get_bucket():
-        _gcs_blob(key).upload_from_string(buf, content_type="text/csv")
+        _gcs_blob(key).upload_from_string(buf, content_type="text/csv", timeout=_GCS_TIMEOUT)
         return
     path = _local_path(key)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +114,7 @@ def list_keys(prefix: str) -> list[str]:
     """List all keys under a prefix in GCS, or file names in a local dir."""
     if _get_bucket():
         client = _gcs_client()
-        blobs = client.list_blobs(GCS_BUCKET, prefix=prefix)
+        blobs = client.list_blobs(_get_bucket(), prefix=prefix)
         return [b.name for b in blobs]
     directory = _local_path(prefix)
     if not directory.is_dir():
@@ -142,7 +144,7 @@ def download_model(gcs_key: str, local_path: Path) -> Path:
     local_path = Path(local_path)
     if _get_bucket():
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        raw = _gcs_blob(gcs_key).download_as_bytes()
+        raw = _gcs_blob(gcs_key).download_as_bytes(timeout=_GCS_TIMEOUT)
         local_path.write_bytes(raw)
     return local_path
 
@@ -150,7 +152,7 @@ def download_model(gcs_key: str, local_path: Path) -> Path:
 def upload_model(local_path: Path, gcs_key: str) -> None:
     """Upload a local model file to GCS (no-op in local mode)."""
     if _get_bucket():
-        _gcs_blob(gcs_key).upload_from_filename(str(local_path))
+        _gcs_blob(gcs_key).upload_from_filename(str(local_path), timeout=_GCS_TIMEOUT)
 
 
 def stat(key: str) -> dict | None:
