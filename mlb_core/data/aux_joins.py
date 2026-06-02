@@ -19,7 +19,6 @@ Sources attached per call:
 
   join_pitcher_aux:
     bref_pitching  -- FIP, WHIP, SO9, BB9         join on (name_norm, year)
-    swing_take     -- runs_chase/heart/shadow      join on (pitcher MLBAM, year)
     team_schedule  -- travel_miles, home_away_streak, series_game_num
                       join on (pitcher_team, game_pk)
     manager_hooks  -- avg_starter_outs_L30, pct_quick_hooks_L30, pct_quality_starts_L30
@@ -28,12 +27,13 @@ Sources attached per call:
   join_game_aux:
     team_schedule  -- home_sched_* / away_sched_*  join on (team, game_pk) x2
     manager_hooks  -- home_hooks_* / away_hooks_*   join on (team, game_pk) x2
-    swing_take     -- home_runs_chase/heart/shadow  join on (home_pitcher_col, year) if provided
-                      away_runs_chase/heart/shadow  join on (away_pitcher_col, year) if provided
 
   join_batter_aux:
-    swing_take     -- opp_runs_chase/heart/shadow   join on (opp_pitcher_id, year)
-    team_schedule  -- home_sched_* / away_sched_*   join on (team, game_pk) x2
+    swing_take     -- batter_runs_chase/heart/shadow/waste  join on (batter MLBAM, year)
+    team_schedule  -- home_sched_* / away_sched_*           join on (team, game_pk) x2
+
+Note: the Savant swing-take leaderboard is batter-only (player_id = batter MLBAM ID).
+Joining on pitcher ID produces 0 matches, so swing_take is excluded from pitcher/game joins.
 """
 import logging
 
@@ -116,30 +116,6 @@ def join_pitcher_aux(
                     logger.info("aux_joins: bref join -- FIP NaN=%.1f%%", 100 * nan_pct)
         except Exception as exc:
             logger.warning("aux_joins: bref join failed (non-fatal): %s", exc)
-
-    # -- swing_take: runs_chase/heart/shadow/waste ---------------------------
-    if pitcher_col in df.columns:
-        try:
-            st = load_swing_take()
-            if not st.empty and "player_id" in st.columns:
-                st_cols = [c for c in _ST_COLS if c in st.columns]
-                if st_cols:
-                    df = df.copy()
-                    df["_aux_year"] = _safe_int(year)
-                    st_slim = (
-                        st[["player_id", "year"] + st_cols]
-                        .rename(columns={"player_id": "_st_pid", "year": "_aux_year"})
-                        .drop_duplicates(subset=["_st_pid", "_aux_year"])
-                    )
-                    st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
-                    st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
-                    df["_st_pid"] = _safe_int(df[pitcher_col])
-                    df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
-                    df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
-                    nan_pct = df["runs_chase"].isna().mean() if "runs_chase" in df.columns else float("nan")
-                    logger.info("aux_joins: swing_take join -- runs_chase NaN=%.1f%%", 100 * nan_pct)
-        except Exception as exc:
-            logger.warning("aux_joins: swing_take join failed (non-fatal): %s", exc)
 
     # -- derive pitcher_team -------------------------------------------------
     pitcher_team: pd.Series | None = None
@@ -227,39 +203,7 @@ def join_game_aux(
     Usage (GAME -- no pitcher IDs in final mf):
         mf = join_game_aux(mf, home_pitcher_col=None, away_pitcher_col=None)
     """
-    from mlb_core.data.auxiliary_features import load_swing_take, load_team_schedule, load_manager_hooks
-
-    # -- swing_take (per-side if pitcher IDs available) ----------------------
-    for side, p_col in (("home", home_pitcher_col), ("away", away_pitcher_col)):
-        if not p_col or p_col not in df.columns:
-            continue
-        try:
-            st = load_swing_take()
-            if not st.empty and "player_id" in st.columns and game_date_col in df.columns:
-                st_cols = [c for c in _ST_COLS if c in st.columns]
-                if st_cols:
-                    year = _year_from(df, game_date_col)
-                    df = df.copy()
-                    df["_aux_year"] = _safe_int(year)
-                    st_slim = (
-                        st[["player_id", "year"] + st_cols]
-                        .rename(columns={
-                            "player_id": "_st_pid",
-                            "year": "_aux_year",
-                            **{c: f"{side}_{c}" for c in st_cols},
-                        })
-                        .drop_duplicates(subset=["_st_pid", "_aux_year"])
-                    )
-                    st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
-                    st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
-                    df["_st_pid"] = _safe_int(df[p_col])
-                    df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
-                    df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
-                    nan_col = f"{side}_runs_chase"
-                    nan_pct = df[nan_col].isna().mean() if nan_col in df.columns else float("nan")
-                    logger.info("aux_joins: game swing_take %s -- %s NaN=%.1f%%", side, nan_col, 100 * nan_pct)
-        except Exception as exc:
-            logger.warning("aux_joins: game swing_take %s join failed (non-fatal): %s", side, exc)
+    from mlb_core.data.auxiliary_features import load_team_schedule, load_manager_hooks
 
     # -- team_schedule (both sides) -----------------------------------------
     try:
@@ -314,6 +258,7 @@ def join_game_aux(
 
 def join_batter_aux(
     df: pd.DataFrame,
+    batter_col: str | None = None,
     opp_pitcher_col: str = "opp_pitcher_id",
     home_team_col: str = "home_team",
     away_team_col: str = "away_team",
@@ -322,20 +267,20 @@ def join_batter_aux(
 ) -> pd.DataFrame:
     """Attach auxiliary features to a batter-game DataFrame.
 
-    - swing_take (opp pitcher): opp_runs_chase/heart/shadow
-      join on (opp_pitcher_id, year)
+    - swing_take (batter own stats): batter_runs_chase/heart/shadow/waste
+      join on (batter MLBAM, year)  -- requires batter_col
     - team_schedule: home_sched_* / away_sched_* for both sides
       join on (home_team / away_team, game_pk)
 
     Usage:
-        df = join_batter_aux(df)
+        df = join_batter_aux(df, batter_col="batter")
     """
     from mlb_core.data.auxiliary_features import load_swing_take, load_team_schedule
 
     year = _year_from(df, game_date_col)
 
-    # -- opp pitcher swing_take ---------------------------------------------
-    if opp_pitcher_col in df.columns:
+    # -- batter swing_take (batter's own swing/take tendencies) -------------
+    if batter_col and batter_col in df.columns:
         try:
             st = load_swing_take()
             if not st.empty and "player_id" in st.columns:
@@ -348,17 +293,17 @@ def join_batter_aux(
                         .rename(columns={
                             "player_id": "_st_pid",
                             "year": "_aux_year",
-                            **{c: f"opp_{c}" for c in st_cols},
+                            **{c: f"batter_{c}" for c in st_cols},
                         })
                         .drop_duplicates(subset=["_st_pid", "_aux_year"])
                     )
                     st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
                     st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
-                    df["_st_pid"] = _safe_int(df[opp_pitcher_col])
+                    df["_st_pid"] = _safe_int(df[batter_col])
                     df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
                     df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
-                    nan_pct = df["opp_runs_chase"].isna().mean() if "opp_runs_chase" in df.columns else float("nan")
-                    logger.info("aux_joins: batter swing_take join -- opp_runs_chase NaN=%.1f%%", 100 * nan_pct)
+                    nan_pct = df["batter_runs_chase"].isna().mean() if "batter_runs_chase" in df.columns else float("nan")
+                    logger.info("aux_joins: batter swing_take join -- batter_runs_chase NaN=%.1f%%", 100 * nan_pct)
         except Exception as exc:
             logger.warning("aux_joins: batter swing_take join failed (non-fatal): %s", exc)
 

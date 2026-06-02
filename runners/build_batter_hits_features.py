@@ -472,7 +472,7 @@ def build_model_features(
 
     try:
         from mlb_core.data.aux_joins import join_batter_aux
-        df = join_batter_aux(df, opp_pitcher_col="opp_pitcher_id")
+        df = join_batter_aux(df, batter_col="batter", opp_pitcher_col="opp_pitcher_id")
     except Exception as _e:
         logger.warning("BATTER_HITS: aux_joins failed (non-fatal): %s", _e)
 
