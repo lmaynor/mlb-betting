@@ -677,6 +677,12 @@ def build_features(
             pd.to_datetime(df["game_date"]) >= pd.Timestamp("2023-03-30")
         ).astype(int)
 
+    try:
+        from mlb_core.data.aux_joins import join_batter_aux
+        df = join_batter_aux(df, opp_pitcher_col="opp_pitcher_id")
+    except Exception as _e:
+        logger.warning("HR: aux_joins failed (non-fatal): %s", _e)
+
     return df
 
 

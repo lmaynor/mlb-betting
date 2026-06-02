@@ -867,6 +867,22 @@ def run(run_date: str | None = None) -> dict:
     pf = _attach_today_slate(pf, sc, run_date)
     pf = _join_pitch_arsenals(pf)
 
+    # Auxiliary features (bref FIP/SO9, swing_take, team_schedule, manager_hooks)
+    try:
+        from mlb_core.data.aux_joins import join_pitcher_aux
+        # pf carries pitcher MLBAM ID but not player_name; backfill from sc
+        if "player_name" not in pf.columns and "player_name" in sc.columns:
+            _name_map = sc.groupby("pitcher")["player_name"].first()
+            pf["player_name"] = pf["pitcher"].map(_name_map)
+        pf = join_pitcher_aux(
+            pf,
+            player_name_col="player_name",
+            pitcher_col="pitcher",
+            pitcher_is_home_col="is_home",
+        )
+    except Exception as _e:
+        logger.warning("K build: aux_joins failed (non-fatal): %s", _e)
+
     # Ensure every K_FEATURES column exists (NaN if not built — XGBoost handles it)
     from K_Pro_System.config_k import K_FEATURES
     missing_cols = [c for c in K_FEATURES if c not in pf.columns]

@@ -950,6 +950,17 @@ def build_model_features(
     except Exception as _e:
         logger.warning("GAME: home_win derivation failed: %s", _e)
 
+    try:
+        from mlb_core.data.aux_joins import join_game_aux
+        # pitcher columns in mf: 'pitcher' = home starter MLBAM ID (away starter ID not kept)
+        mf = join_game_aux(
+            mf,
+            home_pitcher_col="pitcher" if "pitcher" in mf.columns else None,
+            away_pitcher_col=None,
+        )
+    except Exception as _e:
+        logger.warning("GAME: aux_joins failed (non-fatal): %s", _e)
+
     mf = mf.sort_values("game_date").reset_index(drop=True)
     logger.info("GAME model_features: %d rows | %d games",
                 len(mf), mf["game_pk"].nunique() if not mf.empty else 0)

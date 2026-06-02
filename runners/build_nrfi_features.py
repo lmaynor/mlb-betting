@@ -568,6 +568,17 @@ def build_feature_table(pitcher_features: pd.DataFrame,
             (df["ump_total_run_impact_L30"]  < run_thresh)
         ).astype("Int64")
 
+    try:
+        from mlb_core.data.aux_joins import join_pitcher_aux
+        df = join_pitcher_aux(
+            df,
+            player_name_col="player_name",
+            pitcher_col="pitcher",
+            pitcher_is_home_col="pitcher_is_home",
+        )
+    except Exception as _e:
+        logger.warning("NRFI: aux_joins failed (non-fatal): %s", _e)
+
     logger.info(f"  ✅ Final feature table: {len(df):,} rows | {len(df.columns)} columns")
     return df
 

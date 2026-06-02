@@ -372,6 +372,16 @@ def _apply_joins(outcomes_df: pd.DataFrame,
     if "home_xwoba_L10" in gf.columns and "away_xwoba_L10" in gf.columns:
         gf["xwoba_allowed_diff"] = gf["away_xwoba_L10"] - gf["home_xwoba_L10"]
 
+    try:
+        from mlb_core.data.aux_joins import join_game_aux
+        gf = join_game_aux(
+            gf,
+            home_pitcher_col="home_pitcher" if "home_pitcher" in gf.columns else None,
+            away_pitcher_col="away_pitcher" if "away_pitcher" in gf.columns else None,
+        )
+    except Exception as _e:
+        logger.warning("F5: aux_joins failed (non-fatal): %s", _e)
+
     gf = (gf.drop_duplicates("game_pk", keep="first")
             .sort_values("game_date")
             .reset_index(drop=True))

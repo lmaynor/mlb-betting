@@ -276,6 +276,13 @@ def build_model_features(
         df = df.merge(om[["batter", "ewma_batting_order"]], on="batter", how="left")
     df["ewma_batting_order"] = df.get("ewma_batting_order", pd.Series(5.0, index=df.index)).fillna(5.0)
     df["post_pitch_clock"] = (df["game_date"] >= pd.Timestamp("2023-03-30")).astype(int)
+
+    try:
+        from mlb_core.data.aux_joins import join_batter_aux
+        df = join_batter_aux(df, opp_pitcher_col="opp_pitcher_id")
+    except Exception as _e:
+        logger.warning("BATTER_TB: aux_joins failed (non-fatal): %s", _e)
+
     logger.info("BATTER_TB: model_features rows=%s", f"{len(df):,}")
     return df
 

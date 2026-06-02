@@ -1,0 +1,387 @@
+"""
+mlb_core.data.aux_joins -- Shared helpers for wiring auxiliary_features data
+into feature-builder DataFrames.
+
+All joins are left joins: missing auxiliary data yields NaN rather than
+dropped rows.  Safe to call even if GCS files don't yet exist (each
+load call is wrapped in try/except and returns unchanged df on failure).
+
+Three entry points:
+
+  join_pitcher_aux(df, ...)   -- pitcher-grain (one row per pitcher-game)
+                                  NRFI, K
+  join_game_aux(df, ...)      -- game-grain   (one row per game)
+                                  F5, GAME
+  join_batter_aux(df, ...)    -- batter-grain (one row per batter-game)
+                                  HR, BATTER_HITS, BATTER_TB
+
+Sources attached per call:
+
+  join_pitcher_aux:
+    bref_pitching  -- FIP, WHIP, SO9, BB9         join on (name_norm, year)
+    swing_take     -- runs_chase/heart/shadow      join on (pitcher MLBAM, year)
+    team_schedule  -- travel_miles, home_away_streak, series_game_num
+                      join on (pitcher_team, game_pk)
+    manager_hooks  -- avg_starter_outs_L30, pct_quick_hooks_L30, pct_quality_starts_L30
+                      join on (pitcher_team, game_pk)
+
+  join_game_aux:
+    team_schedule  -- home_sched_* / away_sched_*  join on (team, game_pk) x2
+    manager_hooks  -- home_hooks_* / away_hooks_*   join on (team, game_pk) x2
+    swing_take     -- home_runs_chase/heart/shadow  join on (home_pitcher_col, year) if provided
+                      away_runs_chase/heart/shadow  join on (away_pitcher_col, year) if provided
+
+  join_batter_aux:
+    swing_take     -- opp_runs_chase/heart/shadow   join on (opp_pitcher_id, year)
+    team_schedule  -- home_sched_* / away_sched_*   join on (team, game_pk) x2
+"""
+import logging
+
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+_BREF_COLS  = ["FIP", "WHIP", "SO9", "BB9"]
+_ST_COLS    = ["runs_chase", "runs_heart", "runs_shadow", "runs_waste"]
+# days_rest deliberately excluded -- many builders compute it from statcast already.
+_SCHED_COLS = ["travel_miles", "home_away_streak", "series_game_num"]
+_HOOKS_COLS = ["avg_starter_outs_L30", "pct_quick_hooks_L30", "pct_quality_starts_L30"]
+
+
+def _safe_int(series: pd.Series) -> pd.Series:
+    """Cast to nullable Int64 so int/float mismatches don't break merges."""
+    return pd.to_numeric(series, errors="coerce").astype("Int64")
+
+
+def _year_from(df: pd.DataFrame, date_col: str) -> pd.Series:
+    return pd.to_datetime(df[date_col], errors="coerce").dt.year.astype("Int64")
+
+
+# ---------------------------------------------------------------------------
+# 1. Pitcher-grain joins
+# ---------------------------------------------------------------------------
+
+def join_pitcher_aux(
+    df: pd.DataFrame,
+    game_date_col: str = "game_date",
+    player_name_col: str | None = "player_name",
+    pitcher_col: str = "pitcher",
+    game_pk_col: str = "game_pk",
+    home_team_col: str = "home_team",
+    away_team_col: str = "away_team",
+    pitcher_is_home_col: str | None = None,
+    pitcher_team_col: str | None = None,
+) -> pd.DataFrame:
+    """Attach bref, swing_take, team_schedule, and manager_hooks to a pitcher-game DataFrame.
+
+    Pitcher team resolution (first match wins):
+      1. pitcher_team_col   -- explicit pre-computed column
+      2. pitcher_is_home_col + home/away_team -- derive from is_home flag
+      3. Neither provided   -- schedule/hooks joins are skipped
+
+    Usage (NRFI):
+        df = join_pitcher_aux(df, pitcher_is_home_col="pitcher_is_home")
+
+    Usage (K):
+        df = join_pitcher_aux(pf, player_name_col="player_name", pitcher_is_home_col="is_home")
+    """
+    from mlb_core.data.auxiliary_features import (
+        load_fangraphs_pitching, load_swing_take,
+        load_team_schedule, load_manager_hooks, norm_statcast_name,
+    )
+
+    year = _year_from(df, game_date_col)
+
+    # -- bref: FIP, WHIP, SO9, BB9 -----------------------------------------
+    if player_name_col and player_name_col in df.columns:
+        try:
+            bref = load_fangraphs_pitching()
+            if not bref.empty:
+                bref_cols = [c for c in _BREF_COLS if c in bref.columns]
+                if bref_cols:
+                    df = df.copy()
+                    df["_bref_key"] = df[player_name_col].apply(norm_statcast_name)
+                    df["_aux_year"] = year
+                    bref_slim = (
+                        bref[["name_norm", "year"] + bref_cols]
+                        .rename(columns={"name_norm": "_bref_key", "year": "_aux_year"})
+                        .drop_duplicates(subset=["_bref_key", "_aux_year"])
+                    )
+                    bref_slim["_aux_year"] = _safe_int(bref_slim["_aux_year"])
+                    df["_aux_year"] = _safe_int(df["_aux_year"])
+                    df = df.merge(bref_slim, on=["_bref_key", "_aux_year"], how="left")
+                    df = df.drop(columns=["_bref_key", "_aux_year"], errors="ignore")
+                    nan_pct = df["FIP"].isna().mean() if "FIP" in df.columns else float("nan")
+                    logger.info("aux_joins: bref join -- FIP NaN=%.1f%%", 100 * nan_pct)
+        except Exception as exc:
+            logger.warning("aux_joins: bref join failed (non-fatal): %s", exc)
+
+    # -- swing_take: runs_chase/heart/shadow/waste ---------------------------
+    if pitcher_col in df.columns:
+        try:
+            st = load_swing_take()
+            if not st.empty and "player_id" in st.columns:
+                st_cols = [c for c in _ST_COLS if c in st.columns]
+                if st_cols:
+                    df = df.copy()
+                    df["_aux_year"] = _safe_int(year)
+                    st_slim = (
+                        st[["player_id", "year"] + st_cols]
+                        .rename(columns={"player_id": "_st_pid", "year": "_aux_year"})
+                        .drop_duplicates(subset=["_st_pid", "_aux_year"])
+                    )
+                    st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
+                    st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
+                    df["_st_pid"] = _safe_int(df[pitcher_col])
+                    df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
+                    df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
+                    nan_pct = df["runs_chase"].isna().mean() if "runs_chase" in df.columns else float("nan")
+                    logger.info("aux_joins: swing_take join -- runs_chase NaN=%.1f%%", 100 * nan_pct)
+        except Exception as exc:
+            logger.warning("aux_joins: swing_take join failed (non-fatal): %s", exc)
+
+    # -- derive pitcher_team -------------------------------------------------
+    pitcher_team: pd.Series | None = None
+    if pitcher_team_col and pitcher_team_col in df.columns:
+        pitcher_team = df[pitcher_team_col]
+    elif (pitcher_is_home_col and pitcher_is_home_col in df.columns
+          and home_team_col in df.columns and away_team_col in df.columns):
+        pitcher_team = np.where(
+            df[pitcher_is_home_col].astype(float).fillna(0).astype(int) == 1,
+            df[home_team_col],
+            df[away_team_col],
+        )
+
+    if pitcher_team is None:
+        logger.debug("aux_joins: pitcher_team not resolvable -- schedule/hooks skipped")
+        return df
+
+    df = df.copy()
+    df["_pitcher_team"] = pitcher_team
+
+    # -- team_schedule: travel_miles, home_away_streak, series_game_num -----
+    try:
+        sched = load_team_schedule()
+        if not sched.empty:
+            sched_cols = [c for c in _SCHED_COLS if c in sched.columns]
+            if sched_cols:
+                sched_slim = (
+                    sched[["team", "game_pk"] + sched_cols]
+                    .rename(columns={"team": "_pitcher_team"})
+                    .drop_duplicates(subset=["_pitcher_team", "game_pk"])
+                )
+                sched_slim["game_pk"] = _safe_int(sched_slim["game_pk"])
+                df[game_pk_col] = _safe_int(df[game_pk_col])
+                df = df.merge(sched_slim, on=["_pitcher_team", game_pk_col], how="left")
+                nan_pct = df["travel_miles"].isna().mean() if "travel_miles" in df.columns else float("nan")
+                logger.info("aux_joins: team_schedule join -- travel_miles NaN=%.1f%%", 100 * nan_pct)
+    except Exception as exc:
+        logger.warning("aux_joins: team_schedule join failed (non-fatal): %s", exc)
+
+    # -- manager_hooks -------------------------------------------------------
+    try:
+        hooks = load_manager_hooks()
+        if not hooks.empty:
+            hook_cols = [c for c in _HOOKS_COLS if c in hooks.columns]
+            if hook_cols:
+                hooks_slim = (
+                    hooks[["team", "game_pk"] + hook_cols]
+                    .rename(columns={"team": "_pitcher_team"})
+                    .drop_duplicates(subset=["_pitcher_team", "game_pk"])
+                )
+                hooks_slim["game_pk"] = _safe_int(hooks_slim["game_pk"])
+                df[game_pk_col] = _safe_int(df[game_pk_col])
+                df = df.merge(hooks_slim, on=["_pitcher_team", game_pk_col], how="left")
+                nan_pct = df["avg_starter_outs_L30"].isna().mean() if "avg_starter_outs_L30" in df.columns else float("nan")
+                logger.info("aux_joins: manager_hooks join -- avg_starter_outs NaN=%.1f%%", 100 * nan_pct)
+    except Exception as exc:
+        logger.warning("aux_joins: manager_hooks join failed (non-fatal): %s", exc)
+
+    df = df.drop(columns=["_pitcher_team"], errors="ignore")
+    return df
+
+
+# ---------------------------------------------------------------------------
+# 2. Game-grain joins  (F5, GAME)
+# ---------------------------------------------------------------------------
+
+def join_game_aux(
+    df: pd.DataFrame,
+    home_team_col: str = "home_team",
+    away_team_col: str = "away_team",
+    game_pk_col: str = "game_pk",
+    game_date_col: str = "game_date",
+    home_pitcher_col: str | None = "home_pitcher",
+    away_pitcher_col: str | None = "away_pitcher",
+) -> pd.DataFrame:
+    """Attach auxiliary features to a game-grain DataFrame.
+
+    Joins team_schedule and manager_hooks for both home and away sides.
+    If home_pitcher_col / away_pitcher_col are present, also joins swing_take
+    for each side with home_/away_ prefixes.
+
+    Usage (F5):
+        gf = join_game_aux(gf, home_pitcher_col="home_pitcher", away_pitcher_col="away_pitcher")
+
+    Usage (GAME -- no pitcher IDs in final mf):
+        mf = join_game_aux(mf, home_pitcher_col=None, away_pitcher_col=None)
+    """
+    from mlb_core.data.auxiliary_features import load_swing_take, load_team_schedule, load_manager_hooks
+
+    # -- swing_take (per-side if pitcher IDs available) ----------------------
+    for side, p_col in (("home", home_pitcher_col), ("away", away_pitcher_col)):
+        if not p_col or p_col not in df.columns:
+            continue
+        try:
+            st = load_swing_take()
+            if not st.empty and "player_id" in st.columns and game_date_col in df.columns:
+                st_cols = [c for c in _ST_COLS if c in st.columns]
+                if st_cols:
+                    year = _year_from(df, game_date_col)
+                    df = df.copy()
+                    df["_aux_year"] = _safe_int(year)
+                    st_slim = (
+                        st[["player_id", "year"] + st_cols]
+                        .rename(columns={
+                            "player_id": "_st_pid",
+                            "year": "_aux_year",
+                            **{c: f"{side}_{c}" for c in st_cols},
+                        })
+                        .drop_duplicates(subset=["_st_pid", "_aux_year"])
+                    )
+                    st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
+                    st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
+                    df["_st_pid"] = _safe_int(df[p_col])
+                    df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
+                    df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
+                    nan_col = f"{side}_runs_chase"
+                    nan_pct = df[nan_col].isna().mean() if nan_col in df.columns else float("nan")
+                    logger.info("aux_joins: game swing_take %s -- %s NaN=%.1f%%", side, nan_col, 100 * nan_pct)
+        except Exception as exc:
+            logger.warning("aux_joins: game swing_take %s join failed (non-fatal): %s", side, exc)
+
+    # -- team_schedule (both sides) -----------------------------------------
+    try:
+        sched = load_team_schedule()
+        if not sched.empty:
+            sched_cols = [c for c in _SCHED_COLS if c in sched.columns]
+            if sched_cols:
+                for side, team_col in (("home", home_team_col), ("away", away_team_col)):
+                    if team_col not in df.columns:
+                        continue
+                    sched_slim = (
+                        sched[["team", "game_pk"] + sched_cols]
+                        .rename(columns={"team": team_col, **{c: f"{side}_sched_{c}" for c in sched_cols}})
+                        .drop_duplicates(subset=[team_col, "game_pk"])
+                    )
+                    sched_slim["game_pk"] = _safe_int(sched_slim["game_pk"])
+                    df = df.copy()
+                    df[game_pk_col] = _safe_int(df[game_pk_col])
+                    df = df.merge(sched_slim, on=[team_col, game_pk_col], how="left")
+                logger.info("aux_joins: game team_schedule joined (home + away)")
+    except Exception as exc:
+        logger.warning("aux_joins: game team_schedule join failed (non-fatal): %s", exc)
+
+    # -- manager_hooks (both sides) -----------------------------------------
+    try:
+        hooks = load_manager_hooks()
+        if not hooks.empty:
+            hook_cols = [c for c in _HOOKS_COLS if c in hooks.columns]
+            if hook_cols:
+                for side, team_col in (("home", home_team_col), ("away", away_team_col)):
+                    if team_col not in df.columns:
+                        continue
+                    hooks_slim = (
+                        hooks[["team", "game_pk"] + hook_cols]
+                        .rename(columns={"team": team_col, **{c: f"{side}_hooks_{c}" for c in hook_cols}})
+                        .drop_duplicates(subset=[team_col, "game_pk"])
+                    )
+                    hooks_slim["game_pk"] = _safe_int(hooks_slim["game_pk"])
+                    df = df.copy()
+                    df[game_pk_col] = _safe_int(df[game_pk_col])
+                    df = df.merge(hooks_slim, on=[team_col, game_pk_col], how="left")
+                logger.info("aux_joins: game manager_hooks joined (home + away)")
+    except Exception as exc:
+        logger.warning("aux_joins: game manager_hooks join failed (non-fatal): %s", exc)
+
+    return df
+
+
+# ---------------------------------------------------------------------------
+# 3. Batter-grain joins  (HR, BATTER_HITS, BATTER_TB)
+# ---------------------------------------------------------------------------
+
+def join_batter_aux(
+    df: pd.DataFrame,
+    opp_pitcher_col: str = "opp_pitcher_id",
+    home_team_col: str = "home_team",
+    away_team_col: str = "away_team",
+    game_pk_col: str = "game_pk",
+    game_date_col: str = "game_date",
+) -> pd.DataFrame:
+    """Attach auxiliary features to a batter-game DataFrame.
+
+    - swing_take (opp pitcher): opp_runs_chase/heart/shadow
+      join on (opp_pitcher_id, year)
+    - team_schedule: home_sched_* / away_sched_* for both sides
+      join on (home_team / away_team, game_pk)
+
+    Usage:
+        df = join_batter_aux(df)
+    """
+    from mlb_core.data.auxiliary_features import load_swing_take, load_team_schedule
+
+    year = _year_from(df, game_date_col)
+
+    # -- opp pitcher swing_take ---------------------------------------------
+    if opp_pitcher_col in df.columns:
+        try:
+            st = load_swing_take()
+            if not st.empty and "player_id" in st.columns:
+                st_cols = [c for c in _ST_COLS if c in st.columns]
+                if st_cols:
+                    df = df.copy()
+                    df["_aux_year"] = _safe_int(year)
+                    st_slim = (
+                        st[["player_id", "year"] + st_cols]
+                        .rename(columns={
+                            "player_id": "_st_pid",
+                            "year": "_aux_year",
+                            **{c: f"opp_{c}" for c in st_cols},
+                        })
+                        .drop_duplicates(subset=["_st_pid", "_aux_year"])
+                    )
+                    st_slim["_st_pid"] = _safe_int(st_slim["_st_pid"])
+                    st_slim["_aux_year"] = _safe_int(st_slim["_aux_year"])
+                    df["_st_pid"] = _safe_int(df[opp_pitcher_col])
+                    df = df.merge(st_slim, on=["_st_pid", "_aux_year"], how="left")
+                    df = df.drop(columns=["_st_pid", "_aux_year"], errors="ignore")
+                    nan_pct = df["opp_runs_chase"].isna().mean() if "opp_runs_chase" in df.columns else float("nan")
+                    logger.info("aux_joins: batter swing_take join -- opp_runs_chase NaN=%.1f%%", 100 * nan_pct)
+        except Exception as exc:
+            logger.warning("aux_joins: batter swing_take join failed (non-fatal): %s", exc)
+
+    # -- team schedule (both sides) -----------------------------------------
+    try:
+        sched = load_team_schedule()
+        if not sched.empty:
+            sched_cols = [c for c in _SCHED_COLS if c in sched.columns]
+            if sched_cols:
+                for side, team_col in (("home", home_team_col), ("away", away_team_col)):
+                    if team_col not in df.columns:
+                        continue
+                    sched_slim = (
+                        sched[["team", "game_pk"] + sched_cols]
+                        .rename(columns={"team": team_col, **{c: f"{side}_sched_{c}" for c in sched_cols}})
+                        .drop_duplicates(subset=[team_col, "game_pk"])
+                    )
+                    sched_slim["game_pk"] = _safe_int(sched_slim["game_pk"])
+                    df = df.copy()
+                    df[game_pk_col] = _safe_int(df[game_pk_col])
+                    df = df.merge(sched_slim, on=[team_col, game_pk_col], how="left")
+                logger.info("aux_joins: batter team_schedule joined (home + away)")
+    except Exception as exc:
+        logger.warning("aux_joins: batter team_schedule join failed (non-fatal): %s", exc)
+
+    return df
