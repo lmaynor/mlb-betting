@@ -21,12 +21,24 @@ from typing import Optional
 
 import pandas as pd
 
-from mlb_core.config import GCS_BUCKET, BASE_DATA
+from mlb_core.config import BASE_DATA
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _get_bucket() -> str:
+    """Re-read GCS bucket name from env at call time.
+
+    Checks MLB_GCS_BUCKET first (Cloud Run), then GCS_BUCKET (Cloud Shell
+    convenience alias).  Returns empty string in local-only mode.
+    Re-reading at call time means `export GCS_BUCKET=...` takes effect
+    without restarting Python.
+    """
+    return (os.environ.get("MLB_GCS_BUCKET", "")
+            or os.environ.get("GCS_BUCKET", ""))
+
 
 def _gcs_client():
     from google.cloud import storage as gcs
@@ -35,7 +47,7 @@ def _gcs_client():
 
 def _gcs_blob(key: str):
     client = _gcs_client()
-    bucket = client.bucket(GCS_BUCKET)
+    bucket = client.bucket(_get_bucket())
     return bucket.blob(key)
 
 
@@ -53,7 +65,7 @@ def _local_path(key: str) -> Path:
 
 def read_bytes(key: str) -> bytes:
     """Read raw bytes from GCS or local disk."""
-    if GCS_BUCKET:
+    if _get_bucket():
         return _gcs_blob(key).download_as_bytes()
     path = _local_path(key)
     return path.read_bytes()
@@ -61,7 +73,7 @@ def read_bytes(key: str) -> bytes:
 
 def write_bytes(data: bytes, key: str) -> None:
     """Write raw bytes to GCS or local disk."""
-    if GCS_BUCKET:
+    if _get_bucket():
         _gcs_blob(key).upload_from_string(data)
         return
     path = _local_path(key)
@@ -71,7 +83,7 @@ def write_bytes(data: bytes, key: str) -> None:
 
 def read_csv(key: str, **kwargs) -> pd.DataFrame:
     """Read a CSV into a DataFrame from GCS or local disk."""
-    if GCS_BUCKET:
+    if _get_bucket():
         raw = _gcs_blob(key).download_as_bytes()
         return pd.read_csv(io.BytesIO(raw), **kwargs)
     path = _local_path(key)
@@ -81,7 +93,7 @@ def read_csv(key: str, **kwargs) -> pd.DataFrame:
 def write_csv(df: pd.DataFrame, key: str, index: bool = False) -> None:
     """Write a DataFrame as CSV to GCS or local disk."""
     buf = df.to_csv(index=index).encode()
-    if GCS_BUCKET:
+    if _get_bucket():
         _gcs_blob(key).upload_from_string(buf, content_type="text/csv")
         return
     path = _local_path(key)
@@ -91,14 +103,14 @@ def write_csv(df: pd.DataFrame, key: str, index: bool = False) -> None:
 
 def exists(key: str) -> bool:
     """Check whether a key exists in GCS or on local disk."""
-    if GCS_BUCKET:
+    if _get_bucket():
         return _gcs_blob(key).exists()
     return _local_path(key).exists()
 
 
 def list_keys(prefix: str) -> list[str]:
     """List all keys under a prefix in GCS, or file names in a local dir."""
-    if GCS_BUCKET:
+    if _get_bucket():
         client = _gcs_client()
         blobs = client.list_blobs(GCS_BUCKET, prefix=prefix)
         return [b.name for b in blobs]
@@ -110,7 +122,7 @@ def list_keys(prefix: str) -> list[str]:
 
 def delete(key: str) -> None:
     """Delete a key from GCS or local disk (silent if missing)."""
-    if GCS_BUCKET:
+    if _get_bucket():
         blob = _gcs_blob(key)
         if blob.exists():
             blob.delete()
@@ -128,7 +140,7 @@ def download_model(gcs_key: str, local_path: Path) -> Path:
     materialised locally even in GCS mode.  Returns the local path.
     """
     local_path = Path(local_path)
-    if GCS_BUCKET:
+    if _get_bucket():
         local_path.parent.mkdir(parents=True, exist_ok=True)
         raw = _gcs_blob(gcs_key).download_as_bytes()
         local_path.write_bytes(raw)
@@ -137,13 +149,13 @@ def download_model(gcs_key: str, local_path: Path) -> Path:
 
 def upload_model(local_path: Path, gcs_key: str) -> None:
     """Upload a local model file to GCS (no-op in local mode)."""
-    if GCS_BUCKET:
+    if _get_bucket():
         _gcs_blob(gcs_key).upload_from_filename(str(local_path))
 
 
 def stat(key: str) -> dict | None:
     """Return {'mtime_utc': datetime, 'size': int} for a key, or None if missing."""
-    if GCS_BUCKET:
+    if _get_bucket():
         blob = _gcs_blob(key)
         blob.reload()
         if not blob.exists():

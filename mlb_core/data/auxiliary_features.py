@@ -344,8 +344,11 @@ def _nightly_generic(prefix: str, start_year: int, fetch_fn,
 # 1. FanGraphs Plate Discipline (via pybaseball)
 # ===========================================================================
 
-# B-Ref columns that must be present after the fetch.
-_FG_REQUIRED_COLS = {"FIP", "SO9"}
+# B-Ref columns that must be present to proceed (raw counting stats only).
+_FG_REQUIRED_COLS = {"ERA", "SO", "IP"}
+
+# FIP constant (league-average, stable enough for feature engineering).
+_FIP_CONSTANT = 3.10
 
 # pybaseball / B-Ref column name candidates for pitcher display name.
 _FG_NAME_COLS = ["Name", "PlayerName", "playerName"]
@@ -437,6 +440,28 @@ def _fetch_fangraphs_pitching(year: int) -> pd.DataFrame | None:
             f"auxiliary_features: bref {year} -- no name column found, "
             f"name_norm absent (join will fail)"
         )
+
+    # Coerce numeric cols (B-Ref sometimes returns strings for IP/HR/BB)
+    for col in ["IP", "HR", "BB", "HBP", "SO", "H", "ER", "ERA"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Compute derived metrics from counting stats (B-Ref doesn't return these)
+    ip = df["IP"].replace(0, float("nan"))
+    hr  = df.get("HR",  pd.Series(0, index=df.index))
+    bb  = df.get("BB",  pd.Series(0, index=df.index))
+    hbp = df.get("HBP", pd.Series(0, index=df.index))
+    so  = df["SO"]
+    h   = df.get("H",   pd.Series(0, index=df.index))
+    df["FIP"]  = (13 * hr + 3 * (bb + hbp) - 2 * so) / ip + _FIP_CONSTANT
+    df["WHIP"] = (h + bb) / ip
+    df["SO9"]  = so * 9.0 / ip
+    df["BB9"]  = bb * 9.0 / ip
+    df["HR9"]  = hr * 9.0 / ip
+    logger.debug(
+        f"auxiliary_features: bref {year} computed FIP/WHIP/SO9/BB9/HR9 "
+        f"from counting stats"
+    )
 
     # Keep only the columns we care about (plus any extras present)
     keep = [c for c in _BREF_KEEP_COLS if c in df.columns]
