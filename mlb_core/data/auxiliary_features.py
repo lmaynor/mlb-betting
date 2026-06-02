@@ -344,74 +344,178 @@ def _nightly_generic(prefix: str, start_year: int, fetch_fn,
 # 1. FanGraphs Plate Discipline
 # ===========================================================================
 
-# Columns we expect from the FanGraphs plate discipline CSV.
-# If these are absent the URL type parameter may have drifted -- check manually.
+# FanGraphs JSON API column names for plate discipline (type=5, pitchers).
+# The JSON API and CSV export use the same display names, but the JSON values
+# are already numeric (no "%" suffix) so no string conversion is needed.
+# If none of these appear, log the actual columns so we can update the mapping.
 _FG_REQUIRED_COLS = {"O-Swing%", "SwStr%"}
+
+# Some FanGraphs API responses use alternate name fields -- checked in order.
+_FG_NAME_COLS = ["PlayerName", "Name", "playerName"]
+
+# Additional headers that make the JSON API request look like a browser XHR.
+# The legacy leaders.aspx?csv=1 endpoint returns 403; the internal API does not.
+_FG_API_HEADERS = {
+    "Referer":          "https://www.fangraphs.com/leaders/major-league",
+    "Accept":           "application/json, text/plain, */*",
+    "Sec-Fetch-Site":   "same-origin",
+    "Sec-Fetch-Mode":   "cors",
+    "Sec-Fetch-Dest":   "empty",
+    "X-Requested-With": "XMLHttpRequest",
+}
 
 
 def _fetch_fangraphs_pitching(year: int) -> pd.DataFrame | None:
-    """Fetch pitcher plate discipline from FanGraphs for one season.
+    """Fetch pitcher plate discipline from FanGraphs JSON API for one season.
 
-    Endpoint: /leaders.aspx type=5 (Plate Discipline tab) with csv=1.
-    Columns include: Name, Team, IP, O-Swing%, Z-Swing%, Swing%, SwStr%,
-    Zone%, F-Strike%, Contact%, playerid.
+    Uses /api/leaders/major-league (the FanGraphs internal XHR endpoint used
+    by their own frontend). More permissive than the legacy leaders.aspx?csv=1
+    export, which returns 403 due to bot-protection on that specific route.
 
-    Adds year and name_norm columns. Converts %-string columns to float 0-1.
-    Returns None if the expected columns are absent (likely URL change or 403).
+    type=5 is Plate Discipline. Columns: Name, Team, IP, TBF, O-Swing%,
+    Z-Swing%, Swing%, O-Contact%, Z-Contact%, Contact%, Zone%, F-Strike%,
+    SwStr%, Pace, playerid.
+
+    Returns None if expected columns absent or fetch fails.
     """
     url = (
-        f"https://www.fangraphs.com/leaders.aspx"
+        f"https://www.fangraphs.com/api/leaders/major-league"
         f"?pos=all&stats=pit&lg=all&qual={_FANGRAPHS_MIN_IP}"
-        f"&type=5&season={year}&month=0&season1={year}"
+        f"&type=5&season={year}&season1={year}"
         f"&ind=0&team=0&rost=0&age=0&filter=&players=0"
-        f"&startdate=&enddate=&csv=1"
+        f"&startdate={year}-01-01&enddate={year}-12-31"
     )
-    df = _fetch_csv_url(url, "fangraphs_pitching", year)
-    if df is None or df.empty:
-        return None
+    logger.info(f"auxiliary_features: fetching fangraphs_pitching {year} -- {url}")
 
-    missing = _FG_REQUIRED_COLS - set(df.columns)
-    if missing:
-        logger.warning(
-            f"auxiliary_features: fangraphs_pitching {year} -- "
-            f"required cols {missing} not found in response "
-            f"(got: {list(df.columns[:12])}). "
-            f"FanGraphs may have changed type=5 -- verify URL manually."
-        )
-        return None
+    for attempt in range(4):
+        try:
+            resp = _SESSION.get(url, timeout=30, headers=_FG_API_HEADERS)
+            resp.raise_for_status()
 
-    if "year" not in df.columns:
-        df.insert(0, "year", year)
+            # Endpoint returns JSON -- parse directly
+            try:
+                payload = resp.json()
+            except ValueError:
+                content = resp.text.strip()
+                if content.startswith("<"):
+                    wait = 30 + attempt * 15
+                    logger.warning(
+                        f"auxiliary_features: fangraphs_pitching {year} HTML response "
+                        f"(attempt {attempt + 1}/4) -- sleeping {wait}s"
+                    )
+                    time.sleep(wait)
+                    continue
+                logger.warning(
+                    f"auxiliary_features: fangraphs_pitching {year} non-JSON response "
+                    f"(attempt {attempt + 1}/4), len={len(content)}"
+                )
+                time.sleep((2 ** attempt) * 5)
+                continue
 
-    # name_norm for joining to statcast pitcher names (MLBAM ID not in FG CSV)
-    if "Name" in df.columns:
-        df["name_norm"] = df["Name"].apply(_norm_name)
-        logger.debug(
-            f"auxiliary_features: fangraphs_pitching {year} "
-            f"-- sample name_norm: {df['name_norm'].iloc[:3].tolist()}"
-        )
+            # Payload is either a list or {"data": [...]}
+            if isinstance(payload, list):
+                rows = payload
+            elif isinstance(payload, dict):
+                rows = payload.get("data") or payload.get("rows") or []
+            else:
+                logger.warning(
+                    f"auxiliary_features: fangraphs_pitching {year} unexpected "
+                    f"JSON type {type(payload).__name__}"
+                )
+                return None
 
-    # %-string columns to float 0-1 (FanGraphs returns "12.3%")
-    pct_cols = [c for c in df.columns if isinstance(c, str) and c.endswith("%")]
-    for col in pct_cols:
-        if df[col].dtype == object:
-            df[col] = (
-                pd.to_numeric(
-                    df[col].astype(str).str.replace("%", "", regex=False),
-                    errors="coerce",
-                ) / 100.0
+            if not rows:
+                logger.info(
+                    f"auxiliary_features: fangraphs_pitching {year} -- "
+                    f"empty rows array (off-season or no qualifiers)"
+                )
+                return None
+
+            df = pd.DataFrame(rows)
+            logger.info(
+                f"auxiliary_features: fangraphs_pitching {year} -> "
+                f"{len(df):,} rows | cols: {list(df.columns[:14])}"
             )
 
-    swstr_mean = df["SwStr%"].mean()
-    oswing_mean = df["O-Swing%"].mean()
-    nan_swstr   = df["SwStr%"].isna().sum()
-    logger.info(
-        f"auxiliary_features: fangraphs_pitching {year} -- "
-        f"{len(df):,} pitchers | "
-        f"SwStr% mean={swstr_mean:.3f} NaN={nan_swstr} | "
-        f"O-Swing% mean={oswing_mean:.3f}"
+            missing = _FG_REQUIRED_COLS - set(df.columns)
+            if missing:
+                logger.warning(
+                    f"auxiliary_features: fangraphs_pitching {year} -- "
+                    f"required cols {missing} absent. Got: {list(df.columns[:14])}. "
+                    f"FanGraphs may have renamed columns -- update _FG_REQUIRED_COLS."
+                )
+                return None
+
+            if "year" not in df.columns:
+                df.insert(0, "year", year)
+
+            # name_norm for cross-source joins (MLBAM ID not in FanGraphs response)
+            name_col = next((c for c in _FG_NAME_COLS if c in df.columns), None)
+            if name_col:
+                df["name_norm"] = df[name_col].apply(_norm_name)
+                logger.debug(
+                    f"auxiliary_features: fangraphs_pitching {year} name_norm "
+                    f"from '{name_col}': {df['name_norm'].iloc[:3].tolist()}"
+                )
+            else:
+                logger.warning(
+                    f"auxiliary_features: fangraphs_pitching {year} -- "
+                    f"no name column found in {list(df.columns[:10])}, "
+                    f"name_norm will be missing"
+                )
+
+            # JSON values are already numeric -- no % string conversion needed.
+            # But guard against any string columns that slipped through.
+            pct_cols = [c for c in df.columns if isinstance(c, str) and c.endswith("%")]
+            for col in pct_cols:
+                if df[col].dtype == object:
+                    df[col] = pd.to_numeric(
+                        df[col].astype(str).str.replace("%", "", regex=False),
+                        errors="coerce",
+                    ) / 100.0
+
+            # FanGraphs JSON returns pct as 0-100 float (e.g. 12.3), not 0-1.
+            # Normalise any pct col whose mean > 1 to 0-1 range.
+            for col in pct_cols:
+                if col in df.columns and df[col].notna().any():
+                    if df[col].mean() > 1.0:
+                        df[col] = df[col] / 100.0
+                        logger.debug(
+                            f"auxiliary_features: fangraphs {year} normalised "
+                            f"{col} from 0-100 to 0-1"
+                        )
+
+            swstr_mean  = df["SwStr%"].mean()
+            oswing_mean = df["O-Swing%"].mean()
+            nan_swstr   = int(df["SwStr%"].isna().sum())
+            logger.info(
+                f"auxiliary_features: fangraphs_pitching {year} -- "
+                f"{len(df):,} pitchers | "
+                f"SwStr% mean={swstr_mean:.3f} NaN={nan_swstr} | "
+                f"O-Swing% mean={oswing_mean:.3f}"
+            )
+            return df
+
+        except requests.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            wait = 45 + attempt * 20 if status == 403 else (2 ** attempt) * 5
+            logger.warning(
+                f"auxiliary_features: HTTP {status} fangraphs_pitching {year} "
+                f"(attempt {attempt + 1}/4), sleeping {wait}s"
+            )
+            time.sleep(wait)
+        except Exception as e:
+            wait = (2 ** attempt) * 3 + random.uniform(1, 3)
+            logger.warning(
+                f"auxiliary_features: fetch error fangraphs_pitching {year} "
+                f"(attempt {attempt + 1}/4): {e}, sleeping {wait:.1f}s"
+            )
+            time.sleep(wait)
+
+    logger.error(
+        f"auxiliary_features: all 4 attempts failed for fangraphs_pitching {year}"
     )
-    return df
+    return None
 
 
 def fangraphs_backfill_gcs(
