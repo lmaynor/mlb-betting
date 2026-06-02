@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _FANGRAPHS_START_YEAR = 2015
-_SWING_TAKE_START_YEAR = 2020
+_SWING_TAKE_START_YEAR = 2024   # leaderboard added 2024; pre-2024 returns empty
 _SCHEDULE_START_YEAR = 2021   # matches statcast_master window
 
 _FANGRAPHS_MIN_IP = 20        # minimum IP filter for FanGraphs plate discipline
@@ -600,47 +600,77 @@ _SWING_TAKE_REQUIRED_ANY = {"chase_rate", "swing_rate", "heart_swing_rate", "pla
 def _fetch_swing_take(year: int) -> pd.DataFrame | None:
     """Fetch Baseball Savant Swing-Take leaderboard for pitchers.
 
-    Endpoint: /leaderboard/swing-take (added 2024). Returns per-pitcher
+    Endpoint: /leaderboard/swing-take (added 2024). Returns per player
     chase_rate, heart_swing_rate, shadow_swing_rate, run values, etc.
-    Returns None if endpoint unavailable or columns changed.
+    The leaderboard returns both pitchers and batters; we keep pitchers
+    by filtering on pa_type or equivalent column when present.
+
+    Note: type=pitcher causes 0-row responses -- this endpoint does not
+    accept a player_type filter in the URL. Fetch all and filter in code.
     """
     url = (
         f"https://baseballsavant.mlb.com/leaderboard/swing-take"
-        f"?type=pitcher&year={year}&min={_SWING_TAKE_MIN}&csv=true"
+        f"?year={year}&min={_SWING_TAKE_MIN}&csv=true"
     )
     df = _fetch_csv_url(url, "swing_take", year)
     if df is None or df.empty:
         return None
 
     got_cols = set(df.columns)
+    logger.info(
+        f"auxiliary_features: swing_take {year} raw -> "
+        f"{len(df):,} rows | cols: {sorted(got_cols)}"
+    )
+
     if not _SWING_TAKE_REQUIRED_ANY.intersection(got_cols):
         logger.warning(
             f"auxiliary_features: swing_take {year} -- "
-            f"none of {_SWING_TAKE_REQUIRED_ANY} found in response cols "
-            f"{list(df.columns[:12])}. "
+            f"none of {_SWING_TAKE_REQUIRED_ANY} found. "
             f"Savant may have changed this endpoint -- check manually."
         )
+        return None
+
+    # Keep pitchers only. Savant returns a combined leaderboard; the
+    # pitcher/batter split lives in a 'pa_type' or 'player_type' column
+    # when present. Fallback: keep all rows (both views share the same schema).
+    for type_col in ("pa_type", "player_type", "type"):
+        if type_col in df.columns:
+            before = len(df)
+            df = df[df[type_col].astype(str).str.lower() == "pitcher"].copy()
+            logger.info(
+                f"auxiliary_features: swing_take {year} pitcher filter "
+                f"on '{type_col}': {before} -> {len(df)} rows"
+            )
+            break
+    else:
+        logger.debug(
+            f"auxiliary_features: swing_take {year} -- no type column found, "
+            f"keeping all {len(df)} rows (may include batters)"
+        )
+
+    if df.empty:
+        logger.warning(f"auxiliary_features: swing_take {year} empty after pitcher filter")
         return None
 
     if "year" not in df.columns:
         df.insert(0, "year", year)
 
-    # Build name_norm from first/last columns for backup join path
+    # Build name_norm from first/last name columns for fallback joins
     if "last_name" in df.columns and "first_name" in df.columns:
         df["name_norm"] = (
             (df["first_name"].fillna("") + " " + df["last_name"].fillna(""))
             .apply(_norm_name)
         )
     elif "last_name, first_name" in df.columns:
-        # Savant sometimes returns "Last, First" format in a single column
-        def _split_savant_name(s):
+        # Savant sometimes returns "Last, First" in a single combined column
+        def _split_savant_name(s: str) -> str:
             parts = str(s).split(", ")
             return _norm_name(f"{parts[1]} {parts[0]}") if len(parts) == 2 else _norm_name(s)
         df["name_norm"] = df["last_name, first_name"].apply(_split_savant_name)
 
     logger.info(
         f"auxiliary_features: swing_take {year} -- "
-        f"{len(df):,} pitchers | cols: {sorted(got_cols)}"
+        f"{len(df):,} pitchers retained"
     )
     return df
 
