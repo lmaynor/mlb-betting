@@ -127,6 +127,29 @@ def _norm_name(name: str) -> str:
     return n.lower().strip()
 
 
+def norm_statcast_name(player_name: str) -> str:
+    """Convert a Statcast 'Last, First' player_name to bref_pitching name_norm format.
+
+    Statcast stores pitcher names as 'Cole, Gerrit'.
+    bref_pitching.name_norm is 'gerrit cole' (from B-Ref 'Gerrit Cole').
+
+    Feature builders must use this before joining to bref_pitching on name_norm:
+
+        df["bref_key"] = df["player_name"].apply(norm_statcast_name)
+        bref = load_fangraphs_pitching()
+        df = df.merge(bref[["name_norm","year","FIP","SO9","BB9","WHIP"]],
+                      left_on=["bref_key","year"], right_on=["name_norm","year"],
+                      how="left")
+
+    For swing_take and team_schedule / manager_hooks there is no name join --
+    use player_id (MLBAM) or (team, game_pk) instead.
+    """
+    parts = str(player_name).split(", ")
+    if len(parts) == 2:
+        return _norm_name(f"{parts[1]} {parts[0]}")
+    return _norm_name(player_name)
+
+
 def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in miles between two lat/lon points."""
     R = 3959.0
@@ -518,13 +541,22 @@ def fangraphs_nightly_gcs() -> dict:
 def load_fangraphs_pitching(years: list[int] | None = None) -> pd.DataFrame:
     """Load FanGraphs pitcher plate discipline master from GCS/local.
 
-    Feature builders join on (name_norm, year) to get FIP, SO9, BB9, WHIP, etc.
+    Feature builders join on (name_norm, year). Because Statcast stores
+    player_name as 'Last, First' and bref uses 'First Last', you must
+    call norm_statcast_name(player_name) before joining:
+
+        df["bref_key"] = df["player_name"].apply(norm_statcast_name)
+        year = pd.to_datetime(df["game_date"]).dt.year
+        bref = load_fangraphs_pitching()
+        merged = df.merge(bref[["name_norm","year","FIP","SO9","BB9","WHIP"]],
+                          left_on=["bref_key", year],
+                          right_on=["name_norm","year"], how="left")
 
     Args:
         years: If provided, filter to these seasons only.
 
     Returns:
-        DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, etc.
+        DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, ERA+.
         Empty DataFrame if master not found.
     """
     from mlb_core.storage import read_csv, exists
