@@ -5,9 +5,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Python deps first (layer cache)
+# Install Python deps first (layer cache).
+# Uninstall nvidia-nccl-cu12 in the SAME RUN step so the 300MB package is
+# never committed to a Docker layer (and never bloats the GCR image).
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
 # Copy source
 COPY mlb_core/      ./mlb_core/
@@ -26,9 +29,7 @@ COPY tweet_drafter.py .
 COPY setup.py         .
 
 # Install mlb_core as a package (eliminates all sys.path hacks)
-# Uninstall NCCL here (after all pip steps) so it's only downloaded once.
-RUN pip install --no-cache-dir -e . \
-    && pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
+RUN pip install --no-cache-dir -e .
 
 # Cloud Run listens on $PORT (default 8080)
 ENV PORT=8080

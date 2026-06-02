@@ -74,6 +74,19 @@ TEAM_NAME_TO_ABBR = {
 HIT_EVENTS = frozenset(["single", "double", "triple", "home_run"])
 K_EVENTS    = frozenset(["strikeout", "strikeout_double_play"])
 
+# Columns actually used by this builder (~18 of ~80 in statcast_master).
+# Keeping this list tight cuts memory ~4x vs full-width load (from 8Gi to ~2Gi).
+_STATCAST_COLS = {
+    # identifiers
+    "game_date", "game_pk", "batter", "pitcher",
+    # outcome / batted ball
+    "events", "launch_speed", "launch_angle", "bb_type",
+    # swing / zone (pitch-level)
+    "description", "plate_x", "plate_z", "sz_top", "sz_bot",
+    # context
+    "p_throws", "stand", "home_team", "away_team", "player_name",
+}
+
 
 def _normalize_name(name: str) -> str:
     import unicodedata, re
@@ -88,10 +101,11 @@ def _normalize_name(name: str) -> str:
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
     from mlb_core.storage import read_csv
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
-
-    if "bat_speed" in df.columns:
-        df = df.drop(columns=["bat_speed"])
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
 
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df[df["game_date"].dt.year >= cfg["season_start"]].copy()
