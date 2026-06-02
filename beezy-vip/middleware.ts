@@ -7,6 +7,8 @@ export const runtime = 'nodejs'
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
   '/tools/bet-tracker(.*)',
+  '/tools/clv-tracker(.*)',
+  '/tools/slate(.*)',
   '/api/admin(.*)',
 ])
 

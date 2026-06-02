@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 
 function normalizeApiUrl(value: string) {
@@ -106,4 +106,28 @@ export async function apiGetPicks(params: {
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   const data = await apiFetch<PicksResponse>(`/api/public/picks${qs}`, 60)
   return data.picks
+}
+
+// Server-side only (called from server components, not client)
+export async function apiGetCLVData(days = 90, systems?: string): Promise<CLVDataPoint[]> {
+  if (!API_URL) throw new Error('BETTING_API_URL is not set')
+  const sp = new URLSearchParams({ days: String(days) })
+  if (systems) sp.set('systems', systems)
+  const res = await fetch(`${API_URL}/api/public/stats/clv?${sp.toString()}`, {
+    headers: { 'X-API-Key': API_KEY },
+    next: { revalidate: 300 },
+  })
+  if (!res.ok) throw new Error(`CLV API ${res.status}`)
+  const json = await res.json()
+  return (json.data ?? []) as CLVDataPoint[]
+}
+
+export async function apiGetTodaySlate(): Promise<TodaySlate> {
+  if (!API_URL) throw new Error('BETTING_API_URL is not set')
+  const res = await fetch(`${API_URL}/api/public/slate/today`, {
+    headers: { 'X-API-Key': API_KEY },
+    next: { revalidate: 300 },
+  })
+  if (!res.ok) throw new Error(`Slate API ${res.status}`)
+  return res.json() as Promise<TodaySlate>
 }

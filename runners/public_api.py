@@ -132,6 +132,145 @@ def get_pnl_sparkline(engine, days=30):
     return out
 
 
+def get_clv_data(engine, days=90, systems=None):
+    """
+    Returns settled, kelly-triggered bets with closing line data for CLV scatter tool.
+    model_edge_pct: edge column (decimal) * 100 -> percentage like 8.2
+    clv_pct: stored as percentage like 5.21 (entry_fair - closing_fair) / closing_fair * 100
+    Only returns bets where closing_odds IS NOT NULL and clv_pct IS NOT NULL.
+    """
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=int(days))).isoformat()
+
+    conditions = [
+        "kelly_triggered = true",
+        "result IS NOT NULL",
+        "result != 'void'",
+        "closing_odds IS NOT NULL",
+        "clv_pct IS NOT NULL",
+        "game_date >= :cutoff",
+    ]
+    params: dict = {"cutoff": cutoff}
+
+    if systems:
+        sys_list = [s.strip().upper() for s in str(systems).split(",") if s.strip()]
+        if sys_list:
+            placeholders = ", ".join(f":s{i}" for i in range(len(sys_list)))
+            conditions.append(f"system IN ({placeholders})")
+            for i, s in enumerate(sys_list):
+                params[f"s{i}"] = s
+
+    where = "WHERE " + " AND ".join(conditions)
+    sql = text(
+        "SELECT system, game_date, bet_type, player, away_team, home_team, "
+        "ROUND((COALESCE(edge, 0) * 100)::numeric, 2) AS model_edge_pct, "
+        "ROUND(clv_pct::numeric, 2) AS clv_pct, "
+        "result, odds AS opening_odds, closing_odds "
+        f"FROM bets {where} "
+        "ORDER BY game_date DESC "
+        "LIMIT 2000"
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(sql, params).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def get_today_slate(engine):
+    """
+    Returns today's MLB slate with game metadata (teams, time, starters)
+    and Beezy kelly-triggered picks grouped by game_pk.
+    Uses MLB Stats API for schedule + DB for picks.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from mlb_core.data.lineups import get_today_schedule
+
+    ct_now  = datetime.now(ZoneInfo("America/Chicago"))
+    run_date = ct_now.date().isoformat()
+
+    # Load today's schedule (game_pk, teams, time, probable pitchers)
+    try:
+        schedule = get_today_schedule(run_date)
+    except Exception:
+        schedule = None
+
+    # Load today's picks from DB
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT game_pk, system, bet_type, "
+            "ROUND((model_prob * 100)::numeric, 1) AS model_prob_pct, "
+            "ROUND((market_prob * 100)::numeric, 1) AS market_prob_pct, "
+            "ROUND((COALESCE(edge, 0) * 100)::numeric, 2) AS edge_pct, "
+            "odds, result, notes, player, away_team, home_team "
+            "FROM bets "
+            "WHERE game_date = :today AND kelly_triggered = true "
+            "ORDER BY system, edge DESC NULLS LAST"
+        ), {"today": run_date}).mappings().all()
+
+    picks_by_game: dict = {}
+    for r in rows:
+        gpk = r["game_pk"]
+        if gpk not in picks_by_game:
+            picks_by_game[gpk] = []
+        picks_by_game[gpk].append(dict(r))
+
+    # Format game time UTC -> ET
+    def _fmt_time(utc_str: str) -> str | None:
+        if not utc_str:
+            return None
+        try:
+            dt_utc = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+            dt_et  = dt_utc.astimezone(ZoneInfo("America/New_York"))
+            h, m   = dt_et.hour, dt_et.minute
+            suffix = "AM" if h < 12 else "PM"
+            h12    = h % 12 or 12
+            return f"{h12}:{m:02d} {suffix} ET"
+        except Exception:
+            return None
+
+    games = []
+    if schedule is not None and not schedule.empty:
+        for _, row in schedule.iterrows():
+            gpk = int(row["game_pk"])
+            games.append({
+                "game_pk":      gpk,
+                "away_team":    str(row.get("away_team") or ""),
+                "home_team":    str(row.get("home_team") or ""),
+                "start_time":   _fmt_time(str(row.get("game_time_utc") or "")),
+                "away_pitcher": row.get("away_pitcher_name") or None,
+                "home_pitcher": row.get("home_pitcher_name") or None,
+                "picks":        picks_by_game.get(gpk, []),
+            })
+    else:
+        # Fallback: build game list from picks only (no schedule data)
+        seen: set = set()
+        for gpk, picks in picks_by_game.items():
+            if gpk in seen:
+                continue
+            seen.add(gpk)
+            first = picks[0]
+            games.append({
+                "game_pk":      gpk,
+                "away_team":    str(first.get("away_team") or ""),
+                "home_team":    str(first.get("home_team") or ""),
+                "start_time":   None,
+                "away_pitcher": None,
+                "home_pitcher": None,
+                "picks":        picks,
+            })
+
+    # Sort: games with picks first, then by start_time
+    games.sort(key=lambda g: (0 if g["picks"] else 1, g["start_time"] or "99:99 ZZ"))
+
+    return {
+        "games":       games,
+        "run_date":    run_date,
+        "as_of":       ct_now.isoformat(),
+        "total_picks": sum(len(g["picks"]) for g in games),
+        "total_games": len(games),
+    }
+
+
 def get_summary_stats(engine):
     with engine.connect() as conn:
         by_system = conn.execute(text(

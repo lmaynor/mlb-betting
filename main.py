@@ -749,6 +749,7 @@ from runners.public_api import (
     get_pnl_sparkline,
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
+    get_clv_data, get_today_slate,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -894,6 +895,44 @@ def public_stats_summary():
         return jsonify({"error": str(exc)}), 500
 
 
+
+
+@app.route("/api/public/stats/clv", methods=["GET", "OPTIONS"])
+def public_stats_clv():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        days    = request.args.get("days", 90)
+        systems = request.args.get("systems")
+        data    = get_clv_data(_get_engine(), days=days, systems=systems)
+        resp    = jsonify({"data": data, "count": len(data)})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        logger.exception("public_stats_clv failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/slate/today", methods=["GET", "OPTIONS"])
+def public_slate_today():
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_today_slate(_get_engine())
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        logger.exception("public_slate_today failed")
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/model-health", methods=["GET", "POST"])

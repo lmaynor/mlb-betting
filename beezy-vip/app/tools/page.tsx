@@ -12,11 +12,13 @@ const B  = '0.5px solid #1f1f24'
 const BH = '0.5px solid #2a2a31'
 
 const TOOLS = [
+  { href: '/tools/clv-tracker',   title: 'CLV + Edge Tracker',           description: 'Each pick plotted by model edge vs. closing line value. Positive CLV in the top-right proves the model finds real inefficiencies.', tag: 'Pro',     keywords: 'closing line value · model edge · clv scatter' },
+  { href: '/tools/slate',         title: 'Slate Command Center',         description: "Today's full MLB slate with every Beezy pick, starters, and start times. One screen covers everything.",                            tag: 'Pro',     keywords: 'todays mlb slate · picks dashboard · command center' },
   { href: '/tools/odds-calculator',  title: 'Odds & Vig Calculator',      description: 'Input American odds for both sides. Get implied probability, vig percentage, and fair value odds instantly.', tag: 'Free',    keywords: 'implied probability · vig removal · fair odds' },
   { href: '/tools/kelly-calculator', title: 'Kelly Criterion Calculator',  description: 'Enter your bankroll, the line, and your estimated win probability. Get full and half Kelly stake sizes.',        tag: 'Free',    keywords: 'bankroll management · stake sizing · Kelly %' },
-  { href: '/tools/nrfi-conditions',  title: 'NRFI Conditions Dashboard',   description: "Today's full MLB slate with starter ERA, umpire K-rate, weather, and park factors. Model probability for members.", tag: 'Partial', keywords: 'nrfi conditions today · first inning betting' },
-  { href: '/tools/pitcher-matchups', title: 'Pitcher Matchup Dashboard',   description: "Today's starters with SwStr%, zone rate, and opponent K%. Beezy strikeout projection for Pro members.",         tag: 'Partial', keywords: 'mlb strikeout props today · pitcher matchups' },
-  { href: '/tools/edge-finder',      title: 'Edge Finder',                 description: 'Input the line you see at your book. Get implied probability and — for Pro members — the Beezy model number.',    tag: 'Partial', keywords: 'sports betting edge · model vs market' },
+  { href: '/tools/nrfi-conditions',  title: 'NRFI Conditions Dashboard',   description: "Today's full MLB slate with starter ERA, umpire K-rate, weather, and park factors. Model probability for members.", tag: 'Pro',     keywords: 'nrfi conditions today · first inning betting' },
+  { href: '/tools/pitcher-matchups', title: 'Pitcher Matchup Dashboard',   description: "Today's starters with SwStr%, zone rate, and opponent K%. Beezy strikeout projection for Pro members.",         tag: 'Pro',     keywords: 'mlb strikeout props today · pitcher matchups' },
+  { href: '/tools/edge-finder',      title: 'Edge Finder',                 description: 'Input the line you see at your book. Get implied probability and -- for Pro members -- the Beezy model number.',    tag: 'Partial', keywords: 'sports betting edge · model vs market' },
   { href: '/tools/bet-tracker',      title: 'Personal Bet Tracker',        description: 'Log your own bets, track ROI, and compare your performance against the Beezy model. Members only.',              tag: 'Pro',     keywords: 'bet tracking · personal ROI · P&L' },
 ]
 
@@ -37,14 +39,13 @@ export default function ToolsPage() {
       <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
         {TOOLS.map((tool, i) => {
           const col = i % 3
-          const row = Math.floor(i / 3)
           const t = TAG[tool.tag]
           return (
             <Link key={tool.href} href={tool.href} style={{
               display: 'block', padding: '18px', textDecoration: 'none', position: 'relative',
               background: '#0a0a0c',
               borderRight:  col < 2 ? B : undefined,
-              borderBottom: row < 1 ? B : undefined,
+              borderBottom: i < TOOLS.length - 3 ? B : undefined,
             }}>
               <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', color: t.color, background: t.bg, border: t.border, display: 'inline-block', marginBottom: '10px' }}>
                 {tool.tag.toUpperCase()}
