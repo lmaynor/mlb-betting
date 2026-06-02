@@ -2440,7 +2440,7 @@ bottleneck._
   could halve memory, allowing a smaller Job.
 - **Action:** Add `_STATCAST_COLS` set; run build job with 4Gi to verify it stays
   under memory. Only worth doing if daily build time or cost is a concern.
-- [ ] Done
+- [x] Done 2026-06-01 -- 18 cols identified, `_STATCAST_COLS` added, job downsized to 2CPU/4Gi
 
 ##### E16 -- GAME Pro v1 Optuna tuning (post-gate)
 - **Why:** best_iteration=15 on first retrain indicates heavy regularization
