@@ -1028,8 +1028,8 @@ def compute_manager_hooks(force: bool = False) -> pd.DataFrame:
         f"before starter filter"
     )
 
-    # Keep only max-BF pitcher per game
-    idx_max   = agg.groupby("game_pk")["bf"].idxmax()
+    # Keep only max-BF pitcher per game per team (one starter per game side)
+    idx_max   = agg.groupby(["game_pk", "dominant_half"])["bf"].idxmax()
     starters  = agg.loc[idx_max].copy()
     logger.info(
         f"auxiliary_features: manager_hooks -- {len(starters):,} starter-game rows "
