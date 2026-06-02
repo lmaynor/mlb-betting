@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-06-01 18:38 CST_
+_Last updated: 2026-06-01 22:15 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -101,9 +101,21 @@ mlb-betting/
 │   │   │                             by /refresh-data nightly (in-season only).
 │   │   │                             savant_leaderboard_backfill_gcs(dataset, ...)
 │   │   │                             for one-time fills via /backfill-savant.
-│   │   └── game_result.py        fetch_game_result(game_pk) -- MLB Stats API linescore
-│   │                             + boxscore. Returns innings/pitchers/batters dict.
-│   │                             Returns None if game not Final. Used by settle_bets.
+│   │   ├── game_result.py        fetch_game_result(game_pk) -- MLB Stats API linescore
+│   │   │                         + boxscore. Returns innings/pitchers/batters dict.
+│   │   │                         Returns None if game not Final. Used by settle_bets.
+│   │   ├── auxiliary_features.py B-Ref pitching (FIP/WHIP/SO9/BB9), Savant swing_take,
+│   │   │                         team_schedule (travel_miles/home_away_streak/series_game_num),
+│   │   │                         manager_hooks (avg_starter_outs_L30/pct_quick_hooks_L30/
+│   │   │                         pct_quality_starts_L30) fetchers + GCS loaders.
+│   │   │                         CLI: PYTHONPATH=. python3 -m mlb_core.data.auxiliary_features
+│   │   │                         <dataset> [--force]. Writes AuxData/ masters to GCS.
+│   │   │                         norm_statcast_name() converts "Last, First" -> bref name_norm.
+│   │   └── aux_joins.py          Shared join helpers for all 7 feature builders.
+│   │                             join_pitcher_aux() -- NRFI, K (bref + team_schedule + manager_hooks).
+│   │                             join_game_aux()    -- F5, GAME (team_schedule + manager_hooks x2).
+│   │                             join_batter_aux()  -- HR, BATTER_HITS, BATTER_TB (swing_take + team_schedule x2).
+│   │                             All joins are left joins; missing data yields NaN, never drops rows.
 │   ├── odds/
 │   │   ├── sgo.py                SGO client + 10 extractors:
 │   │   │                           extract_hr_props()
@@ -294,6 +306,17 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── model_meta_game_v1.json      (features, feature_means, best_iteration, auc_oos)
 │       ├── isotonic_calibrator_game_v1.pkl
 │       └── archive/
+├── AuxData/
+│   ├── bref_pitching_master.csv        FIP/WHIP/SO9/BB9 per pitcher-season (B-Ref via FanGraphs).
+│   ├── swing_take_master.csv           Batter swing/take run values per (MLBAM ID, season).
+│   │                                   Fetched from Savant /leaderboard/swing-take.
+│   │                                   player_id is BATTER MLBAM ID only -- see §15.4 gotcha.
+│   ├── team_schedule_master.csv        travel_miles, home_away_streak, series_game_num
+│   │                                   per (team, game_pk). Built from MLB Stats API schedule.
+│   ├── manager_hooks_master.csv        avg_starter_outs_L30, pct_quick_hooks_L30,
+│   │                                   pct_quality_starts_L30 per (team, game_pk).
+│   │                                   Built from statcast_master groupby pitcher-game.
+│   └── {prefix}/data/last_build.json  Freshness sentinel per aux dataset.
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
 │                                       by each feature builder. Checked by monitor_ops.
@@ -1728,6 +1751,42 @@ between calls. Full 6-dataset backfill takes 15-25 min. Run via
 `/backfill-savant` from Cloud Shell proxy only -- not a Scheduler job.
 Gunicorn timeout 3600s is adequate for a full backfill.
 
+**`PYTHONPATH=.` required when running feature builders outside Docker.** `mlb_core`
+is installed as a package inside the Docker image but not in the local virtualenv.
+Running `python3 runners/build_nrfi_features.py` directly raises
+`ModuleNotFoundError: No module named 'mlb_core'`. Always use:
+`PYTHONPATH=. python3 runners/build_nrfi_features.py`
+for local testing. Inside Cloud Run this is not needed (setup.py installs the package).
+
+**Savant swing_take is batter data only -- never join on pitcher MLBAM IDs.**
+The `/leaderboard/swing-take` endpoint returns batter data regardless of the
+`player_type` URL parameter. `player_type=pitcher` returns ~600 rows that are
+all batters (Guillorme, Ozuna, Devers, etc.) not pitchers. `type=pitcher` returns
+0 rows. Joining swing_take on pitcher MLBAM IDs produces at most 1 match out of
+hundreds (near-zero overlap). swing_take is intentionally excluded from
+`join_pitcher_aux()` and `join_game_aux()`. It is only wired into
+`join_batter_aux(batter_col="batter")` using the batter's own MLBAM ID.
+Output columns: `batter_runs_chase`, `batter_runs_heart`, `batter_runs_shadow`,
+`batter_runs_waste`.
+
+**manager_hooks `compute_manager_hooks` must group by `(game_pk, dominant_half)`, not `game_pk`.**
+Using `groupby("game_pk")["bf"].idxmax()` picks only one pitcher per entire game,
+silently dropping either the home or away starter. The correct groupby is
+`groupby(["game_pk", "dominant_half"])["bf"].idxmax()` to get one starter per
+game side. `dominant_half` is the mode of `inning_topbot` per pitcher-game
+("Top" = away pitcher, "Bot" = home pitcher). Correct output: ~25,700 rows
+(one per team per game) vs the wrong ~12,850 (one per game). NaN=~120 is
+expected warmup (first 30 games per team have no L30 history).
+
+**Expected NaN rates after auxiliary joins.** These are normal and not bugs:
+- FIP/WHIP/SO9/BB9 ~9% NaN (bref name match gaps for rookies / name format drift)
+- travel_miles/home_away_streak/series_game_num < 5% NaN (team_schedule coverage)
+- avg_starter_outs_L30 ~120 rows NaN (30-game warmup period per team at season start)
+- batter_runs_chase/heart/shadow/waste varies by season (Savant coverage from 2023+)
+- arm_angle ~97% NaN (newer Statcast field, absent pre-2024)
+- n_thruorder ~95% NaN (newer Statcast field, absent pre-2024)
+All of these are handled by XGBoost natively via feature_means imputation.
+
 **`pitch_arsenals` CSV uses `pitcher` as the MLBAM ID column, not `player_id`.**
 The `_dedup_cols()` function formerly fell back to `["year"]`-only dedup when no
 named ID column matched, silently collapsing ~750 pitcher rows/season to 1.
@@ -2231,7 +2290,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-06-01 18:38 CST_
+_Last updated: 2026-06-01 22:15 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
