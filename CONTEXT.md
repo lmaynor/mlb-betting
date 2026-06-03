@@ -808,7 +808,8 @@ secretmanager.secretAccessor.
 - `mlb-build-all-features` (daily feature build; chains all 7 builders in dependency order:
   HR -> NRFI -> K -> F5 -> BATTER_HITS -> BATTER_TB -> GAME via `/bin/sh -c "cmd1 && cmd2 && ..."`
   so any failure aborts subsequent builders; 4Gi/2CPU; 3600s task timeout.
-  Triggered by Scheduler via OAuth + Run API scope, NOT OIDC/service -- see §9 and §15.9.)
+  Triggered by Scheduler via OAuth + Run API scope, NOT OIDC/service -- see §9 and §15.9.
+  Scheduler attempt-deadline=1800s (max allowed); job execution timeout=3600s set on the job.)
 
 All 21 Cloud Run Jobs have explicit task timeouts set (added 2026-05-24):
 retrain jobs: 7200s, calibrate jobs: 1800s, build jobs: 3600s, tweet jobs: 300s.
@@ -883,7 +884,7 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
-| `mlb-build-all-features` | `30 14 * * *` | Run API `.../jobs/mlb-build-all-features:run` (OAuth -- see Auth note above) | 3600s | `{}` |
+| `mlb-build-all-features` | `30 14 * * *` | Run API `.../jobs/mlb-build-all-features:run` (OAuth -- see Auth note above) | 1800s | `{}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
@@ -2227,11 +2228,15 @@ gcloud scheduler jobs update http mlb-build-all-features \
   --http-method POST \
   --oauth-service-account-email scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com \
   --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform" \
-  --attempt-deadline 3600s \
+  --attempt-deadline 1800s \
   --message-body "{}"
 ```
 Run this from Cloud Shell. Verify with
 `gcloud scheduler jobs describe mlb-build-all-features --location us-central1`.
+**NOTE:** Cloud Scheduler `--attempt-deadline` is capped at 1800s (30 min). This is NOT the
+job execution timeout -- the Run API call returns a LongRunningOperation immediately (async),
+so the scheduler only needs ~60s to get the HTTP 200 back. The job itself runs to completion
+independently under the 3600s task timeout set on the Cloud Run Job itself.
 
 ### 15.10 Frontend (Tailwind v4, Clerk v7, Next.js)
 
