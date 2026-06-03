@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-06-02 12:12 CST_
+_Last updated: 2026-06-02 16:00 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -746,29 +746,24 @@ hit rate within 3 pct points; PSI for all top-10 features < 0.25.
 ```
                               ┌──────────────────┐
                               │ Cloud Scheduler  │
-                              │  ~15 cron jobs   │
-                              └────────┬─────────┘
-                                       │ OIDC
-                                       ▼
-┌────────────────┐         ┌──────────────────────┐
-│  GitHub (main) │ → build │   Cloud Run service  │
-└────────────────┘  manual │     mlb-betting      │
-                           │   (Flask + gunicorn  │
-                           │    timeout=3600s)    │
-                           └──────┬───────────────┘
-                                  │
-                  ┌───────────────┼──────────────────┬─────────────┐
-                  ▼               ▼                  ▼             ▼
-            ┌──────────┐   ┌─────────────┐   ┌───────────┐  ┌────────────┐
-            │   GCS    │   │ Cloud SQL   │   │   SGO     │  │  Discord   │
-            │  bucket  │   │ (Postgres)  │   │   API     │  │  webhook   │
-            └──────────┘   └─────────────┘   └───────────┘  └────────────┘
-                  ▲
-                  │
-          ┌───────────────┐
-          │ Cloud Run Jobs│
-          │ mlb-retrain-* │
-          └───────────────┘
+                              │  ~17 cron jobs   │
+                              └──┬────────────┬──┘
+                            OIDC │            │ OAuth (Run API)
+                                 ▼            ▼
+┌────────────────┐  ┌──────────────────────┐  ┌───────────────────────┐
+│  GitHub (main) │→ │   Cloud Run service  │  │   Cloud Run Jobs      │
+└────────────────┘  │     mlb-betting      │  │  mlb-build-all-       │
+               build│   (Flask + gunicorn  │  │   features (daily)    │
+               manual    timeout=3600s)    │  │  mlb-retrain-*        │
+                    └──────┬───────────────┘  └──────────┬────────────┘
+                           │                             │
+                ┌──────────┴─────────────────────────────┘
+                │          │                  │             │
+                ▼          ▼                  ▼             ▼
+          ┌──────────┐   ┌─────────────┐   ┌───────────┐  ┌────────────┐
+          │   GCS    │   │ Cloud SQL   │   │   SGO     │  │  Discord   │
+          │  bucket  │   │ (Postgres)  │   │   API     │  │  webhook   │
+          └──────────┘   └─────────────┘   └───────────┘  └────────────┘
 ```
 
 **Service:** stateless HTTP, max 1 instance (>=2GB for feature builds).
@@ -810,8 +805,12 @@ secretmanager.secretAccessor.
 - `mlb-build-game-features` (nightly GAME feature build; 4Gi; usecols reduces statcast to 13 cols)
 - `mlb-retrain-game-v1` (full GAME Pro v1 retrain; binary:logistic on home_win)
 - `mlb-calibrate-game` (fit isotonic calibrator for GAME v1; run after retrain)
+- `mlb-build-all-features` (daily feature build; chains all 7 builders in dependency order:
+  HR -> NRFI -> K -> F5 -> BATTER_HITS -> BATTER_TB -> GAME via `/bin/sh -c "cmd1 && cmd2 && ..."`
+  so any failure aborts subsequent builders; 4Gi/2CPU; 3600s task timeout.
+  Triggered by Scheduler via OAuth + Run API scope, NOT OIDC/service -- see §9 and §15.9.)
 
-All 20 Cloud Run Jobs have explicit task timeouts set (added 2026-05-24):
+All 21 Cloud Run Jobs have explicit task timeouts set (added 2026-05-24):
 retrain jobs: 7200s, calibrate jobs: 1800s, build jobs: 3600s, tweet jobs: 300s.
 Default 600s was silently allowing long retrains to be killed mid-run.
 
@@ -871,7 +870,11 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 
 **Location:** `us-central1`
 **Service URL:** `https://mlb-betting-628109313129.us-central1.run.app`
-**Auth:** OIDC via `scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com`
+**Auth (service jobs):** OIDC via `scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com`
+**Auth (Cloud Run Job triggers):** OAuth with `--oauth-service-account-email scheduler-invoker@...`
+and `--oauth-token-scope https://www.googleapis.com/auth/cloud-platform`. Required when the
+scheduler calls the Run API (`run.googleapis.com/v2/...`) to trigger a Cloud Run Job. Do NOT
+use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 
 ### Full job inventory
 
@@ -880,7 +883,7 @@ Follow the `extract_k_odds()` pattern in `sgo.py`:
 | `mlb-settle` | `0 9 * * *` | `/settle` | 600s | `{}` |
 | `mlb-monitor` | `30 9 * * *` | `/monitor` | 120s | `{}` |
 | `mlb-refresh-data` | `0 14 * * *` | `/refresh-data` | 300s | `{}` |
-| `mlb-build-all-features` | `30 14 * * *` | `/build-all-features` | 1800s | `{"systems":["HR","1IOU","K","F5","BATTER_HITS","GAME","BATTER_TB"],"continue_on_error":false}` |
+| `mlb-build-all-features` | `30 14 * * *` | Run API `.../jobs/mlb-build-all-features:run` (OAuth -- see Auth note above) | 3600s | `{}` |
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
@@ -2213,6 +2216,23 @@ still has hardcoded system lists (VALID_SYSTEMS, builders dict, etc.) --
 migration is deferred. When adding a new system, update both `registry.py`
 (required) AND `main.py` (until the migration is done).
 
+**`gcloud scheduler jobs update http` uses `--attempt-deadline`, NOT `--deadline`.**
+`--deadline` is not a valid flag and gcloud will reject it:
+`ERROR: unrecognized arguments: --deadline (did you mean '--attempt-deadline'?)`.
+Correct command fragment for updating the build job deadline:
+```bash
+gcloud scheduler jobs update http mlb-build-all-features \
+  --location us-central1 \
+  --uri "https://run.googleapis.com/v2/projects/concrete-crow-445205-m4/locations/us-central1/jobs/mlb-build-all-features:run" \
+  --http-method POST \
+  --oauth-service-account-email scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com \
+  --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform" \
+  --attempt-deadline 3600s \
+  --message-body "{}"
+```
+Run this from Cloud Shell. Verify with
+`gcloud scheduler jobs describe mlb-build-all-features --location us-central1`.
+
 ### 15.10 Frontend (Tailwind v4, Clerk v7, Next.js)
 
 **The core rule: use pure inline styles for everything in beezy-vip.** Do not
@@ -2290,7 +2310,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-06-02 12:12 CST_
+_Last updated: 2026-06-02 16:00 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
