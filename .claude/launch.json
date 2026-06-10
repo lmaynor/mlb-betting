@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "beezy-vip",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd beezy-vip && npm run dev"],
+      "port": 3000,
+      "autoPort": false
+    }
+  ]
+}
