@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-06-02 21:30 CST_
+_Last updated: 2026-06-10 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -1184,13 +1184,69 @@ This route ONLY manages `learn_articles` -- it never touches the `bets` table.
 
 ### Design system
 
-Bloomberg Terminal meets PrizePicks aesthetic:
-- Fonts: Inter (prose/UI) + JetBrains Mono (data/numbers/tickers)
-- Background: `#0a0a0c`, Surface: `#111114`, Border: `#1f1f24`
-- Win/positive: `#10b981`, Loss/negative: `#ef4444`, Warning: `#f59e0b`
-- System pills: NRFI green, HR amber, F5 blue, K purple, OUTS orange
-- No drop shadows, no gradients, no glow effects
-- Depth via surface elevation and border tone only
+**Dell 1996 catalog aesthetic** (fully implemented 2026-06-10). Every terminal-palette
+color (`#10b981`, `#ef4444`, `#3b82f6`, `#f59e0b`, `#71717a`) has been replaced
+site-wide. OG image routes (`/api/og/`) and `legal/` pages intentionally excluded.
+
+#### Colors
+
+| Role | Value | Notes |
+|---|---|---|
+| Page background | `#0a0a0c` | CSS var `--bg` |
+| Surface | `#111114` | CSS var `--surface` |
+| Hard border | `#000` | Page frame, card edges |
+| Inner border | `#1f1f24` | CSS var `--border`; between surface elements |
+| Win / positive | `#b3bd95` | Sage -- Dell Latitude Notebooks tint |
+| Loss / negative | `#d77a7a` | Salmon -- Dell OptiPlex GX tint |
+| Info / sky | `#9ab6c8` | Sky -- Dellware catalog tint |
+| Periwinkle | `#8c9ae0` | PowerEdge Servers |
+| Peach | `#e6915d` | Dimension / OptiPlex Gs |
+| Lime | `#c0d4a7` | Edge/model signal (OptiPlex G Series) |
+| Steel | `#a5b8c0` | Neutral active state (Dimension XPS Pro) |
+| Muted text | `#888890` | WCAG AA 5.0:1 on dark bg |
+| Links | `#9999ff` | Classic hyperlink blue (7.25:1 on dark bg) |
+| CTA yellow | `#fcc20f` | Dell "BUY a DELL" sticker yellow |
+| Hero panel | `#0e1f0d` | Dark green; low-key, not alarming |
+
+System pill assignment: NRFI = sage, HR = salmon, F5 = sky, K = periwinkle,
+OUTS = peach, BATTER_TB = sky, BATTER_HITS = sky, GAME = steel.
+
+#### Typography
+
+CSS classes defined in `app/globals.css`:
+- `.dell-display` -- Arial Black, 900 weight, uppercase. H1 headlines, logo.
+- `.dell-heading` -- Arial, 700 weight, uppercase, tracked. Section labels, eyebrows, badges.
+- `.times` -- Georgia (primary), Times New Roman (fallback), serif. Body copy, descriptions.
+  Georgia is a universally available system font -- no web font load needed. Reliable on Vercel edge.
+- `.mono` -- JetBrains Mono, loaded via `next/font/google`. Data, numbers, odds, tickers.
+
+Google Fonts loaded in `app/layout.tsx`: Inter (CSS var `--font-inter`) and
+JetBrains Mono (CSS var `--font-mono`). No serif loaded via Google Fonts --
+Georgia is the system fallback for `.times` everywhere including OG image routes.
+
+#### Layout rules
+
+- `borderRadius: 0` everywhere. No rounded corners.
+- All borders `1px solid` (never `0.5px solid`).
+- Page frame: `8px solid #000` on `.page-frame` class.
+- No drop shadows. No gradients. No emissive glows.
+- Hard borders only for depth.
+
+#### Nav
+
+Sticky top nav (`components/layout/nav.tsx`):
+- Logo area: `flex: 1`. Contains 28x28px dashed placeholder box + "BEEZY.FYI" text.
+  Replace the `<div>` placeholder with `<img>` when the final mark is ready.
+- Nav links: natural width, visually centered by the two `flex: 1` flanking sections.
+- Right section: `flex: 1, justifyContent: 'flex-end'`. X icon + auth + Discord sticker.
+- Mobile: `.nav-desktop` hidden; `.mobile-only` shows auth + X + Discord compact.
+
+#### Tokens file
+
+Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or `pickLabel`
+locally in components. Import from `@/lib/tokens` instead. `B` is `'1px solid #000'`
+(hard frame border). `B_INNER` is the inner surface border. When adding a new system,
+update `lib/tokens.ts` for Dell tint colors/labels and `lib/pick-systems.ts` for routing.
 
 ### Vercel deployment
 
@@ -1231,12 +1287,6 @@ truth for valid slug -> system mappings and powers the all-model grid at
 As of 2026-05-29, the public all-model route covers:
 `NRFI`, `1I`, `F3`, `F5`, `F1H`, `F7`, `GAME`, `HR`, `BATTER_TB`,
 `BATTER_HITS`, `BATTER_K`, `K`, `OUTS`, and `PITCHER_ER`.
-
-### Design tokens
-Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or
-`pickLabel` locally in components. Import from `@/lib/tokens` instead.
-When adding a new system, update `lib/tokens.ts` for colors/labels and
-`lib/pick-systems.ts` for public picks-page routing/catalog metadata.
 
 ### Charts
 
@@ -2315,7 +2365,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-06-02 21:30 CST_
+_Last updated: 2026-06-10 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
@@ -2754,6 +2804,17 @@ Beyond the T01-T20 backlog. All complete.
 - **Sprint 3 -- Mobile shell.** `components/layout/bottom-nav.tsx` (NEW), `app/layout.tsx` ClerkProvider wrapper + BottomNav render, `app/globals.css` `.mobile-only` rules + body padding, `components/layout/nav.tsx` mobile collapse to logo + auth only.
 - **Sprints 4+5 -- Today view + Visualization.** `app/cheat-sheet/cheat-sheet-client.tsx` per-card expand + summary row + chip filter tabs + edge magnitude coloring + share button + empty state. `app/cheat-sheet/page.tsx` fetches yesterday's settled picks. `components/today/slate-strip.tsx` (NEW). `app/dashboard/picks/page.tsx` ProbBar replaces 3 plain-text columns. `components/landing/system-sparkline.tsx` (NEW). `components/landing/models-grid.tsx` per-system sparklines. `app/results/results-client.tsx` edge chart filtered. `lib/betting-api.ts` `apiGetSparklineBySystem`.
 - **Sprints 6+7 -- Table UX + Polish.** `components/picks/picks-table.tsx` clickable sort headers + pagination + notes as bullets. `app/results/results-client.tsx` clickable sort headers + pagination + per-system counts on chips + date filter via useSearchParams. `components/picks/date-bar.tsx` (NEW). `components/layout/live-ticker.tsx` pinned label. `components/landing/hero.tsx` primary CTA changed. `app/page.tsx` DiscordCTA removed.
+
+#### Dell 1996 design unification (2026-06-10)
+
+Full site-wide replacement of the terminal-palette color set with Dell 1996 catalog tints.
+~30 files edited across two sessions. Key commits: `4559b28` (palette sweep), `46f69db` (font + hero + nav polish).
+
+- **Palette sweep.** All `#10b981` -> sage `#b3bd95`, `#ef4444` -> salmon `#d77a7a`, `#3b82f6` -> sky `#9ab6c8`, `#f59e0b` -> peach/yellow, `#71717a` -> muted `#888890`. All `0.5px solid` borders -> `1px solid`. All `borderRadius: var(--radius-sm)` -> `0`. Across: all page routes, picks/results tables, filter bar, date bar, cheat sheet, slate, CLV tracker, tools (Kelly, edge finder, odds calc, bet tracker, slate), models, learn, landing (hero, sparkline, models grid), auth pages, dashboard, error/not-found pages, copy-bet button, bankroll input, checkout button, footer.
+- **Font fix.** `.times` CSS class changed from `'Times New Roman'`-first to `Georgia`-first (`Georgia, 'Times New Roman', Times, serif`). Georgia is a universally available system font -- eliminates Vercel edge rendering failures. Same fix applied to footer nav links. `app/globals.css` duplicate `.article-body code` rule cleaned up; stray `#10b981` removed; pre `border-radius: 4px` -> `0`.
+- **Hero panel.** `components/landing/hero.tsx` background changed from loud red `#c91525` to dark green `#0e1f0d`.
+- **Nav centering + logo placeholder.** `components/layout/nav.tsx` logo section gets `flex: 1` and a 28px dashed placeholder box (replace with final `<img>` when mark is ready). Right section gets `flex: 1, justifyContent: flex-end` so nav links are visually centered between equal-weight flanks.
+- **Pitcher headshot resilience.** `cheat-sheet-client.tsx` `<img>` for headshots now has `onError` to silently hide broken URLs instead of showing a broken-image icon.
 
 ---
 
