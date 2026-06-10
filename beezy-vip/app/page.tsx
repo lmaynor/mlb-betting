@@ -20,11 +20,11 @@ export default function HomePage() {
       <Suspense fallback={null}>
         <RecentPicksTable />
       </Suspense>
-      <DiscordFollowCTA />
       <HowItWorks />
       <Suspense fallback={null}>
         <ModelsGrid />
       </Suspense>
+      <DiscordFollowCTA />
     </>
   )
 }

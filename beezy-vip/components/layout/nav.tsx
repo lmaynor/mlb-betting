@@ -40,7 +40,7 @@ export function Nav() {
 
         {/* Desktop nav links */}
         <div style={{ display: 'flex', alignItems: 'stretch' }} className="nav-desktop">
-          {NAV_LINKS.map(l => {
+          {NAV_LINKS.map((l, index) => {
             const active = pathname.startsWith(l.href)
             return (
               <Link
@@ -55,7 +55,7 @@ export function Nav() {
                   display: 'flex',
                   alignItems: 'center',
                   padding: '0 14px',
-                  borderRight: '1px solid #1a1a1a',
+                  borderRight: index < NAV_LINKS.length - 1 ? '1px solid #1f1f24' : 'none',
                   borderBottom: active ? '2px solid #fcc20f' : '2px solid transparent',
                   background: active ? '#111' : 'transparent',
                 }}

@@ -56,7 +56,7 @@ export function BottomNav() {
             <tab.Icon size={17} strokeWidth={active ? 2.4 : 1.9} color={color} />
             <span
               className="dell-heading"
-              style={{ fontSize: '8px', letterSpacing: '0.08em' }}
+              style={{ fontSize: '10px', letterSpacing: '0.06em' }}
             >
               {tab.label}
             </span>

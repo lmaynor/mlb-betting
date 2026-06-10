@@ -192,7 +192,7 @@ function TableRow({ bet }: { bet: Bet }) {
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
                 <span style={{ color: pill.color, fontSize: '8px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: '#626274', lineHeight: '14px' }}>{n}</span>
+                <span className="mono" style={{ fontSize: '9px', color: '#888890', lineHeight: '14px' }}>{n}</span>
               </div>
             ))}
           </div>

@@ -3,12 +3,12 @@ export const dynamic = 'force-dynamic'
 import fs from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks } from '@/lib/betting-api'
+import { apiGetTodayPicks, apiGetRecentSettled } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 import { beezyscore } from '@/lib/beezy-score'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
 import { SlateStrip } from '@/components/today/slate-strip'
-import { formatCentralDate } from '@/lib/dates'
+import { formatCentralDate, siteDateKey, addDaysToDateKey } from '@/lib/dates'
 import playerMap from '@/public/headshots/player_map.json'
 
 export const metadata: Metadata = {
@@ -90,10 +90,18 @@ export default async function CheatSheetPage() {
     .map(enrich)
     .sort((a, b) => beezyscore(b) - beezyscore(a))
 
+  // Yesterday's settled picks for empty-state proof
+  const yesterday = addDaysToDateKey(siteDateKey(), -1)
+  const settledRaw = await apiGetRecentSettled(40).catch(() => [] as Bet[])
+  const yesterdayPicks = settledRaw
+    .filter(b => b.game_date === yesterday)
+    .map(enrich)
+    .sort((a, b) => beezyscore(b) - beezyscore(a))
+
   return (
     <>
       <SlateStrip />
-      <CheatSheetClient picks={picks} today={dateLabel()} />
+      <CheatSheetClient picks={picks} today={dateLabel()} yesterdayPicks={yesterdayPicks} />
     </>
   )
 }

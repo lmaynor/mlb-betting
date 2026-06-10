@@ -86,7 +86,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
       onClick={onToggle}
       className="card-hover"
       style={{
-        background: '#0d0d12',
+        background: '#111114',
         borderBottom: '1px solid #000',
         borderLeft: `3px solid ${tierColor}`,
         display: 'flex',
@@ -198,7 +198,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
 
         <div className="mono" style={{
           fontSize: '10px',
-          color: '#626274',
+          color: '#888890',
           marginBottom: (expanded && bullets.length) ? '6px' : 0,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -212,7 +212,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
             {bullets.slice(0, 3).map((b, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
                 <span style={{ color, fontSize: '9px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: '#797991', lineHeight: '14px' }}>{b}</span>
+                <span className="mono" style={{ fontSize: '9px', color: '#888890', lineHeight: '14px' }}>{b}</span>
               </div>
             ))}
           </div>
@@ -235,16 +235,48 @@ function PickCard({ bet, rank, expanded, onToggle }: {
   )
 }
 
+function YesterdayRow({ bet }: { bet: EnrichedBet }) {
+  const isWin = bet.result === 'win'
+  const label = pickLabel(bet)
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      padding: '6px 0',
+      borderBottom: '1px solid #1f1f24',
+    }}>
+      <span className="dell-heading" style={{
+        fontSize: '8px',
+        letterSpacing: '0.06em',
+        padding: '2px 5px',
+        background: isWin ? '#b3bd9520' : '#d77a7a20',
+        color: isWin ? '#b3bd95' : '#d77a7a',
+        border: `1px solid ${isWin ? '#b3bd95' : '#d77a7a'}`,
+        flexShrink: 0,
+      }}>
+        {isWin ? 'W' : 'L'}
+      </span>
+      <span className="mono" style={{ fontSize: '9px', color: '#888890', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+    </div>
+  )
+}
+
 export function CheatSheetClient({
   picks,
   today,
+  yesterdayPicks = [],
 }: {
   picks: EnrichedBet[]
   today: string
+  yesterdayPicks?: EnrichedBet[]
 }) {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
   const [showMore, setShowMore] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const sorted = useMemo(() => [...picks].sort((a, b) => beezyscore(b) - beezyscore(a)), [picks])
   const filtered = filterBets(sorted, filter)
@@ -256,6 +288,9 @@ export function CheatSheetClient({
   const topEdgePct = filtered.length > 0
     ? Math.max(...filtered.map(b => b.edge != null ? (Math.abs(b.edge) < 2 ? b.edge * 100 : b.edge) : 0))
     : 0
+
+  const ydayWins = yesterdayPicks.filter(b => b.result === 'win').length
+  const ydayLosses = yesterdayPicks.filter(b => b.result === 'loss').length
 
   function toggleCard(id: number) {
     setExpandedIds(prev => {
@@ -270,265 +305,392 @@ export function CheatSheetClient({
     setExpandedIds(allExpanded ? new Set() : new Set(filtered.map(b => b.id)))
   }
 
+  async function handleShare() {
+    const url = 'https://beezy.fyi/cheat-sheet'
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: 'Beezy.FYI MLB Daily Card', url })
+      } catch {
+        // user cancelled — no-op
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        // clipboard not available
+      }
+    }
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#07070b',
+      background: '#0a0a0c',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
       padding: '18px 12px 40px',
-      fontFamily: 'Inter, -apple-system, sans-serif',
     }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '390px',
-        border: '1px solid #23232d',
-        background: '#08080d',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-card)',
-        overflow: 'hidden',
-      }}>
+      <div className="cheat-sheet-layout">
+        {/* ── Card ─────────────────────────────────────────────────── */}
         <div style={{
-          background: 'linear-gradient(135deg, #0f2017 0%, #09090f 64%)',
-          padding: '16px 16px 12px',
-          borderBottom: '1px solid #1a1a22',
+          width: '100%',
+          maxWidth: '390px',
+          border: '1px solid #1f1f24',
+          background: '#0a0a0c',
+          borderRadius: 0,
+          overflow: 'hidden',
+          flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
-            <div>
-              <div className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', lineHeight: 1 }}>
-                BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
+          {/* Header */}
+          <div style={{
+            background: '#0f1a14',
+            padding: '16px 16px 12px',
+            borderBottom: '1px solid #1f1f24',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
+              <div>
+                <div className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', lineHeight: 1 }}>
+                  BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
+                  MLB Daily Card
+                </div>
+                <div className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.1em', marginTop: '5px' }}>
+                  {today}
+                </div>
               </div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
-                MLB Daily Card
-              </div>
-              <div className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.1em', marginTop: '5px' }}>
-                {today}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                <div className="dell-heading" style={{
+                  fontSize: '8px',
+                  letterSpacing: '0.12em',
+                  color: '#fcc20f',
+                  padding: '4px 8px',
+                  border: '1px solid #000',
+                  background: '#000',
+                }}>
+                  DAILY CARD
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: '8px',
+                    fontWeight: 800,
+                    letterSpacing: '0.08em',
+                    color: '#f5f5f7',
+                    background: '#111114',
+                    border: '1px solid #1f1f24',
+                    borderRadius: 0,
+                    padding: '5px 9px',
+                  }}
+                >
+                  beezy.fyi
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-              <div className="dell-heading" style={{
-                fontSize: '8px',
-                letterSpacing: '0.12em',
-                color: '#fcc20f',
-                padding: '4px 8px',
-                border: '1px solid #000',
-                background: '#000',
-              }}>
-                DAILY CARD
-              </div>
-              <div
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+              {filtered.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
+                    TOP PLAY
+                  </span>
+                  <span style={{ fontSize: '13px', color: '#f5f5f7', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {pickLabel(filtered[0])}
+                  </span>
+                </div>
+              ) : (
+                <p style={{ fontSize: '12px', color: '#888890', lineHeight: 1.45, maxWidth: '245px' }}>
+                  No card posted yet.
+                </p>
+              )}
+              <button
+                onClick={toggleAll}
                 className="mono"
                 style={{
                   fontSize: '8px',
-                  fontWeight: 800,
                   letterSpacing: '0.08em',
-                  color: '#f5f5f7',
-                  background: '#111114',
-                  border: '1px solid #2a2a36',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '5px 9px',
+                  color: allExpanded ? '#a5b8c0' : '#888890',
+                  background: 'transparent',
+                  border: `1px solid ${allExpanded ? '#a5b8c0' : '#1f1f24'}`,
+                  padding: '4px 7px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                beezy.fyi
-              </div>
+                {allExpanded ? 'COLLAPSE' : 'EXPAND'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {FILTERS.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => { setFilter(f.key); setShowMore(false); setExpandedIds(new Set()) }}
+                  className="mono"
+                  style={{
+                    padding: '5px 10px',
+                    fontSize: '9px',
+                    cursor: 'pointer',
+                    border: `1px solid ${filter === f.key ? '#a5b8c0' : '#1f1f24'}`,
+                    background: filter === f.key ? '#131a1e' : 'transparent',
+                    color: filter === f.key ? '#a5b8c0' : '#888890',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
-            {filtered.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
-                  TOP PLAY
+          {/* Stats bar */}
+          {filtered.length > 0 && (
+            <div style={{
+              padding: '7px 16px',
+              background: '#0a0a0c',
+              borderBottom: '1px solid #1f1f24',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '10px',
+              alignItems: 'center',
+            }}>
+              <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
+                {filtered.length} PICKS
+              </span>
+              {strongCount > 0 && (
+                <span className="dell-heading" style={{ fontSize: '9px', color: '#b3bd95', letterSpacing: '0.06em' }}>
+                  {strongCount} STRONG
                 </span>
-                <span style={{ fontSize: '13px', color: '#d4d4d8', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {pickLabel(filtered[0])}
+              )}
+              {leanCount > 0 && (
+                <span className="dell-heading" style={{ fontSize: '9px', color: '#fcc20f', letterSpacing: '0.06em' }}>
+                  {leanCount} LEAN
                 </span>
+              )}
+              {topEdgePct > 0 && (
+                <span className="dell-heading" style={{ fontSize: '9px', color: '#c0d4a7', letterSpacing: '0.06em' }}>
+                  BEST EDGE +{topEdgePct.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Column header */}
+          <div style={{
+            display: 'flex',
+            borderBottom: '1px solid #1f1f24',
+            background: '#0a0a0c',
+            padding: '5px 0',
+          }}>
+            <div style={{ width: '86px', minWidth: '86px' }} />
+            <div className="mono" style={{ flex: 1, paddingLeft: '12px', fontSize: '8px', color: '#888890', letterSpacing: '0.1em' }}>
+              PICK / TAP FOR WHY
+            </div>
+            <div className="mono" style={{ minWidth: '68px', textAlign: 'center', fontSize: '8px', color: '#888890', letterSpacing: '0.1em' }}>
+              SCORE
+            </div>
+          </div>
+
+          {/* Picks or empty state */}
+          {filtered.length === 0 ? (
+            <div style={{ padding: '20px 16px' }}>
+              <div className="mono" style={{ fontSize: '10px', color: '#888890', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
+                NO {filter.toUpperCase()} PICKS YET — NEXT CARD ~11AM ET
               </div>
-            ) : (
-              <p style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.45, maxWidth: '245px' }}>
-                No card posted yet.
-              </p>
-            )}
+              {yesterdayPicks.length > 0 && (
+                <>
+                  <div className="mono" style={{ fontSize: '8px', color: '#52525b', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
+                    YESTERDAY&apos;S RESULTS
+                  </div>
+                  {yesterdayPicks.slice(0, 3).map(bet => (
+                    <YesterdayRow key={bet.id} bet={bet} />
+                  ))}
+                  {(ydayWins > 0 || ydayLosses > 0) && (
+                    <div className="mono" style={{ fontSize: '9px', color: '#888890', textAlign: 'center', marginTop: '10px', letterSpacing: '0.06em' }}>
+                      {ydayWins}–{ydayLosses} yesterday
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              {displayed.map((bet, i) => (
+                <PickCard
+                  key={bet.id}
+                  bet={bet}
+                  rank={i + 1}
+                  expanded={expandedIds.has(bet.id)}
+                  onToggle={() => toggleCard(bet.id)}
+                />
+              ))}
+
+              {!showMore && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowMore(true)}
+                  className="mono"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '10px',
+                    letterSpacing: '0.08em',
+                    color: '#888890',
+                    background: '#0a0a0c',
+                    border: 'none',
+                    borderTop: '1px solid #1f1f24',
+                    cursor: 'pointer',
+                  }}
+                >
+                  + {hiddenCount} MORE PICKS
+                </button>
+              )}
+              {showMore && filtered.length > DEFAULT_LIMIT && (
+                <button
+                  onClick={() => setShowMore(false)}
+                  className="mono"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '10px',
+                    letterSpacing: '0.08em',
+                    color: '#888890',
+                    background: '#0a0a0c',
+                    border: 'none',
+                    borderTop: '1px solid #1f1f24',
+                    cursor: 'pointer',
+                  }}
+                >
+                  SHOW TOP 5
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Footer */}
+          <div style={{
+            borderTop: '1px solid #1f1f24',
+            padding: '11px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: '#0a0a0c',
+          }}>
             <button
-              onClick={toggleAll}
-              className="mono"
+              onClick={handleShare}
+              className="dell-heading"
               style={{
-                fontSize: '8px',
+                fontSize: '9px',
                 letterSpacing: '0.08em',
-                color: allExpanded ? '#a5b8c0' : '#888890',
-                background: 'transparent',
-                border: `1px solid ${allExpanded ? '#a5b8c0' : '#2a2a36'}`,
-                padding: '4px 7px',
+                padding: '6px 12px',
+                background: '#fcc20f',
+                color: '#000',
+                border: '1px solid #000',
+                borderRadius: 0,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
-              {allExpanded ? 'COLLAPSE' : 'EXPAND'}
+              {copied ? 'COPIED!' : 'SHARE CARD'}
             </button>
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-            {FILTERS.map(f => (
-              <button
-                key={f.key}
-                onClick={() => { setFilter(f.key); setShowMore(false); setExpandedIds(new Set()) }}
-                className="mono"
-                style={{
-                  padding: '5px 10px',
-                  fontSize: '9px',
-                  cursor: 'pointer',
-                  border: `1px solid ${filter === f.key ? '#a5b8c0' : '#2a2a36'}`,
-                  background: filter === f.key ? '#131a1e' : 'transparent',
-                  color: filter === f.key ? '#a5b8c0' : '#888890',
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {filtered.length > 0 && (
-          <div style={{
-            padding: '7px 16px',
-            background: '#0a0a0f',
-            borderBottom: '1px solid #1a1a22',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '10px',
-            alignItems: 'center',
-          }}>
-            <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
-              {filtered.length} PICKS
+            <div style={{ flex: 1 }} />
+            <span className="mono" style={{ fontSize: '8px', color: '#52525b', letterSpacing: '0.08em' }}>
+              BEEZY.FYI
             </span>
-            {strongCount > 0 && (
-              <span className="dell-heading" style={{ fontSize: '9px', color: '#b3bd95', letterSpacing: '0.06em' }}>
-                {strongCount} STRONG
-              </span>
-            )}
-            {leanCount > 0 && (
-              <span className="dell-heading" style={{ fontSize: '9px', color: '#fcc20f', letterSpacing: '0.06em' }}>
-                {leanCount} LEAN
-              </span>
-            )}
-            {topEdgePct > 0 && (
-              <span className="dell-heading" style={{ fontSize: '9px', color: '#c0d4a7', letterSpacing: '0.06em' }}>
-                BEST EDGE +{topEdgePct.toFixed(1)}%
-              </span>
-            )}
-          </div>
-        )}
-
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid #1a1a22',
-          background: '#0a0a0f',
-          padding: '5px 0',
-        }}>
-          <div style={{ width: '86px', minWidth: '86px' }} />
-          <div className="mono" style={{ flex: 1, paddingLeft: '12px', fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.1em' }}>
-            PICK / TAP FOR WHY
-          </div>
-          <div className="mono" style={{ minWidth: '68px', textAlign: 'center', fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.1em' }}>
-            SCORE
           </div>
         </div>
 
-        {filtered.length === 0 ? (
-          <div style={{ padding: '28px 20px', textAlign: 'center' }}>
-            <div className="mono" style={{ fontSize: '10px', color: '#888890', letterSpacing: '0.08em', marginBottom: '6px' }}>
-              NO {filter.toUpperCase()} PICKS TODAY
+        {/* ── Desktop sidebar ──────────────────────────────────────── */}
+        <aside className="cheat-sheet-sidebar">
+          <div style={{
+            border: '1px solid #1f1f24',
+            background: '#111114',
+            padding: '20px',
+            marginBottom: '16px',
+          }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#fcc20f', marginBottom: '12px' }}>
+              WHAT IS THIS?
             </div>
-            <p style={{ fontSize: '12px', color: '#52525b', lineHeight: 1.5 }}>
-              The next card appears after the model run.
+            <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65, marginBottom: '12px' }}>
+              The Daily Card surfaces today&apos;s top MLB bets ranked by Beezy Score — a composite of edge, historical system accuracy, and model confidence.
+            </p>
+            <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65 }}>
+              Cards are published each morning after the model run (~11am ET). Tap any pick to see why the model likes it.
             </p>
           </div>
-        ) : (
-          <>
-            {displayed.map((bet, i) => (
-              <PickCard
-                key={bet.id}
-                bet={bet}
-                rank={i + 1}
-                expanded={expandedIds.has(bet.id)}
-                onToggle={() => toggleCard(bet.id)}
-              />
+
+          <div style={{
+            border: '1px solid #1f1f24',
+            background: '#111114',
+            padding: '20px',
+            marginBottom: '16px',
+          }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#888890', marginBottom: '12px' }}>
+              SCORE LEGEND
+            </div>
+            {[
+              { tier: 'strong', color: '#b3bd95', label: 'STRONG', desc: 'High edge + high confidence' },
+              { tier: 'lean',   color: '#fcc20f', label: 'LEAN',   desc: 'Positive edge, moderate confidence' },
+              { tier: 'pass',   color: '#888890', label: 'PASS',   desc: 'Listed for reference, not recommended' },
+            ].map(row => (
+              <div key={row.tier} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <span className="dell-heading" style={{
+                  fontSize: '8px',
+                  letterSpacing: '0.08em',
+                  padding: '2px 6px',
+                  background: `${row.color}20`,
+                  color: row.color,
+                  border: `1px solid ${row.color}`,
+                  flexShrink: 0,
+                }}>
+                  {row.label}
+                </span>
+                <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{row.desc}</span>
+              </div>
             ))}
+          </div>
 
-            {!showMore && hiddenCount > 0 && (
-              <button
-                onClick={() => setShowMore(true)}
-                className="mono"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  fontSize: '10px',
-                  letterSpacing: '0.08em',
-                  color: '#888890',
-                  background: '#0a0a0f',
-                  border: 'none',
-                  borderTop: '1px solid #1a1a22',
-                  cursor: 'pointer',
-                }}
-              >
-                + {hiddenCount} MORE PICKS
-              </button>
-            )}
-            {showMore && filtered.length > DEFAULT_LIMIT && (
-              <button
-                onClick={() => setShowMore(false)}
-                className="mono"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  fontSize: '10px',
-                  letterSpacing: '0.08em',
-                  color: '#888890',
-                  background: '#0a0a0f',
-                  border: 'none',
-                  borderTop: '1px solid #1a1a22',
-                  cursor: 'pointer',
-                }}
-              >
-                SHOW TOP 5
-              </button>
-            )}
-          </>
-        )}
-
-        <div style={{
-          borderTop: '1px solid #1a1a22',
-          padding: '11px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#06060a',
-        }}>
-          <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.08em' }}>
-            BEEZY.FYI / MLB DAILY CARD
-          </span>
-          <span className="mono" style={{ fontSize: '8px', color: '#3f3f4e', letterSpacing: '0.06em' }}>
-            beezy.fyi
-          </span>
-        </div>
+          <div style={{
+            border: '1px solid #1f1f24',
+            background: '#111114',
+            padding: '20px',
+          }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#888890', marginBottom: '12px' }}>
+              SYSTEMS
+            </div>
+            {[
+              { key: 'NRFI', color: '#9ab6c8', desc: 'No Run First Inning — game pick' },
+              { key: 'F5',   color: '#e6915d', desc: 'First 5 innings ML — game pick' },
+              { key: 'HR',   color: '#d77a7a', desc: 'Home Run — batter prop' },
+              { key: 'K',    color: '#c0d4a7', desc: 'Strikeouts Over — pitcher prop' },
+              { key: 'OUTS', color: '#a5b8c0', desc: 'Outs Recorded — pitcher prop' },
+              { key: 'HITS', color: '#b3bd95', desc: 'Batter Hits Over — batter prop' },
+            ].map(row => (
+              <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>
+                <span className="mono" style={{ fontSize: '9px', color: row.color, width: '36px', flexShrink: 0 }}>{row.key}</span>
+                <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{row.desc}</span>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
 
       <a
         href="/picks"
-        className="mono"
+        className="mono cheat-sheet-picks-link"
         style={{
           marginTop: '16px',
           fontSize: '10px',
-          color: '#52525b',
+          color: '#888890',
           textDecoration: 'none',
           letterSpacing: '0.06em',
         }}
       >
-        FULL PICKS TABLE
+        FULL PICKS TABLE →
       </a>
     </div>
   )

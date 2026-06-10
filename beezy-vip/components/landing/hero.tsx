@@ -94,7 +94,7 @@ export async function Hero() {
                 background: 'transparent',
                 color: '#fff',
                 textDecoration: 'none',
-                border: '1px solid rgba(255,255,255,0.5)',
+                border: '1px solid #fff',
                 display: 'inline-block',
               }}
             >

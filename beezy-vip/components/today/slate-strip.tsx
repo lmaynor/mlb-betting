@@ -65,12 +65,12 @@ export async function SlateStrip() {
                   </span>
                 </div>
               ) : (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#3a3a48' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: '#888890' }}>
                   no pick
                 </div>
               )}
               {gamePicks.length > 1 && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '8px', color: '#52525b' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '8px', color: '#888890' }}>
                   +{gamePicks.length - 1} more
                 </div>
               )}
