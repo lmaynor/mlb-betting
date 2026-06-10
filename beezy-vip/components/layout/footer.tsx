@@ -95,7 +95,7 @@ export function Footer() {
                 <Link
                   key={href}
                   href={href}
-                  style={{ display: 'block', fontSize: '12px', color: '#9999ff', textDecoration: 'underline', marginBottom: '6px', fontFamily: 'Times New Roman, Times, serif' }}
+                  style={{ display: 'block', fontSize: '12px', color: '#9999ff', textDecoration: 'underline', marginBottom: '6px', fontFamily: 'Georgia, Times New Roman, Times, serif' }}
                 >
                   {label}
                 </Link>

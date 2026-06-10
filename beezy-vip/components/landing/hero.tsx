@@ -32,10 +32,10 @@ export async function Hero() {
     <section style={{ borderBottom: B, borderTop: B }}>
       <div className="hero-grid" style={{ gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
 
-        {/* Left: Dell-red CTA panel */}
+        {/* Left: dark-green CTA panel */}
         <div
           className="hero-left"
-          style={{ padding: '48px 24px 40px', borderRight: B, background: '#c91525', position: 'relative' }}
+          style={{ padding: '48px 24px 40px', borderRight: B, background: '#0e1f0d', position: 'relative' }}
         >
           {/* Eyebrow */}
           <div
@@ -53,7 +53,7 @@ export async function Hero() {
             Today&apos;s MLB Card,<br />Ranked by Edge.
           </h1>
 
-          {/* Body copy -- Times New Roman for 1996 feel */}
+          {/* Body copy -- Georgia serif for 1996 feel */}
           <p
             className="times"
             style={{ fontSize: '15px', lineHeight: 1.6, color: '#fff', marginBottom: '28px', maxWidth: '380px' }}

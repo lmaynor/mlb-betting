@@ -97,7 +97,7 @@ html {
 }
 
 .times {
-  font-family: 'Times New Roman', Times, serif;
+  font-family: Georgia, 'Times New Roman', Times, serif;
 }
 
 /* Dell page frame -- the literal black border around the viewport */
@@ -332,10 +332,9 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .article-body strong { color: #f5f5f7; }
 .article-body ul { padding-left: 20px; margin-bottom: 16px; }
 .article-body li { margin-bottom: 6px; }
-.article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
-.article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
+.article-body pre { background: #111114; border: 1px solid #1f1f24; padding: 16px; overflow-x: auto; margin-bottom: 16px; }
+.article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #b3bd95; }
 .article-body a { color: #9999ff; }
-.article-body code { color: #b3bd95; }
 /* ── Interactive card hover -- Dell: hard border highlight, no lift ── */
 .card-hover {
   transition: border-color .1s ease;

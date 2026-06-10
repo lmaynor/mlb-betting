@@ -25,10 +25,14 @@ export function Nav() {
 
   return (
     <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw', background: '#000', borderBottom: BORDER_HARD, overflow: 'hidden' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'stretch', justifyContent: 'space-between', height: '56px' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'stretch', height: '56px' }}>
 
         {/* Logo -- Dell display: Arial Black style */}
-        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          {/* Logo placeholder -- replace with <img> when final mark is ready */}
+          <div style={{ width: '28px', height: '28px', border: '1px dashed #444', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '9px', fontFamily: 'Arial, Helvetica, sans-serif', letterSpacing: 0 }}>
+            ?
+          </div>
           <span className="dell-display" style={{ fontSize: '18px', color: '#fff', letterSpacing: '0.02em', lineHeight: 1 }}>
             BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
           </span>
@@ -63,7 +67,7 @@ export function Nav() {
         </div>
 
         {/* Desktop right: auth + social + Discord sticker */}
-        <div className="nav-desktop" style={{ gap: '8px', alignItems: 'center' }}>
+        <div className="nav-desktop" style={{ gap: '8px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
           <a
             href={X_URL}
             target="_blank"

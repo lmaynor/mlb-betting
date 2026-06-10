@@ -126,6 +126,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
             alt={bet.player ?? ''}
             width={72}
             height={88}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
             style={{
               objectFit: 'contain',
               objectPosition: 'bottom center',
