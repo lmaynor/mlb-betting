@@ -13,9 +13,10 @@ const SYSTEM_LABEL: Record<string, string> = {
   K: 'K',
   OUTS: 'OUTS',
   BATTER_HITS: 'HITS',
+  PITCHER_ER: 'P.ER',
 }
 
-const GAME_SYSTEMS = new Set(['NRFI', 'F5'])
+const GAME_SYSTEMS = new Set(['NRFI', 'F5', 'PITCHER_ER'])
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS'])
 const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS'])
 
@@ -53,6 +54,16 @@ function fmtEdge(e: number | null) {
   return `+${pct.toFixed(1)}%`
 }
 
+function fmtBetType(betType: string | null | undefined, system: string): string | null {
+  if (!betType) return null
+  // Strip the system prefix (e.g. "PITCHER_ER_UNDER_2.5" → "UNDER 2.5")
+  const prefix = system + '_'
+  const cleaned = betType.toUpperCase().startsWith(prefix)
+    ? betType.slice(prefix.length)
+    : betType
+  return cleaned.replace(/_/g, ' ')
+}
+
 function splitNotes(notes: string | null | undefined) {
   if (!notes) return []
   return notes
@@ -79,7 +90,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
   const title = isProp
     ? (bet.player ?? bet.bet_type ?? 'No player listed')
     : `${bet.away_team ?? '?'} @ ${bet.home_team ?? '?'}`
-  const sub = [bet.bet_type, fmtOdds(bet.odds), bet.book].filter(Boolean).join(' / ')
+  const sub = [fmtBetType(bet.bet_type, bet.system), fmtOdds(bet.odds), bet.book].filter(Boolean).join(' / ')
 
   return (
     <div
@@ -275,13 +286,11 @@ export function CheatSheetClient({
 }) {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
-  const [showMore, setShowMore] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const sorted = useMemo(() => [...picks].sort((a, b) => beezyscore(b) - beezyscore(a)), [picks])
   const filtered = filterBets(sorted, filter)
-  const displayed = showMore ? filtered : filtered.slice(0, DEFAULT_LIMIT)
-  const hiddenCount = filtered.length - DEFAULT_LIMIT
+  const displayed = filtered.slice(0, DEFAULT_LIMIT)
   const allExpanded = filtered.length > 0 && filtered.every(b => expandedIds.has(b.id))
   const strongCount = filtered.filter(b => scoreTier(beezyscore(b)) === 'strong').length
   const leanCount = filtered.filter(b => scoreTier(beezyscore(b)) === 'lean').length
@@ -302,7 +311,7 @@ export function CheatSheetClient({
   }
 
   function toggleAll() {
-    setExpandedIds(allExpanded ? new Set() : new Set(filtered.map(b => b.id)))
+    setExpandedIds(allExpanded ? new Set() : new Set(displayed.map(b => b.id)))
   }
 
   async function handleShare() {
@@ -428,7 +437,7 @@ export function CheatSheetClient({
               {FILTERS.map(f => (
                 <button
                   key={f.key}
-                  onClick={() => { setFilter(f.key); setShowMore(false); setExpandedIds(new Set()) }}
+                  onClick={() => { setFilter(f.key); setExpandedIds(new Set()) }}
                   className="mono"
                   style={{
                     padding: '5px 10px',
@@ -529,43 +538,17 @@ export function CheatSheetClient({
                 />
               ))}
 
-              {!showMore && hiddenCount > 0 && (
-                <button
-                  onClick={() => setShowMore(true)}
-                  className="mono"
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    fontSize: '10px',
-                    letterSpacing: '0.08em',
-                    color: '#888890',
-                    background: '#0a0a0c',
-                    border: 'none',
-                    borderTop: '1px solid #1f1f24',
-                    cursor: 'pointer',
-                  }}
-                >
-                  + {hiddenCount} MORE PICKS
-                </button>
-              )}
-              {showMore && filtered.length > DEFAULT_LIMIT && (
-                <button
-                  onClick={() => setShowMore(false)}
-                  className="mono"
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    fontSize: '10px',
-                    letterSpacing: '0.08em',
-                    color: '#888890',
-                    background: '#0a0a0c',
-                    border: 'none',
-                    borderTop: '1px solid #1f1f24',
-                    cursor: 'pointer',
-                  }}
-                >
-                  SHOW TOP 5
-                </button>
+              {filtered.length > DEFAULT_LIMIT && (
+                <div className="mono" style={{
+                  padding: '8px 16px',
+                  fontSize: '9px',
+                  letterSpacing: '0.08em',
+                  color: '#52525b',
+                  borderTop: '1px solid #1f1f24',
+                  textAlign: 'center',
+                }}>
+                  +{filtered.length - DEFAULT_LIMIT} MORE ON FULL PICKS TABLE
+                </div>
               )}
             </>
           )}

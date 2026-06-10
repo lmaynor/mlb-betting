@@ -7,7 +7,6 @@ import { apiGetTodayPicks, apiGetRecentSettled } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 import { beezyscore } from '@/lib/beezy-score'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
-import { SlateStrip } from '@/components/today/slate-strip'
 import { formatCentralDate, siteDateKey, addDaysToDateKey } from '@/lib/dates'
 import playerMap from '@/public/headshots/player_map.json'
 
@@ -99,9 +98,6 @@ export default async function CheatSheetPage() {
     .sort((a, b) => beezyscore(b) - beezyscore(a))
 
   return (
-    <>
-      <SlateStrip />
-      <CheatSheetClient picks={picks} today={dateLabel()} yesterdayPicks={yesterdayPicks} />
-    </>
+    <CheatSheetClient picks={picks} today={dateLabel()} yesterdayPicks={yesterdayPicks} />
   )
 }

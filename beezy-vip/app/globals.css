@@ -264,8 +264,10 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   input, select, textarea {
     font-size: 16px !important;
   }
-  /* WCAG 2.5.5 / Apple HIG: coarse-pointer touch targets ≥ 40px */
-  button, [role="button"] {
+  /* WCAG 2.5.5 / Apple HIG: coarse-pointer touch targets ≥ 40px.
+     Scoped to main content — excludes nav/footer buttons which live
+     inside a taller fixed container that provides adequate tap area. */
+  main button, main [role="button"] {
     min-height: 40px;
   }
 }

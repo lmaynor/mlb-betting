@@ -62,6 +62,7 @@ export async function Hero() {
             0&ndash;100 score so the best plays are easy to scan, screenshot, and track.
           </p>
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {/* Primary CTA -- Dell black button */}
             <Link
@@ -102,14 +103,13 @@ export async function Hero() {
             </Link>
           </div>
 
-          {/* Settled-bets count -- bottom left of panel */}
-          <div style={{ position: 'absolute', bottom: '16px', left: '24px' }}>
-            <span
-              className="dell-heading"
-              style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}
-            >
-              {stats.total_bets} SETTLED BETS &middot; {PICK_SYSTEMS.length} SYSTEMS
-            </span>
+          {/* Settled-bets count -- in flow so it doesn't overlap on mobile */}
+          <span
+            className="dell-heading"
+            style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.45)' }}
+          >
+            {stats.total_bets} SETTLED BETS &middot; {PICK_SYSTEMS.length} SYSTEMS
+          </span>
           </div>
         </div>
 

@@ -136,7 +136,7 @@ export function Nav() {
             <SignInButton mode="modal">
               <button
                 className="dell-heading"
-                style={{ fontSize: '10px', letterSpacing: '0.04em', background: 'none', border: '1px solid #333', padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer' }}
+                style={{ fontSize: '10px', letterSpacing: '0.04em', background: 'none', border: '1px solid #333', padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
                 Sign In
               </button>
