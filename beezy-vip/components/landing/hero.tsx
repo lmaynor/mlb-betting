@@ -3,7 +3,7 @@ import { apiGetStats, apiGetSparkline } from '@/lib/betting-api'
 import { HeroSparkline } from '@/components/landing/hero-sparkline'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #000'
 
 async function getStats() {
   try {
@@ -32,60 +32,143 @@ export async function Hero() {
     <section style={{ borderBottom: B, borderTop: B }}>
       <div className="hero-grid" style={{ gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
 
-        {/* Left: headline + copy + CTAs */}
-        <div className="hero-left" style={{ padding: '48px 20px 40px', borderRight: B }}>
-          <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '12px' }}>
-            Daily MLB card / score-ranked picks / {stats.total_bets} settled bets
+        {/* Left: Dell-red CTA panel */}
+        <div
+          className="hero-left"
+          style={{ padding: '48px 24px 40px', borderRight: B, background: '#e91d2a', position: 'relative' }}
+        >
+          {/* Eyebrow */}
+          <div
+            className="dell-heading"
+            style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.7)', marginBottom: '14px' }}
+          >
+            MLB PICKS BACKED BY MACHINE LEARNING
           </div>
-          <h1 className="hero-h1" style={{ fontSize: '28px', fontWeight: 700, lineHeight: 1.12, color: 'var(--text)', marginBottom: '12px' }}>
-            Today&apos;s MLB card,<br />ranked by conviction.
+
+          {/* Main headline -- Arial Black display */}
+          <h1
+            className="dell-display hero-h1"
+            style={{ fontSize: '32px', lineHeight: 1.0, color: '#fff', marginBottom: '16px' }}
+          >
+            Today&apos;s MLB Card,<br />Ranked by Edge.
           </h1>
-          <p style={{ fontSize: '13px', lineHeight: 1.65, color: 'var(--sec)', marginBottom: '22px', maxWidth: '400px' }}>
+
+          {/* Body copy -- Times New Roman for 1996 feel */}
+          <p
+            className="times"
+            style={{ fontSize: '15px', lineHeight: 1.6, color: 'rgba(255,255,255,0.85)', marginBottom: '28px', maxWidth: '380px' }}
+          >
             Beezy turns model edge, market price, and Kelly signal into a simple
-            0-100 score so the best plays are easy to scan, screenshot, and track.
+            0&ndash;100 score so the best plays are easy to scan, screenshot, and track.
           </p>
+
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <Link href="/cheat-sheet"
-              className="mono" style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '7px 16px', background: 'var(--accent)', color: 'var(--bg)', textDecoration: 'none' }}>
+            {/* Primary CTA -- Dell black button */}
+            <Link
+              href="/cheat-sheet"
+              style={{
+                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                padding: '9px 20px',
+                background: '#fcc20f',
+                color: '#000',
+                textDecoration: 'none',
+                border: '1px solid #000',
+                display: 'inline-block',
+              }}
+            >
               Open Daily Card
             </Link>
-            <Link href="/models"
-              className="mono" style={{ fontSize: '11px', letterSpacing: '0.02em', padding: '7px 16px', border: B, color: 'var(--sec)', textDecoration: 'none' }}>
-              View methodology
+            <Link
+              href="/models"
+              style={{
+                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                padding: '9px 20px',
+                background: 'transparent',
+                color: '#fff',
+                textDecoration: 'none',
+                border: '1px solid rgba(255,255,255,0.5)',
+                display: 'inline-block',
+              }}
+            >
+              View Methodology
             </Link>
+          </div>
+
+          {/* Settled-bets count -- bottom left of panel */}
+          <div style={{ position: 'absolute', bottom: '16px', left: '24px' }}>
+            <span
+              className="dell-heading"
+              style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}
+            >
+              {stats.total_bets} SETTLED BETS &middot; {PICK_SYSTEMS.length} SYSTEMS
+            </span>
           </div>
         </div>
 
-        {/* Right: 2x2 stat grid */}
+        {/* Right: ribbon-card stat grid */}
         <div className="hero-stats" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <div style={{ padding: '24px 18px', borderBottom: B, borderRight: B }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Season ROI</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiAvail ? (roiPos ? 'var(--win)' : 'var(--loss)') : 'var(--muted)' }}>
+
+          {/* Ribbon title bar */}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              background: '#0a0a0c',
+              borderBottom: B,
+              padding: '7px 16px',
+            }}
+          >
+            <span
+              className="dell-heading"
+              style={{ fontSize: '10px', letterSpacing: '0.08em', color: '#a1a1aa' }}
+            >
+              SEASON PERFORMANCE
+            </span>
+          </div>
+
+          {/* Season ROI */}
+          <div style={{ padding: '22px 18px', borderBottom: B, borderRight: B, background: '#111114' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Season ROI</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiAvail ? (roiPos ? '#b3bd95' : '#d77a7a') : '#71717a' }}>
               {roiAvail ? (roiPos ? '+' : '') + stats.roi + '%' : stats.roi}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{stats.total_bets} settled bets</div>
+            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>{stats.total_bets} settled bets</div>
           </div>
-          <div style={{ padding: '24px 18px', borderBottom: B }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Win Rate</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--text)' }}>
+
+          {/* Win Rate */}
+          <div style={{ padding: '22px 18px', borderBottom: B, background: '#111114' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Win Rate</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>
               {stats.win_rate !== '--' ? stats.win_rate + '%' : stats.win_rate}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>W / (W+L)</div>
+            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>W / (W+L)</div>
           </div>
-          <div style={{ padding: '24px 18px', borderRight: B }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Settled Bets</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--text)' }}>
+
+          {/* Settled Bets */}
+          <div style={{ padding: '22px 18px', borderRight: B, background: '#0f1a14' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Settled Bets</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>
               {stats.total_bets}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{PICK_SYSTEMS.length} systems &middot; MLB</div>
+            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>{PICK_SYSTEMS.length} systems &middot; MLB</div>
           </div>
-          <div style={{ padding: '24px 18px' }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Avg Edge</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: stats.avg_edge !== '--' ? 'var(--win)' : 'var(--muted)' }}>
+
+          {/* Avg Edge */}
+          <div style={{ padding: '22px 18px', background: '#0f1a14' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Avg Edge</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: stats.avg_edge !== '--' ? '#b3bd95' : '#71717a' }}>
               {stats.avg_edge !== '--' ? '+' + stats.avg_edge + '%' : stats.avg_edge}
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Model vs implied</div>
+            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>Model vs implied</div>
           </div>
+
           <HeroSparkline data={sparkline} />
         </div>
 

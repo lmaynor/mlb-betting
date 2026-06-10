@@ -6,11 +6,12 @@ import type { Bet } from '@/lib/types'
 
 function resultTone(result: string | null) {
   const r = result?.toLowerCase()
-  if (r === 'win') return { label: 'WIN', color: '#10b981', bg: '#052016', border: '#0f6e56' }
-  if (r === 'loss') return { label: 'LOSS', color: '#ef4444', bg: '#200808', border: '#a32d2d' }
-  if (r === 'push') return { label: 'PUSH', color: '#f59e0b', bg: '#1b1204', border: '#92400e' }
-  if (r === 'void') return { label: 'VOID', color: '#94a3b8', bg: '#101014', border: '#3f3f46' }
-  return { label: 'PENDING', color: '#3b82f6', bg: '#040e1c', border: '#185fa5' }
+  // Dell tint palette: sage=win, salmon=loss, steel=push/void, sky=pending
+  if (r === 'win')  return { label: 'WIN',     color: '#b3bd95', bg: '#1a2218', border: '#8e9e78' }
+  if (r === 'loss') return { label: 'LOSS',    color: '#d77a7a', bg: '#2a1818', border: '#b05050' }
+  if (r === 'push') return { label: 'PUSH',    color: '#a5b8c0', bg: '#131a1e', border: '#7a9aa5' }
+  if (r === 'void') return { label: 'VOID',    color: '#71717a', bg: '#101014', border: '#3f3f46' }
+  return             { label: 'PENDING', color: '#9ab6c8', bg: '#131e24', border: '#6a8fa0' }
 }
 
 function units(profit: number | null, stake: number | null) {
@@ -36,7 +37,7 @@ function ScoreMark({ score, tier }: { score: number; tier: ReturnType<typeof sco
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 850, color, lineHeight: 1 }}>{score}</span>
-      <span className="mono" style={{ fontSize: '8px', fontWeight: 800, letterSpacing: '0.08em', padding: '2px 5px', borderRadius: 'var(--radius-sm)', border: `0.5px solid ${color}44`, background: `${color}12`, color, whiteSpace: 'nowrap' }}>
+      <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 5px', border: `1px solid ${color}`, background: `${color}18`, color, whiteSpace: 'nowrap' }}>
         {TIER_LABEL[tier].replace(' PLAY', '')}
       </span>
     </div>
@@ -46,7 +47,7 @@ function ScoreMark({ score, tier }: { score: number; tier: ReturnType<typeof sco
 function ResultPill({ result }: { result: string | null }) {
   const tone = resultTone(result)
   return (
-    <span className="mono" style={{ fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em', padding: '3px 7px', borderRadius: 'var(--radius-sm)', background: tone.bg, color: tone.color, border: `0.5px solid ${tone.border}`, display: 'inline-flex', width: 'fit-content' }}>
+    <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 7px', background: tone.bg, color: tone.color, border: `1px solid ${tone.border}`, display: 'inline-flex', width: 'fit-content' }}>
       {tone.label}
     </span>
   )
@@ -79,10 +80,10 @@ export async function RecentPicksTable() {
   return (
     <section style={{ padding: '24px 20px', borderBottom: B }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', gap: '12px' }}>
-        <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-          Recent graded plays
+        <span className="dell-display" style={{ fontSize: '12px', color: 'var(--text)' }}>
+          Recent Graded Plays
         </span>
-        <Link href="/results" style={{ fontSize: '11px', color: '#3b82f6', textDecoration: 'none' }}>
+        <Link href="/results" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#0000ee', textDecoration: 'underline' }}>
           View results
         </Link>
       </div>
@@ -133,7 +134,7 @@ export async function RecentPicksTable() {
                       </div>
                     )}
                   </div>
-                  <span className="mono" style={{ fontSize: '12px', fontWeight: 700, textAlign: 'right', color: isPositive ? 'var(--win)' : 'var(--loss)' }}>
+                  <span className="mono" style={{ fontSize: '12px', fontWeight: 700, textAlign: 'right', color: isPositive ? '#b3bd95' : '#d77a7a' }}>
                     {units(bet.profit, bet.stake)}
                   </span>
                 </div>
@@ -152,7 +153,7 @@ export async function RecentPicksTable() {
                       <ScoreMark score={row.score} tier={row.tier} />
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
                         <ResultPill result={bet.result} />
-                        <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: isPositive ? 'var(--win)' : 'var(--loss)' }}>
+                        <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: isPositive ? '#b3bd95' : '#d77a7a' }}>
                           {units(bet.profit, bet.stake)}
                         </span>
                       </div>

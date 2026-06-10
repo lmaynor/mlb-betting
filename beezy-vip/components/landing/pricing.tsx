@@ -1,7 +1,7 @@
 'use client'
 
 const PRE_LAUNCH = true
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #000'
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 
 import dynamic from 'next/dynamic'
@@ -11,50 +11,111 @@ const CheckoutButton = dynamic(
 )
 
 const TIERS = [
-  { name: 'Starter', price: '$29', period: '/mo', tier: 'starter' as const, featured: false, features: ['1 system picks daily', 'Full results history', 'All free tools', 'Discord access'] },
-  { name: 'Pro', price: '$79', period: '/mo', tier: 'pro' as const, featured: true, features: ['All 5 system picks', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export', 'Edge finder (full)'] },
-  { name: 'Season', price: '$499', period: '/season', tier: 'season' as const, featured: false, features: ['Everything in Pro', 'Full 2026 MLB season', 'Best per-month value', 'Priority Discord role'] },
+  {
+    name: 'Starter',
+    price: '$29',
+    period: '/mo',
+    tier: 'starter' as const,
+    featured: false,
+    tintBg: '#131e24',
+    tint: '#9ab6c8',
+    features: ['1 system picks daily', 'Full results history', 'All free tools', 'Discord access'],
+  },
+  {
+    name: 'Pro',
+    price: '$79',
+    period: '/mo',
+    tier: 'pro' as const,
+    featured: true,
+    tintBg: '#1a2218',
+    tint: '#b3bd95',
+    features: ['All 5 system picks', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export', 'Edge finder (full)'],
+  },
+  {
+    name: 'Season',
+    price: '$499',
+    period: '/season',
+    tier: 'season' as const,
+    featured: false,
+    tintBg: '#2a1a0f',
+    tint: '#e6915d',
+    features: ['Everything in Pro', 'Full 2026 MLB season', 'Best per-month value', 'Priority Discord role'],
+  },
 ]
 
 export function PricingSection() {
   return (
-    <section style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 20px', borderBottom: B }}>
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f5f5f7', marginBottom: '6px' }}>Pricing</h1>
-        <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>
-          {PRE_LAUNCH ? 'Pre-launch / Join the waitlist / Prices lock at launch' : 'All plans include a 7-day money-back guarantee'}
+    <section style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 20px', borderBottom: '1px solid #1f1f24' }}>
+
+      {/* Section eyebrow */}
+      <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+        <h1 className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', marginBottom: '8px' }}>Pricing</h1>
+        <p className="times" style={{ fontSize: '13px', color: '#71717a' }}>
+          {PRE_LAUNCH ? 'Pre-launch — Join the waitlist. Prices lock at launch.' : 'All plans include a 7-day money-back guarantee'}
         </p>
       </div>
 
-      <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B, borderRadius: 'var(--radius)', overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+      <div className="pricing-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', gap: '0', border: B, overflow: 'hidden' }}>
         {TIERS.map((t, i) => (
-          <div key={t.name} style={{ padding: '24px', display: 'flex', flexDirection: 'column', borderRight: i < 2 ? B : undefined, background: t.featured ? 'rgba(16,185,129,0.04)' : '#0a0a0c', borderTop: t.featured ? '2px solid #10b981' : undefined }}>
-            {t.featured && (
-              <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '10px' }}>Most Popular</div>
-            )}
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '8px' }}>{t.name}</div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '20px' }}>
-              <span style={{ fontSize: '36px', fontWeight: 700, color: '#f5f5f7', lineHeight: 1 }}>{t.price}</span>
-              <span className="mono" style={{ fontSize: '13px', color: '#71717a', marginBottom: '4px' }}>{t.period}</span>
+          <div
+            key={t.name}
+            style={{ display: 'flex', flexDirection: 'column', borderRight: i < 2 ? B : undefined }}
+          >
+            {/* Ribbon title bar */}
+            <div style={{ background: '#0a0a0c', borderBottom: B, padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.06em', color: t.tint }}>{t.name.toUpperCase()}</span>
+              {t.featured && (
+                <span
+                  className="dell-heading"
+                  style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', background: '#fcc20f', color: '#000', border: '1px solid #000' }}
+                >
+                  MOST POPULAR
+                </span>
+              )}
             </div>
-            <ul style={{ listStyle: 'none', marginBottom: '24px', flex: 1 }}>
-              {t.features.map(f => (
-                <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#a1a1aa', marginBottom: '8px' }}>
-                  <span style={{ color: '#10b981' }}>+</span>{f}
-                </li>
-              ))}
-            </ul>
-            {PRE_LAUNCH ? (
-              <a href={DISCORD_URL} className="mono" style={{ display: 'block', textAlign: 'center', fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '10px', fontWeight: 700, textDecoration: 'none', background: t.featured ? '#10b981' : 'transparent', color: t.featured ? '#0a0a0c' : '#f5f5f7', border: t.featured ? 'none' : B, borderRadius: 'var(--radius-sm)' }}>
-                Join waitlist
-              </a>
-            ) : (
-              <CheckoutButton tier={t.tier} label={`Get ${t.name}`} featured={t.featured} />
-            )}
+
+            {/* Ribbon body */}
+            <div style={{ padding: '20px 16px', background: t.tintBg, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '20px' }}>
+                <span className="dell-display" style={{ fontSize: '32px', color: t.tint, lineHeight: 1 }}>{t.price}</span>
+                <span className="times" style={{ fontSize: '13px', color: '#71717a', marginBottom: '4px' }}>{t.period}</span>
+              </div>
+              <ul style={{ listStyle: 'none', marginBottom: '24px', flex: 1 }}>
+                {t.features.map(f => (
+                  <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span className="dell-heading" style={{ fontSize: '10px', color: t.tint, flexShrink: 0 }}>+</span>
+                    <span className="times" style={{ fontSize: '13px', color: '#a1a1aa' }}>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              {PRE_LAUNCH ? (
+                <a
+                  href={DISCORD_URL}
+                  style={{
+                    display: 'block',
+                    textAlign: 'center',
+                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    fontSize: '11px',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    fontWeight: 700,
+                    padding: '10px',
+                    textDecoration: 'none',
+                    background: t.featured ? '#fcc20f' : 'transparent',
+                    color: t.featured ? '#000' : '#f5f5f7',
+                    border: t.featured ? '1px solid #000' : '1px solid #333',
+                  }}
+                >
+                  Join waitlist
+                </a>
+              ) : (
+                <CheckoutButton tier={t.tier} label={`Get ${t.name}`} featured={t.featured} />
+              )}
+            </div>
           </div>
         ))}
       </div>
-      <p className="mono" style={{ textAlign: 'center', fontSize: '11px', color: '#71717a', marginTop: '16px' }}>
+      <p className="times" style={{ textAlign: 'center', fontSize: '12px', color: '#71717a', marginTop: '16px' }}>
         {PRE_LAUNCH ? 'Models enter paid mode after clearing 200-bet gate. Currently in paper mode.' : 'Cancel anytime.'}
       </p>
     </section>

@@ -14,7 +14,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#0a0a0c',
+  themeColor: '#000000',
 }
 
 export const metadata: Metadata = {
@@ -37,11 +37,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
       <body>
-        <Nav />
-        <LiveTicker />
-        <main>{children}</main>
-        <Footer />
-        <BottomNav />
+        <div className="page-frame">
+          <Nav />
+          <LiveTicker />
+          <main>{children}</main>
+          <Footer />
+          <BottomNav />
+        </div>
       </body>
     </html>
     </ClerkProvider>

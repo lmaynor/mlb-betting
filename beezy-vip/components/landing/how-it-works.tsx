@@ -1,23 +1,62 @@
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #000'
+const B_INNER = '1px solid #1f1f24'
 
 const STEPS = [
-  { num: '01', title: 'Open the daily card', desc: "Today's plays are ranked by Beezy Score so the top edge is easy to spot." },
-  { num: '02', title: 'Compare price and edge', desc: 'Each pick shows the system, odds, book, model edge, and a short reason it made the card.' },
-  { num: '03', title: 'Track the result', desc: 'Settlement runs nightly. Wins, losses, pushes, and voids stay public.' },
+  { num: '01', title: 'Open the Daily Card', desc: "Today's plays are ranked by Beezy Score so the top edge is easy to spot." },
+  { num: '02', title: 'Compare Price and Edge', desc: 'Each pick shows the system, odds, book, model edge, and a short reason it made the card.' },
+  { num: '03', title: 'Track the Result', desc: 'Settlement runs nightly. Wins, losses, pushes, and voids stay public.' },
 ]
 
 export function HowItWorks() {
   return (
-    <section style={{ padding: '24px 20px', borderBottom: B }}>
-      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '14px' }}>
-        How it works
+    <section style={{ padding: '24px 20px', borderBottom: B_INNER }}>
+      {/* Section eyebrow -- Dell olive-style display block */}
+      <div
+        style={{
+          background: '#1c1c0a',
+          border: B,
+          borderBottom: 'none',
+          padding: '10px 16px',
+          display: 'inline-block',
+          marginBottom: 0,
+        }}
+      >
+        <span
+          className="dell-display"
+          style={{ fontSize: '13px', color: '#8e8a25', letterSpacing: '0.04em' }}
+        >
+          How It Works
+        </span>
       </div>
-      <div className="steps-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B, borderRadius: 'var(--radius)', overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+
+      <div className="steps-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B, overflow: 'hidden' }}>
         {STEPS.map((step, i) => (
-          <div key={step.num} style={{ padding: '18px', borderRight: i < STEPS.length - 1 ? B : undefined, background: '#0d0d11' }}>
-            <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: '8px' }}>{step.num}</div>
-            <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)', marginBottom: '6px' }}>{step.title}</h3>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.55 }}>{step.desc}</p>
+          <div
+            key={step.num}
+            style={{
+              borderRight: i < STEPS.length - 1 ? B : undefined,
+              background: '#0d0d11',
+            }}
+          >
+            {/* Ribbon title bar */}
+            <div style={{ background: '#0a0a0c', borderBottom: B, padding: '6px 12px' }}>
+              <span
+                className="dell-heading"
+                style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a' }}
+              >
+                STEP {step.num}
+              </span>
+            </div>
+            {/* Ribbon body */}
+            <div style={{ padding: '16px' }}>
+              <h3
+                className="dell-heading"
+                style={{ fontSize: '12px', letterSpacing: '0.04em', color: '#f5f5f7', marginBottom: '8px' }}
+              >
+                {step.title}
+              </h3>
+              <p className="times" style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.55 }}>{step.desc}</p>
+            </div>
           </div>
         ))}
       </div>

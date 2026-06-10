@@ -20,50 +20,50 @@ export const TIER_LABEL: Record<ScoreTier, string> = {
   watch:  'WATCH',
 }
 
-// System solid colors (charts, text, filter chips)
+// System solid colors -- mapped to Dell 1996 catalog tints
 export const SYSTEM_COLOR: Record<string, string> = {
   // Game Lines
-  NRFI:        '#10b981',
-  F5:          '#3b82f6',
+  NRFI:        '#b3bd95',   // sage
+  F5:          '#9ab6c8',   // sky
   // Innings Windows
-  F3:          '#06b6d4',   // cyan -- shorter window, lighter feel
-  F1H:         '#0ea5e9',   // sky blue -- between F3 and F5
-  F7:          '#6366f1',   // indigo -- deeper into game
-  GAME:        '#475569',   // slate -- full game, neutral
+  F3:          '#a5b8c0',   // steel -- shorter window
+  F1H:         '#9ab6c8',   // sky
+  F7:          '#8c9ae0',   // periwinkle -- deeper into game
+  GAME:        '#8e8a25',   // olive -- full game
   // Pitcher Props
-  K:           '#a78bfa',
-  OUTS:        '#fb923c',
-  PITCHER_ER:  '#f43f5e',   // rose
+  K:           '#8c9ae0',   // periwinkle
+  OUTS:        '#e6915d',   // peach
+  PITCHER_ER:  '#d77a7a',   // salmon
   // Batter Props
-  HR:          '#f59e0b',
-  BATTER_K:    '#e879f9',   // fuchsia
-  BATTER_TB:   '#84cc16',   // lime
-  BATTER_HITS: '#14b8a6',   // teal
+  HR:          '#d77a7a',   // salmon
+  BATTER_K:    '#8c9ae0',   // periwinkle
+  BATTER_TB:   '#c0d4a7',   // lime
+  BATTER_HITS: '#a5b8c0',   // steel
   // Meta
   ALL:         '#f5f5f7',
 }
 
-// System pill styles (bg + color + border) for badges
+// System pill styles -- mapped to Dell 1996 catalog tints, hard 1px borders
 export const SYSTEM_PILL: Record<string, { bg: string; color: string; border: string }> = {
   // Game Lines
-  NRFI:        { bg: '#052016', color: '#10b981', border: '0.5px solid #0f6e56' },
-  F5:          { bg: '#040e1c', color: '#3b82f6', border: '0.5px solid #185fa5' },
+  NRFI:        { bg: '#1a2218', color: '#b3bd95', border: '1px solid #8e9e78' },  // sage
+  F5:          { bg: '#131e24', color: '#9ab6c8', border: '1px solid #6a8fa0' },  // sky
   // Innings Windows
-  F3:          { bg: '#041418', color: '#06b6d4', border: '0.5px solid #0e7490' },
-  F1H:         { bg: '#040e18', color: '#0ea5e9', border: '0.5px solid #0369a1' },
-  F7:          { bg: '#07071a', color: '#6366f1', border: '0.5px solid #3730a3' },
-  GAME:        { bg: '#0d0f12', color: '#94a3b8', border: '0.5px solid #334155' },
+  F3:          { bg: '#131a1e', color: '#a5b8c0', border: '1px solid #7a9aa5' },  // steel
+  F1H:         { bg: '#131e24', color: '#9ab6c8', border: '1px solid #6a8fa0' },  // sky
+  F7:          { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
+  GAME:        { bg: '#1c1c0a', color: '#8e8a25', border: '1px solid #6a6615' },  // olive
   // Pitcher Props
-  K:           { bg: '#0e0718', color: '#a78bfa', border: '0.5px solid #534ab7' },
-  OUTS:        { bg: '#1a0d05', color: '#fb923c', border: '0.5px solid #9a3412' },
-  PITCHER_ER:  { bg: '#1a0508', color: '#f43f5e', border: '0.5px solid #9f1239' },
+  K:           { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
+  OUTS:        { bg: '#2a1a0f', color: '#e6915d', border: '1px solid #c06830' },  // peach
+  PITCHER_ER:  { bg: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' },  // salmon
   // Batter Props
-  HR:          { bg: '#1c1207', color: '#f59e0b', border: '0.5px solid #854f0b' },
-  BATTER_K:    { bg: '#1a0518', color: '#e879f9', border: '0.5px solid #86198f' },
-  BATTER_TB:   { bg: '#071505', color: '#84cc16', border: '0.5px solid #3f6212' },
-  BATTER_HITS: { bg: '#041412', color: '#14b8a6', border: '0.5px solid #0f766e' },
+  HR:          { bg: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' },  // salmon
+  BATTER_K:    { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
+  BATTER_TB:   { bg: '#141e0f', color: '#c0d4a7', border: '1px solid #8aaa6c' },  // lime
+  BATTER_HITS: { bg: '#131a1e', color: '#a5b8c0', border: '1px solid #7a9aa5' },  // steel
   // Fallback for unknown or newly-pipelined systems.
-  ALL:          { bg: '#1f1f24', color: '#a1a1aa', border: '0.5px solid #2a2a31' },
+  ALL:          { bg: '#1f1f24', color: '#a1a1aa', border: '1px solid #2a2a31' },
 }
 
 // Team full name -> 3-letter abbreviation

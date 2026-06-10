@@ -31,19 +31,46 @@ img, video { max-width: 100%; height: auto; }
   --muted:         #71717a;
   --sec:           #a1a1aa;
 
-  /* Border radius scale */
-  --radius-sm: 6px;
-  --radius:    10px;
-  --radius-lg: 14px;
+  /* Border radius -- Dell 1996: square everything */
+  --radius-sm: 0px;
+  --radius:    0px;
+  --radius-lg: 0px;
 
-  /* Card elevation */
-  --shadow-card:     0 1px 3px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
-  --shadow-elevated: 0 4px 12px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+  /* Card elevation -- Dell: no soft shadows, hard borders only */
+  --shadow-card:     none;
+  --shadow-elevated: none;
 
   /* Confidence tier colors */
   --strong: #22c55e;
   --lean:   #facc15;
   --watch:  #94a3b8;
+
+  /* ── Dell 1996 Design System ───────────────────────── */
+  --dell-primary:   #e91d2a;   /* Dell Red -- CTA + phone callout only */
+  --dell-yellow:    #fcc20f;   /* Sticker yellow -- BUY a DELL / NEW! */
+  --dell-purple:    #6a26a4;   /* Purple accent inside sticker chrome */
+  --dell-frame:     #000000;   /* Frame ink -- page border + hard edges */
+  --dell-link:      #0000ee;   /* Classic Netscape / Mosaic link blue */
+
+  /* Ribbon-card tint palette (catalog colors, dark-adapted) */
+  --tint-sage:      #b3bd95;   /* Latitude Notebooks */
+  --tint-salmon:    #d77a7a;   /* OptiPlex GX */
+  --tint-peach:     #e6915d;   /* Dimension + OptiPlex Gs */
+  --tint-lime:      #c0d4a7;   /* OptiPlex G Series */
+  --tint-sky:       #9ab6c8;   /* Dellware */
+  --tint-steel:     #a5b8c0;   /* Dimension XPS Pro */
+  --tint-periwinkle:#8c9ae0;   /* PowerEdge Servers */
+  --tint-olive:     #8e8a25;   /* Dimension Desktops eyebrow */
+
+  /* Dark ribbon-card body fills (dark-mode adaptation) */
+  --tint-sage-bg:        #1a2218;
+  --tint-salmon-bg:      #2a1818;
+  --tint-peach-bg:       #2a1a0f;
+  --tint-lime-bg:        #141e0f;
+  --tint-sky-bg:         #131e24;
+  --tint-steel-bg:       #131a1e;
+  --tint-periwinkle-bg:  #0f1024;
+  --tint-olive-bg:       #1c1c0a;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,8 +78,105 @@ img, video { max-width: 100%; height: auto; }
 html {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: Arial, Helvetica, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Dell 1996 typography classes */
+.dell-display {
+  font-family: 'Arial Black', 'Arial Bold', Arial, Helvetica, sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.dell-heading {
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.times {
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Dell page frame -- the literal black border around the viewport */
+.page-frame {
+  border: 8px solid var(--dell-frame);
+  min-height: 100vh;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .page-frame { border-width: 4px; }
+}
+
+@media (max-width: 480px) {
+  .page-frame { border-width: 2px; }
+}
+
+/* Dell ribbon card components */
+.ribbon-card-wrap {
+  border: 1px solid var(--dell-frame);
+  overflow: hidden;
+}
+
+.ribbon-title {
+  background: var(--surface);
+  border-bottom: 1px solid var(--dell-frame);
+  padding: 6px 12px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* Dell sticker -- yellow BUY a DELL / NEW! style */
+.dell-sticker {
+  background: var(--dell-yellow);
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border: 1px solid #000;
+  display: inline-block;
+}
+
+/* Dell CTA button -- primary black filled */
+.dell-btn-primary {
+  background: var(--dell-frame);
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border: 1px solid var(--dell-frame);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+/* Dell CTA button -- red (phone callout / primary CTA) */
+.dell-btn-red {
+  background: var(--dell-primary);
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border: 1px solid #000;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
 }
 
 body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
@@ -211,13 +335,12 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
 .article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
 .article-body a { color: #10b981; }
-/* ── Interactive card hover elevation ──────────────────────────────── */
+/* ── Interactive card hover -- Dell: hard border highlight, no lift ── */
 .card-hover {
-  transition: transform .15s ease, box-shadow .15s ease;
+  transition: border-color .1s ease;
 }
 .card-hover:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-elevated) !important;
+  border-color: var(--tint-steel) !important;
 }
 
 /* ── Picks page: desktop table / mobile cards ──────────────────────── */
