@@ -1697,6 +1697,22 @@ eventually ship.
 only on BetMGM, and the player sets don't overlap. Result: 0 matched pairs
 after `_best_book_odds_int()`. Skip until book coverage improves.
 
+**Cross-line odds mixing in batter prop extractors (fixed 2026-06-10).**
+Within a single SGO odd_id (e.g. `batting_hits-PLAYERID-game-ou-under`),
+different books post different lines -- DK may have u0.5 at -200 while BetMGM
+has u1.5 at +200. `_best_book_odds_int()` picked the highest American odds
+value regardless of line, so BetMGM's u0.5 price (+200) was selected as the
+"best" under odds for what DK reported as a 1.5-line bet. Result: the model
+saw a massive fake edge on BATTER_HITS and BATTER_TB unders, and 82 poisoned
+`BATTER_HITS_UNDER_1.5` bets were logged between 2026-05-25 and 2026-06-10
+with inflated paper P&L (~+$933 fake). Those bets were deleted from the DB.
+Fix: `_best_book_odds_for_line(entry, target_line)` restricts odds selection
+to books whose `overUnder` matches the canonical line. `_dk_line_float` was
+also updated to iterate `ONSHORE_BOOKS_PRIORITY` (DK first) instead of an
+unordered set so the canonical line always comes from the most liquid book.
+`BATTER_HITS_UNDER_0.5` bets with positive odds are NOT poisoned -- under 0.5
+hits is the hitless prop and positive odds are correct for that market.
+
 ### 15.4 Feature builds (statcast, usecols, build_model_features)
 
 **Statcast bat_score/post_bat_score are 100% null for 2021-2025.** Use
