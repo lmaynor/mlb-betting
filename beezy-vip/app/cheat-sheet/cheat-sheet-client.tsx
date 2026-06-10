@@ -16,8 +16,8 @@ const SYSTEM_LABEL: Record<string, string> = {
   PITCHER_ER: 'P.ER',
 }
 
-const GAME_SYSTEMS = new Set(['NRFI', 'F5', 'PITCHER_ER'])
-const PITCHER_SYSTEMS = new Set(['K', 'OUTS'])
+const GAME_SYSTEMS = new Set(['NRFI', 'F5'])
+const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
 const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS'])
 
 type FilterKey = 'all' | 'game' | 'pitcher' | 'player'
@@ -650,6 +650,7 @@ export function CheatSheetClient({
               { key: 'HR',   color: '#d77a7a', desc: 'Home Run — batter prop' },
               { key: 'K',    color: '#c0d4a7', desc: 'Strikeouts Over — pitcher prop' },
               { key: 'OUTS', color: '#a5b8c0', desc: 'Outs Recorded — pitcher prop' },
+              { key: 'P.ER', color: '#8c9ae0', desc: 'Pitcher Earned Runs — pitcher prop' },
               { key: 'HITS', color: '#b3bd95', desc: 'Batter Hits Over — batter prop' },
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>
