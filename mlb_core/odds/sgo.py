@@ -56,6 +56,14 @@ ONSHORE_BOOKS = {
     "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
 }
 
+# Priority order for canonical line selection -- most liquid first.
+# Used by _dk_line_float and _best_book_odds_for_line so that different books
+# posting different lines (e.g. DK: 0.5, BetMGM: 1.5 for the same odd_id) do not
+# pollute each other's odds.
+ONSHORE_BOOKS_PRIORITY = [
+    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+]
+
 # SGO key -> canonical name stored in DB.
 # ESPN Bet rebranded to theScore Bet in 2025; SGO may use either key.
 BOOK_CANONICAL: dict[str, str] = {
@@ -147,9 +155,13 @@ def _dk_odds_int(odd_entry: dict) -> Optional[int]:
 
 
 def _dk_line_float(odd_entry: dict) -> Optional[float]:
-    """Over/under line from first available onshore book (lines are identical across books)."""
+    """Over/under line from highest-priority available onshore book.
+
+    Uses ONSHORE_BOOKS_PRIORITY (DK first) so the canonical line comes from the
+    most liquid book, not an arbitrary set-iteration order.
+    """
     by_book = odd_entry.get("byBookmaker") or {}
-    for book in ONSHORE_BOOKS:
+    for book in ONSHORE_BOOKS_PRIORITY:
         info = by_book.get(book) or {}
         if not info.get("available"):
             continue
@@ -161,6 +173,41 @@ def _dk_line_float(odd_entry: dict) -> Optional[float]:
         except (ValueError, TypeError):
             continue
     return None
+
+
+def _best_book_odds_for_line(
+    odd_entry: dict, target_line: Optional[float]
+) -> tuple[Optional[int], Optional[str]]:
+    """Best American odds restricted to books whose overUnder matches target_line.
+
+    Prevents cross-line mixing: e.g. BetMGM's u0.5 (+200) being selected as best
+    under odds when DK has u1.5 (-200) -- they are different markets under the same
+    odd_id prefix. Falls back to _best_book_odds_int if target_line is None or no
+    line-matched book is available.
+    """
+    if target_line is None:
+        return _best_book_odds_int(odd_entry)
+    by_book = odd_entry.get("byBookmaker") or {}
+    best_odds, best_book = None, None
+    for book, info in by_book.items():
+        if book not in ONSHORE_BOOKS:
+            continue
+        if not info.get("available"):
+            continue
+        try:
+            book_line = float(info.get("overUnder") or "nan")
+        except (ValueError, TypeError):
+            continue
+        if book_line != target_line:
+            continue
+        val = _parse_odds_int(info.get("odds"))
+        if val is None:
+            continue
+        if best_odds is None or val > best_odds:
+            best_odds, best_book = val, BOOK_CANONICAL.get(book, book)
+    if best_odds is None:
+        return _best_book_odds_int(odd_entry)
+    return best_odds, best_book
 
 
 def _event_teams(event: dict) -> tuple[str, str]:
@@ -711,8 +758,9 @@ def _extract_player_ou_props(events: list, prefix: str, stat_id: str,
             under_entry = under_map.get(player_id)
             if not under_entry:
                 continue
-            over_odds,  over_book  = _best_book_odds_int(over_entry)
-            under_odds, under_book = _best_book_odds_int(under_entry)
+            canonical_line = _dk_line_float(over_entry)
+            over_odds,  over_book  = _best_book_odds_for_line(over_entry,  canonical_line)
+            under_odds, under_book = _best_book_odds_for_line(under_entry, canonical_line)
             if over_odds is None or under_odds is None:
                 continue
             name = _player_name(event, player_id)
@@ -722,7 +770,7 @@ def _extract_player_ou_props(events: list, prefix: str, stat_id: str,
             out[name] = {
                 "over_odds":  over_odds,
                 "under_odds": under_odds,
-                "line":       _dk_line_float(over_entry),
+                "line":       canonical_line,
                 "away_team":  away,
                 "home_team":  home,
                 "event_id":   event_id,
