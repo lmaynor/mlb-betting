@@ -39,11 +39,8 @@ export function DateBar() {
         style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '4px 10px', cursor: 'pointer', border: B, background: 'transparent', color: '#888890' }}>
         Prev
       </button>
-      <span className="mono" style={{ fontSize: '9px', color: '#52525b', letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-        Picks date
-      </span>
-      <button onClick={() => navigate(todayStr)}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: isToday ? 600 : 400, padding: '4px 13px', cursor: 'pointer', border: `1px solid ${isToday ? '#a5b8c0' : '#1f1f24'}`, background: isToday ? '#131a1e' : 'transparent', color: isToday ? '#a5b8c0' : '#f5f5f7', letterSpacing: '0.04em', flex: '0 1 auto' }}>
+<button onClick={() => navigate(todayStr)}
+        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: isToday ? 600 : 400, padding: '4px 13px', cursor: 'pointer', border: `1px solid ${isToday ? '#a5b8c0' : '#1f1f24'}`, background: isToday ? '#131a1e' : 'transparent', color: isToday ? '#a5b8c0' : '#f5f5f7', letterSpacing: '0.04em', flex: '0 1 auto', whiteSpace: 'nowrap' }}>
         {isToday ? `TODAY / ${fmtDisplay(current)} CT` : `${fmtDisplay(current)} CT`}
       </button>
       <button onClick={() => navigate(next)} disabled={isFuture}

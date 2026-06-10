@@ -326,7 +326,6 @@ export function CheatSheetClient({
 
   return (
     <div style={{
-      minHeight: '100vh',
       background: '#0a0a0c',
       display: 'flex',
       flexDirection: 'column',
