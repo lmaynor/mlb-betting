@@ -34,7 +34,7 @@ export function BottomNav() {
     >
       {TABS.map(tab => {
         const active = pathname.startsWith(tab.href)
-        const color = active ? '#fcc20f' : '#71717a'
+        const color = active ? '#fcc20f' : '#888890'
         return (
           <Link
             key={tab.href}

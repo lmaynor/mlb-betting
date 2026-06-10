@@ -42,7 +42,7 @@ export function HowItWorks() {
             <div style={{ background: '#0a0a0c', borderBottom: B, padding: '6px 12px' }}>
               <span
                 className="dell-heading"
-                style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a' }}
+                style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890' }}
               >
                 STEP {step.num}
               </span>
@@ -55,7 +55,7 @@ export function HowItWorks() {
               >
                 {step.title}
               </h3>
-              <p className="times" style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.55 }}>{step.desc}</p>
+              <p className="times" style={{ fontSize: '13px', color: '#888890', lineHeight: 1.55 }}>{step.desc}</p>
             </div>
           </div>
         ))}

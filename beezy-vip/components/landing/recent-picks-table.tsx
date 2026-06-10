@@ -10,7 +10,7 @@ function resultTone(result: string | null) {
   if (r === 'win')  return { label: 'WIN',     color: '#b3bd95', bg: '#1a2218', border: '#8e9e78' }
   if (r === 'loss') return { label: 'LOSS',    color: '#d77a7a', bg: '#2a1818', border: '#b05050' }
   if (r === 'push') return { label: 'PUSH',    color: '#a5b8c0', bg: '#131a1e', border: '#7a9aa5' }
-  if (r === 'void') return { label: 'VOID',    color: '#71717a', bg: '#101014', border: '#3f3f46' }
+  if (r === 'void') return { label: 'VOID',    color: '#888890', bg: '#101014', border: '#3f3f46' }
   return             { label: 'PENDING', color: '#9ab6c8', bg: '#131e24', border: '#6a8fa0' }
 }
 
@@ -83,7 +83,7 @@ export async function RecentPicksTable() {
         <span className="dell-display" style={{ fontSize: '12px', color: 'var(--text)' }}>
           Recent Graded Plays
         </span>
-        <Link href="/results" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#0000ee', textDecoration: 'underline' }}>
+        <Link href="/results" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}>
           View results
         </Link>
       </div>
@@ -129,7 +129,7 @@ export async function RecentPicksTable() {
                       </span>
                     </div>
                     {bet.player && (
-                      <div className="mono" style={{ marginTop: '3px', fontSize: '10px', color: '#71717a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="mono" style={{ marginTop: '3px', fontSize: '10px', color: '#888890', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {pickText(bet)}
                       </div>
                     )}
@@ -168,7 +168,7 @@ export async function RecentPicksTable() {
                       {bet.player ?? pickText(bet)}
                     </div>
                     {bet.player && (
-                      <div className="mono" style={{ marginTop: '3px', fontSize: '11px', color: '#71717a', lineHeight: 1.35 }}>
+                      <div className="mono" style={{ marginTop: '3px', fontSize: '11px', color: '#888890', lineHeight: 1.35 }}>
                         {pickText(bet)}
                       </div>
                     )}

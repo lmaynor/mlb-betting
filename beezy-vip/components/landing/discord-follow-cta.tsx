@@ -103,7 +103,7 @@ export function DiscordFollowCTA() {
               fontWeight: 700,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
-              color: '#0000ee',
+              color: '#9999ff',
               textDecoration: 'underline',
             }}
           >

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #1f1f24'
 
 export function BankrollInput({ defaultValue }: { defaultValue: number }) {
   const [value,  setValue]  = useState(String(defaultValue))
@@ -51,7 +51,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           disabled={saving}
           className="mono"
           style={{
-            padding: '8px 16px', background: '#10b981', color: '#0a0a0c',
+            padding: '8px 16px', background: '#fcc20f', color: '#0a0a0c',
             fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em',
             textTransform: 'uppercase', cursor: saving ? 'not-allowed' : 'pointer',
             opacity: saving ? 0.5 : 1, border: 'none',
@@ -61,7 +61,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
         </button>
       </div>
       {error && (
-        <p className="mono" style={{ fontSize: '11px', color: '#ef4444', marginTop: '6px' }}>
+        <p className="mono" style={{ fontSize: '11px', color: '#d77a7a', marginTop: '6px' }}>
           {error}
         </p>
       )}

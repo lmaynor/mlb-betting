@@ -69,7 +69,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
   expanded: boolean
   onToggle: () => void
 }) {
-  const color = SYSTEM_COLOR[bet.system] ?? '#71717a'
+  const color = SYSTEM_COLOR[bet.system] ?? '#888890'
   const isProp = PLAYER_SYSTEMS.has(bet.system) || PITCHER_SYSTEMS.has(bet.system)
   const isGame = GAME_SYSTEMS.has(bet.system)
   const edge = fmtEdge(bet.edge)
@@ -81,26 +81,19 @@ function PickCard({ bet, rank, expanded, onToggle }: {
     : `${bet.away_team ?? '?'} @ ${bet.home_team ?? '?'}`
   const sub = [bet.bet_type, fmtOdds(bet.odds), bet.book].filter(Boolean).join(' / ')
 
-  const tierGlow: Record<string, string> = {
-    strong: `0 0 0 1px ${tierColor}30, 0 0 18px ${tierColor}14`,
-    lean: `0 0 0 1px ${tierColor}24, 0 0 14px ${tierColor}0f`,
-    watch: 'var(--shadow-card)',
-  }
-
   return (
     <div
       onClick={onToggle}
       className="card-hover"
       style={{
         background: '#0d0d12',
-        borderBottom: '1px solid #181820',
-        borderLeft: `3px solid ${tierColor}66`,
+        borderBottom: '1px solid #000',
+        borderLeft: `3px solid ${tierColor}`,
         display: 'flex',
         alignItems: 'stretch',
         minHeight: '104px',
         overflow: 'hidden',
         position: 'relative',
-        boxShadow: tierGlow[tier],
         cursor: 'pointer',
       }}
     >
@@ -109,8 +102,8 @@ function PickCard({ bet, rank, expanded, onToggle }: {
         minWidth: '86px',
         position: 'relative',
         overflow: 'hidden',
-        background: `linear-gradient(145deg, ${color}26 0%, #08080d 74%)`,
-        borderRight: `1px solid ${color}22`,
+        background: `${color}18`,
+        borderRight: `1px solid ${color}44`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -172,15 +165,13 @@ function PickCard({ bet, rank, expanded, onToggle }: {
         minWidth: 0,
       }}>
         <div style={{ marginBottom: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <span className="mono" style={{
+          <span className="dell-heading" style={{
             fontSize: '8px',
-            fontWeight: 800,
             letterSpacing: '0.1em',
             padding: '2px 6px',
             background: `${color}20`,
             color,
-            border: `1px solid ${color}44`,
-            borderRadius: 'var(--radius-sm)',
+            border: `1px solid ${color}`,
           }}>
             {SYSTEM_LABEL[bet.system] ?? bet.system}
           </span>
@@ -305,26 +296,24 @@ export function CheatSheetClient({
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
             <div>
-              <div style={{ fontSize: '22px', fontWeight: 850, color: '#f5f5f7', lineHeight: 1 }}>
-                BEEZY<span style={{ color: '#10b981' }}>.FYI</span>
+              <div className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', lineHeight: 1 }}>
+                BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
               </div>
               <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
                 MLB Daily Card
               </div>
-              <div className="mono" style={{ fontSize: '9px', color: '#737383', letterSpacing: '0.1em', marginTop: '5px' }}>
+              <div className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.1em', marginTop: '5px' }}>
                 {today}
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-              <div className="mono" style={{
+              <div className="dell-heading" style={{
                 fontSize: '8px',
-                fontWeight: 800,
                 letterSpacing: '0.12em',
-                color: '#10b981',
+                color: '#fcc20f',
                 padding: '4px 8px',
-                border: '1px solid #0f6e5644',
-                background: '#052016',
-                borderRadius: 'var(--radius-sm)',
+                border: '1px solid #000',
+                background: '#000',
               }}>
                 DAILY CARD
               </div>
@@ -349,7 +338,7 @@ export function CheatSheetClient({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
             {filtered.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span className="mono" style={{ fontSize: '9px', color: '#737383', letterSpacing: '0.08em' }}>
+                <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
                   TOP PLAY
                 </span>
                 <span style={{ fontSize: '13px', color: '#d4d4d8', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -367,10 +356,9 @@ export function CheatSheetClient({
               style={{
                 fontSize: '8px',
                 letterSpacing: '0.08em',
-                color: allExpanded ? '#10b981' : '#737383',
+                color: allExpanded ? '#a5b8c0' : '#888890',
                 background: 'transparent',
-                border: `1px solid ${allExpanded ? '#0f6e5644' : '#2a2a36'}`,
-                borderRadius: 'var(--radius-sm)',
+                border: `1px solid ${allExpanded ? '#a5b8c0' : '#2a2a36'}`,
                 padding: '4px 7px',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -390,10 +378,9 @@ export function CheatSheetClient({
                   padding: '5px 10px',
                   fontSize: '9px',
                   cursor: 'pointer',
-                  border: `0.5px solid ${filter === f.key ? '#10b981' : '#2a2a36'}`,
-                  borderRadius: 'var(--radius-sm)',
-                  background: filter === f.key ? '#10b98118' : 'transparent',
-                  color: filter === f.key ? '#10b981' : '#737383',
+                  border: `1px solid ${filter === f.key ? '#a5b8c0' : '#2a2a36'}`,
+                  background: filter === f.key ? '#131a1e' : 'transparent',
+                  color: filter === f.key ? '#a5b8c0' : '#888890',
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                 }}
@@ -414,21 +401,21 @@ export function CheatSheetClient({
             gap: '10px',
             alignItems: 'center',
           }}>
-            <span className="mono" style={{ fontSize: '9px', color: '#737383', letterSpacing: '0.08em' }}>
+            <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
               {filtered.length} PICKS
             </span>
             {strongCount > 0 && (
-              <span className="mono" style={{ fontSize: '9px', color: '#22c55e', letterSpacing: '0.06em', fontWeight: 800 }}>
+              <span className="dell-heading" style={{ fontSize: '9px', color: '#b3bd95', letterSpacing: '0.06em' }}>
                 {strongCount} STRONG
               </span>
             )}
             {leanCount > 0 && (
-              <span className="mono" style={{ fontSize: '9px', color: '#facc15', letterSpacing: '0.06em', fontWeight: 700 }}>
+              <span className="dell-heading" style={{ fontSize: '9px', color: '#fcc20f', letterSpacing: '0.06em' }}>
                 {leanCount} LEAN
               </span>
             )}
             {topEdgePct > 0 && (
-              <span className="mono" style={{ fontSize: '9px', color: '#10b981', letterSpacing: '0.06em' }}>
+              <span className="dell-heading" style={{ fontSize: '9px', color: '#c0d4a7', letterSpacing: '0.06em' }}>
                 BEST EDGE +{topEdgePct.toFixed(1)}%
               </span>
             )}
@@ -452,7 +439,7 @@ export function CheatSheetClient({
 
         {filtered.length === 0 ? (
           <div style={{ padding: '28px 20px', textAlign: 'center' }}>
-            <div className="mono" style={{ fontSize: '10px', color: '#737383', letterSpacing: '0.08em', marginBottom: '6px' }}>
+            <div className="mono" style={{ fontSize: '10px', color: '#888890', letterSpacing: '0.08em', marginBottom: '6px' }}>
               NO {filter.toUpperCase()} PICKS TODAY
             </div>
             <p style={{ fontSize: '12px', color: '#52525b', lineHeight: 1.5 }}>
@@ -480,7 +467,7 @@ export function CheatSheetClient({
                   padding: '10px',
                   fontSize: '10px',
                   letterSpacing: '0.08em',
-                  color: '#737383',
+                  color: '#888890',
                   background: '#0a0a0f',
                   border: 'none',
                   borderTop: '1px solid #1a1a22',
@@ -499,7 +486,7 @@ export function CheatSheetClient({
                   padding: '10px',
                   fontSize: '10px',
                   letterSpacing: '0.08em',
-                  color: '#737383',
+                  color: '#888890',
                   background: '#0a0a0f',
                   border: 'none',
                   borderTop: '1px solid #1a1a22',

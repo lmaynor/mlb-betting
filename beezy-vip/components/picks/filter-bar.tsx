@@ -5,17 +5,17 @@ import { useCallback, useState } from 'react'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
 import { SYSTEM_COLOR } from '@/lib/tokens'
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #1f1f24'
 
 const CHIP_BASE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: '6px',
   padding: '5px 10px',
-  borderRadius: '2px',
+  borderRadius: 0,
   border: B,
   background: '#111114',
-  color: '#a1a1aa',
+  color: '#888890',
   fontSize: '11px',
   fontFamily: 'var(--font-mono)',
   letterSpacing: '0.06em',
@@ -29,13 +29,13 @@ const CHIP_BASE: React.CSSProperties = {
 const CHIP_ACTIVE: React.CSSProperties = {
   ...CHIP_BASE,
   color: '#f5f5f7',
-  borderColor: '#3f3f46',
-  background: '#18181b',
+  borderColor: '#a5b8c0',
+  background: '#131a1e',
 }
 
 const SYSTEM_DOTS: Record<string, string> = {
-  ALL: '#71717a',
-  ...Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, SYSTEM_COLOR[system.key] ?? '#71717a'])),
+  ALL: '#888890',
+  ...Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, SYSTEM_COLOR[system.key] ?? '#888890'])),
 }
 
 // Sort options shown inline in the toggle bar
@@ -107,7 +107,7 @@ export function FilterBar() {
   function row(label: string, children: React.ReactNode) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: B }}>
-        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#71717a', letterSpacing: '0.08em', minWidth: '44px' }}>
+        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#888890', letterSpacing: '0.08em', minWidth: '44px' }}>
           {label}
         </span>
         {children}
@@ -142,12 +142,12 @@ export function FilterBar() {
             {activeCount > 0 && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: '16px', height: '16px', borderRadius: '50%',
-                background: '#10b981', color: '#0a0a0c',
+                width: '16px', height: '16px',
+                background: '#fcc20f', color: '#000', border: '1px solid #000',
                 fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700,
               }}>{activeCount}</span>
             )}
-            <span style={{ fontSize: '9px', color: '#71717a' }}>{open ? '▴' : '▾'}</span>
+            <span style={{ fontSize: '9px', color: '#888890' }}>{open ? '▴' : '▾'}</span>
           </button>
 
           {/* Active filter summary when collapsed */}
@@ -155,7 +155,7 @@ export function FilterBar() {
             <>
               {market !== 'ALL' && (
                 <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>
-                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: SYSTEM_DOTS[market] ?? '#71717a', display: 'inline-block' }} />
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: SYSTEM_DOTS[market] ?? '#888890', display: 'inline-block' }} />
                   {market}
                 </span>
               )}
@@ -168,7 +168,7 @@ export function FilterBar() {
 
         {/* Right: sort buttons — always visible */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#71717a', letterSpacing: '0.08em', marginRight: '4px' }}>SORT</span>
+          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#888890', letterSpacing: '0.08em', marginRight: '4px' }}>SORT</span>
           {SORT_OPTIONS.map(({ value, label }) => {
             const active = sort === value
             return (

@@ -33,7 +33,7 @@ export function Footer() {
                 padding: '8px 24px',
                 borderRight: i < ICON_NAV.length - 1 ? '1px solid #1f1f24' : 'none',
                 textDecoration: 'none',
-                color: '#0000ee',
+                color: '#9999ff',
               }}
             >
               <span style={{ fontSize: '20px', color: '#a1a1aa', lineHeight: 1 }}>{item.icon}</span>
@@ -54,7 +54,7 @@ export function Footer() {
             <div className="dell-display" style={{ fontSize: '16px', color: '#f5f5f7', marginBottom: '8px', letterSpacing: '0.02em' }}>
               BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
             </div>
-            <p className="times" style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.6, marginBottom: '12px' }}>
+            <p className="times" style={{ fontSize: '13px', color: '#888890', lineHeight: 1.6, marginBottom: '12px' }}>
               Machine learning models for sports betting. Built on data, not gut feelings.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -95,7 +95,7 @@ export function Footer() {
                 <Link
                   key={href}
                   href={href}
-                  style={{ display: 'block', fontSize: '12px', color: '#0000ee', textDecoration: 'underline', marginBottom: '6px', fontFamily: 'Times New Roman, Times, serif' }}
+                  style={{ display: 'block', fontSize: '12px', color: '#9999ff', textDecoration: 'underline', marginBottom: '6px', fontFamily: 'Times New Roman, Times, serif' }}
                 >
                   {label}
                 </Link>
@@ -112,16 +112,16 @@ export function Footer() {
           >
             PAPER MODE
           </span>
-          <p className="times" style={{ fontSize: '12px', color: '#71717a', lineHeight: 1.5 }}>
+          <p className="times" style={{ fontSize: '12px', color: '#888890', lineHeight: 1.5 }}>
             Beezy.FYI is in pre-launch paper mode. No real money is being wagered or transacted. Paid access opens when the first system clears its 200-bet validation gate.
           </p>
         </div>
 
         <div style={{ borderTop: '1px solid #1f1f24', paddingTop: '16px' }}>
-          <p className="times" style={{ fontSize: '12px', color: '#71717a', marginBottom: '4px', lineHeight: 1.5 }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
-          <p className="times" style={{ fontSize: '12px', color: '#71717a', marginBottom: '4px', lineHeight: 1.5 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet.</p>
-          <p className="times" style={{ fontSize: '12px', color: '#71717a', marginTop: '12px' }}>
-            &copy; {new Date().getFullYear()} <Link href="/" style={{ color: '#0000ee', textDecoration: 'underline' }}>Beezy.FYI</Link> &middot; All rights reserved
+          <p className="times" style={{ fontSize: '12px', color: '#888890', marginBottom: '4px', lineHeight: 1.5 }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
+          <p className="times" style={{ fontSize: '12px', color: '#888890', marginBottom: '4px', lineHeight: 1.5 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet.</p>
+          <p className="times" style={{ fontSize: '12px', color: '#888890', marginTop: '12px' }}>
+            &copy; {new Date().getFullYear()} <Link href="/" style={{ color: '#9999ff', textDecoration: 'underline' }}>Beezy.FYI</Link> &middot; All rights reserved
           </p>
         </div>
       </div>

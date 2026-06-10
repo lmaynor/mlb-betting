@@ -22,13 +22,13 @@ img, video { max-width: 100%; height: auto; }
   --surface-2:     #16161a;
   --border:        #1f1f24;
   --border-bright: #2a2a31;
-  --accent:        #10b981;
-  --win:           #10b981;
-  --loss:          #ef4444;
-  --warn:          #f59e0b;
-  --info:          #3b82f6;
+  --accent:        #b3bd95;
+  --win:           #b3bd95;
+  --loss:          #d77a7a;
+  --warn:          #e6915d;
+  --info:          #9ab6c8;
   --text:          #f5f5f7;
-  --muted:         #71717a;
+  --muted:         #888890;
   --sec:           #a1a1aa;
 
   /* Border radius -- Dell 1996: square everything */
@@ -40,10 +40,10 @@ img, video { max-width: 100%; height: auto; }
   --shadow-card:     none;
   --shadow-elevated: none;
 
-  /* Confidence tier colors */
-  --strong: #22c55e;
-  --lean:   #facc15;
-  --watch:  #94a3b8;
+  /* Confidence tier colors -- Dell tints */
+  --strong: #b3bd95;
+  --lean:   #fcc20f;
+  --watch:  #a5b8c0;
 
   /* ── Dell 1996 Design System ───────────────────────── */
   --dell-primary:   #e91d2a;   /* Dell Red -- CTA + phone callout only */
@@ -334,7 +334,8 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .article-body li { margin-bottom: 6px; }
 .article-body pre { background: #111114; border: 0.5px solid #1f1f24; padding: 16px; border-radius: 4px; overflow-x: auto; margin-bottom: 16px; }
 .article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #10b981; }
-.article-body a { color: #10b981; }
+.article-body a { color: #9999ff; }
+.article-body code { color: #b3bd95; }
 /* ── Interactive card hover -- Dell: hard border highlight, no lift ── */
 .card-hover {
   transition: border-color .1s ease;

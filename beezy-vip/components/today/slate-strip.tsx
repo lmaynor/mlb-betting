@@ -2,8 +2,8 @@ import { apiGetTodayPicks } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
 
 const SYSTEM_COLOR: Record<string, string> = {
-  NRFI: '#10b981', HR: '#f59e0b', F5: '#3b82f6',
-  K: '#a78bfa', OUTS: '#fb923c', BATTER_HITS: '#e879f9',
+  NRFI: '#b3bd95', HR: '#e6915d', F5: '#9ab6c8',
+  K: '#8c9ae0', OUTS: '#e6915d', BATTER_HITS: '#8c9ae0',
 }
 
 export async function SlateStrip() {
@@ -37,14 +37,14 @@ export async function SlateStrip() {
           const score = topPick ? beezyscore(topPick) : 0
           const tier  = topPick ? scoreTier(score) : 'watch'
           const color = topPick ? TIER_COLOR[tier] : '#2a2a31'
-          const sysColor = topPick ? (SYSTEM_COLOR[topPick.system] ?? '#71717a') : '#71717a'
+          const sysColor = topPick ? (SYSTEM_COLOR[topPick.system] ?? '#888890') : '#888890'
 
           return (
             <div key={key} style={{
               minWidth: '100px', padding: '8px 10px',
               background: hasPick ? `${sysColor}0d` : '#111114',
-              border: `0.5px solid ${hasPick ? `${color}44` : '#1f1f24'}`,
-              borderRadius: 'var(--radius-sm)',
+              border: `1px solid ${hasPick ? `${color}66` : '#1f1f24'}`,
+              borderRadius: 0,
               display: 'flex', flexDirection: 'column', gap: '4px',
               flexShrink: 0,
             }}>
@@ -56,7 +56,7 @@ export async function SlateStrip() {
                   <span style={{
                     fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: 700,
                     padding: '1px 5px', background: `${sysColor}20`, color: sysColor,
-                    border: `0.5px solid ${sysColor}44`, borderRadius: '3px',
+                    border: `1px solid ${sysColor}66`, borderRadius: 0,
                   }}>
                     {topPick.system}
                   </span>

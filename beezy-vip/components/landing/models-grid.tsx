@@ -51,10 +51,10 @@ export async function ModelsGrid() {
     <section style={{ padding: '24px 20px', borderBottom: B }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
         <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--muted)' }}>Active Systems</span>
-        <Link href="/models" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#0000ee', textDecoration: 'underline' }}>Full methodology &rarr;</Link>
+        <Link href="/models" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}>Full methodology &rarr;</Link>
       </div>
       <div style={{ border: B, padding: '40px', textAlign: 'center' }}>
-        <p className="times" style={{ fontSize: '13px', color: '#71717a' }}>Loading systems&hellip;</p>
+        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Loading systems&hellip;</p>
       </div>
     </section>
   )
@@ -69,7 +69,7 @@ export async function ModelsGrid() {
         <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>Active Systems</span>
         <Link
           href="/models"
-          style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#0000ee', textDecoration: 'underline' }}
+          style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}
         >
           Full methodology &rarr;
         </Link>
@@ -131,8 +131,8 @@ export async function ModelsGrid() {
                 >
                   {[['WR', s.win_rate.toFixed(1)+'%'], ['Bets', String(s.total_bets)], ['Gate', s.total_bets+'/200']].map(([label, val]) => (
                     <div key={label}>
-                      <div className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.1em', color: '#71717a' }}>{label}</div>
-                      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: label === 'Gate' ? '#71717a' : meta.tint }}>{val}</div>
+                      <div className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.1em', color: '#888890' }}>{label}</div>
+                      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: label === 'Gate' ? '#888890' : meta.tint }}>{val}</div>
                     </div>
                   ))}
                 </div>

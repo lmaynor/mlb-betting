@@ -43,8 +43,8 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#f5f5f7' }}>Picks</h1>
-            <p style={{ fontSize: '13px', color: '#a1a1aa', marginTop: '5px', maxWidth: '560px', lineHeight: 1.55 }}>
+            <h1 className="dell-display" style={{ fontSize: '18px', color: '#f5f5f7' }}>Picks</h1>
+            <p className="times" style={{ fontSize: '13px', color: '#888890', marginTop: '5px', maxWidth: '560px', lineHeight: 1.55 }}>
               Every model-qualified MLB play across {PICK_SYSTEMS.length} systems, ranked by Beezy Score with market, book, edge, and result context.
             </p>
           </div>
@@ -57,9 +57,9 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
               color: '#0a0a0c',
-              background: '#10b981',
+              background: '#fcc20f',
               padding: '8px 12px',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 0,
               textDecoration: 'none',
             }}
           >
@@ -67,8 +67,8 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
           </a>
         </div>
         <Suspense fallback={
-          <div style={{ padding: '40px', textAlign: 'center', border: '0.5px solid #1f1f24', borderRadius: 'var(--radius)' }}>
-            <p className="mono" style={{ fontSize: '12px', color: '#71717a' }}>Loading picks...</p>
+          <div style={{ padding: '40px', textAlign: 'center', border: '1px solid #1f1f24' }}>
+            <p className="mono" style={{ fontSize: '12px', color: '#888890' }}>Loading picks...</p>
           </div>
         }>
           <PicksContent searchParams={searchParams} />

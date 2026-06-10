@@ -2,7 +2,7 @@ import { getArticle, ARTICLES } from '@/lib/articles-static'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #1f1f24'
 
 export function generateStaticParams() {
   return ARTICLES.map(a => ({ slug: a.slug }))
@@ -37,7 +37,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   return (
     <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
-        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '10px' }}>
+        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', marginBottom: '10px' }}>
           {article.category} · {article.keyword}
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f5f5f7', lineHeight: 1.3 }}>{article.title}</h1>
@@ -47,7 +47,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         dangerouslySetInnerHTML={{ __html: `<p>${html}</p>` }}
       />
       <div style={{ marginTop: '48px', paddingTop: '24px', borderTop: B }}>
-        <a href="/learn" style={{ fontSize: '12px', color: '#10b981', textDecoration: 'none', fontFamily: 'monospace' }}>← Back to Learn</a>
+        <a href="/learn" style={{ fontSize: '12px', color: '#9999ff', textDecoration: 'underline', fontFamily: 'monospace' }}>← Back to Learn</a>
       </div>
     </div>
   )

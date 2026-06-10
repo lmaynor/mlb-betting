@@ -3,7 +3,7 @@
 import { LineChart, Line, ReferenceLine, ResponsiveContainer, Tooltip } from 'recharts'
 import type { SparklinePoint } from '@/lib/betting-api'
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #000'
 
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
@@ -11,8 +11,8 @@ function CustomTooltip({ active, payload }: any) {
   const pos = d.cum_pnl >= 0
   return (
     <div style={{ background: '#111114', border: B, padding: '6px 10px' }}>
-      <div className="mono" style={{ fontSize: '9px', color: '#71717a', marginBottom: '2px' }}>{d.date}</div>
-      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: pos ? '#10b981' : '#ef4444' }}>
+      <div className="mono" style={{ fontSize: '9px', color: '#888890', marginBottom: '2px' }}>{d.date}</div>
+      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: pos ? '#b3bd95' : '#d77a7a' }}>
         {pos ? '+' : ''}{(d.cum_pnl / 10).toFixed(2)}u
       </div>
     </div>
@@ -22,14 +22,14 @@ function CustomTooltip({ active, payload }: any) {
 export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
   if (!data || data.length < 2) return null
 
-  const final   = data[data.length - 1].cum_pnl
-  const lineColor = final >= 0 ? '#10b981' : '#ef4444'
-  const settled = data.reduce((s, d) => s + (d.daily_pnl !== 0 ? 1 : 0), 0)
+  const final    = data[data.length - 1].cum_pnl
+  const lineColor = final >= 0 ? '#b3bd95' : '#d77a7a'
+  const settled  = data.reduce((s, d) => s + (d.daily_pnl !== 0 ? 1 : 0), 0)
 
   return (
-    <div style={{ borderTop: B, padding: '12px 18px 14px' }}>
+    <div style={{ borderTop: B, padding: '12px 18px 14px', gridColumn: '1 / -1' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>
+        <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890' }}>
           30D cumulative &middot; paper &middot; {settled} settled
         </span>
         <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: lineColor }}>

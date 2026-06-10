@@ -35,7 +35,7 @@ export async function Hero() {
         {/* Left: Dell-red CTA panel */}
         <div
           className="hero-left"
-          style={{ padding: '48px 24px 40px', borderRight: B, background: '#e91d2a', position: 'relative' }}
+          style={{ padding: '48px 24px 40px', borderRight: B, background: '#c91525', position: 'relative' }}
         >
           {/* Eyebrow */}
           <div
@@ -56,7 +56,7 @@ export async function Hero() {
           {/* Body copy -- Times New Roman for 1996 feel */}
           <p
             className="times"
-            style={{ fontSize: '15px', lineHeight: 1.6, color: 'rgba(255,255,255,0.85)', marginBottom: '28px', maxWidth: '380px' }}
+            style={{ fontSize: '15px', lineHeight: 1.6, color: '#fff', marginBottom: '28px', maxWidth: '380px' }}
           >
             Beezy turns model edge, market price, and Kelly signal into a simple
             0&ndash;100 score so the best plays are easy to scan, screenshot, and track.
@@ -135,38 +135,38 @@ export async function Hero() {
 
           {/* Season ROI */}
           <div style={{ padding: '22px 18px', borderBottom: B, borderRight: B, background: '#111114' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Season ROI</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiAvail ? (roiPos ? '#b3bd95' : '#d77a7a') : '#71717a' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '8px' }}>Season ROI</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: roiAvail ? (roiPos ? '#b3bd95' : '#d77a7a') : '#888890' }}>
               {roiAvail ? (roiPos ? '+' : '') + stats.roi + '%' : stats.roi}
             </div>
-            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>{stats.total_bets} settled bets</div>
+            <div className="times" style={{ fontSize: '12px', color: '#888890' }}>{stats.total_bets} settled bets</div>
           </div>
 
           {/* Win Rate */}
           <div style={{ padding: '22px 18px', borderBottom: B, background: '#111114' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Win Rate</div>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '8px' }}>Win Rate</div>
             <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>
               {stats.win_rate !== '--' ? stats.win_rate + '%' : stats.win_rate}
             </div>
-            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>W / (W+L)</div>
+            <div className="times" style={{ fontSize: '12px', color: '#888890' }}>W / (W+L)</div>
           </div>
 
           {/* Settled Bets */}
           <div style={{ padding: '22px 18px', borderRight: B, background: '#0f1a14' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Settled Bets</div>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '8px' }}>Settled Bets</div>
             <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: '#f5f5f7' }}>
               {stats.total_bets}
             </div>
-            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>{PICK_SYSTEMS.length} systems &middot; MLB</div>
+            <div className="times" style={{ fontSize: '12px', color: '#888890' }}>{PICK_SYSTEMS.length} systems &middot; MLB</div>
           </div>
 
           {/* Avg Edge */}
           <div style={{ padding: '22px 18px', background: '#0f1a14' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '8px' }}>Avg Edge</div>
-            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: stats.avg_edge !== '--' ? '#b3bd95' : '#71717a' }}>
+            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '8px' }}>Avg Edge</div>
+            <div className="mono" style={{ fontSize: 'clamp(20px, 2.2vw, 28px)', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: stats.avg_edge !== '--' ? '#b3bd95' : '#888890' }}>
               {stats.avg_edge !== '--' ? '+' + stats.avg_edge + '%' : stats.avg_edge}
             </div>
-            <div className="times" style={{ fontSize: '12px', color: '#71717a' }}>Model vs implied</div>
+            <div className="times" style={{ fontSize: '12px', color: '#888890' }}>Model vs implied</div>
           </div>
 
           <HeroSparkline data={sparkline} />

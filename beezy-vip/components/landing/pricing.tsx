@@ -50,7 +50,7 @@ export function PricingSection() {
       {/* Section eyebrow */}
       <div style={{ marginBottom: '24px', textAlign: 'center' }}>
         <h1 className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', marginBottom: '8px' }}>Pricing</h1>
-        <p className="times" style={{ fontSize: '13px', color: '#71717a' }}>
+        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>
           {PRE_LAUNCH ? 'Pre-launch — Join the waitlist. Prices lock at launch.' : 'All plans include a 7-day money-back guarantee'}
         </p>
       </div>
@@ -78,7 +78,7 @@ export function PricingSection() {
             <div style={{ padding: '20px 16px', background: t.tintBg, flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '20px' }}>
                 <span className="dell-display" style={{ fontSize: '32px', color: t.tint, lineHeight: 1 }}>{t.price}</span>
-                <span className="times" style={{ fontSize: '13px', color: '#71717a', marginBottom: '4px' }}>{t.period}</span>
+                <span className="times" style={{ fontSize: '13px', color: '#888890', marginBottom: '4px' }}>{t.period}</span>
               </div>
               <ul style={{ listStyle: 'none', marginBottom: '24px', flex: 1 }}>
                 {t.features.map(f => (
@@ -115,7 +115,7 @@ export function PricingSection() {
           </div>
         ))}
       </div>
-      <p className="times" style={{ textAlign: 'center', fontSize: '12px', color: '#71717a', marginTop: '16px' }}>
+      <p className="times" style={{ textAlign: 'center', fontSize: '12px', color: '#888890', marginTop: '16px' }}>
         {PRE_LAUNCH ? 'Models enter paid mode after clearing 200-bet gate. Currently in paper mode.' : 'Cancel anytime.'}
       </p>
     </section>

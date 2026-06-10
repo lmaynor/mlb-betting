@@ -4,15 +4,17 @@
  */
 import type { Bet } from '@/lib/types'
 
-// Border constant
-export const B = '0.5px solid #1f1f24'
+// Border constant -- Dell 1996: hard 1px black for outer frames
+export const B = '1px solid #000'
+// Softer inner border for table rows and subdividers
+export const B_INNER = '1px solid #1f1f24'
 
 // Confidence tier colors (mirror --strong/--lean/--watch in globals.css)
 export type ScoreTier = 'strong' | 'lean' | 'watch'
 export const TIER_COLOR: Record<ScoreTier, string> = {
-  strong: '#22c55e',
-  lean:   '#facc15',
-  watch:  '#94a3b8',
+  strong: '#b3bd95',   // sage -- WIN color, high confidence
+  lean:   '#fcc20f',   // Dell yellow -- worth a look
+  watch:  '#a5b8c0',   // steel -- neutral signal
 }
 export const TIER_LABEL: Record<ScoreTier, string> = {
   strong: 'STRONG PLAY',

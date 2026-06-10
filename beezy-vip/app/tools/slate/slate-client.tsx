@@ -12,10 +12,10 @@ const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTE
 // ---- helpers -----------------------------------------------------------------
 
 function edgeColor(e: number) {
-  if (e >= 8)  return '#10b981'
-  if (e >= 5)  return '#f59e0b'
-  if (e >  0)  return '#71717a'
-  return '#ef4444'
+  if (e >= 8)  return '#b3bd95'
+  if (e >= 5)  return '#e6915d'
+  if (e >  0)  return '#888890'
+  return '#d77a7a'
 }
 
 function fmt(n: number) { return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%` }
@@ -30,9 +30,9 @@ function Chip({ label, active, color, onClick }: {
     <button onClick={onClick} style={{
       padding: '4px 10px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
       fontWeight: active ? 600 : 400,
-      border: `0.5px solid ${active ? (color ?? '#10b981') : '#2a2a31'}`,
-      background: active ? `${color ?? '#10b981'}18` : 'transparent',
-      color: active ? (color ?? '#10b981') : '#52525b',
+      border: `1px solid ${active ? (color ?? '#a5b8c0') : '#2a2a31'}`,
+      background: active ? `${color ?? '#a5b8c0'}18` : 'transparent',
+      color: active ? (color ?? '#a5b8c0') : '#52525b',
       cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' as const,
     }}>{label}</button>
   )
@@ -48,7 +48,7 @@ function SystemPill({ system, edgePct }: { system: string; edgePct: number }) {
       fontWeight: 600, letterSpacing: '0.06em',
     }}>
       <span style={{ color: p.color }}>{system}</span>
-      <span style={{ color: edgeColor(edgePct), borderLeft: `0.5px solid ${p.border.slice(12)}`, paddingLeft: '5px' }}>
+      <span style={{ color: edgeColor(edgePct), borderLeft: `1px solid ${p.border.slice(11)}`, paddingLeft: '5px' }}>
         {fmt(edgePct)}
       </span>
     </span>
@@ -79,7 +79,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
         <div>
           <div style={{ fontSize: '12px', color: '#f5f5f7', fontWeight: 600, marginBottom: '4px' }}>{label}</div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
+            <span className="mono" style={{ fontSize: '11px', color: '#888890' }}>
               {fmtOdds(pick.odds)}
             </span>
             <span className="mono" style={{ fontSize: '11px', color: edgeColor(pick.edge_pct), fontWeight: 600 }}>
@@ -95,7 +95,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
       {notes.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {notes.map((n, i) => (
-            <span key={i} className="mono" style={{ fontSize: '10px', color: '#3f3f46', background: '#111114', padding: '3px 8px', border: '0.5px solid #1f1f24' }}>
+            <span key={i} className="mono" style={{ fontSize: '10px', color: '#3f3f46', background: '#111114', padding: '3px 8px', border: '1px solid #1f1f24' }}>
               {n}
             </span>
           ))}
@@ -205,9 +205,9 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Header */}
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px' }}>Tools -- Pro</p>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '4px', letterSpacing: '-0.01em' }}>Slate Command Center</h1>
-          <p style={{ fontSize: '13px', color: '#71717a' }}>{dateLabel} &mdash; {slateData.total_games} games &mdash; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</p>
+          <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Tools — Pro</p>
+          <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '4px' }}>Slate Command Center</h1>
+          <p className="times" style={{ fontSize: '13px', color: '#888890' }}>{dateLabel} &mdash; {slateData.total_games} games &mdash; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {slateData.as_of && (
@@ -218,7 +218,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           <button
             onClick={() => void refresh()}
             disabled={refreshing}
-            style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? '#3f3f46' : '#71717a', cursor: refreshing ? 'default' : 'pointer' }}
+            style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? '#3f3f46' : '#888890', cursor: refreshing ? 'default' : 'pointer' }}
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -232,7 +232,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
             onClick={() => setPicksOnly(o => !o)}
             style={{
               width: '28px', height: '16px',
-              background: picksOnly ? '#10b981' : '#1f1f24',
+              background: picksOnly ? '#a5b8c0' : '#1f1f24',
               borderRadius: '8px', position: 'relative' as const, display: 'inline-block',
               flexShrink: 0, cursor: 'pointer', transition: 'background 0.15s',
             }}
@@ -245,7 +245,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
               borderRadius: '50%', transition: 'left 0.15s',
             }} />
           </span>
-          <span className="mono" style={{ fontSize: '10px', color: '#71717a', letterSpacing: '0.05em', textTransform: 'uppercase', userSelect: 'none' }}>Picks only</span>
+          <span className="mono" style={{ fontSize: '10px', color: '#888890', letterSpacing: '0.05em', textTransform: 'uppercase', userSelect: 'none' }}>Picks only</span>
         </label>
 
         <div style={{ width: '0.5px', background: '#1f1f24', height: '20px', flexShrink: 0 }} />

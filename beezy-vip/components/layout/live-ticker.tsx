@@ -26,14 +26,14 @@ export async function LiveTicker() {
   const doubled = [...ticks, ...ticks]
 
   return (
-    <div className="live-ticker-shell" style={{ borderBottom: '0.5px solid #1f1f24', background: '#111114', overflow: 'hidden', padding: '7px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-      <div style={{ position: 'sticky', left: 0, zIndex: 10, background: '#111114', padding: '0 12px 0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderRight: '0.5px solid #1f1f24' }}>
+    <div className="live-ticker-shell" style={{ borderBottom: '1px solid #1f1f24', background: '#111114', overflow: 'hidden', padding: '7px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'sticky', left: 0, zIndex: 10, background: '#111114', padding: '0 12px 0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderRight: '1px solid #1f1f24' }}>
         <span className="live-dot" />
         <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525b', whiteSpace: 'nowrap' }}>Recent</span>
       </div>
       <div className="ticker-track" style={{ flex: 1, overflow: 'hidden' }}>
         {doubled.map((t, i) => (
-          <span key={i} className="mono" style={{ fontSize: '11px', color: '#71717a', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
             <span>{t.result === 'win' ? 'W' : 'L'}</span>
             <span style={{ color: '#3d3d42' }}>/</span>
             <span>{t.system}</span>

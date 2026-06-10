@@ -19,7 +19,7 @@ export function LiveDot({ label }: { label?: string }) {
       {label && (
         <span
           className="dell-heading"
-          style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#71717a' }}
+          style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890' }}
         >
           {label}
         </span>
@@ -45,7 +45,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '20px', border: '1px solid #000', background: '#111114' }}>
       <span
         className="dell-heading"
-        style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#71717a', marginBottom: '4px' }}
+        style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '4px' }}
       >
         {label}
       </span>
@@ -55,14 +55,14 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
       >
         {value}
       </span>
-      {sub && <span className="mono" style={{ fontSize: '11px', color: '#71717a' }}>{sub}</span>}
+      {sub && <span className="mono" style={{ fontSize: '11px', color: '#888890' }}>{sub}</span>}
     </div>
   )
 }
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading" style={{ fontSize: '9px', color: '#71717a' }}>PENDING</span>
+    return <span className="dell-heading" style={{ fontSize: '9px', color: '#888890' }}>PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -70,7 +70,7 @@ export function ResultPill({ result }: { result: string | null }) {
   const style = isWin
     ? { background: '#1a2218', color: '#b3bd95', border: '1px solid #8e9e78' }
     : isPush || isVoid
-    ? { background: '#1f1f24', color: '#71717a', border: '1px solid #2a2a31' }
+    ? { background: '#1f1f24', color: '#888890', border: '1px solid #2a2a31' }
     : { background: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' }
   return (
     <span
@@ -83,7 +83,7 @@ export function ResultPill({ result }: { result: string | null }) {
 }
 
 export function PnL({ value }: { value: number | null }) {
-  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: '#71717a' }}>—</span>
+  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: '#888890' }}>—</span>
   const pos = value >= 0
   return (
     <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? '#b3bd95' : '#d77a7a' }}>
@@ -96,7 +96,7 @@ export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div style={{ marginBottom: '24px' }}>
       <h2 className="dell-display" style={{ fontSize: '18px', color: '#f5f5f7' }}>{label}</h2>
-      {sub && <p className="times" style={{ fontSize: '13px', color: '#71717a', marginTop: '6px', lineHeight: 1.5 }}>{sub}</p>}
+      {sub && <p className="times" style={{ fontSize: '13px', color: '#888890', marginTop: '6px', lineHeight: 1.5 }}>{sub}</p>}
     </div>
   )
 }

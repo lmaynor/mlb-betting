@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Today's MLB picks from all Beezy.FYI machine learning systems.",
 }
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #1f1f24'
 
 export default async function MLBPicksPage() {
   const stats = await apiGetStats().then(s => s.bySystem).catch(() => [])
@@ -20,9 +20,9 @@ export default async function MLBPicksPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px' }}>Picks</p>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '4px' }}>MLB Picks</h1>
-        <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>{PICK_SYSTEMS.length} systems &middot; DraftKings &middot; Paper mode</p>
+        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Picks</p>
+        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '4px' }}>MLB Picks</h1>
+        <p className="mono" style={{ fontSize: '13px', color: '#888890' }}>{PICK_SYSTEMS.length} systems &middot; DraftKings &middot; Paper mode</p>
       </div>
 
       <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B }}>
@@ -53,7 +53,7 @@ export default async function MLBPicksPage() {
                   {s.shortName}
                 </span>
                 {roi !== null && (
-                  <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roi >= 0 ? '#10b981' : '#ef4444' }}>
+                  <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roi >= 0 ? '#b3bd95' : '#d77a7a' }}>
                     {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
                   </span>
                 )}
@@ -61,16 +61,16 @@ export default async function MLBPicksPage() {
               <div style={{ fontSize: '13px', fontWeight: 600, color: '#f5f5f7', marginBottom: '12px' }}>{s.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', paddingTop: '10px', borderTop: B }}>
                 <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#71717a' }}>Win Rate</div>
+                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Win Rate</div>
                   <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{wr !== null ? `${wr.toFixed(1)}%` : '--'}</div>
                 </div>
                 <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#71717a' }}>Bets</div>
+                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Bets</div>
                   <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{bets}</div>
                 </div>
                 <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#71717a' }}>Gate</div>
-                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#71717a' }}>{bets}/200</div>
+                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Gate</div>
+                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#888890' }}>{bets}/200</div>
                 </div>
               </div>
             </Link>

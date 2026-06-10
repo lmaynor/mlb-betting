@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-const B = '0.5px solid #1f1f24'
+const B = '1px solid #1f1f24'
 
 export default function BlockedPage({
   searchParams,
@@ -17,7 +17,7 @@ export default function BlockedPage({
   return (
     <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 16px' }}>
       <div style={{ width: '100%', maxWidth: '440px', textAlign: 'center' }}>
-        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '16px' }}>
+        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', marginBottom: '16px' }}>
           Unavailable
         </p>
         <h1 style={{ fontSize: '22px', fontWeight: 600, color: '#f5f5f7', letterSpacing: '-0.01em', marginBottom: '16px' }}>
@@ -27,7 +27,7 @@ export default function BlockedPage({
           Beezy.FYI is not currently available in <strong style={{ color: '#f5f5f7' }}>{region}</strong>{' '}
           due to local regulations. We&apos;re working to expand availability.
         </p>
-        <p className="mono" style={{ fontSize: '11px', color: '#71717a' }}>
+        <p className="times" style={{ fontSize: '11px', color: '#888890' }}>
           If you believe this is an error or are accessing via VPN, contact us to resolve it.
         </p>
       </div>

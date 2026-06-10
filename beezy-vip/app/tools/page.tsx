@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description: 'Odds calculator, Kelly criterion calculator, edge finder, NRFI conditions, and pitcher matchup dashboard.',
 }
 
-const B  = '0.5px solid #1f1f24'
-const BH = '0.5px solid #2a2a31'
+const B  = '1px solid #1f1f24'
+const BH = '1px solid #2a2a31'
 
 const TOOLS = [
   { href: '/tools/clv-tracker',   title: 'CLV + Edge Tracker',           description: 'Each pick plotted by model edge vs. closing line value. Positive CLV in the top-right proves the model finds real inefficiencies.', tag: 'Pro',     keywords: 'closing line value · model edge · clv scatter' },
@@ -23,17 +23,17 @@ const TOOLS = [
 ]
 
 const TAG: Record<string, { color: string; bg: string; border: string }> = {
-  Free:    { color: '#10b981', bg: '#052016', border: '0.5px solid #0f6e56' },
-  Partial: { color: '#f59e0b', bg: '#1c1207', border: '0.5px solid #854f0b' },
-  Pro:     { color: '#a78bfa', bg: '#0e0718', border: '0.5px solid #534ab7' },
+  Free:    { color: '#b3bd95', bg: '#1a2218', border: '1px solid #8e9e78' },
+  Partial: { color: '#e6915d', bg: '#1c1207', border: '1px solid #a05d30' },
+  Pro:     { color: '#8c9ae0', bg: '#0e0718', border: '1px solid #534ab7' },
 }
 
 export default function ToolsPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px', letterSpacing: '-0.01em' }}>Betting tools</h1>
-        <p className="mono" style={{ fontSize: '13px', color: '#71717a' }}>Free calculators. Pro dashboards for members.</p>
+        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>Betting tools</h1>
+        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Free calculators. Pro dashboards for members.</p>
       </div>
 
       <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
@@ -51,7 +51,7 @@ export default function ToolsPage() {
                 {tool.tag.toUpperCase()}
               </span>
               <div style={{ fontSize: '13px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>{tool.title}</div>
-              <div style={{ fontSize: '12px', color: '#71717a', lineHeight: 1.55, marginBottom: '12px' }}>{tool.description}</div>
+              <div style={{ fontSize: '12px', color: '#888890', lineHeight: 1.55, marginBottom: '12px' }}>{tool.description}</div>
               <div className="mono" style={{ fontSize: '9px', color: '#2a2a31' }}>{tool.keywords}</div>
             </Link>
           )

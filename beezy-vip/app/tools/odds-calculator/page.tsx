@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { americanToImpliedProb, removeVig, probToAmerican, formatProb, formatOdds } from '@/lib/odds'
 
-const B = '0.5px solid #1f1f24'
-const inputStyle: React.CSSProperties = { width: '100%', background: '#111114', border: B, color: '#f5f5f7', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', display: 'block', marginBottom: '6px' }
+const B = '1px solid #1f1f24'
+const inputStyle: React.CSSProperties = { width: '100%', background: '#111114', border: B, color: '#f5f5f7', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 0 }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', display: 'block', marginBottom: '6px' }
 
 export default function OddsCalculatorPage() {
   const [odds1, setOdds1] = useState('')
@@ -22,9 +22,9 @@ export default function OddsCalculatorPage() {
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#10b981', marginBottom: '6px' }}>Tools</p>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>Odds &amp; Vig Calculator</h1>
-        <p style={{ fontSize: '13px', color: '#71717a' }}>Enter American odds for both sides. Get implied probability, vig, and fair value odds.</p>
+        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Tools</p>
+        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>Odds &amp; Vig Calculator</h1>
+        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Enter American odds for both sides. Get implied probability, vig, and fair value odds.</p>
       </div>
 
       <div style={{ border: B, padding: '20px', marginBottom: '16px' }}>
@@ -37,8 +37,8 @@ export default function OddsCalculatorPage() {
       {result && (
         <div style={{ border: B, overflow: 'hidden', marginBottom: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#111114', borderBottom: B }}>
-            <div /><div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Side 1</div>
-            <div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a' }}>Side 2</div>
+            <div /><div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890' }}>Side 1</div>
+            <div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890' }}>Side 2</div>
           </div>
           {[
             { label: 'Input Odds',   v1: formatOdds(o1),                          v2: formatOdds(o2) },
@@ -47,22 +47,22 @@ export default function OddsCalculatorPage() {
             { label: 'Fair Odds',    v1: formatOdds(probToAmerican(result.fair1)),v2: formatOdds(probToAmerican(result.fair2)) },
           ].map((row, i) => (
             <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', borderBottom: i < 3 ? B : undefined }}>
-              <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#71717a' }}>{row.label}</div>
+              <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#888890' }}>{row.label}</div>
               <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{row.v1}</div>
               <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{row.v2}</div>
             </div>
           ))}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: '#111114' }}>
-            <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#71717a' }}>Vig</div>
-            <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#ef4444', gridColumn: 'span 2' }}>{result.vig.toFixed(2)}%</div>
+            <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: '#888890' }}>Vig</div>
+            <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#d77a7a', gridColumn: 'span 2' }}>{result.vig.toFixed(2)}%</div>
           </div>
         </div>
       )}
 
       <div style={{ border: B, padding: '16px' }}>
-        <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#71717a', marginBottom: '10px' }}>How it works</div>
-        <p style={{ fontSize: '12px', color: '#71717a', lineHeight: 1.6, marginBottom: '8px' }}>Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
-        <p style={{ fontSize: '12px', color: '#71717a', lineHeight: 1.6 }}>If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" style={{ color: '#3b82f6' }}>Kelly Calculator</a> to size your stake.</p>
+        <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', marginBottom: '10px' }}>How it works</div>
+        <p className="times" style={{ fontSize: '12px', color: '#888890', lineHeight: 1.6, marginBottom: '8px' }}>Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
+        <p className="times" style={{ fontSize: '12px', color: '#888890', lineHeight: 1.6 }}>If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" style={{ color: '#9999ff', textDecoration: 'underline' }}>Kelly Calculator</a> to size your stake.</p>
       </div>
     </div>
   )
