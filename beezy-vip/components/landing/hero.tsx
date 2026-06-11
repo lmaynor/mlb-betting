@@ -35,7 +35,7 @@ export async function Hero() {
         {/* Left: dark-green CTA panel */}
         <div
           className="hero-left"
-          style={{ padding: '48px 24px 40px', borderRight: B, background: '#0e1f0d', position: 'relative' }}
+          style={{ padding: '48px 24px 40px', borderRight: B, background: '#0e1f0d', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
         >
           {/* Eyebrow */}
           <div

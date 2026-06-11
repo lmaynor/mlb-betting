@@ -9,24 +9,9 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section style={{ padding: '24px 20px', borderBottom: B_INNER }}>
-      {/* Section eyebrow -- Dell olive-style display block */}
-      <div
-        style={{
-          background: '#1c1c0a',
-          border: B,
-          borderBottom: 'none',
-          padding: '10px 16px',
-          display: 'inline-block',
-          marginBottom: 0,
-        }}
-      >
-        <span
-          className="dell-display"
-          style={{ fontSize: '13px', color: '#8e8a25', letterSpacing: '0.04em' }}
-        >
-          How It Works
-        </span>
+    <section style={{ padding: '40px 20px 32px', borderBottom: B_INNER }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '14px', gap: '12px' }}>
+        <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>How It Works</span>
       </div>
 
       <div className="steps-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B, overflow: 'hidden' }}>

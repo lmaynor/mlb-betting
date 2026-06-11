@@ -78,9 +78,9 @@ export async function RecentPicksTable() {
   const COL = '112px 78px minmax(116px, 0.7fr) minmax(260px, 1.4fr) 72px'
 
   return (
-    <section style={{ padding: '24px 20px', borderBottom: B }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', gap: '12px' }}>
-        <span className="dell-display" style={{ fontSize: '12px', color: 'var(--text)' }}>
+    <section style={{ padding: '40px 20px 32px', borderBottom: B }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '4px', gap: '12px' }}>
+        <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>
           Recent Graded Plays
         </span>
         <Link href="/results" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}>

@@ -1,6 +1,6 @@
 import { apiGetStats, apiGetSparklineBySystem } from '@/lib/betting-api'
 import Link from 'next/link'
-import { SystemSparkline } from './system-sparkline'
+import { ModelsGridClient, type SystemCard } from './models-grid-client'
 
 const B = '1px solid #000'
 const B_INNER = '1px solid #1f1f24'
@@ -48,102 +48,62 @@ export async function ModelsGrid() {
   } catch { /* API unavailable -- render empty */ }
 
   if (stats.length === 0) return (
-    <section style={{ padding: '24px 20px', borderBottom: B }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--muted)' }}>Active Systems</span>
-        <Link href="/models" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}>Full methodology &rarr;</Link>
-      </div>
+    <section style={{ padding: '40px 20px 32px', borderBottom: B_INNER }}>
+      <SectionHeader />
       <div style={{ border: B, padding: '40px', textAlign: 'center' }}>
         <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Loading systems&hellip;</p>
       </div>
     </section>
   )
 
-  const columns = 3
-  const rows = Math.ceil(stats.length / columns)
+  // Sort gate-cleared systems first, then by ROI -- strongest signal leads,
+  // noise (low-volume outliers) sinks to the bottom of the still-complete grid.
+  const systems: SystemCard[] = stats
+    .filter(s => META[s.system])
+    .sort((a, b) => {
+      const ag = a.total_bets >= 200 ? 1 : 0
+      const bg = b.total_bets >= 200 ? 1 : 0
+      if (ag !== bg) return bg - ag
+      return b.roi - a.roi
+    })
+    .map(s => {
+      const meta = META[s.system]
+      return {
+        system: s.system,
+        name: meta.name,
+        desc: meta.desc,
+        href: meta.href,
+        tint: meta.tint,
+        tintBg: meta.tintBg,
+        border: meta.border,
+        win_rate: s.win_rate,
+        roi: s.roi,
+        total_bets: s.total_bets,
+        sparkline: sparklines[s.system] ?? null,
+      }
+    })
 
   return (
-    <section style={{ padding: '24px 20px', borderBottom: B_INNER }}>
-      {/* Section eyebrow -- Dell display block */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>Active Systems</span>
-        <Link
-          href="/models"
-          style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}
-        >
-          Full methodology &rarr;
-        </Link>
-      </div>
-
-      <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
-        {stats.map((s, i) => {
-          const col = i % columns
-          const row = Math.floor(i / columns)
-          const cellBorder: React.CSSProperties = {
-            borderRight:  col < columns - 1 ? B : undefined,
-            borderBottom: row < rows - 1 ? B : undefined,
-          }
-
-          const meta = META[s.system]
-          if (!meta) return null
-          const roiPos = s.roi >= 0
-
-          return (
-            // Dell ribbon card: title bar + tinted body
-            <Link
-              key={s.system}
-              href={meta.href}
-              className="card-hover"
-              style={{ ...cellBorder, display: 'block', textDecoration: 'none' }}
-            >
-              {/* Ribbon title bar -- white/light header with system label */}
-              <div style={{ background: '#0a0a0c', borderBottom: B, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span
-                  className="dell-heading"
-                  style={{ fontSize: '10px', letterSpacing: '0.06em', color: meta.tint }}
-                >
-                  {s.system}
-                </span>
-                <span
-                  className="mono"
-                  style={{ fontSize: '11px', fontWeight: 600, color: roiPos ? '#b3bd95' : '#d77a7a' }}
-                >
-                  {roiPos ? '+' : ''}{s.roi.toFixed(1)}%
-                </span>
-              </div>
-
-              {/* Ribbon body -- tinted fill */}
-              <div style={{ padding: '14px 12px', background: meta.tintBg }}>
-                <div
-                  className="dell-heading"
-                  style={{ fontSize: '11px', color: '#f5f5f7', marginBottom: '6px', letterSpacing: '0.02em' }}
-                >
-                  {meta.name}
-                </div>
-                <div
-                  className="times"
-                  style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.5, marginBottom: '12px' }}
-                >
-                  {meta.desc}
-                </div>
-                <div
-                  style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)' }}
-                >
-                  {[['WR', s.win_rate.toFixed(1)+'%'], ['Bets', String(s.total_bets)], ['Gate', s.total_bets+'/200']].map(([label, val]) => (
-                    <div key={label}>
-                      <div className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.1em', color: '#888890' }}>{label}</div>
-                      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: label === 'Gate' ? '#888890' : meta.tint }}>{val}</div>
-                    </div>
-                  ))}
-                </div>
-                {sparklines[s.system] && (
-                  <SystemSparkline data={sparklines[s.system]} color={meta.tint} />
-                )}
-              </div>
-            </Link>
-          )
-        })}
-      </div>
+    <section style={{ padding: '40px 20px 32px', borderBottom: B_INNER }}>
+      <SectionHeader />
+      <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '-8px', marginBottom: '14px' }}>
+        Every model we run, with its live paper record. Tap a system for the method and stats.
+      </p>
+      <ModelsGridClient systems={systems} />
     </section>
+  )
+}
+
+function SectionHeader() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '14px', gap: '12px' }}>
+      <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>Active Systems</span>
+      <Link
+        href="/models"
+        style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}
+      >
+        Full methodology &rarr;
+      </Link>
+    </div>
   )
 }
