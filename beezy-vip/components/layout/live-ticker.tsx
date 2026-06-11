@@ -27,23 +27,27 @@ export async function LiveTicker() {
 
   return (
     <div className="live-ticker-shell" style={{ borderBottom: '1px solid #1f1f24', background: '#111114', overflow: 'hidden', padding: '7px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-      <div style={{ position: 'sticky', left: 0, zIndex: 10, background: '#111114', padding: '0 12px 0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderRight: '1px solid #1f1f24' }}>
+      {/* Static label -- sits in normal flow; the track scrolls in its own clipped viewport to its right */}
+      <div style={{ zIndex: 10, background: '#111114', padding: '0 12px 0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderRight: '1px solid #1f1f24' }}>
         <span className="live-dot" />
         <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', whiteSpace: 'nowrap' }}>Recent</span>
       </div>
-      <div className="ticker-track" style={{ flex: 1, overflow: 'hidden' }}>
-        {doubled.map((t, i) => (
-          <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            <span>{t.result === 'win' ? 'W' : 'L'}</span>
-            <span style={{ color: '#52525b' }}>/</span>
-            <span>{t.system}</span>
-            <span style={{ color: '#52525b' }}>/</span>
-            <span>{t.game}</span>
-            <span style={{ color: '#52525b' }}>/</span>
-            <span>{t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(2)}u</span>
-            <span style={{ color: '#1f1f24', padding: '0 10px' }}>|</span>
-          </span>
-        ))}
+      {/* Clipping viewport -- the animated track lives inside this, so translateX never reaches the label */}
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
+        <div className="ticker-track">
+          {doubled.map((t, i) => (
+            <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span>{t.result === 'win' ? 'W' : 'L'}</span>
+              <span style={{ color: '#52525b' }}>/</span>
+              <span>{t.system}</span>
+              <span style={{ color: '#52525b' }}>/</span>
+              <span>{t.game}</span>
+              <span style={{ color: '#52525b' }}>/</span>
+              <span>{t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(2)}u</span>
+              <span style={{ color: '#1f1f24', padding: '0 10px' }}>|</span>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
