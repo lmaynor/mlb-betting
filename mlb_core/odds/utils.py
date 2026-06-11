@@ -47,11 +47,95 @@ def clv_pct_from_prices(entry_odds, closing_odds) -> float:
 
 
 def remove_vig(prob_a: float, prob_b: float) -> tuple:
-    """Remove vig from a two-sided market. Returns (fair_prob_a, fair_prob_b)."""
+    """Remove vig from a two-sided market (PROPORTIONAL method). Returns (fair_a, fair_b).
+
+    Proportional de-vig assumes vig is split in proportion to implied prob. It is
+    known to MISPRICE favorites/longshots (the favorite-longshot bias): it shades
+    too little off favorites. Shin and log de-vig (below) are the standard
+    alternatives. See devig_two_way() for a method-selectable wrapper.
+    """
     total = prob_a + prob_b
     if total <= 0 or pd.isna(total):
         return np.nan, np.nan
     return prob_a / total, prob_b / total
+
+
+def shin_two_way(prob_a: float, prob_b: float) -> tuple:
+    """Shin (1992) de-vig for a two-sided market. Returns (fair_a, fair_b).
+
+    Models the vig as protection against insider/sharp money (proportion z) and
+    backs out true probs. Shades favorites more than proportional, which better
+    matches observed favorite-longshot bias. Solves for z numerically (robust for
+    any over-round); falls back to proportional if inputs are degenerate.
+    """
+    if pd.isna(prob_a) or pd.isna(prob_b):
+        return np.nan, np.nan
+    s = prob_a + prob_b
+    if s <= 0:
+        return np.nan, np.nan
+    if s <= 1.0:  # no vig present -> nothing to remove beyond normalization
+        return remove_vig(prob_a, prob_b)
+
+    def _fair(z):
+        out = []
+        for q in (prob_a, prob_b):
+            val = (np.sqrt(z * z + 4.0 * (1.0 - z) * q * q / s) - z) / (2.0 * (1.0 - z))
+            out.append(val)
+        return out
+
+    # Solve sum(_fair(z)) == 1 by bisection on z in (0, 0.5).
+    lo, hi = 1e-9, 0.5
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if sum(_fair(mid)) > 1.0:
+            lo = mid
+        else:
+            hi = mid
+    fa, fb = _fair((lo + hi) / 2.0)
+    tot = fa + fb
+    if tot <= 0 or pd.isna(tot):
+        return remove_vig(prob_a, prob_b)
+    return fa / tot, fb / tot
+
+
+def log_two_way(prob_a: float, prob_b: float) -> tuple:
+    """Power/odds-ratio de-vig: fair_i proportional to q_i**k, solve k so sum==1.
+
+    Another standard favorite-longshot correction. Returns (fair_a, fair_b).
+    """
+    if pd.isna(prob_a) or pd.isna(prob_b):
+        return np.nan, np.nan
+    s = prob_a + prob_b
+    if s <= 0:
+        return np.nan, np.nan
+    if s <= 1.0:
+        return remove_vig(prob_a, prob_b)
+
+    def _sum(k):
+        return prob_a ** k + prob_b ** k
+
+    # k >= 1 shrinks the over-round; bisection on k in [1, 8].
+    lo, hi = 1.0, 8.0
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if _sum(mid) > 1.0:
+            lo = mid
+        else:
+            hi = mid
+    k = (lo + hi) / 2.0
+    tot = _sum(k)
+    if tot <= 0 or pd.isna(tot):
+        return remove_vig(prob_a, prob_b)
+    return prob_a ** k / tot, prob_b ** k / tot
+
+
+def devig_two_way(prob_a: float, prob_b: float, method: str = "proportional") -> tuple:
+    """Method-selectable two-way de-vig. method in {proportional, shin, log}."""
+    if method == "shin":
+        return shin_two_way(prob_a, prob_b)
+    if method == "log":
+        return log_two_way(prob_a, prob_b)
+    return remove_vig(prob_a, prob_b)
 
 
 def devig_unilateral(market_prob: float, vig_pct: float = 0.07) -> float:

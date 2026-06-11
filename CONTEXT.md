@@ -1054,6 +1054,22 @@ Repair history: `POST /capture-closing {"backfill_clv": true}` (or
 `capture_closing_lines.backfill_clv()`) recomputes clv_pct for all rows with a closing
 line using the price formula. Idempotent. Run once after deploy.
 
+### De-vig methods (Task #4 building block -- 2026-06-11)
+
+`mlb_core/odds/utils.py` now offers three two-way de-vig methods:
+`remove_vig` (proportional, current default used by all runners), `shin_two_way`
+(Shin 1992, models vig as insider protection), `log_two_way` (power/odds-ratio).
+`devig_two_way(a, b, method=...)` selects. Shin/log apply a favorite-longshot
+correction (shade favorites more than proportional). These are READY but NOT yet
+wired into runners -- swapping the de-vig method is a deliberate change gated on an
+audit (which method best calibrates to realized outcomes). The audit needs a
+snapshot-archive -> game_pk -> outcome join (both-side closing odds vs results) that
+is not available from the bets table (runners log only the chosen side's odds), so it
+is a deliberate next build. Priority is BELOW calibration: /edge-analysis showed the
+dominant error is model-side overconfidence (now addressed by Task #3), not the
+market/de-vig side. Cheapest decision gate: re-run /edge-analysis after calibration +
+CLV land; if market-side miscalibration is negligible, the de-vig swap is unnecessary.
+
 ### Prediction calibration + edge cap (Task #3 -- 2026-06-11)
 
 `mlb_core/risk/calibration.py::apply(system, prob) -> (calibrated_prob, was_calibrated)`
