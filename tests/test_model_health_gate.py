@@ -225,7 +225,13 @@ class TestHysteresis:
 
 class TestIsSupressedFailOpen:
     def _set_gate_file(self, tmp_path: Path, content: bytes):
-        """Write a fake gate file to the local MLB_BASE_DATA dir."""
+        """Write a fake gate file to the local MLB_BASE_DATA dir.
+
+        Also clears MLB_GCS_BUCKET so gates.py reads local disk even when
+        other test modules (e.g. test_public_api.py) set a fake bucket.
+        """
+        os.environ.pop("MLB_GCS_BUCKET", None)
+        os.environ.pop("GCS_BUCKET", None)
         base = Path(os.environ["MLB_BASE_DATA"])
         gate_dir = base / "Gates"
         gate_dir.mkdir(parents=True, exist_ok=True)
@@ -233,6 +239,8 @@ class TestIsSupressedFailOpen:
 
     def test_missing_gate_file_returns_false(self, tmp_path):
         # No gate file exists -> fail open
+        os.environ.pop("MLB_GCS_BUCKET", None)
+        os.environ.pop("GCS_BUCKET", None)
         from mlb_core.risk.gates import is_suppressed
         assert is_suppressed("K") is False
 
