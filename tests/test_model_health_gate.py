@@ -117,43 +117,93 @@ class TestHealthVerdict:
 # Task B: gate decision logic (_gate_condition_met)
 # ---------------------------------------------------------------------------
 
-def _gate_cond(n, auc, roi):
-    """Replicate _gate_condition_met logic for unit testing."""
-    GATE_AUC_MIN = 0.52
-    GATE_ROI_MIN = -20.0
-    MIN_GATE_N   = 30
+def _gate_cond(n, auc_model=0.60, roi=5.0, avg_model_prob=None, hit_rate=0.50):
+    """Call the REAL _gate_condition_met with a rolling-stats dict.
 
-    if n < MIN_GATE_N:
-        return False, f"underpowered (n={n})"
-
-    reasons = []
-    if auc is not None and auc < GATE_AUC_MIN:
-        reasons.append(f"auc {auc:.3f} < {GATE_AUC_MIN}")
-    if roi < GATE_ROI_MIN:
-        reasons.append(f"roi {roi:+.1f}%")
-    if reasons:
-        return True, "; ".join(reasons)
-    return False, "healthy"
+    Imports the production function so tests catch the model-AUC + calibration
+    fixes rather than a drifting replica.
+    """
+    from runners.monitor_performance import _gate_condition_met
+    rolling = {
+        "n": n,
+        "auc_model": auc_model,
+        "roi": roi,
+        "hit_rate": hit_rate,
+        "avg_model_prob": avg_model_prob,
+    }
+    return _gate_condition_met(rolling)
 
 
 class TestGateCondition:
     def test_underpowered_never_suppressed(self):
-        ok, reason = _gate_cond(n=10, auc=0.40, roi=-50)
+        ok, reason = _gate_cond(n=10, auc_model=0.40, roi=-50)
         assert ok is False
         assert "underpowered" in reason
 
-    def test_low_auc_triggers(self):
-        ok, _ = _gate_cond(n=50, auc=0.50, roi=5)
+    def test_low_model_auc_triggers(self):
+        ok, reason = _gate_cond(n=50, auc_model=0.50, roi=5)
         assert ok is True
+        assert "auc_model" in reason
 
     def test_low_roi_triggers(self):
-        ok, _ = _gate_cond(n=50, auc=0.55, roi=-25)
+        ok, _ = _gate_cond(n=50, auc_model=0.55, roi=-25)
         assert ok is True
 
     def test_healthy_clears(self):
-        ok, reason = _gate_cond(n=50, auc=0.55, roi=5)
+        ok, reason = _gate_cond(n=50, auc_model=0.55, roi=5)
         assert ok is False
         assert reason == "healthy"
+
+    def test_calibration_arm_fires_when_avg_model_prob_present(self):
+        # hit_rate 0.45 vs avg_model_prob 0.65 -> cal_err -0.20, |.| > 0.12
+        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
+                                avg_model_prob=0.65, hit_rate=0.45)
+        assert ok is True
+        assert "cal_err" in reason
+
+    def test_calibration_arm_silent_when_avg_model_prob_missing(self):
+        # No avg_model_prob -> calibration arm must not fire (and not crash)
+        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
+                                avg_model_prob=None, hit_rate=0.20)
+        assert ok is False
+        assert reason == "healthy"
+
+    def test_well_calibrated_does_not_trigger(self):
+        # hit_rate 0.54 vs avg_model_prob 0.52 -> cal_err 0.02, within tol
+        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
+                                avg_model_prob=0.52, hit_rate=0.54)
+        assert ok is False
+        assert reason == "healthy"
+
+
+# ---------------------------------------------------------------------------
+# Task B: _rolling_stats plumbs model AUC + avg_model_prob (defect-2 fix)
+# ---------------------------------------------------------------------------
+
+class TestRollingStatsModelFields:
+    def _df(self):
+        import pandas as pd
+        # 4 settled bets: model_prob high on wins, low on losses (good ranker)
+        return pd.DataFrame({
+            "result":      ["win", "loss", "win", "loss"],
+            "stake":       [10.0, 10.0, 10.0, 10.0],
+            "profit":      [9.0, -10.0, 9.0, -10.0],
+            "edge":        [0.05, 0.05, 0.05, 0.05],
+            "market_prob": [0.50, 0.50, 0.50, 0.50],
+            "model_prob":  [0.70, 0.40, 0.65, 0.45],
+            "clv_pct":     [None, None, None, None],
+        })
+
+    def test_auc_model_and_avg_present(self):
+        from runners.monitor_performance import _rolling_stats
+        stats = _rolling_stats(self._df(), window=30)
+        assert "auc_model" in stats
+        assert "avg_model_prob" in stats
+        assert stats["avg_model_prob"] is not None
+        # mean of [0.70,0.40,0.65,0.45] = 0.55
+        assert abs(stats["avg_model_prob"] - 0.55) < 1e-6
+        # perfect ranking (wins have higher model_prob than losses) -> AUC 1.0
+        assert stats["auc_model"] == 1.0
 
 
 # ---------------------------------------------------------------------------

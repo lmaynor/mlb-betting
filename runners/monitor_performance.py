@@ -115,6 +115,19 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
     outcomes = [1 if r == "win" else 0 for r in recent.loc[recent["market_prob"].notna(), "result"]]
     auc_val  = _auc(probs, outcomes)
 
+    # Model-probability AUC + mean -- used by the suppression gate (Task B).
+    # Distinct from `auc` above (market_prob): the gate measures whether OUR
+    # model rank-orders outcomes, not whether the market does. cal_err is
+    # rolling hit_rate - rolling avg_model_prob.
+    if "model_prob" in recent.columns:
+        m_mask     = recent["model_prob"].notna()
+        m_probs    = recent.loc[m_mask, "model_prob"].astype(float).tolist()
+        m_outcomes = [1 if r == "win" else 0 for r in recent.loc[m_mask, "result"]]
+    else:
+        m_probs, m_outcomes = [], []
+    auc_model      = _auc(m_probs, m_outcomes)
+    avg_model_prob = sum(m_probs) / len(m_probs) if m_probs else None
+
     stats = {
         "n":         n,
         "wins":      int(wins),
@@ -124,6 +137,8 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
         "avg_edge":  round(float(recent["edge"].mean()), 4),
         "pending":   int(df[df["result"].isna()].shape[0]),
         "auc":       round(auc_val, 4) if auc_val is not None else None,
+        "auc_model":      round(auc_model, 4) if auc_model is not None else None,
+        "avg_model_prob": round(avg_model_prob, 4) if avg_model_prob is not None else None,
     }
     stats.update(_clv_stats(recent))
     return stats
@@ -363,23 +378,26 @@ def _write_gate_state(state: dict) -> None:
 
 
 def _gate_condition_met(rolling: dict) -> tuple[bool, str]:
-    """Return (should_suppress, reason) based on rolling metrics."""
+    """Return (should_suppress, reason) based on rolling metrics.
+
+    Uses MODEL-probability AUC (auc_model), not market AUC -- the gate must
+    measure whether our model discriminates, which is what determines edge.
+    Calibration arm uses rolling hit_rate vs avg_model_prob.
+    """
     n       = rolling.get("n", 0)
-    auc     = rolling.get("auc")
+    auc     = rolling.get("auc_model")        # model_prob AUC (not market)
     roi     = rolling.get("roi", 0.0)
     hr      = rolling.get("hit_rate", 0.0)
-    avg_mp  = rolling.get("avg_model_prob")  # not in rolling_stats -- use None guard
+    avg_mp  = rolling.get("avg_model_prob")
 
     if n < MIN_GATE_N:
         return False, f"underpowered (n={n} < {MIN_GATE_N})"
 
     reasons = []
     if auc is not None and auc < GATE_AUC_MIN:
-        reasons.append(f"auc {auc:.3f} < {GATE_AUC_MIN}")
+        reasons.append(f"auc_model {auc:.3f} < {GATE_AUC_MIN}")
 
-    # Calibration error: hit_rate vs avg_model_prob if available.
-    # rolling_stats does not carry avg_model_prob; compute from the
-    # passed avg_mp argument when the caller supplies it.
+    # Calibration error: rolling hit_rate vs rolling avg model probability.
     if avg_mp is not None:
         cal_err = hr - avg_mp
         if abs(cal_err) > GATE_CAL_TOL:
@@ -436,7 +454,11 @@ def _update_gate(system: str, should_suppress: bool, reason: str,
         "suppressed":      now_suppressed,
         "reason":          reason,
         "metrics": {
-            "auc":   rolling.get("auc"),
+            "auc_model":      rolling.get("auc_model"),
+            "auc_market":     rolling.get("auc"),
+            "avg_model_prob": rolling.get("avg_model_prob"),
+            "cal_err": (round(rolling.get("hit_rate", 0.0) - rolling["avg_model_prob"], 4)
+                        if rolling.get("avg_model_prob") is not None else None),
             "roi":   rolling.get("roi"),
             "n":     rolling.get("n", 0),
         },
@@ -470,7 +492,7 @@ def _post_gate_alert(system: str, suppressed: bool, reason: str,
         "description": desc,
         "color":       color,
         "fields": [
-            {"name": "AUC",  "value": f"{stats.get('auc'):.3f}" if stats.get("auc") is not None else "n/a", "inline": True},
+            {"name": "AUC (model)", "value": f"{stats.get('auc_model'):.3f}" if stats.get("auc_model") is not None else "n/a", "inline": True},
             {"name": "ROI",  "value": f"{stats.get('roi', 0):+.1f}%", "inline": True},
             {"name": "n",    "value": str(stats.get("n", 0)), "inline": True},
         ],

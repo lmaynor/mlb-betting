@@ -983,7 +983,12 @@ ROI, mean_clv per book. Alert if any book reaches n >= 20 and ROI < -20%
 
 `monitor_performance.run()` also writes `Gates/model_gates.json` after every
 monitor run. Gate logic (thresholds overrideable via env vars):
-- Suppress if rolling AUC < `GATE_AUC_MIN=0.52` OR ROI < `GATE_ROI_MIN=-20%`
+- Suppress if rolling **model_prob** AUC < `GATE_AUC_MIN=0.52` OR
+  |cal_err| > `GATE_CAL_TOL=0.12` OR ROI < `GATE_ROI_MIN=-20%`
+- The gate uses MODEL AUC (`auc_model` in `_rolling_stats`), NOT market AUC.
+  `_rolling_stats` carries both: `auc` (market_prob, used by the legacy degradation
+  alert in `_check_alerts`) and `auc_model` (model_prob, used by the gate). cal_err =
+  rolling hit_rate - rolling avg_model_prob.
 - `MIN_GATE_N=30` settled bets minimum before gate may activate (prevents cold-start shutdown)
 - Hysteresis: 2 consecutive runs meeting condition before flip; 2 consecutive clean runs to recover
 - Manual override: `SystemConfig.force_gate = "on"/"off"` in registry wins over all metrics
