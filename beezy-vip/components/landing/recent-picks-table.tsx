@@ -88,7 +88,7 @@ export async function RecentPicksTable() {
         </Link>
       </div>
       <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
-        A quick receipt trail for the score-ranked card.
+        Recent picks graded in the open — wins and losses alike, scored before the first pitch.
       </p>
 
       <div style={{ border: B, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>

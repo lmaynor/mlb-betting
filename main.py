@@ -873,8 +873,9 @@ def public_stats_sparkline():
         return err
     try:
         days = int(request.args.get("days", 30))
-        data = get_pnl_sparkline(_get_engine(), days=days)
-        resp = jsonify({"sparkline": data, "days": days})
+        system = request.args.get("system")
+        data = get_pnl_sparkline(_get_engine(), days=days, system=system)
+        resp = jsonify({"sparkline": data, "days": days, "system": system})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=300"
         return resp

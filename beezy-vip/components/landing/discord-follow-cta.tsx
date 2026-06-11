@@ -40,10 +40,10 @@ export function DiscordFollowCTA() {
               className="dell-heading"
               style={{ fontSize: '12px', color: '#f5f5f7', marginBottom: '4px', letterSpacing: '0.04em' }}
             >
-              Follow the daily card in Discord
+              Get the card the moment it drops
             </div>
             <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.45 }}>
-              Card drops, model notes, and result updates without refreshing the site.
+              Join the Discord for the daily card, model notes, and nightly results — pushed to you, no refresh required.
             </p>
           </div>
         </div>

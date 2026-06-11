@@ -6,47 +6,9 @@ const BORDER_HARD = '1px solid #000'
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 const X_URL = 'https://x.com/beezy_fyi'
 
-// Dell 1996 icon-label nav items
-const ICON_NAV = [
-  { label: 'Picks',    href: '/picks',   icon: '◈' },
-  { label: 'Tools',    href: '/tools',   icon: '⚙' },
-  { label: 'Results',  href: '/results', icon: '▤' },
-  { label: 'Support',  href: '/learn',   icon: '?' },
-]
-
 export function Footer() {
   return (
     <footer style={{ borderTop: BORDER_HARD, background: '#111114', marginTop: '48px', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-
-      {/* Dell icon-label nav strip */}
-      <div style={{ borderBottom: BORDER_HARD, padding: '12px 20px', background: '#0a0a0c' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0' }}>
-          {ICON_NAV.map((item, i) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '8px 24px',
-                borderRight: i < ICON_NAV.length - 1 ? '1px solid #1f1f24' : 'none',
-                textDecoration: 'none',
-                color: '#9999ff',
-              }}
-            >
-              <span style={{ fontSize: '20px', color: '#a1a1aa', lineHeight: 1 }}>{item.icon}</span>
-              <span
-                className="dell-heading"
-                style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#a1a1aa' }}
-              >
-                {item.label}
-              </span>
-            </Link>
-          ))}
-        </div>
-      </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 20px' }}>
         <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: '32px', marginBottom: '32px' }}>

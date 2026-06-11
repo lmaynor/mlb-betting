@@ -2,9 +2,10 @@ const B = '1px solid #000'
 const B_INNER = '1px solid #1f1f24'
 
 const STEPS = [
-  { num: '01', title: 'Open the Daily Card', desc: "Today's plays are ranked by Beezy Score so the top edge is easy to spot." },
-  { num: '02', title: 'Compare Price and Edge', desc: 'Each pick shows the system, odds, book, model edge, and a short reason it made the card.' },
-  { num: '03', title: 'Track the Result', desc: 'Settlement runs nightly. Wins, losses, pushes, and voids stay public.' },
+  { num: '01', title: 'Models score the slate', desc: 'Each morning our systems grade every MLB game and prop, folding model edge, market price, and Kelly signal into one 0–100 Beezy Score.' },
+  { num: '02', title: 'The card drops by ~11am ET', desc: 'The top-scoring plays publish to the Daily Card, ranked by edge and tagged with system, price, book, and why each made the cut.' },
+  { num: '03', title: 'You place what you like', desc: 'Bet the plays that fit your book and bankroll. Beezy flags the edge and a Kelly-sized stake — we never take or hold wagers.' },
+  { num: '04', title: 'Results settle in public', desc: 'Every pick grades overnight. Wins, losses, pushes, and voids stay on the permanent record that ranks each system.' },
 ]
 
 export function HowItWorks() {
@@ -14,7 +15,7 @@ export function HowItWorks() {
         <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>How It Works</span>
       </div>
 
-      <div className="steps-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B, overflow: 'hidden' }}>
+      <div className="steps-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', border: B, overflow: 'hidden' }}>
         {STEPS.map((step, i) => (
           <div
             key={step.num}

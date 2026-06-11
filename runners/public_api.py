@@ -103,23 +103,33 @@ def get_recent_settled(engine, limit=20):
     return [dict(r) for r in rows]
 
 
-def get_pnl_sparkline(engine, days=30):
+def get_pnl_sparkline(engine, days=30, system=None):
     """Daily cumulative P&L for the last N days, kelly_triggered=true only.
-    Returns list of {date, daily_pnl, cum_pnl} dicts sorted ascending by date.
+    Optionally scoped to a single system (e.g. "NRFI"); when omitted, covers
+    all systems. Returns list of {date, daily_pnl, cum_pnl} dicts sorted
+    ascending by date.
     """
     from datetime import date, timedelta
     cutoff = (date.today() - timedelta(days=days)).isoformat()
+    conditions = [
+        "result IS NOT NULL",
+        "kelly_triggered = true",
+        "stake > 0",
+        "game_date >= :cutoff",
+    ]
+    params: dict = {"cutoff": cutoff}
+    if system and str(system).strip():
+        conditions.append("system = :system")
+        params["system"] = str(system).strip().upper()
+    where = "WHERE " + " AND ".join(conditions)
     with engine.connect() as conn:
         rows = conn.execute(text(
             "SELECT game_date, COALESCE(SUM(profit), 0) AS daily_pnl "
             "FROM bets "
-            "WHERE result IS NOT NULL "
-            "  AND kelly_triggered = true "
-            "  AND stake > 0 "
-            "  AND game_date >= :cutoff "
+            f"{where} "
             "GROUP BY game_date "
             "ORDER BY game_date ASC"
-        ), {"cutoff": cutoff}).mappings().all()
+        ), params).mappings().all()
     cum = 0.0
     out = []
     for r in rows:
