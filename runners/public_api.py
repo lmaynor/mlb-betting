@@ -136,7 +136,8 @@ def get_clv_data(engine, days=90, systems=None):
     """
     Returns settled, kelly-triggered bets with closing line data for CLV scatter tool.
     model_edge_pct: edge column (decimal) * 100 -> percentage like 8.2
-    clv_pct: stored as percentage like 5.21 (entry_fair - closing_fair) / closing_fair * 100
+    clv_pct: price-based CLV, percentage like 5.21 = (decimal_entry/decimal_close - 1)*100.
+        Positive => we beat the close (got a better price).
     Only returns bets where closing_odds IS NOT NULL and clv_pct IS NOT NULL.
     """
     from datetime import date, timedelta

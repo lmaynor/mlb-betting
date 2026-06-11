@@ -1267,8 +1267,13 @@ def capture_closing_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
-        from runners.capture_closing_lines import run as capture_run
-        result = capture_run(run_date=run_date)
+        if body.get("backfill_clv"):
+            # One-off repair of historical clv_pct (price-based recompute).
+            from runners.capture_closing_lines import backfill_clv
+            result = backfill_clv()
+        else:
+            from runners.capture_closing_lines import run as capture_run
+            result = capture_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"capture-closing failed:\n{tb}")

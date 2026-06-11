@@ -327,34 +327,28 @@ class BetTracker:
 
     def write_closing_line(self, bet_id: int, closing_odds: float,
                            complement_odds: float = None) -> None:
-        """Record the closing line for a bet and compute CLV.
+        """Record the closing line for a bet and compute CLV (price-based).
 
-        CLV = (entry_fair_prob - closing_fair_prob) / closing_fair_prob * 100
+        CLV% = (decimal_entry_odds / decimal_closing_odds - 1) * 100
 
-        Both sides must use NO-VIG (fair) probabilities for CLV to be meaningful.
-        Using raw vig-inclusive implied probs produces a number that conflates
-        line movement with vig changes — incorrect.
+        Positive => we got a better price than the close (the line moved our
+        way). This is the industry-standard CLV: bounded, correctly signed, and
+        computed on the SAME side's prices so book vig largely cancels.
 
-        For two-sided markets (NRFI, F5): we use the market_prob stored at
-        bet time, which is already the no-vig fair prob (runners call remove_vig
-        before storing). For one-sided props (HR, K): market_prob stored is the
-        devigged fair prob from devig_unilateral. Either way, market_prob in the
-        DB is already the fair prob.
+        Prior implementation used a probability-RELATIVE CLV
+        ((entry_fair - closing_fair)/closing_fair) which (a) had the sign
+        inverted and (b) divided by the closing probability, so a small or
+        mismatched closing_fair (e.g. a cross-line complement, s15.3) blew the
+        value up to +-35-68%. The /edge-analysis run (2026-06-11) surfaced
+        exactly that. Price-based CLV does not depend on the devig/complement
+        path at all, so the cross-line risk no longer affects CLV.
 
-        The closing_odds are vig-inclusive (raw American odds from SGO). We
-        apply the same devig method used at bet time:
-          - Two-sided markets: need both sides; approximate by assuming
-            symmetric vig → closing_fair ≈ closing_implied / (closing_implied
-            + (1 - closing_implied)) = closing_implied (simplifies to raw for
-            50/50 markets; for asymmetric markets this is an approximation).
-            The correct fix is to store the complementary side at closing time.
-          - One-sided props: use devig_unilateral with the same vig_pct.
-
-        TODO: For two-sided markets, capture_closing_lines.py should also
-        capture the complementary side's closing odds so remove_vig can be
-        applied properly. For now we use raw implied as a proxy and log a note.
+        closing_prob (devigged) is still stored for reference, using the
+        complement when available; it no longer feeds clv_pct.
         """
-        from mlb_core.odds.utils import american_to_implied_prob, devig_unilateral
+        from mlb_core.odds.utils import (
+            american_to_implied_prob, devig_unilateral, clv_pct_from_prices,
+        )
 
         closing_implied = american_to_implied_prob(closing_odds)
         if pd.isna(closing_implied):
@@ -371,29 +365,22 @@ class BetTracker:
             return
         entry_odds, entry_fair_prob, bet_type = row
 
-        # Determine closing fair prob using the same devig method as at entry.
-        # HR/K props: use devig_unilateral (vig_pct=0.07).
-        # All others: use raw implied as approximation (symmetric vig assumed).
+        # closing_prob (devigged) -- reference only, no longer feeds CLV.
         bt_upper = (bet_type or "").upper()
         is_prop = bt_upper.startswith(("K_", "OUTS_", "HR", "BATTER_", "PITCHER_"))
         if complement_odds is not None and not is_prop:
-            # C06: devig two-sided market with complement for accurate CLV.
-            # Raw implied causes vig changes to appear as fake CLV movement.
             from mlb_core.odds.utils import remove_vig
             complement_implied = american_to_implied_prob(complement_odds)
             closing_fair_prob, _ = remove_vig(closing_implied, complement_implied)
         elif is_prop:
             closing_fair_prob = devig_unilateral(closing_implied, vig_pct=0.07)
         else:
-            # No complement captured -- raw implied as fallback.
             closing_fair_prob = closing_implied
 
-        clv_pct = None
-        if (entry_fair_prob and entry_fair_prob > 0
-                and closing_fair_prob and closing_fair_prob > 0):
-            clv_pct = round(
-                (entry_fair_prob - closing_fair_prob) / closing_fair_prob * 100, 4
-            )
+        # Price-based CLV from the raw entry vs closing American odds.
+        clv_pct = clv_pct_from_prices(entry_odds, closing_odds)
+        if pd.isna(clv_pct):
+            clv_pct = None
 
         with self.engine.begin() as conn:
             conn.execute(
@@ -404,17 +391,15 @@ class BetTracker:
                 """),
                 {
                     "co":  closing_odds,
-                    "cp":  round(closing_fair_prob, 6),
+                    "cp":  round(closing_fair_prob, 6) if closing_fair_prob and not pd.isna(closing_fair_prob) else None,
                     "clv": clv_pct,
                     "id":  bet_id,
                 },
             )
         logger.debug(
-            f"  [{self.system}] Bet #{bet_id} closing: "
-            f"entry_fair={entry_fair_prob:.4f} "
-            f"closing_fair={closing_fair_prob:.4f} "
-            f"CLV={clv_pct:+.2f}%" if clv_pct is not None else
-            f"  [{self.system}] Bet #{bet_id} closing line recorded: {closing_odds}"
+            f"  [{self.system}] Bet #{bet_id} closing: entry_odds={entry_odds} "
+            f"closing_odds={closing_odds} "
+            + (f"CLV={clv_pct:+.2f}%" if clv_pct is not None else "CLV=n/a")
         )
 
     def pending(self) -> pd.DataFrame:

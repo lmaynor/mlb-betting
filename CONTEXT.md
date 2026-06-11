@@ -1035,8 +1035,40 @@ The first /edge-analysis run (2026-06-11) confirmed adverse selection: realized_
 goes from ~+0.03 (<5% gap) to ~-0.31 (>=20% gap) across EVERY system -- the biggest
 gaps are overwhelmingly model overconfidence (model says ~0.77, wins ~0.46), not edge.
 Small/moderate gaps are well-calibrated and profitable. Also surfaced: `mean_clv`
-values are implausible (+35% to +68%) -- a CLV-computation bug (likely SGO cross-line
-mixing, s15.3); CLV is NOT trustworthy until fixed. Use cal_err + ROI meanwhile.
+values were implausible (+35% to +68%) -- a CLV-computation bug, now FIXED (below).
+
+### CLV recomputed price-based (2026-06-11)
+
+`BetTracker.write_closing_line` previously computed CLV as a probability-RELATIVE
+quantity `(entry_fair - closing_fair)/closing_fair*100`. Two defects: (1) the sign
+was inverted (positive should mean beating the close), and (2) dividing by the
+closing fair prob blew the value up to +-35-68% whenever closing_fair was small or
+came from a cross-line/mismatched complement (s15.3). CLV is now the industry-standard
+PRICE-based ratio: `mlb_core.odds.utils.clv_pct_from_prices(entry_odds, closing_odds)
+= (decimal_entry/decimal_close - 1)*100`. Bounded, correctly signed (positive = we got
+a better price than the close), computed on the same side's raw prices so vig cancels,
+and independent of the devig/complement path (so the cross-line risk no longer touches
+CLV). `closing_prob` is still stored (devigged, reference only) but no longer feeds clv_pct.
+
+Repair history: `POST /capture-closing {"backfill_clv": true}` (or
+`capture_closing_lines.backfill_clv()`) recomputes clv_pct for all rows with a closing
+line using the price formula. Idempotent. Run once after deploy.
+
+### De-vig methods (Task #4 building block -- 2026-06-11)
+
+`mlb_core/odds/utils.py` now offers three two-way de-vig methods:
+`remove_vig` (proportional, current default used by all runners), `shin_two_way`
+(Shin 1992, models vig as insider protection), `log_two_way` (power/odds-ratio).
+`devig_two_way(a, b, method=...)` selects. Shin/log apply a favorite-longshot
+correction (shade favorites more than proportional). These are READY but NOT yet
+wired into runners -- swapping the de-vig method is a deliberate change gated on an
+audit (which method best calibrates to realized outcomes). The audit needs a
+snapshot-archive -> game_pk -> outcome join (both-side closing odds vs results) that
+is not available from the bets table (runners log only the chosen side's odds), so it
+is a deliberate next build. Priority is BELOW calibration: /edge-analysis showed the
+dominant error is model-side overconfidence (now addressed by Task #3), not the
+market/de-vig side. Cheapest decision gate: re-run /edge-analysis after calibration +
+CLV land; if market-side miscalibration is negligible, the de-vig swap is unnecessary.
 
 ### Prediction calibration + edge cap (Task #3 -- 2026-06-11)
 
