@@ -169,6 +169,35 @@ def _get_closing_odds_from_snapshot(
     return closing
 
 
+def backfill_clv() -> dict:
+    """Recompute clv_pct for ALL rows that have a closing line, using the
+    price-based formula. Repairs historical rows written under the old
+    probability-relative CLV (which was sign-inverted and magnitude-unstable).
+    Idempotent.
+    """
+    from mlb_core.tracking.bet_tracker import _make_engine
+    from mlb_core.odds.utils import clv_pct_from_prices
+    from sqlalchemy import text
+    import pandas as pd
+
+    engine = _make_engine("unused")
+    with engine.connect() as conn:
+        rows = pd.read_sql(text(
+            "SELECT id, odds, closing_odds FROM bets WHERE closing_odds IS NOT NULL"
+        ), conn)
+    updated = 0
+    with engine.begin() as conn:
+        for _, r in rows.iterrows():
+            clv = clv_pct_from_prices(r["odds"], r["closing_odds"])
+            if pd.isna(clv):
+                continue
+            conn.execute(text("UPDATE bets SET clv_pct=:c WHERE id=:id"),
+                         {"c": float(clv), "id": int(r["id"])})
+            updated += 1
+    logger.info("backfill_clv: recomputed %d/%d rows", updated, len(rows))
+    return {"status": "ok", "rows_with_closing": int(len(rows)), "updated": updated}
+
+
 def run(run_date: str = None) -> dict:
     """Capture closing lines for all open bets today. Returns summary dict."""
     run_date = run_date or date.today().isoformat()

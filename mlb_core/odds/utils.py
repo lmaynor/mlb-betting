@@ -21,6 +21,31 @@ def implied_to_american(prob) -> float:
     return round(-prob / (1 - prob) * 100) if prob > 0.5 else round((1 - prob) / prob * 100)
 
 
+def american_to_decimal(odds) -> float:
+    """Convert American odds to decimal (total return per 1 unit staked)."""
+    if pd.isna(odds):
+        return np.nan
+    odds = float(odds)
+    return 1.0 + (odds / 100.0 if odds > 0 else 100.0 / abs(odds))
+
+
+def clv_pct_from_prices(entry_odds, closing_odds) -> float:
+    """Closing Line Value as a price ratio (the industry-standard CLV).
+
+    CLV% = (decimal_entry / decimal_close - 1) * 100
+
+    Positive => you got a better price than the close (line moved your way).
+    This is bounded and stable, unlike a probability-relative CLV which divides
+    by the closing probability and blows up for small probs / mismatched lines.
+    Same-side prices are compared, so book vig largely cancels.
+    """
+    d_entry = american_to_decimal(entry_odds)
+    d_close = american_to_decimal(closing_odds)
+    if pd.isna(d_entry) or pd.isna(d_close) or d_close <= 1.0:
+        return np.nan
+    return round((d_entry / d_close - 1.0) * 100.0, 4)
+
+
 def remove_vig(prob_a: float, prob_b: float) -> tuple:
     """Remove vig from a two-sided market. Returns (fair_prob_a, fair_prob_b)."""
     total = prob_a + prob_b
