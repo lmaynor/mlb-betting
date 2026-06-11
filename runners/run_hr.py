@@ -526,6 +526,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="HR")
     _pending_stakes: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed = _is_suppressed("HR")
     if _gate_suppressed:
         logger.warning("HR gate active -- logging only, no staked bets this run")
@@ -544,7 +545,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         # Calibrate HR_VIG_PCT periodically from closing-line analysis (T08/T15).
         HR_VIG_PCT  = 0.07
         fair_prob   = devig_unilateral(market_prob, vig_pct=HR_VIG_PCT)
+        model_prob, _cal = _cal_apply("HR", model_prob)
         edge        = model_prob - fair_prob
+        _edge_capped = _cal and edge > _EDGE_CAP
         k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake       = min(kelly_stake(
@@ -555,7 +558,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
 
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed and not _edge_capped
         if kelly_triggered and stake > 0:
             _pending_stakes[int(row.get("game_pk", 0))] = (
                 _pending_stakes.get(int(row.get("game_pk", 0)), 0.0) + stake

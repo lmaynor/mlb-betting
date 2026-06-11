@@ -375,6 +375,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="GAME")
     _pending: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed = _is_suppressed("GAME")
     if _gate_suppressed:
         logger.warning("GAME gate active -- logging only, no staked bets this run")
@@ -425,6 +426,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             odds      = away_odds_raw
             model_prob = prob_away
 
+        model_prob, _cal = _cal_apply("GAME", model_prob)
+        edge = model_prob - fair
+        _edge_capped = _cal and edge > _EDGE_CAP
+
         logger.info(
             "GAME pred | %s @ %s | raw_home=%.3f cal_home=%.3f in_range=%s "
             "%s | model=%.3f fair=%.3f edge=%+.3f",
@@ -451,7 +456,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         )
         stake = min(raw_stake, _cap)
 
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed)
+        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped)
         if kelly_triggered and stake > 0:
             _pending[game_pk] = _pending.get(game_pk, 0.0) + stake
 

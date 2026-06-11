@@ -1031,6 +1031,41 @@ If they hold/rise, the gaps are real EV. CLV is a strong test in liquid markets
 that should parameterize the calibration-before-sizing change (Task #3); the
 de-vig audit (Task #4) corrects the market side of the gap (`fair_prob`).
 
+The first /edge-analysis run (2026-06-11) confirmed adverse selection: realized_cal_err
+goes from ~+0.03 (<5% gap) to ~-0.31 (>=20% gap) across EVERY system -- the biggest
+gaps are overwhelmingly model overconfidence (model says ~0.77, wins ~0.46), not edge.
+Small/moderate gaps are well-calibrated and profitable. Also surfaced: `mean_clv`
+values are implausible (+35% to +68%) -- a CLV-computation bug (likely SGO cross-line
+mixing, s15.3); CLV is NOT trustworthy until fixed. Use cal_err + ROI meanwhile.
+
+### Prediction calibration + edge cap (Task #3 -- 2026-06-11)
+
+`mlb_core/risk/calibration.py::apply(system, prob) -> (calibrated_prob, was_calibrated)`
+calibrates model_prob against REALIZED OUTCOMES (not the market) BEFORE edge is
+computed, correcting the overconfidence above. Per-system isotonic calibrators are
+fit by `training/fit_prediction_calibrators.py` (Cloud Run Job `mlb-fit-calibrators`,
+reads ALL settled predictions in the bets table -- placed and unplaced, since settle
+ignores kelly_triggered) and stored at `Calibration/{system}_prediction_calibrator.pkl`.
+
+Wired into every scoring runner (run_nrfi/hr/k[K+OUTS]/batter_hits/game/f5): after
+side selection, `model_prob, _cal = apply(SYSTEM, model_prob); edge = model_prob - fair`.
+- SAFE ROLLOUT / fail-open: no calibrator (or any error) -> prob unchanged,
+  was_calibrated=False -> system behaves exactly as before. Calibrators take effect
+  only after `mlb-fit-calibrators` runs.
+- Interim edge cap: `EDGE_CAP=0.20` (env `EDGE_CAP`). A bet whose POST-calibration
+  edge still exceeds the cap is skipped (kelly_triggered=False). The cap fires ONLY
+  when was_calibrated=True, so it never acts on a raw uncalibrated edge.
+- Calibration against outcomes layers ON TOP of any training-time calibrator (NRFI
+  v18 isotonic, etc.) -- it corrects the residual live overconfidence those miss.
+
+Rollout: deploy -> run `mlb-fit-calibrators` -> calibrators exist -> next betting run
+calibrates + caps. Re-run the fit job weekly (or after notable bet volume).
+
+NOTE (gate gap fixed in the same change): run_f5 previously did NOT read the
+suppression gate, so F5 being suppressed in `Gates/model_gates.json` had no effect.
+run_f5 now calls `is_suppressed("F5")` (main ML) and `is_suppressed("F1H")` (innings
+submarket), generalizing the empty `LOG_ONLY_SYSTEMS` set.
+
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
 - BATTER_HITS: 52%, BATTER_TB: 52%, GAME: 52% (update after 200 settled bets; dedicated trained models)

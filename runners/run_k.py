@@ -421,6 +421,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="K")
     _pending_stakes: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed_k    = _is_suppressed("K")
     _gate_suppressed_outs = _is_suppressed("OUTS")
     if _gate_suppressed_k:
@@ -464,6 +465,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
+                    model_prob, _cal = _cal_apply("K", model_prob)
+                    edge = model_prob - fair
+                    _edge_capped = _cal and edge > _EDGE_CAP
                     logger.info(
                         f"K pred | {row['_pitcher_name']} | lam={row['lambda_k']:.2f} "
                         f"raw_lam={row.get('raw_lambda_k', row['lambda_k']):.2f} "
@@ -478,7 +482,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_k
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_k and not _edge_capped
                     if kelly_triggered and _stake > 0:
                         _pending_stakes[int(row["game_pk"])] = (
                             _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
@@ -573,6 +577,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     else:
                         side, edge, fair, odds, model_prob = (
                             "UNDER", edge_under, fair_under, under_odds, p_under)
+                    model_prob, _cal = _cal_apply("OUTS", model_prob)
+                    edge = model_prob - fair
+                    _edge_capped = _cal and edge > _EDGE_CAP
                     logger.info(
                         "OUTS pred | %s | raw_lam=%s lam=%s in_range=%s "
                         "proj_outs=%.2f line=%.1f %s | model=%.3f fair=%.3f edge=%+.3f",
@@ -592,7 +599,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_outs
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_outs and not _edge_capped
                     if kelly_triggered and _stake > 0:
                         _pending_stakes[int(row["game_pk"])] = (
                             _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake

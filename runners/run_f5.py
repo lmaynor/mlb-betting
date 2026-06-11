@@ -282,6 +282,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="F5")
     _pending_stakes: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
+    _gate_suppressed = _is_suppressed("F5")
+    if _gate_suppressed:
+        logger.warning("F5 gate active -- logging only, no staked bets this run")
     _IL_DAYS = 15
 
     def _starter_stale(row, side: str, run_date: str) -> bool:
@@ -334,6 +339,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob = p_a
             team = row["away_team"]
 
+        model_prob, _cal = _cal_apply("F5", model_prob)
+        edge = model_prob - fair
+        _edge_capped = _cal and edge > _EDGE_CAP
+
         k_pct = kpct(edge, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake = min(kelly_stake(
@@ -343,7 +352,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed and not _edge_capped
         if kelly_triggered and stake > 0:
             _pending_stakes[int(row["game_pk"])] = (
                 _pending_stakes.get(int(row["game_pk"]), 0.0) + stake
@@ -455,7 +464,8 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
         extractor = extractor_fns[extractor_name]
         odds_map  = extractor(events)
         scalar    = scalars.get(scalar_key, _SCALAR_FALLBACKS.get(scalar_key, 1.0))
-        log_only  = sys_key in LOG_ONLY_SYSTEMS
+        from mlb_core.risk.gates import is_suppressed as _is_suppressed
+        log_only  = (sys_key in LOG_ONLY_SYSTEMS) or _is_suppressed(sys_key)
         bankroll, prefetched = prefetch_exposure(_engine, _all_game_pks, run_date, system=sys_key)
         pending: dict[int, float] = {}
 
