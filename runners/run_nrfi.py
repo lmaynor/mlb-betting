@@ -436,6 +436,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(pivot["game_pk"].dropna().astype(int).unique()) if "pivot" in dir() else []
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="1IOU")
     _pending_stakes: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    _gate_suppressed = _is_suppressed("1IOU")
+    if _gate_suppressed:
+        logger.warning("1IOU gate active -- logging only, no staked bets this run")
     for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
         odds_info = by_abbrev.get(key)
@@ -471,7 +475,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed
         if kelly_triggered and stake > 0:
             _pending_stakes[int(row["game_pk"])] = (
                 _pending_stakes.get(int(row["game_pk"]), 0.0) + stake

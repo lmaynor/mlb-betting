@@ -27,6 +27,12 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 _CT = ZoneInfo("America/Chicago")
 
+# Model health verdict thresholds (Task A / Task B shared constants).
+# Task B gate uses the same numeric values -- update both here.
+MIN_HEALTH_N  = int(os.getenv("HEALTH_MIN_N",   "20"))   # min bets before non-underpowered verdict
+CAL_ERR_TOL   = float(os.getenv("HEALTH_CAL_TOL", "0.10"))  # |hit_rate - avg_model_prob| threshold
+ROI_FLOOR     = float(os.getenv("HEALTH_ROI_FLOOR", "-10"))  # roi% below which "degraded" fires
+
 from flask import Flask, request, jsonify
 
 logging.basicConfig(
@@ -980,6 +986,51 @@ def model_health_handler():
         se  = math.sqrt(var / n)
         return round(mu, 4), round(mu / se, 3) if se > 0 else 0.0
 
+    def _health_verdict(n, auc_model, cal_err, roi):
+        """Return flags, health, recommended_action for a system's season stats."""
+        flags = []
+        if n < MIN_HEALTH_N:
+            flags.append("underpowered")
+        if auc_model is not None and auc_model < 0.50:
+            flags.append("inverted")
+        if cal_err is not None and abs(cal_err) > CAL_ERR_TOL:
+            flags.append("miscalibrated")
+        if roi is not None and roi < ROI_FLOOR:
+            flags.append("negative_roi")
+        if auc_model is not None and 0.50 <= auc_model < 0.53:
+            flags.append("no_edge")
+
+        # Precedence: first match wins
+        if n < MIN_HEALTH_N:
+            health = "underpowered"
+        elif auc_model is not None and auc_model < 0.50:
+            health = "inverted"
+        elif cal_err is not None and abs(cal_err) > CAL_ERR_TOL:
+            health = "miscalibrated"
+        elif auc_model is not None and auc_model < 0.53:
+            health = "no_edge"
+        elif roi is not None and roi < ROI_FLOOR:
+            health = "degraded"
+        elif auc_model is not None and auc_model < 0.57:
+            health = "moderate"
+        else:
+            health = "healthy"
+
+        _actions = {
+            "underpowered":  "not enough data yet; monitor",
+            "inverted":      "retrain (rank-ordering broken; calibrator cannot fix)",
+            "miscalibrated": "recalibrate / check edge filter (overconfident point estimates)",
+            "no_edge":       "market efficient; keep log-only, do not chase",
+            "degraded":      "investigate pricing/variance; review per-book ROI",
+            "moderate":      "monitor; edge is marginal",
+            "healthy":       "ok",
+        }
+        return {
+            "flags":              flags,
+            "health":             health,
+            "recommended_action": _actions.get(health, "unknown"),
+        }
+
     def _system_stats(rows):
         scorable = [r for r in rows if r.get("result") in ("win", "loss")]
         n = len(scorable)
@@ -1034,6 +1085,7 @@ def model_health_handler():
                 "inverted" if auc_model and auc_model < 0.50  else
                 "unknown"
             ),
+            **_health_verdict(n, auc_model, cal_err, roi),
         }
 
     try:

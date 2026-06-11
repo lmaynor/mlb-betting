@@ -374,6 +374,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 if "game_pk" in feat_df.columns else []
     _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="GAME")
     _pending: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    _gate_suppressed = _is_suppressed("GAME")
+    if _gate_suppressed:
+        logger.warning("GAME gate active -- logging only, no staked bets this run")
 
     results = []
 
@@ -447,7 +451,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         )
         stake = min(raw_stake, _cap)
 
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY)
+        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed)
         if kelly_triggered and stake > 0:
             _pending[game_pk] = _pending.get(game_pk, 0.0) + stake
 

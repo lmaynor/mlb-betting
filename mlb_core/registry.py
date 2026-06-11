@@ -40,6 +40,7 @@ class SystemConfig:
     tune_metric: str | None = None    # "auc" / "poisson-nloglik"
     tune_metric_dir: str | None = None # "max" / "min"
     tune_output: str | None = None    # GCS key for tuned_params.json
+    force_gate: str | None = None     # None=auto | "on"=force-suppress | "off"=force-enable
 
 
 # Canonical system order — used for ordered iteration, display, and digests.

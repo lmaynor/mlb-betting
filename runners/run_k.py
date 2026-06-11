@@ -420,7 +420,14 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="K")
     _pending_stakes: dict[int, float] = {}
-    
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    _gate_suppressed_k    = _is_suppressed("K")
+    _gate_suppressed_outs = _is_suppressed("OUTS")
+    if _gate_suppressed_k:
+        logger.warning("K gate active -- logging only, no staked bets this run")
+    if _gate_suppressed_outs:
+        logger.warning("OUTS gate active -- logging only, no staked bets this run")
+
     for _, row in feat_df.iterrows():
         norm     = row["_pitcher_name_norm"]
         avg_ip   = row.get("avg_ip_L5")
@@ -471,7 +478,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_k
                     if kelly_triggered and _stake > 0:
                         _pending_stakes[int(row["game_pk"])] = (
                             _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
@@ -585,7 +592,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0
+                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_outs
                     if kelly_triggered and _stake > 0:
                         _pending_stakes[int(row["game_pk"])] = (
                             _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake

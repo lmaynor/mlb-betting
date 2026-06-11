@@ -45,6 +45,16 @@ HIT_RATE_DROP         = float(os.getenv("MONITOR_HIT_RATE_DROP", "10"))  # pct p
 MIN_BETS_FOR_ALERT    = int(os.getenv("MONITOR_MIN_BETS",        "20"))  # min settled bets
 ROLLING_WINDOW        = int(os.getenv("MONITOR_ROLLING_WINDOW",  "30"))  # bets
 
+# Gate thresholds (Task B) -- same numeric intent as main.py MIN_HEALTH_N/CAL_ERR_TOL/ROI_FLOOR.
+# A system with < MIN_GATE_N bets is NEVER suppressed.
+MIN_GATE_N      = int(os.getenv("GATE_MIN_N",      "30"))   # minimum settled bets to activate gate
+GATE_AUC_MIN    = float(os.getenv("GATE_AUC_MIN",  "0.52"))  # suppress if rolling AUC < this
+GATE_CAL_TOL    = float(os.getenv("GATE_CAL_TOL",  "0.12"))  # suppress if |cal_err| > this
+GATE_ROI_MIN    = float(os.getenv("GATE_ROI_MIN",  "-20"))   # suppress if rolling ROI < this (%)
+GATE_HYSTERESIS = int(os.getenv("GATE_HYSTERESIS", "2"))     # consecutive runs before flip
+
+GATE_FILE_KEY   = "Gates/model_gates.json"
+
 # Expected model hit rates — derived from registry.
 # These are conservative; update expected_hit_rate in mlb_core/registry.py
 # after 200+ settled bets per system rather than editing this file.
@@ -330,6 +340,145 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
     _post(webhook_url, {"embeds": [embed]})
 
 
+def _load_gate_state() -> dict:
+    """Read the existing gate file from GCS. Returns {} on missing or error."""
+    from mlb_core.storage import read_bytes, exists
+    try:
+        if not exists(GATE_FILE_KEY):
+            return {}
+        import json
+        return json.loads(read_bytes(GATE_FILE_KEY))
+    except Exception as exc:
+        logger.warning("monitor: could not read gate state: %s", exc)
+        return {}
+
+
+def _write_gate_state(state: dict) -> None:
+    from mlb_core.storage import write_bytes
+    import json
+    try:
+        write_bytes(json.dumps(state, indent=2).encode(), GATE_FILE_KEY)
+    except Exception as exc:
+        logger.warning("monitor: could not write gate state: %s", exc)
+
+
+def _gate_condition_met(rolling: dict) -> tuple[bool, str]:
+    """Return (should_suppress, reason) based on rolling metrics."""
+    n       = rolling.get("n", 0)
+    auc     = rolling.get("auc")
+    roi     = rolling.get("roi", 0.0)
+    hr      = rolling.get("hit_rate", 0.0)
+    avg_mp  = rolling.get("avg_model_prob")  # not in rolling_stats -- use None guard
+
+    if n < MIN_GATE_N:
+        return False, f"underpowered (n={n} < {MIN_GATE_N})"
+
+    reasons = []
+    if auc is not None and auc < GATE_AUC_MIN:
+        reasons.append(f"auc {auc:.3f} < {GATE_AUC_MIN}")
+
+    # Calibration error: hit_rate vs avg_model_prob if available.
+    # rolling_stats does not carry avg_model_prob; compute from the
+    # passed avg_mp argument when the caller supplies it.
+    if avg_mp is not None:
+        cal_err = hr - avg_mp
+        if abs(cal_err) > GATE_CAL_TOL:
+            reasons.append(f"cal_err {cal_err:+.3f} > {GATE_CAL_TOL}")
+
+    if roi < GATE_ROI_MIN:
+        reasons.append(f"roi {roi:+.1f}% < {GATE_ROI_MIN}%")
+
+    if reasons:
+        return True, "; ".join(reasons)
+    return False, "healthy"
+
+
+def _update_gate(system: str, should_suppress: bool, reason: str,
+                 rolling: dict, prev_state: dict, run_date: str) -> dict:
+    """Apply hysteresis logic, return updated system gate dict, post flip alerts."""
+    prev = prev_state.get(system, {})
+    was_suppressed  = prev.get("suppressed", False)
+    suppress_streak = prev.get("suppress_streak", 0)
+    clear_streak    = prev.get("clear_streak",   0)
+
+    # Check force_gate override in registry.
+    from mlb_core.registry import SYSTEMS
+    cfg = SYSTEMS.get(system)
+    force_gate = cfg.force_gate if cfg else None
+
+    if force_gate is not None:
+        forced = force_gate.lower().strip()
+        if forced == "on":
+            now_suppressed = True
+            reason = "force_gate=on (registry override)"
+        elif forced == "off":
+            now_suppressed = False
+            reason = "force_gate=off (registry override)"
+        else:
+            now_suppressed = was_suppressed  # unknown value -- no change
+        suppress_streak = 0
+        clear_streak    = 0
+    elif should_suppress:
+        suppress_streak += 1
+        clear_streak     = 0
+        now_suppressed   = was_suppressed or (suppress_streak >= GATE_HYSTERESIS)
+    else:
+        clear_streak    += 1
+        suppress_streak  = 0
+        now_suppressed   = was_suppressed and (clear_streak < GATE_HYSTERESIS)
+
+    # Post alert on state flip.
+    flipped = (now_suppressed != was_suppressed)
+    if flipped:
+        _post_gate_alert(system, now_suppressed, reason, rolling, run_date)
+
+    return {
+        "suppressed":      now_suppressed,
+        "reason":          reason,
+        "metrics": {
+            "auc":   rolling.get("auc"),
+            "roi":   rolling.get("roi"),
+            "n":     rolling.get("n", 0),
+        },
+        "suppress_streak": suppress_streak,
+        "clear_streak":    clear_streak,
+        "as_of":           run_date,
+    }
+
+
+def _post_gate_alert(system: str, suppressed: bool, reason: str,
+                     stats: dict, run_date: str) -> None:
+    """Post suppressed<->unsuppressed flip to #ops-alerts."""
+    from mlb_core.notify.discord import _get_ops_webhook, _post
+
+    webhook_url = _get_ops_webhook()
+    if not webhook_url:
+        return
+
+    dot = SYSTEMS[system].icon if system in SYSTEMS else "o"
+    if suppressed:
+        title = f"GATE ACTIVE: {dot} {system} suppressed | {run_date}"
+        color = 0xED4245
+        desc  = f"System suppressed: {reason}"
+    else:
+        title = f"GATE CLEARED: {dot} {system} restored | {run_date}"
+        color = 0x57F287
+        desc  = f"System restored to live betting: {reason}"
+
+    embed = {
+        "title":       title,
+        "description": desc,
+        "color":       color,
+        "fields": [
+            {"name": "AUC",  "value": f"{stats.get('auc'):.3f}" if stats.get("auc") is not None else "n/a", "inline": True},
+            {"name": "ROI",  "value": f"{stats.get('roi', 0):+.1f}%", "inline": True},
+            {"name": "n",    "value": str(stats.get("n", 0)), "inline": True},
+        ],
+        "footer": {"text": "mlb-betting model gate | monitor_performance"},
+    }
+    _post(webhook_url, {"embeds": [embed]})
+
+
 def run(run_date: str = None) -> dict:
     """Check rolling performance for all systems. Post alerts if degraded.
 
@@ -355,31 +504,64 @@ def run(run_date: str = None) -> dict:
     total_alerts = 0
     weekly_stats = {}
 
+    # Load gate state once; update per-system; write once at end.
+    prev_gate  = _load_gate_state()
+    prev_sys   = prev_gate.get("systems", {})
+    new_sys_gates: dict = {}
+
     for system in CANONICAL_ORDER:
         sys_bets = all_bets[all_bets["system"] == system]
         if sys_bets.empty:
             results[system] = {"status": "no_data"}
             weekly_stats[system] = None
+            # Carry forward previous gate state so hysteresis counters persist.
+            new_sys_gates[system] = prev_sys.get(system, {
+                "suppressed": False, "reason": "no_data",
+                "suppress_streak": 0, "clear_streak": 0,
+            })
             continue
 
-        rolling = _rolling_stats(sys_bets, ROLLING_WINDOW)
+        rolling  = _rolling_stats(sys_bets, ROLLING_WINDOW)
         season_s = _season_stats(sys_bets)
         weekly_stats[system] = season_s
 
         alerts = _check_alerts(system, rolling)
         if alerts:
-            logger.warning(f"monitor: {system} ALERT — {alerts}")
+            logger.warning(f"monitor: {system} ALERT -- {alerts}")
             _post_alert(system, alerts, rolling, run_date)
             total_alerts += len(alerts)
         else:
             logger.info(f"monitor: {system} healthy | "
                         f"n={rolling.get('n',0)} roi={rolling.get('roi',0):+.1f}%")
 
+        # Gate decision.
+        should_suppress, gate_reason = _gate_condition_met(rolling)
+        gate_entry = _update_gate(
+            system, should_suppress, gate_reason, rolling, prev_sys, run_date
+        )
+        new_sys_gates[system] = gate_entry
+        logger.info(
+            "monitor: %s gate -> suppressed=%s reason=%s streaks(sup=%d,clr=%d)",
+            system, gate_entry["suppressed"], gate_reason,
+            gate_entry["suppress_streak"], gate_entry["clear_streak"],
+        )
+
         results[system] = {
             "rolling": rolling,
             "season":  season_s,
             "alerts":  alerts,
+            "gate":    {"suppressed": gate_entry["suppressed"], "reason": gate_entry["reason"]},
         }
+
+    # Write gate file (overwrite each run; idempotent).
+    import json as _json_mod
+    from datetime import timezone, datetime as _datetime
+    new_gate_state = {
+        "as_of":   _datetime.now(timezone.utc).isoformat(),
+        "systems": new_sys_gates,
+    }
+    _write_gate_state(new_gate_state)
+    logger.info("monitor: gate file written to %s", GATE_FILE_KEY)
 
     if is_monday:
         logger.info("monitor: posting weekly digest")

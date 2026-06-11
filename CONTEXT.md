@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-06-10 17:41 CST_
+_Last updated: 2026-06-10 19:00 CST
 
 The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
 
@@ -979,6 +979,34 @@ Per-book stats (T15): groups settled bets by `book` column, reports n, hit_rate,
 ROI, mean_clv per book. Alert if any book reaches n >= 20 and ROI < -20%
 (potential profiling signal).
 
+### Model-health gate (Task B -- 2026-06-10)
+
+`monitor_performance.run()` also writes `Gates/model_gates.json` after every
+monitor run. Gate logic (thresholds overrideable via env vars):
+- Suppress if rolling AUC < `GATE_AUC_MIN=0.52` OR ROI < `GATE_ROI_MIN=-20%`
+- `MIN_GATE_N=30` settled bets minimum before gate may activate (prevents cold-start shutdown)
+- Hysteresis: 2 consecutive runs meeting condition before flip; 2 consecutive clean runs to recover
+- Manual override: `SystemConfig.force_gate = "on"/"off"` in registry wins over all metrics
+
+`mlb_core/risk/gates.py::is_suppressed(system)` is called once per runner before the scoring loop.
+Returns False on any I/O error (fail-open). When suppressed, runner logs every prediction but
+sets `kelly_triggered=False, stake=0` -- data continues to accumulate for recovery.
+State flips post to #ops-alerts with AUC/ROI/n context.
+
+Runners with gate wiring: run_nrfi ("1IOU"), run_hr ("HR"), run_k ("K" + "OUTS"),
+run_batter_hits ("BATTER_HITS"), run_game ("GAME"). F5 and sub-runners (F1H) inherit via the
+`LOG_ONLY_SYSTEMS` set in run_f5.py (OR semantics; both static and dynamic suppression apply).
+
+### Model-health endpoint (Task A -- 2026-06-10)
+
+`GET /model-health` now returns three additional fields per system:
+- `flags`: list of active flags (`inverted`, `miscalibrated`, `negative_roi`, `underpowered`, `no_edge`)
+- `health`: composite verdict with precedence: underpowered -> inverted -> miscalibrated -> no_edge -> degraded -> moderate -> healthy
+- `recommended_action`: short human string keyed to `health`
+
+Thresholds: `MIN_HEALTH_N=20` (env: `HEALTH_MIN_N`), `CAL_ERR_TOL=0.10` (`HEALTH_CAL_TOL`),
+`ROI_FLOOR=-10` (`HEALTH_ROI_FLOOR`). Constants in main.py at module level.
+
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%
 - BATTER_HITS: 52%, BATTER_TB: 52%, GAME: 52% (update after 200 settled bets; dedicated trained models)
@@ -999,6 +1027,10 @@ Checks (all post-feature-build):
 - Any bets pending > 3 days
 
 Silent on clean run. Posts to #ops-alerts via DISCORD_WEBHOOK_OPS on failure.
+
+`Gates/model_gates.json` -- GCS key for the dynamic suppression gate file. Written by
+`monitor_performance.run()`. Read by `mlb_core/risk/gates.py::is_suppressed()` in each
+runner. Absent before first post-deploy monitor run; all runners fail open on missing file.
 
 `monitor_drift.py` (T14) runs Monday at 09:00 UTC via `mlb-monitor-drift`.
 Computes PSI between last 7 days of live prediction feature distributions vs
@@ -2381,7 +2413,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-06-10 17:41 CST_
+_Last updated: 2026-06-10 19:00 CST
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

@@ -525,6 +525,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="HR")
     _pending_stakes: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    _gate_suppressed = _is_suppressed("HR")
+    if _gate_suppressed:
+        logger.warning("HR gate active -- logging only, no staked bets this run")
     for player_name, odds_info in player_odds.items():
         idx = _resolve_name_idx(player_name)
         if idx is None:
@@ -551,7 +555,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
 
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed
         if kelly_triggered and stake > 0:
             _pending_stakes[int(row.get("game_pk", 0))] = (
                 _pending_stakes.get(int(row.get("game_pk", 0)), 0.0) + stake
