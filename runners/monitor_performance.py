@@ -45,13 +45,16 @@ HIT_RATE_DROP         = float(os.getenv("MONITOR_HIT_RATE_DROP", "10"))  # pct p
 MIN_BETS_FOR_ALERT    = int(os.getenv("MONITOR_MIN_BETS",        "20"))  # min settled bets
 ROLLING_WINDOW        = int(os.getenv("MONITOR_ROLLING_WINDOW",  "30"))  # bets
 
-# Gate thresholds (Task B) -- same numeric intent as main.py MIN_HEALTH_N/CAL_ERR_TOL/ROI_FLOOR.
-# A system with < MIN_GATE_N bets is NEVER suppressed.
+# Gate thresholds (Task B). Suppression is ROI-ONLY (see _gate_condition_met):
+# ROI is the only un-biased "is this working" signal. A system with < MIN_GATE_N
+# bets is NEVER suppressed.
 MIN_GATE_N      = int(os.getenv("GATE_MIN_N",      "30"))   # minimum settled bets to activate gate
-GATE_AUC_MIN    = float(os.getenv("GATE_AUC_MIN",  "0.52"))  # suppress if rolling AUC < this
-GATE_CAL_TOL    = float(os.getenv("GATE_CAL_TOL",  "0.12"))  # suppress if |cal_err| > this
 GATE_ROI_MIN    = float(os.getenv("GATE_ROI_MIN",  "-20"))   # suppress if rolling ROI < this (%)
 GATE_HYSTERESIS = int(os.getenv("GATE_HYSTERESIS", "2"))     # consecutive runs before flip
+# Observability-only thresholds (recorded in gate metrics + drive non-suppressing
+# alerts; do NOT trigger gate suppression -- bet-sample AUC/cal are selection-biased).
+GATE_AUC_MIN    = float(os.getenv("GATE_AUC_MIN",  "0.52"))
+GATE_CAL_TOL    = float(os.getenv("GATE_CAL_TOL",  "0.12"))
 
 GATE_FILE_KEY   = "Gates/model_gates.json"
 
@@ -378,36 +381,25 @@ def _write_gate_state(state: dict) -> None:
 
 
 def _gate_condition_met(rolling: dict) -> tuple[bool, str]:
-    """Return (should_suppress, reason) based on rolling metrics.
+    """Return (should_suppress, reason) -- ROI-only suppression.
 
-    Uses MODEL-probability AUC (auc_model), not market AUC -- the gate must
-    measure whether our model discriminates, which is what determines edge.
-    Calibration arm uses rolling hit_rate vs avg_model_prob.
+    ROI is the ground-truth signal for "is this system working". The
+    first-inning run-sim spike (2026-06-11, handoff_runsim_decision) proved
+    that bet-sample auc_model and cal_err are SELECTION-BIASED: a system can
+    show bet-sample AUC < 0.50 while earning +11% ROI, because the bets are a
+    censored anti-market subsample. Those metrics are still computed and stored
+    for observability (and still raise a NON-suppressing Discord alert via
+    _check_alerts), but they do NOT trigger automatic suppression -- only a
+    sustained negative ROI does. This keeps the gate simple, stable, and from
+    killing profitable systems on noisy 30-bet discrimination estimates.
     """
-    n       = rolling.get("n", 0)
-    auc     = rolling.get("auc_model")        # model_prob AUC (not market)
-    roi     = rolling.get("roi", 0.0)
-    hr      = rolling.get("hit_rate", 0.0)
-    avg_mp  = rolling.get("avg_model_prob")
+    n   = rolling.get("n", 0)
+    roi = rolling.get("roi", 0.0)
 
     if n < MIN_GATE_N:
         return False, f"underpowered (n={n} < {MIN_GATE_N})"
-
-    reasons = []
-    if auc is not None and auc < GATE_AUC_MIN:
-        reasons.append(f"auc_model {auc:.3f} < {GATE_AUC_MIN}")
-
-    # Calibration error: rolling hit_rate vs rolling avg model probability.
-    if avg_mp is not None:
-        cal_err = hr - avg_mp
-        if abs(cal_err) > GATE_CAL_TOL:
-            reasons.append(f"cal_err {cal_err:+.3f} > {GATE_CAL_TOL}")
-
     if roi < GATE_ROI_MIN:
-        reasons.append(f"roi {roi:+.1f}% < {GATE_ROI_MIN}%")
-
-    if reasons:
-        return True, "; ".join(reasons)
+        return True, f"roi {roi:+.1f}% < {GATE_ROI_MIN}%"
     return False, "healthy"
 
 

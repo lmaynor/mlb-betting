@@ -135,45 +135,48 @@ def _gate_cond(n, auc_model=0.60, roi=5.0, avg_model_prob=None, hit_rate=0.50):
 
 
 class TestGateCondition:
+    """ROI-only suppression. Bet-sample AUC/cal are observability-only and must
+    NOT trigger suppression (proven selection-biased by the run-sim spike)."""
+
     def test_underpowered_never_suppressed(self):
         ok, reason = _gate_cond(n=10, auc_model=0.40, roi=-50)
         assert ok is False
         assert "underpowered" in reason
 
-    def test_low_model_auc_triggers(self):
-        ok, reason = _gate_cond(n=50, auc_model=0.50, roi=5)
-        assert ok is True
-        assert "auc_model" in reason
+    def test_low_model_auc_does_NOT_trigger(self):
+        # auc 0.42 (backwards on bet sample) but profitable -> NOT suppressed
+        ok, reason = _gate_cond(n=50, auc_model=0.42, roi=11)
+        assert ok is False
+        assert reason == "healthy"
 
     def test_low_roi_triggers(self):
-        ok, _ = _gate_cond(n=50, auc_model=0.55, roi=-25)
+        ok, reason = _gate_cond(n=50, auc_model=0.55, roi=-25)
         assert ok is True
+        assert "roi" in reason
 
     def test_healthy_clears(self):
         ok, reason = _gate_cond(n=50, auc_model=0.55, roi=5)
         assert ok is False
         assert reason == "healthy"
 
-    def test_calibration_arm_fires_when_avg_model_prob_present(self):
-        # hit_rate 0.45 vs avg_model_prob 0.65 -> cal_err -0.20, |.| > 0.12
-        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
+    def test_bad_calibration_does_NOT_trigger_when_profitable(self):
+        # cal_err -0.20 (overconfident) but ROI positive -> NOT suppressed
+        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=11,
                                 avg_model_prob=0.65, hit_rate=0.45)
+        assert ok is False
+        assert reason == "healthy"
+
+    def test_profitable_system_never_suppressed(self):
+        # The OUTS case: bet-sample AUC 0.43, bad cal, but +11% ROI
+        ok, reason = _gate_cond(n=489, auc_model=0.43, roi=11,
+                                avg_model_prob=0.56, hit_rate=0.49)
+        assert ok is False
+
+    def test_negative_roi_suppressed_regardless_of_auc(self):
+        # F5 case: decent-ish AUC but ROI -22.6% -> suppressed
+        ok, reason = _gate_cond(n=30, auc_model=0.55, roi=-22.6)
         assert ok is True
-        assert "cal_err" in reason
-
-    def test_calibration_arm_silent_when_avg_model_prob_missing(self):
-        # No avg_model_prob -> calibration arm must not fire (and not crash)
-        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
-                                avg_model_prob=None, hit_rate=0.20)
-        assert ok is False
-        assert reason == "healthy"
-
-    def test_well_calibrated_does_not_trigger(self):
-        # hit_rate 0.54 vs avg_model_prob 0.52 -> cal_err 0.02, within tol
-        ok, reason = _gate_cond(n=50, auc_model=0.60, roi=5,
-                                avg_model_prob=0.52, hit_rate=0.54)
-        assert ok is False
-        assert reason == "healthy"
+        assert "roi" in reason
 
 
 # ---------------------------------------------------------------------------
