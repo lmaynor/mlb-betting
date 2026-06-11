@@ -76,7 +76,7 @@ mlb-betting/
 │                                 Routes: /healthz, /run, /build-features,
 │                                         /snapshot-odds, /settle, /refresh-data,
 │                                         /monitor, /monitor-ops, /retrain-weekly,
-│                                         /model-health, /backfill-data
+│                                         /model-health, /edge-analysis, /backfill-data
 ├── Dockerfile                    Single image. Used by Cloud Run service AND jobs.
 ├── requirements.txt              Pinned Python deps.
 ├── setup.py                      Makes mlb_core importable. Only prod deps --
@@ -1015,6 +1015,21 @@ run_batter_hits ("BATTER_HITS"), run_game ("GAME"). F5 and sub-runners (F1H) inh
 
 Thresholds: `MIN_HEALTH_N=20` (env: `HEALTH_MIN_N`), `CAL_ERR_TOL=0.10` (`HEALTH_CAL_TOL`),
 `ROI_FLOOR=-10` (`HEALTH_ROI_FLOOR`). Constants in main.py at module level.
+
+### Edge-analysis endpoint (Task #2 -- adverse-selection diagnostic, 2026-06-11)
+
+`GET /edge-analysis` stratifies settled, kelly-triggered bets by EDGE bucket
+(the gap between model_prob and the de-vigged line: <5%, 5-10%, 10-15%, 15-20%,
+>=20%) and reports per bucket per system: n, mean_edge, hit_rate, avg_model_prob,
+realized_cal_err, roi, mean_clv, clv_tstat. Read-only.
+
+Purpose: detect adverse selection. If ROI/mean_clv DECLINE as the edge bucket
+grows, the biggest apparent edges are mostly model error (winner's curse on
+max-disagreement bets) -> cap/down-weight extreme edges + calibrate before Kelly.
+If they hold/rise, the gaps are real EV. CLV is a strong test in liquid markets
+(GAME, F5), weak in thin prop/inning markets (use ROI there). This is the keystone
+that should parameterize the calibration-before-sizing change (Task #3); the
+de-vig audit (Task #4) corrects the market side of the gap (`fair_prob`).
 
 Expected hit rates (baselines -- update after 200 bets per system):
 - HR: 7%, NRFI: 55%, F5: 52%, K: 52%, OUTS: 52%

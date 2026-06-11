@@ -1146,6 +1146,121 @@ def model_health_handler():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route("/edge-analysis", methods=["GET", "POST"])
+def edge_analysis_handler():
+    """
+    GET/POST /edge-analysis
+
+    Adverse-selection diagnostic (Task #2). Stratifies settled, kelly-triggered
+    bets by EDGE bucket (the gap between model_prob and the de-vigged fair line)
+    and reports, per bucket, whether realized performance RISES or FALLS as the
+    gap grows:
+      - realized ROI and mean CLV (do bigger gaps convert to bigger edge?)
+      - realized calibration: hit_rate vs avg_model_prob (is the gap real or
+        is it overconfidence?)
+
+    Reading the result:
+      - ROI / CLV that DECLINE as edge grows  => adverse selection: your biggest
+        apparent edges are mostly model error. Cap/down-weight extreme edges and
+        calibrate before sizing (Task #3).
+      - ROI / CLV that hold or RISE with edge  => the gaps are real EV. Keep them.
+    Interpret per market liquidity: CLV is a strong test in liquid markets
+    (GAME, F5), weak in thin prop/inning markets (use ROI there).
+    """
+    import math
+    from sqlalchemy import text as _text
+
+    # Edge buckets (the gap to the de-vigged line). Fixed bins for interpretability.
+    BINS = [
+        ("<5%",    -1.0,  0.05),
+        ("5-10%",   0.05, 0.10),
+        ("10-15%",  0.10, 0.15),
+        ("15-20%",  0.15, 0.20),
+        (">=20%",   0.20, 1.0),
+    ]
+
+    def _clv_tstat(clvs):
+        n = len(clvs)
+        if n < 2:
+            return None, None
+        mu  = sum(clvs) / n
+        var = sum((x - mu) ** 2 for x in clvs) / (n - 1)
+        se  = math.sqrt(var / n)
+        return round(mu, 4), (round(mu / se, 3) if se > 0 else 0.0)
+
+    def _bucket_stats(rows):
+        n = len(rows)
+        if n == 0:
+            return None
+        outcomes  = [1 if r["result"] == "win" else 0 for r in rows]
+        hit_rate  = sum(outcomes) / n
+        staked    = sum(float(r.get("stake")  or 0) for r in rows)
+        profit    = sum(float(r.get("profit") or 0) for r in rows)
+        roi       = round(profit / staked * 100, 2) if staked > 0 else None
+        edges     = [float(r["edge"]) for r in rows if r.get("edge") is not None]
+        mean_edge = round(sum(edges) / len(edges) * 100, 2) if edges else None
+        mprobs    = [float(r["model_prob"]) for r in rows if r.get("model_prob") is not None]
+        avg_mp    = sum(mprobs) / len(mprobs) if mprobs else None
+        clvs      = [float(r["clv_pct"]) for r in rows if r.get("clv_pct") is not None]
+        mean_clv, clv_t = _clv_tstat(clvs) if clvs else (None, None)
+        return {
+            "n":            n,
+            "mean_edge_pct": mean_edge,
+            "hit_rate":     round(hit_rate, 4),
+            "avg_model_prob": round(avg_mp, 4) if avg_mp is not None else None,
+            "realized_cal_err": round(hit_rate - avg_mp, 4) if avg_mp is not None else None,
+            "roi":          roi,
+            "mean_clv":     mean_clv,
+            "clv_tstat":    clv_t,
+            "clv_n":        len(clvs),
+        }
+
+    def _system_buckets(rows):
+        scorable = [r for r in rows if r.get("result") in ("win", "loss")]
+        out = {}
+        for label, lo, hi in BINS:
+            bucket = [r for r in scorable
+                      if r.get("edge") is not None and lo <= float(r["edge"]) < hi]
+            stats = _bucket_stats(bucket)
+            if stats is not None:
+                out[label] = stats
+        return out
+
+    try:
+        engine = _get_engine()
+        season = datetime.now(_CT).year
+        with engine.connect() as conn:
+            rows = [dict(r._mapping) for r in conn.execute(_text(
+                "SELECT system, result, stake, profit, model_prob, market_prob, "
+                "edge, clv_pct, game_date FROM bets "
+                "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                "ORDER BY game_date ASC"
+            ), {"y": f"{season}%"})]
+
+        by_system = {}
+        for r in rows:
+            by_system.setdefault(r["system"], []).append(r)
+
+        results = {"ALL": _system_buckets(rows)}
+        for sys_name, sys_rows in sorted(by_system.items()):
+            results[sys_name] = _system_buckets(sys_rows)
+
+        return jsonify({
+            "status":   "ok",
+            "season":   season,
+            "note":     "Edge bucket = gap between model_prob and de-vigged line. "
+                        "If roi/mean_clv decline as edge grows => adverse selection "
+                        "(biggest gaps are model error). See edge_analysis_handler docstring.",
+            "buckets":  [b[0] for b in BINS],
+            "systems":  results,
+        }), 200
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"edge-analysis failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/capture-closing", methods=["POST"])
 def capture_closing_handler():
     """Capture closing lines for all open bets today. Run at T-5 min per game."""
