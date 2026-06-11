@@ -50,7 +50,7 @@ export async function Hero() {
             className="dell-display hero-h1"
             style={{ fontSize: '32px', lineHeight: 1.0, color: '#fff', marginBottom: '16px' }}
           >
-            Today&apos;s MLB Card,<br />Ranked by Edge.
+            The Sharpest MLB Plays,<br />Ranked Every Morning.
           </h1>
 
           {/* Body copy -- Georgia serif for 1996 feel */}
@@ -58,8 +58,8 @@ export async function Hero() {
             className="times"
             style={{ fontSize: '15px', lineHeight: 1.6, color: '#fff', marginBottom: '28px', maxWidth: '380px' }}
           >
-            Beezy turns model edge, market price, and Kelly signal into a simple
-            0&ndash;100 score so the best plays are easy to scan, screenshot, and track.
+            Our models grade every game and prop, then rank them by a single
+            0&ndash;100 Beezy Score. Open the card, see the edge, track every result.
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
