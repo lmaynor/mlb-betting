@@ -39,7 +39,7 @@ export function Nav() {
         </Link>
 
         {/* Desktop nav links */}
-        <div style={{ display: 'flex', alignItems: 'stretch' }} className="nav-desktop">
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }} className="nav-desktop">
           {NAV_LINKS.map((l, index) => {
             const active = pathname.startsWith(l.href)
             return (
@@ -54,7 +54,7 @@ export function Nav() {
                   color: active ? '#fcc20f' : '#a1a1aa',
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '0 14px',
+                  padding: '0 16px',
                   borderRight: index < NAV_LINKS.length - 1 ? '1px solid #1f1f24' : 'none',
                   borderBottom: active ? '2px solid #fcc20f' : '2px solid transparent',
                   background: active ? '#111' : 'transparent',

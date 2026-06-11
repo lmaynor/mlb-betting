@@ -212,7 +212,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .ticker-track {
   display: flex;
   width: max-content;
-  animation: ticker-scroll 30s linear infinite;
+  animation: ticker-scroll 64s linear infinite;
 }
 
 .ticker-track:hover { animation-play-state: paused; }
@@ -321,7 +321,7 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   }
 
   .live-ticker-shell .ticker-track {
-    animation-duration: 18s;
+    animation-duration: 44s;
   }
 
   .live-ticker-shell span {

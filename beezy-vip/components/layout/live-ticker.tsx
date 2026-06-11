@@ -20,7 +20,14 @@ export async function LiveTicker() {
     // Render nothing if API is unavailable.
   }
 
-  const ticks = [...wins, ...losses]
+  // Interleave W / L so the strip stays visually balanced instead of
+  // showing a run of wins followed by a run of losses.
+  const ticks: typeof wins = []
+  const maxLen = Math.max(wins.length, losses.length)
+  for (let i = 0; i < maxLen; i++) {
+    if (wins[i])   ticks.push(wins[i])
+    if (losses[i]) ticks.push(losses[i])
+  }
   if (ticks.length === 0) return null
 
   const doubled = [...ticks, ...ticks]
@@ -35,18 +42,25 @@ export async function LiveTicker() {
       {/* Clipping viewport -- the animated track lives inside this, so translateX never reaches the label */}
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
         <div className="ticker-track">
-          {doubled.map((t, i) => (
-            <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <span>{t.result === 'win' ? 'W' : 'L'}</span>
-              <span style={{ color: '#52525b' }}>/</span>
-              <span>{t.system}</span>
-              <span style={{ color: '#52525b' }}>/</span>
-              <span>{t.game}</span>
-              <span style={{ color: '#52525b' }}>/</span>
-              <span>{t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(2)}u</span>
-              <span style={{ color: '#1f1f24', padding: '0 10px' }}>|</span>
-            </span>
-          ))}
+          {doubled.map((t, i) => {
+            const win = t.result === 'win'
+            const tone = win ? '#b3bd95' : '#d77a7a'
+            // profit is stored in dollars at a $10 unit (1u = 1% of bankroll);
+            // divide by 10 to display in units.
+            const u = t.pnl / 10
+            return (
+              <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: tone, fontWeight: 700 }}>{win ? 'W' : 'L'}</span>
+                <span style={{ color: '#52525b' }}>/</span>
+                <span>{t.system}</span>
+                <span style={{ color: '#52525b' }}>/</span>
+                <span>{t.game}</span>
+                <span style={{ color: '#52525b' }}>/</span>
+                <span style={{ color: tone }}>{u >= 0 ? '+' : ''}{u.toFixed(2)}u</span>
+                <span style={{ color: '#1f1f24', padding: '0 10px' }}>|</span>
+              </span>
+            )
+          })}
         </div>
       </div>
     </div>

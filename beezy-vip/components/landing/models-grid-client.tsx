@@ -85,7 +85,7 @@ function SystemTile({ s, cellBorder }: { s: SystemCard; cellBorder: React.CSSPro
         <div className="dell-heading" style={{ fontSize: '11px', color: '#f5f5f7', letterSpacing: '0.02em' }}>
           {s.name}
         </div>
-        {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} />}
+        {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} positive={s.roi >= 0} />}
       </div>
 
       {/* Expandable detail: description + stats + link */}
