@@ -68,6 +68,17 @@ def raw_boxscore_key(date: str) -> str:
     return f"{NBA_PREFIX}/raw/boxscores/{date}.json"
 
 
+# -- Kaggle (eoinamoore historical stats.nba.com dataset) ----------------------
+KAGGLE_DATASET = "eoinamoore/historical-nba-data-and-player-box-scores"
+STATS_NBA_PREFIX = f"{NBA_PREFIX}/stats_nba"
+
+
+def stats_nba_raw_key(relpath: str) -> str:
+    return f"{STATS_NBA_PREFIX}/raw/{relpath}"
+
+
+STATS_NBA_INGEST_SENTINEL = f"{STATS_NBA_PREFIX}/last_ingest.json"
+
 GAMES_MASTER = f"{NBA_PREFIX}/games_master.csv"
 TEAM_BOX_MASTER = f"{NBA_PREFIX}/team_boxscores_master.csv"
 PLAYER_BOX_MASTER = f"{NBA_PREFIX}/player_boxscores_master.csv"

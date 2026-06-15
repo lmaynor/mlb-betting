@@ -36,7 +36,22 @@ nba/
     masters.py         upsert(key, rows) -- merge+dedupe+write a master
     backfill.py        one-time multi-season pull (resume-safe)
     refresh.py         nightly incremental (yesterday); no-op offseason
+    kaggle_ingest.py   one-shot Kaggle -> GCS mirror of the deep-history dataset
 ```
+
+## Deep history (Kaggle, optional secondary source)
+
+`kaggle_ingest.py` mirrors the **eoinamoore historical NBA dataset**
+(stats.nba.com lineage: games / team+player box / play-by-play / advanced stats,
+1947-today, **no odds**) into `NBA/stats_nba/raw/`. This is the deep, advanced-stat
+source that matches the historical training parquet; SportsBlaze remains the clean
+nightly outcomes/box backbone.
+
+- Auth: kagglehub reads `KAGGLE_USERNAME` + `KAGGLE_KEY` (token from
+  kaggle.com/settings -> "Create New Token"). In Cloud Run these come from Secret
+  Manager (`kaggle-username`, `kaggle-key`).
+- Run as a slow overnight Cloud Run Job (`nba-kaggle-ingest`, 16Gi) via
+  `deploy/setup_nba_kaggle_ingest.sh`. Writes `NBA/stats_nba/last_ingest.json`.
 
 ## GCS (shared bucket, `NBA/` prefix)
 

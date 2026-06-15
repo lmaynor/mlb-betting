@@ -155,6 +155,20 @@ def upload_model(local_path: Path, gcs_key: str) -> None:
         _gcs_blob(gcs_key).upload_from_filename(str(local_path), timeout=_GCS_TIMEOUT)
 
 
+def upload_file(local_path, key: str) -> None:
+    """Upload an arbitrary local file to a GCS key, or copy it under BASE_DATA
+    in local mode. Streams from disk (no full read into memory) so it is safe
+    for large files (e.g. multi-hundred-MB CSVs)."""
+    local_path = Path(local_path)
+    if _get_bucket():
+        _gcs_blob(key).upload_from_filename(str(local_path), timeout=_GCS_TIMEOUT)
+        return
+    import shutil
+    dest = _local_path(key)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(local_path, dest)
+
+
 def stat(key: str) -> dict | None:
     """Return {'mtime_utc': datetime, 'size': int} for a key, or None if missing."""
     if _get_bucket():

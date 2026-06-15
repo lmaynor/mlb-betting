@@ -3011,6 +3011,13 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   `nba-refresh-data` (daily 13:00 UTC, OAuth + Run API trigger, see §9). Runs
   year-round; no-ops on empty days (offseason self-healing). Provisioned by
   `deploy/setup_nba_refresh.sh`. **Not** wired into `monitor_ops` yet (MLB-keyed).
+- **Deep history (Kaggle):** Cloud Run Job `nba-kaggle-ingest`
+  (`nba/data/kaggle_ingest.py`) mirrors the eoinamoore historical NBA dataset
+  (stats.nba.com lineage: games/team/player box + play-by-play + advanced stats,
+  1947-today, **no odds**) into `NBA/stats_nba/raw/`. Slow overnight batch;
+  kagglehub auth via Secret Manager `kaggle-username`/`kaggle-key`. Provisioned by
+  `deploy/setup_nba_kaggle_ingest.sh` (16Gi). Live-reproducible advanced-feature
+  source matching the historical training parquet.
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
