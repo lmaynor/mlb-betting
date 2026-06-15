@@ -30,8 +30,16 @@ Ported from nba-parlay-generator `odds_ingestion.py`, refit sync + GCS.
 - Edge/Kelly/de-vig: **reuse `mlb_core.odds.utils`** (already has
   `american_to_implied_prob`, `remove_vig`, `kelly_pct`, `devig_two_way`) -- did
   NOT re-port `edge_calculator`.
-- Key: env `THE_ODDS_API_KEY` <- Secret Manager `odds-api-key`. NOTE: the office
-  LAN blocks api.the-odds-api.com (gambling category) -- live calls only from Cloud Run.
+- **Provider: ParlayAPI** (`nba/odds/parlayapi.py` + `parlay_extract.py` +
+  `accumulator.py`). Chosen over The Odds API: 1000 cr/mo free (vs 500), 60 req/sec,
+  includes Pinnacle, 32 books. Billing: props 1 cr per (event x market); whole-slate
+  game lines 1 cr per market. Key env `PARLAY_API_KEY` <- Secret Manager `parlay-api-key`.
+  The Odds API client (`theoddsapi.py`) kept as an alternate.
+- **Accumulator** (`nba/odds/accumulator.py`, Job via `deploy/setup_parlay_accumulator.sh`):
+  sport-agnostic; snapshots live props/game-lines to `OddsAccum/{sport}/{date}/`.
+  This is how prop history is built -- **no historical-props API exists at any tier**
+  (confirmed 2026-06-15), so we bank it forward (MLB now; NBA from Oct).
+- NOTE: gambling-category APIs are blocked on the office LAN -- live calls only from Cloud Run.
 
 ### 2. Features (DEFERRED)
 Two feature surfaces:

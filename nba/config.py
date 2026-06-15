@@ -114,6 +114,40 @@ def odds_csv_key(date: str, kind: str, hhmm: str) -> str:
     return f"{ODDS_PREFIX}/{date}/{kind}_{hhmm}.csv"
 
 
+# -- ParlayAPI (chosen live odds provider; sport-agnostic accumulator) ----------
+# parlay-api.com -- 1000 credits/mo free (60 req/sec); $5 = 20k. Same response
+# shape as The Odds API EXCEPT prop outcome name is "Over <player>" with
+# description="<player>". Billing: props 1 credit per (event x market); whole-slate
+# game lines 1 credit per market. Request oddsFormat=american. Pinnacle included.
+# Key from Secret Manager (parlay-api-key) -> env PARLAY_API_KEY. Reachable from
+# Cloud Run (office LAN blocks gambling category).
+# NOTE: ParlayAPI has NO historical player props -- accumulator banks them forward.
+PARLAY_API_BASE = os.environ.get("PARLAY_API_BASE", "https://parlay-api.com/v1")
+PARLAY_REGION = "us"
+
+# default prop markets per sport (override via CLI)
+PARLAY_PROP_MARKETS = {
+    "basketball_nba": ["player_points", "player_rebounds", "player_assists"],
+    "baseball_mlb": ["player_hits", "player_total_bases", "player_home_runs"],
+}
+PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
+
+# accumulated-odds lake (sport-namespaced; multi-sport)
+ODDSACCUM_PREFIX = "OddsAccum"
+
+
+def oddsaccum_raw_key(sport: str, date: str, kind: str, hhmm: str) -> str:
+    return f"{ODDSACCUM_PREFIX}/{sport}/raw/{date}/{kind}_{hhmm}.json"
+
+
+def oddsaccum_csv_key(sport: str, date: str, kind: str, hhmm: str) -> str:
+    return f"{ODDSACCUM_PREFIX}/{sport}/{date}/{kind}_{hhmm}.csv"
+
+
+def oddsaccum_latest_key(sport: str) -> str:
+    return f"{ODDSACCUM_PREFIX}/{sport}/latest.json"
+
+
 GAMES_MASTER = f"{NBA_PREFIX}/games_master.csv"
 TEAM_BOX_MASTER = f"{NBA_PREFIX}/team_boxscores_master.csv"
 PLAYER_BOX_MASTER = f"{NBA_PREFIX}/player_boxscores_master.csv"
