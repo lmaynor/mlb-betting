@@ -79,6 +79,41 @@ def stats_nba_raw_key(relpath: str) -> str:
 
 STATS_NBA_INGEST_SENTINEL = f"{STATS_NBA_PREFIX}/last_ingest.json"
 
+# -- The Odds API (live odds) --------------------------------------------------
+# Ported from the nba-parlay-generator reference. NOTE: api.the-odds-api.com is
+# blocked on the office LAN (gambling category) -- live calls only work from
+# Cloud Run. Key from Secret Manager (odds-api-key) -> env THE_ODDS_API_KEY.
+# Free tier is 500 requests/month: player props cost 1 credit PER EVENT, game
+# lines (h2h/spreads/totals) cost 1 credit for the WHOLE slate. Be frugal.
+ODDS_API_BASE = os.environ.get("ODDS_API_BASE", "https://api.the-odds-api.com/v4")
+ODDS_SPORT_KEY = "basketball_nba"
+ODDS_REGION = "us"
+
+# us-region books we track; order = preference for tie-breaks in best-book.
+ODDS_DEFAULT_BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"]
+
+# player-prop market api-key -> short name
+ODDS_PROP_MARKETS = {
+    "player_points": "points",
+    "player_rebounds": "rebounds",
+    "player_assists": "assists",
+    "player_threes": "threes",
+    "player_points_rebounds_assists": "pra",
+}
+ODDS_GAME_MARKETS = ["h2h", "spreads", "totals"]
+
+ODDS_PREFIX = f"{NBA_PREFIX}/odds"
+ODDS_LATEST = f"{ODDS_PREFIX}/latest.json"
+
+
+def odds_raw_key(date: str, kind: str, hhmm: str) -> str:
+    return f"{ODDS_PREFIX}/raw/{date}/{kind}_{hhmm}.json"
+
+
+def odds_csv_key(date: str, kind: str, hhmm: str) -> str:
+    return f"{ODDS_PREFIX}/{date}/{kind}_{hhmm}.csv"
+
+
 GAMES_MASTER = f"{NBA_PREFIX}/games_master.csv"
 TEAM_BOX_MASTER = f"{NBA_PREFIX}/team_boxscores_master.csv"
 PLAYER_BOX_MASTER = f"{NBA_PREFIX}/player_boxscores_master.csv"

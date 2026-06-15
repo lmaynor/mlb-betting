@@ -3001,7 +3001,11 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
 `docs/solutions/integration-issues/sportsblaze-nba.md`.
 
 - **Code:** `nba/` package (additive; reuses `mlb_core.storage`; MLB untouched).
-  `nba/data/{sportsblaze,flatten,masters,backfill,refresh}.py`.
+  `nba/data/{sportsblaze,flatten,masters,backfill,refresh,kaggle_ingest}.py`;
+  `nba/odds/{theoddsapi,extract,snapshot}.py` (The Odds API layer, ported from the
+  nba-parlay-generator reference; reuses `mlb_core.odds.utils` for edge/Kelly/de-vig).
+  Full pipeline plan (features/models/edge/parlay/backtest, mostly DEFERRED) in
+  `nba/BLUEPRINT.md`.
 - **Data lake:** shared bucket under `NBA/` prefix -- `raw/boxscores/{date}.json`
   (idempotent cache), `games_master.csv`, `team_boxscores_master.csv`,
   `player_boxscores_master.csv`, `last_refresh.json`. 8 seasons available
