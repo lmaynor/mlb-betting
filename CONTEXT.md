@@ -30,6 +30,7 @@ If you change something here, treat it as a contract change -- flag it in the ne
 16. [Backlogs](#16-backlogs)
 17. [Pointers to other docs](#17-pointers-to-other-docs)
 18. [When to update this file](#18-when-to-update-this-file)
+19. [NBA (data-only, pre-modeling)](#19-nba-data-only-pre-modeling)
 
 ---
 
@@ -2987,3 +2988,29 @@ Full site-wide replacement of the terminal-palette color set with Dell 1996 cata
 
 **Don't put point-in-time state here.** That belongs in `handoffs/`.
 **Don't put runbook fragments here.** That belongs in `RUNBOOKS.md`.
+
+---
+
+## 19. NBA (data-only, pre-modeling)
+
+Basketball expansion, **data-collection-first**. Source: SportsBlaze
+(`https://cache.sportsblaze.com`, no auth). There is **no NBA model, odds feed,
+or betting runner yet** -- this is raw box-score ingest only. Odds sourcing is a
+separate, later effort. Full detail lives in `nba/README.md`; plan + decisions in
+`handoffs/scope_nba_expansion_2026-06-14.md`; API quirks in
+`docs/solutions/integration-issues/sportsblaze-nba.md`.
+
+- **Code:** `nba/` package (additive; reuses `mlb_core.storage`; MLB untouched).
+  `nba/data/{sportsblaze,flatten,masters,backfill,refresh}.py`.
+- **Data lake:** shared bucket under `NBA/` prefix -- `raw/boxscores/{date}.json`
+  (idempotent cache), `games_master.csv`, `team_boxscores_master.csv`,
+  `player_boxscores_master.csv`, `last_refresh.json`. 8 seasons available
+  (2018-19..2025-26); 7 backfilled (2019-25): 9,186 games / 18,372 team /
+  315,331 player rows.
+- **Nightly ingest:** Cloud Run Job `nba-refresh-data` + Cloud Scheduler
+  `nba-refresh-data` (daily 13:00 UTC, OAuth + Run API trigger, see §9). Runs
+  year-round; no-ops on empty days (offseason self-healing). Provisioned by
+  `deploy/setup_nba_refresh.sh`. **Not** wired into `monitor_ops` yet (MLB-keyed).
+
+When NBA gains odds + a model it graduates to the full "adding a new system"
+checklist (§6); until then keep it out of the MLB registry/monitors.

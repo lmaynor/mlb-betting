@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY mlb_core/      ./mlb_core/
+COPY nba/           ./nba/
 COPY NRFI_Pro_System/ ./NRFI_Pro_System/
 COPY HR_Pro/          ./HR_Pro/
 COPY F5_Pro_System/   ./F5_Pro_System/

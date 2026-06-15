@@ -1,0 +1,290 @@
+{
+ "updated": "2026-06-14T17:29:19.596Z",
+ "league": {
+  "id": "nba",
+  "name": "NBA",
+  "sport": "Basketball"
+ },
+ "events": [
+  {
+   "id": "22bb1aac-5760-52b7-837d-c075f4b3ba7c",
+   "season": {
+    "year": 2025,
+    "type": "Regular Season"
+   },
+   "teams": {
+    "away": {
+     "id": "3fa6fba8-d08c-5fb7-8b78-79b176c55507",
+     "name": "Minnesota Timberwolves",
+     "abbreviation": "MIN"
+    },
+    "home": {
+     "id": "2c034dc7-b47b-5355-af4c-f575c6aad681",
+     "name": "Oklahoma City Thunder",
+     "abbreviation": "OKC"
+    }
+   },
+   "date": "2026-03-15T17:00:00.000Z",
+   "live": false,
+   "status": "Final",
+   "scores": {
+    "total": {
+     "away": 103,
+     "home": 116
+    },
+    "periods": {
+     "1": {
+      "away": 22,
+      "home": 23
+     },
+     "2": {
+      "away": 31,
+      "home": 24
+     },
+     "3": {
+      "away": 23,
+      "home": 33
+     },
+     "4": {
+      "away": 27,
+      "home": 36
+     }
+    }
+   },
+   "statistics": {
+    "away": {
+     "total": {
+      "assists": 18,
+      "blocks": 5,
+      "field_goals_attempted": 77,
+      "field_goals_made": 36,
+      "fouls": 19,
+      "free_throws_attempted": 22,
+      "free_throws_made": 16,
+      "minutes": "240:00",
+      "plus_minus": -13,
+      "points": 103,
+      "rebounds": 58,
+      "rebounds_defensive": 38,
+      "rebounds_offensive": 8,
+      "steals": 5,
+      "three_points_attempted": 33,
+      "three_points_made": 15,
+      "turnovers": 22,
+      "two_points_attempted": 44,
+      "two_points_made": 21
+     }
+    },
+    "home": {
+     "total": {
+      "assists": 28,
+      "blocks": 6,
+      "field_goals_attempted": 101,
+      "field_goals_made": 42,
+      "fouls": 16,
+      "free_throws_attempted": 19,
+      "free_throws_made": 17,
+      "minutes": "240:00",
+      "plus_minus": 13,
+      "points": 116,
+      "rebounds": 51,
+      "rebounds_defensive": 29,
+      "rebounds_offensive": 15,
+      "steals": 16,
+      "three_points_attempted": 40,
+      "three_points_made": 15,
+      "turnovers": 7,
+      "two_points_attempted": 61,
+      "two_points_made": 27
+     }
+    }
+   },
+   "players": {
+    "away": [
+     {
+      "id": "7269b79b-217a-56d3-800a-e7ae6e980967",
+      "name": "Anthony Edwards",
+      "position": "SG",
+      "played": true,
+      "starter": true,
+      "statistics": {
+       "total": {
+        "assists": 5,
+        "blocks": 1,
+        "field_goals_attempted": 17,
+        "field_goals_made": 6,
+        "fouls": 5,
+        "free_throws_attempted": 10,
+        "free_throws_made": 5,
+        "minutes": "37:19",
+        "plus_minus": -7,
+        "points": 19,
+        "rebounds": 6,
+        "rebounds_defensive": 5,
+        "rebounds_offensive": 1,
+        "steals": 1,
+        "three_points_attempted": 5,
+        "three_points_made": 2,
+        "turnovers": 6,
+        "two_points_attempted": 12,
+        "two_points_made": 4
+       }
+      }
+     },
+     {
+      "id": "e9e754a0-98d9-5edf-995d-e86cc3b4e8ec",
+      "name": "Ayo Dosunmu",
+      "position": "SG",
+      "played": true,
+      "starter": false,
+      "statistics": {
+       "total": {
+        "assists": 0,
+        "blocks": 0,
+        "field_goals_attempted": 9,
+        "field_goals_made": 7,
+        "fouls": 1,
+        "free_throws_attempted": 0,
+        "free_throws_made": 0,
+        "minutes": "32:30",
+        "plus_minus": -3,
+        "points": 18,
+        "rebounds": 4,
+        "rebounds_defensive": 4,
+        "rebounds_offensive": 0,
+        "steals": 0,
+        "three_points_attempted": 5,
+        "three_points_made": 4,
+        "turnovers": 2,
+        "two_points_attempted": 4,
+        "two_points_made": 3
+       }
+      }
+     },
+     {
+      "id": "444b5b82-9c35-5d17-8801-4f758ca8ca25",
+      "name": "Bones Hyland",
+      "position": "PG",
+      "played": true,
+      "starter": false,
+      "statistics": {
+       "total": {
+        "assists": 2,
+        "blocks": 2,
+        "field_goals_attempted": 5,
+        "field_goals_made": 1,
+        "fouls": 0,
+        "free_throws_attempted": 0,
+        "free_throws_made": 0,
+        "minutes": "13:11",
+        "plus_minus": -9,
+        "points": 3,
+        "rebounds": 0,
+        "rebounds_defensive": 0,
+        "rebounds_offensive": 0,
+        "steals": 0,
+        "three_points_attempted": 4,
+        "three_points_made": 1,
+        "turnovers": 0,
+        "two_points_attempted": 1,
+        "two_points_made": 0
+       }
+      }
+     }
+    ],
+    "home": [
+     {
+      "id": "83576313-9959-5435-8784-e26d3899ebfc",
+      "name": "Aaron Wiggins",
+      "position": "SG",
+      "played": true,
+      "starter": false,
+      "statistics": {
+       "total": {
+        "assists": 0,
+        "blocks": 0,
+        "field_goals_attempted": 1,
+        "field_goals_made": 0,
+        "fouls": 2,
+        "free_throws_attempted": 0,
+        "free_throws_made": 0,
+        "minutes": "5:32",
+        "plus_minus": -11,
+        "points": 0,
+        "rebounds": 0,
+        "rebounds_defensive": 0,
+        "rebounds_offensive": 0,
+        "steals": 0,
+        "three_points_attempted": 1,
+        "three_points_made": 0,
+        "turnovers": 0,
+        "two_points_attempted": 0,
+        "two_points_made": 0
+       }
+      }
+     },
+     {
+      "id": "7185672c-fbe4-5f17-bb04-7d296a802ec7",
+      "name": "Ajay Mitchell",
+      "position": "SG",
+      "played": true,
+      "starter": true,
+      "statistics": {
+       "total": {
+        "assists": 3,
+        "blocks": 0,
+        "field_goals_attempted": 13,
+        "field_goals_made": 4,
+        "fouls": 1,
+        "free_throws_attempted": 2,
+        "free_throws_made": 2,
+        "minutes": "26:46",
+        "plus_minus": 1,
+        "points": 11,
+        "rebounds": 5,
+        "rebounds_defensive": 2,
+        "rebounds_offensive": 3,
+        "steals": 2,
+        "three_points_attempted": 4,
+        "three_points_made": 1,
+        "turnovers": 2,
+        "two_points_attempted": 9,
+        "two_points_made": 3
+       }
+      }
+     },
+     {
+      "id": "c0487c96-994c-5e92-97dc-ea97f292d6e7",
+      "name": "Alex Caruso",
+      "position": "SG",
+      "played": true,
+      "starter": false,
+      "statistics": {
+       "total": {
+        "assists": 1,
+        "blocks": 0,
+        "field_goals_attempted": 10,
+        "field_goals_made": 6,
+        "fouls": 0,
+        "free_throws_attempted": 4,
+        "free_throws_made": 4,
+        "minutes": "21:46",
+        "plus_minus": -3,
+        "points": 17,
+        "rebounds": 2,
+        "rebounds_defensive": 1,
+        "rebounds_offensive": 1,
+        "steals": 3,
+        "three_points_attempted": 3,
+        "three_points_made": 1,
+        "turnovers": 0,
+        "two_points_attempted": 7,
+        "two_points_made": 5
+       }
+      }
+     }
+    ]
+   }
+  }
+ ]
+}
