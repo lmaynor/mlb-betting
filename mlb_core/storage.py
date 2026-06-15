@@ -51,12 +51,24 @@ def _gcs_blob(key: str):
     return bucket.blob(key)
 
 
+def _get_base_data() -> Path:
+    """Re-read MLB_BASE_DATA from env at call time.
+
+    Mirrors _get_bucket(): resolving at call time (instead of using the
+    import-time BASE_DATA constant) means changing MLB_BASE_DATA after import
+    takes effect, and avoids import-order-dependent path capture in tests.
+    Falls back to the import-time BASE_DATA default when the env var is unset.
+    """
+    env = os.environ.get("MLB_BASE_DATA")
+    return Path(env) if env else BASE_DATA
+
+
 def _local_path(key: str) -> Path:
     """Resolve a key like 'Statcast/foo.csv' to an absolute local path."""
     p = Path(key)
     if p.is_absolute():
         return p
-    return BASE_DATA / key
+    return _get_base_data() / key
 
 
 # ---------------------------------------------------------------------------
