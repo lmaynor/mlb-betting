@@ -45,12 +45,18 @@ Two feature surfaces:
   `games_last_7`, `is_home`, `is_playoff`, `playoff_avg_*`, `cv_*_l10`,
   `trend_{points,assists}`.
 
-### 3. Models (DEFERRED)
-- **Game winner:** binary classifier on the parquet (baseline LogReg/HistGBM
-  AUC ~0.72, calibrated). Mirrors MLB GAME Pro v1. Add isotonic calibrator.
-- **Player props:** LightGBM projection (mean) + `compute_historical_std` ->
-  probability via count-aware CDF. Prefer **NegBin CDF** (as MLB BATTER_HITS/TB)
-  over the reference's Gaussian for counts.
+### 3. Models
+- **Game winner: DROPPED (backtested NOT viable, 2026-06-15).** Baseline HistGBM
+  AUC 0.703 < market 0.739; flat-stake backtest on 3,648 games (2022-25) loses
+  -6% to -8% (worse than bet-favorite); model+market blend weights the model at
+  ~0.06 (no incremental signal -- market already prices the injury/lineup/rest news
+  the stat features miss). Do not productionize NBA moneyline. Full writeup:
+  `handoffs/handoff_nba_backtest_2026-06-15.md`.
+- **Player props: THE path forward (DEFERRED).** LightGBM/NegBin projection (mean) +
+  `compute_historical_std` -> P(over line) via **NegBin CDF** (as MLB BATTER_HITS/TB).
+  Softer markets than ML; transfers our MLB prop experience. MUST clear its own
+  backtest before any live betting. Blocker: need deeper historical prop odds
+  (nba_gambling's are ~Jan-Jun 2026 only) -- accumulate via The Odds API, buy, or scrape.
 
 ### 4. Edge + sizing (DEFERRED wiring; math READY)
 `model_prob` (calibrated) vs de-vigged market -> edge -> fractional Kelly via
