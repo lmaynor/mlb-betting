@@ -43,6 +43,16 @@ BATTED_EVENTS = HIT_EVENTS | {"field_out", "grounded_into_double_play", "force_o
                               "sac_fly", "sac_bunt", "field_error", "fielders_choice",
                               "double_play", "triple_play", "fielders_choice_out"}
 
+# outs recorded per out-producing event (events is non-null only on the PA-ending
+# pitch, so summing over rows is correct). Approximate: covers the common cases.
+OUT_EVENTS_MULT = {
+    "strikeout": 1, "field_out": 1, "force_out": 1, "sac_fly": 1, "sac_bunt": 1,
+    "fielders_choice_out": 1, "caught_stealing_2b": 1, "caught_stealing_3b": 1,
+    "caught_stealing_home": 1, "other_out": 1,
+    "grounded_into_double_play": 2, "double_play": 2, "sac_fly_double_play": 2,
+    "strikeout_double_play": 2, "triple_play": 3,
+}
+
 BATTER_STATS = [("TOTAL_BASES", "total_bases"), ("TB", "total_bases"),
                 ("HITS", "hits"), ("HR", "home_runs"), ("HOMERUN", "home_runs")]
 PITCHER_STATS = [("OUTS", "outs"), ("STRIKEOUT", "strikeouts"), ("_K_", "strikeouts"),
@@ -180,7 +190,7 @@ def _pitcher_block(g: pd.DataFrame, stat: str, line):
             if stat == "strikeouts":
                 return int((gg["events"] == "strikeout").sum())
             if stat == "outs":
-                return int(gg["events"].notna().sum())   # approx: balls-in-play+K per PA-ending
+                return int(gg["events"].dropna().map(OUT_EVENTS_MULT).fillna(0).sum())
             return 0
         if stat in ("strikeouts", "outs"):
             rf = _recent(g, val, line)

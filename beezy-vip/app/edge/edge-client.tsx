@@ -78,21 +78,70 @@ function titleOf(p: EdgePick): string {
   return p.player ?? betTypeLabel(p.bet_type, p.system)
 }
 
+// -- shared chart scaffolding (takeaway / legend / stat chips) ----------------
+// Every chart leads with a plain-language takeaway, then shows the data as
+// evidence. Legends and stat chips make each chart self-explaining for a
+// casual viewer -- no assumed Statcast literacy.
+function Take({ children }: { children: ReactNode }) {
+  return <p className="edge-take">{children}</p>
+}
+
+type LegendItem = { kind: 'dot' | 'ring' | 'sq'; color?: string; opacity?: number; label: string }
+function Legend({ items }: { items: LegendItem[] }) {
+  return (
+    <div className="edge-legend">
+      {items.map((it, i) => (
+        <span key={i}>
+          <i className={it.kind === 'dot' ? 'edge-lg-dot' : it.kind === 'ring' ? 'edge-lg-ring' : 'edge-lg-sq'}
+            style={it.kind === 'ring'
+              ? { borderColor: it.color ?? '#5a5a64', opacity: it.opacity }
+              : { background: it.color, opacity: it.opacity }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function Chips({ items }: { items: [string | number, string][] }) {
+  return (
+    <div className="edge-stats">
+      {items.map(([v, l], i) => (
+        <div key={i} className="edge-stat">
+          <div className="edge-stat-v">{v}</div>
+          <div className="edge-stat-l">{l}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // -- probability track: the centerpiece ---------------------------------------
 function EdgeTrack({ model, market, color }: { model: number; market: number; color: string }) {
   const lo = Math.min(model, market)
   const hi = Math.max(model, market)
+  const W = 300, H = 54, x0 = 6, x1 = 294, y = 24
+  const sx = (p: number) => x0 + (Math.max(0, Math.min(100, p)) / 100) * (x1 - x0)
+  const ticks = [0, 25, 50, 75, 100]
   return (
-    <div className="edge-track" aria-hidden>
-      <div className="edge-track-rail" />
+    <svg className="edge-track" viewBox={`0 0 ${W} ${H}`} role="img"
+      aria-label={`model probability ${model}% versus market ${market}%`}>
+      <line x1={x0} y1={y} x2={x1} y2={y} stroke="#232329" strokeWidth="4" />
       {/* the edge band between market and model */}
-      <div className="edge-track-band"
-        style={{ left: `${lo}%`, width: `${Math.max(hi - lo, 0.5)}%`, background: color }} />
-      {/* market marker */}
-      <div className="edge-track-mark edge-track-market" style={{ left: `${market}%` }} />
-      {/* model marker */}
-      <div className="edge-track-mark edge-track-model" style={{ left: `${model}%`, background: color, borderColor: color }} />
-    </div>
+      <rect x={sx(lo)} y={y - 3} width={Math.max(sx(hi) - sx(lo), 1)} height="6" fill={color} opacity="0.85" />
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={sx(t)} y1={y - 6} x2={sx(t)} y2={y + 6} stroke="#33333a" strokeWidth="1" />
+          <text className="edge-axt" x={sx(t)} y={y + 16} textAnchor="middle">{t}%</text>
+        </g>
+      ))}
+      {/* market marker + label */}
+      <rect x={sx(market) - 1.5} y={y - 9} width="3" height="18" fill="#d8d8de" />
+      <text className="edge-axl" x={sx(market)} y={y - 12} textAnchor="middle" fill="#d8d8de">MARKET</text>
+      {/* model marker + label */}
+      <rect x={sx(model) - 5} y={y - 11} width="10" height="22" fill={color} stroke="#0d0d10" strokeWidth="1.5" />
+      <text className="edge-axl" x={sx(model)} y={y + 25} textAnchor="middle" fill={color}>MODEL</text>
+    </svg>
   )
 }
 
@@ -127,28 +176,60 @@ function PitcherMatchup({ m }: { m: NonNullable<EdgePick['matchup']> }) {
 function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>; color: string }) {
   const games = rf.games ?? []
   if (games.length === 0) return null
-  const W = 220, H = 54, pad = 4
+  const hasLine = rf.line != null
+  const succ = (g: { value: number; over: boolean | null }) =>
+    g.over != null ? g.over : hasLine ? g.value > (rf.line as number) : g.value > 0
+  const W = 300, H = 92, padL = 20, padR = 8, padT = 18, padB = 18
   const max = Math.max(rf.line ?? 0, ...games.map(g => g.value), 1)
-  const bw = (W - pad * 2) / games.length
-  const lineY = rf.line == null ? null : H - pad - (rf.line / max) * (H - pad * 2)
-  const overCount = games.filter(g => g.over).length
+  const bw = (W - padL - padR) / games.length
+  const ya = (v: number) => (H - padB) - (v / max) * (H - padT - padB)
+  const lineY = hasLine ? ya(rf.line as number) : null
+  const overCount = games.filter(succ).length
+  const pct = Math.round((overCount / games.length) * 100)
+  const n3 = Math.min(3, games.length)
+  const f3 = games.slice(0, n3).reduce((a, b) => a + b.value, 0) / n3
+  const l3 = games.slice(-n3).reduce((a, b) => a + b.value, 0) / n3
+  const trend = l3 > f3 + 0.3 ? 'trending up' : l3 < f3 - 0.3 ? 'cooling off' : 'holding steady'
+  const statL = rf.stat.replace(/_/g, ' ')
   return (
     <div className="edge-ctx edge-ctx-wide">
-      <div className="edge-ctx-k">
-        Last {games.length} games &middot; {rf.stat.replace('_', ' ')}
-        {rf.line != null && <span className="edge-ctx-dim"> (line {rf.line})</span>}
-        {rf.line != null && <span className="edge-form-hit"> &mdash; over {overCount}/{games.length}</span>}
-      </div>
-      <svg className="edge-spark" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`recent ${rf.stat}`}>
-        {lineY != null && <line x1={pad} y1={lineY} x2={W - pad} y2={lineY} stroke="#d8d8de" strokeWidth="1" strokeDasharray="3 3" />}
+      <div className="edge-ctx-k">Last {games.length} games &middot; {statL}</div>
+      <Take>
+        {hasLine
+          ? <>Cleared the <b>{rf.line}</b> line in <b>{overCount} of {games.length}</b>{' '}
+              <span className="mono">({pct}%)</span> &mdash; {trend}.</>
+          : <>{rf.stat === 'home_runs' ? 'Homered' : 'Produced'} in <b>{overCount} of {games.length}</b> games &mdash; {trend}.</>}
+      </Take>
+      <svg className="edge-spark" viewBox={`0 0 ${W} ${H}`} role="img"
+        aria-label={`recent ${statL}: over the line in ${overCount} of ${games.length} games`}>
+        {[0, Math.round(max)].map(v => (
+          <text key={v} className="edge-axt" x={padL - 4} y={ya(v) + 3} textAnchor="end">{v}</text>
+        ))}
         {games.map((g, i) => {
-          const h = (g.value / max) * (H - pad * 2)
-          const x = pad + i * bw
-          const over = g.over
-          return <rect key={i} x={x + 1} y={H - pad - h} width={Math.max(bw - 2, 1)} height={Math.max(h, 0.5)}
-            fill={over === true ? color : over === false ? '#3a3a42' : '#5a5a64'} rx="0.5" />
+          const h = (g.value / max) * (H - padT - padB)
+          const x = padL + i * bw
+          const ok = succ(g)
+          return (
+            <g key={i}>
+              <rect x={x + 1.5} y={H - padB - h} width={Math.max(bw - 3, 1)} height={Math.max(h, 0.5)}
+                fill={ok ? color : '#3a3a42'} />
+              <text className="edge-axt" x={x + bw / 2} y={H - padB - h - 3} textAnchor="middle"
+                fill={ok ? color : '#6f6f78'} style={{ fontSize: '7.5px' }}>{g.value}</text>
+            </g>
+          )
         })}
+        {lineY != null && <>
+          <line x1={padL} y1={lineY} x2={W - padR} y2={lineY} stroke="#fcc20f" strokeWidth="1" strokeDasharray="3 2" />
+          <text className="edge-axt" x={padL - 4} y={lineY + 3} textAnchor="end" fill="#fcc20f"
+            style={{ fontWeight: 700 }}>{rf.line}</text>
+        </>}
+        <text className="edge-axt" x={padL} y={H - 4}>{games[0].date}</text>
+        <text className="edge-axt" x={W - padR} y={H - 4} textAnchor="end">{games[games.length - 1].date}</text>
       </svg>
+      <Legend items={hasLine
+        ? [{ kind: 'sq', color, label: 'over the line' }, { kind: 'sq', color: '#3a3a42', label: 'under' }]
+        : [{ kind: 'sq', color, label: rf.stat === 'home_runs' ? 'homered' : 'produced' },
+           { kind: 'sq', color: '#3a3a42', label: 'none' }]} />
     </div>
   )
 }
@@ -156,25 +237,39 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
 // Statcast hc coords: home plate ~ (125, 199), field opens upward (y decreases).
 function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>; color: string }) {
   if (!points.length) return null
-  const S = 150
+  const S = 170
   const tx = (x: number) => (x / 250) * S
   const ty = (y: number) => (y / 250) * S
   const hits = points.filter(p => p.hit).length
+  const thirds = [0, 0, 0]
+  points.forEach(p => { thirds[p.x < 92 ? 0 : p.x < 158 ? 1 : 2]++ })
+  const dom = thirds[0] > thirds[1] && thirds[0] > thirds[2] ? 'pulls most contact to left field'
+    : thirds[2] > thirds[1] && thirds[2] > thirds[0] ? 'goes the other way to right field'
+    : 'sprays the ball to all fields'
+  const hp = `${tx(125)} ${ty(199)}`
   return (
     <div className="edge-ctx edge-ctx-wide">
-      <div className="edge-ctx-k">Spray chart <span className="edge-ctx-dim">({points.length} batted, {hits} hits)</span></div>
-      <svg className="edge-spray" viewBox={`0 0 ${S} ${S}`} role="img" aria-label="batted-ball spray chart">
+      <div className="edge-ctx-k">Where the ball goes</div>
+      <Take><b>{hits} hits</b> on {points.length} batted balls &mdash; {dom}.</Take>
+      <svg className="edge-spray" viewBox={`0 0 ${S} ${S}`} role="img"
+        aria-label={`batted-ball spray chart, ${hits} hits of ${points.length}`}>
         {/* outfield arc + foul lines, home plate at bottom-center */}
-        <path d={`M ${tx(125)} ${ty(199)} L ${tx(33)} ${ty(75)} A 120 120 0 0 1 ${tx(217)} ${ty(75)} Z`}
-          fill="#16161a" stroke="#26262c" strokeWidth="1" />
-        <line x1={tx(125)} y1={ty(199)} x2={tx(33)} y2={ty(75)} stroke="#26262c" strokeWidth="0.7" />
-        <line x1={tx(125)} y1={ty(199)} x2={tx(217)} y2={ty(75)} stroke="#26262c" strokeWidth="0.7" />
-        {points.map((pt, i) => (
-          <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r={pt.hit ? 2.4 : 1.8}
-            fill={pt.hit ? color : 'transparent'} stroke={pt.hit ? color : '#5a5a64'} strokeWidth="0.9"
-            opacity={pt.hit ? 0.95 : 0.6} />
-        ))}
+        <path d={`M ${hp} L ${tx(33)} ${ty(75)} A 118 118 0 0 1 ${tx(217)} ${ty(75)} Z`}
+          fill="#121216" stroke="#26262c" strokeWidth="1" />
+        {/* infield diamond for orientation */}
+        <path d={`M ${hp} L ${tx(70)} ${ty(150)} L ${tx(125)} ${ty(120)} L ${tx(180)} ${ty(150)} Z`}
+          fill="none" stroke="#26262c" strokeWidth="0.7" />
+        <line x1={tx(125)} y1={ty(199)} x2={tx(33)} y2={ty(75)} stroke="#2c2c34" strokeWidth="0.7" />
+        <line x1={tx(125)} y1={ty(199)} x2={tx(217)} y2={ty(75)} stroke="#2c2c34" strokeWidth="0.7" />
+        <text className="edge-axt" x={tx(40)} y={ty(64)} textAnchor="middle">LF</text>
+        <text className="edge-axt" x={tx(125)} y={ty(40)} textAnchor="middle">CF</text>
+        <text className="edge-axt" x={tx(210)} y={ty(64)} textAnchor="middle">RF</text>
+        {points.map((pt, i) => pt.hit
+          ? <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r="2.6" fill={color} opacity="0.95" />
+          : <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r="1.9" fill="none" stroke="#5a5a64" strokeWidth="1" opacity="0.6" />
+        )}
       </svg>
+      <Legend items={[{ kind: 'dot', color, label: 'hit' }, { kind: 'ring', label: 'out' }]} />
     </div>
   )
 }
@@ -183,23 +278,57 @@ const PITCH_COLORS: Record<string, string> = {
   FF: '#d77a7a', SI: '#e6915d', FT: '#e6915d', FC: '#fcc20f', SL: '#8c9ae0', ST: '#c0d4a7',
   CU: '#9ab6c8', KC: '#8e8a25', CH: '#b3bd95', FS: '#a5b8c0', SP: '#a5b8c0',
 }
+const PITCH_NAME: Record<string, string> = {
+  FF: '4-Seam', SI: 'Sinker', FT: '2-Seam', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
+  CU: 'Curveball', KC: 'Knuckle-curve', CH: 'Changeup', FS: 'Splitter', SP: 'Splitter',
+}
 const pc = (p: string) => PITCH_COLORS[p] ?? '#9aa0aa'
 
 function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>; color: string }) {
   if (!points.length) return null
-  const W = 220, H = 130, pad = 6
-  const xa = (la: number) => pad + ((Math.max(-40, Math.min(70, la)) + 40) / 110) * (W - pad * 2)
-  const ya = (ev: number) => H - pad - ((Math.max(40, Math.min(120, ev)) - 40) / 80) * (H - pad * 2)
+  const W = 300, H = 212, x0 = 40, x1 = 290, y0 = 12, y1 = 168
+  const xa = (la: number) => x0 + ((Math.max(-30, Math.min(60, la)) + 30) / 90) * (x1 - x0)
+  const ya = (ev: number) => y1 - ((Math.max(50, Math.min(120, ev)) - 50) / 70) * (y1 - y0)
+  const avg = points.reduce((a, b) => a + b.ev, 0) / points.length
+  const hardPct = Math.round(points.filter(p => p.ev >= 95).length / points.length * 100)
+  const sweetPct = Math.round(points.filter(p => p.la >= 8 && p.la <= 32).length / points.length * 100)
+  const barrels = points.filter(p => p.ev >= 98 && p.la >= 10 && p.la <= 35).length
+  const verdict = avg >= 91 ? 'Crushing the ball' : avg >= 88 ? 'Solid contact' : 'Light contact lately'
+  const yticks = [60, 80, 100, 120]
+  const xzones: [number, number, string][] = [[-30, 10, 'Grounders'], [10, 25, 'Line drives'], [25, 50, 'Fly balls'], [50, 60, 'Pop ups']]
   return (
     <div className="edge-ctx edge-ctx-wide">
-      <div className="edge-ctx-k">Exit velo / launch angle <span className="edge-ctx-dim">({points.length} batted)</span></div>
-      <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity vs launch angle">
-        <rect x={pad} y={ya(116)} width={W - pad * 2} height={ya(90) - ya(116)} fill="#b3bd9514" />
-        {points.map((p, i) => (
-          <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r={p.hit ? 2.2 : 1.5}
-            fill={p.hit ? color : 'transparent'} stroke={p.hit ? color : '#5a5a64'} strokeWidth="0.8" opacity={p.hit ? 0.9 : 0.5} />
+      <div className="edge-ctx-k">Quality of contact</div>
+      <Take><b>{verdict}</b> &mdash; averaging <span className="mono">{avg.toFixed(1)} mph</span> off the bat, <b>{hardPct}%</b> hit hard.</Take>
+      <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity versus launch angle">
+        {/* sweet-spot band + barrel zone */}
+        <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="#b3bd95" opacity="0.06" />
+        <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="#fcc20f" opacity="0.10" />
+        <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="#fcc20f"
+          style={{ fontSize: '8px', fontWeight: 800, letterSpacing: '0.04em' }}>BARRELS</text>
+        {yticks.map(v => (
+          <g key={v}>
+            <line x1={x0} y1={ya(v)} x2={x1} y2={ya(v)} stroke="#202026" strokeWidth="0.6" />
+            <text className="edge-axt" x={x0 - 4} y={ya(v) + 3} textAnchor="end">{v}</text>
+          </g>
         ))}
+        {[10, 25, 50].map(a => (
+          <line key={a} x1={xa(a)} y1={y0} x2={xa(a)} y2={y1} stroke="#26262c" strokeWidth="0.6" strokeDasharray="2 2" />
+        ))}
+        {xzones.map(([a, b, l]) => (
+          <text key={l} className="edge-axt" x={(xa(a) + xa(Math.min(b, 60))) / 2} y={y1 + 12} textAnchor="middle">{l}</text>
+        ))}
+        {points.map((p, i) => p.hit
+          ? <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r="2.4" fill={color} opacity="0.95" />
+          : <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r="1.7" fill="none" stroke="#5a5a64" strokeWidth="0.9" opacity="0.55" />
+        )}
+        <text className="edge-axl" x="6" y={(y0 + y1) / 2} textAnchor="middle"
+          transform={`rotate(-90 8 ${(y0 + y1) / 2})`} fill="#9a9aa3">Exit velo (mph)</text>
+        <text className="edge-axl" x={(x0 + x1) / 2} y={H - 3} textAnchor="middle" fill="#9a9aa3">Launch angle &rarr;</text>
       </svg>
+      <Chips items={[[avg.toFixed(1), 'avg EV'], [`${hardPct}%`, 'hard-hit'], [`${sweetPct}%`, 'sweet spot'], [barrels, 'barrels']]} />
+      <Legend items={[{ kind: 'dot', color, label: 'hit' }, { kind: 'ring', label: 'out' },
+        { kind: 'sq', color: '#fcc20f', opacity: 0.5, label: 'barrel zone = best outcomes' }]} />
     </div>
   )
 }
@@ -207,17 +336,31 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
 function VeloBars({ velo }: { velo: NonNullable<EdgePick['velo']> }) {
   if (!velo.length) return null
   const max = Math.max(...velo.map(v => v.mph), 100)
+  const totN = velo.reduce((a, b) => a + b.n, 0)
+  const sorted = velo.slice().sort((a, b) => b.mph - a.mph)
+  const top = sorted[0]
+  const tier = top.mph >= 96 ? 'plus velocity' : top.mph >= 93 ? 'average velocity' : 'a finesse arm'
   return (
     <div className="edge-ctx edge-ctx-wide">
-      <div className="edge-ctx-k">Velocity by pitch</div>
+      <div className="edge-ctx-k">Pitch arsenal &amp; velocity</div>
+      <Take>Leads with the <b>{PITCH_NAME[top.pitch] ?? top.pitch}</b> at <span className="mono">{top.mph.toFixed(1)} mph</span> &mdash; {tier}. {velo.length} pitches in the mix.</Take>
       <div className="edge-velo">
-        {velo.slice().sort((a, b) => b.mph - a.mph).map(v => (
-          <div key={v.pitch} className="edge-velo-row">
-            <span className="edge-velo-p" style={{ color: pc(v.pitch) }}>{v.pitch}</span>
-            <span className="edge-velo-bar"><span style={{ width: `${(v.mph / max) * 100}%`, background: pc(v.pitch) }} /></span>
-            <span className="edge-velo-v">{v.mph.toFixed(1)}<span className="edge-ctx-dim"> mph</span></span>
-          </div>
-        ))}
+        {sorted.map(v => {
+          const share = totN > 0 ? Math.round(v.n / totN * 100) : 0
+          return (
+            <div key={v.pitch} className="edge-velo-row">
+              <span className="edge-velo-name">
+                <b style={{ color: pc(v.pitch) }}>{v.pitch}</b>
+                <span>{PITCH_NAME[v.pitch] ?? ''}</span>
+              </span>
+              <span className="edge-velo-bar"><span style={{ width: `${(v.mph / max) * 100}%`, background: pc(v.pitch) }} /></span>
+              <span className="edge-velo-num">
+                <span className="edge-velo-v">{v.mph.toFixed(1)}<small> mph</small></span>
+                <span className="edge-velo-use">{share}% usage</span>
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -225,15 +368,29 @@ function VeloBars({ velo }: { velo: NonNullable<EdgePick['velo']> }) {
 
 function ReleasePoint({ release }: { release: NonNullable<EdgePick['release']> }) {
   if (!release.length) return null
-  const S = 130
-  const xa = (x: number) => ((Math.max(-3, Math.min(3, x)) + 3) / 6) * S
-  const ya = (z: number) => S - ((Math.max(2, Math.min(8, z)) - 2) / 6) * S
+  const W = 180, H = 150, cx = W / 2, zLo = 4, zHi = 7.5
+  const xa = (x: number) => cx + (Math.max(-3, Math.min(3, x)) / 3) * (W / 2 - 16)
+  const za = (z: number) => H - 14 - ((Math.max(zLo, Math.min(zHi, z)) - zLo) / (zHi - zLo)) * (H - 28)
+  const mx = release.reduce((a, b) => a + b.x, 0) / release.length
+  const mz = release.reduce((a, b) => a + b.z, 0) / release.length
+  const side = mx < -0.3 ? 'third-base side' : mx > 0.3 ? 'first-base side' : 'over the middle'
   return (
     <div className="edge-ctx">
-      <div className="edge-ctx-k">Release point <span className="edge-ctx-dim">(catcher view)</span></div>
-      <svg className="edge-viz-sq" viewBox={`0 0 ${S} ${S}`} role="img" aria-label="release point">
-        <line x1={S / 2} y1={0} x2={S / 2} y2={S} stroke="#1f1f24" strokeWidth="0.5" />
-        {release.map((r, i) => <circle key={i} cx={xa(r.x)} cy={ya(r.z)} r="1.6" fill={pc(r.pitch)} opacity="0.7" />)}
+      <div className="edge-ctx-k">Release point <span className="edge-ctx-dim">(catcher&apos;s view)</span></div>
+      <Take>Lets go at <span className="mono">{mz.toFixed(1)} ft</span> high, from the {side} &mdash; a repeatable slot.</Take>
+      <svg className="edge-viz-sq" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`release point, ${mz.toFixed(1)} feet`}>
+        <line x1={cx} y1={6} x2={cx} y2={H - 14} stroke="#202026" strokeWidth="0.7" strokeDasharray="2 3" />
+        {[4, 5, 6, 7].map(z => (
+          <g key={z}>
+            <line x1={14} y1={za(z)} x2={W - 8} y2={za(z)} stroke="#202026" strokeWidth="0.6" />
+            <text className="edge-axt" x={11} y={za(z) + 3} textAnchor="end">{z}&apos;</text>
+          </g>
+        ))}
+        {release.map((r, i) => <circle key={i} cx={xa(r.x)} cy={za(r.z)} r="1.5" fill={pc(r.pitch)} opacity="0.4" />)}
+        <circle cx={xa(mx)} cy={za(mz)} r="4" fill="none" stroke="#fff" strokeWidth="1.3" />
+        <circle cx={xa(mx)} cy={za(mz)} r="0.9" fill="#fff" />
+        <text className="edge-axt" x={16} y={H - 3}>3B side</text>
+        <text className="edge-axt" x={W - 8} y={H - 3} textAnchor="end">1B side</text>
       </svg>
     </div>
   )
@@ -244,15 +401,36 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
   const total = cells.reduce((a, b) => a + b, 0)
   if (total < 5) return null
   const max = Math.max(...cells, 1)
+  const hot = cells.indexOf(Math.max(...cells))
+  const row = Math.floor(hot / 3), col = hot % 3
+  const vert = row === 0 ? 'high' : row === 1 ? 'middle' : 'low'
+  const horiz = col === 0 ? 'to the left' : col === 1 ? 'over the middle' : 'to the right'
+  const spot = row === 1 && col === 1 ? 'right down the middle'
+    : row === 1 ? `middle, ${horiz}` : col === 1 ? `${vert} over the middle` : `${vert} and ${horiz}`
   return (
     <div className="edge-ctx">
-      <div className="edge-ctx-k">Location <span className="edge-ctx-dim">(strike zone)</span></div>
-      <div className="edge-zone">
-        {cells.map((c, i) => (
-          <div key={i} className="edge-zone-cell" style={{ background: `rgba(252,194,15,${0.06 + (c / max) * 0.62})` }}>
-            {Math.round((c / total) * 100)}
+      <div className="edge-ctx-k">Pitch location <span className="edge-ctx-dim">(catcher&apos;s view)</span></div>
+      <Take>Lives <b>{spot}</b> &mdash; that&apos;s where most pitches cross the zone.</Take>
+      <div className="edge-zone-wrap">
+        <div className="edge-zone-side"><span>HIGH</span><span>LOW</span></div>
+        <div>
+          <div className="edge-zone">
+            {cells.map((c, i) => (
+              <div key={i} className={`edge-zone-cell${i === hot ? ' is-hot' : ''}`}
+                style={{ background: `rgba(252,194,15,${0.05 + (c / max) * 0.62})` }}>
+                {Math.round((c / total) * 100)}
+              </div>
+            ))}
           </div>
-        ))}
+          <div className="edge-zone-x"><span>LEFT</span><span>RIGHT</span></div>
+        </div>
+      </div>
+      <div className="edge-zone-scale">
+        <span>fewer</span>
+        <span className="edge-zone-ramp">
+          {[0.1, 0.28, 0.46, 0.64, 0.82].map(o => <i key={o} style={{ background: `rgba(252,194,15,${o})` }} />)}
+        </span>
+        <span>more pitches</span>
       </div>
     </div>
   )
@@ -574,12 +752,9 @@ function Styles() {
 .edge-block-top { display: flex; align-items: baseline; gap: 10px; }
 .edge-hero { font-size: clamp(2.4rem, 8vw, 3.4rem); font-weight: 880; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
 .edge-hero-label { font-size: 12px; color: #9aa0aa; font-weight: 600; }
-.edge-track { position: relative; height: 30px; margin: 18px 0 10px; }
-.edge-track-rail { position: absolute; top: 13px; left: 0; right: 0; height: 4px; background: #232329; }
-.edge-track-band { position: absolute; top: 12px; height: 6px; opacity: 0.85; }
-.edge-track-mark { position: absolute; top: 6px; width: 3px; height: 18px; transform: translateX(-50%); }
-.edge-track-market { background: #d8d8de; }
-.edge-track-model { width: 11px; height: 22px; top: 4px; border: 2px solid; border-radius: 1px; }
+.edge-track { width: 100%; max-width: 380px; height: auto; display: block; margin: 16px 0 8px; }
+.edge-axt { fill: #9a9aa3; font-size: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.edge-axl { font-size: 8.5px; font-weight: 700; font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .edge-readout { display: flex; gap: 20px; margin-top: 6px; }
 .edge-read { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .edge-read-dot { width: 9px; height: 9px; border-radius: 2px; }
@@ -601,21 +776,48 @@ function Styles() {
 .edge-ctx-v { font-size: 13px; color: #d8d8de; }
 .edge-ctx-dim { color: #8a8a93; }
 .edge-weather { display: flex; gap: 14px; }
-.edge-form-hit { color: #b3bd95; font-weight: 700; text-transform: none; letter-spacing: 0; }
-.edge-spark { width: 100%; max-width: 340px; height: auto; display: block; }
-.edge-spray { width: 156px; height: 156px; display: block; }
-.edge-viz { width: 100%; max-width: 320px; height: auto; display: block; }
-.edge-viz-sq { width: 132px; height: 132px; display: block; }
+/* plain-language takeaway: every chart leads with its insight */
+.edge-take { font-size: 12.5px; line-height: 1.45; color: #d8d8de; margin: 0 0 9px; display: flex; gap: 7px; align-items: baseline; }
+.edge-take::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-top: 5px; background: #b3bd95; }
+.edge-take b { color: #f5f5f7; font-weight: 800; }
+.edge-take .mono { color: #f5f5f7; }
+/* self-explaining legends + summary-stat chips */
+.edge-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 10.5px; color: #a1a1aa; }
+.edge-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.edge-lg-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.edge-lg-ring { width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #5a5a64; display: inline-block; }
+.edge-lg-sq { width: 9px; height: 9px; display: inline-block; }
+.edge-stats { display: flex; flex-wrap: wrap; margin-top: 10px; border: 1px solid #1f1f24; }
+.edge-stat { flex: 1; min-width: 64px; padding: 7px 9px; border-right: 1px solid #1f1f24; }
+.edge-stat:last-child { border-right: 0; }
+.edge-stat-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1; }
+.edge-stat-l { font-size: 9.5px; color: #888890; letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
+.edge-spark { width: 100%; max-width: 360px; height: auto; display: block; }
+.edge-spray { width: 100%; max-width: 200px; height: auto; display: block; }
+.edge-viz { width: 100%; max-width: 340px; height: auto; display: block; }
+.edge-viz-sq { width: 100%; max-width: 180px; height: auto; display: block; }
 .edge-viz-row { display: flex; flex-wrap: wrap; gap: 28px; }
-.edge-velo { display: flex; flex-direction: column; gap: 5px; max-width: 320px; }
-.edge-velo-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.edge-velo-p { width: 26px; font-weight: 800; font-size: 11px; }
-.edge-velo-bar { flex: 1; height: 8px; background: #1a1a1f; position: relative; }
+.edge-velo { display: flex; flex-direction: column; gap: 7px; max-width: 340px; }
+.edge-velo-row { display: grid; grid-template-columns: 92px 1fr 76px; align-items: center; gap: 9px; font-size: 11.5px; }
+.edge-velo-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.edge-velo-name b { font-weight: 800; font-size: 11px; }
+.edge-velo-name span { color: #888890; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge-velo-bar { height: 13px; background: #16161a; position: relative; border: 1px solid #1f1f24; }
 .edge-velo-bar > span { position: absolute; left: 0; top: 0; bottom: 0; }
-.edge-velo-v { width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: #d8d8de; }
-.edge-zone { display: grid; grid-template-columns: repeat(3, 30px); grid-auto-rows: 30px; gap: 2px; }
-.edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 9px;
-  font-weight: 700; color: #0b0b0d; font-variant-numeric: tabular-nums; }
+.edge-velo-num { text-align: right; }
+.edge-velo-v { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #e8e8ee; font-weight: 700; font-size: 12px; }
+.edge-velo-v small { color: #888890; font-weight: 400; }
+.edge-velo-use { display: block; font-size: 9px; color: #888890; margin-top: 1px; }
+.edge-zone-wrap { display: flex; gap: 12px; align-items: flex-start; }
+.edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: #888890; height: 106px; }
+.edge-zone { display: grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap: 2px; }
+.edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 10px;
+  font-weight: 800; color: #0b0b0d; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+.edge-zone-cell.is-hot { outline: 1.5px solid #fcc20f; outline-offset: -1.5px; }
+.edge-zone-x { display: flex; justify-content: space-between; font-size: 9px; color: #888890; margin-top: 3px; }
+.edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: #a1a1aa; margin-top: 8px; }
+.edge-zone-ramp { display: inline-flex; gap: 1px; }
+.edge-zone-ramp i { width: 13px; height: 9px; display: block; }
 .edge-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
   padding: 10px 12px; border: 1px solid #1f1f24; background: #0d0d10; }
 .edge-toggle { background: transparent; color: #9aa0aa; border: 1px solid #2a2a31; padding: 6px 12px;

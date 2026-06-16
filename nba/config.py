@@ -125,10 +125,20 @@ def odds_csv_key(date: str, kind: str, hhmm: str) -> str:
 PARLAY_API_BASE = os.environ.get("PARLAY_API_BASE", "https://parlay-api.com/v1")
 PARLAY_REGION = "us"
 
-# default prop markets per sport (override via CLI)
+# default prop markets per sport (override via CLI).
+# NOTE: ParlayAPI uses its own `player_*` market scheme (verified for the batter set);
+# flatten_parlay_props only keeps keys starting with `player_`. The pitcher keys below
+# are CANDIDATES -- verify against a live payload before scheduling (see RUNBOOK in
+# handoffs/handoff_2026-06-16_edge_cockpit_viz.md). Wrong keys still bill 1 cr/(event x
+# market) for zero data.
 PARLAY_PROP_MARKETS = {
     "basketball_nba": ["player_points", "player_rebounds", "player_assists"],
-    "baseball_mlb": ["player_hits", "player_total_bases", "player_home_runs"],
+    "baseball_mlb": [
+        # batter props (verified)
+        "player_hits", "player_total_bases", "player_home_runs",
+        # pitcher props (CANDIDATE keys -- verify before scheduling)
+        "player_strikeouts", "player_outs", "player_earned_runs",
+    ],
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
 
