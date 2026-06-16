@@ -942,6 +942,34 @@ def public_slate_today():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/public/edge-enrich", methods=["GET", "OPTIONS"])
+def public_edge_enrich():
+    """Per-player enrichment for The Edge dashboard (weather / recent form / spray).
+    Reads a small precomputed JSON (Enrich/edge/{date}.json) built by
+    runners/build_edge_enrichment.py. Fail-soft: returns empty players on any miss
+    or error so the dashboard degrades gracefully."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    import zoneinfo
+    from datetime import datetime as _dt
+    date = request.args.get("date") or _dt.now(zoneinfo.ZoneInfo("America/Chicago")).date().isoformat()
+    payload = {"date": date, "players": {}}
+    try:
+        from mlb_core import storage
+        key = f"Enrich/edge/{date}.json"
+        if storage.exists(key):
+            payload = json.loads(storage.read_bytes(key))
+    except Exception:
+        logger.exception("public_edge_enrich read failed (fail-soft)")
+    resp = jsonify(payload)
+    resp.headers.update(_cors_headers())
+    resp.headers["Cache-Control"] = "public, max-age=300"
+    return resp
+
+
 @app.route("/model-health", methods=["GET", "POST"])
 def model_health_handler():
     """

@@ -42,6 +42,7 @@ describe('Bet interface schema contract', () => {
     result:          'win',      // lowercase (not 'W')
     profit:          8.70,       // production column name (not 'pnl')
     paper:           true,
+    book:            'draftkings',
     notes:           null,
     created_at:      '2026-05-15T12:00:00',
   }

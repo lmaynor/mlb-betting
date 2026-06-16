@@ -3,9 +3,9 @@ export const dynamic = 'force-dynamic'
 import fs from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks } from '@/lib/betting-api'
-import type { Bet } from '@/lib/types'
-import { formatCentralDate } from '@/lib/dates'
+import { apiGetTodayPicks, apiGetTodaySlate, apiGetEdgeEnrich } from '@/lib/betting-api'
+import type { Bet, TodaySlate, SlateGame } from '@/lib/types'
+import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { EdgeClient, type EdgePick } from './edge-client'
 import playerMap from '@/public/headshots/player_map.json'
 
@@ -64,20 +64,45 @@ function toPct(p: number | null | undefined): number | null {
   return p <= 1.5 ? p * 100 : p
 }
 
-function enrich(bet: Bet): EdgePick {
-  return {
-    ...bet,
-    headshotUrl: headshotUrl(bet.player),
-    awayLogoUrl: logoUrl(bet.away_team),
-    homeLogoUrl: logoUrl(bet.home_team),
-    modelProbPct: toPct(bet.model_prob),
-    marketProbPct: toPct(bet.market_prob),
-    edgePctValue: edgePct(bet.edge),
-  }
+// match runner's _norm_name: NFD-strip diacritics, lowercase, "First Last"
+function normName(name: string | null): string {
+  if (!name) return ''
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
 export default async function EdgePage() {
-  const raw = await apiGetTodayPicks().catch(() => [] as Bet[])
+  const date = siteDateKey()
+  const [raw, slate, enrichData] = await Promise.all([
+    apiGetTodayPicks().catch(() => [] as Bet[]),
+    apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
+    apiGetEdgeEnrich(date),
+  ])
+
+  const gameMap = new Map<number, SlateGame>((slate.games ?? []).map(g => [g.game_pk, g]))
+  const players = enrichData.players ?? {}
+
+  function enrich(bet: Bet): EdgePick {
+    const g = gameMap.get(bet.game_pk)
+    const en = players[normName(bet.player)]
+    return {
+      ...bet,
+      headshotUrl: headshotUrl(bet.player),
+      awayLogoUrl: logoUrl(bet.away_team),
+      homeLogoUrl: logoUrl(bet.home_team),
+      modelProbPct: toPct(bet.model_prob),
+      marketProbPct: toPct(bet.market_prob),
+      edgePctValue: edgePct(bet.edge),
+      matchup: g ? {
+        awayTeam: g.away_team, awayPitcher: g.away_pitcher,
+        homeTeam: g.home_team, homePitcher: g.home_pitcher,
+        startTime: g.start_time,
+      } : null,
+      weather: en?.weather ?? null,
+      recentForm: en?.recent_form ?? null,
+      spray: en?.spray ?? null,
+    }
+  }
+
   const picks = raw
     .map(enrich)
     .filter(p => p.edgePctValue != null)

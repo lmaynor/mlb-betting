@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Calculator, ClipboardList, ListChecks, Trophy } from 'lucide-react'
+import { BarChart3, Calculator, ClipboardList, ListChecks, Trophy, Zap } from 'lucide-react'
 
 const TABS = [
+  { label: 'Edge',    href: '/edge',        Icon: Zap },
   { label: 'Card',    href: '/cheat-sheet', Icon: ClipboardList },
   { label: 'Picks',   href: '/picks',       Icon: ListChecks },
   { label: 'Results', href: '/results',     Icon: Trophy },

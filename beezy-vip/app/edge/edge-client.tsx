@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { Bet } from '@/lib/types'
 import { SYSTEM_COLOR, SYSTEM_PILL } from '@/lib/tokens'
 
@@ -11,6 +11,14 @@ export interface EdgePick extends Bet {
   modelProbPct: number | null
   marketProbPct: number | null
   edgePctValue: number | null
+  matchup?: {
+    awayTeam: string; awayPitcher: string | null
+    homeTeam: string; homePitcher: string | null
+    startTime: string | null
+  } | null
+  weather?: { temp_f: number | null; wind_mph: number | null; wind_dir: string | null } | null
+  recentForm?: { stat: string; line: number | null; games: { date: string; value: number; over: boolean | null }[] } | null
+  spray?: { x: number; y: number; hit: boolean; ev: number | null }[] | null
 }
 
 // -- sport scaffolding (NBA slots in here once it has a model) ----------------
@@ -80,6 +88,89 @@ function EdgeTrack({ model, market, color }: { model: number; market: number; co
       <div className="edge-track-mark edge-track-market" style={{ left: `${market}%` }} />
       {/* model marker */}
       <div className="edge-track-mark edge-track-model" style={{ left: `${model}%`, background: color, borderColor: color }} />
+    </div>
+  )
+}
+
+// -- context blocks (slices 2-4) ----------------------------------------------
+function WeatherChip({ w }: { w: NonNullable<EdgePick['weather']> }) {
+  const parts: ReactNode[] = []
+  if (w.temp_f != null) parts.push(<span key="t">{w.temp_f}&deg;F</span>)
+  if (w.wind_mph != null) parts.push(<span key="w">{w.wind_mph} mph{w.wind_dir ? ` ${w.wind_dir}` : ''}</span>)
+  if (parts.length === 0) return null
+  return (
+    <div className="edge-ctx">
+      <div className="edge-ctx-k">Weather</div>
+      <div className="edge-ctx-v edge-weather">{parts}</div>
+    </div>
+  )
+}
+
+function PitcherMatchup({ m }: { m: NonNullable<EdgePick['matchup']> }) {
+  if (!m.awayPitcher && !m.homePitcher) return null
+  return (
+    <div className="edge-ctx">
+      <div className="edge-ctx-k">Probable pitchers</div>
+      <div className="edge-ctx-v">
+        <span>{m.awayTeam} {m.awayPitcher ?? 'TBD'}</span>
+        <span className="edge-ctx-dim"> vs </span>
+        <span>{m.homeTeam} {m.homePitcher ?? 'TBD'}</span>
+      </div>
+    </div>
+  )
+}
+
+function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>; color: string }) {
+  const games = rf.games ?? []
+  if (games.length === 0) return null
+  const W = 220, H = 54, pad = 4
+  const max = Math.max(rf.line ?? 0, ...games.map(g => g.value), 1)
+  const bw = (W - pad * 2) / games.length
+  const lineY = rf.line == null ? null : H - pad - (rf.line / max) * (H - pad * 2)
+  const overCount = games.filter(g => g.over).length
+  return (
+    <div className="edge-ctx edge-ctx-wide">
+      <div className="edge-ctx-k">
+        Last {games.length} games &middot; {rf.stat.replace('_', ' ')}
+        {rf.line != null && <span className="edge-ctx-dim"> (line {rf.line})</span>}
+        {rf.line != null && <span className="edge-form-hit"> &mdash; over {overCount}/{games.length}</span>}
+      </div>
+      <svg className="edge-spark" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`recent ${rf.stat}`}>
+        {lineY != null && <line x1={pad} y1={lineY} x2={W - pad} y2={lineY} stroke="#d8d8de" strokeWidth="1" strokeDasharray="3 3" />}
+        {games.map((g, i) => {
+          const h = (g.value / max) * (H - pad * 2)
+          const x = pad + i * bw
+          const over = g.over
+          return <rect key={i} x={x + 1} y={H - pad - h} width={Math.max(bw - 2, 1)} height={Math.max(h, 0.5)}
+            fill={over === true ? color : over === false ? '#3a3a42' : '#5a5a64'} rx="0.5" />
+        })}
+      </svg>
+    </div>
+  )
+}
+
+// Statcast hc coords: home plate ~ (125, 199), field opens upward (y decreases).
+function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>; color: string }) {
+  if (!points.length) return null
+  const S = 150
+  const tx = (x: number) => (x / 250) * S
+  const ty = (y: number) => (y / 250) * S
+  const hits = points.filter(p => p.hit).length
+  return (
+    <div className="edge-ctx edge-ctx-wide">
+      <div className="edge-ctx-k">Spray chart <span className="edge-ctx-dim">({points.length} batted, {hits} hits)</span></div>
+      <svg className="edge-spray" viewBox={`0 0 ${S} ${S}`} role="img" aria-label="batted-ball spray chart">
+        {/* outfield arc + foul lines, home plate at bottom-center */}
+        <path d={`M ${tx(125)} ${ty(199)} L ${tx(33)} ${ty(75)} A 120 120 0 0 1 ${tx(217)} ${ty(75)} Z`}
+          fill="#16161a" stroke="#26262c" strokeWidth="1" />
+        <line x1={tx(125)} y1={ty(199)} x2={tx(33)} y2={ty(75)} stroke="#26262c" strokeWidth="0.7" />
+        <line x1={tx(125)} y1={ty(199)} x2={tx(217)} y2={ty(75)} stroke="#26262c" strokeWidth="0.7" />
+        {points.map((pt, i) => (
+          <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r={pt.hit ? 2.4 : 1.8}
+            fill={pt.hit ? color : 'transparent'} stroke={pt.hit ? color : '#5a5a64'} strokeWidth="0.9"
+            opacity={pt.hit ? 0.95 : 0.6} />
+        ))}
+      </svg>
     </div>
   )
 }
@@ -164,6 +255,19 @@ function Detail({ p }: { p: EdgePick }) {
           )}
         </div>
       </div>
+
+      {(p.weather || p.matchup || p.recentForm || (p.spray && p.spray.length > 0)) && (
+        <div className="edge-context">
+          {(p.weather || p.matchup) && (
+            <div className="edge-context-row">
+              {p.weather && <WeatherChip w={p.weather} />}
+              {p.matchup && <PitcherMatchup m={p.matchup} />}
+            </div>
+          )}
+          {p.recentForm && <FormSparkline rf={p.recentForm} color={color} />}
+          {p.spray && p.spray.length > 0 && <SprayChart points={p.spray} color={color} />}
+        </div>
+      )}
 
       {bullets.length > 0 && (
         <div className="edge-why">
@@ -363,6 +467,17 @@ function Styles() {
 .edge-why { margin-top: 18px; padding-top: 16px; border-top: 1px solid #1f1f24; }
 .edge-why-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #8a8a93; margin-bottom: 8px; }
 .edge-why-list { margin: 0; padding-left: 16px; color: #c4c4cc; font-size: 13px; line-height: 1.7; }
+.edge-context { margin-top: 18px; padding-top: 16px; border-top: 1px solid #1f1f24; display: flex; flex-direction: column; gap: 16px; }
+.edge-context-row { display: flex; flex-wrap: wrap; gap: 28px; }
+.edge-ctx { min-width: 0; }
+.edge-ctx-wide { width: 100%; }
+.edge-ctx-k { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #8a8a93; margin-bottom: 6px; text-transform: uppercase; }
+.edge-ctx-v { font-size: 13px; color: #d8d8de; }
+.edge-ctx-dim { color: #8a8a93; }
+.edge-weather { display: flex; gap: 14px; }
+.edge-form-hit { color: #b3bd95; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.edge-spark { width: 100%; max-width: 340px; height: auto; display: block; }
+.edge-spray { width: 156px; height: 156px; display: block; }
 .edge-empty { border: 1px solid #000; background: #0d0d10; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
 .edge-empty-s { color: #9aa0aa; font-size: 13px; margin: 0; }
