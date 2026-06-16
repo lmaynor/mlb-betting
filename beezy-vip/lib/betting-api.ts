@@ -131,3 +131,27 @@ export async function apiGetTodaySlate(): Promise<TodaySlate> {
   if (!res.ok) throw new Error(`Slate API ${res.status}`)
   return res.json() as Promise<TodaySlate>
 }
+
+// -- The Edge dashboard enrichment (weather / recent form / spray) ------------
+export interface PlayerEnrich {
+  weather?: { temp_f: number | null; wind_mph: number | null; wind_dir: string | null }
+  recent_form?: { stat: string; line: number | null; games: { date: string; value: number; over: boolean | null }[] }
+  spray?: { x: number; y: number; hit: boolean; ev: number | null }[]
+}
+export interface EdgeEnrich { date: string; players: Record<string, PlayerEnrich> }
+
+// Server-only (called from the /edge server component). Fail-soft: returns empty
+// players on any error so the dashboard always renders.
+export async function apiGetEdgeEnrich(date: string): Promise<EdgeEnrich> {
+  if (!API_URL) return { date, players: {} }
+  try {
+    const res = await fetch(`${API_URL}/api/public/edge-enrich?date=${date}`, {
+      headers: { 'X-API-Key': API_KEY },
+      next: { revalidate: 300 },
+    })
+    if (!res.ok) return { date, players: {} }
+    return res.json() as Promise<EdgeEnrich>
+  } catch {
+    return { date, players: {} }
+  }
+}

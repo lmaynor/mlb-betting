@@ -10,6 +10,7 @@ const BORDER_HARD = '1px solid #000'
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
+  { label: 'The Edge',   href: '/edge' },
   { label: 'Picks',      href: '/picks' },
   { label: 'Daily Card', href: '/cheat-sheet' },
   { label: 'Tools',      href: '/tools' },

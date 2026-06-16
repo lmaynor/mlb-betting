@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 
@@ -63,6 +64,13 @@ export async function LiveTicker() {
           })}
         </div>
       </div>
+      <Link
+        href="/edge"
+        className="mono edge-ribbon-cta"
+        style={{ zIndex: 10, background: '#111114', padding: '0 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #1f1f24', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fcc20f', textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
+      >
+        The Edge <span aria-hidden>&rarr;</span>
+      </Link>
     </div>
   )
 }
