@@ -47,23 +47,27 @@ gcloud storage cat gs://concrete-crow-445205-m4-mlb-data/Enrich/edge/$(TZ=Americ
 ```
 
 ## ParlayAPI -- UPGRADING TO $5 / 20,000 cr TOMORROW (2026-06-17)
-Decision changed this session: upgrade to the **$5 / 20k-cr-per-month tier tomorrow**
-(was: stay free until October). Operating point: **~22 refreshes/day**.
+Decision: upgrade to the **$5 / 20k-cr-per-month tier tomorrow** (was: stay free until Oct).
+Priority is **all markets for all games** -- NO `--max-events` cap. Lower the FREQUENCY to
+fit the budget instead (full coverage > more time points).
 
-Budget math: 20,000 / 30 days ~= **667 cr/day**; / 22 refreshes ~= **~30 cr per refresh**.
-A props refresh costs `1 (slate) + events x markets` (3 markets default). ~30 cr ~= 1 + ~9 games x 3.
-- A full ~15-game MLB slate is ~46 cr -> **cap with `--max-events 9`** to hold ~30 cr/refresh.
-  TRADEOFF: caps to the first 9 games per refresh (loses props for games beyond the 9th on
-  big slates). Alternative if full coverage matters more than frequency: drop the cap and run
-  fewer full-slate refreshes (~14/day fits 20k).
+Budget math: 20,000 / 30 days ~= **667 cr/day**. A props refresh costs `1 (slate) + games x markets`.
+A full ~15-game MLB slate at 3 markets = ~46 cr -> **~14 full-slate refreshes/day fits 20k**.
+- Recommended cadence: **every 2 hours** (`0 */2 * * *`) = 12 refreshes/day -> ~552 cr/day
+  -> **~16.5k/mo**, leaving headroom for doubleheaders. Tighten toward ~90 min if more time
+  points are wanted; back off if it runs hot.
+- MARKET SET: `PARLAY_PROP_MARKETS["baseball_mlb"]` currently = hits / total_bases / home_runs
+  (3 batter markets). If "all markets" should also include pitcher props (K / outs / ER),
+  add them to that list in `nba/config.py` -- cost scales linearly with market count
+  (e.g. 6 markets ~= 91 cr/refresh -> halve the cadence or ~7/day).
 - NBA is offseason until ~Oct, so MLB gets the whole budget through summer. Stage the NBA
-  job now; wire its schedulers in October (smaller slates, usually fine uncapped).
+  job now; wire its schedulers (and re-split the budget) in October.
 - Watch `credits_remaining` in `OddsAccum/{sport}/latest.json` and tune.
 
 ```bash
-# MLB props -- hourly (~24/day), capped to hold ~30 cr/refresh, ~20k/mo
-PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=props MAX_EVENTS=9 \
-  SCHEDULE="0 * * * *" bash ./deploy/setup_parlay_accumulator.sh
+# MLB props -- ALL games, ALL configured markets, every 2h (~12/day, ~16.5k/mo)
+PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=props \
+  SCHEDULE="0 */2 * * *" bash ./deploy/setup_parlay_accumulator.sh
 
 # NBA props -- stage the job only (no scheduler until October)
 PROJECT_ID=concrete-crow-445205-m4 SPORT=basketball_nba KIND=props bash ./deploy/setup_parlay_accumulator.sh
