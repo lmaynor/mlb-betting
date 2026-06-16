@@ -126,18 +126,18 @@ PARLAY_API_BASE = os.environ.get("PARLAY_API_BASE", "https://parlay-api.com/v1")
 PARLAY_REGION = "us"
 
 # default prop markets per sport (override via CLI).
-# NOTE: ParlayAPI uses its own `player_*` market scheme (verified for the batter set);
-# flatten_parlay_props only keeps keys starting with `player_`. The pitcher keys below
-# are CANDIDATES -- verify against a live payload before scheduling (see RUNBOOK in
-# handoffs/handoff_2026-06-16_edge_cockpit_viz.md). Wrong keys still bill 1 cr/(event x
-# market) for zero data.
+# NOTE: ParlayAPI uses its own `player_*` market scheme; flatten_parlay_props only keeps
+# keys starting with `player_`. MLB keys verified against a live payload 2026-06-16.
+# `outs` arrives under TWO keys (player_pitcher_outs / player_pitching_outs), both
+# collapsed to the short name 'outs' in parlay_extract._market_short.
 PARLAY_PROP_MARKETS = {
     "basketball_nba": ["player_points", "player_rebounds", "player_assists"],
     "baseball_mlb": [
-        # batter props (verified)
+        # batter props
         "player_hits", "player_total_bases", "player_home_runs",
-        # pitcher props (CANDIDATE keys -- verify before scheduling)
-        "player_strikeouts", "player_outs", "player_earned_runs",
+        # pitcher props
+        "player_strikeouts", "player_earned_runs",
+        "player_pitcher_outs", "player_pitching_outs",
     ],
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]

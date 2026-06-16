@@ -8,8 +8,20 @@ the game-line helpers are reused unchanged.
 from nba.config import PARLAY_PROP_MARKETS
 
 
+# Some ParlayAPI markets arrive under more than one key for the same concept;
+# collapse those to one short name so the data is not fragmented. Pitcher "outs
+# recorded" comes back as both player_pitcher_outs and player_pitching_outs
+# (verified against a live payload 2026-06-16).
+_MARKET_ALIASES = {
+    "player_pitcher_outs": "outs",
+    "player_pitching_outs": "outs",
+}
+
+
 def _market_short(sport: str, key: str) -> str:
     """Map a ParlayAPI market key to a short name (e.g. player_points->points)."""
+    if key in _MARKET_ALIASES:
+        return _MARKET_ALIASES[key]
     if key.startswith("player_"):
         return key[len("player_"):]
     return key
