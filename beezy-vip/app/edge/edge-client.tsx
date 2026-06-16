@@ -18,7 +18,11 @@ export interface EdgePick extends Bet {
   } | null
   weather?: { temp_f: number | null; wind_mph: number | null; wind_dir: string | null } | null
   recentForm?: { stat: string; line: number | null; games: { date: string; value: number; over: boolean | null }[] } | null
-  spray?: { x: number; y: number; hit: boolean; ev: number | null }[] | null
+  spray?: { x: number; y: number; hit: boolean; ev?: number | null }[] | null
+  evLa?: { ev: number; la: number; hit: boolean }[] | null
+  velo?: { pitch: string; mph: number; n: number }[] | null
+  release?: { x: number; z: number; pitch: string }[] | null
+  zone?: Record<string, number> | null
 }
 
 // -- sport scaffolding (NBA slots in here once it has a model) ----------------
@@ -175,6 +179,85 @@ function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>;
   )
 }
 
+const PITCH_COLORS: Record<string, string> = {
+  FF: '#d77a7a', SI: '#e6915d', FT: '#e6915d', FC: '#fcc20f', SL: '#8c9ae0', ST: '#c0d4a7',
+  CU: '#9ab6c8', KC: '#8e8a25', CH: '#b3bd95', FS: '#a5b8c0', SP: '#a5b8c0',
+}
+const pc = (p: string) => PITCH_COLORS[p] ?? '#9aa0aa'
+
+function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>; color: string }) {
+  if (!points.length) return null
+  const W = 220, H = 130, pad = 6
+  const xa = (la: number) => pad + ((Math.max(-40, Math.min(70, la)) + 40) / 110) * (W - pad * 2)
+  const ya = (ev: number) => H - pad - ((Math.max(40, Math.min(120, ev)) - 40) / 80) * (H - pad * 2)
+  return (
+    <div className="edge-ctx edge-ctx-wide">
+      <div className="edge-ctx-k">Exit velo / launch angle <span className="edge-ctx-dim">({points.length} batted)</span></div>
+      <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity vs launch angle">
+        <rect x={pad} y={ya(116)} width={W - pad * 2} height={ya(90) - ya(116)} fill="#b3bd9514" />
+        {points.map((p, i) => (
+          <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r={p.hit ? 2.2 : 1.5}
+            fill={p.hit ? color : 'transparent'} stroke={p.hit ? color : '#5a5a64'} strokeWidth="0.8" opacity={p.hit ? 0.9 : 0.5} />
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function VeloBars({ velo }: { velo: NonNullable<EdgePick['velo']> }) {
+  if (!velo.length) return null
+  const max = Math.max(...velo.map(v => v.mph), 100)
+  return (
+    <div className="edge-ctx edge-ctx-wide">
+      <div className="edge-ctx-k">Velocity by pitch</div>
+      <div className="edge-velo">
+        {velo.slice().sort((a, b) => b.mph - a.mph).map(v => (
+          <div key={v.pitch} className="edge-velo-row">
+            <span className="edge-velo-p" style={{ color: pc(v.pitch) }}>{v.pitch}</span>
+            <span className="edge-velo-bar"><span style={{ width: `${(v.mph / max) * 100}%`, background: pc(v.pitch) }} /></span>
+            <span className="edge-velo-v">{v.mph.toFixed(1)}<span className="edge-ctx-dim"> mph</span></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReleasePoint({ release }: { release: NonNullable<EdgePick['release']> }) {
+  if (!release.length) return null
+  const S = 130
+  const xa = (x: number) => ((Math.max(-3, Math.min(3, x)) + 3) / 6) * S
+  const ya = (z: number) => S - ((Math.max(2, Math.min(8, z)) - 2) / 6) * S
+  return (
+    <div className="edge-ctx">
+      <div className="edge-ctx-k">Release point <span className="edge-ctx-dim">(catcher view)</span></div>
+      <svg className="edge-viz-sq" viewBox={`0 0 ${S} ${S}`} role="img" aria-label="release point">
+        <line x1={S / 2} y1={0} x2={S / 2} y2={S} stroke="#1f1f24" strokeWidth="0.5" />
+        {release.map((r, i) => <circle key={i} cx={xa(r.x)} cy={ya(r.z)} r="1.6" fill={pc(r.pitch)} opacity="0.7" />)}
+      </svg>
+    </div>
+  )
+}
+
+function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
+  const cells = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(z => zone[String(z)] ?? 0)
+  const total = cells.reduce((a, b) => a + b, 0)
+  if (total < 5) return null
+  const max = Math.max(...cells, 1)
+  return (
+    <div className="edge-ctx">
+      <div className="edge-ctx-k">Location <span className="edge-ctx-dim">(strike zone)</span></div>
+      <div className="edge-zone">
+        {cells.map((c, i) => (
+          <div key={i} className="edge-zone-cell" style={{ background: `rgba(252,194,15,${0.06 + (c / max) * 0.62})` }}>
+            {Math.round((c / total) * 100)}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // -- detail panel -------------------------------------------------------------
 function Detail({ p }: { p: EdgePick }) {
   const color = SYSTEM_COLOR[p.system] ?? '#9aa0aa'
@@ -256,7 +339,8 @@ function Detail({ p }: { p: EdgePick }) {
         </div>
       </div>
 
-      {(p.weather || p.matchup || p.recentForm || (p.spray && p.spray.length > 0)) && (
+      {(p.weather || p.matchup || p.recentForm || (p.spray?.length) || (p.evLa?.length) ||
+        (p.velo?.length) || (p.release?.length) || p.zone) && (
         <div className="edge-context">
           {(p.weather || p.matchup) && (
             <div className="edge-context-row">
@@ -266,6 +350,14 @@ function Detail({ p }: { p: EdgePick }) {
           )}
           {p.recentForm && <FormSparkline rf={p.recentForm} color={color} />}
           {p.spray && p.spray.length > 0 && <SprayChart points={p.spray} color={color} />}
+          {p.evLa && p.evLa.length > 0 && <EvLaScatter points={p.evLa} color={color} />}
+          {p.velo && p.velo.length > 0 && <VeloBars velo={p.velo} />}
+          {((p.release && p.release.length > 0) || p.zone) && (
+            <div className="edge-viz-row">
+              {p.release && p.release.length > 0 && <ReleasePoint release={p.release} />}
+              {p.zone && <ZoneGrid zone={p.zone} />}
+            </div>
+          )}
         </div>
       )}
 
@@ -284,12 +376,26 @@ function Detail({ p }: { p: EdgePick }) {
 export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: string }) {
   const [sport, setSport] = useState<SportKey>('mlb')
   const [group, setGroup] = useState<Group>('all')
+  const [team, setTeam] = useState<string>('all')
+  const [minEdge, setMinEdge] = useState<number>(0)
+  const [topOnly, setTopOnly] = useState<boolean>(false)
   const [selectedId, setSelectedId] = useState<number | null>(picks[0]?.id ?? null)
 
-  const visible = useMemo(
-    () => (group === 'all' ? picks : picks.filter(p => groupOf(p.system) === group)),
-    [picks, group],
-  )
+  const teams = useMemo(() => {
+    const set = new Set<string>()
+    picks.forEach(p => { if (p.away_team) set.add(p.away_team); if (p.home_team) set.add(p.home_team) })
+    return Array.from(set).sort()
+  }, [picks])
+
+  const visible = useMemo(() => {
+    let v = picks
+    if (group !== 'all') v = v.filter(p => groupOf(p.system) === group)
+    if (team !== 'all') v = v.filter(p => p.away_team === team || p.home_team === team)
+    if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
+    v = v.slice().sort((a, b) => (b.edgePctValue ?? 0) - (a.edgePctValue ?? 0))
+    if (topOnly) v = v.slice(0, 10)
+    return v
+  }, [picks, group, team, minEdge, topOnly])
   const selected = useMemo(
     () => visible.find(p => p.id === selectedId) ?? visible[0] ?? null,
     [visible, selectedId],
@@ -329,6 +435,26 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
             </button>
           )
         })}
+      </div>
+
+      <div className="edge-controls">
+        <button className={`edge-toggle${topOnly ? ' is-on' : ''}`} onClick={() => setTopOnly(v => !v)}
+          aria-pressed={topOnly}>Top 10 today</button>
+        <label className="edge-slider">
+          <span>Min edge <strong>{minEdge}%</strong></span>
+          <input type="range" min={0} max={20} step={1} value={minEdge}
+            onChange={e => setMinEdge(Number(e.target.value))} aria-label="Minimum edge" />
+        </label>
+        <label className="edge-select">
+          <span className="edge-select-k">Team</span>
+          <select value={team} onChange={e => setTeam(e.target.value)} aria-label="Team">
+            <option value="all">All teams</option>
+            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        {(team !== 'all' || minEdge > 0 || topOnly) && (
+          <button className="edge-clear" onClick={() => { setTeam('all'); setMinEdge(0); setTopOnly(false) }}>Clear</button>
+        )}
       </div>
 
       {visible.length === 0 ? (
@@ -478,6 +604,30 @@ function Styles() {
 .edge-form-hit { color: #b3bd95; font-weight: 700; text-transform: none; letter-spacing: 0; }
 .edge-spark { width: 100%; max-width: 340px; height: auto; display: block; }
 .edge-spray { width: 156px; height: 156px; display: block; }
+.edge-viz { width: 100%; max-width: 320px; height: auto; display: block; }
+.edge-viz-sq { width: 132px; height: 132px; display: block; }
+.edge-viz-row { display: flex; flex-wrap: wrap; gap: 28px; }
+.edge-velo { display: flex; flex-direction: column; gap: 5px; max-width: 320px; }
+.edge-velo-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.edge-velo-p { width: 26px; font-weight: 800; font-size: 11px; }
+.edge-velo-bar { flex: 1; height: 8px; background: #1a1a1f; position: relative; }
+.edge-velo-bar > span { position: absolute; left: 0; top: 0; bottom: 0; }
+.edge-velo-v { width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: #d8d8de; }
+.edge-zone { display: grid; grid-template-columns: repeat(3, 30px); grid-auto-rows: 30px; gap: 2px; }
+.edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 9px;
+  font-weight: 700; color: #0b0b0d; font-variant-numeric: tabular-nums; }
+.edge-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  padding: 10px 12px; border: 1px solid #1f1f24; background: #0d0d10; }
+.edge-toggle { background: transparent; color: #9aa0aa; border: 1px solid #2a2a31; padding: 6px 12px;
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: color .16s, border-color .16s, background .16s; }
+.edge-toggle.is-on { background: #fcc20f; color: #0b0b0d; border-color: #fcc20f; }
+.edge-slider { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #9aa0aa; min-width: 150px; }
+.edge-slider strong { color: #fcc20f; font-variant-numeric: tabular-nums; }
+.edge-slider input { accent-color: #fcc20f; }
+.edge-select { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.edge-select-k { color: #9aa0aa; }
+.edge-select select { background: #111114; color: #f5f5f7; border: 1px solid #2a2a31; padding: 5px 8px; font-size: 12px; }
+.edge-clear { background: transparent; color: #8a8a93; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .edge-empty { border: 1px solid #000; background: #0d0d10; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
 .edge-empty-s { color: #9aa0aa; font-size: 13px; margin: 0; }
