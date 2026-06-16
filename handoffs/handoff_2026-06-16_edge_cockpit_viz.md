@@ -47,32 +47,47 @@ gcloud storage cat gs://concrete-crow-445205-m4-mlb-data/Enrich/edge/$(TZ=Americ
 ```
 
 ## ParlayAPI -- UPGRADING TO $5 / 20,000 cr TOMORROW (2026-06-17)
-Decision: upgrade to the **$5 / 20k-cr-per-month tier tomorrow** (was: stay free until Oct).
-Priority is **all markets for all games** -- NO `--max-events` cap. Lower the FREQUENCY to
-fit the budget instead (full coverage > more time points).
+Decision: upgrade to the **$5 / 20k-cr-per-month tier tomorrow**. Bank **game lines +
+pitcher props + batter props, all games** -- NO `--max-events` cap. Lower the FREQUENCY to
+fit budget (full coverage > more time points). SGO keeps running as the live source and
+already banks MLB prop snapshots forward (`Odds/sgo/`); ParlayAPI adds Pinnacle/sharp +
+closing-line quality and is the essential path for NBA (no SGO there).
 
-Budget math: 20,000 / 30 days ~= **667 cr/day**. A props refresh costs `1 (slate) + games x markets`.
-A full ~15-game MLB slate at 3 markets = ~46 cr -> **~14 full-slate refreshes/day fits 20k**.
-- Recommended cadence: **every 2 hours** (`0 */2 * * *`) = 12 refreshes/day -> ~552 cr/day
-  -> **~16.5k/mo**, leaving headroom for doubleheaders. Tighten toward ~90 min if more time
-  points are wanted; back off if it runs hot.
-- MARKET SET: `PARLAY_PROP_MARKETS["baseball_mlb"]` currently = hits / total_bases / home_runs
-  (3 batter markets). If "all markets" should also include pitcher props (K / outs / ER),
-  add them to that list in `nba/config.py` -- cost scales linearly with market count
-  (e.g. 6 markets ~= 91 cr/refresh -> halve the cadence or ~7/day).
-- NBA is offseason until ~Oct, so MLB gets the whole budget through summer. Stage the NBA
-  job now; wire its schedulers (and re-split the budget) in October.
+This session expanded `PARLAY_PROP_MARKETS["baseball_mlb"]` in `nba/config.py` to 6 markets:
+`player_hits, player_total_bases, player_home_runs` (batter, verified) + `player_strikeouts,
+player_outs, player_earned_runs` (pitcher, **CANDIDATE keys -- verify before scheduling**).
+
+Budget math: 20,000 / 30 ~= **667 cr/day**. props refresh = `1 + games x markets`; a full
+~15-game slate x 6 markets = ~91 cr. game_lines = ~3 cr/refresh (1/market, whole slate).
+- Recommended cadence: **every 4 hours** (`0 */4 * * *`) = 6/day -> props 546 + game_lines 18
+  = ~564 cr/day -> **~16.9k/mo**, headroom for doubleheaders. (Every 3h ~= 21.8k -> over.)
+- NBA offseason until ~Oct -> MLB gets the whole budget through summer. Stage the NBA job
+  now; schedule it + re-split the budget in October.
 - Watch `credits_remaining` in `OddsAccum/{sport}/latest.json` and tune.
 
 ```bash
-# MLB props -- ALL games, ALL configured markets, every 2h (~12/day, ~16.5k/mo)
-PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=props \
-  SCHEDULE="0 */2 * * *" bash ./deploy/setup_parlay_accumulator.sh
+# STEP 1 -- VERIFY pitcher market keys BEFORE scheduling (one-shot, no scheduler).
+PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=props bash ./deploy/setup_parlay_accumulator.sh
+gcloud run jobs execute parlay-accum-mlb-props --region=us-central1 --project=concrete-crow-445205-m4 --wait
+gcloud storage cat gs://concrete-crow-445205-m4-mlb-data/OddsAccum/baseball_mlb/latest.json
+#   ^ check best_book_rows > 0 and that K/outs/ER appear. If pitcher markets returned
+#     nothing, the keys are wrong -- inspect a raw payload to find the real ones:
+#     gcloud storage cat gs://.../OddsAccum/baseball_mlb/raw/<date>/props_<HHMM>.json | python3 -m json.tool | grep '"key"'
+#     then fix PARLAY_PROP_MARKETS in nba/config.py, redeploy the image, re-run.
 
-# NBA props -- stage the job only (no scheduler until October)
+# STEP 2 -- once keys verified, schedule props every 4h (all games, all 6 markets)
+PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=props \
+  SCHEDULE="0 */4 * * *" bash ./deploy/setup_parlay_accumulator.sh
+
+# STEP 3 -- game lines (cheap), same cadence
+PROJECT_ID=concrete-crow-445205-m4 SPORT=baseball_mlb KIND=game_lines \
+  SCHEDULE="0 */4 * * *" bash ./deploy/setup_parlay_accumulator.sh
+
+# NBA -- stage props job only (no scheduler until October)
 PROJECT_ID=concrete-crow-445205-m4 SPORT=basketball_nba KIND=props bash ./deploy/setup_parlay_accumulator.sh
 ```
-(`setup_parlay_accumulator.sh` already exists and takes SPORT/KIND/MAX_EVENTS/SCHEDULE.)
+(`setup_parlay_accumulator.sh` exists and takes SPORT/KIND/MAX_EVENTS/SCHEDULE; job name is
+`parlay-accum-{mlb|nba}-{props|game_lines}`.)
 
 ## Still pending / not done
 - Deploy everything above (Cloud Shell).
