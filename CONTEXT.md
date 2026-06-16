@@ -2,7 +2,7 @@
 
 _Last updated: 2026-06-11 00:30 CST
 
-The standing architectural and conventions document for `lmaynor/mlb-betting`. Read this first at the start of any new session before touching code.
+The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
 **This doc captures what doesn't change session-to-session.** For point-in-time status (which models are deployed, which bugs are open), see the latest handoff in `handoffs/`. For modeling theory, see `ipynb_CONTEXT`. For operational runbooks (common gcloud/curl fragments, deploy workflow, social media pipeline), see `RUNBOOKS.md`.
 
@@ -10,8 +10,37 @@ If you change something here, treat it as a contract change -- flag it in the ne
 
 ---
 
+## 0. Platform framing (beezy.fyi) and sport labeling
+
+The product is **beezy.fyi** -- a betting platform, NOT an MLB-only project. Sports
+nest underneath the beezy umbrella as **pillars**:
+
+- **MLB** -- the mature, live pillar: 10 systems, daily Cloud Run loops, the
+  `mlb_core/` package, the MLB GCS masters. This is the bulk of this document
+  (sections 1-18). Treat unqualified legacy code/data as the **mlb** pillar.
+- **NBA** -- the emerging, data-collection-phase pillar (no model/odds-gated live
+  betting yet). Code in `nba/`, data under the `NBA/` GCS prefix. See section 19.
+
+**Labeling convention (apply going forward; do not mass-rename live MLB code):**
+- Always say which pillar a thing belongs to -- "the mlb refresh job", "the nba
+  odds accumulator" -- never leave sport ambiguous.
+- New code nests by sport: `nba/...` (and a future `mlb/` if/when the legacy
+  `mlb_core` is lifted). New sport-specific GCS data nests under a sport prefix
+  (`NBA/`, `OddsAccum/{sport}/`, `Enrich/edge/` is shared/sport-tagged inside).
+- Truly sport-agnostic infra (e.g. `mlb_core.storage`, `mlb_core.odds.utils`) is
+  reused across pillars despite the legacy `mlb_` name; a rename to a neutral
+  `core/` is DEFERRED (too invasive while MLB is live) -- tracked, not done.
+- Frontend (beezy.fyi) is sport-aware: the `/edge` dashboard has MLB live + an
+  NBA(soon) tab; keep new UI sport-keyed so NBA slots in without a redesign.
+
+The repo name (`lmaynor/mlb-betting`) is legacy and not worth renaming; the
+**brand and mental model is beezy.fyi with mlb + nba pillars.**
+
+---
+
 ## Table of contents
 
+0. [Platform framing (beezy.fyi) and sport labeling](#0-platform-framing-beezyfyi-and-sport-labeling)
 1. [What this project is](#1-what-this-project-is)
 2. [Repo layout (the map)](#2-repo-layout-the-map)
 3. [GCS layout (the data lake)](#3-gcs-layout-the-data-lake)
@@ -36,7 +65,8 @@ If you change something here, treat it as a contract change -- flag it in the ne
 
 ## 1. What this project is
 
-Ten MLB betting systems running daily in GCP:
+beezy.fyi's **MLB pillar** (see section 0 for the platform framing). Ten MLB
+betting systems running daily in GCP:
 
 | System | What it predicts | Market | Status |
 |---|---|---|---|
