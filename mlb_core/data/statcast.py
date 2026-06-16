@@ -47,6 +47,8 @@ STATCAST_FIELDS = [
     "arm_angle", "bat_speed", "swing_length",
     "hc_x", "hc_y",
     "release_pos_x", "release_pos_z",
+    "pfx_x", "pfx_z",          # pitch movement (break) -- forward-only, added 2026-06
+    "plate_x", "plate_z",      # precise pitch location -- forward-only, added 2026-06
     "on_1b", "on_2b", "on_3b",
 ]
 

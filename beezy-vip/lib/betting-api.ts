@@ -136,7 +136,11 @@ export async function apiGetTodaySlate(): Promise<TodaySlate> {
 export interface PlayerEnrich {
   weather?: { temp_f: number | null; wind_mph: number | null; wind_dir: string | null }
   recent_form?: { stat: string; line: number | null; games: { date: string; value: number; over: boolean | null }[] }
-  spray?: { x: number; y: number; hit: boolean; ev: number | null }[]
+  spray?: { x: number; y: number; hit: boolean; ev?: number | null }[]
+  ev_la?: { ev: number; la: number; hit: boolean }[]
+  velo?: { pitch: string; mph: number; n: number }[]
+  release?: { x: number; z: number; pitch: string }[]
+  zone?: Record<string, number>
 }
 export interface EdgeEnrich { date: string; players: Record<string, PlayerEnrich> }
 

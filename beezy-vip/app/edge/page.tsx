@@ -100,6 +100,10 @@ export default async function EdgePage() {
       weather: en?.weather ?? null,
       recentForm: en?.recent_form ?? null,
       spray: en?.spray ?? null,
+      evLa: en?.ev_la ?? null,
+      velo: en?.velo ?? null,
+      release: en?.release ?? null,
+      zone: en?.zone ?? null,
     }
   }
 
