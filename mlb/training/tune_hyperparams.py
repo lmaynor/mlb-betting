@@ -335,7 +335,7 @@ def load_tuned_params(system: str) -> dict | None:
     override hardcoded XGB_PARAMS.
 
     Usage in retrain scripts:
-        from training.tune_hyperparams import load_tuned_params
+        from mlb.training.tune_hyperparams import load_tuned_params
         tuned = load_tuned_params("1IOU")
         if tuned:
             XGB_PARAMS = tuned["xgb_params"]

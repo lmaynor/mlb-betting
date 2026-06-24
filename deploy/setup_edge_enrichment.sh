@@ -50,7 +50,7 @@ JOB_FLAGS=(
   --set-cloudsql-instances="$INSTANCE"
   --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
   --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
-  --command="python" --args="-m,runners.build_edge_enrichment"
+  --command="python" --args="-m,mlb.runners.build_edge_enrichment"
   --memory=2Gi --cpu=1 --task-timeout=900 --max-retries=1 --quiet
 )
 if gcloud run jobs describe "$JOB_NAME" --region="$REGION" --quiet >/dev/null 2>&1; then

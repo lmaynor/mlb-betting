@@ -1,17 +1,21 @@
 """
-training/retrain_batter_hits_v1.py — BATTER_HITS Pro v1 full retrain.
+training/retrain_game_v1.py -- GAME Pro v1 full retrain.
 
-NegBin count regressor: XGBoost count:poisson predicting lambda (expected
-hits per game). At score time, P(hits > line) = 1 - NegBin_CDF(floor(line),
-lambda, nb_alpha). Mirrors retrain_k_v1.py exactly, adapted for the
-batter-side hits market.
+Binary classifier: XGBoost binary:logistic predicting P(home team wins
+full game). Key differentiator from F5: dedicated bullpen features.
 
-Output GCS keys (matches BATTER_HITS_System/config_batter_hits.py):
-  - BATTER_HITS_System/models/xgb_batter_hits_v1.json
-  - BATTER_HITS_System/models/model_meta_batter_hits_v1.json
-  - BATTER_HITS_System/models/archive/...{ts}...
+NOTE: The feature builder (runners/build_game_features.py) must include a
+      `home_win` column in model_features.csv. This is derived from
+      Scoring/scoring_master.csv: sum runs for home team across all innings,
+      sum for away team, home > away -> 1, else -> 0.
+      If `home_win` is absent, this retrain will abort with a clear error.
 
-Entrypoint: python -m training.retrain_batter_hits_v1
+Output GCS keys (matches GAME_Pro_System/config_game.py):
+  - GAME_Pro_System/models/xgb_game_v1.json
+  - GAME_Pro_System/models/model_meta_game_v1.json
+  - GAME_Pro_System/models/archive/...{ts}...
+
+Entrypoint: python -m training.retrain_game_v1
 """
 from __future__ import annotations
 
@@ -28,53 +32,90 @@ import xgboost as xgb
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
 )
 logger = logging.getLogger(__name__)
 
 
 VERSION = "v1"
-TARGET  = "batter_hits"
+TARGET  = "home_win"
+SYSTEM  = "GAME"
 
-# Feature contract — keep in sync with BATTER_HITS_System/config_batter_hits.py
-BATTER_HITS_FEATURES = [
-    "hits_per_game_L20", "hits_per_game_L50",
-    "hits_rate_L20", "hits_rate_season",
-    "babip_L20", "babip_L50",
-    "contact_pct_L20", "chase_pct_L20",
-    "ld_rate_L20", "gb_rate_L20",
-    "hard_hit_L20",
-    "batter_pa_per_game_L20", "ewma_batting_order",
-    "hits_vs_hand_career", "hits_vs_hand_season",
-    "pitcher_babip_allowed_L20", "pitcher_hits_per_9_L20",
-    "pitcher_gb_rate_L20", "pitcher_k_pct_L20",
-    "hits_park_factor",
-    "is_home", "temperature_f", "is_dome", "post_pitch_clock",
+# Feature contract -- keep in sync with GAME_Pro_System/config_game.py
+GAME_FEATURES = [
+    # Home starter
+    "home_k_pct_L3",
+    "home_xwoba_allowed_L3",
+    "home_velo_mean_L3",
+    "home_bb_pct_L3",
+    "home_starter_ip_avg_L5",
+    "home_starter_days_rest",
+    "home_whiff_pct_L3",
+    "home_hard_hit_allowed_L3",
+    # Away starter
+    "away_k_pct_L3",
+    "away_xwoba_allowed_L3",
+    "away_velo_mean_L3",
+    "away_bb_pct_L3",
+    "away_starter_ip_avg_L5",
+    "away_starter_days_rest",
+    "away_whiff_pct_L3",
+    "away_hard_hit_allowed_L3",
+    # Home bullpen (key differentiator from F5)
+    "home_bullpen_xwoba_L14",
+    "home_bullpen_k_pct_L14",
+    "home_bullpen_bb_pct_L14",
+    "home_bullpen_ip_L7",
+    "home_bullpen_whiff_pct_L14",
+    "home_bullpen_hard_hit_L14",
+    # Away bullpen
+    "away_bullpen_xwoba_L14",
+    "away_bullpen_k_pct_L14",
+    "away_bullpen_bb_pct_L14",
+    "away_bullpen_ip_L7",
+    "away_bullpen_whiff_pct_L14",
+    "away_bullpen_hard_hit_L14",
+    # Team offense
+    "home_team_woba_L20",
+    "away_team_woba_L20",
+    "home_team_k_pct_L20",
+    "away_team_k_pct_L20",
+    "home_run_diff_L20",
+    "home_team_hard_hit_L20",
+    "away_team_hard_hit_L20",
+    # Park / weather / context
+    "park_factor",
+    "temperature_f",
+    "wind_speed_mph",
+    "wind_out",
+    "wind_in",
+    "is_dome",
+    "post_pitch_clock",
 ]
 
 XGB_PARAMS = {
-    "objective":        "count:poisson",
-    "eval_metric":      "poisson-nloglik",
-    "max_depth":        4,
-    "learning_rate":    0.03,
+    "objective":        "binary:logistic",
+    "eval_metric":      "auc",
+    "max_depth":        3,
+    "learning_rate":    0.05,
     "subsample":        0.8,
     "colsample_bytree": 0.8,
-    "min_child_weight": 20,   # batters have more rows than pitchers — more regularisation
-    "reg_alpha":        1.0,
-    "reg_lambda":       3.0,
-    "gamma":            0.5,
+    "min_child_weight": 20,
+    "reg_alpha":        0.1,
+    "reg_lambda":       1.0,
+    "gamma":            0.1,
     "seed":             42,
 }
 
-NUM_BOOST_ROUND      = 2000
+NUM_BOOST_ROUND       = 2000
 EARLY_STOPPING_ROUNDS = 50
-CV_FOLDS             = [2023, 2024, 2025]
+CV_FOLDS              = [2023, 2024, 2025]
 
-GCS_MODEL_FEATURES  = "BATTER_HITS_System/data/model_features.csv"
-GCS_BOOSTER_LATEST  = f"BATTER_HITS_System/models/xgb_batter_hits_{VERSION}.json"
-GCS_META_LATEST     = f"BATTER_HITS_System/models/model_meta_batter_hits_{VERSION}.json"
-GCS_BOOSTER_ARCHIVE = f"BATTER_HITS_System/models/archive/xgb_batter_hits_{VERSION}.{{ts}}.json"
-GCS_META_ARCHIVE    = f"BATTER_HITS_System/models/archive/model_meta_batter_hits_{VERSION}.{{ts}}.json"
+GCS_MODEL_FEATURES  = "GAME_Pro_System/data/model_features.csv"
+GCS_BOOSTER_LATEST  = f"GAME_Pro_System/models/xgb_game_{VERSION}.json"
+GCS_META_LATEST     = f"GAME_Pro_System/models/model_meta_game_{VERSION}.json"
+GCS_BOOSTER_ARCHIVE = f"GAME_Pro_System/models/archive/xgb_game_{VERSION}.{{ts}}.json"
+GCS_META_ARCHIVE    = f"GAME_Pro_System/models/archive/model_meta_game_{VERSION}.{{ts}}.json"
 
 
 def _ts() -> str:
@@ -84,7 +125,7 @@ def _ts() -> str:
 def _load_features():
     from mlb_core.storage import read_csv, exists
     if not exists(GCS_MODEL_FEATURES):
-        return None, f"{GCS_MODEL_FEATURES} not found — run /build-features for BATTER_HITS first"
+        return None, f"{GCS_MODEL_FEATURES} not found -- run /build-features for GAME first"
     try:
         df = read_csv(GCS_MODEL_FEATURES, low_memory=False)
     except Exception as e:
@@ -92,7 +133,11 @@ def _load_features():
     if df.empty:
         return None, f"{GCS_MODEL_FEATURES} is empty"
     if TARGET not in df.columns:
-        return None, f"target column {TARGET!r} missing from features CSV"
+        return None, (
+            f"target column {TARGET!r} missing from features CSV. "
+            "The feature builder must derive home_win from scoring_master.csv "
+            "(sum home runs > sum away runs -> 1, else -> 0) and include it."
+        )
 
     df["game_date"] = pd.to_datetime(df["game_date"])
     df = df.sort_values("game_date").reset_index(drop=True)
@@ -101,23 +146,39 @@ def _load_features():
     df = df.dropna(subset=[TARGET]).copy()
     df[TARGET] = pd.to_numeric(df[TARGET], errors="coerce")
     df = df.dropna(subset=[TARGET])
+    df[TARGET] = df[TARGET].astype(int)
     dropped = before - len(df)
     df["year"] = df["game_date"].dt.year
 
+    win_rate = df[TARGET].mean()
     logger.info(
-        f"loaded features: {len(df):,} training rows ({dropped} slate rows excluded) | "
-        f"{df['game_date'].min().date()} -> {df['game_date'].max().date()} | "
-        f"mean hits={df[TARGET].mean():.3f}"
+        "loaded features: %d training rows (%d slate rows excluded) | "
+        "%s -> %s | home_win_rate=%.3f",
+        len(df), dropped,
+        df["game_date"].min().date(), df["game_date"].max().date(),
+        win_rate,
     )
     return df, None
 
 
-def _mae(y_true, y_pred):  return float(np.mean(np.abs(np.array(y_true) - np.array(y_pred))))
-def _rmse(y_true, y_pred): return float(np.sqrt(np.mean((np.array(y_true) - np.array(y_pred)) ** 2)))
-def _r2(y_true, y_pred):
-    ss_res = float(np.sum((np.array(y_true) - np.array(y_pred)) ** 2))
-    ss_tot = float(np.sum((np.array(y_true) - np.mean(y_true)) ** 2))
-    return 1 - ss_res / max(ss_tot, 1e-9)
+def _auc(y_true, y_pred):
+    """Simple AUC via sklearn."""
+    from sklearn.metrics import roc_auc_score
+    try:
+        return float(roc_auc_score(np.array(y_true), np.array(y_pred)))
+    except Exception:
+        return float("nan")
+
+
+def _brier(y_true, y_pred):
+    return float(np.mean((np.array(y_pred) - np.array(y_true)) ** 2))
+
+
+def _logloss(y_true, y_pred):
+    eps = 1e-7
+    p = np.clip(np.array(y_pred), eps, 1 - eps)
+    y = np.array(y_true)
+    return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
 
 
 def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
@@ -128,8 +189,8 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
         df_tr = df[df["year"].isin(train_years)]
         df_te = df[df["year"] == test_year]
         if len(df_tr) < 100 or len(df_te) < 20:
-            logger.info(f"  fold {test_year}: insufficient data "
-                        f"(train={len(df_tr)}, test={len(df_te)}) — skip")
+            logger.info("  fold %d: insufficient data (train=%d, test=%d) -- skip",
+                        test_year, len(df_tr), len(df_te))
             continue
 
         X_tr = df_tr[features].apply(pd.to_numeric, errors="coerce")
@@ -150,17 +211,18 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
             verbose_eval=False,
         )
         y_pred = booster.predict(dtest)
-        mae  = _mae(y_te, y_pred)
-        rmse = _rmse(y_te, y_pred)
-        r2   = _r2(y_te, y_pred)
-        cal  = float(np.mean(y_pred) - np.mean(y_te))
-        best = int(getattr(booster, "best_iteration", NUM_BOOST_ROUND - 1)) + 1
+        auc    = _auc(y_te, y_pred)
+        brier  = _brier(y_te, y_pred)
+        ll     = _logloss(y_te, y_pred)
+        cal    = float(np.mean(y_pred) - np.mean(y_te))
+        best   = int(getattr(booster, "best_iteration", NUM_BOOST_ROUND - 1)) + 1
         results.append({
             "test_year": test_year, "n_train": len(df_tr), "n_test": len(df_te),
-            "mae": mae, "rmse": rmse, "r2": r2, "cal_gap": cal, "best_iteration": best,
+            "auc": auc, "brier": brier, "logloss": ll, "cal_gap": cal,
+            "best_iteration": best,
         })
-        logger.info(f"  fold {test_year}: MAE={mae:.3f} RMSE={rmse:.3f} R²={r2:.3f} "
-                    f"cal={cal:+.3f} best_iter={best}")
+        logger.info("  fold %d: AUC=%.4f Brier=%.4f LogLoss=%.4f cal=%+.4f best_iter=%d",
+                    test_year, auc, brier, ll, cal, best)
     return results
 
 
@@ -176,7 +238,8 @@ def _oos_eval(df: pd.DataFrame, features: list) -> dict:
     X_te = df_te[features].apply(pd.to_numeric, errors="coerce")
     y_te = df_te[TARGET].astype(float)
 
-    logger.info(f"OOS split | train={len(df_tr)} (years <{last}) | test={len(df_te)} (year={last})")
+    logger.info("OOS split | train=%d (years <%d) | test=%d (year=%d)",
+                len(df_tr), last, len(df_te), last)
 
     _nval   = int(len(X_tr) * (7 / 8))
     dtrain  = xgb.DMatrix(X_tr.iloc[:_nval],  label=y_tr.iloc[:_nval],  feature_names=features)
@@ -190,33 +253,35 @@ def _oos_eval(df: pd.DataFrame, features: list) -> dict:
         early_stopping_rounds=EARLY_STOPPING_ROUNDS,
         verbose_eval=100,
     )
-    y_pred    = booster.predict(dtest)
-    y_tr_pred = booster.predict(dtrain)
+    y_pred       = booster.predict(dtest)
+    y_tr_pred    = booster.predict(dtrain)
 
-    mae_oos   = _mae(y_te, y_pred)
-    rmse_oos  = _rmse(y_te, y_pred)
-    r2_oos    = _r2(y_te, y_pred)
-    cal_oos   = float(np.mean(y_pred) - np.mean(y_te))
-    best_iter = int(getattr(booster, "best_iteration", NUM_BOOST_ROUND - 1)) + 1
+    auc_oos      = _auc(y_te, y_pred)
+    brier_oos    = _brier(y_te, y_pred)
+    ll_oos       = _logloss(y_te, y_pred)
+    cal_oos      = float(np.mean(y_pred) - np.mean(y_te))
+    best_iter    = int(getattr(booster, "best_iteration", NUM_BOOST_ROUND - 1)) + 1
+    auc_train    = _auc(y_tr.iloc[:_nval], y_tr_pred)
+    overfit_gap  = round(abs(auc_train - auc_oos), 4)
 
-    logger.info(f"OOS | MAE={mae_oos:.3f} RMSE={rmse_oos:.3f} R²={r2_oos:.3f} "
-                f"cal={cal_oos:+.3f} best_iter={best_iter}")
+    logger.info("OOS | AUC=%.4f Brier=%.4f LogLoss=%.4f cal=%+.4f best_iter=%d",
+                auc_oos, brier_oos, ll_oos, cal_oos, best_iter)
     return {
         "train_rows":     int(len(df_tr)),
         "test_rows":      int(len(df_te)),
-        "mae_oos":        round(mae_oos, 4),
-        "rmse_oos":       round(rmse_oos, 4),
-        "r2_oos":         round(r2_oos, 4),
+        "auc_oos":        round(auc_oos, 4),
+        "brier_oos":      round(brier_oos, 4),
+        "logloss_oos":    round(ll_oos, 4),
         "cal_oos":        round(cal_oos, 4),
-        "mae_train":      round(_mae(y_tr.iloc[:_nval], y_tr_pred), 4),
-        "overfit_gap":    round(abs(_mae(y_tr.iloc[:_nval], y_tr_pred) - mae_oos), 4),
+        "auc_train":      round(auc_train, 4),
+        "overfit_gap":    overfit_gap,
         "best_iteration": best_iter,
         "test_year":      int(last),
     }
 
 
 def _full_retrain(df: pd.DataFrame, features: list, best_iter: int) -> xgb.Booster:
-    logger.info(f"full retrain | rows={len(df)} features={len(features)} rounds={best_iter}")
+    logger.info("full retrain | rows=%d features=%d rounds=%d", len(df), len(features), best_iter)
     X = df[features].apply(pd.to_numeric, errors="coerce")
     y = df[TARGET].astype(float)
     dtrain = xgb.DMatrix(X, label=y, feature_names=features)
@@ -230,15 +295,15 @@ def _feature_means(df: pd.DataFrame, features: list) -> dict:
         v = X[f].mean(skipna=True)
         if not pd.isna(v):
             means[f] = float(v)
-    logger.info(f"feature_means computed for {len(means)}/{len(features)} features")
+    logger.info("feature_means computed for %d/%d features", len(means), len(features))
     return means
 
 
 def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
                    threshold: float = 0.10) -> list[str]:
     import os
-    if os.getenv("BATTER_HITS_SKIP_LEAKAGE_CHECK") == "1":
-        logger.info("leakage check skipped")
+    if os.getenv("GAME_SKIP_LEAKAGE_CHECK") == "1":
+        logger.info("leakage check skipped (GAME_SKIP_LEAKAGE_CHECK=1)")
         return []
 
     last         = CV_FOLDS[-1]
@@ -248,12 +313,13 @@ def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
         return []
 
     best_iter    = oos["best_iteration"]
-    baseline_mae = oos["mae_oos"]
+    baseline_auc = oos["auc_oos"]
     y_tr = df_tr[TARGET].astype(float)
     y_te = df_te[TARGET].astype(float)
     suspicious = []
 
-    logger.info(f"leakage check | baseline MAE={baseline_mae:.3f} | threshold={threshold:.0%}")
+    logger.info("leakage check | baseline AUC=%.4f | threshold=%.0f%%",
+                baseline_auc, threshold * 100)
     for feat in features:
         coverage = df_tr[feat].notna().mean() if feat in df_tr.columns else 0.0
         if coverage < 0.5:
@@ -266,12 +332,13 @@ def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
         dtest_z  = xgb.DMatrix(
             df_te_z[features].apply(pd.to_numeric, errors="coerce"),
             label=y_te, feature_names=features)
-        b = xgb.train(XGB_PARAMS, dtrain_z, num_boost_round=best_iter, verbose_eval=False)
-        mae_z = _mae(y_te, b.predict(dtest_z))
-        if (baseline_mae - mae_z) / max(baseline_mae, 1e-9) > threshold:
+        b      = xgb.train(XGB_PARAMS, dtrain_z, num_boost_round=best_iter, verbose_eval=False)
+        auc_z  = _auc(y_te, b.predict(dtest_z))
+        # For AUC: leakage -> baseline > zeroed (we'd expect AUC to FALL, not rise)
+        # Flag if zeroing the feature IMPROVES AUC by more than threshold (suspiciously high)
+        if (auc_z - baseline_auc) / max(baseline_auc, 1e-9) > threshold:
             suspicious.append(feat)
-            logger.warning(f"  LEAKAGE SUSPECT: {feat!r} | "
-                           f"MAE {baseline_mae:.3f} -> {mae_z:.3f}")
+            logger.warning("  LEAKAGE SUSPECT: %r | AUC %.4f -> zeroed %.4f", feat, baseline_auc, auc_z)
 
     if not suspicious:
         logger.info("  leakage check passed")
@@ -284,14 +351,14 @@ def run() -> dict:
 
     # Load Optuna-tuned params if available
     try:
-        from training.tune_hyperparams import load_tuned_params
-        tuned = load_tuned_params("BATTER_HITS")
+        from mlb.training.tune_hyperparams import load_tuned_params
+        tuned = load_tuned_params(SYSTEM)
         if tuned:
             global XGB_PARAMS
             XGB_PARAMS = tuned["xgb_params"]
-            logger.info(f"Using Optuna-tuned params (score={tuned['best_score']})")
+            logger.info("Using Optuna-tuned params (score=%s)", tuned["best_score"])
     except Exception as e:
-        logger.warning(f"Could not load tuned params: {e}")
+        logger.warning("Could not load tuned params: %s", e)
 
     if not GCS_BUCKET:
         return {"status": "error", "error": "MLB_GCS_BUCKET not set"}
@@ -300,10 +367,10 @@ def run() -> dict:
     if err:
         return {"status": "error", "error": err}
 
-    available = [f for f in BATTER_HITS_FEATURES if f in df.columns]
-    missing   = [f for f in BATTER_HITS_FEATURES if f not in df.columns]
+    available = [f for f in GAME_FEATURES if f in df.columns]
+    missing   = [f for f in GAME_FEATURES if f not in df.columns]
     if missing:
-        logger.warning(f"missing features (skipped): {missing}")
+        logger.warning("missing features (skipped): %s", missing)
 
     try:
         wf = _walk_forward_cv(df, available)
@@ -322,20 +389,6 @@ def run() -> dict:
     except Exception as e:
         return {"status": "error", "error": f"full retrain: {e}"}
 
-    # NB dispersion: var = mu + alpha*mu^2  =>  alpha = (var - mu) / mu^2
-    try:
-        X_all  = df[available].apply(pd.to_numeric, errors="coerce")
-        dm_all = xgb.DMatrix(X_all, feature_names=available)
-        y_all  = df[TARGET].astype(float).values
-        preds  = booster.predict(dm_all)
-        resid_var = float(np.var(y_all - preds))
-        mu_mean   = float(np.mean(preds))
-        nb_alpha  = float(np.clip((resid_var - mu_mean) / max(mu_mean ** 2, 1e-6), 0.01, 0.50))
-        logger.info(f"NB dispersion | mu={mu_mean:.3f} resid_var={resid_var:.3f} nb_alpha={nb_alpha:.4f}")
-    except Exception as e:
-        nb_alpha = 0.10
-        logger.warning(f"nb_alpha fit failed ({e}) — using default 0.10")
-
     fmeans = _feature_means(df, available)
 
     # Feature stds for PSI drift
@@ -346,7 +399,7 @@ def run() -> dict:
         if not pd.isna(v):
             fstds[f] = round(float(v), 6)
 
-    # Empirical percentile dists for PSI
+    # Empirical percentile distributions for PSI
     fpdists: dict = {}
     for _f in available:
         try:
@@ -354,26 +407,26 @@ def run() -> dict:
             if len(_col) < 10:
                 continue
             fpdists[_f] = {
-                "p5":     round(float(np.percentile(_col,  5)), 6),
-                "p10":    round(float(np.percentile(_col, 10)), 6),
-                "p25":    round(float(np.percentile(_col, 25)), 6),
-                "p50":    round(float(np.percentile(_col, 50)), 6),
-                "p75":    round(float(np.percentile(_col, 75)), 6),
-                "p90":    round(float(np.percentile(_col, 90)), 6),
-                "p95":    round(float(np.percentile(_col, 95)), 6),
+                "p5":  round(float(np.percentile(_col,  5)), 6),
+                "p10": round(float(np.percentile(_col, 10)), 6),
+                "p25": round(float(np.percentile(_col, 25)), 6),
+                "p50": round(float(np.percentile(_col, 50)), 6),
+                "p75": round(float(np.percentile(_col, 75)), 6),
+                "p90": round(float(np.percentile(_col, 90)), 6),
+                "p95": round(float(np.percentile(_col, 95)), 6),
             }
         except Exception:
             continue
 
-    # Bootstrap CI on CV mean MAE
+    # Bootstrap CI on CV mean AUC
     cv_ci_lo = cv_ci_hi = None
     if wf and len(wf) >= 2:
         import scipy.stats as _st
-        maes = [f["mae"] for f in wf]
+        aucs = [f["auc"] for f in wf]
         cv_ci_lo, cv_ci_hi = _st.t.interval(
-            0.95, len(maes) - 1,
-            loc=float(np.mean(maes)),
-            scale=float(_st.sem(maes)),
+            0.95, len(aucs) - 1,
+            loc=float(np.mean(aucs)),
+            scale=float(_st.sem(aucs)),
         )
         cv_ci_lo = round(float(cv_ci_lo), 4)
         cv_ci_hi = round(float(cv_ci_hi), 4)
@@ -382,27 +435,26 @@ def run() -> dict:
     if wf:
         wf_df = pd.DataFrame(wf)
         wf_summary = {
-            "wf_mae":     round(float(wf_df["mae"].mean()), 4),
-            "wf_rmse":    round(float(wf_df["rmse"].mean()), 4),
-            "wf_r2":      round(float(wf_df["r2"].mean()), 4),
-            "wf_cal":     round(float(wf_df["cal_gap"].mean()), 4),
-            "wf_mae_std": round(float(wf_df["mae"].std()), 4),
-            "wf_folds":   wf,
+            "wf_auc":      round(float(wf_df["auc"].mean()), 4),
+            "wf_brier":    round(float(wf_df["brier"].mean()), 4),
+            "wf_logloss":  round(float(wf_df["logloss"].mean()), 4),
+            "wf_cal":      round(float(wf_df["cal_gap"].mean()), 4),
+            "wf_auc_std":  round(float(wf_df["auc"].std()), 4),
+            "wf_folds":    wf,
         }
 
     meta = {
-        "version":       VERSION,
-        "model_type":    "batter_hits_poisson",
-        "trained_at":    datetime.now(timezone.utc).isoformat(),
-        "full_retrain":  True,
-        "features":      available,
-        "nb_alpha":      nb_alpha,
-        "feature_dists": fpdists,
-        "feature_means": fmeans,
-        "feature_stds":  fstds,
-        "cv_folds":      CV_FOLDS,
-        "cv_mae_ci_lo":  cv_ci_lo,
-        "cv_mae_ci_hi":  cv_ci_hi,
+        "version":        VERSION,
+        "model_type":     "game_binary_logistic",
+        "trained_at":     datetime.now(timezone.utc).isoformat(),
+        "full_retrain":   True,
+        "features":       available,
+        "feature_dists":  fpdists,
+        "feature_means":  fmeans,
+        "feature_stds":   fstds,
+        "cv_folds":       CV_FOLDS,
+        "cv_auc_ci_lo":   cv_ci_lo,
+        "cv_auc_ci_hi":   cv_ci_hi,
         **oos,
         **wf_summary,
     }
@@ -418,7 +470,7 @@ def run() -> dict:
         booster.save_model(str(booster_tmp))
         try:
             upload_model(booster_tmp, booster_archive_key)
-            logger.info(f"archive booster: {booster_archive_key}")
+            logger.info("archive booster: %s", booster_archive_key)
         except Exception as e:
             return {"status": "error", "error": f"archive booster write: {e}"}
         try:
@@ -427,12 +479,12 @@ def run() -> dict:
             return {"status": "error", "error": f"archive meta write: {e}"}
         try:
             upload_model(booster_tmp, GCS_BOOSTER_LATEST)
-            logger.info(f"latest booster: {GCS_BOOSTER_LATEST}")
+            logger.info("latest booster: %s", GCS_BOOSTER_LATEST)
         except Exception as e:
             return {"status": "error", "error": f"latest booster write: {e}"}
         try:
             write_bytes(meta_bytes, GCS_META_LATEST)
-            logger.info(f"latest meta: {GCS_META_LATEST}")
+            logger.info("latest meta: %s", GCS_META_LATEST)
         except Exception as e:
             return {"status": "error", "error": f"latest meta write: {e}"}
     finally:
@@ -444,12 +496,11 @@ def run() -> dict:
         "features":         len(available),
         "train_rows":       oos["train_rows"],
         "test_rows":        oos["test_rows"],
-        "mae_oos":          oos["mae_oos"],
-        "rmse_oos":         oos["rmse_oos"],
-        "r2_oos":           oos["r2_oos"],
+        "auc_oos":          oos["auc_oos"],
+        "brier_oos":        oos["brier_oos"],
+        "logloss_oos":      oos["logloss_oos"],
         "best_iteration":   oos["best_iteration"],
-        "nb_alpha":         nb_alpha,
-        "wf_mae":           wf_summary.get("wf_mae"),
+        "wf_auc":           wf_summary.get("wf_auc"),
         "leakage_suspects": leakage_suspects,
         "booster_archive":  booster_archive_key,
         "meta_archive":     meta_archive_key,

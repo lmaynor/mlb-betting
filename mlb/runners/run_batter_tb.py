@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from runners.run_batter_hits import (
+from mlb.runners.run_batter_hits import (
     _fetch_today_weather,
     _join_pitcher_features,
     _join_weather,
@@ -113,8 +113,8 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.config import GCS_BUCKET
     from mlb_core.data.lineups import _pull_lineup_date, get_today_schedule
     from mlb_core.storage import read_csv
-    from runners.build_batter_tb_features import TB_PARK_FACTORS
-    from runners.build_batter_hits_features import STADIUMS_ROOF, TEAM_NAME_TO_ABBR
+    from mlb.runners.build_batter_tb_features import TB_PARK_FACTORS
+    from mlb.runners.build_batter_hits_features import STADIUMS_ROOF, TEAM_NAME_TO_ABBR
 
     sched = get_today_schedule(run_date)
     if sched.empty:
@@ -337,7 +337,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info("BATTER_TB run | type=%s | date=%s | log_only=%s", run_type, run_date, LOG_ONLY)
 
-    from BATTER_TB_System.config_batter_tb import cfg
+    from mlb.systems.BATTER_TB_System.config_batter_tb import cfg
     from mlb_core.notify.discord import post_bets
     from mlb_core.tracking import BetTracker
 

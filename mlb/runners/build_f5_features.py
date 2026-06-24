@@ -623,7 +623,7 @@ def run(run_date: str = None) -> dict:
     ump = pd.DataFrame()
     if exists(GCS_UMPIRES_MASTER):
         try:
-            from runners.build_nrfi_features import build_umpire_features
+            from mlb.runners.build_nrfi_features import build_umpire_features
             ump_raw = read_csv(GCS_UMPIRES_MASTER, low_memory=False)
             ump = build_umpire_features(ump_raw)
         except Exception as e:

@@ -45,7 +45,7 @@ gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
 # ── Create or update the job ────────────────────────────────────────────────
 # Cloud Run Jobs syntax: `create` fails if it exists, `update` fails if it doesn't.
 # Try create; if it fails, fall back to update.
-COMMAND="python,-m,training.retrain_f5_meta"
+COMMAND="python,-m,mlb.training.retrain_f5_meta"
 
 if gcloud run jobs describe "$JOB_NAME" --region="$REGION" --quiet >/dev/null 2>&1; then
   echo "Job exists — updating..."
@@ -56,7 +56,7 @@ if gcloud run jobs describe "$JOB_NAME" --region="$REGION" --quiet >/dev/null 2>
     --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
     --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}" \
     --command="python" \
-    --args="-m,training.retrain_f5_meta" \
+    --args="-m,mlb.training.retrain_f5_meta" \
     --memory=2Gi \
     --cpu=2 \
     --task-timeout=600 \
@@ -71,7 +71,7 @@ else
     --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
     --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}" \
     --command="python" \
-    --args="-m,training.retrain_f5_meta" \
+    --args="-m,mlb.training.retrain_f5_meta" \
     --memory=2Gi \
     --cpu=2 \
     --task-timeout=600 \

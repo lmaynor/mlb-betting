@@ -7,7 +7,7 @@ Runner (run_k.py) loads these via cfg["gcs_outs_model"] etc.
 import os
 
 # Inherit K config as base -- OUTS shares the same feature pipeline
-from K_Pro_System.config_k import cfg as _k_cfg
+from mlb.systems.K_Pro_System.config_k import cfg as _k_cfg
 
 cfg = dict(_k_cfg)
 

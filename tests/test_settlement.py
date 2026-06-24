@@ -11,7 +11,7 @@ Run: pytest tests/test_settlement.py -v
 import pandas as pd
 import pytest
 
-from runners.settle_bets import (
+from mlb.runners.settle_bets import (
     _calc_profit,
     _settle_nrfi,
     _settle_f5,
@@ -270,7 +270,7 @@ class TestSettleK:
         """Whole-number line should log a warning and grade push, not crash."""
         import logging
         pitchers = self._make_pitchers("gerrit cole", 7, 21)
-        with caplog.at_level(logging.WARNING, logger="runners.settle_bets"):
+        with caplog.at_level(logging.WARNING, logger="mlb.runners.settle_bets"):
             results = self._settle("K_OVER_7", "Gerrit Cole", pitchers)
         assert results[0]["result"] == "push"
         assert any("whole-number line" in m for m in caplog.messages)

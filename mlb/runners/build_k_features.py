@@ -850,7 +850,7 @@ def run(run_date: str | None = None) -> dict:
 
     Returns a status dict suitable for the /build-features HTTP response.
     """
-    from K_Pro_System.config_k import cfg
+    from mlb.systems.K_Pro_System.config_k import cfg
     run_date = run_date or date.today().isoformat()
     logger.info(f"K build: starting for run_date={run_date}")
 
@@ -884,7 +884,7 @@ def run(run_date: str | None = None) -> dict:
         logger.warning("K build: aux_joins failed (non-fatal): %s", _e)
 
     # Ensure every K_FEATURES column exists (NaN if not built — XGBoost handles it)
-    from K_Pro_System.config_k import K_FEATURES
+    from mlb.systems.K_Pro_System.config_k import K_FEATURES
     missing_cols = [c for c in K_FEATURES if c not in pf.columns]
     for c in missing_cols:
         pf[c] = np.nan

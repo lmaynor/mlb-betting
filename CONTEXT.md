@@ -24,9 +24,17 @@ nest underneath the beezy umbrella as **pillars**:
 **Labeling convention (apply going forward; do not mass-rename live MLB code):**
 - Always say which pillar a thing belongs to -- "the mlb refresh job", "the nba
   odds accumulator" -- never leave sport ambiguous.
-- New code nests by sport: `nba/...` (and a future `mlb/` if/when the legacy
-  `mlb_core` is lifted). New sport-specific GCS data nests under a sport prefix
-  (`NBA/`, `OddsAccum/{sport}/`, `Enrich/edge/` is shared/sport-tagged inside).
+- New code nests by sport: both pillars are now symmetric -- `mlb/` (runners/,
+  training/, systems/) and `nba/`. **Pillar restructure landed 2026-06-24**
+  (branch `restructure/pillarize-mlb`): the MLB runners/training/per-system dirs
+  moved under `mlb/`; module paths became `mlb.runners.*`, `mlb.training.*`,
+  `mlb.systems.<DIR>.config_*`. Shared infra stays in `mlb_core/` (the `core/`
+  rename remains DEFERRED -- see below). New sport-specific GCS data nests under a
+  sport prefix (`NBA/`, `OddsAccum/{sport}/`, `Enrich/edge/` is shared/sport-tagged inside).
+  CONTRACT CHANGE: ~21 Cloud Run Jobs + the Cloud Scheduler entrypoints reference
+  the old `runners.*`/`training.*` module paths and MUST be re-provisioned (re-run
+  the relevant `deploy/setup_*.sh`) and the image rebuilt (`deploy/deploy_service.sh`)
+  before the next scheduled run, or jobs will fail with ModuleNotFoundError.
 - Truly sport-agnostic infra (e.g. `mlb_core.storage`, `mlb_core.odds.utils`) is
   reused across pillars despite the legacy `mlb_` name; a rename to a neutral
   `core/` is DEFERRED (too invasive while MLB is live) -- tracked, not done.
@@ -184,8 +192,13 @@ mlb-betting/
 │                                 log_bet() dedup on (system, game_date, game_pk, bet_type).
 │                                 summary() filters by system via text() wrapper.
 │
-├── runners/                      DAILY JOBS
-│   ├── build_hr_features.py      Nightly: build HR_Pro/data/model_features.csv.
+├── mlb/                         MLB PILLAR (symmetric with nba/; see section 0)
+│   │                            Restructured 2026-06-24: runners/, training/, and the
+│   │                            per-system config dirs moved under mlb/. Shared infra
+│   │                            stays in mlb_core/ (rename to core/ still DEFERRED).
+│   │                            New pillars (NFL/NHL) follow this nesting template.
+│   ├── runners/                 DAILY JOBS (was top-level runners/)
+│   │   ├── build_hr_features.py      Nightly: build HR_Pro/data/model_features.csv.
 │   ├── build_nrfi_features.py    Nightly: build NRFI pitcher features + model_features.
 │   ├── build_f5_features.py      Nightly: build F5 pitcher/offense/model_features.
 │   ├── build_k_features.py       Nightly: build K_Pro_System/data/model_features.csv.
@@ -214,8 +227,8 @@ mlb-betting/
 │                                 artifact existence, bets pending > 3 days.
 │                                 Silent on clean run. Posts Discord alert on failure.
 │
-├── training/                     RETRAIN PIPELINE
-│   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
+│   ├── training/                RETRAIN PIPELINE (was top-level training/)
+│   │   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
 │   ├── retrain_nrfi_v17.py       Full NRFI retrain. (v17 -- superseded)
 │   ├── retrain_nrfi_v18.py       Full NRFI v18 retrain (E05+E08: sub-model ensemble).
 │   ├── calibrate_nrfi_v18.py     Fit isotonic calibrator for NRFI v18.
@@ -232,19 +245,24 @@ mlb-betting/
 │   ├── calibrate_game_v1.py      Fit IsotonicRegression calibrator for GAME v1 (Brier eval).
 │   └── tune_hyperparams.py       Optuna hyperparameter search for all systems. (E09)
 │
-├── HR_Pro/                       Per-system config dirs
-├── NRFI_Pro_System/
-├── F5_Pro_System/
-├── OUTS_Pro_System/              OUTS Pro config (shares K feature CSV)
-├── K_Pro_System/
-├── BATTER_HITS_System/           BATTER_HITS config (config_batter_hits.py + __init__.py)
-├── GAME_Pro_System/              GAME config (config_game.py + __init__.py)
-│                                 42 features: starters L3 (xwOBA+whiff+hard-hit), bullpen L14
-│                                 (xwOBA/K%/BB%/whiff/hard-hit/fatigue), offense L20 (wOBA+hard-hit),
-│                                 park/weather. +10 vs original: whiff_pct_L3, hard_hit_allowed_L3
-│                                 (starters), bullpen_whiff_pct_L14, bullpen_hard_hit_L14,
-│                                 team_hard_hit_L20 (home+away = 10 columns)
+│   └── systems/                 Per-system config dirs (was top-level; import as
+│       │                        mlb.systems.<DIR>.config_<sys>)
+│       ├── HR_Pro/
+│       ├── NRFI_Pro_System/
+│       ├── F5_Pro_System/
+│       ├── OUTS_Pro_System/     OUTS Pro config (shares K feature CSV)
+│       ├── K_Pro_System/
+│       ├── BATTER_HITS_System/  BATTER_HITS config (config_batter_hits.py + __init__.py)
+│       └── GAME_Pro_System/     GAME config (config_game.py + __init__.py)
+│                                42 features: starters L3 (xwOBA+whiff+hard-hit), bullpen L14
+│                                (xwOBA/K%/BB%/whiff/hard-hit/fatigue), offense L20 (wOBA+hard-hit),
+│                                park/weather. +10 vs original: whiff_pct_L3, hard_hit_allowed_L3
+│                                (starters), bullpen_whiff_pct_L14, bullpen_hard_hit_L14,
+│                                team_hard_hit_L20 (home+away = 10 columns)
 │
+├── notebooks/                    Modeling notebooks (moved from root 2026-06-24).
+├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops,
+│                                 fix_ops_issues*, pull_ops_logs, setup_discord, etc.)
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
 │   ├── SGO_DEPLOY_NOTES.md

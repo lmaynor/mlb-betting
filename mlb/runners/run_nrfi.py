@@ -535,7 +535,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"NRFI run | type={run_type} | date={run_date}")
 
-    from NRFI_Pro_System.config_nrfi import cfg
+    from mlb.systems.NRFI_Pro_System.config_nrfi import cfg
     from mlb_core.tracking import BetTracker
     from mlb_core.rationale import build_rationale
     from mlb_core.notify.discord import post_bets

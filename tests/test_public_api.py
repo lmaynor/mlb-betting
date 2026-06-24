@@ -310,27 +310,27 @@ class TestExistingRoutesUnaffected:
 
 class TestRequireApiKey:
     def test_correct_key_returns_true(self):
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         headers = {"X-API-Key": "my-secret"}
         assert _require_api_key(headers, "my-secret") is True
 
     def test_wrong_key_returns_false(self):
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         headers = {"X-API-Key": "wrong"}
         assert _require_api_key(headers, "my-secret") is False
 
     def test_missing_key_returns_false(self):
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         assert _require_api_key({}, "my-secret") is False
 
     def test_lowercase_header_returns_true(self):
         """HTTP/2 sends headers lowercase -- must still match."""
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         headers = {"x-api-key": "my-secret"}
         assert _require_api_key(headers, "my-secret") is True
 
     def test_key_with_whitespace_stripped(self):
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         headers = {"X-API-Key": "  my-secret  "}
         assert _require_api_key(headers, "my-secret") is True
 
@@ -339,6 +339,6 @@ class TestRequireApiKey:
         # but _auth_required() in main.py catches SITE_API_KEY == "" before
         # calling _require_api_key, returning 500 instead.
         # This test confirms the pure function behavior is consistent.
-        from runners.public_api import _require_api_key
+        from mlb.runners.public_api import _require_api_key
         assert _require_api_key({"X-API-Key": "real-key"}, "") is False
         assert _require_api_key({"X-API-Key": ""}, "real-key") is False

@@ -59,7 +59,7 @@ if gcloud run jobs describe "$JOB_NAME" --region="$REGION" --quiet >/dev/null 2>
     --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
     --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}" \
     --command="python" \
-    --args="-m,training.retrain_k_v1" \
+    --args="-m,mlb.training.retrain_k_v1" \
     --memory=2Gi \
     --cpu=2 \
     --task-timeout=1800 \
@@ -74,7 +74,7 @@ else
     --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
     --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}" \
     --command="python" \
-    --args="-m,training.retrain_k_v1" \
+    --args="-m,mlb.training.retrain_k_v1" \
     --memory=2Gi \
     --cpu=2 \
     --task-timeout=1800 \

@@ -14,13 +14,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from runners.build_batter_hits_features import (
+from mlb.runners.build_batter_hits_features import (
     HITS_PARK_FACTORS,
     K_EVENTS,
     STADIUMS_ROOF,
     TEAM_NAME_TO_ABBR,
 )
-from runners.build_hr_features import _derive_barrel
+from mlb.runners.build_hr_features import _derive_barrel
 
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
@@ -291,7 +291,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info("BATTER_TB feature build | date=%s", run_date)
 
-    from BATTER_TB_System.config_batter_tb import cfg
+    from mlb.systems.BATTER_TB_System.config_batter_tb import cfg
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import exists, read_csv, write_build_sentinel, write_csv
 

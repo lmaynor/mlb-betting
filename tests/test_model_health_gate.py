@@ -123,7 +123,7 @@ def _gate_cond(n, auc_model=0.60, roi=5.0, avg_model_prob=None, hit_rate=0.50):
     Imports the production function so tests catch the model-AUC + calibration
     fixes rather than a drifting replica.
     """
-    from runners.monitor_performance import _gate_condition_met
+    from mlb.runners.monitor_performance import _gate_condition_met
     rolling = {
         "n": n,
         "auc_model": auc_model,
@@ -198,7 +198,7 @@ class TestRollingStatsModelFields:
         })
 
     def test_auc_model_and_avg_present(self):
-        from runners.monitor_performance import _rolling_stats
+        from mlb.runners.monitor_performance import _rolling_stats
         stats = _rolling_stats(self._df(), window=30)
         assert "auc_model" in stats
         assert "avg_model_prob" in stats
