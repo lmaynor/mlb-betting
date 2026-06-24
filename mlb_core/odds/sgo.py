@@ -400,6 +400,7 @@ def _hr_row_from_entry(event: dict, player_id: str, odd_id: str,
         "fair_odds":    _safe_int(entry.get("fairOdds")),
         "open_odds":    _safe_int(entry.get("openBookOdds")),
         "source_oddid": odd_id,
+        "commence_time": (event.get("status") or {}).get("startsAt", ""),
     }
 
 
@@ -779,10 +780,36 @@ def _extract_player_ou_props(events: list, prefix: str, stat_id: str,
                 "fair_under": _safe_int(under_entry.get("fairOdds")),
                 "open_over":  _safe_int(over_entry.get("openBookOdds")),
                 "open_under": _safe_int(under_entry.get("openBookOdds")),
+                "commence_time": (event.get("status") or {}).get("startsAt", ""),
             }
 
     logger.info(f"SGO {log_label}: {len(out)} players with onshore prices")
     return out
+
+
+def is_live_event(commence_time, now=None, grace_min: int = 0) -> bool:
+    """True if the event has already started -> its odds are LIVE / in-play.
+
+    Scoring in-play odds with pre-game count models causes dramatic
+    overconfidence (the model assumes a batter still has a full game of plate
+    appearances left), so runners use this to skip / flag live picks.
+
+    commence_time: ISO8601 string (SGO status.startsAt, e.g. "2026-05-15T23:10:00Z").
+    Fails OPEN (returns False) on missing/unparseable input so a bad timestamp
+    never silently suppresses the whole slate.
+    """
+    if not commence_time:
+        return False
+    try:
+        from datetime import datetime, timezone, timedelta
+        s = str(commence_time).strip().replace("Z", "+00:00")
+        start = datetime.fromisoformat(s)
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        ref = now or datetime.now(timezone.utc)
+        return ref >= (start - timedelta(minutes=grace_min))
+    except Exception:
+        return False
 
 
 def extract_batter_hits_odds(events: list) -> dict:

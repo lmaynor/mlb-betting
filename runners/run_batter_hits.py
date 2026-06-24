@@ -478,7 +478,14 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         )
         stake = min(raw_stake, _cap)
 
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped)
+        _is_live = _sgo.is_live_event(odds_info.get("commence_time"))
+        if _is_live:
+            logger.warning(
+                "BATTER_HITS: LIVE/in-play odds for %s (start=%s) -- pre-game count "
+                "model assumes a full game of PAs left; suppressing bet",
+                player_name, odds_info.get("commence_time"),
+            )
+        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped) and (not _is_live)
         if kelly_triggered and stake > 0:
             gp = int(row.get("game_pk", 0))
             _pending[gp] = _pending.get(gp, 0.0) + stake
