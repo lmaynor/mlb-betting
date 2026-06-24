@@ -303,7 +303,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         )
         stake = min(raw_stake, cap)
-        triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY)
+        triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _sgo.is_live_event(odds_info.get("commence_time")))
         if triggered:
             gp = int(row.get("game_pk", 0))
             pending[gp] = pending.get(gp, 0.0) + stake
