@@ -32,9 +32,12 @@ IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# short sport tag for the job name (basketball_nba -> nba, baseball_mlb -> mlb)
+# short sport tag for the job name (basketball_nba -> nba, baseball_mlb -> mlb).
+# Cloud Run job names allow only lowercase + hyphens, so sanitize the kind
+# (game_lines -> game-lines).
 TAG="${SPORT##*_}"
-JOB_NAME="parlay-accum-${TAG}-${KIND}"
+KIND_TAG="$(printf '%s' "$KIND" | tr '_' '-')"
+JOB_NAME="parlay-accum-${TAG}-${KIND_TAG}"
 
 ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND}"
 [ -n "$MAX_EVENTS" ] && ARGS="${ARGS},--max-events,${MAX_EVENTS}"

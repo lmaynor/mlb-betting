@@ -135,9 +135,9 @@ PARLAY_PROP_MARKETS = {
     "baseball_mlb": [
         # batter props
         "player_hits", "player_total_bases", "player_home_runs",
-        # pitcher props
-        "player_strikeouts", "player_earned_runs",
-        "player_pitcher_outs", "player_pitching_outs",
+        # pitcher props (player_pitcher_outs is the live key; player_pitching_outs
+        # is NOT returned by the API -- requesting it just wastes a credit)
+        "player_strikeouts", "player_earned_runs", "player_pitcher_outs",
     ],
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
