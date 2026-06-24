@@ -74,6 +74,17 @@ TEAM_NAME_TO_ABBR = {
 HIT_EVENTS = frozenset(["single", "double", "triple", "home_run"])
 K_EVENTS    = frozenset(["strikeout", "strikeout_double_play"])
 
+# Columns actually used by this builder (~18 of ~80 in statcast_master). Loading
+# only these via usecols cuts peak memory ~4x (full-width load OOMs a 2Gi job).
+# Optional cols (p_throws/stand/player_name) are read with `in columns` guards;
+# everything else here is referenced unguarded so must stay in the set.
+_STATCAST_COLS = frozenset([
+    "game_date", "game_pk", "batter", "pitcher",          # ids
+    "events", "launch_speed", "launch_angle", "bb_type",  # outcome / batted ball
+    "description", "plate_x", "plate_z", "sz_top", "sz_bot",  # swing / zone
+    "p_throws", "stand", "home_team", "away_team", "player_name",  # context
+])
+
 
 def _normalize_name(name: str) -> str:
     import unicodedata, re
@@ -88,10 +99,12 @@ def _normalize_name(name: str) -> str:
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
     from mlb_core.storage import read_csv
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
-
-    if "bat_speed" in df.columns:
-        df = df.drop(columns=["bat_speed"])
+    # Load only the columns this builder uses (usecols) -- full-width load OOMs at 2Gi.
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
 
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df[df["game_date"].dt.year >= cfg["season_start"]].copy()
