@@ -584,6 +584,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "odds":            odds,
             "stake":           stake if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
+            # book is captured by the extractor but was dropped here -> book=NULL in DB,
+            # making per-book profiling impossible for HR (Q5, 2026-06-24). Propagate it.
+            "bookmaker":       odds_info.get("bookmaker"),
             # rationale features
             "barrel_rate":       row.get("barrel_rate"),
             "hard_hit":          row.get("hard_hit"),

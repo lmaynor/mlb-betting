@@ -30,6 +30,33 @@ GAME: mlb-retrain-game-v1   -> mlb-calibrate-game
 
 The `/retrain-weekly` route fires all retrains then all calibrate jobs 30 min later via a background thread.
 
+## Second calibrator layer: the PREDICTION calibrator (mlb-fit-calibrators)
+
+There are TWO calibrators per system, and the retrain sequence above only refreshes the
+first one:
+
+1. **Training-time isotonic calibrator** (`mlb-calibrate-*` -> `*/models/isotonic_calibrator_*.pkl`)
+   -- fit on the model's OOS output range. Covered by the sequence above.
+2. **Prediction calibrator** (`mlb-fit-calibrators` -> `Calibration/{system}_prediction_calibrator.pkl`)
+   -- fit against REALIZED BET OUTCOMES, applied PRE-edge by `mlb_core.risk.calibration.apply`.
+   This is the layer that corrects live overconfidence and that gates the `EDGE_CAP`.
+
+**A retrain invalidates BOTH.** The prediction calibrator maps the OLD model's
+probabilities to realized outcomes; after a retrain it is calibrating predictions from
+a model that no longer exists. Observed 2026-06-24: NRFI was retrained 2026-06-22 but
+every `Calibration/*_prediction_calibrator.pkl` was still dated 2026-06-11, so live
+NRFI ran with a stale prediction calibrator (and the edge cap silently mis-fired).
+
+**After any retrain, also run `mlb-fit-calibrators`** (re-fits all prediction calibrators
+from the full settled-bets table). Schedule it weekly regardless of retrains, since it
+also drifts as bet volume grows.
+
+Coverage note: `mlb_core.risk.calibration.apply` must be called by EVERY scoring runner
+or that system bypasses both calibration and the `EDGE_CAP`. As of 2026-06-24 all ten
+systems are wired: K/OUTS/PITCHER_ER (run_k), 1IOU (run_nrfi), F5/F1H (run_f5),
+GAME (run_game), HR (run_hr), BATTER_HITS (run_batter_hits). PITCHER_ER and F1H were
+added 2026-06-24 -- they had been silently uncalibrated and uncapped.
+
 ## Why This Matters
 
 Calibrators fit on the train slice (70%) give adequate output range coverage. Refitting on full df would leak val/test into calibration -- do not change calibrate scripts to fit on full df.

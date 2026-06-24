@@ -690,6 +690,12 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
     _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="PITCHER_ER")
     _pending: dict[int, float] = {}
 
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
+    _gate_suppressed_er = _is_suppressed("PITCHER_ER")
+    if _gate_suppressed_er:
+        logger.info("PITCHER_ER: suppressed by model-health gate -- logging predictions, stake=0")
+
     results = []
     for _, row in predictions_df.iterrows():
         norm_name = _norm_name(str(row.get("player", "")))
@@ -731,6 +737,12 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
         else:
             side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
 
+        # Calibrate PRE-edge against realized outcomes, then re-derive edge so the
+        # min_edge filter + Kelly sizing act on the calibrated gap (matches K/OUTS).
+        model_prob, _cal = _cal_apply("PITCHER_ER", model_prob)
+        edge = model_prob - fair
+        _edge_capped = _cal and edge > _EDGE_CAP
+
         if edge < cfg["min_edge"]:
             continue
 
@@ -746,7 +758,7 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed_er and not _edge_capped
         if kelly_triggered and stake > 0:
             gp = int(row.get("game_pk", 0))
             _pending[gp] = _pending.get(gp, 0.0) + stake

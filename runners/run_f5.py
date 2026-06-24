@@ -465,6 +465,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
         odds_map  = extractor(events)
         scalar    = scalars.get(scalar_key, _SCALAR_FALLBACKS.get(scalar_key, 1.0))
         from mlb_core.risk.gates import is_suppressed as _is_suppressed
+        from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
         log_only  = (sys_key in LOG_ONLY_SYSTEMS) or _is_suppressed(sys_key)
         bankroll, prefetched = prefetch_exposure(_engine, _all_game_pks, run_date, system=sys_key)
         pending: dict[int, float] = {}
@@ -498,6 +499,12 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                     "AWAY", p_away_s - fair_away, fair_away,
                     odds_info["away_odds"], p_away_s)
 
+            # Calibrate PRE-edge against realized outcomes (per sub-market), then
+            # re-derive edge so the min_edge filter + Kelly act on the calibrated gap.
+            model_prob, _cal = _cal_apply(sys_key, model_prob)
+            edge = model_prob - fair
+            _edge_capped = _cal and edge > _EDGE_CAP
+
             if edge < cfg["min_edge"]:
                 continue
 
@@ -515,7 +522,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                 max_pct=cfg["max_kelly_pct"],
             ), cap)
             stake = 0.0 if log_only else would_be
-            kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0)
+            kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and not _edge_capped
             if kelly_triggered:
                 pending[game_pk] = pending.get(game_pk, 0.0) + stake
 
