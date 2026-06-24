@@ -30,9 +30,12 @@ COPY main.py          .
 COPY tweet_drafter.py .
 COPY setup.py         .
 
-# Install mlb_core as a package (eliminates all sys.path hacks). xgboost is already
-# satisfied from the requirements layer, so this does not re-pull nvidia-nccl-cu12.
-RUN pip install --no-cache-dir -e .
+# Install mlb_core as a package (eliminates all sys.path hacks). --no-deps is REQUIRED:
+# setup.py reads install_requires from requirements.txt (already installed above), so
+# skipping dependency resolution here avoids re-pulling the 300MB nvidia-nccl-cu12 that
+# we uninstalled in the requirements layer. Without --no-deps, `-e .` re-installs nccl
+# and it ends up baked into the final image.
+RUN pip install --no-cache-dir -e . --no-deps
 
 # Cloud Run listens on $PORT (default 8080)
 ENV PORT=8080
