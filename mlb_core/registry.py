@@ -77,6 +77,11 @@ SYSTEMS: dict[str, SystemConfig] = {
         retrain_jobs=["mlb-retrain-nrfi-v18"],
         calibrate_jobs=["mlb-calibrate-nrfi"],
         expected_hit_rate=0.55,
+        # Retired 2026-06-24: no live edge (bet-sample AUC ~0.50, negative every
+        # week across 05-05..06-22). Calibration cannot fix broken rank ordering.
+        # Force-suppress until a retrain restores discrimination, then set to None.
+        # See handoffs/handoff_2026-06-24_calibration_coverage.md.
+        force_gate="on",
         tune_target="yrfi",
         tune_objective="binary:logistic",
         tune_metric="auc",
@@ -129,6 +134,11 @@ SYSTEMS: dict[str, SystemConfig] = {
         retrain_jobs=["mlb-retrain-f5-v5"],
         calibrate_jobs=["mlb-calibrate-f5"],
         expected_hit_rate=0.52,
+        # Retired 2026-06-24: no live edge (bet-sample AUC ~0.50, negative 6 of 7
+        # weeks across 05-05..06-22). Already auto-suppressed; force makes it
+        # deterministic (no hysteresis flip-back on noisy ROI) until retrain.
+        # Set to None after mlb-retrain-f5-v5 restores discrimination.
+        force_gate="on",
         tune_target="home_win",
         tune_objective="binary:logistic",
         tune_metric="auc",

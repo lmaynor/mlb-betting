@@ -398,7 +398,10 @@ import numpy as _np
 
 # F1H ships as an active sub-market. GAME runs through runners/run_game.py
 # to avoid duplicate logging from this F5-derived proxy path.
-LOG_ONLY_SYSTEMS = set()
+# F1H retired 2026-06-24: no live edge (bet-sample AUC ~0.50, net-negative trend);
+# it is a scalar proxy off F5, which is also retired. Log-only (stake=0) until a
+# real F1H model exists. Remove from this set to re-enable.
+LOG_ONLY_SYSTEMS = {"F1H"}
 _SCALAR_FALLBACKS = {"F1H": 0.94, "GAME": 0.82}
 _INNINGS_SUBMARKET_CONFIG = [
     ("F1H",  "extract_f1h_ml_odds",  "F1H",  "F1H"),
