@@ -26,15 +26,18 @@ nest underneath the beezy umbrella as **pillars**:
   odds accumulator" -- never leave sport ambiguous.
 - New code nests by sport: both pillars are now symmetric -- `mlb/` (runners/,
   training/, systems/) and `nba/`. **Pillar restructure landed 2026-06-24**
-  (branch `restructure/pillarize-mlb`): the MLB runners/training/per-system dirs
-  moved under `mlb/`; module paths became `mlb.runners.*`, `mlb.training.*`,
-  `mlb.systems.<DIR>.config_*`. Shared infra stays in `mlb_core/` (the `core/`
-  rename remains DEFERRED -- see below). New sport-specific GCS data nests under a
-  sport prefix (`NBA/`, `OddsAccum/{sport}/`, `Enrich/edge/` is shared/sport-tagged inside).
-  CONTRACT CHANGE: ~21 Cloud Run Jobs + the Cloud Scheduler entrypoints reference
-  the old `runners.*`/`training.*` module paths and MUST be re-provisioned (re-run
-  the relevant `deploy/setup_*.sh`) and the image rebuilt (`deploy/deploy_service.sh`)
-  before the next scheduled run, or jobs will fail with ModuleNotFoundError.
+  (branch `restructure/pillarize-mlb`, PR #21): the MLB runners/, training/, and
+  per-system config dirs moved under `mlb/`; module paths became `mlb.runners.*`,
+  `mlb.training.*`, `mlb.systems.<DIR>.config_*`. Shared infra stays in `mlb_core/`
+  (the `core/` rename remains DEFERRED -- see below). New sport-specific GCS data
+  nests under a sport prefix (`NBA/`, `OddsAccum/{sport}/`, `Enrich/edge/` is
+  shared/sport-tagged inside).
+  DEPLOYED 2026-06-24 (service rev `mlb-betting-00240-rvc`): the image was rebuilt
+  (`deploy/deploy_service.sh`) and ALL Cloud Run Jobs re-provisioned to the `mlb.*`
+  paths via `deploy/setup_model_jobs.sh` + `setup_edge_enrichment.sh` +
+  `setup_fit_calibrators.sh` (the last needs `PROJECT_ID=`, not `PROJECT=`).
+  Re-provisioning is mandatory after any such move -- a Cloud Run Job's `-m` command
+  is baked into GCP, so a code-only change leaves jobs failing with ModuleNotFoundError.
 - Truly sport-agnostic infra (e.g. `mlb_core.storage`, `mlb_core.odds.utils`) is
   reused across pillars despite the legacy `mlb_` name; a rename to a neutral
   `core/` is DEFERRED (too invasive while MLB is live) -- tracked, not done.
@@ -100,10 +103,10 @@ All systems are paper-mode-only until each clears a 200-settled-bet gate.
 
 The system has three responsibilities: **build features daily**, **score / size bets twice daily**, and **settle bets + monitor performance nightly**.
 
-Model training itself is human-driven (notebooks on Windows) but is being migrated to a Cloud Run Jobs pipeline (`training/`).
+Model training itself is human-driven (notebooks on Windows) but is being migrated to a Cloud Run Jobs pipeline (`mlb/training/`).
 `BATTER_TB` is now first-class in that pipeline via `BATTER_TB_System/`,
-`runners/build_batter_tb_features.py`, `training/retrain_batter_tb_v1.py`, and
-`training/calibrate_batter_tb_v1.py`.
+`mlb/runners/build_batter_tb_features.py`, `mlb/training/retrain_batter_tb_v1.py`, and
+`mlb/training/calibrate_batter_tb_v1.py`.
 
 ---
 
@@ -736,9 +739,11 @@ To add a new betting system:
 1. Add entry to `mlb_core/registry.py` SYSTEMS dict (required -- drives monitor_ops,
    monitor_performance, discord, and future auto-wiring)
 2. Add to §1 table and §5 bet type / settlement tables
-3. Create `runners/run_{sys}.py` and `runners/build_{sys}_features.py`
+3. Create `mlb/runners/run_{sys}.py` and `mlb/runners/build_{sys}_features.py`
    - **Both** must have `if __name__ == "__main__":` block (required for Cloud Run Job invocation)
-4. Add system to `settle_bets.py` systems loop + statcast/scoring checks
+   - Put the per-system config dir under `mlb/systems/{SYS}_System/` (with `__init__.py`);
+     import as `from mlb.systems.{SYS}_System.config_{sys} import ...`
+4. Add system to `mlb/runners/settle_bets.py` systems loop + statcast/scoring checks
 5. Add to `main.py` VALID_SYSTEMS, builders dict, _run_system, build_features_handler
    (main.py is NOT yet driven by the registry -- update both until migration is done)
 6. Add Cloud Scheduler jobs for feature build + wire into `/run`
@@ -746,7 +751,10 @@ To add a new betting system:
 8. Update CONTEXT.md §1, §2, §3, §5
 9. Add rules to `mlb_core/rationale.py` `_SYSTEM_RULES` dict
 10. Add schema entry to `mlb_core/schemas.py` (SCHEMAS dict)
-11. Add COPY line for the new system directory to Dockerfile (see RUNBOOKS.md)
+11. No Dockerfile change needed for a new system: the single `COPY mlb/ ./mlb/`
+    line already covers new dirs under `mlb/runners/`, `mlb/training/`, and
+    `mlb/systems/`. (Cloud Run Job `-m` commands still point at `mlb.runners.*` /
+    `mlb.training.*` -- provision them in step 7.)
 
 Step 1 (registry) also auto-populates:
 - `monitor_ops.py` FEATURE_KEYS + MODEL_KEYS
@@ -1008,7 +1016,7 @@ Knowing these prevents incorrect settlement logic and bad model assumptions.
 
 ## 11. Performance monitor
 
-`runners/monitor_performance.py` -- fires at 09:30 UTC daily via `mlb-monitor`.
+`mlb/runners/monitor_performance.py` -- fires at 09:30 UTC daily via `mlb-monitor`.
 
 Alert thresholds (overrideable via env vars):
 - `MONITOR_ROI_WARN=-15` -- ROI over last 30 bets below -15% triggers alert
@@ -1124,7 +1132,7 @@ CLV land; if market-side miscalibration is negligible, the de-vig swap is unnece
 `mlb_core/risk/calibration.py::apply(system, prob) -> (calibrated_prob, was_calibrated)`
 calibrates model_prob against REALIZED OUTCOMES (not the market) BEFORE edge is
 computed, correcting the overconfidence above. Per-system isotonic calibrators are
-fit by `training/fit_prediction_calibrators.py` (Cloud Run Job `mlb-fit-calibrators`,
+fit by `mlb/training/fit_prediction_calibrators.py` (Cloud Run Job `mlb-fit-calibrators`,
 reads ALL settled predictions in the bets table -- placed and unplaced, since settle
 ignores kelly_triggered) and stored at `Calibration/{system}_prediction_calibrator.pkl`.
 
@@ -1156,7 +1164,7 @@ Expected hit rates (baselines -- update after 200 bets per system):
 
 ## 12. Ops monitor
 
-`runners/monitor_ops.py` -- fires at 12:50 UTC daily via `mlb-monitor-ops`.
+`mlb/runners/monitor_ops.py` -- fires at 12:50 UTC daily via `mlb-monitor-ops`.
 
 Checks (all post-feature-build):
 - All Cloud Scheduler jobs: last run status code
@@ -1995,9 +2003,9 @@ Gunicorn timeout 3600s is adequate for a full backfill.
 
 **`PYTHONPATH=.` required when running feature builders outside Docker.** `mlb_core`
 is installed as a package inside the Docker image but not in the local virtualenv.
-Running `python3 runners/build_nrfi_features.py` directly raises
+Running `python3 mlb/runners/build_nrfi_features.py` directly raises
 `ModuleNotFoundError: No module named 'mlb_core'`. Always use:
-`PYTHONPATH=. python3 runners/build_nrfi_features.py`
+`PYTHONPATH=. python3 mlb/runners/build_nrfi_features.py`
 for local testing. Inside Cloud Run this is not needed (setup.py installs the package).
 
 **Savant swing_take is batter data only -- never join on pitcher MLBAM IDs.**
@@ -2051,11 +2059,11 @@ now correctly rolls the umpire master, but `ump_k_boost_L30` is proxied via
 `ump_total_run_impact_L30`. Models were trained and validated without umpire
 signal -- XGBoost handles NaN natively.
 
-**F13 -- `ump_tight_zone` in-sample quantile threshold.** `runners/build_nrfi_features.py`:
+**F13 -- `ump_tight_zone` in-sample quantile threshold.** `mlb/runners/build_nrfi_features.py`:
 thresholds now use `expanding().quantile()` instead of full-dataset `quantile()`.
 
 **F15 -- `build_batter_rolling` / `build_pitcher_features` used wall-clock date.**
-`runners/build_hr_features.py`: both functions now accept `run_date` parameter;
+`mlb/runners/build_hr_features.py`: both functions now accept `run_date` parameter;
 historical replays use the correct reference point.
 
 **F16 -- Weather fetch had no retry backoff.** Created
@@ -2264,7 +2272,7 @@ calibration. To promote F1H to real sizing: remove "F1H" from
 `LOG_ONLY_SYSTEMS` in `run_f5.py`.
 
 **GAME Pro v1 is a dedicated model, NOT the F5 scalar proxy.**
-`runners/run_game.py` uses `GAME_Pro_System/models/xgb_game_v1.json` -- a
+`mlb/runners/run_game.py` uses `GAME_Pro_System/models/xgb_game_v1.json` -- a
 `binary:logistic` model trained on `home_win` with 42 features including bullpen
 (xwOBA L14, K%, BB%, whiff_pct L14, hard_hit L14, fatigue IP L7), starter rolling
 stats (xwOBA+whiff+hard-hit L3), and team offense (wOBA+hard-hit L20).
@@ -2339,17 +2347,17 @@ and `results/page.tsx`. Proper fix: normalize team names in `run_hr.py` at
 log time. Backlog item.
 
 **F01 -- HR vig formula centralised.** `mlb_core/odds/utils.py`: added
-`devig_unilateral(market_prob, vig_pct=0.07)`. `runners/run_hr.py`: replaced
+`devig_unilateral(market_prob, vig_pct=0.07)`. `mlb/runners/run_hr.py`: replaced
 hardcoded `market_prob / 1.07` with `devig_unilateral`.
 
 **F02 -- SQL injection in /dashboard and /reset-bets.** `main.py`:
 `system_filter` now whitelist-validated and passed as a bound parameter.
 `/reset-and-run` and `/reset-bets` now require `X-API-Key` auth.
 
-**F03 -- Retractable roof always set to is_outdoor=1.** `runners/run_hr.py` line
+**F03 -- Retractable roof always set to is_outdoor=1.** `mlb/runners/run_hr.py` line
 460: `1 if roof == "open" else 1` -> `1 if roof in ("open","retractable") else 0`.
 
-**F04 -- F5 calibrator applied without boundary check.** `runners/run_f5.py`:
+**F04 -- F5 calibrator applied without boundary check.** `mlb/runners/run_f5.py`:
 added `X_min_`/`X_max_` range guard matching the NRFI runner pattern.
 
 **F05 -- `_norm` defined three times in settle_bets.py.** Hoisted to module
@@ -2360,16 +2368,16 @@ level. All three inline copies removed.
 no longer blocks a triggered evening bet on the same market. Triggered bet still
 blocks a second triggered bet.
 
-**F11 -- Settlement fetched game results serially.** `runners/settle_bets.py`:
+**F11 -- Settlement fetched game results serially.** `mlb/runners/settle_bets.py`:
 `ThreadPoolExecutor(max_workers=8)` parallelises `fetch_game_result` calls.
 15-game slate: ~7.5s -> ~1s.
 
 **F12 -- `post_pitch_clock` added to builders but not to explicit feature lists.**
-`training/retrain_nrfi_v17.py` `HALFINN_FEATURES`: added `"post_pitch_clock"`.
-`training/retrain_k_v1.py` `K_FEATURES`: added `"post_pitch_clock"`.
+`mlb/training/retrain_nrfi_v17.py` `HALFINN_FEATURES`: added `"post_pitch_clock"`.
+`mlb/training/retrain_k_v1.py` `K_FEATURES`: added `"post_pitch_clock"`.
 
 **F14 -- HR name matching: exact-only misses accent variants and suffixes.**
-`runners/run_hr.py`: added `difflib.get_close_matches` fuzzy fallback at cutoff=0.85.
+`mlb/runners/run_hr.py`: added `difflib.get_close_matches` fuzzy fallback at cutoff=0.85.
 
 ### 15.7 Settlement and boxscore
 
@@ -2385,7 +2393,7 @@ boxscore. The settler now voids the bet (result='void', profit=0) rather than
 leaving it pending indefinitely. This matches DK rules: pitcher must throw at
 least one pitch for props to grade.
 
-**F06 -- K/OUTS push grading on integer lines.** `runners/settle_bets.py`:
+**F06 -- K/OUTS push grading on integer lines.** `mlb/runners/settle_bets.py`:
 whole-number line now logs a `WARNING` instead of silently grading push.
 DK uses half-point K/OUTS lines so a whole-number line signals a parsing error.
 
@@ -2410,7 +2418,7 @@ extractors expect a list. Iterating a dict yields keys (strings), causing
 **`public_api.get_picks` and `get_recent_settled` were missing CLV columns.**
 `closing_odds`, `clv_pct`, `morning_odds`, `line_move_pct` not in SELECT.
 CLV values written to DB correctly but never returned by public API. Fixed:
-added all four columns to both SELECTs in `runners/public_api.py`.
+added all four columns to both SELECTs in `mlb/runners/public_api.py`.
 
 **`mlb-capture-closing` scheduler job uses OIDC but `/capture-closing` has
 no auth check.** OIDC token is sent but ignored -- route is open. Job was
@@ -2426,7 +2434,7 @@ to `morning_odds IS NOT NULL`.
 ### 15.9 Cloud Run Jobs
 
 **Cloud Run Jobs executed via `python3 -m module` require `if __name__ == "__main__":` blocks.**
-When a Cloud Run Job runs `--command python3 --args="-m" --args="runners.build_game_features"`,
+When a Cloud Run Job runs `--command python3 --args="-m" --args="mlb.runners.build_game_features"`,
 Python imports the module and exits 0 silently if there is no `__main__` block.
 No error, no stack trace, no payload written -- the job shows COMPLETE: 1/1 but
 did nothing. All six build runners needed this block added. Training scripts
@@ -2440,8 +2448,8 @@ The service also requires
 See RUNBOOKS.md for the full working command.
 
 **`--args` flag takes repeated values, not comma-separated.**
-`--args="-m,runners.build_game_features"` fails with "expected one argument".
-Correct form: `--args="-m" --args="runners.build_game_features"`.
+`--args="-m,mlb.runners.build_game_features"` fails with "expected one argument".
+Correct form: `--args="-m" --args="mlb.runners.build_game_features"`.
 
 **Jobs created before the image is confirmed good will have the wrong image path.**
 If you create a job then immediately hit an image NOT_FOUND on execute, use
@@ -2581,7 +2589,7 @@ T01-T09 are complete and moved to §16.4 Archive. Open P0 items: none.
 
 ##### T12 -- Live lineup integration
 - **Depends on:** T06 (feature contract reconciled first)
-- **File:** `runners/run_nrfi.py` around `_build_today_feature_rows` lines 89-165
+- **File:** `mlb/runners/run_nrfi.py` around `_build_today_feature_rows` lines 89-165
 - **Change:** Call MLB Stats API for posted lineups. Map starter ID -> top-3
   batter IDs. Compute `top3_batter_*` rolling stats from the historical batter
   features table. Flag each bet with `lineup_confidence: 'posted' | 'estimated'`
@@ -2691,7 +2699,7 @@ bottleneck._
   target/objective/metric/output fields that duplicate
   `mlb_core/registry.py` SystemConfig tune_* fields. Already kept in sync
   manually -- divergence is a matter of when, not if.
-- **Files:** `training/tune_hyperparams.py` -- replace SYSTEM_CONFIG dict with
+- **Files:** `mlb/training/tune_hyperparams.py` -- replace SYSTEM_CONFIG dict with
   `{name: get_system(name) for name in active_systems()}` and read
   `cfg.tune_target` etc.
 - [ ] Done
@@ -2711,7 +2719,7 @@ bottleneck._
   max_depth/min_child_weight/reg_alpha balance.
 - **Blocked:** Do not run until GAME clears 200-bet gate (LOG_ONLY gate). Tuning
   on a model that may have calibration issues is wasted compute.
-- **Action:** `python -m training.tune_hyperparams --system GAME --n-trials 50`
+- **Action:** `python -m mlb.training.tune_hyperparams --system GAME --n-trials 50`
   then `mlb-retrain-game-v1 -> mlb-calibrate-game`.
 - [ ] Done
 
@@ -2949,7 +2957,7 @@ The fastest path to closing the gap with Mongoose: **Sprints 0-2**.
 - **T10** Add fold-by-fold dispersion to retrain output (cv_folds, cv_mean_auc, cv_std_auc, cv_auc_ci_lo/hi in model_meta). [x] 2026-05-19
 - **T11** Migrate HR and F5 training out of notebooks (`retrain_hr_v6.py`, `retrain_f5_v5.py`). [x] 2026-05-19
 - **T13** Add regime indicator feature (`post_pitch_clock`). [x] 2026-05-19
-- **T14** Add PSI drift monitoring (`runners/monitor_drift.py`, Monday cron). [x] 2026-05-19
+- **T14** Add PSI drift monitoring (`mlb/runners/monitor_drift.py`, Monday cron). [x] 2026-05-19
 - **T15** Per-book performance breakdown in monitor_performance.py. [x] 2026-05-19
 - **T16** Add F5 bullpen features (`bullpen_xfip_L30`, `bullpen_k_pct_L30`, `bullpen_xwoba_L30`). [x] 2026-05-19
 - **T20** Odds math test coverage (`tests/test_odds_math.py`). [x] 2026-05-19
@@ -2959,9 +2967,9 @@ The fastest path to closing the gap with Mongoose: **Sprints 0-2**.
 - **E01** Fix K fair probability calculation -- closed (not a bug; historical pre-T01 edge values inflating avg_edge).
 - **E02** F5 CV loop C03 leak -- `retrain_f5_v5.py` CV loop now carves val from train. [x] 2026-05-21
 - **E03** CLV pipeline bugs -- two rounds of fixes (2026-05-21, 2026-05-22). bt_upper rename, real MLB_DB_URL, SGO team name lookup, extractor list vs dict, public_api CLV columns. CLV capturing from 2026-05-22 evening bets onward. [x] 2026-05-22
-- **E04** Build OUTS as proper regression model (`training/retrain_outs_v1.py`, NegBin count, Cloud Run Job `mlb-retrain-outs-v1`). [x] 2026-05-21
+- **E04** Build OUTS as proper regression model (`mlb/training/retrain_outs_v1.py`, NegBin count, Cloud Run Job `mlb-retrain-outs-v1`). [x] 2026-05-21
 - **E06** Fix deploy script traffic routing (`--traffic=100` + missing Discord webhook secrets). [x] 2026-05-21
-- **E09** Hyperparameter tuning via Optuna -- script written (`training/tune_hyperparams.py`). [x] 2026-05-21. Per-system invocation tracked separately under T18.
+- **E09** Hyperparameter tuning via Optuna -- script written (`mlb/training/tune_hyperparams.py`). [x] 2026-05-21. Per-system invocation tracked separately under T18.
 - **E10** Pre-game line movement feature (`bets.morning_odds`, `bets.line_move_pct`, `mlb_core/odds/line_movement.py`, all 4 runners load morning snapshot). [x] 2026-05-21
 - **E12** BATTER_HITS first-run sequence (build + retrain + calibrate Cloud Run Jobs, all wired into main.py). [x] 2026-05-24
 

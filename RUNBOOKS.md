@@ -1,6 +1,6 @@
 # Runbooks
 
-_Last updated: 2026-05-28 18:45 CST_
+_Last updated: 2026-06-24 (pillar restructure: mlb/ paths)_
 
 Common manual actions and operational workflows for `lmaynor/mlb-betting`.
 CONTEXT.md is the contract; this is the cookbook. If something here
@@ -73,22 +73,24 @@ git commit -m "fix: description"
 **Do not commit on both Mac and Cloud Shell without syncing first** -- diverged
 branches require a merge or rebase before deploy will push cleanly.
 
-### Dockerfile COPY rule -- add new system dirs here
+### Dockerfile COPY rule -- pillar dirs are copied wholesale
 
-The Dockerfile has **explicit COPY lines** for every system package directory.
-`find_packages()` in `setup.py` is not sufficient -- if the directory is not
-in the Dockerfile it will not exist in the container.
+Since the 2026-06-24 pillar restructure the Dockerfile copies whole packages
+(`mlb_core/`, `nba/`, `mlb/`) rather than one COPY line per system dir. Anything
+under `mlb/` (runners/, training/, systems/) is included automatically -- only a
+brand-new top-level package would need a new COPY line.
 
-When adding a new system `FOO_System/`:
-1. Add `COPY FOO_System/ ./FOO_System/` to Dockerfile (after K_Pro_System line)
-2. Commit and redeploy -- the 500 `ModuleNotFoundError` is the symptom if missed
+When adding a new system, put its config dir under `mlb/systems/FOO_System/`
+(with `__init__.py`) -- it is then included by the existing `COPY mlb/`, no
+Dockerfile change required.
 
-Current system dirs in Dockerfile:
+Current COPY lines in Dockerfile:
 ```
-mlb_core/ NRFI_Pro_System/ HR_Pro/ F5_Pro_System/ K_Pro_System/
-OUTS_Pro_System/ BATTER_HITS_System/ BATTER_TB_System/ GAME_Pro_System/
-runners/ training/ main.py setup.py tweet_drafter.py
+mlb_core/ nba/ mlb/ main.py tweet_drafter.py setup.py
 ```
+(`mlb/` contains `runners/`, `training/`, and `systems/{HR_Pro, NRFI_Pro_System,
+F5_Pro_System, K_Pro_System, OUTS_Pro_System, BATTER_HITS_System,
+BATTER_TB_System, GAME_Pro_System}/`.)
 
 `BATTER_TB` now has a dedicated `BATTER_TB_System/` package, feature table,
 model artifact, and lambda calibrator. It no longer uses the HR proxy artifact.
@@ -297,7 +299,7 @@ BATTER_HITS, and BATTER_TB.
 # If the job doesn't exist yet, create it once (copy image from v17 job):
 #   IMAGE=$(gcloud run jobs describe mlb-retrain-nrfi-v17 --region=us-central1 --format='value(spec.template.spec.containers[0].image)')
 #   gcloud run jobs create mlb-retrain-nrfi-v18 --image $IMAGE \
-#     --args="-m,training.retrain_nrfi_v18" --region=us-central1 --task-timeout=7200s \
+#     --args="-m,mlb.training.retrain_nrfi_v18" --region=us-central1 --task-timeout=7200s \
 #     --set-env-vars="$(gcloud run jobs describe mlb-retrain-nrfi-v17 --region=us-central1 --format='value(spec.template.spec.containers[0].env)')"
 gcloud run jobs execute mlb-retrain-nrfi-v18  --region=us-central1
 gcloud run jobs execute mlb-calibrate-nrfi    --region=us-central1
@@ -441,10 +443,10 @@ gcloud run jobs execute mlb-retrain-outs-v1 --region=us-central1 --wait
 pip install optuna --break-system-packages
 cd ~/mlb-betting
 # Run after E02-E07 complete and models are clean
-python -m training.tune_hyperparams --system NRFI --n-trials 50
-python -m training.tune_hyperparams --system K    --n-trials 50
-python -m training.tune_hyperparams --system F5   --n-trials 50
-python -m training.tune_hyperparams --system HR   --n-trials 50
+python -m mlb.training.tune_hyperparams --system NRFI --n-trials 50
+python -m mlb.training.tune_hyperparams --system K    --n-trials 50
+python -m mlb.training.tune_hyperparams --system F5   --n-trials 50
+python -m mlb.training.tune_hyperparams --system HR   --n-trials 50
 ```
 
 ### Refresh player headshots (full reconciliation)
