@@ -198,7 +198,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     out = _join_weather(out, weather_today)
 
     # 9. Park hits factor + context features
-    from runners.build_batter_hits_features import HITS_PARK_FACTORS, STADIUMS_ROOF, TEAM_NAME_TO_ABBR
+    from mlb.runners.build_batter_hits_features import HITS_PARK_FACTORS, STADIUMS_ROOF, TEAM_NAME_TO_ABBR
     home_abbr = out["home_team"].map(TEAM_NAME_TO_ABBR)
     out["hits_park_factor"] = home_abbr.map(HITS_PARK_FACTORS).fillna(1.0)
     out["is_dome"]          = home_abbr.map(lambda t: 1 if STADIUMS_ROOF.get(t) else 0).fillna(0).astype(int)
@@ -209,7 +209,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
 
 
 def _candidates_from_lineups(sched, lineups, batter_latest):
-    from runners.build_batter_hits_features import TEAM_NAME_TO_ABBR
+    from mlb.runners.build_batter_hits_features import TEAM_NAME_TO_ABBR
     rows = []
 
     if not lineups.empty:
@@ -521,7 +521,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"BATTER_HITS run | type={run_type} | date={run_date} | log_only={LOG_ONLY}")
 
-    from BATTER_HITS_System.config_batter_hits import cfg
+    from mlb.systems.BATTER_HITS_System.config_batter_hits import cfg
     from mlb_core.tracking import BetTracker
     from mlb_core.notify.discord import post_bets
 

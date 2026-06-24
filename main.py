@@ -52,21 +52,21 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
     """Dispatch to the correct system runner. Returns result dict."""
     try:
         if system == "1IOU":
-            from runners.run_nrfi import run
+            from mlb.runners.run_nrfi import run
         elif system == "HR":
-            from runners.run_hr import run
+            from mlb.runners.run_hr import run
         elif system == "F5":
-            from runners.run_f5 import run
+            from mlb.runners.run_f5 import run
         elif system == "K":
-            from runners.run_k import run
+            from mlb.runners.run_k import run
         elif system == "BATTER_HITS":
-            from runners.run_batter_hits import run
+            from mlb.runners.run_batter_hits import run
         elif system == "GAME":
-            from runners.run_game import run
+            from mlb.runners.run_game import run
         elif system == "BATTER_TB":
-            from runners.run_batter_tb import run
+            from mlb.runners.run_batter_tb import run
         elif system == "1I":
-            from runners.run_1i import run
+            from mlb.runners.run_1i import run
         else:
             return {"system": system, "status": "error", "error": "unknown system"}
 
@@ -133,19 +133,19 @@ def build_features_handler():
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
 
     if system == "HR":
-        from runners.build_hr_features import run
+        from mlb.runners.build_hr_features import run
     elif system == "1IOU":
-        from runners.build_nrfi_features import run
+        from mlb.runners.build_nrfi_features import run
     elif system == "F5":
-        from runners.build_f5_features import run
+        from mlb.runners.build_f5_features import run
     elif system == "K":
-        from runners.build_k_features import run
+        from mlb.runners.build_k_features import run
     elif system == "BATTER_HITS":
-        from runners.build_batter_hits_features import run
+        from mlb.runners.build_batter_hits_features import run
     elif system == "BATTER_TB":
-        from runners.build_batter_tb_features import run
+        from mlb.runners.build_batter_tb_features import run
     elif system == "GAME":
-        from runners.build_game_features import run
+        from mlb.runners.build_game_features import run
     else:
         return jsonify({"status": "error", "error": f"Unknown system: {system}"}), 400
 
@@ -176,14 +176,14 @@ def build_all_features_handler():
     ordered = [s for s in DEFAULT_FEATURE_BUILD_SYSTEMS if s in requested]
 
     builders = {
-        "HR":          "runners.build_hr_features",
-        "NRFI":        "runners.build_nrfi_features",
-        "1IOU":        "runners.build_nrfi_features",  # 1IOU is the registry ID for NRFI
-        "K":           "runners.build_k_features",
-        "F5":          "runners.build_f5_features",
-        "BATTER_HITS": "runners.build_batter_hits_features",
-        "BATTER_TB":   "runners.build_batter_tb_features",
-        "GAME":        "runners.build_game_features",
+        "HR":          "mlb.runners.build_hr_features",
+        "NRFI":        "mlb.runners.build_nrfi_features",
+        "1IOU":        "mlb.runners.build_nrfi_features",  # 1IOU is the registry ID for NRFI
+        "K":           "mlb.runners.build_k_features",
+        "F5":          "mlb.runners.build_f5_features",
+        "BATTER_HITS": "mlb.runners.build_batter_hits_features",
+        "BATTER_TB":   "mlb.runners.build_batter_tb_features",
+        "GAME":        "mlb.runners.build_game_features",
     }
 
     results = []
@@ -219,7 +219,7 @@ def snapshot_odds_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
-        from runners.snapshot_odds import run as snapshot_run
+        from mlb.runners.snapshot_odds import run as snapshot_run
         result = snapshot_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()
@@ -246,7 +246,7 @@ def settle_handler():
     body        = request.get_json(silent=True) or {}
     settle_date = body.get("settle_date", None)  # optional; defaults to yesterday
     try:
-        from runners.settle_bets import run as settle_run
+        from mlb.runners.settle_bets import run as settle_run
         result = settle_run(settle_date=settle_date)
     except Exception as e:
         tb = traceback.format_exc()
@@ -508,7 +508,7 @@ def monitor_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
-        from runners.monitor_performance import run as monitor_run
+        from mlb.runners.monitor_performance import run as monitor_run
         result = monitor_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()
@@ -524,7 +524,7 @@ def monitor_ops_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
-        from runners.monitor_ops import run as monitor_ops_run
+        from mlb.runners.monitor_ops import run as monitor_ops_run
         result = monitor_ops_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()
@@ -565,14 +565,14 @@ def reset_and_run():
         return err
     from sqlalchemy import text
     from mlb_core.tracking.bet_tracker import BetTracker
-    from runners.run_hr import run as run_hr
-    from runners.run_nrfi import run as run_nrfi
-    from runners.run_f5 import run as run_f5
-    from runners.run_k import run as run_k
-    from runners.run_batter_hits import run as run_batter_hits
-    from runners.run_game import run as run_game
-    from runners.run_batter_tb import run as run_batter_tb
-    from runners.run_1i import run as run_1i
+    from mlb.runners.run_hr import run as run_hr
+    from mlb.runners.run_nrfi import run as run_nrfi
+    from mlb.runners.run_f5 import run as run_f5
+    from mlb.runners.run_k import run as run_k
+    from mlb.runners.run_batter_hits import run as run_batter_hits
+    from mlb.runners.run_game import run as run_game
+    from mlb.runners.run_batter_tb import run as run_batter_tb
+    from mlb.runners.run_1i import run as run_1i
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
     systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
@@ -751,7 +751,7 @@ def dashboard():
 # Used by the Beezy frontend.
 # ---------------------------------------------------------------------------
 
-from runners.public_api import (
+from mlb.runners.public_api import (
     get_pnl_sparkline,
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
@@ -1298,10 +1298,10 @@ def capture_closing_handler():
     try:
         if body.get("backfill_clv"):
             # One-off repair of historical clv_pct (price-based recompute).
-            from runners.capture_closing_lines import backfill_clv
+            from mlb.runners.capture_closing_lines import backfill_clv
             result = backfill_clv()
         else:
-            from runners.capture_closing_lines import run as capture_run
+            from mlb.runners.capture_closing_lines import run as capture_run
             result = capture_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()
@@ -1316,7 +1316,7 @@ def monitor_drift_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
-        from runners.monitor_drift import run as drift_run
+        from mlb.runners.monitor_drift import run as drift_run
         result = drift_run(run_date=run_date)
     except Exception as e:
         tb = traceback.format_exc()

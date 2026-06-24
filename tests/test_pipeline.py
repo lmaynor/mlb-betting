@@ -197,27 +197,27 @@ def test_apply_cap_zero_when_exceeded(tmp_path):
 # ── Settlement logic tests ────────────────────────────────────────────────────
 
 def test_calc_profit_win_plus_odds():
-    from runners.settle_bets import _calc_profit
+    from mlb.runners.settle_bets import _calc_profit
     assert _calc_profit(10.0, 150, "win") == 15.0
 
 
 def test_calc_profit_win_minus_odds():
-    from runners.settle_bets import _calc_profit
+    from mlb.runners.settle_bets import _calc_profit
     assert abs(_calc_profit(10.0, -110, "win") - 9.09) < 0.01
 
 
 def test_calc_profit_loss():
-    from runners.settle_bets import _calc_profit
+    from mlb.runners.settle_bets import _calc_profit
     assert _calc_profit(10.0, -115, "loss") == -10.0
 
 
 def test_calc_profit_push():
-    from runners.settle_bets import _calc_profit
+    from mlb.runners.settle_bets import _calc_profit
     assert _calc_profit(10.0, -115, "push") == 0.0
 
 
 def test_calc_profit_void():
-    from runners.settle_bets import _calc_profit
+    from mlb.runners.settle_bets import _calc_profit
     assert _calc_profit(10.0, -115, "void") == 0.0
 
 
@@ -238,7 +238,7 @@ def _make_game_cache(away_inn1=0, home_inn1=0, innings_5_away=None, innings_5_ho
 
 
 def test_settle_nrfi_win():
-    from runners.settle_bets import _settle_nrfi
+    from mlb.runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
                               "stake": 10.0, "odds": -115}])
     results = _settle_nrfi(pending, _make_game_cache(away_inn1=0, home_inn1=0))
@@ -248,7 +248,7 @@ def test_settle_nrfi_win():
 
 
 def test_settle_nrfi_loss():
-    from runners.settle_bets import _settle_nrfi
+    from mlb.runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "NRFI",
                               "stake": 10.0, "odds": -115}])
     results = _settle_nrfi(pending, _make_game_cache(away_inn1=1, home_inn1=0))
@@ -257,7 +257,7 @@ def test_settle_nrfi_loss():
 
 
 def test_settle_3way_away():
-    from runners.settle_bets import _settle_nrfi
+    from mlb.runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "1I_AWAY",
                               "stake": 10.0, "odds": 200}])
     results = _settle_nrfi(pending, _make_game_cache(away_inn1=2, home_inn1=1))
@@ -266,7 +266,7 @@ def test_settle_3way_away():
 
 
 def test_settle_f5_home_win():
-    from runners.settle_bets import _settle_f5
+    from mlb.runners.settle_bets import _settle_f5
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
                               "stake": 10.0, "odds": -110}])
     cache = _make_game_cache(innings_5_away=[0,0,0,0,0], innings_5_home=[1,0,0,0,0])
@@ -275,7 +275,7 @@ def test_settle_f5_home_win():
 
 
 def test_settle_f5_push():
-    from runners.settle_bets import _settle_f5
+    from mlb.runners.settle_bets import _settle_f5
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "bet_type": "HOME",
                               "stake": 10.0, "odds": -110}])
     cache = _make_game_cache(innings_5_away=[1,0,0,0,0], innings_5_home=[1,0,0,0,0])
@@ -297,7 +297,7 @@ def _make_k_cache(strikeouts=8, outs=18, pitcher_name="Slade Cecconi"):
 
 
 def test_settle_k_over_win():
-    from runners.settle_bets import _settle_k
+    from mlb.runners.settle_bets import _settle_k
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
                               "bet_type": "K_OVER_6.5", "stake": 10.0, "odds": -120}])
     results = _settle_k(pending, _make_k_cache(strikeouts=8))
@@ -305,7 +305,7 @@ def test_settle_k_over_win():
 
 
 def test_settle_k_under_win():
-    from runners.settle_bets import _settle_k
+    from mlb.runners.settle_bets import _settle_k
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
                               "bet_type": "K_UNDER_6.5", "stake": 10.0, "odds": 110}])
     results = _settle_k(pending, _make_k_cache(strikeouts=4))
@@ -313,7 +313,7 @@ def test_settle_k_under_win():
 
 
 def test_settle_k_push():
-    from runners.settle_bets import _settle_k
+    from mlb.runners.settle_bets import _settle_k
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
                               "bet_type": "K_OVER_7.0", "stake": 10.0, "odds": -110}])
     results = _settle_k(pending, _make_k_cache(strikeouts=7))
@@ -336,7 +336,7 @@ def _make_hr_cache(starter=True, home_runs=0, final=True):
 
 
 def test_settle_hr_win():
-    from runners.settle_bets import _settle_hr
+    from mlb.runners.settle_bets import _settle_hr
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
                               "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
     results = _settle_hr(pending, _make_hr_cache(starter=True, home_runs=1))
@@ -345,7 +345,7 @@ def test_settle_hr_win():
 
 
 def test_settle_hr_loss():
-    from runners.settle_bets import _settle_hr
+    from mlb.runners.settle_bets import _settle_hr
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
                               "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
     results = _settle_hr(pending, _make_hr_cache(starter=True, home_runs=0))
@@ -354,7 +354,7 @@ def test_settle_hr_loss():
 
 
 def test_settle_hr_void_not_starter():
-    from runners.settle_bets import _settle_hr
+    from mlb.runners.settle_bets import _settle_hr
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
                               "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
     results = _settle_hr(pending, _make_hr_cache(starter=False, home_runs=0))
@@ -363,7 +363,7 @@ def test_settle_hr_void_not_starter():
 
 
 def test_settle_hr_game_not_final():
-    from runners.settle_bets import _settle_hr
+    from mlb.runners.settle_bets import _settle_hr
     pending = pd.DataFrame([{"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
                               "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE}])
     results = _settle_hr(pending, _make_hr_cache(final=False))
@@ -410,7 +410,7 @@ def _game_cache_full(
 
 def test_settle_nrfi_yrfi_via_cache():
     """YRFI: away scores in inning 1."""
-    from runners.settle_bets import _settle_nrfi
+    from mlb.runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "bet_type": "NRFI", "stake": 10.0, "odds": -115},
         {"id": 2, "game_pk": GAME_PK, "bet_type": "YRFI", "stake": 10.0, "odds": -105},
@@ -425,7 +425,7 @@ def test_settle_nrfi_yrfi_via_cache():
 
 def test_settle_3way_draw_via_cache():
     """1I_DRAW: teams are tied after inning 1."""
-    from runners.settle_bets import _settle_nrfi
+    from mlb.runners.settle_bets import _settle_nrfi
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "bet_type": "1I_DRAW", "stake": 10.0, "odds": 200},
         {"id": 2, "game_pk": GAME_PK, "bet_type": "1I_AWAY", "stake": 10.0, "odds": 250},
@@ -439,7 +439,7 @@ def test_settle_3way_draw_via_cache():
 
 def test_settle_f5_away_win_via_cache():
     """F5 AWAY: away team leads after 5 innings."""
-    from runners.settle_bets import _settle_f5
+    from mlb.runners.settle_bets import _settle_f5
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "bet_type": "AWAY", "stake": 10.0, "odds": 110},
     ])
@@ -451,7 +451,7 @@ def test_settle_f5_away_win_via_cache():
 
 def test_settle_k_outs_via_cache():
     """OUTS O/U: pitcher records 18 outs, line 17.5."""
-    from runners.settle_bets import _settle_k
+    from mlb.runners.settle_bets import _settle_k
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "player": "Slade Cecconi",
          "bet_type": "OUTS_OVER_17.5", "stake": 10.0, "odds": -110},
@@ -467,7 +467,7 @@ def test_settle_k_outs_via_cache():
 
 def test_settle_hr_starter_no_hr():
     """HR: starter who did not hit a HR -> loss."""
-    from runners.settle_bets import _settle_hr
+    from mlb.runners.settle_bets import _settle_hr
     pending = pd.DataFrame([
         {"id": 1, "game_pk": GAME_PK, "player": "Aaron Judge",
          "bet_type": "HR", "stake": 10.0, "odds": 500, "game_date": GAME_DATE},
@@ -479,7 +479,7 @@ def test_settle_hr_starter_no_hr():
 
 def test_settle_game_not_final_all_systems():
     """All systems skip when game not Final (cache returns None)."""
-    from runners.settle_bets import _settle_nrfi, _settle_f5, _settle_hr, _settle_k
+    from mlb.runners.settle_bets import _settle_nrfi, _settle_f5, _settle_hr, _settle_k
     cache = {GAME_PK: None}
     pending_nrfi = pd.DataFrame([{"id":1,"game_pk":GAME_PK,"bet_type":"NRFI","stake":10.0,"odds":-115}])
     pending_f5   = pd.DataFrame([{"id":2,"game_pk":GAME_PK,"bet_type":"HOME","stake":10.0,"odds":-110}])

@@ -156,7 +156,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     try:
         from mlb_core.data.lineups import get_today_schedule
         from mlb_core.storage import read_csv as _rc
-        from runners.build_game_features import (
+        from mlb.runners.build_game_features import (
             build_starter_features, build_model_features,
             PARK_FACTORS, DOME_TEAMS, TEAM_NAME_TO_ABBR,
         )
@@ -355,7 +355,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         feat_df["calibrator_in_range"] = False
 
     # Build a lookup: (home_team_abbr, away_team_abbr) -> row index
-    from runners.build_game_features import TEAM_NAME_TO_ABBR as _ABBR
+    from mlb.runners.build_game_features import TEAM_NAME_TO_ABBR as _ABBR
 
     def _abbr(name: str) -> str:
         return _ABBR.get(str(name), str(name)).upper()
@@ -496,7 +496,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info("GAME run | type=%s | date=%s | log_only=%s", run_type, run_date, LOG_ONLY)
 
-    from GAME_Pro_System.config_game import cfg
+    from mlb.systems.GAME_Pro_System.config_game import cfg
     from mlb_core.tracking import BetTracker
     from mlb_core.notify.discord import post_bets
 

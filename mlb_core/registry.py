@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 class SystemConfig:
     name: str                         # "HR", "NRFI", etc.
     icon: str                         # Discord/display emoji
-    builder_module: str               # "runners.build_hr_features"
-    runner_module: str                # "runners.run_hr"
+    builder_module: str               # "mlb.runners.build_hr_features"
+    runner_module: str                # "mlb.runners.run_hr"
     feature_csv: str                  # GCS key for model_features.csv
     model_artifact: str               # GCS key for xgb_*.json
     build_sentinel: str               # GCS key for last_build.json
@@ -51,8 +51,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "HR": SystemConfig(
         name="HR",
         icon="🔴",
-        builder_module="runners.build_hr_features",
-        runner_module="runners.run_hr",
+        builder_module="mlb.runners.build_hr_features",
+        runner_module="mlb.runners.run_hr",
         feature_csv="HR_Pro/data/model_features.csv",
         model_artifact="HR_Pro/models/xgb_hr_v6.json",
         build_sentinel="HR_Pro/data/last_build.json",
@@ -69,8 +69,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "1IOU": SystemConfig(
         name="1IOU",
         icon="🔵",
-        builder_module="runners.build_nrfi_features",
-        runner_module="runners.run_nrfi",
+        builder_module="mlb.runners.build_nrfi_features",
+        runner_module="mlb.runners.run_nrfi",
         feature_csv="NRFI_Pro_System/data/model_features.csv",
         model_artifact="NRFI_Pro_System/models/xgb_halfinn_v17.json",
         build_sentinel="NRFI_Pro_System/data/last_build.json",
@@ -92,8 +92,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "K": SystemConfig(
         name="K",
         icon="🟡",
-        builder_module="runners.build_k_features",
-        runner_module="runners.run_k",
+        builder_module="mlb.runners.build_k_features",
+        runner_module="mlb.runners.run_k",
         feature_csv="K_Pro_System/data/model_features.csv",
         model_artifact="K_Pro_System/models/xgb_k_v1.json",
         build_sentinel="K_Pro_System/data/last_build.json",
@@ -112,8 +112,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "OUTS": SystemConfig(
         name="OUTS",
         icon="🟠",
-        builder_module="runners.build_k_features",   # shares K builder
-        runner_module="runners.run_outs",
+        builder_module="mlb.runners.build_k_features",   # shares K builder
+        runner_module="mlb.runners.run_outs",
         feature_csv="K_Pro_System/data/model_features.csv",  # shared with K
         model_artifact="K_Pro_System/models/xgb_k_v1.json",  # OUTS uses K model artifact (no separate OUTS artifact in MODEL_KEYS)
         build_sentinel="K_Pro_System/data/last_build.json",   # shares K sentinel
@@ -126,8 +126,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "F5": SystemConfig(
         name="F5",
         icon="🟢",
-        builder_module="runners.build_f5_features",
-        runner_module="runners.run_f5",
+        builder_module="mlb.runners.build_f5_features",
+        runner_module="mlb.runners.run_f5",
         feature_csv="F5_Pro_System/data/model_features.csv",
         model_artifact="F5_Pro_System/models/xgb_f5_v5.json",
         build_sentinel="F5_Pro_System/data/last_build.json",
@@ -149,8 +149,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "BATTER_HITS": SystemConfig(
         name="BATTER_HITS",
         icon="🩵",
-        builder_module="runners.build_batter_hits_features",
-        runner_module="runners.run_batter_hits",
+        builder_module="mlb.runners.build_batter_hits_features",
+        runner_module="mlb.runners.run_batter_hits",
         feature_csv="BATTER_HITS_System/data/model_features.csv",
         model_artifact="BATTER_HITS_System/models/xgb_batter_hits_v1.json",
         build_sentinel="BATTER_HITS_System/data/last_build.json",
@@ -167,8 +167,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "BATTER_TB": SystemConfig(
         name="BATTER_TB",
         icon="🟩",
-        builder_module="runners.build_batter_tb_features",
-        runner_module="runners.run_batter_tb",
+        builder_module="mlb.runners.build_batter_tb_features",
+        runner_module="mlb.runners.run_batter_tb",
         feature_csv="BATTER_TB_System/data/model_features.csv",
         model_artifact="BATTER_TB_System/models/xgb_batter_tb_v1.json",
         build_sentinel="BATTER_TB_System/data/last_build.json",
@@ -185,8 +185,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "GAME": SystemConfig(
         name="GAME",
         icon="🖤",
-        builder_module="runners.build_game_features",
-        runner_module="runners.run_game",
+        builder_module="mlb.runners.build_game_features",
+        runner_module="mlb.runners.run_game",
         feature_csv="GAME_Pro_System/data/model_features.csv",
         model_artifact="GAME_Pro_System/models/xgb_game_v1.json",
         build_sentinel="GAME_Pro_System/data/last_build.json",
@@ -203,8 +203,8 @@ SYSTEMS: dict[str, SystemConfig] = {
     "1I": SystemConfig(
         name="1I",
         icon="1️⃣",
-        builder_module="runners.build_nrfi_features",  # derived from NRFI half-inning model
-        runner_module="runners.run_1i",
+        builder_module="mlb.runners.build_nrfi_features",  # derived from NRFI half-inning model
+        runner_module="mlb.runners.run_1i",
         feature_csv="NRFI_Pro_System/data/model_features.csv",
         model_artifact="NRFI_Pro_System/models/xgb_halfinn_v17.json",
         build_sentinel="NRFI_Pro_System/data/last_build.json",

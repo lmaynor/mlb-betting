@@ -15,7 +15,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.isotonic import IsotonicRegression
 
-from BATTER_TB_System.config_batter_tb import BATTER_TB_FEATURES
+from mlb.systems.BATTER_TB_System.config_batter_tb import BATTER_TB_FEATURES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s -- %(message)s")
 logger = logging.getLogger(__name__)

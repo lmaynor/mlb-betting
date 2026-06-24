@@ -13,10 +13,10 @@ sys.modules.setdefault(
     types.SimpleNamespace(brier_score_loss=lambda y_true, y_pred: 0.0),
 )
 
-from runners.run_k import _simulate_k
-from runners.run_1i import _derive_3way_probs
-from runners.run_batter_tb import _negbin_p_over, _negbin_p_under
-from training.calibrate_nrfi_v18 import _build_game_level
+from mlb.runners.run_k import _simulate_k
+from mlb.runners.run_1i import _derive_3way_probs
+from mlb.runners.run_batter_tb import _negbin_p_over, _negbin_p_under
+from mlb.training.calibrate_nrfi_v18 import _build_game_level
 
 
 def test_k_simulation_uses_calibrated_lambda_not_recent_rate_proxy():

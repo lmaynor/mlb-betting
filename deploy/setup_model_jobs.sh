@@ -50,25 +50,25 @@ upsert_job() {
 
 echo "Configuring model retrain/calibration jobs from image: $IMAGE"
 
-upsert_job "mlb-retrain-nrfi-v18"       "training.retrain_nrfi_v18"        "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-nrfi"         "training.calibrate_nrfi_v18"      "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-nrfi-v18"       "mlb.training.retrain_nrfi_v18"        "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-nrfi"         "mlb.training.calibrate_nrfi_v18"      "2Gi" "1" "1800s"
 
-upsert_job "mlb-retrain-hr-v6"          "training.retrain_hr_v6"           "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-hr"           "training.calibrate_hr_v6"         "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-hr-v6"          "mlb.training.retrain_hr_v6"           "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-hr"           "mlb.training.calibrate_hr_v6"         "2Gi" "1" "1800s"
 
-upsert_job "mlb-retrain-f5-v5"          "training.retrain_f5_v5"           "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-f5"           "training.calibrate_f5_v5"         "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-f5-v5"          "mlb.training.retrain_f5_v5"           "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-f5"           "mlb.training.calibrate_f5_v5"         "2Gi" "1" "1800s"
 
-upsert_job "mlb-retrain-k-v1"           "training.retrain_k_v1"            "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-k"            "training.calibrate_k_v1"          "2Gi" "1" "1800s"
-upsert_job "mlb-retrain-outs-v1"        "training.retrain_outs_v1"         "4Gi" "2" "7200s"
+upsert_job "mlb-retrain-k-v1"           "mlb.training.retrain_k_v1"            "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-k"            "mlb.training.calibrate_k_v1"          "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-outs-v1"        "mlb.training.retrain_outs_v1"         "4Gi" "2" "7200s"
 
-upsert_job "mlb-retrain-game-v1"        "training.retrain_game_v1"         "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-game"         "training.calibrate_game_v1"       "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-game-v1"        "mlb.training.retrain_game_v1"         "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-game"         "mlb.training.calibrate_game_v1"       "2Gi" "1" "1800s"
 
-upsert_job "mlb-retrain-batter-hits"    "training.retrain_batter_hits_v1"  "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-batter-hits"  "training.calibrate_batter_hits_v1" "2Gi" "1" "1800s"
-upsert_job "mlb-retrain-batter-tb"      "training.retrain_batter_tb_v1"    "4Gi" "2" "7200s"
-upsert_job "mlb-calibrate-batter-tb"    "training.calibrate_batter_tb_v1"  "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-batter-hits"    "mlb.training.retrain_batter_hits_v1"  "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-batter-hits"  "mlb.training.calibrate_batter_hits_v1" "2Gi" "1" "1800s"
+upsert_job "mlb-retrain-batter-tb"      "mlb.training.retrain_batter_tb_v1"    "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-batter-tb"    "mlb.training.calibrate_batter_tb_v1"  "2Gi" "1" "1800s"
 
 echo "Model jobs ready."

@@ -138,7 +138,7 @@ def _build_game_probs(cfg: dict, run_date: str) -> pd.DataFrame:
         game_pk, away_team, home_team, p_3way_away, p_3way_home, p_3way_draw
     One row per game where both starters were scored.
     """
-    from runners.run_nrfi import (
+    from mlb.runners.run_nrfi import (
         _load_v18_ensemble, _score_v18,
         _load_halfinn_model, _score,
         _load_calibrator, _load_calibrator_by_key,
@@ -354,7 +354,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"1I run | type={run_type} | date={run_date} | log_only={LOG_ONLY}")
 
-    from NRFI_Pro_System.config_nrfi import cfg
+    from mlb.systems.NRFI_Pro_System.config_nrfi import cfg
     from mlb_core.tracking import BetTracker
     from mlb_core.notify.discord import post_bets
 

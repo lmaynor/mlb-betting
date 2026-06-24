@@ -692,7 +692,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"HR feature build | date={run_date}")
 
-    from HR_Pro.config_hr import cfg
+    from mlb.systems.HR_Pro.config_hr import cfg
     from mlb_core.storage import read_csv, write_csv, exists
     from mlb_core.config import GCS_BUCKET
     from mlb_core.data import statcast_nightly, weather_nightly, lineup_nightly

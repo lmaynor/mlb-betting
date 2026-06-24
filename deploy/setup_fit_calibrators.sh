@@ -43,7 +43,7 @@ COMMON_ARGS=(
   --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
   --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
   --command="python"
-  --args="-m,training.fit_prediction_calibrators"
+  --args="-m,mlb.training.fit_prediction_calibrators"
   --memory=2Gi
   --cpu=2
   --task-timeout=900

@@ -499,7 +499,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"BATTER_HITS feature build | date={run_date}")
 
-    from BATTER_HITS_System.config_batter_hits import cfg
+    from mlb.systems.BATTER_HITS_System.config_batter_hits import cfg
     from mlb_core.storage import read_csv, write_csv, exists, write_build_sentinel
     from mlb_core.config import GCS_BUCKET
 

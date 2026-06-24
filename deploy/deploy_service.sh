@@ -32,8 +32,8 @@ git commit -m "docs: update CONTEXT.md timestamp" --allow-empty
 git push
 
 echo "==> 0.5. Run tests"
-python3 -m compileall -q mlb_core/ runners/ main.py
-find mlb_core runners -name '*.py' -print0 | xargs -0 python3 -m py_compile
+python3 -m compileall -q mlb_core/ mlb/ main.py
+find mlb_core mlb -name '*.py' -print0 | xargs -0 python3 -m py_compile
 python3 -m py_compile main.py
 pytest tests/ -q
 if [ $? -ne 0 ]; then

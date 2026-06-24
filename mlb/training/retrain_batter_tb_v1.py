@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from BATTER_TB_System.config_batter_tb import BATTER_TB_FEATURES
+from mlb.systems.BATTER_TB_System.config_batter_tb import BATTER_TB_FEATURES
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s -- %(message)s")
 logger = logging.getLogger(__name__)
@@ -200,7 +200,7 @@ def run() -> dict:
     from mlb_core.storage import upload_model, write_bytes
 
     try:
-        from training.tune_hyperparams import load_tuned_params
+        from mlb.training.tune_hyperparams import load_tuned_params
         tuned = load_tuned_params("BATTER_TB")
         if tuned:
             global XGB_PARAMS
