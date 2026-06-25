@@ -758,7 +758,7 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed_er and not _edge_capped and not sgo.is_live_event(odds_info.get("commence_time"))
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed_er and not _edge_capped and not _sgo.is_live_event(odds_info.get("commence_time"))
         if kelly_triggered and stake > 0:
             gp = int(row.get("game_pk", 0))
             _pending[gp] = _pending.get(gp, 0.0) + stake

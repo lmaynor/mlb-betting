@@ -437,6 +437,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     """
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
     from mlb_core.odds.utils import devig_unilateral
+    from mlb_core.odds import sgo  # live-event guard (line ~561); sgo imported at module-top only inside _fetch_hr_odds
 
     # 1. Load model + its trained feature list
     booster, features, feature_means = _load_model(cfg)
