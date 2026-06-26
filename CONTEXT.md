@@ -946,15 +946,35 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS","GAME"],"run_type":"morning"}` |
+| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":[...],"run_type":"morning"}` |
 | `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-betting-afternoon` | `5 19 * * *` | `/run` | 180s | cloned from `mlb-betting-evening` (see note) |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":["NRFI","HR","F5","K","BATTER_HITS","GAME"],"run_type":"evening"}` |
+| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":[...],"run_type":"evening"}` |
 | `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-betting-pregame` | `35 23 * * *` | `/run` | 180s | cloned from `mlb-betting-evening` (see note) |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
 | `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | TWEET_MODE=picks |
 | `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | TWEET_MODE=recap |
+
+### Scoring paired to snapshots (2026-06-25)
+
+Scoring (`/run`) now fires ~5 min after EVERY odds snapshot, not just morning +
+evening: `mlb-betting-afternoon` (after the 19:00 snapshot) and
+`mlb-betting-pregame` (after the 23:30 snapshot) were added so late-appearing
+markets (evening-game props posted mid-afternoon, lineups confirmed near first
+pitch) get scored. This is safe because `BetTracker.log_bet()` is **strict
+first-wins** on `(system, game_date, game_pk, bet_type)` -- extra runs only log
+brand-new markets, never double-log or re-price an existing bet. No dedup code
+change was needed.
+
+Provision via `deploy/add_betting_schedulers.sh` (idempotent). That script
+**clones** the live `mlb-betting-evening` job's request body + OIDC auth rather
+than hardcoding them, so the new jobs always send the correct systems list. NOTE
+the `systems` arrays shown in the table above are illustrative -- the live body
+must use `main.py` `VALID_SYSTEMS` names (`1IOU`/`1I`, not the legacy `NRFI`);
+relying on the cloned template avoids that drift.
 
 ### status.code values
 - `-1` -- never run or ran successfully
