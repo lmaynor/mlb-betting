@@ -946,13 +946,13 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
 | `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":[...],"run_type":"morning"}` |
+| `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"morning"}` |
 | `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-afternoon` | `5 19 * * *` | `/run` | 180s | cloned from `mlb-betting-evening` (see note) |
+| `mlb-betting-afternoon` | `5 19 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"afternoon"}` |
 | `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":[...],"run_type":"evening"}` |
+| `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"evening"}` |
 | `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
-| `mlb-betting-pregame` | `35 23 * * *` | `/run` | 180s | cloned from `mlb-betting-evening` (see note) |
+| `mlb-betting-pregame` | `35 23 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"pregame"}` |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
 | `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | TWEET_MODE=picks |
@@ -969,12 +969,20 @@ first-wins** on `(system, game_date, game_pk, bet_type)` -- extra runs only log
 brand-new markets, never double-log or re-price an existing bet. No dedup code
 change was needed.
 
-Provision via `deploy/add_betting_schedulers.sh` (idempotent). That script
-**clones** the live `mlb-betting-evening` job's request body + OIDC auth rather
-than hardcoding them, so the new jobs always send the correct systems list. NOTE
-the `systems` arrays shown in the table above are illustrative -- the live body
-must use `main.py` `VALID_SYSTEMS` names (`1IOU`/`1I`, not the legacy `NRFI`);
-relying on the cloned template avoids that drift.
+Provision via `deploy/setup_betting_schedulers.sh` (idempotent). It sets ALL FOUR
+`/run` jobs with the AUTHORITATIVE body `{"systems":[...],"run_type":...}` where
+the list mirrors `main.py` `DEFAULT_RUN_SYSTEMS`:
+`["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","GAME","1I"]`. Use `VALID_SYSTEMS`
+names (`1IOU`/`1I`, NOT the legacy `NRFI`). Keep the script's `SYSTEMS_JSON` in
+sync with `DEFAULT_RUN_SYSTEMS` when adding a system. (Earlier the live bodies
+omitted `BATTER_TB`/`1I` -- this script is the single source of truth so that
+can't drift. Supersedes the old clone-based `add_betting_schedulers.sh`.)
+
+The `mlb-build-all-features` Cloud Run Job is provisioned by
+`deploy/setup_build_all_features.sh` (idempotent). It was previously created by
+hand and got missed in the 2026-06-24 pillarize re-provisioning (its `-m` command
+stayed on the old `runners.*` path -> `ModuleNotFoundError` -> stale sentinels ->
+runner aborts). Re-run it after any module move.
 
 ### status.code values
 - `-1` -- never run or ran successfully
