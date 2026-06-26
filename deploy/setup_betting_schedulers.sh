@@ -40,11 +40,12 @@ _upsert_run_job() {
   if gcloud scheduler jobs describe "$name" \
        --location="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
     echo "Updating $name ($cron, run_type=$run_type)..."
+    # NOTE: `update http` uses --update-headers (NOT --headers, which is create-only).
     gcloud scheduler jobs update http "$name" \
       --location="$REGION" --schedule="$cron" --time-zone="UTC" \
       --uri="${SERVICE_URL}/run" --http-method=POST \
       --message-body="$body" \
-      --headers="Content-Type=application/json" \
+      --update-headers="Content-Type=application/json" \
       --oidc-service-account-email="$SCHEDULER_SA" \
       --oidc-token-audience="$SERVICE_URL" \
       --attempt-deadline="180s" \
