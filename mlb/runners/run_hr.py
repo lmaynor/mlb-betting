@@ -52,7 +52,7 @@ def _fetch_hr_odds(run_date: str) -> dict:
     _fresh, _reason = sgo.check_snapshot_freshness(_SGO_KEY)
     if not _fresh:
         logger.error(f"aborting run — {_reason}")
-        return pd.DataFrame()
+        return {}
     # Sentinel check -- abort if feature build is stale or failed
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import check_build_sentinel
@@ -62,7 +62,7 @@ def _fetch_hr_odds(run_date: str) -> dict:
         logger.error(msg)
         from mlb_core.notify.discord import post_error
         post_error("HR", msg)
-        return pd.DataFrame()
+        return {}
     logger.info("HR: sentinel ok -- %s", _sreason)
     # E10: load morning snapshot for line movement signal
     from mlb_core.odds.line_movement import load_morning_odds
