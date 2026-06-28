@@ -1015,8 +1015,16 @@ def model_health_handler():
         se  = math.sqrt(var / n)
         return round(mu, 4), round(mu / se, 3) if se > 0 else 0.0
 
-    def _health_verdict(n, auc_model, cal_err, roi):
-        """Return flags, health, recommended_action for a system's season stats."""
+    def _health_verdict(n, auc_model, cal_err, roi,
+                        mean_clv=None, clv_tstat=None, clv_n=0):
+        """Return flags, health, recommended_action for a system's season stats.
+
+        CLV is folded in as a first-class scorecard axis (A4): it does NOT change
+        the discrimination/ROI-based `health` label, but it adds the affirmative
+        promotion verdict (T17 paper->live bar) and a leading negative-edge flag.
+        Suppression stays ROI-only in monitor_performance -- CLV is observability
+        + promotion here, never auto-suppression.
+        """
         flags = []
         if n < MIN_HEALTH_N:
             flags.append("underpowered")
@@ -1054,10 +1062,28 @@ def model_health_handler():
             "moderate":      "monitor; edge is marginal",
             "healthy":       "ok",
         }
+        action = _actions.get(health, "unknown")
+
+        # CLV scorecard (A4): affirmative promotion signal + leading no-edge flag.
+        from mlb_core.risk.clv import clv_verdict
+        cv = clv_verdict(mean_clv, clv_tstat, clv_n)
+        if cv["clv_status"] == "negative":
+            flags.append("clv_negative")
+        if cv["clv_promote_ready"]:
+            flags.append("clv_promote_ready")
+        # Enrich the action without overriding the discrimination/ROI verdict.
+        if cv["clv_promote_ready"] and health in ("healthy", "moderate"):
+            action = f"PROMOTION-READY -- {cv['clv_note']}"
+        elif cv["clv_status"] == "negative" and health in ("healthy", "moderate", "degraded"):
+            action = f"{action} | caution: {cv['clv_note']}"
+
         return {
             "flags":              flags,
             "health":             health,
-            "recommended_action": _actions.get(health, "unknown"),
+            "recommended_action": action,
+            "clv_status":         cv["clv_status"],
+            "clv_promote_ready":  cv["clv_promote_ready"],
+            "clv_note":           cv["clv_note"],
         }
 
     def _system_stats(rows):
@@ -1114,7 +1140,7 @@ def model_health_handler():
                 "inverted" if auc_model and auc_model < 0.50  else
                 "unknown"
             ),
-            **_health_verdict(n, auc_model, cal_err, roi),
+            **_health_verdict(n, auc_model, cal_err, roi, mean_clv, clv_t, len(clvs)),
         }
 
     try:
@@ -1321,6 +1347,25 @@ def monitor_drift_handler():
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"monitor-drift failed:\n{tb}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+    return jsonify(result), 200
+
+
+@app.route("/diagnose-nrfi-drift", methods=["GET", "POST"])
+def diagnose_nrfi_drift_handler():
+    """NRFI v18 concept-drift attribution: per-sub-model live AUC vs OOS. (A2)
+
+    Optional body/query `since` (YYYY-MM-DD) sets the recent-window lower bound;
+    defaults to the last DRIFT_LOOKBACK_DAYS. Read-only diagnostic.
+    """
+    body  = request.get_json(silent=True) or {}
+    since = body.get("since") or request.args.get("since")
+    try:
+        from mlb.runners.diagnose_nrfi_drift import run as drift_run
+        result = drift_run(since=since)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"diagnose-nrfi-drift failed:\n{tb}")
         return jsonify({"status": "error", "error": str(e)}), 500
     return jsonify(result), 200
 

@@ -139,11 +139,16 @@ def _load_v18_ensemble():
     return sub_boosters, meta
 
 
-def _score_v18(sub_boosters: dict, meta: dict, df: pd.DataFrame) -> np.ndarray:
+def _score_v18(sub_boosters: dict, meta: dict, df: pd.DataFrame,
+               return_components: bool = False):
     """Score half-inning rows using the v18 ensemble.
 
     Applies each sub-model to its feature group, then runs the logistic
     stacker to produce a single per-row half-inning YRFI probability.
+
+    return_components=True additionally returns the per-sub-model probability
+    arrays as {name: np.ndarray} (used by diagnose_nrfi_drift for concept-drift
+    attribution). Default False preserves the original ndarray return.
     """
     sub_order = meta["stacker"]["sub_order"]
     coef      = np.array(meta["stacker"]["coef"])
@@ -179,7 +184,10 @@ def _score_v18(sub_boosters: dict, meta: dict, df: pd.DataFrame) -> np.ndarray:
 
     meta_X = np.column_stack(sub_probs)
     logit  = meta_X @ coef + intercept
-    return 1.0 / (1.0 + np.exp(-logit))
+    stacked = 1.0 / (1.0 + np.exp(-logit))
+    if return_components:
+        return stacked, {name: sub_probs[i] for i, name in enumerate(sub_order)}
+    return stacked
 
 
 def _load_calibrator_by_key(gcs_key: str):
