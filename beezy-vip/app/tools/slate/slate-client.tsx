@@ -45,7 +45,7 @@ function SystemPill({ system, edgePct }: { system: string; edgePct: number }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '5px',
       padding: '3px 8px', background: p.bg, border: p.border,
-      fontSize: '9px', fontFamily: 'JetBrains Mono, monospace',
+      fontSize: '9px', fontFamily: 'var(--font-mono), monospace',
       fontWeight: 600, letterSpacing: '0.06em',
     }}>
       <span style={{ color: p.color }}>{system}</span>
@@ -219,7 +219,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           <button
             onClick={() => void refresh()}
             disabled={refreshing}
-            style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? 'var(--steel)' : 'var(--fog)', cursor: refreshing ? 'default' : 'pointer' }}
+            style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? 'var(--steel)' : 'var(--fog)', cursor: refreshing ? 'default' : 'pointer' }}
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>

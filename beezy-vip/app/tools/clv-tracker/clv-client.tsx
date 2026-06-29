@@ -44,7 +44,7 @@ function Chip({ label, active, color, onClick }: {
 }) {
   return (
     <button onClick={onClick} style={{
-      padding: '4px 10px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
+      padding: '4px 10px', fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 400,
       border: `1px solid ${active ? (color ?? 'var(--silver)') : 'var(--basalt)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--silver)'} 16%, var(--carbon))` : 'var(--graphite)',
@@ -203,7 +203,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           />
         ))}
         {activeSystems.length > 0 && (
-          <button onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: 'var(--steel)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
+          <button onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', color: 'var(--steel)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
             clear
           </button>
         )}
@@ -221,11 +221,11 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         ) : (
           <ResponsiveContainer width="100%" height={460}>
             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--basalt)" strokeOpacity={0.6} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2b292d" strokeOpacity={0.6} />
 
               {/* Quadrant shading */}
-              <ReferenceArea x1={0} x2={xMax} y1={0} y2={yMax} fill="var(--signal)06" stroke="none" />
-              <ReferenceArea x1={xMin} x2={0} y1={yMin} y2={0} fill="var(--loss)06" stroke="none" />
+              <ReferenceArea x1={0} x2={xMax} y1={0} y2={yMax} fill="#71d08312" stroke="none" />
+              <ReferenceArea x1={xMin} x2={0} y1={yMin} y2={0} fill="#ec6a6a12" stroke="none" />
 
               <XAxis
                 dataKey="x"
@@ -233,10 +233,10 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 domain={[xMin, xMax]}
                 name="Model Edge"
                 unit="%"
-                tick={{ fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
                 tickLine={false}
-                axisLine={{ stroke: 'var(--iron)' }}
-                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                axisLine={{ stroke: '#323035' }}
+                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
               />
               <YAxis
                 dataKey="y"
@@ -244,17 +244,17 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 domain={[yMin, yMax]}
                 name="CLV"
                 unit="%"
-                tick={{ fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
                 tickLine={false}
-                axisLine={{ stroke: 'var(--iron)' }}
+                axisLine={{ stroke: '#323035' }}
                 width={52}
-                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', dx: 14 }}
+                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace', dx: 14 }}
               />
 
-              <ReferenceLine x={0} stroke="var(--iron)" strokeDasharray="4 2" />
-              <ReferenceLine y={0} stroke="var(--iron)" strokeDasharray="4 2" />
+              <ReferenceLine x={0} stroke="#323035" strokeDasharray="4 2" />
+              <ReferenceLine y={0} stroke="#323035" strokeDasharray="4 2" />
 
-              <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: 'var(--iron)' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#323035' }} />
 
               {bySystem.map(({ sys, color, points }) => (
                 <Scatter

@@ -23,7 +23,7 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
   if (!data || data.length < 2) return null
 
   const final    = data[data.length - 1].cum_pnl
-  const lineColor = final >= 0 ? 'var(--signal)' : 'var(--loss)'
+  const lineColor = final >= 0 ? '#71d083' : '#ec6a6a'
   const settled  = data.reduce((s, d) => s + (d.daily_pnl !== 0 ? 1 : 0), 0)
 
   return (
@@ -38,7 +38,7 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
       </div>
       <ResponsiveContainer width="100%" height={48}>
         <LineChart data={data} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
-          <ReferenceLine y={0} stroke="var(--iron)" strokeDasharray="2 2" />
+          <ReferenceLine y={0} stroke="#323035" strokeDasharray="2 2" />
           <Tooltip content={<CustomTooltip />} />
           <Line
             type="monotone"

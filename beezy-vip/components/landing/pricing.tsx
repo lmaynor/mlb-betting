@@ -81,7 +81,7 @@ export function PricingSection() {
                 {t.features.map(f => (
                   <li key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '11px' }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }} aria-hidden>
-                      <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" stroke="var(--signal)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" stroke="#71d083" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                     <span className="times" style={{ fontSize: '14px', color: 'var(--silver)' }}>{f}</span>
                   </li>

@@ -753,8 +753,8 @@ function Styles() {
 .edge-hero { font-size: clamp(2.4rem, 8vw, 3.4rem); font-weight: 880; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
 .edge-hero-label { font-size: 12px; color: #9aa0aa; font-weight: 600; }
 .edge-track { width: 100%; max-width: 380px; height: auto; display: block; margin: 16px 0 8px; }
-.edge-axt { fill: #9a9aa3; font-size: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
-.edge-axl { font-size: 8.5px; font-weight: 700; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.edge-axt { fill: #9a9aa3; font-size: 8px; font-family: var(--font-mono), ui-monospace, monospace; }
+.edge-axl { font-size: 8.5px; font-weight: 700; font-family: var(--font-mono), ui-monospace, monospace; }
 .edge-readout { display: flex; gap: 20px; margin-top: 6px; }
 .edge-read { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .edge-read-dot { width: 9px; height: 9px; border-radius: 2px; }
@@ -790,7 +790,7 @@ function Styles() {
 .edge-stats { display: flex; flex-wrap: wrap; margin-top: 10px; border: 1px solid var(--basalt); }
 .edge-stat { flex: 1; min-width: 64px; padding: 7px 9px; border-right: 1px solid var(--basalt); }
 .edge-stat:last-child { border-right: 0; }
-.edge-stat-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1; }
+.edge-stat-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: var(--font-mono), ui-monospace, monospace; line-height: 1; }
 .edge-stat-l { font-size: 9.5px; color: var(--fog); letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
 .edge-spark { width: 100%; max-width: 360px; height: auto; display: block; }
 .edge-spray { width: 100%; max-width: 200px; height: auto; display: block; }
@@ -805,14 +805,14 @@ function Styles() {
 .edge-velo-bar { height: 13px; background: var(--obsidian); position: relative; border: 1px solid var(--basalt); }
 .edge-velo-bar > span { position: absolute; left: 0; top: 0; bottom: 0; }
 .edge-velo-num { text-align: right; }
-.edge-velo-v { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #e8e8ee; font-weight: 700; font-size: 12px; }
+.edge-velo-v { display: block; font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #e8e8ee; font-weight: 700; font-size: 12px; }
 .edge-velo-v small { color: var(--fog); font-weight: 400; }
 .edge-velo-use { display: block; font-size: 9px; color: var(--fog); margin-top: 1px; }
 .edge-zone-wrap { display: flex; gap: 12px; align-items: flex-start; }
 .edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: var(--fog); height: 106px; }
 .edge-zone { display: grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap: 2px; }
 .edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 10px;
-  font-weight: 800; color: #0b0b0d; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+  font-weight: 800; color: #0b0b0d; font-variant-numeric: tabular-nums; font-family: var(--font-mono), monospace; }
 .edge-zone-cell.is-hot { outline: 1.5px solid var(--signal); outline-offset: -1.5px; }
 .edge-zone-x { display: flex; justify-content: space-between; font-size: 9px; color: var(--fog); margin-top: 3px; }
 .edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--silver); margin-top: 8px; }
