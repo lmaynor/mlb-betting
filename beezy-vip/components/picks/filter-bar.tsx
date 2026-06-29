@@ -5,37 +5,37 @@ import { useCallback, useState } from 'react'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
 import { SYSTEM_COLOR } from '@/lib/tokens'
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 const CHIP_BASE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: '6px',
-  padding: '5px 10px',
-  borderRadius: 0,
+  padding: '6px 11px',
+  borderRadius: 'var(--radius-pill)',
   border: B,
-  background: '#111114',
-  color: '#888890',
+  background: 'var(--graphite)',
+  color: 'var(--silver)',
   fontSize: '11px',
   fontFamily: 'var(--font-mono)',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.04em',
   cursor: 'pointer',
   whiteSpace: 'nowrap' as const,
   userSelect: 'none' as const,
   WebkitTapHighlightColor: 'transparent',
-  transition: 'color 0.1s, border-color 0.1s, background 0.1s',
+  transition: 'color var(--dur), border-color var(--dur), background var(--dur)',
 }
 
 const CHIP_ACTIVE: React.CSSProperties = {
   ...CHIP_BASE,
-  color: '#f5f5f7',
-  borderColor: '#a5b8c0',
-  background: '#131a1e',
+  color: 'var(--chalk)',
+  borderColor: 'var(--steel)',
+  background: 'var(--slate)',
 }
 
 const SYSTEM_DOTS: Record<string, string> = {
-  ALL: '#888890',
-  ...Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, SYSTEM_COLOR[system.key] ?? '#888890'])),
+  ALL: 'var(--fog)',
+  ...Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, SYSTEM_COLOR[system.key] ?? 'var(--fog)'])),
 }
 
 // Sort options shown inline in the toggle bar
@@ -107,7 +107,7 @@ export function FilterBar() {
   function row(label: string, children: React.ReactNode) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: B }}>
-        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#888890', letterSpacing: '0.08em', minWidth: '44px' }}>
+        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', minWidth: '44px' }}>
           {label}
         </span>
         {children}
@@ -116,7 +116,7 @@ export function FilterBar() {
   }
 
   return (
-    <div style={{ borderBottom: B, background: '#0a0a0c' }}>
+    <div style={{ borderBottom: B, background: 'var(--carbon)' }}>
 
       {/* Toggle bar — always visible */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 16px', flexWrap: 'wrap' }}>
@@ -127,9 +127,9 @@ export function FilterBar() {
             onClick={() => setOpen(o => !o)}
             style={{
               ...CHIP_BASE,
-              color: open ? '#f5f5f7' : '#a1a1aa',
-              borderColor: open ? '#3f3f46' : '#1f1f24',
-              background: open ? '#18181b' : '#111114',
+              color: open ? 'var(--chalk)' : 'var(--silver)',
+              borderColor: open ? 'var(--steel)' : 'var(--basalt)',
+              background: open ? 'var(--slate)' : 'var(--graphite)',
               gap: '8px',
             }}
           >
@@ -142,12 +142,12 @@ export function FilterBar() {
             {activeCount > 0 && (
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: '16px', height: '16px',
-                background: '#fcc20f', color: '#000', border: '1px solid #000',
+                width: '17px', height: '17px', borderRadius: 'var(--radius-pill)',
+                background: 'var(--signal)', color: 'var(--carbon)',
                 fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700,
               }}>{activeCount}</span>
             )}
-            <span style={{ fontSize: '9px', color: '#888890' }}>{open ? '▴' : '▾'}</span>
+            <span style={{ fontSize: '9px', color: 'var(--fog)' }}>{open ? '▴' : '▾'}</span>
           </button>
 
           {/* Active filter summary when collapsed */}
@@ -155,7 +155,7 @@ export function FilterBar() {
             <>
               {market !== 'ALL' && (
                 <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>
-                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: SYSTEM_DOTS[market] ?? '#888890', display: 'inline-block' }} />
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: SYSTEM_DOTS[market] ?? 'var(--fog)', display: 'inline-block' }} />
                   {market}
                 </span>
               )}
@@ -168,7 +168,7 @@ export function FilterBar() {
 
         {/* Right: sort buttons — always visible */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: '#888890', letterSpacing: '0.08em', marginRight: '4px' }}>SORT</span>
+          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', marginRight: '4px' }}>SORT</span>
           {SORT_OPTIONS.map(({ value, label }) => {
             const active = sort === value
             return (

@@ -10,8 +10,8 @@ export const metadata: Metadata = {
   description: 'How Beezy.FYI builds MLB betting models. Walk-forward CV, Kelly gating, 200-bet gate, and pipeline systems.',
 }
 
-const B = '1px solid #000'
-const B_INNER = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
+const B_INNER = '1px solid var(--basalt)'
 
 const PILL = SYSTEM_PILL
 
@@ -38,50 +38,50 @@ export default async function ModelsPage() {
   const stats = await apiGetStats().then(s => s.bySystem).catch(() => [])
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '36px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
       <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', marginBottom: '6px' }}>Models</h1>
-          <p className="times" style={{ fontSize: '13px', color: '#888890', maxWidth: '620px', lineHeight: 1.55 }}>
+          <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Models</h1>
+          <p className="times" style={{ fontSize: '13px', color: 'var(--fog)', maxWidth: '620px', lineHeight: 1.55 }}>
             Active systems, pipeline markets, and the validation rules behind the card.
           </p>
         </div>
-        <Link href="/results" style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        <Link href="/results" className="times" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}>
           View results
         </Link>
       </div>
 
-      <div className="models-strip" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B_INNER, marginBottom: '22px' }}>
+      <div className="models-strip" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden', marginBottom: '22px' }}>
         {[
           { label: 'Core engine', value: 'XGBoost + props sims', sub: 'Market-specific model stack' },
           { label: 'Validation', value: 'Walk-forward CV', sub: 'No future data leakage' },
           { label: 'Launch gate', value: '200 bets', sub: 'Per-system paper validation' },
         ].map((item, i) => (
           <div key={item.label} style={{ padding: '18px', borderRight: i < 2 ? B : undefined }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', marginBottom: '6px' }}>{item.label}</div>
-            <div className="mono" style={{ fontSize: '16px', fontWeight: 700, color: '#f5f5f7', marginBottom: '4px' }}>{item.value}</div>
-            <div style={{ fontSize: '11px', color: '#888890' }}>{item.sub}</div>
+            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '6px' }}>{item.label}</div>
+            <div className="mono" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ash)', marginBottom: '4px' }}>{item.value}</div>
+            <div style={{ fontSize: '11px', color: 'var(--fog)' }}>{item.sub}</div>
           </div>
         ))}
       </div>
 
-      <section style={{ padding: '18px', border: B_INNER, marginBottom: '24px', background: '#0d0d12' }}>
-        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#a1a1aa', marginBottom: '12px' }}>Training Methodology</div>
+      <section style={{ padding: '20px', border: B, borderRadius: 'var(--radius-lg)', marginBottom: '24px', background: 'var(--graphite)' }}>
+        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--silver)', marginBottom: '12px' }}>Training Methodology</div>
         {[
           'Models use walk-forward validation: trained on prior seasons and validated on the next season so the model never sees future data.',
           'A pick has to clear model probability, implied probability, edge threshold, and Kelly-positive checks before it reaches the card.',
           'Systems stay in paper mode until they clear the 200-bet gate. Results are tracked transparently before paid access opens.',
         ].map((p, i) => (
-          <p key={i} style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.7, marginBottom: i < 2 ? '10px' : 0 }}>{p}</p>
+          <p key={i} style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.7, marginBottom: i < 2 ? '10px' : 0 }}>{p}</p>
         ))}
       </section>
 
       <section style={{ marginBottom: '24px' }}>
-        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '10px' }}>Active systems</div>
-        <div className="models-table-desktop" style={{ border: B }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', background: '#111114', borderBottom: B_INNER }}>
+        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>Active systems</div>
+        <div className="models-table-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', background: 'var(--obsidian)', borderBottom: B_INNER }}>
             {['System', 'What it prices', 'Metric', 'Training', 'Detail'].map(h => (
-              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', padding: '9px 12px' }}>{h}</div>
+              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
             ))}
           </div>
           {ACTIVE_MODELS.map((model, i) => {
@@ -91,18 +91,18 @@ export default async function ModelsPage() {
             return (
               <div key={model.system} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', borderBottom: i < ACTIVE_MODELS.length - 1 ? B : undefined, alignItems: 'center' }}>
                 <div style={{ padding: '12px' }}>
-                  <span className="mono" style={{ fontSize: '9px', fontWeight: 700, padding: '3px 7px', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
-                  <div className="mono" style={{ fontSize: '9px', color: '#888890' }}>{model.version}</div>
+                  <span className="mono" style={{ fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
+                  <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{model.version}</div>
                 </div>
-                <div style={{ padding: '12px', fontSize: '12px', color: '#a1a1aa', lineHeight: 1.55 }}>{model.desc}</div>
+                <div style={{ padding: '12px', fontSize: '12px', color: 'var(--silver)', lineHeight: 1.55 }}>{model.desc}</div>
                 <div style={{ padding: '12px' }}>
-                  <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: '#f5f5f7' }}>{model.metric}</div>
-                  <div className="mono" style={{ fontSize: '8px', color: '#888890', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
-                  {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? '#b3bd95' : '#d77a7a', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}%</div>}
+                  <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ash)' }}>{model.metric}</div>
+                  <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
+                  {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}%</div>}
                 </div>
-                <div className="mono" style={{ padding: '12px', fontSize: '11px', color: '#a1a1aa' }}>{model.range}</div>
+                <div className="mono" style={{ padding: '12px', fontSize: '11px', color: 'var(--silver)' }}>{model.range}</div>
                 <div style={{ padding: '12px' }}>
-                  <Link href={model.href} style={{ fontSize: '11px', color: '#9999ff', textDecoration: 'underline', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700 }}>Detail</Link>
+                  <Link href={model.href} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none', fontWeight: 600 }}>Detail &rarr;</Link>
                 </div>
               </div>
             )
@@ -115,15 +115,15 @@ export default async function ModelsPage() {
             const pill = PILL[model.system]
             const roi = stat ? parseFloat(String(stat.roi ?? 0)) : null
             return (
-              <Link key={model.system} href={model.href} style={{ display: 'block', textDecoration: 'none', border: B, borderRadius: 'var(--radius)', background: '#0d0d12', padding: '13px', marginBottom: '10px' }}>
+              <Link key={model.system} href={model.href} style={{ display: 'block', textDecoration: 'none', border: B, borderRadius: 'var(--radius)', background: 'var(--graphite)', padding: '13px', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '9px' }}>
-                  <span className="mono" style={{ fontSize: '10px', fontWeight: 800, padding: '3px 7px', background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
-                  <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{model.metricLabel}: <strong style={{ color: '#f5f5f7' }}>{model.metric}</strong></span>
+                  <span className="mono" style={{ fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{model.metricLabel}: <strong style={{ color: 'var(--ash)' }}>{model.metric}</strong></span>
                 </div>
-                <p style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.55, marginBottom: '10px' }}>{model.desc}</p>
-                <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '10px', color: '#888890' }}>
+                <p style={{ fontSize: '12px', color: 'var(--silver)', lineHeight: 1.55, marginBottom: '10px' }}>{model.desc}</p>
+                <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '10px', color: 'var(--fog)' }}>
                   <span>{model.version} / {model.range}</span>
-                  {roi !== null && <span style={{ color: roi >= 0 ? '#b3bd95' : '#d77a7a', fontWeight: 800 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI</span>}
+                  {roi !== null && <span style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', fontWeight: 800 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI</span>}
                 </div>
               </Link>
             )
@@ -132,23 +132,23 @@ export default async function ModelsPage() {
       </section>
 
       <section style={{ marginBottom: '24px' }}>
-        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '10px' }}>Pipeline models</div>
-        <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', border: B, background: '#1f1f24' }}>
+        <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>Pipeline models</div>
+        <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--basalt)' }}>
           {PIPELINE_MODELS.map(model => {
             const pill = PILL[model.system]
             return (
-              <div key={model.system} style={{ background: '#0d0d12', padding: '14px' }}>
-                <span className="mono" style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, padding: '3px 7px', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f5f5f7', marginBottom: '5px' }}>{model.label}</div>
-                <p style={{ fontSize: '11px', color: '#888890', lineHeight: 1.5 }}>{model.note}</p>
+              <div key={model.system} style={{ background: 'var(--graphite)', padding: '14px' }}>
+                <span className="mono" style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ash)', marginBottom: '5px' }}>{model.label}</div>
+                <p style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>{model.note}</p>
               </div>
             )
           })}
         </div>
       </section>
 
-      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '10px' }}>Data sources</div>
-      <div className="sources-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', border: B }}>
+      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>Data sources</div>
+      <div className="sources-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
         {[
           { name: 'Statcast', desc: 'Pitch rows, launch angle, exit velocity, spin, and contact quality.' },
           { name: 'MLB Stats API', desc: 'Game results, innings, lineups, starters, and settlement.' },
@@ -156,8 +156,8 @@ export default async function ModelsPage() {
           { name: 'Umpire Scorecards', desc: 'Zone accuracy, K boost, and run impact by umpire.' },
         ].map((src, i) => (
           <div key={src.name} style={{ padding: '14px', borderRight: i < 3 ? B : undefined }}>
-            <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color: '#f5f5f7', marginBottom: '4px' }}>{src.name}</div>
-            <div style={{ fontSize: '11px', color: '#888890', lineHeight: 1.5 }}>{src.desc}</div>
+            <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ash)', marginBottom: '4px' }}>{src.name}</div>
+            <div style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>{src.desc}</div>
           </div>
         ))}
       </div>

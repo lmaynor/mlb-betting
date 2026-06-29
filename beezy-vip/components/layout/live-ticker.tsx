@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
+import { SYSTEM_COLOR } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
 export async function LiveTicker() {
@@ -34,31 +35,30 @@ export async function LiveTicker() {
   const doubled = [...ticks, ...ticks]
 
   return (
-    <div className="live-ticker-shell" style={{ borderBottom: '1px solid #1f1f24', background: '#111114', overflow: 'hidden', padding: '7px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
+    <div className="live-ticker-shell" style={{ borderBottom: '1px solid var(--basalt)', background: 'var(--graphite)', overflow: 'hidden', padding: '8px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
       {/* Static label -- sits in normal flow; the track scrolls in its own clipped viewport to its right */}
-      <div style={{ zIndex: 10, background: '#111114', padding: '0 12px 0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderRight: '1px solid #1f1f24' }}>
+      <div style={{ zIndex: 10, background: 'var(--graphite)', padding: '0 14px 0 20px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid var(--basalt)' }}>
         <span className="live-dot" />
-        <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', whiteSpace: 'nowrap' }}>Recent</span>
+        <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fog)', whiteSpace: 'nowrap' }}>Recent</span>
       </div>
       {/* Clipping viewport -- the animated track lives inside this, so translateX never reaches the label */}
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
         <div className="ticker-track">
           {doubled.map((t, i) => {
             const win = t.result === 'win'
-            const tone = win ? '#b3bd95' : '#d77a7a'
+            const tone = win ? 'var(--signal)' : 'var(--loss)'
+            const sysColor = SYSTEM_COLOR[t.system] ?? 'var(--silver)'
             // profit is stored in dollars at a $10 unit (1u = 1% of bankroll);
             // divide by 10 to display in units.
             const u = t.pnl / 10
             return (
-              <span key={i} className="mono" style={{ fontSize: '11px', color: '#888890', letterSpacing: '0.04em', whiteSpace: 'nowrap', padding: '0 20px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <span key={i} className="mono" style={{ fontSize: '11px', color: 'var(--silver)', letterSpacing: '0.03em', whiteSpace: 'nowrap', padding: '0 18px', display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
                 <span style={{ color: tone, fontWeight: 700 }}>{win ? 'W' : 'L'}</span>
-                <span style={{ color: '#52525b' }}>/</span>
-                <span>{t.system}</span>
-                <span style={{ color: '#52525b' }}>/</span>
+                <span style={{ color: sysColor, fontWeight: 600 }}>{t.system}</span>
+                <span style={{ color: 'var(--steel)' }}>&middot;</span>
                 <span>{t.game}</span>
-                <span style={{ color: '#52525b' }}>/</span>
-                <span style={{ color: tone }}>{u >= 0 ? '+' : ''}{u.toFixed(2)}u</span>
-                <span style={{ color: '#1f1f24', padding: '0 10px' }}>|</span>
+                <span style={{ color: tone, fontWeight: 600 }}>{u >= 0 ? '+' : ''}{u.toFixed(2)}u</span>
+                <span style={{ color: 'var(--basalt)', padding: '0 12px' }}>|</span>
               </span>
             )
           })}
@@ -67,7 +67,7 @@ export async function LiveTicker() {
       <Link
         href="/edge"
         className="mono edge-ribbon-cta"
-        style={{ zIndex: 10, background: '#111114', padding: '0 14px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #1f1f24', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fcc20f', textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
+        style={{ zIndex: 10, background: 'var(--graphite)', padding: '0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderLeft: '1px solid var(--basalt)', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--signal)', textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
       >
         The Edge <span aria-hidden>&rarr;</span>
       </Link>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 export function CheckoutButton({
   tier,
@@ -42,18 +42,20 @@ export function CheckoutButton({
         className="mono"
         style={{
           display: 'block', width: '100%', textAlign: 'center',
-          fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase',
-          padding: '12px 16px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+          fontSize: '13px', letterSpacing: '0.01em',
+          padding: '11px 16px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
           opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
-          background: featured ? '#fcc20f' : 'transparent',
-          color:      featured ? '#0a0a0c' : '#f5f5f7',
-          border:     featured ? 'none' : B,
+          borderRadius: 'var(--radius)',
+          background: featured ? 'var(--signal)' : 'var(--slate)',
+          color:      featured ? 'var(--carbon)' : 'var(--ash)',
+          border:     featured ? '1px solid var(--signal-led)' : B,
+          boxShadow:  featured ? 'var(--shadow-inset)' : 'none',
         }}
       >
         {loading ? 'Redirecting...' : label}
       </button>
       {error && (
-        <p className="mono" style={{ fontSize: '11px', color: '#d77a7a', marginTop: '8px', textAlign: 'center' }}>
+        <p className="mono" style={{ fontSize: '11px', color: 'var(--loss)', marginTop: '8px', textAlign: 'center' }}>
           {error}
         </p>
       )}

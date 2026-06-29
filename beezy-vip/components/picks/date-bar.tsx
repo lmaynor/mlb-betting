@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 function fmtDisplay(dateKey: string) {
   return formatDateKey(dateKey, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
@@ -33,19 +33,19 @@ export function DateBar() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '7px 16px', borderBottom: B, background: '#0a0a0c', gap: '10px',
+      padding: '10px 16px', borderBottom: B, background: 'var(--carbon)', gap: '10px',
     }}>
       <button onClick={() => navigate(prev)}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '4px 10px', cursor: 'pointer', border: B, background: 'transparent', color: '#888890' }}>
-        Prev
+        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 12px', borderRadius: 'var(--radius)', cursor: 'pointer', border: B, background: 'var(--graphite)', color: 'var(--silver)' }}>
+        &larr; Prev
       </button>
 <button onClick={() => navigate(todayStr)}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: isToday ? 600 : 400, padding: '4px 13px', cursor: 'pointer', border: `1px solid ${isToday ? '#a5b8c0' : '#1f1f24'}`, background: isToday ? '#131a1e' : 'transparent', color: isToday ? '#a5b8c0' : '#f5f5f7', letterSpacing: '0.04em', flex: '0 1 auto', whiteSpace: 'nowrap' }}>
-        {isToday ? `TODAY / ${fmtDisplay(current)} CT` : `${fmtDisplay(current)} CT`}
+        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: isToday ? 600 : 400, padding: '6px 14px', borderRadius: 'var(--radius)', cursor: 'pointer', border: `1px solid ${isToday ? 'var(--win-border)' : 'var(--basalt)'}`, background: isToday ? 'var(--win-wash)' : 'var(--graphite)', color: isToday ? 'var(--signal)' : 'var(--ash)', letterSpacing: '0.04em', flex: '0 1 auto', whiteSpace: 'nowrap' }}>
+        {isToday ? `TODAY · ${fmtDisplay(current)} CT` : `${fmtDisplay(current)} CT`}
       </button>
       <button onClick={() => navigate(next)} disabled={isFuture}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '4px 10px', cursor: isFuture ? 'default' : 'pointer', border: B, background: 'transparent', color: isFuture ? '#2a2a31' : '#888890' }}>
-        Next
+        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 12px', borderRadius: 'var(--radius)', cursor: isFuture ? 'default' : 'pointer', border: B, background: 'var(--graphite)', color: isFuture ? 'var(--iron)' : 'var(--silver)', opacity: isFuture ? 0.5 : 1 }}>
+        Next &rarr;
       </button>
     </div>
   )

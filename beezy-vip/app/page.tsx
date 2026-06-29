@@ -9,11 +9,9 @@ export const dynamic = 'force-dynamic'
 
 export default function HomePage() {
   return (
-    <>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
       <Suspense fallback={
-        <div className="border-b px-5 py-10" style={{ borderColor: 'var(--border)' }}>
-          <div className="h-8 w-64 animate-pulse rounded" style={{ background: 'var(--surface)' }} />
-        </div>
+        <div style={{ marginTop: '36px', height: '320px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--basalt)', background: 'var(--graphite)' }} className="reveal" />
       }>
         <Hero />
       </Suspense>
@@ -25,6 +23,6 @@ export default function HomePage() {
         <ModelsGrid />
       </Suspense>
       <DiscordFollowCTA />
-    </>
+    </div>
   )
 }

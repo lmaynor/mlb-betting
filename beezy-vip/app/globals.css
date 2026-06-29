@@ -1,14 +1,21 @@
 @import "tailwindcss";
 
+/* ===================================================================
+   beezy.fyi — Terminal design system
+   Dark near-black canvas, hairline borders, Signal Green brand accent,
+   Red Hat type trio, and a per-system color taxonomy (Discord-style).
+   Replaces the retro "Dell 1996" aesthetic site-wide.
+   =================================================================== */
+
 /* Mobile-first resets */
 *, *::before, *::after { box-sizing: border-box; }
-html { 
+html {
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
   overflow-x: hidden;
   width: 100%;
 }
-body { 
+body {
   width: 100%;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -17,226 +24,348 @@ body {
 img, video { max-width: 100%; height: auto; }
 
 :root {
-  --bg:            #0a0a0c;
-  --surface:       #111114;
-  --surface-2:     #16161a;
-  --border:        #1f1f24;
-  --border-bright: #2a2a31;
-  --accent:        #b3bd95;
-  --win:           #b3bd95;
-  --loss:          #d77a7a;
-  --warn:          #e6915d;
-  --info:          #9ab6c8;
-  --text:          #f5f5f7;
-  --muted:         #888890;
-  --sec:           #a1a1aa;
+  /* ── Neutral surface ladder (Carbon → Slate) ───────────── */
+  --carbon:        #04040b;   /* level 0 — page canvas */
+  --graphite:      #121113;   /* level 1 — cards, nav, panels */
+  --obsidian:      #1a191b;   /* level 2 — nested panels, footer, headers */
+  --slate:         #232225;   /* level 3 — inputs, hovers, button fills */
+  --basalt:        #2b292d;   /* primary hairline border */
+  --iron:          #323035;   /* stronger divider / hover border */
+  --pewter:        #3c393f;   /* raised border */
+  --steel:         #49474e;   /* muted icon strokes, emphasis border */
 
-  /* Border radius -- Dell 1996: square everything */
-  --radius-sm: 0px;
-  --radius:    0px;
-  --radius-lg: 0px;
+  /* ── Text ladder ───────────────────────────────────────── */
+  --fog:           #8a8893;   /* muted / secondary copy (lifted for AA) */
+  --silver:        #b5b2bc;   /* secondary text, labels, icon outlines */
+  --ash:           #eeeef0;   /* primary body text */
+  --chalk:         #f3f2f5;   /* headings / display */
 
-  /* Card elevation -- Dell: no soft shadows, hard borders only */
-  --shadow-card:     none;
-  --shadow-elevated: none;
+  /* ── Brand + semantic ──────────────────────────────────── */
+  --signal:        #71d083;   /* brand / primary CTA / WIN */
+  --signal-led:    #366740;   /* green border accent */
+  --moss:          #2d5736;   /* green-tinted border */
+  --forest:        #1d3a24;   /* green tinted surface */
+  --link:          #70b8ff;   /* inline links */
+  --lilac:         #baa7ff;   /* decorative violet accent */
+  --loss:          #ec6a6a;   /* LOSS / negative */
+  --warn:          #e3b261;   /* caution / lean tier / partial */
+  --push:          #8a8893;   /* push / void neutral */
 
-  /* Confidence tier colors -- Dell tints */
-  --strong: #b3bd95;
-  --lean:   #fcc20f;
-  --watch:  #a5b8c0;
+  /* Tinted semantic surfaces (derived) */
+  --win-wash:      color-mix(in oklab, var(--signal) 14%, var(--carbon));
+  --win-border:    color-mix(in oklab, var(--signal) 42%, var(--carbon));
+  --loss-wash:     color-mix(in oklab, var(--loss) 15%, var(--carbon));
+  --loss-border:   color-mix(in oklab, var(--loss) 44%, var(--carbon));
+  --warn-wash:     color-mix(in oklab, var(--warn) 14%, var(--carbon));
+  --warn-border:   color-mix(in oklab, var(--warn) 42%, var(--carbon));
 
-  /* ── Dell 1996 Design System ───────────────────────── */
-  --dell-primary:   #e91d2a;   /* Dell Red -- CTA + phone callout only */
-  --dell-yellow:    #fcc20f;   /* Sticker yellow -- BUY a DELL / NEW! */
-  --dell-purple:    #6a26a4;   /* Purple accent inside sticker chrome */
-  --dell-frame:     #000000;   /* Frame ink -- page border + hard edges */
-  --dell-link:      #0000ee;   /* Classic Netscape / Mosaic link blue */
+  /* ── Legacy aliases (kept so existing inline styles resolve) ── */
+  --bg:            var(--carbon);
+  --surface:       var(--graphite);
+  --surface-2:     var(--obsidian);
+  --border:        var(--basalt);
+  --border-bright: var(--iron);
+  --accent:        var(--signal);
+  --win:           var(--signal);
+  --info:          var(--link);
+  --text:          var(--ash);
+  --muted:         var(--fog);
+  --sec:           var(--silver);
 
-  /* Ribbon-card tint palette (catalog colors, dark-adapted) */
-  --tint-sage:      #b3bd95;   /* Latitude Notebooks */
-  --tint-salmon:    #d77a7a;   /* OptiPlex GX */
-  --tint-peach:     #e6915d;   /* Dimension + OptiPlex Gs */
-  --tint-lime:      #c0d4a7;   /* OptiPlex G Series */
-  --tint-sky:       #9ab6c8;   /* Dellware */
-  --tint-steel:     #a5b8c0;   /* Dimension XPS Pro */
-  --tint-periwinkle:#8c9ae0;   /* PowerEdge Servers */
-  --tint-olive:     #8e8a25;   /* Dimension Desktops eyebrow */
+  /* ── Confidence tiers ──────────────────────────────────── */
+  --strong: var(--signal);
+  --lean:   var(--warn);
+  --watch:  var(--silver);
 
-  /* Dark ribbon-card body fills (dark-mode adaptation) */
-  --tint-sage-bg:        #1a2218;
-  --tint-salmon-bg:      #2a1818;
-  --tint-peach-bg:       #2a1a0f;
-  --tint-lime-bg:        #141e0f;
-  --tint-sky-bg:         #131e24;
-  --tint-steel-bg:       #131a1e;
-  --tint-periwinkle-bg:  #0f1024;
-  --tint-olive-bg:       #1c1c0a;
+  /* ── Per-system identity colors (Discord-style taxonomy) ──
+     Solid = system hue (text/markers/accents).
+     Surface + border are derived per system in the [data-sys] rules. */
+  --sys-all:         #c9c6cf;   /* meta / aggregate — neutral */
+  --sys-nrfi:        #5fd0a0;   /* mint */
+  --sys-f5:          #4ea6f5;   /* azure */
+  --sys-f3:          #46c0d8;   /* cyan */
+  --sys-f1h:         #6f9cf5;   /* cornflower */
+  --sys-f7:          #8b87f2;   /* indigo */
+  --sys-game:        #e3b261;   /* gold — full game */
+  --sys-k:           #a987f0;   /* violet */
+  --sys-outs:        #ef9a52;   /* amber */
+  --sys-pitcher-er:  #ef7f6e;   /* coral */
+  --sys-hr:          #ee6fae;   /* magenta — marquee */
+  --sys-batter-k:    #c08cf0;   /* lavender */
+  --sys-batter-tb:   #a9d166;   /* lime */
+  --sys-batter-hits: #4fc7bd;   /* teal */
+
+  /* ── Radius — soft, restrained ─────────────────────────── */
+  --radius-sm:   4px;
+  --radius:      8px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-pill: 999px;
+
+  /* ── Elevation — subtle, premium (depth, not skeuomorphism) */
+  --shadow-inset:   inset 0 1px 0 rgba(255,255,255,0.05);
+  --shadow-sm:      0 1px 2px rgba(0,0,0,0.45);
+  --shadow-md:      0 6px 20px -6px rgba(0,0,0,0.55);
+  --shadow-lg:      0 18px 50px -12px rgba(0,0,0,0.65);
+  --shadow-card:    var(--shadow-sm);
+  --shadow-elevated:var(--shadow-md);
+  --glow-signal:    0 0 24px -6px color-mix(in oklab, var(--signal) 55%, transparent);
+
+  /* ── Layout rhythm ─────────────────────────────────────── */
+  --page-max: 1200px;
+  --pad-page: 24px;
+  --section-gap: 64px;
+
+  /* ── Motion ────────────────────────────────────────────── */
+  --ease-out:      cubic-bezier(.22, 1, .36, 1);
+  --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+  --dur-fast: 120ms;
+  --dur:      200ms;
+  --dur-slow: 360ms;
+
+  /* ── z-index scale ─────────────────────────────────────── */
+  --z-sticky:   40;
+  --z-nav:      50;
+  --z-bottomnav:60;
+  --z-backdrop: 70;
+  --z-modal:    80;
+  --z-toast:    90;
+  --z-tooltip:  100;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {
-  background: var(--bg);
-  color: var(--text);
-  font-family: Arial, Helvetica, system-ui, sans-serif;
+  background: var(--carbon);
+  color: var(--ash);
+  font-family: var(--font-text), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "tnum" 0;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Dell 1996 typography classes */
+body {
+  background: var(--carbon);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  letter-spacing: 0.01em;
+}
+
+/* ── Typography classes (names retained from prior system) ──────────
+   Display = Red Hat Display (tight tracking). Heading = Red Hat Text,
+   uppercase tracked labels. Body = Red Hat Text. Mono = Red Hat Mono. */
 .dell-display {
-  font-family: 'Arial Black', 'Arial Bold', Arial, Helvetica, sans-serif;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.dell-heading {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-display), var(--font-text), system-ui, sans-serif;
   font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-transform: none;
+  color: var(--chalk);
+}
+.dell-heading {
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.09em;
 }
-
 .times {
-  font-family: Georgia, 'Times New Roman', Times, serif;
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.mono {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
-/* Dell page frame -- the literal black border around the viewport */
+/* Display tracking loosens slightly at very large sizes via clamp helpers */
+.display-xl { font-size: clamp(2.5rem, 6vw, 3.75rem); letter-spacing: -0.035em; line-height: 1; }
+.display-lg { font-size: clamp(2rem, 4.5vw, 3rem);    letter-spacing: -0.03em;  line-height: 1.03; }
+
+/* ── Page container ─────────────────────────────────────────────────
+   The black "page-frame" border is gone. The shell is now full-bleed
+   Carbon with a faint ambient top wash for depth. */
 .page-frame {
-  border: 8px solid var(--dell-frame);
   min-height: 100vh;
   position: relative;
+  isolation: isolate;
+}
+.page-frame::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 420px;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(120% 100% at 50% -20%,
+      color-mix(in oklab, var(--signal) 7%, transparent) 0%,
+      transparent 60%);
 }
 
-@media (max-width: 768px) {
-  .page-frame { border-width: 4px; }
-}
-
-@media (max-width: 480px) {
-  .page-frame { border-width: 2px; }
-}
-
-/* Dell ribbon card components */
+/* ── Card components ────────────────────────────────────────────── */
 .ribbon-card-wrap {
-  border: 1px solid var(--dell-frame);
+  border: 1px solid var(--basalt);
+  border-radius: var(--radius-lg);
+  background: var(--graphite);
   overflow: hidden;
 }
-
 .ribbon-title {
-  background: var(--surface);
-  border-bottom: 1px solid var(--dell-frame);
-  padding: 6px 12px;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: 700;
+  background: var(--obsidian);
+  border-bottom: 1px solid var(--basalt);
+  padding: 9px 14px;
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-weight: 600;
   font-size: 11px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--text);
+  color: var(--silver);
 }
 
-/* Dell sticker -- yellow BUY a DELL / NEW! style */
+/* Accent chip (was the yellow Dell sticker) */
 .dell-sticker {
-  background: var(--dell-yellow);
-  color: #000;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--win-wash);
+  color: var(--signal);
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-weight: 600;
   font-size: 11px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 5px 10px;
-  border: 1px solid #000;
-  display: inline-block;
+  border: 1px solid var(--win-border);
+  border-radius: var(--radius-pill);
 }
 
-/* Dell CTA button -- primary black filled */
-.dell-btn-primary {
-  background: var(--dell-frame);
-  color: #fff;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 7px 16px;
-  border: 1px solid var(--dell-frame);
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
-
-/* Dell CTA button -- red (phone callout / primary CTA) */
+/* ── Buttons ────────────────────────────────────────────────────── */
+.btn,
+.dell-btn-primary,
 .dell-btn-red {
-  background: var(--dell-primary);
-  color: #fff;
-  font-family: Arial, Helvetica, sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 7px 16px;
-  border: 1px solid #000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--font-text), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  padding: 9px 18px;
+  border-radius: var(--radius);
   cursor: pointer;
   text-decoration: none;
-  display: inline-block;
+  border: 1px solid transparent;
+  transition: background var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out);
+}
+.dell-btn-primary,
+.dell-btn-red,
+.btn-primary {
+  background: var(--signal);
+  color: var(--carbon);
+  border-color: var(--signal-led);
+  box-shadow: var(--shadow-inset);
+}
+.dell-btn-primary:hover,
+.dell-btn-red:hover,
+.btn-primary:hover {
+  background: color-mix(in oklab, var(--signal) 88%, white);
+  box-shadow: var(--glow-signal), var(--shadow-inset);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--ash);
+  border-color: var(--basalt);
+}
+.btn-ghost:hover { border-color: var(--steel); background: var(--slate); }
+.btn-secondary {
+  background: var(--slate);
+  color: var(--ash);
+  border-color: var(--basalt);
+}
+.btn-secondary:hover { border-color: var(--steel); }
+.btn:active,
+.dell-btn-primary:active,
+.dell-btn-red:active,
+.btn-primary:active { transform: translateY(1px); }
+.btn:focus-visible,
+.dell-btn-primary:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
-body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
-
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
+/* ── Background grid (subtler) ──────────────────────────────────── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 44px 44px;
 }
 
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
+/* ── Live status dot ────────────────────────────────────────────── */
+@keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 .live-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--signal);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--signal) 70%, transparent);
   animation: pulse-dot 1.8s ease-in-out infinite;
 }
 
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-.ticker-track {
-  display: flex;
-  width: max-content;
-  animation: ticker-scroll 64s linear infinite;
-}
-
+/* ── Ticker ─────────────────────────────────────────────────────── */
+@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.ticker-track { display: flex; width: max-content; animation: ticker-scroll 64s linear infinite; }
 .ticker-track:hover { animation-play-state: paused; }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border-bright); }
+/* ── Scrollbars ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--iron); border-radius: var(--radius-pill); border: 2px solid var(--carbon); }
+::-webkit-scrollbar-thumb:hover { background: var(--pewter); }
+* { scrollbar-width: thin; scrollbar-color: var(--iron) transparent; }
 
-/* ── Desktop base grid rules ── */
-.nav-desktop    { display: flex; align-items: center; gap: 32px; }
+/* ── Entrance motion (CSS-only, runs on load; content visible by default) */
+@keyframes reveal-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.reveal { animation: reveal-up var(--dur-slow) var(--ease-out) both; }
+.reveal-2 { animation: reveal-up var(--dur-slow) var(--ease-out) both; animation-delay: 60ms; }
+.reveal-3 { animation: reveal-up var(--dur-slow) var(--ease-out) both; animation-delay: 120ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===================================================================
+   Layout helper grids (structure only — kept from prior system)
+   =================================================================== */
+.nav-desktop    { display: flex; align-items: center; gap: 28px; }
 .nav-mobile     { display: none; }
 .mobile-only    { display: none !important; }
 
-.hero-grid      { display: grid; grid-template-columns: 1fr 1fr; min-height: 480px; }
+.hero-grid      { display: grid; grid-template-columns: minmax(0,7fr) minmax(0,5fr); }
 .hero-stats     { display: grid; grid-template-columns: 1fr 1fr; }
 
-.steps-grid     { display: grid; grid-template-columns: repeat(3, 1fr); }
-.systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
-.pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-.tools-grid     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
-.footer-grid    { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; }
-.models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; }
-.results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; }
+.steps-grid     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.tools-grid     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.footer-grid    { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; }
+.models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 
+/* Seamless internal-border "strip" panels (no gap; cells share hairlines) */
 .stats-strip     { display: grid; }
 .stats-4up       { display: grid; grid-template-columns: repeat(4, 1fr); }
 .sources-grid    { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -244,70 +373,49 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
 .model-stats-5up   { display: grid; grid-template-columns: repeat(5, 1fr); }
 .model-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
-/* nav/hero/steps consolidated into comprehensive 768px block below */
-
 @media (max-width: 640px) {
   .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
-  .hero-stats  { border-top: 1px solid #1f1f24; }
+  .hero-stats  { border-top: 1px solid var(--basalt); }
 }
 
 .banner-short { display: none; }
 .banner-full  { display: inline; }
-
 @media (max-width: 600px) {
   .banner-short { display: inline; }
   .banner-full  { display: none; }
 }
 
-/* iOS: prevent auto-zoom on input focus (font-size must be >= 16px on touch) */
+/* iOS: prevent zoom on input focus; ensure ≥40px touch targets in content */
 @media (hover: none) and (pointer: coarse) {
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-  /* WCAG 2.5.5 / Apple HIG: coarse-pointer touch targets ≥ 40px.
-     Scoped to main content — excludes nav/footer buttons which live
-     inside a taller fixed container that provides adequate tap area. */
-  main button, main [role="button"] {
-    min-height: 40px;
-  }
+  input, select, textarea { font-size: 16px !important; }
+  main button, main [role="button"] { min-height: 40px; }
 }
 
 @media (max-width: 768px) {
-  body { overflow-x: clip; padding-bottom: calc(56px + env(safe-area-inset-bottom)); }
+  body { overflow-x: clip; padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 
-  /* Nav: hide desktop links, show burger */
   .nav-desktop { display: none !important; }
   .nav-mobile  { display: block !important; }
-
-  /* Bottom tab bar */
   .mobile-only { display: flex !important; }
 
-  /* Hero: force single column */
   .hero-grid  { display: block !important; }
-  .hero-left  { border-right: none !important; padding: 24px 16px !important; }
-  .hero-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; border-top: 1px solid #1f1f24; }
-  .hero-h1    { font-size: 22px !important; }
+  .hero-left  { border-right: none !important; padding: 28px 20px !important; }
+  .hero-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; border-top: 1px solid var(--basalt); }
+  .hero-h1    { font-size: 30px !important; }
 
-  /* Steps: stack */
-  .steps-grid { display: block !important; }
-  .steps-grid > div { border-right: none !important; border-bottom: 1px solid #1f1f24; }
-  .steps-grid > div:last-child { border-bottom: none; }
+  .steps-grid { grid-template-columns: 1fr !important; }
 
-  /* Systems / Models / Pricing: single column on mobile */
   .systems-grid  { grid-template-columns: 1fr !important; }
   .models-grid   { grid-template-columns: 1fr !important; }
   .pricing-grid  { grid-template-columns: 1fr !important; gap: 16px !important; }
   .tools-grid    { grid-template-columns: 1fr !important; }
   .results-grid  { grid-template-columns: 1fr !important; }
 
-  /* Footer */
-  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 20px !important; }
+  .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 22px !important; }
 
-  /* Banner */
   .banner-full  { display: none; }
   .banner-short { display: inline; }
 
-  /* Stat grids */
   .stats-strip     { grid-template-columns: 1fr 1fr !important; }
   .stats-4up       { grid-template-columns: 1fr 1fr !important; }
   .sources-grid    { grid-template-columns: 1fr 1fr !important; }
@@ -315,42 +423,36 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   .model-stats-5up { grid-template-columns: 1fr 1fr !important; }
   .model-config-grid { grid-template-columns: 1fr !important; }
 
-  .live-ticker-shell {
-    padding: 5px 0 !important;
-    max-height: 30px;
-  }
-
-  .live-ticker-shell .ticker-track {
-    animation-duration: 44s;
-  }
-
-  .live-ticker-shell span {
-    font-size: 9px !important;
-  }
+  .live-ticker-shell { padding: 6px 0 !important; max-height: 32px; }
+  .live-ticker-shell .ticker-track { animation-duration: 44s; }
+  .live-ticker-shell span { font-size: 10px !important; }
 }
 
-/* Article body */
-.article-body { color: #a1a1aa; font-size: 15px; line-height: 1.8; }
-.article-body h1, .article-body h2, .article-body h3 { color: #f5f5f7; font-weight: 600; margin: 32px 0 12px; }
-.article-body h2 { font-size: 18px; }
-.article-body h3 { font-size: 15px; }
+/* Tablet: relax the densest desktop grids before the mobile breakpoint */
+@media (max-width: 1000px) and (min-width: 769px) {
+  .steps-grid   { grid-template-columns: repeat(2, 1fr); }
+  .sources-grid { grid-template-columns: repeat(2, 1fr); }
+  .footer-grid  { grid-template-columns: 1.4fr 1fr 1fr; }
+}
+
+/* ── Article body ───────────────────────────────────────────────── */
+.article-body { color: var(--silver); font-size: 16px; line-height: 1.75; max-width: 70ch; }
+.article-body h1, .article-body h2, .article-body h3 { color: var(--chalk); font-weight: 600; margin: 36px 0 14px; letter-spacing: -0.01em; }
+.article-body h2 { font-size: 20px; }
+.article-body h3 { font-size: 16px; }
 .article-body p  { margin-bottom: 16px; }
-.article-body strong { color: #f5f5f7; }
+.article-body strong { color: var(--ash); font-weight: 600; }
 .article-body ul { padding-left: 20px; margin-bottom: 16px; }
-.article-body li { margin-bottom: 6px; }
-.article-body pre { background: #111114; border: 1px solid #1f1f24; padding: 16px; overflow-x: auto; margin-bottom: 16px; }
-.article-body code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #b3bd95; }
-.article-body a { color: #9999ff; }
-/* ── Interactive card hover -- Dell: hard border highlight, no lift ── */
-.card-hover {
-  transition: border-color .1s ease;
-}
-.card-hover:hover {
-  border-color: var(--tint-steel) !important;
-}
+.article-body li { margin-bottom: 8px; }
+.article-body pre { background: var(--graphite); border: 1px solid var(--basalt); border-radius: var(--radius); padding: 16px; overflow-x: auto; margin-bottom: 16px; }
+.article-body code { font-family: var(--font-mono), monospace; font-size: 13.5px; color: var(--signal); }
+.article-body a { color: var(--link); text-underline-offset: 3px; }
 
-/* ── Picks page: desktop table / mobile cards ──────────────────────── */
+/* ── Interactive card hover ─────────────────────────────────────── */
+.card-hover { transition: border-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.card-hover:hover { border-color: var(--steel) !important; transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
+/* ── Picks/results responsive table swaps ───────────────────────── */
 .picks-desktop { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .picks-mobile  { display: none; }
 .results-desktop { display: block; }
@@ -376,45 +478,39 @@ body { background: var(--bg); min-height: 100vh; min-height: 100dvh; overflow-x:
   .pipeline-grid { grid-template-columns: 1fr !important; }
 }
 
-/* ── Cheat-sheet desktop layout ────────────────────────────────────── */
-.cheat-sheet-layout {
-  display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  justify-content: center;
-  width: 100%;
-  max-width: 900px;
-}
-.cheat-sheet-sidebar {
-  flex: 1;
-  min-width: 0;
-  display: block;
-}
-.cheat-sheet-picks-link {
-  display: block;
-}
+/* ── Cheat-sheet layout ─────────────────────────────────────────── */
+.cheat-sheet-layout { display: flex; gap: 24px; align-items: flex-start; justify-content: center; width: 100%; max-width: 900px; }
+.cheat-sheet-sidebar { flex: 1; min-width: 0; display: block; }
+.cheat-sheet-picks-link { display: block; }
 @media (max-width: 640px) {
   .cheat-sheet-sidebar { display: none !important; }
   .cheat-sheet-layout { flex-direction: column; align-items: center; max-width: 390px; }
   .cheat-sheet-picks-link { text-align: center; }
 }
 
-/* ── Nav links: never wrap ─────────────────────────────────────────── */
+/* ── Nav links never wrap ───────────────────────────────────────── */
 .nav-desktop a { white-space: nowrap; }
 
-/* ── Active Systems: click-to-expand detail ────────────────────────── */
-.sys-expand {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows .28s cubic-bezier(.22, 1, .36, 1);
+/* ── Active Systems expand ──────────────────────────────────────── */
+.sys-expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s var(--ease-out); }
+.sys-expand[data-open="true"] { grid-template-rows: 1fr; }
+.sys-expand-inner { overflow: hidden; min-height: 0; }
+@media (prefers-reduced-motion: reduce) { .sys-expand { transition: none; } }
+
+/* ── Form controls — consistent vocabulary ──────────────────────── */
+input, select, textarea {
+  background: var(--slate);
+  border: 1px solid var(--basalt);
+  border-radius: var(--radius);
+  color: var(--ash);
+  font-family: var(--font-text), system-ui, sans-serif;
 }
-.sys-expand[data-open="true"] {
-  grid-template-rows: 1fr;
+input::placeholder, textarea::placeholder { color: var(--fog); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none;
+  border-color: var(--signal-led);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--signal) 22%, transparent);
 }
-.sys-expand-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .sys-expand { transition: none; }
-}
+::selection { background: color-mix(in oklab, var(--signal) 30%, transparent); color: var(--chalk); }
+
+a { color: inherit; }

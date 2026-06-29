@@ -2,11 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "beezy-vip",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd beezy-vip && npm run dev"],
-      "port": 3000,
-      "autoPort": false
+      "name": "beezy-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "/tmp/beezy-preview"],
+      "port": 8123
     }
   ]
 }

@@ -80,7 +80,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
   expanded: boolean
   onToggle: () => void
 }) {
-  const color = SYSTEM_COLOR[bet.system] ?? '#888890'
+  const color = SYSTEM_COLOR[bet.system] ?? 'var(--fog)'
   const isProp = PLAYER_SYSTEMS.has(bet.system) || PITCHER_SYSTEMS.has(bet.system)
   const isGame = GAME_SYSTEMS.has(bet.system)
   const edge = fmtEdge(bet.edge)
@@ -97,8 +97,8 @@ function PickCard({ bet, rank, expanded, onToggle }: {
       onClick={onToggle}
       className="card-hover"
       style={{
-        background: '#111114',
-        borderBottom: '1px solid #000',
+        background: 'var(--graphite)',
+        borderBottom: '1px solid var(--basalt)',
         borderLeft: `3px solid ${tierColor}`,
         display: 'flex',
         alignItems: 'stretch',
@@ -197,7 +197,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
         <div style={{
           fontSize: '15px',
           fontWeight: 800,
-          color: '#f5f5f7',
+          color: 'var(--ash)',
           lineHeight: 1.12,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -209,7 +209,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
 
         <div className="mono" style={{
           fontSize: '10px',
-          color: '#888890',
+          color: 'var(--fog)',
           marginBottom: (expanded && bullets.length) ? '6px' : 0,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -223,7 +223,7 @@ function PickCard({ bet, rank, expanded, onToggle }: {
             {bullets.slice(0, 3).map((b, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
                 <span style={{ color, fontSize: '9px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: '#888890', lineHeight: '14px' }}>{b}</span>
+                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', lineHeight: '14px' }}>{b}</span>
               </div>
             ))}
           </div>
@@ -255,20 +255,20 @@ function YesterdayRow({ bet }: { bet: EnrichedBet }) {
       alignItems: 'center',
       gap: '8px',
       padding: '6px 0',
-      borderBottom: '1px solid #1f1f24',
+      borderBottom: '1px solid var(--basalt)',
     }}>
       <span className="dell-heading" style={{
         fontSize: '8px',
         letterSpacing: '0.06em',
         padding: '2px 5px',
-        background: isWin ? '#b3bd9520' : '#d77a7a20',
-        color: isWin ? '#b3bd95' : '#d77a7a',
-        border: `1px solid ${isWin ? '#b3bd95' : '#d77a7a'}`,
+        background: isWin ? 'var(--signal)20' : 'var(--loss)20',
+        color: isWin ? 'var(--signal)' : 'var(--loss)',
+        border: `1px solid ${isWin ? 'var(--signal)' : 'var(--loss)'}`,
         flexShrink: 0,
       }}>
         {isWin ? 'W' : 'L'}
       </span>
-      <span className="mono" style={{ fontSize: '9px', color: '#888890', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {label}
       </span>
     </div>
@@ -335,7 +335,7 @@ export function CheatSheetClient({
 
   return (
     <div style={{
-      background: '#0a0a0c',
+      background: 'var(--carbon)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -347,9 +347,9 @@ export function CheatSheetClient({
         <div style={{
           width: '100%',
           maxWidth: '390px',
-          border: '1px solid #1f1f24',
-          background: '#0a0a0c',
-          borderRadius: 0,
+          border: '1px solid var(--basalt)',
+          background: 'var(--carbon)',
+          borderRadius: 'var(--radius)',
           overflow: 'hidden',
           flexShrink: 0,
         }}>
@@ -357,17 +357,17 @@ export function CheatSheetClient({
           <div style={{
             background: '#0f1a14',
             padding: '16px 16px 12px',
-            borderBottom: '1px solid #1f1f24',
+            borderBottom: '1px solid var(--basalt)',
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
               <div>
-                <div className="dell-display" style={{ fontSize: '22px', color: '#f5f5f7', lineHeight: 1 }}>
-                  BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
+                <div className="dell-display" style={{ fontSize: '22px', color: 'var(--ash)', lineHeight: 1 }}>
+                  BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7', lineHeight: 1.15, marginTop: '8px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>
                   MLB Daily Card
                 </div>
-                <div className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.1em', marginTop: '5px' }}>
+                <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>
                   {today}
                 </div>
               </div>
@@ -375,9 +375,9 @@ export function CheatSheetClient({
                 <div className="dell-heading" style={{
                   fontSize: '8px',
                   letterSpacing: '0.12em',
-                  color: '#fcc20f',
+                  color: 'var(--signal)',
                   padding: '4px 8px',
-                  border: '1px solid #000',
+                  border: '1px solid var(--basalt)',
                   background: '#000',
                 }}>
                   DAILY CARD
@@ -388,10 +388,10 @@ export function CheatSheetClient({
                     fontSize: '8px',
                     fontWeight: 800,
                     letterSpacing: '0.08em',
-                    color: '#f5f5f7',
-                    background: '#111114',
-                    border: '1px solid #1f1f24',
-                    borderRadius: 0,
+                    color: 'var(--ash)',
+                    background: 'var(--graphite)',
+                    border: '1px solid var(--basalt)',
+                    borderRadius: 'var(--radius)',
                     padding: '5px 9px',
                   }}
                 >
@@ -403,15 +403,15 @@ export function CheatSheetClient({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
               {filtered.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
+                  <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
                     TOP PLAY
                   </span>
-                  <span style={{ fontSize: '13px', color: '#f5f5f7', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {pickLabel(filtered[0])}
                   </span>
                 </div>
               ) : (
-                <p style={{ fontSize: '12px', color: '#888890', lineHeight: 1.45, maxWidth: '245px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.45, maxWidth: '245px' }}>
                   No card posted yet.
                 </p>
               )}
@@ -421,9 +421,9 @@ export function CheatSheetClient({
                 style={{
                   fontSize: '8px',
                   letterSpacing: '0.08em',
-                  color: allExpanded ? '#a5b8c0' : '#888890',
+                  color: allExpanded ? '#a5b8c0' : 'var(--fog)',
                   background: 'transparent',
-                  border: `1px solid ${allExpanded ? '#a5b8c0' : '#1f1f24'}`,
+                  border: `1px solid ${allExpanded ? '#a5b8c0' : 'var(--basalt)'}`,
                   padding: '4px 7px',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
@@ -443,9 +443,9 @@ export function CheatSheetClient({
                     padding: '5px 10px',
                     fontSize: '9px',
                     cursor: 'pointer',
-                    border: `1px solid ${filter === f.key ? '#a5b8c0' : '#1f1f24'}`,
+                    border: `1px solid ${filter === f.key ? '#a5b8c0' : 'var(--basalt)'}`,
                     background: filter === f.key ? '#131a1e' : 'transparent',
-                    color: filter === f.key ? '#a5b8c0' : '#888890',
+                    color: filter === f.key ? '#a5b8c0' : 'var(--fog)',
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                   }}
@@ -460,23 +460,23 @@ export function CheatSheetClient({
           {filtered.length > 0 && (
             <div style={{
               padding: '7px 16px',
-              background: '#0a0a0c',
-              borderBottom: '1px solid #1f1f24',
+              background: 'var(--carbon)',
+              borderBottom: '1px solid var(--basalt)',
               display: 'flex',
               flexWrap: 'wrap',
               gap: '10px',
               alignItems: 'center',
             }}>
-              <span className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em' }}>
+              <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
                 {filtered.length} PICKS
               </span>
               {strongCount > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: '#b3bd95', letterSpacing: '0.06em' }}>
+                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
                   {strongCount} STRONG
                 </span>
               )}
               {leanCount > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: '#fcc20f', letterSpacing: '0.06em' }}>
+                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
                   {leanCount} LEAN
                 </span>
               )}
@@ -491,15 +491,15 @@ export function CheatSheetClient({
           {/* Column header */}
           <div style={{
             display: 'flex',
-            borderBottom: '1px solid #1f1f24',
-            background: '#0a0a0c',
+            borderBottom: '1px solid var(--basalt)',
+            background: 'var(--carbon)',
             padding: '5px 0',
           }}>
             <div style={{ width: '86px', minWidth: '86px' }} />
-            <div className="mono" style={{ flex: 1, paddingLeft: '12px', fontSize: '8px', color: '#888890', letterSpacing: '0.1em' }}>
+            <div className="mono" style={{ flex: 1, paddingLeft: '12px', fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em' }}>
               PICK / TAP FOR WHY
             </div>
-            <div className="mono" style={{ minWidth: '68px', textAlign: 'center', fontSize: '8px', color: '#888890', letterSpacing: '0.1em' }}>
+            <div className="mono" style={{ minWidth: '68px', textAlign: 'center', fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em' }}>
               SCORE
             </div>
           </div>
@@ -507,19 +507,19 @@ export function CheatSheetClient({
           {/* Picks or empty state */}
           {filtered.length === 0 ? (
             <div style={{ padding: '20px 16px' }}>
-              <div className="mono" style={{ fontSize: '10px', color: '#888890', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
+              <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
                 NO {filter.toUpperCase()} PICKS YET — NEXT CARD ~11AM ET
               </div>
               {yesterdayPicks.length > 0 && (
                 <>
-                  <div className="mono" style={{ fontSize: '8px', color: '#52525b', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
+                  <div className="mono" style={{ fontSize: '8px', color: 'var(--steel)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
                     YESTERDAY&apos;S RESULTS
                   </div>
                   {yesterdayPicks.slice(0, 3).map(bet => (
                     <YesterdayRow key={bet.id} bet={bet} />
                   ))}
                   {(ydayWins > 0 || ydayLosses > 0) && (
-                    <div className="mono" style={{ fontSize: '9px', color: '#888890', textAlign: 'center', marginTop: '10px', letterSpacing: '0.06em' }}>
+                    <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', textAlign: 'center', marginTop: '10px', letterSpacing: '0.06em' }}>
                       {ydayWins}–{ydayLosses} yesterday
                     </div>
                   )}
@@ -543,8 +543,8 @@ export function CheatSheetClient({
                   padding: '8px 16px',
                   fontSize: '9px',
                   letterSpacing: '0.08em',
-                  color: '#52525b',
-                  borderTop: '1px solid #1f1f24',
+                  color: 'var(--steel)',
+                  borderTop: '1px solid var(--basalt)',
                   textAlign: 'center',
                 }}>
                   +{filtered.length - DEFAULT_LIMIT} MORE ON FULL PICKS TABLE
@@ -555,12 +555,12 @@ export function CheatSheetClient({
 
           {/* Footer */}
           <div style={{
-            borderTop: '1px solid #1f1f24',
+            borderTop: '1px solid var(--basalt)',
             padding: '11px 16px',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            background: '#0a0a0c',
+            background: 'var(--carbon)',
           }}>
             <button
               onClick={handleShare}
@@ -569,10 +569,10 @@ export function CheatSheetClient({
                 fontSize: '9px',
                 letterSpacing: '0.08em',
                 padding: '6px 12px',
-                background: '#fcc20f',
+                background: 'var(--signal)',
                 color: '#000',
-                border: '1px solid #000',
-                borderRadius: 0,
+                border: '1px solid var(--basalt)',
+                borderRadius: 'var(--radius)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
@@ -580,7 +580,7 @@ export function CheatSheetClient({
               {copied ? 'COPIED!' : 'SHARE CARD'}
             </button>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: '8px', color: '#52525b', letterSpacing: '0.08em' }}>
+            <span className="mono" style={{ fontSize: '8px', color: 'var(--steel)', letterSpacing: '0.08em' }}>
               BEEZY.FYI
             </span>
           </div>
@@ -589,35 +589,35 @@ export function CheatSheetClient({
         {/* ── Desktop sidebar ──────────────────────────────────────── */}
         <aside className="cheat-sheet-sidebar">
           <div style={{
-            border: '1px solid #1f1f24',
-            background: '#111114',
+            border: '1px solid var(--basalt)',
+            background: 'var(--graphite)',
             padding: '20px',
             marginBottom: '16px',
           }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#fcc20f', marginBottom: '12px' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--signal)', marginBottom: '12px' }}>
               WHAT IS THIS?
             </div>
-            <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65, marginBottom: '12px' }}>
+            <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65, marginBottom: '12px' }}>
               The Daily Card surfaces today&apos;s top MLB bets ranked by Beezy Score — a composite of edge, historical system accuracy, and model confidence.
             </p>
-            <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.65 }}>
+            <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65 }}>
               Cards are published each morning after the model run (~11am ET). Tap any pick to see why the model likes it.
             </p>
           </div>
 
           <div style={{
-            border: '1px solid #1f1f24',
-            background: '#111114',
+            border: '1px solid var(--basalt)',
+            background: 'var(--graphite)',
             padding: '20px',
             marginBottom: '16px',
           }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#888890', marginBottom: '12px' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '12px' }}>
               SCORE LEGEND
             </div>
             {[
-              { tier: 'strong', color: '#b3bd95', label: 'STRONG', desc: 'High edge + high confidence' },
-              { tier: 'lean',   color: '#fcc20f', label: 'LEAN',   desc: 'Positive edge, moderate confidence' },
-              { tier: 'pass',   color: '#888890', label: 'PASS',   desc: 'Listed for reference, not recommended' },
+              { tier: 'strong', color: 'var(--signal)', label: 'STRONG', desc: 'High edge + high confidence' },
+              { tier: 'lean',   color: 'var(--signal)', label: 'LEAN',   desc: 'Positive edge, moderate confidence' },
+              { tier: 'pass',   color: 'var(--fog)', label: 'PASS',   desc: 'Listed for reference, not recommended' },
             ].map(row => (
               <div key={row.tier} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                 <span className="dell-heading" style={{
@@ -631,31 +631,31 @@ export function CheatSheetClient({
                 }}>
                   {row.label}
                 </span>
-                <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{row.desc}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
               </div>
             ))}
           </div>
 
           <div style={{
-            border: '1px solid #1f1f24',
-            background: '#111114',
+            border: '1px solid var(--basalt)',
+            background: 'var(--graphite)',
             padding: '20px',
           }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#888890', marginBottom: '12px' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '12px' }}>
               SYSTEMS
             </div>
             {[
               { key: 'NRFI', color: '#9ab6c8', desc: 'No Run First Inning — game pick' },
               { key: 'F5',   color: '#e6915d', desc: 'First 5 innings ML — game pick' },
-              { key: 'HR',   color: '#d77a7a', desc: 'Home Run — batter prop' },
+              { key: 'HR',   color: 'var(--loss)', desc: 'Home Run — batter prop' },
               { key: 'K',    color: '#c0d4a7', desc: 'Strikeouts Over — pitcher prop' },
               { key: 'OUTS', color: '#a5b8c0', desc: 'Outs Recorded — pitcher prop' },
               { key: 'P.ER', color: '#8c9ae0', desc: 'Pitcher Earned Runs — pitcher prop' },
-              { key: 'HITS', color: '#b3bd95', desc: 'Batter Hits Over — batter prop' },
+              { key: 'HITS', color: 'var(--signal)', desc: 'Batter Hits Over — batter prop' },
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>
                 <span className="mono" style={{ fontSize: '9px', color: row.color, width: '36px', flexShrink: 0 }}>{row.key}</span>
-                <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{row.desc}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
               </div>
             ))}
           </div>
@@ -668,7 +668,7 @@ export function CheatSheetClient({
         style={{
           marginTop: '16px',
           fontSize: '10px',
-          color: '#888890',
+          color: 'var(--fog)',
           textDecoration: 'none',
           letterSpacing: '0.06em',
         }}

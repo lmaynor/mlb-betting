@@ -6,7 +6,6 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 
-const BORDER_HARD = '1px solid #000'
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
@@ -20,45 +19,57 @@ const NAV_LINKS = [
   { label: 'Learn',      href: '/learn' },
 ]
 
+const iconBox: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  width: '34px', height: '34px', border: '1px solid var(--basalt)',
+  borderRadius: 'var(--radius)', color: 'var(--silver)', textDecoration: 'none',
+  background: 'var(--graphite)', transition: 'border-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
+}
+
+const discordBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '7px',
+  fontFamily: 'var(--font-text), sans-serif', fontWeight: 600, fontSize: '13px',
+  padding: '8px 14px', borderRadius: 'var(--radius)', textDecoration: 'none',
+  background: 'color-mix(in oklab, #5865f2 22%, var(--carbon))',
+  color: '#c6ccff', border: '1px solid color-mix(in oklab, #5865f2 50%, var(--carbon))',
+}
+
 export function Nav() {
   const pathname  = usePathname()
   const { isSignedIn } = useUser()
 
   return (
-    <nav style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw', background: '#000', borderBottom: BORDER_HARD, overflow: 'hidden' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'stretch', height: '56px' }}>
+    <nav style={{
+      position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw',
+      background: 'color-mix(in oklab, var(--graphite) 82%, transparent)',
+      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+      borderBottom: '1px solid var(--basalt)', overflow: 'hidden',
+    }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '60px', gap: '24px' }}>
 
-        {/* Logo -- Dell display: Arial Black style */}
-        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-          {/* Logo placeholder -- replace with <img> when final mark is ready */}
-          <div style={{ width: '28px', height: '28px', border: '1px dashed #444', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '9px', fontFamily: 'Arial, Helvetica, sans-serif', letterSpacing: 0 }}>
-            ?
-          </div>
-          <span className="dell-display" style={{ fontSize: '18px', color: '#fff', letterSpacing: '0.02em', lineHeight: 1 }}>
-            BEEZY<span style={{ color: '#fcc20f' }}>.FYI</span>
+        {/* Logo */}
+        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 10px var(--signal)', flexShrink: 0 }} />
+          <span className="dell-display" style={{ fontSize: '19px', fontWeight: 800, color: 'var(--chalk)', letterSpacing: '-0.01em', lineHeight: 1 }}>
+            BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
           </span>
         </Link>
 
         {/* Desktop nav links */}
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }} className="nav-desktop">
-          {NAV_LINKS.map((l, index) => {
-            const active = pathname.startsWith(l.href)
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1 }} className="nav-desktop">
+          {NAV_LINKS.map((l) => {
+            const active = pathname === l.href || (l.href !== '/' && pathname.startsWith(l.href))
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className="dell-heading"
                 style={{
-                  fontSize: '10px',
-                  letterSpacing: '0.08em',
+                  fontSize: '13px', fontWeight: 500, letterSpacing: '0.005em',
                   textDecoration: 'none',
-                  color: active ? '#fcc20f' : '#a1a1aa',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0 16px',
-                  borderRight: index < NAV_LINKS.length - 1 ? '1px solid #1f1f24' : 'none',
-                  borderBottom: active ? '2px solid #fcc20f' : '2px solid transparent',
-                  background: active ? '#111' : 'transparent',
+                  color: active ? 'var(--signal)' : 'var(--silver)',
+                  padding: '7px 11px', borderRadius: 'var(--radius)',
+                  background: active ? 'var(--win-wash)' : 'transparent',
+                  transition: 'color var(--dur) var(--ease-out), background var(--dur) var(--ease-out)',
                 }}
               >
                 {l.label}
@@ -67,24 +78,21 @@ export function Nav() {
           })}
         </div>
 
-        {/* Desktop right: auth + social + Discord sticker */}
-        <div className="nav-desktop" style={{ gap: '8px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-          <a
-            href={X_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Follow Beezy.FYI on X"
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', border: '1px solid #333', color: '#a1a1aa', textDecoration: 'none' }}
-          >
-            <XMark size={13} color="currentColor" />
+        {/* Desktop right: social + auth + Discord */}
+        <div className="nav-desktop" style={{ gap: '10px', alignItems: 'center', flexShrink: 0 }}>
+          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.FYI on X" style={iconBox}>
+            <XMark size={14} color="currentColor" />
           </a>
 
           {isSignedIn ? (
             <>
               <Link
                 href="/dashboard"
-                className="dell-heading"
-                style={{ fontSize: '10px', letterSpacing: '0.06em', textDecoration: 'none', color: pathname.startsWith('/dashboard') ? '#fcc20f' : '#a1a1aa', padding: '4px 8px', border: '1px solid #333' }}
+                style={{
+                  fontSize: '13px', fontWeight: 600, textDecoration: 'none',
+                  color: pathname.startsWith('/dashboard') ? 'var(--signal)' : 'var(--ash)',
+                  padding: '8px 14px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
+                }}
               >
                 Dashboard
               </Link>
@@ -93,74 +101,42 @@ export function Nav() {
           ) : (
             <SignInButton mode="modal">
               <button
-                className="dell-heading"
-                style={{ fontSize: '10px', letterSpacing: '0.06em', background: 'none', border: '1px solid #333', padding: '5px 10px', color: '#a1a1aa', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{
+                  fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600,
+                  background: 'transparent', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
+                  padding: '8px 14px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
               >
                 Sign In
               </button>
             </SignInButton>
           )}
 
-          {/* Discord -- yellow sticker (BUY a DELL equivalent) */}
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '10px',
-              fontFamily: 'Arial, Helvetica, sans-serif',
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              padding: '6px 12px',
-              background: '#fcc20f',
-              color: '#000',
-              textDecoration: 'none',
-              border: '1px solid #000',
-              height: '100%',
-              alignSelf: 'stretch',
-            }}
-          >
-            <DiscordMark size={13} color="currentColor" />
-            <span>Join Discord</span>
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" style={discordBtn}>
+            <DiscordMark size={15} color="currentColor" />
+            <span>Discord</span>
           </a>
         </div>
 
         {/* Mobile: auth + social. BottomNav handles routing. */}
-        <div className="mobile-only" style={{ alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           {isSignedIn ? (
             <UserButton />
           ) : (
             <SignInButton mode="modal">
               <button
-                className="dell-heading"
-                style={{ fontSize: '10px', letterSpacing: '0.04em', background: 'none', border: '1px solid #333', padding: '4px 8px', color: '#a1a1aa', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                style={{
+                  fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600,
+                  background: 'transparent', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
+                  padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
               >
                 Sign In
               </button>
             </SignInButton>
           )}
-          <a
-            href={X_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Follow Beezy.FYI on X"
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '27px', height: '27px', border: '1px solid #333', color: '#a1a1aa', textDecoration: 'none' }}
-          >
-            <XMark size={13} color="currentColor" />
-          </a>
-          {/* Mobile Discord sticker */}
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '5px 9px', background: '#fcc20f', color: '#000', textDecoration: 'none', border: '1px solid #000' }}
-          >
-            <DiscordMark size={13} color="currentColor" />
-            Discord
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={{ ...discordBtn, padding: '7px 11px' }}>
+            <DiscordMark size={15} color="currentColor" />
           </a>
         </div>
       </div>

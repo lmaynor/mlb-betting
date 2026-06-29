@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   description: 'Odds calculator, Kelly criterion calculator, edge finder, NRFI conditions, and pitcher matchup dashboard.',
 }
 
-const B  = '1px solid #1f1f24'
-const BH = '1px solid #2a2a31'
+const B  = '1px solid var(--basalt)'
+const BH = '1px solid var(--iron)'
 
 const TOOLS = [
   { href: '/tools/clv-tracker',   title: 'CLV + Edge Tracker',           description: 'Each pick plotted by model edge vs. closing line value. Positive CLV in the top-right proves the model finds real inefficiencies.', tag: 'Pro',     keywords: 'closing line value · model edge · clv scatter' },
@@ -23,7 +23,7 @@ const TOOLS = [
 ]
 
 const TAG: Record<string, { color: string; bg: string; border: string }> = {
-  Free:    { color: '#b3bd95', bg: '#1a2218', border: '1px solid #8e9e78' },
+  Free:    { color: 'var(--signal)', bg: '#1a2218', border: '1px solid #8e9e78' },
   Partial: { color: '#e6915d', bg: '#1c1207', border: '1px solid #a05d30' },
   Pro:     { color: '#8c9ae0', bg: '#0e0718', border: '1px solid #534ab7' },
 }
@@ -32,8 +32,8 @@ export default function ToolsPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '32px' }}>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>Betting tools</h1>
-        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Free calculators. Pro dashboards for members.</p>
+        <h1 className="dell-display" style={{ fontSize: '20px', color: 'var(--ash)', marginBottom: '6px' }}>Betting tools</h1>
+        <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Free calculators. Pro dashboards for members.</p>
       </div>
 
       <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
@@ -43,16 +43,16 @@ export default function ToolsPage() {
           return (
             <Link key={tool.href} href={tool.href} style={{
               display: 'block', padding: '18px', textDecoration: 'none', position: 'relative',
-              background: '#0a0a0c',
+              background: 'var(--carbon)',
               borderRight:  col < 2 ? B : undefined,
               borderBottom: i < TOOLS.length - 3 ? B : undefined,
             }}>
               <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', color: t.color, background: t.bg, border: t.border, display: 'inline-block', marginBottom: '10px' }}>
                 {tool.tag.toUpperCase()}
               </span>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>{tool.title}</div>
-              <div style={{ fontSize: '12px', color: '#888890', lineHeight: 1.55, marginBottom: '12px' }}>{tool.description}</div>
-              <div className="mono" style={{ fontSize: '9px', color: '#2a2a31' }}>{tool.keywords}</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--ash)', marginBottom: '6px' }}>{tool.title}</div>
+              <div style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.55, marginBottom: '12px' }}>{tool.description}</div>
+              <div className="mono" style={{ fontSize: '9px', color: 'var(--iron)' }}>{tool.keywords}</div>
             </Link>
           )
         })}

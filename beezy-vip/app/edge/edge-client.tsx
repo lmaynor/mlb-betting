@@ -219,8 +219,8 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
           )
         })}
         {lineY != null && <>
-          <line x1={padL} y1={lineY} x2={W - padR} y2={lineY} stroke="#fcc20f" strokeWidth="1" strokeDasharray="3 2" />
-          <text className="edge-axt" x={padL - 4} y={lineY + 3} textAnchor="end" fill="#fcc20f"
+          <line x1={padL} y1={lineY} x2={W - padR} y2={lineY} stroke="var(--signal)" strokeWidth="1" strokeDasharray="3 2" />
+          <text className="edge-axt" x={padL - 4} y={lineY + 3} textAnchor="end" fill="var(--signal)"
             style={{ fontWeight: 700 }}>{rf.line}</text>
         </>}
         <text className="edge-axt" x={padL} y={H - 4}>{games[0].date}</text>
@@ -275,8 +275,8 @@ function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>;
 }
 
 const PITCH_COLORS: Record<string, string> = {
-  FF: '#d77a7a', SI: '#e6915d', FT: '#e6915d', FC: '#fcc20f', SL: '#8c9ae0', ST: '#c0d4a7',
-  CU: '#9ab6c8', KC: '#8e8a25', CH: '#b3bd95', FS: '#a5b8c0', SP: '#a5b8c0',
+  FF: 'var(--loss)', SI: '#e6915d', FT: '#e6915d', FC: 'var(--signal)', SL: '#8c9ae0', ST: '#c0d4a7',
+  CU: '#9ab6c8', KC: '#8e8a25', CH: 'var(--signal)', FS: '#a5b8c0', SP: '#a5b8c0',
 }
 const PITCH_NAME: Record<string, string> = {
   FF: '4-Seam', SI: 'Sinker', FT: '2-Seam', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
@@ -302,9 +302,9 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
       <Take><b>{verdict}</b> &mdash; averaging <span className="mono">{avg.toFixed(1)} mph</span> off the bat, <b>{hardPct}%</b> hit hard.</Take>
       <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity versus launch angle">
         {/* sweet-spot band + barrel zone */}
-        <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="#b3bd95" opacity="0.06" />
-        <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="#fcc20f" opacity="0.10" />
-        <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="#fcc20f"
+        <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="var(--signal)" opacity="0.06" />
+        <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="var(--signal)" opacity="0.10" />
+        <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="var(--signal)"
           style={{ fontSize: '8px', fontWeight: 800, letterSpacing: '0.04em' }}>BARRELS</text>
         {yticks.map(v => (
           <g key={v}>
@@ -328,7 +328,7 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
       </svg>
       <Chips items={[[avg.toFixed(1), 'avg EV'], [`${hardPct}%`, 'hard-hit'], [`${sweetPct}%`, 'sweet spot'], [barrels, 'barrels']]} />
       <Legend items={[{ kind: 'dot', color, label: 'hit' }, { kind: 'ring', label: 'out' },
-        { kind: 'sq', color: '#fcc20f', opacity: 0.5, label: 'barrel zone = best outcomes' }]} />
+        { kind: 'sq', color: 'var(--signal)', opacity: 0.5, label: 'barrel zone = best outcomes' }]} />
     </div>
   )
 }
@@ -687,37 +687,37 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
 function Styles() {
   return (
     <style>{`
-.edge { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; color: #f5f5f7;
+.edge { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; color: var(--ash);
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
-.edge-header { border-bottom: 1px solid #000; padding-bottom: 18px; margin-bottom: 18px; }
+.edge-header { border-bottom: 1px solid var(--basalt); padding-bottom: 18px; margin-bottom: 18px; }
 .edge-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .edge-title { font-size: clamp(1.9rem, 6vw, 3rem); font-weight: 860; letter-spacing: -0.04em;
   margin: 0; text-wrap: balance; }
 .edge-updated { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
-  letter-spacing: 0.08em; color: #b3bd95; }
+  letter-spacing: 0.08em; color: var(--signal); }
 .edge-updated-time { color: #8a8a93; font-weight: 600; letter-spacing: 0; }
-.edge-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #b3bd95;
-  box-shadow: 0 0 0 0 #b3bd9577; animation: edgepulse 2.4s ease-out infinite; }
-@keyframes edgepulse { 0% { box-shadow: 0 0 0 0 #b3bd9566; } 70% { box-shadow: 0 0 0 7px #b3bd9500; } 100% { box-shadow: 0 0 0 0 #b3bd9500; } }
+.edge-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--signal);
+  box-shadow: 0 0 0 0 var(--signal)77; animation: edgepulse 2.4s ease-out infinite; }
+@keyframes edgepulse { 0% { box-shadow: 0 0 0 0 var(--signal)66; } 70% { box-shadow: 0 0 0 7px var(--signal)00; } 100% { box-shadow: 0 0 0 0 var(--signal)00; } }
 .edge-tagline { color: #b6b6be; font-size: 14px; margin: 8px 0 0; max-width: 60ch; line-height: 1.5; }
 .edge-sports { display: flex; gap: 6px; margin-top: 16px; }
-.edge-sport { background: #111114; color: #9aa0aa; border: 1px solid #1f1f24; padding: 6px 14px;
+.edge-sport { background: var(--graphite); color: #9aa0aa; border: 1px solid var(--basalt); padding: 6px 14px;
   font-size: 12px; font-weight: 800; letter-spacing: 0.06em; cursor: pointer; transition: color .18s, border-color .18s, background .18s; }
-.edge-sport.is-active { color: #f5f5f7; border-color: #f5f5f7; background: #17171b; }
+.edge-sport.is-active { color: var(--ash); border-color: var(--ash); background: #17171b; }
 .edge-sport.is-soon { cursor: not-allowed; opacity: 0.55; display: inline-flex; align-items: center; gap: 6px; }
-.edge-soon { font-size: 8px; font-weight: 800; letter-spacing: 0.1em; color: #6f6f78; border: 1px solid #2a2a31; padding: 1px 4px; }
+.edge-soon { font-size: 8px; font-weight: 800; letter-spacing: 0.1em; color: #6f6f78; border: 1px solid var(--iron); padding: 1px 4px; }
 .edge-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
-.edge-filter { background: transparent; color: #9aa0aa; border: 1px solid #1f1f24; padding: 6px 12px;
+.edge-filter { background: transparent; color: #9aa0aa; border: 1px solid var(--basalt); padding: 6px 12px;
   font-size: 12px; font-weight: 700; cursor: pointer; transition: color .18s, border-color .18s; }
 .edge-filter:hover { color: #d8d8de; }
-.edge-filter.is-active { color: #0b0b0d; background: #f5f5f7; border-color: #f5f5f7; }
+.edge-filter.is-active { color: #0b0b0d; background: var(--ash); border-color: var(--ash); }
 .edge-filter-n { font-variant-numeric: tabular-nums; opacity: 0.6; margin-left: 2px; }
 .edge-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
 @media (min-width: 900px) { .edge-grid { grid-template-columns: minmax(320px, 0.92fr) 1.08fr; }
   .edge-panel { position: sticky; top: 16px; } }
-.edge-list { list-style: none; margin: 0; padding: 0; border: 1px solid #000; background: #0d0d10; }
+.edge-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--basalt); background: #0d0d10; }
 .edge-row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 11px 12px; text-align: left;
-  background: #111114; color: #f5f5f7; border: 0; border-bottom: 1px solid #000; cursor: pointer;
+  background: var(--graphite); color: var(--ash); border: 0; border-bottom: 1px solid var(--basalt); cursor: pointer;
   transition: background .16s ease-out, transform .16s ease-out; }
 .edge-row:last-child { border-bottom: 0; }
 .edge-row:hover { background: #17171b; }
@@ -733,10 +733,10 @@ function Styles() {
 .edge-row-sys { font-weight: 800; letter-spacing: 0.04em; }
 .edge-row-odds { font-variant-numeric: tabular-nums; color: #b6b6be; }
 .edge-row-edge { font-size: 18px; font-weight: 840; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.edge-panel { border: 1px solid #000; background: #0d0d10; min-height: 200px; animation: edgein .22s ease-out; }
+.edge-panel { border: 1px solid var(--basalt); background: #0d0d10; min-height: 200px; animation: edgein .22s ease-out; }
 @keyframes edgein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .edge-detail { padding: 18px; }
-.edge-detail-head { display: flex; gap: 14px; align-items: flex-start; padding-bottom: 16px; border-bottom: 1px solid #1f1f24; }
+.edge-detail-head { display: flex; gap: 14px; align-items: flex-start; padding-bottom: 16px; border-bottom: 1px solid var(--basalt); }
 .edge-portrait { width: 88px; height: 96px; min-width: 88px; border: 1px solid; display: flex;
   align-items: flex-end; justify-content: center; overflow: hidden; }
 .edge-portrait-img { width: 88px; height: 100px; object-fit: cover; object-position: top; }
@@ -760,15 +760,15 @@ function Styles() {
 .edge-read-dot { width: 9px; height: 9px; border-radius: 2px; }
 .edge-read-dot-market { background: #d8d8de; }
 .edge-read-k { color: #9aa0aa; }
-.edge-read-v { color: #f5f5f7; font-weight: 800; font-variant-numeric: tabular-nums; }
-.edge-meta { display: flex; gap: 26px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #1f1f24; }
+.edge-read-v { color: var(--ash); font-weight: 800; font-variant-numeric: tabular-nums; }
+.edge-meta { display: flex; gap: 26px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); }
 .edge-meta-k { display: block; font-size: 11px; color: #8a8a93; letter-spacing: 0.04em; margin-bottom: 3px; }
 .edge-meta-v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .edge-meta-dim { color: #8a8a93; font-weight: 600; }
-.edge-why { margin-top: 18px; padding-top: 16px; border-top: 1px solid #1f1f24; }
+.edge-why { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); }
 .edge-why-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #8a8a93; margin-bottom: 8px; }
 .edge-why-list { margin: 0; padding-left: 16px; color: #c4c4cc; font-size: 13px; line-height: 1.7; }
-.edge-context { margin-top: 18px; padding-top: 16px; border-top: 1px solid #1f1f24; display: flex; flex-direction: column; gap: 16px; }
+.edge-context { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); display: flex; flex-direction: column; gap: 16px; }
 .edge-context-row { display: flex; flex-wrap: wrap; gap: 28px; }
 .edge-ctx { min-width: 0; }
 .edge-ctx-wide { width: 100%; }
@@ -778,20 +778,20 @@ function Styles() {
 .edge-weather { display: flex; gap: 14px; }
 /* plain-language takeaway: every chart leads with its insight */
 .edge-take { font-size: 12.5px; line-height: 1.45; color: #d8d8de; margin: 0 0 9px; display: flex; gap: 7px; align-items: baseline; }
-.edge-take::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-top: 5px; background: #b3bd95; }
-.edge-take b { color: #f5f5f7; font-weight: 800; }
-.edge-take .mono { color: #f5f5f7; }
+.edge-take::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-top: 5px; background: var(--signal); }
+.edge-take b { color: var(--ash); font-weight: 800; }
+.edge-take .mono { color: var(--ash); }
 /* self-explaining legends + summary-stat chips */
-.edge-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 10.5px; color: #a1a1aa; }
+.edge-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 10.5px; color: var(--silver); }
 .edge-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .edge-lg-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .edge-lg-ring { width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #5a5a64; display: inline-block; }
 .edge-lg-sq { width: 9px; height: 9px; display: inline-block; }
-.edge-stats { display: flex; flex-wrap: wrap; margin-top: 10px; border: 1px solid #1f1f24; }
-.edge-stat { flex: 1; min-width: 64px; padding: 7px 9px; border-right: 1px solid #1f1f24; }
+.edge-stats { display: flex; flex-wrap: wrap; margin-top: 10px; border: 1px solid var(--basalt); }
+.edge-stat { flex: 1; min-width: 64px; padding: 7px 9px; border-right: 1px solid var(--basalt); }
 .edge-stat:last-child { border-right: 0; }
 .edge-stat-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', ui-monospace, monospace; line-height: 1; }
-.edge-stat-l { font-size: 9.5px; color: #888890; letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
+.edge-stat-l { font-size: 9.5px; color: var(--fog); letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
 .edge-spark { width: 100%; max-width: 360px; height: auto; display: block; }
 .edge-spray { width: 100%; max-width: 200px; height: auto; display: block; }
 .edge-viz { width: 100%; max-width: 340px; height: auto; display: block; }
@@ -801,39 +801,39 @@ function Styles() {
 .edge-velo-row { display: grid; grid-template-columns: 92px 1fr 76px; align-items: center; gap: 9px; font-size: 11.5px; }
 .edge-velo-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .edge-velo-name b { font-weight: 800; font-size: 11px; }
-.edge-velo-name span { color: #888890; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.edge-velo-bar { height: 13px; background: #16161a; position: relative; border: 1px solid #1f1f24; }
+.edge-velo-name span { color: var(--fog); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge-velo-bar { height: 13px; background: var(--obsidian); position: relative; border: 1px solid var(--basalt); }
 .edge-velo-bar > span { position: absolute; left: 0; top: 0; bottom: 0; }
 .edge-velo-num { text-align: right; }
 .edge-velo-v { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #e8e8ee; font-weight: 700; font-size: 12px; }
-.edge-velo-v small { color: #888890; font-weight: 400; }
-.edge-velo-use { display: block; font-size: 9px; color: #888890; margin-top: 1px; }
+.edge-velo-v small { color: var(--fog); font-weight: 400; }
+.edge-velo-use { display: block; font-size: 9px; color: var(--fog); margin-top: 1px; }
 .edge-zone-wrap { display: flex; gap: 12px; align-items: flex-start; }
-.edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: #888890; height: 106px; }
+.edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: var(--fog); height: 106px; }
 .edge-zone { display: grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap: 2px; }
 .edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 10px;
   font-weight: 800; color: #0b0b0d; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
-.edge-zone-cell.is-hot { outline: 1.5px solid #fcc20f; outline-offset: -1.5px; }
-.edge-zone-x { display: flex; justify-content: space-between; font-size: 9px; color: #888890; margin-top: 3px; }
-.edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: #a1a1aa; margin-top: 8px; }
+.edge-zone-cell.is-hot { outline: 1.5px solid var(--signal); outline-offset: -1.5px; }
+.edge-zone-x { display: flex; justify-content: space-between; font-size: 9px; color: var(--fog); margin-top: 3px; }
+.edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--silver); margin-top: 8px; }
 .edge-zone-ramp { display: inline-flex; gap: 1px; }
 .edge-zone-ramp i { width: 13px; height: 9px; display: block; }
 .edge-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
-  padding: 10px 12px; border: 1px solid #1f1f24; background: #0d0d10; }
-.edge-toggle { background: transparent; color: #9aa0aa; border: 1px solid #2a2a31; padding: 6px 12px;
+  padding: 10px 12px; border: 1px solid var(--basalt); background: #0d0d10; }
+.edge-toggle { background: transparent; color: #9aa0aa; border: 1px solid var(--iron); padding: 6px 12px;
   font-size: 12px; font-weight: 700; cursor: pointer; transition: color .16s, border-color .16s, background .16s; }
-.edge-toggle.is-on { background: #fcc20f; color: #0b0b0d; border-color: #fcc20f; }
+.edge-toggle.is-on { background: var(--signal); color: #0b0b0d; border-color: var(--signal); }
 .edge-slider { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #9aa0aa; min-width: 150px; }
-.edge-slider strong { color: #fcc20f; font-variant-numeric: tabular-nums; }
-.edge-slider input { accent-color: #fcc20f; }
+.edge-slider strong { color: var(--signal); font-variant-numeric: tabular-nums; }
+.edge-slider input { accent-color: var(--signal); }
 .edge-select { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .edge-select-k { color: #9aa0aa; }
-.edge-select select { background: #111114; color: #f5f5f7; border: 1px solid #2a2a31; padding: 5px 8px; font-size: 12px; }
+.edge-select select { background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); padding: 5px 8px; font-size: 12px; }
 .edge-clear { background: transparent; color: #8a8a93; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
-.edge-empty { border: 1px solid #000; background: #0d0d10; padding: 40px 24px; text-align: center; }
+.edge-empty { border: 1px solid var(--basalt); background: #0d0d10; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
 .edge-empty-s { color: #9aa0aa; font-size: 13px; margin: 0; }
-.edge-link { color: #b3bd95; }
+.edge-link { color: var(--signal); }
 @media (prefers-reduced-motion: reduce) {
   .edge-live-dot { animation: none; }
   .edge-panel { animation: none; }

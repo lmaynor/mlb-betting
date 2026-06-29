@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { americanToImpliedProb, formatProb, formatOdds, probToAmerican } from '@/lib/odds'
 
-const B = '1px solid #1f1f24'
-const inputStyle: React.CSSProperties = { width: '100%', background: '#111114', border: B, color: '#f5f5f7', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 0 }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888890', display: 'block', marginBottom: '6px' }
+const B = '1px solid var(--basalt)'
+const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--graphite)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '6px' }
 
 export default function EdgeFinderPage() {
   const [bookOdds, setBookOdds]   = useState('')
@@ -20,16 +20,16 @@ export default function EdgeFinderPage() {
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Tools</p>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>Edge Finder</h1>
-        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Enter the book line and your model probability. See your edge instantly.</p>
+        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools</p>
+        <h1 className="dell-display" style={{ fontSize: '20px', color: 'var(--ash)', marginBottom: '6px' }}>Edge Finder</h1>
+        <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Enter the book line and your model probability. See your edge instantly.</p>
       </div>
       <div style={{ border: B, padding: '20px', marginBottom: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
             <label style={labelStyle}>Book Line (American)</label>
             <input type="number" value={bookOdds} onChange={e => setBookOdds(e.target.value)} placeholder="-115" style={inputStyle} />
-            {impliedP && <p className="mono" style={{ fontSize: '11px', color: '#888890', marginTop: '4px' }}>Implied: {formatProb(impliedP)}</p>}
+            {impliedP && <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>Implied: {formatProb(impliedP)}</p>}
           </div>
           <div>
             <label style={labelStyle}>Model Win Prob (%)</label>
@@ -39,11 +39,11 @@ export default function EdgeFinderPage() {
       </div>
       {edge !== null && (
         <div style={{ border: B, padding: '24px', textAlign: 'center' }}>
-          <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '8px' }}>Edge</div>
-          <div className="mono" style={{ fontSize: '40px', fontWeight: 700, color: edge > 0 ? '#b3bd95' : '#d77a7a' }}>
+          <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Edge</div>
+          <div className="mono" style={{ fontSize: '40px', fontWeight: 700, color: edge > 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {edge > 0 ? '+' : ''}{edge.toFixed(1)}%
           </div>
-          <div className="times" style={{ fontSize: '12px', color: '#888890', marginTop: '8px' }}>
+          <div className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '8px' }}>
             {edge > 4 ? 'Qualifies for Kelly sizing' : edge > 0 ? 'Positive edge — below typical threshold' : 'No edge — do not bet'}
           </div>
         </div>

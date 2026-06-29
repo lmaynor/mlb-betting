@@ -1,33 +1,26 @@
 import { apiGetStats, apiGetSparklineBySystem } from '@/lib/betting-api'
 import Link from 'next/link'
+import { SYSTEM_COLOR } from '@/lib/tokens'
 import { ModelsGridClient, type SystemCard } from './models-grid-client'
 
-const B = '1px solid #000'
-const B_INNER = '1px solid #1f1f24'
-
-// Dell 1996 catalog tint mapping: each system gets its own ribbon color
-const META: Record<string, {
-  name: string
-  desc: string
-  href: string
-  tint: string   // foreground tint color
-  tintBg: string // dark ribbon body fill
-  border: string
-}> = {
-  NRFI:        { name: 'No Run First Inning',   desc: 'Starter ERA, ump K-rate, weather, and park factors combine to predict scoreless first innings.', href: '/picks/mlb/nrfi',        tint: '#b3bd95', tintBg: '#1a2218', border: '1px solid #8e9e78' },
-  HR:          { name: 'Home Run Props',         desc: 'Launch angle, exit velocity, and barrel rate vs. pitcher HR/9.',                                href: '/picks/mlb/hr',          tint: '#d77a7a', tintBg: '#2a1818', border: '1px solid #b05050' },
-  F5:          { name: 'First 5 Innings',        desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                    href: '/picks/mlb/f5',          tint: '#9ab6c8', tintBg: '#131e24', border: '1px solid #6a8fa0' },
-  K:           { name: 'Strikeout Props',         desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                 href: '/picks/mlb/k',           tint: '#8c9ae0', tintBg: '#0f1024', border: '1px solid #5c6bbc' },
-  OUTS:        { name: 'Pitcher Outs Props',     desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                           href: '/picks/mlb/outs',        tint: '#e6915d', tintBg: '#2a1a0f', border: '1px solid #c06830' },
-  GAME:        { name: 'Full Game',              desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                       href: '/picks/mlb/game',        tint: '#8e8a25', tintBg: '#1c1c0a', border: '1px solid #6a6615' },
-  F3:          { name: 'First 3 Innings',         desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',               href: '/picks/mlb/f3',          tint: '#a5b8c0', tintBg: '#131a1e', border: '1px solid #7a9aa5' },
-  F1H:         { name: 'First Half',              desc: 'Hybrid innings window before bullpen noise dominates the projection.',                         href: '/picks/mlb/f1h',         tint: '#9ab6c8', tintBg: '#131e24', border: '1px solid #6a8fa0' },
-  F7:          { name: 'First 7 Innings',         desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                         href: '/picks/mlb/f7',          tint: '#8c9ae0', tintBg: '#0f1024', border: '1px solid #5c6bbc' },
-  BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                     href: '/picks/mlb/batter-k',    tint: '#8c9ae0', tintBg: '#0f1024', border: '1px solid #5c6bbc' },
-  BATTER_TB:   { name: 'Total Bases',            desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                href: '/picks/mlb/batter-tb',   tint: '#c0d4a7', tintBg: '#141e0f', border: '1px solid #8aaa6c' },
-  BATTER_HITS: { name: 'Hits Props',             desc: 'Contact rate, expected average, platoon split, and park context for hits props.',              href: '/picks/mlb/batter-hits', tint: '#a5b8c0', tintBg: '#131a1e', border: '1px solid #7a9aa5' },
-  PITCHER_ER:  { name: 'Pitcher ER Props',       desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',            href: '/picks/mlb/pitcher-er',  tint: '#d77a7a', tintBg: '#2a1818', border: '1px solid #b05050' },
-  '1I':        { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing for home, away, or draw outcomes.',                             href: '/picks/mlb/1i',          tint: '#9ab6c8', tintBg: '#131e24', border: '1px solid #6a8fa0' },
+// Per-system metadata. Identity color comes from the shared SYSTEM_COLOR
+// taxonomy in tokens.ts; cards stay neutral (balanced color usage) with the
+// system hue carried on the badge + sparkline only.
+const META: Record<string, { name: string; desc: string; href: string }> = {
+  NRFI:        { name: 'No Run First Inning',   desc: 'Starter ERA, ump K-rate, weather, and park factors combine to predict scoreless first innings.', href: '/picks/mlb/nrfi' },
+  HR:          { name: 'Home Run Props',         desc: 'Launch angle, exit velocity, and barrel rate vs. pitcher HR/9.',                                href: '/picks/mlb/hr' },
+  F5:          { name: 'First 5 Innings',        desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                    href: '/picks/mlb/f5' },
+  K:           { name: 'Strikeout Props',         desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                 href: '/picks/mlb/k' },
+  OUTS:        { name: 'Pitcher Outs Props',     desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                           href: '/picks/mlb/outs' },
+  GAME:        { name: 'Full Game',              desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                       href: '/picks/mlb/game' },
+  F3:          { name: 'First 3 Innings',         desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',               href: '/picks/mlb/f3' },
+  F1H:         { name: 'First Half',              desc: 'Hybrid innings window before bullpen noise dominates the projection.',                         href: '/picks/mlb/f1h' },
+  F7:          { name: 'First 7 Innings',         desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                         href: '/picks/mlb/f7' },
+  BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                     href: '/picks/mlb/batter-k' },
+  BATTER_TB:   { name: 'Total Bases',            desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                href: '/picks/mlb/batter-tb' },
+  BATTER_HITS: { name: 'Hits Props',             desc: 'Contact rate, expected average, platoon split, and park context for hits props.',              href: '/picks/mlb/batter-hits' },
+  PITCHER_ER:  { name: 'Pitcher ER Props',       desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',            href: '/picks/mlb/pitcher-er' },
+  '1I':        { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing for home, away, or draw outcomes.',                             href: '/picks/mlb/1i' },
 }
 
 export async function ModelsGrid() {
@@ -48,10 +41,10 @@ export async function ModelsGrid() {
   } catch { /* API unavailable -- render empty */ }
 
   if (stats.length === 0) return (
-    <section style={{ padding: '40px 20px 32px', borderBottom: B_INNER }}>
+    <section style={{ padding: '56px 0 0' }}>
       <SectionHeader />
-      <div style={{ border: B, padding: '40px', textAlign: 'center' }}>
-        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Loading systems&hellip;</p>
+      <div style={{ border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', padding: '48px', textAlign: 'center', background: 'var(--graphite)' }}>
+        <p className="times" style={{ fontSize: '14px', color: 'var(--fog)' }}>Loading systems&hellip;</p>
       </div>
     </section>
   )
@@ -73,9 +66,7 @@ export async function ModelsGrid() {
         name: meta.name,
         desc: meta.desc,
         href: meta.href,
-        tint: meta.tint,
-        tintBg: meta.tintBg,
-        border: meta.border,
+        tint: SYSTEM_COLOR[s.system] ?? 'var(--silver)',
         win_rate: s.win_rate,
         roi: s.roi,
         total_bets: s.total_bets,
@@ -84,11 +75,8 @@ export async function ModelsGrid() {
     })
 
   return (
-    <section style={{ padding: '40px 20px 32px', borderBottom: B_INNER }}>
+    <section style={{ padding: '56px 0 0' }}>
       <SectionHeader />
-      <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '-8px', marginBottom: '14px' }}>
-        Every model we run, with its live paper record. Tap a system for the method and stats.
-      </p>
       <ModelsGridClient systems={systems} />
     </section>
   )
@@ -96,11 +84,17 @@ export async function ModelsGrid() {
 
 function SectionHeader() {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '14px', gap: '12px' }}>
-      <span className="dell-display" style={{ fontSize: '14px', color: 'var(--text)' }}>Active Systems</span>
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
+      <div>
+        <h2 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>Active systems</h2>
+        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)', marginTop: '8px' }}>
+          Every model we run, with its live paper record. Tap a system for the method and stats.
+        </p>
+      </div>
       <Link
         href="/models"
-        style={{ fontSize: '11px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700, color: '#9999ff', textDecoration: 'underline' }}
+        className="times"
+        style={{ fontSize: '14px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
       >
         Full methodology &rarr;
       </Link>

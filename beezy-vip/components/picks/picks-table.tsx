@@ -14,18 +14,19 @@ const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTE
 
 function ResultPill({ result }: { result: string | null }) {
   const cfg: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    win:  { label: 'WIN',     color: '#b3bd95', bg: '#1a2218', border: '1px solid #8e9e78' },
-    loss: { label: 'LOSS',    color: '#d77a7a', bg: '#2a1818', border: '1px solid #b05050' },
-    push: { label: 'PUSH',   color: '#a5b8c0', bg: '#131a1e', border: '1px solid #7a9aa5' },
-    void: { label: 'VOID',   color: '#888890', bg: '#0d0d11', border: '1px solid #333' },
+    win:  { label: 'WIN',  color: 'var(--signal)', bg: 'var(--win-wash)',  border: '1px solid var(--win-border)' },
+    loss: { label: 'LOSS', color: 'var(--loss)',   bg: 'var(--loss-wash)', border: '1px solid var(--loss-border)' },
+    push: { label: 'PUSH', color: 'var(--silver)', bg: 'var(--slate)',     border: '1px solid var(--iron)' },
+    void: { label: 'VOID', color: 'var(--fog)',    bg: 'var(--slate)',     border: '1px solid var(--iron)' },
   }
   const r = result?.toLowerCase() ?? ''
-  const c = cfg[r] ?? { label: 'PENDING', color: '#9ab6c8', bg: '#131e24', border: '1px solid #6a8fa0' }
+  const c = cfg[r] ?? { label: 'PENDING', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--carbon))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--carbon))' }
   return (
     <span className="dell-heading" style={{
       display: 'inline-flex',
       alignItems: 'center',
-      padding: '2px 7px',
+      padding: '3px 8px',
+      borderRadius: 'var(--radius-pill)',
       fontSize: '9px',
       letterSpacing: '0.06em',
       color: c.color,
@@ -39,12 +40,12 @@ function ResultPill({ result }: { result: string | null }) {
 
 function PnL({ profit, result }: { profit: number | null; result: string | null }) {
   if (profit === null || result === null || result === 'pending') {
-    return <span className="mono" style={{ color: '#888890', fontSize: '12px' }}>--</span>
+    return <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>--</span>
   }
   const units = (profit / 10).toFixed(1)
   const pos = profit >= 0
   return (
-    <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: pos ? '#b3bd95' : '#d77a7a' }}>
+    <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{units}u
     </span>
   )
@@ -57,15 +58,16 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', gap: '2px' }}>
-      <span className="mono" style={{ fontSize: '16px', fontWeight: 850, color, lineHeight: 1 }}>
+      <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>
       <span className="dell-heading" style={{
         fontSize: '7px',
         letterSpacing: '0.08em',
-        padding: '1px 4px',
+        padding: '2px 5px',
+        borderRadius: 'var(--radius-pill)',
         border: `1px solid ${color}`,
-        background: `${color}18`,
+        background: `color-mix(in oklab, ${color} 14%, var(--carbon))`,
         color,
         whiteSpace: 'nowrap',
       }}>
@@ -139,11 +141,10 @@ function TableRow({ bet }: { bet: Bet }) {
       display: 'grid',
       gridTemplateColumns: TABLE_GRID,
       alignItems: 'center',
-      borderBottom: B,
+      borderBottom: '1px solid #201f22',
       minWidth: TABLE_MIN_WIDTH,
-      background: '#0d0d11',
     }}>
-      <div className="mono" style={{ padding: '11px 10px', fontSize: '11px', color: '#888890' }}>
+      <div className="mono" style={{ padding: '11px 10px', fontSize: '11px', color: 'var(--fog)' }}>
         {fmtDate(bet.game_date)}
       </div>
 
@@ -155,7 +156,8 @@ function TableRow({ bet }: { bet: Bet }) {
         <span className="dell-heading" style={{
           display: 'inline-flex',
           maxWidth: '96px',
-          padding: '2px 7px',
+          padding: '3px 8px',
+          borderRadius: 'var(--radius-pill)',
           fontSize: '9px',
           letterSpacing: '0.06em',
           color: pill.color,
@@ -169,22 +171,22 @@ function TableRow({ bet }: { bet: Bet }) {
         </span>
       </div>
 
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', color: '#a1a1aa' }}>
+      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', color: 'var(--silver)' }}>
         {awayAbbr} @ {homeAbbr}
       </div>
 
       <div style={{ padding: '10px 6px', minWidth: 0 }}>
         {hasProp && bet.player ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-            <span style={{ fontSize: '12px', fontWeight: 750, color: '#f5f5f7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '10px', color: '#a1a1aa', lineHeight: 1.4 }}>
+            <span style={{ fontSize: '12px', fontWeight: 750, color: 'var(--ash)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bet.player}</span>
+            <span className="mono" style={{ fontSize: '10px', color: 'var(--silver)', lineHeight: 1.4 }}>
               {description}
             </span>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-            <span style={{ fontSize: '12px', color: '#f5f5f7', fontWeight: 650 }}>{label}</span>
-            {description && <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{description}</span>}
+            <span style={{ fontSize: '12px', color: 'var(--ash)', fontWeight: 650 }}>{label}</span>
+            {description && <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{description}</span>}
           </div>
         )}
         {notes.length > 0 && (
@@ -192,20 +194,20 @@ function TableRow({ bet }: { bet: Bet }) {
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
                 <span style={{ color: pill.color, fontSize: '8px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: '#888890', lineHeight: '14px' }}>{n}</span>
+                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', lineHeight: '14px' }}>{n}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', fontWeight: 700, color: '#f5f5f7' }}>
+      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', fontWeight: 700, color: 'var(--ash)' }}>
         {fmtOdds(bet.odds)}
       </div>
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', fontWeight: 700, color: '#c0d4a7' }}>
+      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', fontWeight: 700, color: 'var(--signal)' }}>
         {fmtEdge(bet.edge)}
       </div>
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', color: '#a1a1aa', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', color: 'var(--silver)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {bet.book ?? '--'}
       </div>
       <div style={{ padding: '10px 6px' }}><ResultPill result={bet.result} /></div>
@@ -228,18 +230,20 @@ function BetCard({ bet }: { bet: Bet }) {
 
   return (
     <div className="card-hover" style={{
-      background: '#0d0d12',
-      border: '1px solid #000',
-      borderLeft: `3px solid ${tierColor}`,
-      padding: '12px 14px',
+      background: 'var(--graphite)',
+      border: '1px solid var(--basalt)',
+      borderRadius: 'var(--radius-lg)',
+      overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px',
     }}>
+      <div style={{ height: '3px', background: tierColor, opacity: 0.85 }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           <span className="dell-heading" style={{
-            padding: '2px 7px',
+            padding: '3px 8px',
+            borderRadius: 'var(--radius-pill)',
             fontSize: '9px',
             letterSpacing: '0.06em',
             color: pill.color,
@@ -248,35 +252,35 @@ function BetCard({ bet }: { bet: Bet }) {
           }}>
             {systemDisplay(bet.system)}
           </span>
-          <span className="mono" style={{ fontSize: '11px', color: '#888890' }}>{fmtDate(bet.game_date)}</span>
+          <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{fmtDate(bet.game_date)}</span>
         </div>
         <CompactScore bet={bet} align="center" />
       </div>
 
-      <div className="mono" style={{ fontSize: '13px', color: '#a1a1aa' }}>
+      <div className="mono" style={{ fontSize: '13px', color: 'var(--silver)' }}>
         {awayAbbr} @ {homeAbbr}
       </div>
 
       <div>
         {hasProp && bet.player ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#f5f5f7' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.45 }}>
+            <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)' }}>{bet.player}</span>
+            <span className="mono" style={{ fontSize: '12px', color: 'var(--silver)', lineHeight: 1.45 }}>
               {description}
             </span>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '15px', fontWeight: 750, color: '#f5f5f7' }}>{label}</span>
-            {description && <span className="mono" style={{ fontSize: '12px', color: '#888890' }}>{description}</span>}
+            <span style={{ fontSize: '15px', fontWeight: 750, color: 'var(--ash)' }}>{label}</span>
+            {description && <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{description}</span>}
           </div>
         )}
         {notes.length > 0 && (
           <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {notes.slice(0, 2).map((n, i) => (
-              <div key={i} style={{ display: 'flex', gap: '4px' }}>
-                <span style={{ color: pill.color, fontSize: '8px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: '#797991' }}>{n}</span>
+              <div key={i} style={{ display: 'flex', gap: '6px' }}>
+                <span style={{ color: pill.color, fontSize: '9px', flexShrink: 0 }}>&middot;</span>
+                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{n}</span>
               </div>
             ))}
           </div>
@@ -286,16 +290,17 @@ function BetCard({ bet }: { bet: Bet }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '8px', alignItems: 'end' }}>
         {[
           { label: 'ODDS', value: fmtOdds(bet.odds), strong: true },
-          { label: 'EDGE', value: fmtEdge(bet.edge), strong: true, color: '#c0d4a7' },
+          { label: 'EDGE', value: fmtEdge(bet.edge), strong: true, color: 'var(--signal)' },
           { label: 'BOOK', value: bet.book ?? '--' },
         ].map(({ label: l, value, strong, color }) => (
           <div key={l}>
-            <div className="mono" style={{ fontSize: '9px', color: '#888890', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
-            <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? '#f5f5f7' : '#a1a1aa'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
+            <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--ash)' : 'var(--silver)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
           </div>
         ))}
         <div><ResultPill result={bet.result} /></div>
         <div><PnL profit={bet.profit ?? null} result={bet.result} /></div>
+      </div>
       </div>
     </div>
   )
@@ -338,7 +343,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
 
   if (total === 0) {
     return (
-      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#888890', fontFamily: 'var(--font-mono)', fontSize: '12px', border: B, borderRadius: 'var(--radius)' }}>
+      <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--fog)', fontFamily: 'var(--font-mono)', fontSize: '12px', border: B, borderRadius: 'var(--radius)' }}>
         No picks match the selected filters.
       </div>
     )
@@ -362,14 +367,14 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
 
   return (
     <>
-      <div className="picks-desktop" style={{ border: B, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-card)', background: '#0a0a0c' }}>
+      <div className="picks-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', background: 'var(--graphite)', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <div style={{
             display: 'grid',
             gridTemplateColumns: TABLE_GRID,
             borderBottom: B,
             minWidth: TABLE_MIN_WIDTH,
-            background: '#111114',
+            background: 'var(--obsidian)',
           }}>
             {COLS.map(c => c.sortKey ? (
               <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
@@ -377,7 +382,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
                 fontSize: '9px',
                 fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.1em',
-                color: sortKey === c.sortKey ? '#f5f5f7' : '#888890',
+                color: sortKey === c.sortKey ? 'var(--ash)' : 'var(--fog)',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -386,7 +391,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
                 {c.label}{sortIndicator(c.sortKey)}
               </button>
             ) : (
-              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '9px', letterSpacing: '0.1em', color: '#888890' }}>{c.label}</div>
+              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)' }}>{c.label}</div>
             ))}
           </div>
           {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}
@@ -403,15 +408,15 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 2px', borderTop: B, marginTop: '12px' }}>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             className="mono"
-            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, borderRadius: 0, background: 'transparent', color: page === 0 ? '#2a2a31' : '#888890' }}>
+            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: page === 0 ? 'var(--iron)' : 'var(--fog)' }}>
             Prev
           </button>
-          <span className="mono" style={{ fontSize: '11px', color: '#888890' }}>
+          <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
             {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page === pages - 1}
             className="mono"
-            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === pages - 1 ? 'default' : 'pointer', border: B, borderRadius: 0, background: 'transparent', color: page === pages - 1 ? '#2a2a31' : '#888890' }}>
+            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === pages - 1 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: page === pages - 1 ? 'var(--iron)' : 'var(--fog)' }}>
             Next
           </button>
         </div>

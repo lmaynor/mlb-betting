@@ -9,13 +9,13 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
   const edgePct   = ((modelProb - marketProb) * 100).toFixed(1)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' }}>
-      <div style={{ position: 'relative', height: '6px', background: '#1f1f24', borderRadius: '3px', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: '6px', background: 'var(--basalt)', borderRadius: '3px', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: '#9ab6c840' }} />
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: '#b3bd95' }} />
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: 'var(--signal)' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'monospace', fontSize: '10px' }}>
-        <span style={{ color: '#b3bd95' }}>{modelPct}% model</span>
-        <span style={{ color: '#888890' }}>{marketPct}% implied</span>
+        <span style={{ color: 'var(--signal)' }}>{modelPct}% model</span>
+        <span style={{ color: 'var(--fog)' }}>{marketPct}% implied</span>
         <span style={{ color: '#c0d4a7', fontWeight: 700 }}>+{edgePct}%</span>
       </div>
     </div>
