@@ -67,6 +67,18 @@ leak: 0-5% +14.8% (n=146), **5-10% -9.6% (n=348)**, 10-15% +14.7% (n=147), 15-20
 it (non-monotonic cuts can overfit), but on 2 seasons it is a strong signal that the
 mid-confidence range is miscalibrated while the tails are excellent.
 
+VALIDATED (2026-06-29, validate_skip_band.py): fit the band on 2024-08-20..2026
+(431 bets), test on 2026 (448 bets). The 5-10% band is negative on BOTH splits
+(-14.4% fit / -4.1% test). On the TEST split, skipping it improves OOS ROI
+monotonically across cut widths -- bet-all +7.5% (t=1.64) -> skip[5,10) +13.9%
+(t=2.43) -> skip[5,12) +15.6% (t=2.54) -> skip[5,15) +19.2% (t=2.85). Monotone
+agreement across widths is the opposite of an overfit knife-edge. CONCLUSION: adopt
+**skip[5,12)** -- bet edges in [3%,5%) and [>=12%). Do NOT extend to skip[5,15): the
+10-15% bucket is UNSTABLE (+32% fit vs +0.2% test), so cutting it overfits 2026's
+shape. NRFI is positive even with no skip (+7.5%), so the band is an
+efficiency/significance enhancement, not load-bearing. (Bucket-level 2026 ROIs are
+noisy at n~50-160; the aggregate strategy t-stats carry the result.)
+
 ### 6. Line shopping is real money
 Best-of-book vs consensus is worth ~+4.6% (YRFI) / +3.2% (NRFI) on the full sample
 (~+6.3% / +3.0% in 2026), available in ~80-92% of games -- roughly half the ~6.5%
@@ -99,8 +111,9 @@ PYTHONPATH=. python3 -m mlb.analysis.nrfi_market --odds yrfi_master_2026.csv \
 2. **Bet rule guardrails** (data-supported, both reduce the known weak spot):
    - **Line-shop the best onshore book** (already the runner's `_best_book_odds_int`
      behavior) -- worth ~3-4 pts.
-   - **Skip the 5-12% edge band** -- it is the only negative bucket across 2 seasons.
-     Bet edges in [3%, 5%) and [>=10%]. (Confirm boundary on a 2024-25 vs 2026 split.)
+   - **Skip the 5-12% edge band** (VALIDATED OOS, see s5) -- bet edges in [3%,5%)
+     and [>=12%]. Do NOT extend the skip to 15%; the 10-15% bucket is unstable
+     across periods and cutting it overfits 2026.
 3. **Stage as paper/log-only against the 200-bet gate** (CONTEXT s6), watching the
    tightened T17 criteria: mean CLV >= +2% (t > 2) over >=100 bets; hit rate within
    3 pts of avg model prob in the BETTABLE buckets; PSI < 0.25. The holdout already
@@ -111,8 +124,8 @@ PYTHONPATH=. python3 -m mlb.analysis.nrfi_market --odds yrfi_master_2026.csv \
    path confusion, settlement), not the model.
 
 ## Open / next
-- Confirm the 5-12% skip-band boundary on an explicit 2024-25 vs 2026 split (guard
-  against overfitting the bucket edges).
+- [DONE 2026-06-29] Confirmed the skip-band on a 2024-25 vs 2026 split
+  (validate_skip_band.py): skip[5,12) generalizes; do not extend to 15%.
 - Wire the bettable-slate / edge-bucket view into `monitor_performance.py` so NRFI
   (and other tail-selective systems) are gated on bettable ROI, not global AUC.
 - This overturns roadmap_2026-06-28 section 1's "NRFI not salvageable" conclusion --
