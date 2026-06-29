@@ -1,19 +1,23 @@
 """
 mlb.analysis.parlayapi_to_history -- ParlayAPI capture -> odds_history (roadmap P0.2/P0.3).
 
-Forward odds feed: reads the ParlayAPI snapshots banked by the accumulator
-(OddsAccum/baseball_mlb/raw/{date}/props_*.json) and normalizes them into the
-SAME odds_history Parquet schema/partitions as the BettingPros loader, tagged
-source="parlayapi". BettingPros = historical; ParlayAPI = current/future.
+FORWARD-ONLY feed: ParlayAPI serves ~7 days of history, so this is NOT a deep
+historical backfill -- it normalizes the recently-banked ParlayAPI snapshots
+(OddsAccum/baseball_mlb/raw/{date}/props_*.json) into the SAME odds_history
+Parquet schema/partitions as the BettingPros loader, tagged source="parlayapi".
+Run it on the recent window only, going forward as the snapshot/accumulator
+banks data. DEEP HISTORICAL odds_history comes from BettingPros
+(mlb.analysis.bettingpros_to_parquet); SGO is the live inning-market fallback,
+not an odds_history source.
 
 Reuses: nba.odds.parlay_extract.flatten_parlay_props (raw -> per book/player/
 line rows), mlb_core.odds.utils (devig/decimal/implied), mlb_core.data.id_resolver
 (game_pk/player_id), mlb_core.odds.dk_scraper.resolve_team, and
 mlb.analysis.odds_history.write_partition/coverage_report.
 
-Run (Cloud Shell / Cloud Run; needs GCS + pyarrow):
+Run (Cloud Shell / Cloud Run; needs GCS + pyarrow) -- recent window only:
   PYTHONPATH=. python3 -m mlb.analysis.parlayapi_to_history \
-      --since 2026-06-01 --until 2026-06-29 --ingested-at "2026-06-29T00:00:00Z"
+      --since 2026-06-25 --ingested-at "2026-06-29T00:00:00Z"   # last few days
 """
 
 from __future__ import annotations
