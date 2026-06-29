@@ -1,33 +1,20 @@
 """
-bettingpros_api.py
-==================
-API-based BettingPros MLB odds backfill across many markets.
+bettingpros_api.py -- local CLI for the BettingPros multi-market backfill.
 
-Generalizes scripts/bettingpros_hr_api.py (HR-only) to all player O/U props,
-game lines, and inning markets. Hits the BettingPros public JSON API directly
-(events -> offers, paginated) -- no Selenium, no virtualized-scroll problem.
-
-Market shapes (verified 2026-06-28 / 2024-05-01)
-------------------------------------------------
-  player_ou   1 offer per player; selections over/under.       -> Player rows
-  moneyline   1 offer per game; 2 team selections, no line.    -> Away/Home odds
-  spread      1 offer per game; 2 team selections w/ +/- line. -> Away/Home odds+line
-  total       1 offer per game; selections over/under.         -> game total
-  team_total  1 offer per team (2/game); selections over/under.-> per-team total
-  yesno       1 offer per game; selections yes/no.             -> Yes/No odds
-
-Each market writes its own CSV (different schema per kind) under --output-dir.
-`Consensus` is the market-wide consensus (best historical signal); `Open` and
-`Best Odds` are also captured. See bettingpros_hr_api.py header for the book/
-location notes (major books appear only on settled dates, not same-day).
+Thin wrapper over mlb_core.odds.bettingpros (the shared API client + parsers).
+Writes one CSV per market to a local --output-dir. For the server-side
+unattended version that writes to GCS, see mlb.runners.backfill_bettingpros
+(Cloud Run Job) -- both share the same parsing core so they never drift.
 
 Usage
 -----
   python scripts/bettingpros_api.py markets
   python scripts/bettingpros_api.py daily 2024-05-01 --markets all
-  python scripts/bettingpros_api.py backfill --start 2024-04-01 --end 2026-06-28 \
+  python scripts/bettingpros_api.py backfill --start 2024-04-01 --end 2026-06-29 \
       --markets player,lines,innings
   # market groups: player | lines | innings | all   (or explicit ids: 299,285)
+
+Run from Cloud Shell -- local network egress to api.bettingpros.com is blocked.
 """
 
 from __future__ import annotations
@@ -37,385 +24,19 @@ import csv
 import random
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date
 from pathlib import Path
 
-try:
-    import requests
-except ImportError as exc:  # pragma: no cover - runtime guard
-    raise SystemExit("Missing dependency: requests. pip install requests") from exc
+# Make mlb_core importable when run as `python scripts/bettingpros_api.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from mlb_core.odds import bettingpros as bp  # noqa: E402
 
-API_BASE = "https://api.bettingpros.com/v3"
-API_KEY = "CHi8Hy5CEE4khd46XNYL23dCFX96oUdw6qOt1Dnh"
 DEFAULT_OUTPUT_DIR = Path("data/bettingpros")
 
-# market_id -> (csv_name, kind). Verified against /v3/markets 2026-06-28.
-MARKETS = {
-    # --- player O/U props (same shape as HR) ---
-    299: ("home_runs", "player_ou"),
-    287: ("hits", "player_ou"),
-    288: ("runs", "player_ou"),
-    289: ("rbi", "player_ou"),
-    403: ("hits_runs_rbis", "player_ou"),
-    295: ("singles", "player_ou"),
-    291: ("doubles", "player_ou"),
-    292: ("triples", "player_ou"),
-    293: ("total_bases", "player_ou"),
-    294: ("steals", "player_ou"),
-    285: ("strikeouts", "player_ou"),
-    290: ("earned_runs", "player_ou"),
-    404: ("hits_allowed", "player_ou"),
-    408: ("walks_allowed", "player_ou"),
-    405: ("outs_recorded", "player_ou"),
-    # --- game lines ---
-    122: ("moneyline", "moneyline"),
-    176: ("run_line", "spread"),
-    175: ("total_runs", "total"),
-    # --- inning markets ---
-    278: ("1st_inning_moneyline", "moneyline"),
-    279: ("5th_inning_moneyline", "moneyline"),
-    280: ("1st_inning_runs", "total"),
-    281: ("5th_inning_runs", "total"),
-    402: ("2nd_inning_runs", "total"),
-    282: ("1st_inning_spread", "spread"),
-    283: ("5th_inning_spread", "spread"),
-    277: ("team_total_runs", "team_total"),
-    407: ("fifth_inning_team_runs", "team_total"),
-    286: ("first_to_score", "moneyline"),
-    369: ("run_in_1st_inning", "yesno"),
-}
-
-GROUPS = {
-    "player": [m for m, (_, k) in MARKETS.items() if k == "player_ou"],
-    "lines": [122, 176, 175],
-    "innings": [278, 279, 280, 281, 402, 282, 283, 277, 407, 286, 369],
-}
-GROUPS["all"] = GROUPS["player"] + GROUPS["lines"] + GROUPS["innings"]
-
-# /v3/books 2026-06-28. Books outside this map (offshore/DFS) are dropped to
-# keep schemas stable. ESPNBet rebranded to theScore Bet (33).
-BOOK_ID_TO_NAME = {
-    0: "Consensus", 12: "DraftKings", 10: "FanDuel", 24: "bet365", 19: "BetMGM",
-    13: "Caesars", 49: "Hard Rock Bet", 33: "theScore Bet", 14: "Fanatics",
-    39: "Fliff", 18: "BetRivers", 15: "SugarHouse", 27: "PartyCasino", 71: "PointsBet",
-}
-
-FIXED_BOOK_COLUMNS = [
-    "Open", "Best Odds", "Consensus", "bet365", "DraftKings", "BetMGM",
-    "FanDuel", "theScore Bet", "BetRivers", "SugarHouse", "PartyCasino",
-    "Fliff", "Caesars", "PointsBet", "Hard Rock Bet", "ESPNBet", "Fanatics",
-]
-
-MLB_SEASON_RANGES = {
-    2024: ("2024-03-20", "2024-11-03"),
-    2025: ("2025-03-20", "2025-11-03"),
-    2026: ("2026-03-20", "2026-11-03"),
-    2027: ("2027-03-20", "2027-11-03"),
-}
-
-
-# -----------------------------------------------------------------------------
-# HTTP
-# -----------------------------------------------------------------------------
-
-def _session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "x-api-key": API_KEY,
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Origin": "https://www.bettingpros.com",
-        "Referer": "https://www.bettingpros.com/mlb/odds/",
-        "Accept": "application/json",
-    })
-    return s
-
-
-def _get(sess: requests.Session, path: str, params: dict) -> dict:
-    url = f"{API_BASE}/{path}"
-    for attempt in range(4):
-        resp = sess.get(url, params=params, timeout=30)
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code in (429, 500, 502, 503, 504):
-            time.sleep(2 * (attempt + 1))
-            continue
-        raise RuntimeError(f"{resp.status_code} {url} params={params}: {resp.text[:200]}")
-    raise RuntimeError(f"giving up after retries: {url} params={params}")
-
-
-def list_markets() -> None:
-    sess = _session()
-    data = _get(sess, "markets", {"sport": "MLB"})
-    by_id = {m.get("id"): (m.get("meta") or {}) for m in (data.get("markets") or [])}
-    print(f"{len(by_id)} MLB markets ({len(MARKETS)} wired):")
-    for mid, (name, kind) in MARKETS.items():
-        label = (by_id.get(mid) or {}).get("short_label", "?")
-        print(f"  {mid:>4}  {kind:<11} {name:<24} ({label})")
-
-
-def fetch_events(sess: requests.Session, target_date: str) -> dict[int, dict]:
-    """{event_id: {away, home, matchup}} -- offers join here for team info."""
-    data = _get(sess, "events", {"sport": "MLB", "date": target_date})
-    out: dict[int, dict] = {}
-    for e in data.get("events") or []:
-        eid = e.get("id")
-        if eid is None:
-            continue
-        home = e.get("home") or ""
-        abbrs = []
-        for part in e.get("participants") or []:
-            ab = (part.get("team") or {}).get("abbreviation") or part.get("id") or ""
-            if ab:
-                abbrs.append(ab)
-        away = next((a for a in abbrs if a != home), e.get("visitor") or "")
-        if not home and len(abbrs) == 2:
-            home = abbrs[0]
-        matchup = f"{away} at {home}" if away and home else (e.get("event_name") or "")
-        out[eid] = {"away": away, "home": home, "matchup": matchup}
-    return out
-
-
-def fetch_offers(sess: requests.Session, market_id: int, event_ids: list[int]) -> list[dict]:
-    if not event_ids:
-        return []
-    offers: list[dict] = []
-    page = 1
-    while True:
-        data = _get(sess, "offers", {
-            "sport": "MLB",
-            "market_id": market_id,
-            "event_id": ":".join(str(e) for e in event_ids),
-            "location": "ALL",
-            "limit": 10,  # API hard-caps limit at 10; we paginate.
-            "page": page,
-        })
-        batch = data.get("offers") or []
-        offers.extend(batch)
-        pg = data.get("_pagination") or {}
-        if page >= (pg.get("total_pages") or 1) or not batch:
-            break
-        page += 1
-        time.sleep(0.3)
-    return offers
-
-
-# -----------------------------------------------------------------------------
-# Odds helpers
-# -----------------------------------------------------------------------------
-
-def _fmt_odds(cost) -> str:
-    if cost is None:
-        return ""
-    try:
-        n = int(cost)
-    except (TypeError, ValueError):
-        return str(cost)
-    return f"+{n}" if n > 0 else str(n)
-
-
-def _sel_odds(sel: dict) -> tuple[dict, object]:
-    """Return ({col_name: odds_str}, line) for one selection.
-
-    Columns produced are a subset of FIXED_BOOK_COLUMNS: Open (from
-    opening_line), Best Odds (the best:true line), Consensus (book id 0), and
-    each mapped sportsbook.
-    """
-    odds: dict[str, str] = {}
-    line = None
-    op = sel.get("opening_line") or {}
-    if op.get("cost") is not None:
-        odds["Open"] = _fmt_odds(op.get("cost"))
-    if op.get("line") is not None:
-        line = op.get("line")
-    for book in sel.get("books") or []:
-        lines = book.get("lines") or []
-        if not lines:
-            continue
-        ln = lines[0]
-        if ln.get("line") is not None:
-            line = ln.get("line")
-        cost = ln.get("cost")
-        if cost is None:
-            continue
-        if ln.get("best"):
-            odds["Best Odds"] = _fmt_odds(cost)
-        name = BOOK_ID_TO_NAME.get(book.get("id"))
-        if name and name in FIXED_BOOK_COLUMNS:
-            odds[name] = _fmt_odds(cost)
-    return odds, line
-
-
-def _side(sel: dict) -> str | None:
-    """over/under -> Over/Under; yes/no -> Yes/No; else None."""
-    lab = (sel.get("selection") or sel.get("label") or "").lower()
-    if lab.startswith("o"):
-        return "Over"
-    if lab.startswith("u"):
-        return "Under"
-    if lab.startswith("y"):
-        return "Yes"
-    if lab.startswith("n"):
-        return "No"
-    return None
-
-
-def _blank_books(row: dict, suffixes: list[str]) -> None:
-    for suf in suffixes:
-        for b in FIXED_BOOK_COLUMNS:
-            row[f"{b}_{suf}"] = ""
-
-
-def _assign(row: dict, odds: dict, suffix: str) -> None:
-    for col, val in odds.items():
-        row[f"{col}_{suffix}"] = val
-
-
-# -----------------------------------------------------------------------------
-# Headers + row builders (per kind)
-# -----------------------------------------------------------------------------
-
-def _book_cols(suffixes: list[str]) -> list[str]:
-    return [f"{b}_{suf}" for suf in suffixes for b in FIXED_BOOK_COLUMNS]
-
-
-def headers(kind: str) -> list[str]:
-    if kind == "player_ou":
-        base = ["Date", "Player", "Player_Page", "Matchup", "Team", "Position", "Line"]
-        return base + _book_cols(["Over", "Under"])
-    if kind == "total":
-        return ["Date", "Matchup", "Away", "Home", "Line"] + _book_cols(["Over", "Under"])
-    if kind == "team_total":
-        return ["Date", "Matchup", "Away", "Home", "Team", "Line"] + _book_cols(["Over", "Under"])
-    if kind == "moneyline":
-        return ["Date", "Matchup", "Away", "Home"] + _book_cols(["Away", "Home"])
-    if kind == "spread":
-        return ["Date", "Matchup", "Away", "Home", "Away_Line", "Home_Line"] + _book_cols(["Away", "Home"])
-    if kind == "yesno":
-        return ["Date", "Matchup", "Away", "Home", "Line"] + _book_cols(["Yes", "No"])
-    raise ValueError(f"unknown kind {kind}")
-
-
-def build_rows(kind: str, offers: list[dict], ds: str, ev_map: dict[int, dict]) -> list[dict]:
-    if kind == "player_ou":
-        return _rows_player_ou(offers, ds, ev_map)
-    if kind in ("total", "yesno"):
-        return _rows_two_sided_game(offers, ds, ev_map, kind)
-    if kind == "team_total":
-        return _rows_team_total(offers, ds, ev_map)
-    if kind in ("moneyline", "spread"):
-        return _rows_team_pick(offers, ds, ev_map, kind)
-    raise ValueError(f"unknown kind {kind}")
-
-
-def _rows_player_ou(offers, ds, ev_map) -> list[dict]:
-    out = []
-    for o in offers:
-        parts = o.get("participants") or []
-        if not parts:
-            continue
-        p = parts[0]
-        name = p.get("name") or ""
-        if not name:
-            continue
-        player = p.get("player") or {}
-        slug = player.get("slug") or ""
-        ev = ev_map.get(o.get("event_id"), {})
-        row = {
-            "Date": ds, "Player": name,
-            "Player_Page": f"/mlb/props/{slug}/" if slug else (p.get("link") or ""),
-            "Matchup": ev.get("matchup", ""), "Team": player.get("team") or "",
-            "Position": player.get("position") or "", "Line": "0.5",
-        }
-        _blank_books(row, ["Over", "Under"])
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in ("Over", "Under"):
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and side == "Over":
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
-    return out
-
-
-def _rows_two_sided_game(offers, ds, ev_map, kind) -> list[dict]:
-    sides = ("Over", "Under") if kind == "total" else ("Yes", "No")
-    out = []
-    for o in offers:
-        ev = ev_map.get(o.get("event_id"), {})
-        row = {"Date": ds, "Matchup": ev.get("matchup", ""),
-               "Away": ev.get("away", ""), "Home": ev.get("home", ""), "Line": ""}
-        _blank_books(row, list(sides))
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in sides:
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and not row["Line"]:
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
-    return out
-
-
-def _rows_team_total(offers, ds, ev_map) -> list[dict]:
-    out = []
-    for o in offers:
-        ev = ev_map.get(o.get("event_id"), {})
-        team = o.get("team_id") or ""
-        if not team:
-            parts = o.get("participants") or []
-            team = parts[0].get("id") if parts else ""
-        row = {"Date": ds, "Matchup": ev.get("matchup", ""),
-               "Away": ev.get("away", ""), "Home": ev.get("home", ""),
-               "Team": team, "Line": ""}
-        _blank_books(row, ["Over", "Under"])
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in ("Over", "Under"):
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and not row["Line"]:
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
-    return out
-
-
-def _rows_team_pick(offers, ds, ev_map, kind) -> list[dict]:
-    """Moneyline / spread: one row per game, columns by Away/Home team."""
-    out = []
-    for o in offers:
-        ev = ev_map.get(o.get("event_id"), {})
-        home_abbr = ev.get("home", "")
-        row = {"Date": ds, "Matchup": ev.get("matchup", ""),
-               "Away": ev.get("away", ""), "Home": home_abbr}
-        if kind == "spread":
-            row["Away_Line"] = ""
-            row["Home_Line"] = ""
-        _blank_books(row, ["Away", "Home"])
-        for sel in o.get("selections") or []:
-            part = sel.get("participant") or ""
-            suffix = "Home" if part and part == home_abbr else "Away"
-            odds, line = _sel_odds(sel)
-            if kind == "spread" and line is not None:
-                row[f"{suffix}_Line"] = str(line)
-            _assign(row, odds, suffix)
-        out.append(row)
-    return out
-
-
-# -----------------------------------------------------------------------------
-# CSV I/O (one file per market)
-# -----------------------------------------------------------------------------
 
 def path_for(output_dir: Path, market_id: int) -> Path:
-    name, _ = MARKETS[market_id]
+    name, _ = bp.MARKETS[market_id]
     return output_dir / f"{name}_odds.csv"
 
 
@@ -423,73 +44,38 @@ def ensure_csv(path: Path, kind: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists() or path.stat().st_size == 0:
         with path.open("w", newline="", encoding="utf-8") as f:
-            csv.DictWriter(f, fieldnames=headers(kind)).writeheader()
+            csv.DictWriter(f, fieldnames=bp.headers(kind)).writeheader()
 
 
-def completed_dates(path: Path) -> set[str]:
+def completed_dates(path: Path) -> set:
     if not path.exists() or path.stat().st_size == 0:
         return set()
     with path.open("r", newline="", encoding="utf-8") as f:
         return {r["Date"] for r in csv.DictReader(f) if r.get("Date")}
 
 
-def append_rows(path: Path, kind: str, rows: list[dict]) -> None:
+def append_rows(path: Path, kind: str, rows: list) -> None:
     ensure_csv(path, kind)
     with path.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=headers(kind), extrasaction="ignore")
+        writer = csv.DictWriter(f, fieldnames=bp.headers(kind), extrasaction="ignore")
         for r in rows:
             writer.writerow(r)
 
 
-# -----------------------------------------------------------------------------
-# Date utils
-# -----------------------------------------------------------------------------
-
-def date_range(start: str, end: str):
-    cur = datetime.strptime(start, "%Y-%m-%d").date()
-    fin = datetime.strptime(end, "%Y-%m-%d").date()
-    while cur <= fin:
-        yield cur.strftime("%Y-%m-%d")
-        cur += timedelta(days=1)
+def list_markets() -> None:
+    sess = bp.make_session()
+    labels = bp.fetch_markets(sess)
+    print(f"{len(labels)} MLB markets ({len(bp.MARKETS)} wired):")
+    for mid, (name, kind) in bp.MARKETS.items():
+        print(f"  {mid:>4}  {kind:<11} {name:<24} ({labels.get(mid, '?')})")
 
 
-def in_season(ds: str) -> bool:
-    d = datetime.strptime(ds, "%Y-%m-%d").date()
-    bounds = MLB_SEASON_RANGES.get(d.year)
-    if not bounds:
-        return True
-    lo = datetime.strptime(bounds[0], "%Y-%m-%d").date()
-    hi = datetime.strptime(bounds[1], "%Y-%m-%d").date()
-    return lo <= d <= hi
-
-
-def resolve_markets(arg: str) -> list[int]:
-    out: list[int] = []
-    for tok in (arg or "all").split(","):
-        tok = tok.strip()
-        if not tok:
-            continue
-        if tok in GROUPS:
-            out.extend(GROUPS[tok])
-        elif tok.isdigit() and int(tok) in MARKETS:
-            out.append(int(tok))
-        else:
-            raise SystemExit(f"unknown market token '{tok}'. groups: {list(GROUPS)} or ids in {sorted(MARKETS)}")
-    # dedupe, keep order
-    seen = set()
-    return [m for m in out if not (m in seen or seen.add(m))]
-
-
-# -----------------------------------------------------------------------------
-# Drivers
-# -----------------------------------------------------------------------------
-
-def collect_date(sess, ds: str, markets: list[int], output_dir: Path,
-                 done: dict[int, set], verbose: bool) -> int:
+def collect_date(sess, ds: str, markets: list, output_dir: Path,
+                 done: dict, verbose: bool) -> int:
     need = [m for m in markets if ds not in done[m]]
     if not need:
         return 0
-    ev_map = fetch_events(sess, ds)
+    ev_map = bp.fetch_events(sess, ds)
     if not ev_map:
         if verbose:
             print(f"{ds}: no events")
@@ -497,9 +83,9 @@ def collect_date(sess, ds: str, markets: list[int], output_dir: Path,
     eids = list(ev_map.keys())
     total = 0
     for mid in need:
-        name, kind = MARKETS[mid]
-        offers = fetch_offers(sess, mid, eids)
-        rows = build_rows(kind, offers, ds, ev_map)
+        name, kind = bp.MARKETS[mid]
+        offers = bp.fetch_offers(sess, mid, eids)
+        rows = bp.build_rows(kind, offers, ds, ev_map)
         if rows:
             append_rows(path_for(output_dir, mid), kind, rows)
         done[mid].add(ds)
@@ -510,7 +96,7 @@ def collect_date(sess, ds: str, markets: list[int], output_dir: Path,
     return total
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list | None = None) -> int:
     p = argparse.ArgumentParser(description="API-based BettingPros MLB multi-market backfill")
     p.add_argument("mode", choices=["markets", "daily", "backfill"])
     p.add_argument("date", nargs="?", help="YYYY-MM-DD for daily mode")
@@ -525,10 +111,10 @@ def main(argv: list[str] | None = None) -> int:
         list_markets()
         return 0
 
-    sess = _session()
-    markets = resolve_markets(args.markets)
+    sess = bp.make_session()
+    markets = bp.resolve_markets(args.markets)
     for mid in markets:
-        ensure_csv(path_for(args.output_dir, mid), MARKETS[mid][1])
+        ensure_csv(path_for(args.output_dir, mid), bp.MARKETS[mid][1])
     done = {mid: completed_dates(path_for(args.output_dir, mid)) for mid in markets}
 
     if args.mode == "daily":
@@ -538,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{args.date}: {n} rows total across {len(markets)} markets")
         return 0
 
-    dates = [d for d in date_range(args.start, args.end) if in_season(d)]
+    dates = [d for d in bp.date_range(args.start, args.end) if bp.in_season(d)]
     print(f"Backfill {args.start} -> {args.end}: {len(dates)} in-season dates x {len(markets)} markets")
     errors = 0
     for ds in dates:
