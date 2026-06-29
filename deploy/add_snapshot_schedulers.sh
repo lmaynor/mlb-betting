@@ -55,17 +55,31 @@ if [ "$LEGACY" = "1" ]; then
   exit 0
 fi
 
-# Post-cutover: 8 ParlayAPI snapshots/day; include_sgo=true on 4 (SGO inning
-# fetch), false on 4 (carry inning forward). day_offset=1 on the two late-night
-# runs to bank tomorrow's slate.
-_upsert_job "mlb-snapshot-1455" "55 14 * * *" '{"include_sgo":true}'  "pre-morning run (SGO inning)"
-_upsert_job "mlb-snapshot-1655" "55 16 * * *" '{"include_sgo":false}' "parlay-only (carry inning)"
-_upsert_job "mlb-snapshot-1855" "55 18 * * *" '{"include_sgo":false}' "parlay-only (carry inning)"
-_upsert_job "mlb-snapshot-2055" "55 20 * * *" '{"include_sgo":true}'  "pre-evening run (SGO inning)"
-_upsert_job "mlb-snapshot-2255" "55 22 * * *" '{"include_sgo":false}' "parlay-only (carry inning)"
-_upsert_job "mlb-snapshot-2355" "55 23 * * *" '{"include_sgo":true}'  "closing lines (SGO inning)"
-_upsert_job "mlb-snapshot-0155" "55  1 * * *" '{"include_sgo":false,"day_offset":1}' "tomorrow slate (lines posting)"
-_upsert_job "mlb-snapshot-0355" "55  3 * * *" '{"include_sgo":true,"day_offset":1}'  "tomorrow slate (SGO inning)"
+# Post-cutover: 8 ParlayAPI snapshots/day, CONCENTRATED in the hours MLB lines
+# move most -- lineup posting through closing for the (majority) night slate,
+# roughly 18:00-23:00 UTC (2pm-7pm ET). SGO inning fetched on 4 runs (the two
+# pre-betting-run times 15:55/21:55, night lineups, and closing) -- ~4x/day
+# within its ~2500/mo free tier; the other 4 carry inning markets forward.
+# day_offset=1 on the two late-night runs banks tomorrow's slate (lines ~9pm ET).
+# Per-month spend is paced evenly by the snapshot's credit guard.
+#
+# UTC  ET     why                                                  flags
+# 1555 11:55a pre-morning /run (16:00); opening lines              SGO
+# 1855  2:55p day-game close + night lineups posting              carry
+# 2025  4:25p night lineups confirmed -- movement ramps           SGO
+# 2125  5:25p pre-close steam                                     carry
+# 2155  5:55p pre-evening /run (22:00)                            SGO
+# 2305  7:05p closing (~7:10p ET first pitch, bulk night slate)   SGO
+# 0125  9:25p next-day lines posting                              carry offset1
+# 0325 11:25p next-day                                            carry offset1
+_upsert_job "mlb-snapshot-1555" "55 15 * * *" '{"include_sgo":true}'  "pre-morning run; opening (SGO inning)"
+_upsert_job "mlb-snapshot-1855" "55 18 * * *" '{"include_sgo":false}' "day-game close / night lineups (carry)"
+_upsert_job "mlb-snapshot-2025" "25 20 * * *" '{"include_sgo":true}'  "night lineups confirmed (SGO inning)"
+_upsert_job "mlb-snapshot-2125" "25 21 * * *" '{"include_sgo":false}' "pre-close steam (carry)"
+_upsert_job "mlb-snapshot-2155" "55 21 * * *" '{"include_sgo":true}'  "pre-evening run (SGO inning)"
+_upsert_job "mlb-snapshot-2305" "05 23 * * *" '{"include_sgo":true}'  "closing lines (SGO inning)"
+_upsert_job "mlb-snapshot-0125" "25  1 * * *" '{"include_sgo":false,"day_offset":1}' "tomorrow slate, lines posting (carry)"
+_upsert_job "mlb-snapshot-0325" "25  3 * * *" '{"include_sgo":false,"day_offset":1}' "tomorrow slate (carry)"
 
 echo ""
 echo "=== Done: 8 ParlayAPI snapshots/day (4 with SGO inning, 2 next-day) ==="

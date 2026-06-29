@@ -30,6 +30,7 @@ Output (SGO shape, same paths -> runners untouched):
      {out_prefix}/latest.json                             (runner read target)
 out_prefix defaults to "Odds/sgo"; pass a scratch prefix for a shadow run.
 """
+import calendar
 import json
 import logging
 import os
@@ -132,11 +133,15 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
     game_lines = client.get_slate(SPORT, markets="game")   # ~3 credits (whole slate)
     n_events = len(game_lines or [])
 
-    # --- credit guard: skip the expensive per-event props if the month would exceed
+    # --- credit guard: pace spend EVENLY across the month. The allowance grows
+    # linearly (CEILING * day/days_in_month), so cumulative spend tracks a line to
+    # ~CEILING by month end instead of front-loading. Skip the expensive per-event
+    # props when this run would push the month ahead of pace.
     month = target_date[:7]
     spent = _read_credits(month)
     est_props = n_events * max(1, len(markets))
-    do_props = (spent + 3 + est_props) <= CREDIT_CEILING
+    pace_cap = _pace_ceiling(target_date)
+    do_props = (spent + 3 + est_props) <= pace_cap
 
     props_by_id, raw_props, prop_rows = {}, [], []
     if do_props:
@@ -151,8 +156,8 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
                 prop_rows.extend(parlay_extract.flatten_parlay_props(obj, SPORT))
         _add_credits(month, 3 + n_events * max(1, len(markets)))
     else:
-        logger.warning("snapshot(parlay): credit ceiling %d reached (spent=%d) — "
-                       "game lines only this run", CREDIT_CEILING, spent)
+        logger.warning("snapshot(parlay): over month pace (%.0f, spent=%d) — "
+                       "game lines only this run", pace_cap, spent)
         _add_credits(month, 3)
 
     parlay_events = A.parlay_slate_to_sgo_events(game_lines, props_by_id, target_date)
@@ -205,6 +210,14 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
 
 def _credit_key(month: str) -> str:
     return f"OddsAccum/{SPORT}/_credits/{month}.json"
+
+
+def _pace_ceiling(target_date: str) -> float:
+    """Linear daily allowance: CEILING * day_of_month / days_in_month. Keeps
+    cumulative monthly spend on a straight line to ~CEILING (even spread)."""
+    y, m, d = (int(x) for x in target_date.split("-"))
+    days_in_month = calendar.monthrange(y, m)[1]
+    return CREDIT_CEILING * d / days_in_month
 
 
 def _read_credits(month: str) -> int:
