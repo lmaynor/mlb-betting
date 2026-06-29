@@ -46,6 +46,36 @@ LOOKBACK_DAYS = int(os.getenv("DRIFT_LOOKBACK_DAYS", "150"))
 
 # --- pure functions (no GCS / xgboost; unit-tested) --------------------------
 
+def _auc_rank(y: np.ndarray, p: np.ndarray) -> float | None:
+    """Tie-aware ROC AUC via the Mann-Whitney rank-sum identity (numpy only).
+
+    Equivalent to sklearn.metrics.roc_auc_score but with ZERO sklearn dependency:
+    the service / deploy-pytest envs do not reliably ship sklearn, which is why
+    monitor_performance._auc is hand-rolled too. Returns None if either class is
+    absent.
+    """
+    n_pos = float(np.count_nonzero(y == 1))
+    n_neg = float(np.count_nonzero(y == 0))
+    if n_pos == 0 or n_neg == 0:
+        return None
+    # Average (tie-corrected) 1-based ranks of the scores.
+    order = np.argsort(p, kind="mergesort")
+    sp = p[order]
+    n = sp.shape[0]
+    ranks_sorted = np.empty(n, dtype=float)
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and sp[j + 1] == sp[i]:
+            j += 1
+        ranks_sorted[i:j + 1] = (i + j) / 2.0 + 1.0
+        i = j + 1
+    ranks = np.empty(n, dtype=float)
+    ranks[order] = ranks_sorted
+    sum_ranks_pos = float(ranks[y == 1].sum())
+    return (sum_ranks_pos - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg)
+
+
 def _safe_auc(y, p) -> float | None:
     """AUC with guards: drop NaN preds, require both classes and >= MIN_WINDOW_N."""
     y = np.asarray(y, dtype=float)
@@ -56,8 +86,8 @@ def _safe_auc(y, p) -> float | None:
         return None
     if len(np.unique(y)) < 2:
         return None
-    from sklearn.metrics import roc_auc_score
-    return round(float(roc_auc_score(y, p)), 4)
+    auc = _auc_rank(y, p)
+    return round(auc, 4) if auc is not None else None
 
 
 def auc_over_windows(df: pd.DataFrame, score_cols: list[str],
