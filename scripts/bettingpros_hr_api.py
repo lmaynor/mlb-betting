@@ -205,7 +205,7 @@ def fetch_offers(sess: requests.Session, market_id: int, event_ids: list[int]) -
             "market_id": market_id,
             "event_id": ":".join(str(e) for e in event_ids),
             "location": "ALL",
-            "limit": 100,
+            "limit": 10,  # API hard-caps limit at 10; we paginate.
             "page": page,
         })
         batch = data.get("offers") or []
