@@ -44,11 +44,11 @@ function Chip({ label, active, color, onClick }: {
 }) {
   return (
     <button onClick={onClick} style={{
-      padding: '4px 10px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
+      padding: '4px 10px', fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 400,
-      border: `1px solid ${active ? (color ?? '#a5b8c0') : '#2a2a31'}`,
-      background: active ? `${color ?? '#a5b8c0'}18` : 'transparent',
-      color: active ? (color ?? '#a5b8c0') : '#52525b',
+      border: `1px solid ${active ? (color ?? 'var(--silver)') : 'var(--basalt)'}`,
+      background: active ? `color-mix(in oklab, ${color ?? 'var(--silver)'} 16%, var(--carbon))` : 'var(--graphite)',
+      color: active ? (color ?? 'var(--silver)') : 'var(--silver)',
       cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' as const,
       transition: 'all 0.15s',
     }}>{label}</button>
@@ -58,9 +58,9 @@ function Chip({ label, active, color, onClick }: {
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div style={{ padding: '16px 20px', flex: 1, minWidth: 0 }}>
-      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525b', marginBottom: '6px' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? '#f5f5f7', lineHeight: 1 }}>{value}</div>
-      {sub && <div className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginTop: '4px' }}>{sub}</div>}
+      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--steel)', marginBottom: '6px' }}>{label}</div>
+      <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--ash)', lineHeight: 1 }}>{value}</div>
+      {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginTop: '4px' }}>{sub}</div>}
     </div>
   )
 }
@@ -69,22 +69,22 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   if (!active || !payload?.length) return null
   const p = payload[0].payload
   const sys = p.system
-  const color = SYSTEM_COLOR[sys] ?? '#a1a1aa'
+  const color = SYSTEM_COLOR[sys] ?? 'var(--silver)'
   return (
-    <div style={{ background: '#111114', border: B, padding: '12px 14px', fontSize: '11px', minWidth: '160px' }}>
+    <div style={{ background: 'var(--graphite)', border: B, padding: '12px 14px', fontSize: '11px', minWidth: '160px' }}>
       <div className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
-      <div style={{ color: '#888890', marginBottom: '6px', fontSize: '10px' }}>{p.game_date}</div>
+      <div style={{ color: 'var(--fog)', marginBottom: '6px', fontSize: '10px' }}>{p.game_date}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
-        <span style={{ color: '#52525b' }}>Model edge</span>
-        <span className="mono" style={{ color: '#b3bd95', fontWeight: 600 }}>{fmt1(p.x)}</span>
-        <span style={{ color: '#52525b' }}>CLV</span>
-        <span className="mono" style={{ color: p.y >= 0 ? '#b3bd95' : '#d77a7a', fontWeight: 600 }}>{fmt2(p.y)}</span>
-        <span style={{ color: '#52525b' }}>Result</span>
-        <span className="mono" style={{ color: p.result === 'win' ? '#b3bd95' : '#d77a7a', textTransform: 'uppercase' }}>{p.result}</span>
-        <span style={{ color: '#52525b' }}>Open odds</span>
-        <span className="mono" style={{ color: '#f5f5f7' }}>{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
+        <span style={{ color: 'var(--steel)' }}>Model edge</span>
+        <span className="mono" style={{ color: 'var(--signal)', fontWeight: 600 }}>{fmt1(p.x)}</span>
+        <span style={{ color: 'var(--steel)' }}>CLV</span>
+        <span className="mono" style={{ color: p.y >= 0 ? 'var(--signal)' : 'var(--loss)', fontWeight: 600 }}>{fmt2(p.y)}</span>
+        <span style={{ color: 'var(--steel)' }}>Result</span>
+        <span className="mono" style={{ color: p.result === 'win' ? 'var(--signal)' : 'var(--loss)', textTransform: 'uppercase' }}>{p.result}</span>
+        <span style={{ color: 'var(--steel)' }}>Open odds</span>
+        <span className="mono" style={{ color: 'var(--ash)' }}>{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
       </div>
-      {p.player && <div className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginTop: '6px' }}>{p.player}</div>}
+      {p.player && <div className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginTop: '6px' }}>{p.player}</div>}
     </div>
   )
 }
@@ -138,7 +138,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
   const bySystem = useMemo(() =>
     systems.map(sys => ({
       sys,
-      color: SYSTEM_COLOR[sys] ?? '#a1a1aa',
+      color: SYSTEM_COLOR[sys] ?? 'var(--silver)',
       points: filtered
         .filter(p => p.system === sys)
         .map(p => ({ ...p, x: p.model_edge_pct, y: p.clv_pct })),
@@ -167,28 +167,28 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Header */}
       <div style={{ marginBottom: '28px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Tools — Pro</p>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>CLV + Edge Correlation</h1>
-        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Each dot is a settled Beezy pick. X = model edge at bet time. Y = closing line value. Positive CLV in the top-right quadrant means the model consistently finds real market inefficiencies.</p>
+        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools — Pro</p>
+        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '6px' }}>CLV + Edge Correlation</h1>
+        <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Each dot is a settled Beezy pick. X = model edge at bet time. Y = closing line value. Positive CLV in the top-right quadrant means the model consistently finds real market inefficiencies.</p>
       </div>
 
       {/* Filter bar */}
       <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         {/* Date range */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: '#3f3f46', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
+          <span className="mono" style={{ fontSize: '9px', color: 'var(--steel)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: '#3f3f46', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
+          <span className="mono" style={{ fontSize: '9px', color: 'var(--steel)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
         </div>
-        {loading && <span className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginLeft: 'auto' }}>Loading...</span>}
+        {loading && <span className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginLeft: 'auto' }}>Loading...</span>}
       </div>
 
       {/* System chips */}
@@ -203,29 +203,29 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           />
         ))}
         {activeSystems.length > 0 && (
-          <button onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', color: '#52525b', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
+          <button onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', color: 'var(--steel)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
             clear
           </button>
         )}
       </div>
 
       {/* Scatter chart */}
-      <div style={{ border: B, background: '#0a0a0c', marginBottom: '1px' }}>
+      <div style={{ border: B, background: 'var(--carbon)', marginBottom: '1px' }}>
         {filtered.length === 0 ? (
           <div style={{ height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <div className="mono" style={{ fontSize: '12px', color: '#3f3f46', marginBottom: '8px' }}>No CLV data for this filter</div>
+              <div className="mono" style={{ fontSize: '12px', color: 'var(--steel)', marginBottom: '8px' }}>No CLV data for this filter</div>
               <div className="mono" style={{ fontSize: '11px', color: '#27272a' }}>CLV is captured as picks approach game time.</div>
             </div>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={460}>
             <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f1f24" strokeOpacity={0.6} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2b292d" strokeOpacity={0.6} />
 
               {/* Quadrant shading */}
-              <ReferenceArea x1={0} x2={xMax} y1={0} y2={yMax} fill="#b3bd9506" stroke="none" />
-              <ReferenceArea x1={xMin} x2={0} y1={yMin} y2={0} fill="#d77a7a06" stroke="none" />
+              <ReferenceArea x1={0} x2={xMax} y1={0} y2={yMax} fill="#71d08312" stroke="none" />
+              <ReferenceArea x1={xMin} x2={0} y1={yMin} y2={0} fill="#ec6a6a12" stroke="none" />
 
               <XAxis
                 dataKey="x"
@@ -233,10 +233,10 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 domain={[xMin, xMax]}
                 name="Model Edge"
                 unit="%"
-                tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
                 tickLine={false}
-                axisLine={{ stroke: '#2a2a31' }}
-                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: '#3f3f46', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                axisLine={{ stroke: '#323035' }}
+                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
               />
               <YAxis
                 dataKey="y"
@@ -244,17 +244,17 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 domain={[yMin, yMax]}
                 name="CLV"
                 unit="%"
-                tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
                 tickLine={false}
-                axisLine={{ stroke: '#2a2a31' }}
+                axisLine={{ stroke: '#323035' }}
                 width={52}
-                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: '#3f3f46', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', dx: 14 }}
+                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: '#8a8893', fontSize: 10, fontFamily: 'ui-monospace, monospace', dx: 14 }}
               />
 
-              <ReferenceLine x={0} stroke="#2a2a31" strokeDasharray="4 2" />
-              <ReferenceLine y={0} stroke="#2a2a31" strokeDasharray="4 2" />
+              <ReferenceLine x={0} stroke="#323035" strokeDasharray="4 2" />
+              <ReferenceLine y={0} stroke="#323035" strokeDasharray="4 2" />
 
-              <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#2a2a31' }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#323035' }} />
 
               {bySystem.map(({ sys, color, points }) => (
                 <Scatter
@@ -273,8 +273,8 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Quadrant labels (outside chart, below) */}
       <div style={{ border: B, borderTop: 'none', display: 'flex', justifyContent: 'space-between', padding: '6px 16px', marginBottom: '16px' }}>
-        <span className="mono" style={{ fontSize: '9px', color: '#b3bd9560', letterSpacing: '0.06em' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
-        <span className="mono" style={{ fontSize: '9px', color: '#d77a7a60', letterSpacing: '0.06em' }}>BOTTOM LEFT: no edge, negative CLV</span>
+        <span className="mono" style={{ fontSize: '9px', color: 'var(--signal)60', letterSpacing: '0.06em' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
+        <span className="mono" style={{ fontSize: '9px', color: 'var(--loss)60', letterSpacing: '0.06em' }}>BOTTOM LEFT: no edge, negative CLV</span>
       </div>
 
       {/* System legend */}
@@ -283,7 +283,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           {bySystem.map(({ sys, color }) => (
             <span key={sys} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
-              <span className="mono" style={{ fontSize: '10px', color: '#888890' }}>{sys}</span>
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{sys}</span>
             </span>
           ))}
         </div>
@@ -296,23 +296,23 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
             label="Mean CLV"
             value={fmt2(stats.meanCLV)}
             sub="avg closing line value per bet"
-            color={stats.meanCLV >= 0 ? '#b3bd95' : '#d77a7a'}
+            color={stats.meanCLV >= 0 ? 'var(--signal)' : 'var(--loss)'}
           />
-          <div style={{ width: '1px', background: '#1f1f24', flexShrink: 0 }} />
+          <div style={{ width: '1px', background: 'var(--basalt)', flexShrink: 0 }} />
           <StatCard
             label="Positive CLV"
             value={`${stats.pctPos.toFixed(0)}%`}
             sub="of bets beat the closing line"
-            color={stats.pctPos >= 50 ? '#b3bd95' : '#e6915d'}
+            color={stats.pctPos >= 50 ? 'var(--signal)' : 'var(--warn)'}
           />
-          <div style={{ width: '1px', background: '#1f1f24', flexShrink: 0 }} />
+          <div style={{ width: '1px', background: 'var(--basalt)', flexShrink: 0 }} />
           <StatCard
             label="Correlation (r)"
             value={stats.r !== null ? stats.r.toFixed(2) : '--'}
             sub="edge vs CLV correlation"
-            color={stats.r !== null && stats.r > 0.2 ? '#b3bd95' : '#f5f5f7'}
+            color={stats.r !== null && stats.r > 0.2 ? 'var(--signal)' : 'var(--ash)'}
           />
-          <div style={{ width: '1px', background: '#1f1f24', flexShrink: 0 }} />
+          <div style={{ width: '1px', background: 'var(--basalt)', flexShrink: 0 }} />
           <StatCard
             label="Sample"
             value={`n=${stats.n}`}
@@ -327,15 +327,15 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           onClick={() => setInfoOpen(o => !o)}
           style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
-          <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#52525b' }}>What is CLV?</span>
-          <span className="mono" style={{ fontSize: '12px', color: '#3f3f46' }}>{infoOpen ? '-' : '+'}</span>
+          <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--steel)' }}>What is CLV?</span>
+          <span className="mono" style={{ fontSize: '12px', color: 'var(--steel)' }}>{infoOpen ? '-' : '+'}</span>
         </button>
         {infoOpen && (
           <div style={{ padding: '0 16px 16px', borderTop: B }}>
-            <p className="times" style={{ fontSize: '12px', color: '#888890', lineHeight: 1.65, marginTop: '12px', marginBottom: '8px' }}>
+            <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.65, marginTop: '12px', marginBottom: '8px' }}>
               Closing line value (CLV) measures how much better Beezy&apos;s opening line was vs. the closing price at kickoff. When the model predicts NRFI at -115 and the line closes at -128, the edge was real -- sharp money agreed, moving the line in the same direction.
             </p>
-            <p className="times" style={{ fontSize: '12px', color: '#888890', lineHeight: 1.65 }}>
+            <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.65 }}>
               Positive mean CLV over a large sample is the strongest indicator that a betting model is genuinely finding inefficiencies rather than riding variance. It&apos;s measured independent of outcomes -- a bet can have positive CLV and lose, or negative CLV and win.
             </p>
           </div>

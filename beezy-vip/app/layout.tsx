@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Red_Hat_Display, Red_Hat_Text, Red_Hat_Mono } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' })
+const redHatDisplay = Red_Hat_Display({ subsets: ['latin'], variable: '--font-display', display: 'swap' })
+const redHatText = Red_Hat_Text({ subsets: ['latin'], variable: '--font-text', display: 'swap' })
+const redHatMono = Red_Hat_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
 import { ClerkProvider } from '@clerk/nextjs'
 import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
@@ -14,7 +15,7 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#000000',
+  themeColor: '#04040b',
 }
 
 export const metadata: Metadata = {
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+    <html lang="en" className={`${redHatDisplay.variable} ${redHatText.variable} ${redHatMono.variable}`}>
       <body>
         <div className="page-frame">
           <Nav />

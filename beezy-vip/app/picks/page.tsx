@@ -40,35 +40,21 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
     <div>
       <DateBar />
       <FilterBar />
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
-        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
+        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
           <div>
-            <h1 className="dell-display" style={{ fontSize: '18px', color: '#f5f5f7' }}>Picks</h1>
-            <p className="times" style={{ fontSize: '13px', color: '#888890', marginTop: '5px', maxWidth: '560px', lineHeight: 1.55 }}>
+            <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>Today&rsquo;s picks</h1>
+            <p className="times" style={{ fontSize: '15px', color: 'var(--fog)', marginTop: '8px', maxWidth: '60ch', lineHeight: 1.55 }}>
               Every model-qualified MLB play across {PICK_SYSTEMS.length} systems, ranked by Beezy Score with market, book, edge, and result context.
             </p>
           </div>
-          <a
-            href="/cheat-sheet"
-            className="mono"
-            style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: '#0a0a0c',
-              background: '#fcc20f',
-              padding: '8px 12px',
-              borderRadius: 0,
-              textDecoration: 'none',
-            }}
-          >
-            Daily Card
+          <a href="/cheat-sheet" className="btn btn-primary">
+            Daily Card &rarr;
           </a>
         </div>
         <Suspense fallback={
-          <div style={{ padding: '40px', textAlign: 'center', border: '1px solid #1f1f24' }}>
-            <p className="mono" style={{ fontSize: '12px', color: '#888890' }}>Loading picks...</p>
+          <div style={{ padding: '48px', textAlign: 'center', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
+            <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Loading picks...</p>
           </div>
         }>
           <PicksContent searchParams={searchParams} />

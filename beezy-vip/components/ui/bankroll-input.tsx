@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 export function BankrollInput({ defaultValue }: { defaultValue: number }) {
   const [value,  setValue]  = useState(String(defaultValue))
@@ -41,9 +41,10 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           placeholder="1000"
           className="mono"
           style={{
-            flex: 1, background: '#0a0a0c', border: B,
-            color: '#f5f5f7', fontSize: '13px',
-            padding: '8px 12px', outline: 'none',
+            flex: 1, background: 'var(--slate)', border: B,
+            borderRadius: 'var(--radius)',
+            color: 'var(--ash)', fontSize: '13px',
+            padding: '9px 12px', outline: 'none',
           }}
         />
         <button
@@ -51,17 +52,17 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           disabled={saving}
           className="mono"
           style={{
-            padding: '8px 16px', background: '#fcc20f', color: '#0a0a0c',
-            fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em',
-            textTransform: 'uppercase', cursor: saving ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.5 : 1, border: 'none',
+            padding: '9px 18px', background: 'var(--signal)', color: 'var(--carbon)',
+            fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em',
+            borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.5 : 1, border: '1px solid var(--signal-led)',
           }}
         >
           {saving ? '...' : saved ? 'Saved' : 'Save'}
         </button>
       </div>
       {error && (
-        <p className="mono" style={{ fontSize: '11px', color: '#d77a7a', marginTop: '6px' }}>
+        <p className="mono" style={{ fontSize: '11px', color: 'var(--loss)', marginTop: '6px' }}>
           {error}
         </p>
       )}

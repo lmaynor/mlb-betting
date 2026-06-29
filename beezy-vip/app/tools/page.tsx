@@ -8,9 +8,6 @@ export const metadata: Metadata = {
   description: 'Odds calculator, Kelly criterion calculator, edge finder, NRFI conditions, and pitcher matchup dashboard.',
 }
 
-const B  = '1px solid #1f1f24'
-const BH = '1px solid #2a2a31'
-
 const TOOLS = [
   { href: '/tools/clv-tracker',   title: 'CLV + Edge Tracker',           description: 'Each pick plotted by model edge vs. closing line value. Positive CLV in the top-right proves the model finds real inefficiencies.', tag: 'Pro',     keywords: 'closing line value · model edge · clv scatter' },
   { href: '/tools/slate',         title: 'Slate Command Center',         description: "Today's full MLB slate with every Beezy pick, starters, and start times. One screen covers everything.",                            tag: 'Pro',     keywords: 'todays mlb slate · picks dashboard · command center' },
@@ -22,37 +19,34 @@ const TOOLS = [
   { href: '/tools/bet-tracker',      title: 'Personal Bet Tracker',        description: 'Log your own bets, track ROI, and compare your performance against the Beezy model. Members only.',              tag: 'Pro',     keywords: 'bet tracking · personal ROI · P&L' },
 ]
 
-const TAG: Record<string, { color: string; bg: string; border: string }> = {
-  Free:    { color: '#b3bd95', bg: '#1a2218', border: '1px solid #8e9e78' },
-  Partial: { color: '#e6915d', bg: '#1c1207', border: '1px solid #a05d30' },
-  Pro:     { color: '#8c9ae0', bg: '#0e0718', border: '1px solid #534ab7' },
+const TAG: Record<string, { color: string }> = {
+  Free:    { color: 'var(--signal)' },
+  Partial: { color: 'var(--warn)' },
+  Pro:     { color: 'var(--lilac)' },
 }
 
 export default function ToolsPage() {
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
       <div style={{ marginBottom: '32px' }}>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '6px' }}>Betting tools</h1>
-        <p className="times" style={{ fontSize: '13px', color: '#888890' }}>Free calculators. Pro dashboards for members.</p>
+        <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Betting tools</h1>
+        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>Free calculators. Pro dashboards for members.</p>
       </div>
 
-      <div className="tools-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', border: B }}>
-        {TOOLS.map((tool, i) => {
-          const col = i % 3
-          const t = TAG[tool.tag]
+      <div className="tools-grid">
+        {TOOLS.map((tool) => {
+          const c = (TAG[tool.tag] ?? TAG.Free).color
           return (
-            <Link key={tool.href} href={tool.href} style={{
-              display: 'block', padding: '18px', textDecoration: 'none', position: 'relative',
-              background: '#0a0a0c',
-              borderRight:  col < 2 ? B : undefined,
-              borderBottom: i < TOOLS.length - 3 ? B : undefined,
+            <Link key={tool.href} href={tool.href} className="card-hover" style={{
+              display: 'flex', flexDirection: 'column', padding: '20px', textDecoration: 'none',
+              background: 'var(--graphite)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)',
             }}>
-              <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', color: t.color, background: t.bg, border: t.border, display: 'inline-block', marginBottom: '10px' }}>
+              <span className="dell-heading" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 9px', borderRadius: 'var(--radius-pill)', color: c, background: `color-mix(in oklab, ${c} 15%, var(--carbon))`, border: `1px solid color-mix(in oklab, ${c} 40%, var(--carbon))`, display: 'inline-block', alignSelf: 'flex-start', marginBottom: '14px' }}>
                 {tool.tag.toUpperCase()}
               </span>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#f5f5f7', marginBottom: '6px' }}>{tool.title}</div>
-              <div style={{ fontSize: '12px', color: '#888890', lineHeight: 1.55, marginBottom: '12px' }}>{tool.description}</div>
-              <div className="mono" style={{ fontSize: '9px', color: '#2a2a31' }}>{tool.keywords}</div>
+              <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '8px', letterSpacing: '-0.01em' }}>{tool.title}</div>
+              <div className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55, marginBottom: '14px', flex: 1 }}>{tool.description}</div>
+              <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.02em' }}>{tool.keywords}</div>
             </Link>
           )
         })}

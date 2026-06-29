@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 export function CopyBetButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -27,9 +27,10 @@ export function CopyBetButton({ text }: { text: string }) {
       onClick={handleCopy}
       className="mono"
       style={{
-        fontSize: '10px', color: copied ? '#b3bd95' : '#888890',
-        border: copied ? '1px solid #8e9e78' : B,
-        padding: '2px 8px', background: 'transparent',
+        fontSize: '10px', color: copied ? 'var(--signal)' : 'var(--fog)',
+        border: copied ? '1px solid var(--win-border)' : B,
+        borderRadius: 'var(--radius-sm)',
+        padding: '3px 9px', background: copied ? 'var(--win-wash)' : 'transparent',
         cursor: 'pointer', transition: 'all 0.15s',
       }}
     >

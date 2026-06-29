@@ -10,25 +10,21 @@ export const metadata: Metadata = {
   description: "Today's MLB picks from all Beezy.FYI machine learning systems.",
 }
 
-const B = '1px solid #1f1f24'
+const B = '1px solid var(--basalt)'
 
 export default async function MLBPicksPage() {
   const stats = await apiGetStats().then(s => s.bySystem).catch(() => [])
-  const columns = 3
-  const rows = Math.ceil(PICK_SYSTEMS.length / columns)
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890', marginBottom: '6px' }}>Picks</p>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: '#f5f5f7', marginBottom: '4px' }}>MLB Picks</h1>
-        <p className="mono" style={{ fontSize: '13px', color: '#888890' }}>{PICK_SYSTEMS.length} systems &middot; DraftKings &middot; Paper mode</p>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ marginBottom: '28px' }}>
+        <p className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '8px' }}>Picks</p>
+        <h1 className="dell-display" style={{ fontSize: '34px', color: 'var(--chalk)', marginBottom: '8px' }}>MLB picks</h1>
+        <p className="mono" style={{ fontSize: '13px', color: 'var(--fog)' }}>{PICK_SYSTEMS.length} systems &middot; best onshore book &middot; paper mode</p>
       </div>
 
-      <div className="systems-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B }}>
-        {PICK_SYSTEMS.map((s, i) => {
-          const col = i % columns
-          const row = Math.floor(i / columns)
+      <div className="systems-grid">
+        {PICK_SYSTEMS.map((s) => {
           const stat = stats.find(x => x.system === s.key)
           const roi = stat ? parseFloat(String(stat.roi ?? 0)) : null
           const wr = stat ? parseFloat(String(stat.win_rate)) : null
@@ -39,38 +35,42 @@ export default async function MLBPicksPage() {
             <Link
               key={s.key}
               href={`/picks/mlb/${s.slug}`}
+              className="card-hover"
               style={{
                 display: 'block',
-                padding: '16px',
-                background: '#0a0a0c',
+                background: 'var(--graphite)',
                 textDecoration: 'none',
-                borderRight: col < columns - 1 ? B : undefined,
-                borderBottom: row < rows - 1 ? B : undefined,
+                border: B,
+                borderRadius: 'var(--radius-lg)',
+                overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '8px' }}>
-                <span className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 7px', background: pill.bg, color: pill.color, border: pill.border }}>
-                  {s.shortName}
-                </span>
-                {roi !== null && (
-                  <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roi >= 0 ? '#b3bd95' : '#d77a7a' }}>
-                    {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+              <div style={{ height: '3px', background: pill.color, opacity: 0.85 }} />
+              <div style={{ padding: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px', gap: '8px' }}>
+                  <span className="dell-heading" style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+                    {s.shortName}
                   </span>
-                )}
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#f5f5f7', marginBottom: '12px' }}>{s.name}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', paddingTop: '10px', borderTop: B }}>
-                <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Win Rate</div>
-                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{wr !== null ? `${wr.toFixed(1)}%` : '--'}</div>
+                  {roi !== null && (
+                    <span className="mono" style={{ fontSize: '13px', fontWeight: 600, color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+                      {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Bets</div>
-                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f5f5f7' }}>{bets}</div>
-                </div>
-                <div>
-                  <div className="mono" style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#888890' }}>Gate</div>
-                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#888890' }}>{bets}/200</div>
+                <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '16px', letterSpacing: '-0.01em' }}>{s.name}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', paddingTop: '14px', borderTop: B }}>
+                  <div>
+                    <div className="dell-heading" style={{ fontSize: '8.5px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>Win Rate</div>
+                    <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)' }}>{wr !== null ? `${wr.toFixed(1)}%` : '--'}</div>
+                  </div>
+                  <div>
+                    <div className="dell-heading" style={{ fontSize: '8.5px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>Bets</div>
+                    <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)' }}>{bets}</div>
+                  </div>
+                  <div>
+                    <div className="dell-heading" style={{ fontSize: '8.5px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>Gate</div>
+                    <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: bets >= 200 ? 'var(--signal)' : 'var(--fog)' }}>{bets >= 200 ? '✓' : `${bets}/200`}</div>
+                  </div>
                 </div>
               </div>
             </Link>

@@ -1,20 +1,24 @@
 /**
  * Design tokens shared across all beezy-vip components.
  * Import from here instead of redefining locally.
+ *
+ * Terminal aesthetic: near-black surfaces, hairline borders, Signal Green
+ * brand accent, and a per-system color taxonomy (Discord-style) so each
+ * betting system reads as its own identity color across the product.
  */
 import type { Bet } from '@/lib/types'
 
-// Border constant -- Dell 1996: hard 1px black for outer frames
-export const B = '1px solid #000'
-// Softer inner border for table rows and subdividers
-export const B_INNER = '1px solid #1f1f24'
+// Hairline border — replaces the old hard 1px-black Dell frame.
+export const B = '1px solid var(--basalt)'
+// Subtler inner border for table rows and nested dividers.
+export const B_INNER = '1px solid #201f22'
 
-// Confidence tier colors (mirror --strong/--lean/--watch in globals.css)
+// ── Confidence tiers (mirror --strong / --lean / --watch in globals.css) ──
 export type ScoreTier = 'strong' | 'lean' | 'watch'
 export const TIER_COLOR: Record<ScoreTier, string> = {
-  strong: '#b3bd95',   // sage -- WIN color, high confidence
-  lean:   '#fcc20f',   // Dell yellow -- worth a look
-  watch:  '#a5b8c0',   // steel -- neutral signal
+  strong: '#71d083',   // signal green — high confidence
+  lean:   '#e3b261',   // amber — worth a look
+  watch:  '#b5b2bc',   // silver — neutral signal
 }
 export const TIER_LABEL: Record<ScoreTier, string> = {
   strong: 'STRONG PLAY',
@@ -22,50 +26,49 @@ export const TIER_LABEL: Record<ScoreTier, string> = {
   watch:  'WATCH',
 }
 
-// System solid colors -- mapped to Dell 1996 catalog tints
+// ── Per-system identity hues (must match --sys-* vars in globals.css) ──
 export const SYSTEM_COLOR: Record<string, string> = {
   // Game Lines
-  NRFI:        '#b3bd95',   // sage
-  F5:          '#9ab6c8',   // sky
+  NRFI:        '#5fd0a0',   // mint
+  F5:          '#4ea6f5',   // azure
   // Innings Windows
-  F3:          '#a5b8c0',   // steel -- shorter window
-  F1H:         '#9ab6c8',   // sky
-  F7:          '#8c9ae0',   // periwinkle -- deeper into game
-  GAME:        '#8e8a25',   // olive -- full game
+  F3:          '#46c0d8',   // cyan
+  F1H:         '#6f9cf5',   // cornflower
+  F7:          '#8b87f2',   // indigo
+  GAME:        '#e3b261',   // gold
   // Pitcher Props
-  K:           '#8c9ae0',   // periwinkle
-  OUTS:        '#e6915d',   // peach
-  PITCHER_ER:  '#d77a7a',   // salmon
+  K:           '#a987f0',   // violet
+  OUTS:        '#ef9a52',   // amber
+  PITCHER_ER:  '#ef7f6e',   // coral
   // Batter Props
-  HR:          '#d77a7a',   // salmon
-  BATTER_K:    '#8c9ae0',   // periwinkle
-  BATTER_TB:   '#c0d4a7',   // lime
-  BATTER_HITS: '#a5b8c0',   // steel
+  HR:          '#ee6fae',   // magenta
+  BATTER_K:    '#c08cf0',   // lavender
+  BATTER_TB:   '#a9d166',   // lime
+  BATTER_HITS: '#4fc7bd',   // teal
   // Meta
-  ALL:         '#f5f5f7',
+  ALL:         '#c9c6cf',   // neutral silver
 }
 
-// System pill styles -- mapped to Dell 1996 catalog tints, hard 1px borders
-export const SYSTEM_PILL: Record<string, { bg: string; color: string; border: string }> = {
-  // Game Lines
-  NRFI:        { bg: '#1a2218', color: '#b3bd95', border: '1px solid #8e9e78' },  // sage
-  F5:          { bg: '#131e24', color: '#9ab6c8', border: '1px solid #6a8fa0' },  // sky
-  // Innings Windows
-  F3:          { bg: '#131a1e', color: '#a5b8c0', border: '1px solid #7a9aa5' },  // steel
-  F1H:         { bg: '#131e24', color: '#9ab6c8', border: '1px solid #6a8fa0' },  // sky
-  F7:          { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
-  GAME:        { bg: '#1c1c0a', color: '#8e8a25', border: '1px solid #6a6615' },  // olive
-  // Pitcher Props
-  K:           { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
-  OUTS:        { bg: '#2a1a0f', color: '#e6915d', border: '1px solid #c06830' },  // peach
-  PITCHER_ER:  { bg: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' },  // salmon
-  // Batter Props
-  HR:          { bg: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' },  // salmon
-  BATTER_K:    { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },  // periwinkle
-  BATTER_TB:   { bg: '#141e0f', color: '#c0d4a7', border: '1px solid #8aaa6c' },  // lime
-  BATTER_HITS: { bg: '#131a1e', color: '#a5b8c0', border: '1px solid #7a9aa5' },  // steel
-  // Fallback for unknown or newly-pipelined systems.
-  ALL:          { bg: '#1f1f24', color: '#a1a1aa', border: '1px solid #2a2a31' },
+// Build a tinted pill { bg, color, border } from a system hue. Surfaces and
+// borders are derived from the hue so the whole taxonomy stays consistent.
+type Pill = { bg: string; color: string; border: string }
+function pill(hue: string): Pill {
+  return {
+    bg:     `color-mix(in oklab, ${hue} 16%, #04040b)`,
+    color:  hue,
+    border: `1px solid color-mix(in oklab, ${hue} 40%, #04040b)`,
+  }
+}
+
+export const SYSTEM_PILL: Record<string, Pill> = Object.fromEntries(
+  Object.entries(SYSTEM_COLOR).map(([sys, hue]) => [sys, pill(hue)]),
+) as Record<string, Pill>
+
+// Fallback for unknown or newly-pipelined systems.
+SYSTEM_PILL.ALL = {
+  bg:     'color-mix(in oklab, #c9c6cf 10%, #04040b)',
+  color:  '#c9c6cf',
+  border: '1px solid #323035',
 }
 
 // Team full name -> 3-letter abbreviation

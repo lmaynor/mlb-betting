@@ -3,7 +3,7 @@ export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
 const KEY = process.env.BETTING_API_KEY!;
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
+const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://beezy.fyi";
 
 const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
   ARI: { p: "167,25,48",   s: "0,0,0",       slug: "ari" },
@@ -38,17 +38,12 @@ const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
   WSH: { p: "171,0,3",     s: "20,34,90",     slug: "wsh" },
 };
 
+// Per-system identity colors (match lib/tokens.ts SYSTEM_COLOR).
 const SYS: Record<string, { accent: string; bg: string; label: string }> = {
-  HR:   { accent: "#f59e0b", bg: "#1a1200", label: "HR YES" },
-  K:    { accent: "#a78bfa", bg: "#100a1e", label: "STRIKEOUTS" },
-  OUTS: { accent: "#fb923c", bg: "#1a0d00", label: "PITCHER OUTS" },
+  HR:   { accent: "#ee6fae", bg: "#291525", label: "HR YES" },
+  K:    { accent: "#a987f0", bg: "#1e182f", label: "STRIKEOUTS" },
+  OUTS: { accent: "#ef9a52", bg: "#291c16", label: "PITCHER OUTS" },
 };
-
-function playerHeadshot(name: string, base: string): string | null {
-  if (!name) return null;
-  const key = name.toLowerCase().replace(/ /g, "_");
-  return `${base}/headshots/${key}.jpg`;
-}
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
 function fmtEdge(e: any) { return `+${(parseFloat(e) * 100).toFixed(1)}%`; }
@@ -102,35 +97,35 @@ export async function GET() {
   const H = HEADER_H + PAD + picks.length * ROW_H + (picks.length - 1) * GAP + PAD + FOOTER_H;
 
   return new ImageResponse((
-    <div style={{ width:`${W}px`, height:`${H}px`, background:"#06060a", display:"flex", flexDirection:"column", fontFamily:"monospace", position:"relative" }}>
+    <div style={{ width:`${W}px`, height:`${H}px`, background:"#04040b", display:"flex", flexDirection:"column", fontFamily:"monospace", position:"relative" }}>
 
       {/* top gradient bar */}
-      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"5px", background:"linear-gradient(90deg,#f59e0b 0%,#ec4899 40%,#a78bfa 100%)" }} />
+      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"5px", background:"linear-gradient(90deg,#ee6fae 0%,#a987f0 50%,#ef9a52 100%)" }} />
 
       {/* HEADER */}
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #1a1a22", gap:"10px" }}>
+      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #2b292d", gap:"12px" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:"0px" }}>
-          <span style={{ fontSize:"52px", fontWeight:900, color:"#ffffff", letterSpacing:"-3px" }}>BEEZY</span>
-          <span style={{ fontSize:"52px", fontWeight:900, color:"#10b981", letterSpacing:"-3px" }}>.FYI</span>
+          <span style={{ fontSize:"52px", fontWeight:900, color:"#f3f2f5", letterSpacing:"-3px" }}>BEEZY</span>
+          <span style={{ fontSize:"52px", fontWeight:900, color:"#71d083", letterSpacing:"-3px" }}>.FYI</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
-          <div style={{ display:"flex", background:"rgba(245,158,11,0.12)", border:"1px solid rgba(245,158,11,0.35)", borderRadius:"4px", padding:"4px 14px" }}>
-            <span style={{ fontSize:"12px", color:"#f59e0b", letterSpacing:"3px", fontWeight:800 }}>PLAYER PROPS</span>
+          <div style={{ display:"flex", background:"#15241e", border:"1px solid #2f553b", borderRadius:"999px", padding:"5px 14px" }}>
+            <span style={{ fontSize:"12px", color:"#71d083", letterSpacing:"3px", fontWeight:800 }}>PLAYER PROPS</span>
           </div>
-          <span style={{ fontSize:"12px", color:"#3f3f50", letterSpacing:"1px" }}>{today}</span>
+          <span style={{ fontSize:"12px", color:"#8a8893", letterSpacing:"1px" }}>{today}</span>
         </div>
       </div>
 
       {/* PICKS */}
       <div style={{ display:"flex", flexDirection:"column", padding:`${PAD}px 20px`, gap:`${GAP}px` }}>
         {picks.length === 0 ? (
-          <div style={{ display:"flex", height:`${ROW_H}px`, alignItems:"center", justifyContent:"center", color:"#3f3f46", fontSize:"18px", letterSpacing:"3px" }}>
+          <div style={{ display:"flex", height:`${ROW_H}px`, alignItems:"center", justifyContent:"center", color:"#8a8893", fontSize:"18px", letterSpacing:"3px" }}>
             NO PLAYER PROPS TODAY
           </div>
         ) : picks.map((pick, i) => {
           const teamAbbrev = pick.home_team ?? pick.away_team ?? "NYY";
           const team = teamInfo(teamAbbrev);
-          const sys  = SYS[pick.system] ?? { accent:"#71717a", bg:"#111114", label:pick.system };
+          const sys  = SYS[pick.system] ?? { accent:"#b5b2bc", bg:"#1a191b", label:pick.system };
           const bullets = (pick.notes ?? "").trim().split(" · ").filter(Boolean).slice(0, 3);
           const playerName = (pick.player ?? "").toUpperCase();
           const mlbamId = pick.player
@@ -138,10 +133,10 @@ export async function GET() {
             : null;
 
           return (
-            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"14px", overflow:"hidden", position:"relative", border:`1px solid ${sys.accent}28` }}>
+            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"16px", overflow:"hidden", position:"relative", border:`1px solid ${sys.accent}28` }}>
 
               {/* team color gradient — stronger left bleed */}
-              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(120deg, rgba(${team.p},0.95) 0%, rgba(${team.p},0.5) 30%, rgba(${team.s},0.25) 55%, #09090d 100%)` }} />
+              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(120deg, rgba(${team.p},0.95) 0%, rgba(${team.p},0.5) 30%, rgba(${team.s},0.25) 55%, #04040b 100%)` }} />
               {/* subtle glow on left edge */}
               <div style={{ display:"flex", position:"absolute", top:0, left:0, bottom:0, width:"4px", background:`linear-gradient(180deg, ${sys.accent}, transparent)` }} />
 
@@ -149,14 +144,14 @@ export async function GET() {
               <div style={{ display:"flex", alignItems:"center", width:"100%", padding:"0 24px 0 28px", gap:"18px", position:"relative", zIndex:1 }}>
 
                 {/* rank */}
-                <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.25)", fontWeight:700, minWidth:"18px" }}>#{i+1}</span>
+                <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.3)", fontWeight:700, minWidth:"18px" }}>#{i+1}</span>
 
                 {/* headshot — large, prominent */}
                 {mlbamId ? (
                   <img
                     src={`${BASE}/headshots/${mlbamId}.jpg`}
                     width={130} height={130}
-                    style={{ objectFit:"cover", borderRadius:"50%", border:`3px solid ${sys.accent}60`, flexShrink:0 }}
+                    style={{ objectFit:"cover", borderRadius:"50%", border:`3px solid ${sys.accent}80`, flexShrink:0 }}
                   />
                 ) : (
                   <img
@@ -170,23 +165,23 @@ export async function GET() {
                 <div style={{ display:"flex", flexDirection:"column", flex:1, gap:"7px" }}>
                   {/* system pill + matchup */}
                   <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
-                    <div style={{ display:"flex", background:`${sys.bg}dd`, border:`1px solid ${sys.accent}55`, borderRadius:"4px", padding:"3px 10px" }}>
+                    <div style={{ display:"flex", background:`${sys.bg}dd`, border:`1px solid ${sys.accent}66`, borderRadius:"999px", padding:"3px 12px" }}>
                       <span style={{ fontSize:"10px", fontWeight:800, color:sys.accent, letterSpacing:"1.5px" }}>{sys.label}</span>
                     </div>
                     {pick.away_team && pick.home_team && (
-                      <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.4)", letterSpacing:"0.5px" }}>
+                      <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.55)", letterSpacing:"0.5px" }}>
                         {pick.away_team} @ {pick.home_team}
                       </span>
                     )}
                   </div>
 
                   {/* player name — big */}
-                  <span style={{ fontSize:"32px", fontWeight:900, color:"#ffffff", letterSpacing:"-1px", lineHeight:"1" }}>
+                  <span style={{ fontSize:"32px", fontWeight:900, color:"#f3f2f5", letterSpacing:"-1px", lineHeight:"1" }}>
                     {playerName || fmtPick(pick.bet_type)}
                   </span>
 
                   {/* pick line + odds */}
-                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.55)", fontWeight:600, letterSpacing:"0.3px" }}>
+                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.7)", fontWeight:600, letterSpacing:"0.3px" }}>
                     {fmtPick(pick.bet_type)} · {fmtOdds(pick.odds)}
                   </span>
 
@@ -196,7 +191,7 @@ export async function GET() {
                       {bullets.map((b: string, bi: number) => (
                         <div key={bi} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
                           <span style={{ fontSize:"10px", color:sys.accent, fontWeight:800 }}>▸</span>
-                          <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.45)", letterSpacing:"0.2px" }}>{b}</span>
+                          <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.55)", letterSpacing:"0.2px" }}>{b}</span>
                         </div>
                       ))}
                     </div>
@@ -204,10 +199,10 @@ export async function GET() {
                 </div>
 
                 {/* edge hero box */}
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.6)", border:`1px solid ${sys.accent}50`, borderRadius:"12px", padding:"14px 20px", gap:"5px", flexShrink:0, boxShadow:`0 0 20px ${sys.accent}18` }}>
-                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.3)", letterSpacing:"2px" }}>EDGE</span>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.6)", border:`1px solid ${sys.accent}66`, borderRadius:"12px", padding:"14px 20px", gap:"5px", flexShrink:0, boxShadow:`0 0 20px ${sys.accent}22` }}>
+                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.45)", letterSpacing:"2px" }}>EDGE</span>
                   <span style={{ fontSize:"30px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
-                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.22)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
+                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.35)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
                 </div>
               </div>
             </div>
@@ -216,28 +211,28 @@ export async function GET() {
       </div>
 
       {/* FOOTER */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"1px solid #1a1a22" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"1px solid #2b292d" }}>
         <div style={{ display:"flex", gap:"28px" }}>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>SEASON ROI</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#10b981" : "#ef4444") : "#f5f5f7" }}>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>SEASON ROI</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#71d083" : "#ec6a6a") : "#f3f2f5" }}>
               {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—"}
             </span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>BETS TRACKED</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color:"#f5f5f7" }}>{ov.total_bets ?? "—"}</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>BETS TRACKED</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color:"#f3f2f5" }}>{ov.total_bets ?? "—"}</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>FULL PICKS</span>
-            <span style={{ fontSize:"18px", color:"#10b981", fontWeight:800 }}>beezy.fyi</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>FULL PICKS</span>
+            <span style={{ fontSize:"18px", color:"#71d083", fontWeight:800 }}>beezy.fyi</span>
           </div>
-          <div style={{ display:"flex", width:"1px", height:"32px", background:"#1a1a22" }} />
+          <div style={{ display:"flex", width:"1px", height:"32px", background:"#2b292d" }} />
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f50", letterSpacing:"2px" }}>COMMUNITY</span>
-            <span style={{ fontSize:"18px", color:"#a78bfa", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>COMMUNITY</span>
+            <span style={{ fontSize:"18px", color:"#8b92f0", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
           </div>
         </div>
       </div>

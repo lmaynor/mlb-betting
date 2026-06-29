@@ -7,108 +7,64 @@ const X_URL = 'https://x.com/beezy_fyi'
 
 export function DiscordFollowCTA() {
   return (
-    <section style={{ padding: '18px 20px', borderBottom: '1px solid #1f1f24' }}>
+    <section style={{ padding: '56px 0 8px' }}>
       <div style={{
-        maxWidth: '900px',
-        margin: '0 auto',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '16px',
+        gap: '20px',
         flexWrap: 'wrap',
-        padding: '14px 16px',
-        border: '1px solid #000',
-        background: '#0a0c1e',
+        padding: '24px',
+        borderRadius: 'var(--radius-xl)',
+        border: '1px solid color-mix(in oklab, #5865f2 32%, var(--basalt))',
+        background: 'linear-gradient(135deg, color-mix(in oklab, #5865f2 14%, var(--graphite)), var(--graphite))',
+        boxShadow: 'var(--shadow-md)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-          {/* Discord icon block -- Dell accent tile */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
           <div style={{
-            width: '40px',
-            height: '40px',
+            width: '48px',
+            height: '48px',
+            borderRadius: 'var(--radius-lg)',
             background: '#5865f2',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            border: '1px solid #000',
+            boxShadow: '0 0 24px -4px color-mix(in oklab, #5865f2 60%, transparent)',
           }}>
-            <DiscordMark size={22} color="currentColor" />
+            <DiscordMark size={26} color="currentColor" />
           </div>
           <div>
-            <div
-              className="dell-heading"
-              style={{ fontSize: '12px', color: '#f5f5f7', marginBottom: '4px', letterSpacing: '0.04em' }}
-            >
+            <div className="dell-display" style={{ fontSize: '19px', color: 'var(--chalk)', marginBottom: '4px', letterSpacing: '-0.01em' }}>
               Get the card the moment it drops
             </div>
-            <p className="times" style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.45 }}>
-              Join the Discord for the daily card, model notes, and nightly results — pushed to you, no refresh required.
+            <p className="times" style={{ fontSize: '14px', color: 'var(--silver)', lineHeight: 1.5, maxWidth: '52ch' }}>
+              Join the Discord for the daily card, model notes, and nightly results &mdash; pushed to you, no refresh required.
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <a
             href={DISCORD_URL}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px',
-              fontSize: '11px',
-              fontFamily: 'Arial, Helvetica, sans-serif',
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              padding: '7px 14px',
-              background: '#fcc20f',
-              color: '#000',
-              border: '1px solid #000',
-              textDecoration: 'none',
-            }}
+            className="btn"
+            style={{ background: '#5865f2', color: '#fff', border: '1px solid color-mix(in oklab, #5865f2 70%, white)' }}
           >
-            <DiscordMark size={14} color="currentColor" />
+            <DiscordMark size={15} color="currentColor" />
             Join free
           </a>
           <a
             href={X_URL}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px',
-              fontSize: '11px',
-              fontFamily: 'Arial, Helvetica, sans-serif',
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              padding: '6px 12px',
-              background: '#0a0a0c',
-              color: '#f5f5f7',
-              border: '1px solid #333',
-              textDecoration: 'none',
-            }}
+            className="btn btn-ghost"
           >
             <XMark size={14} color="currentColor" />
             Follow
           </a>
-          <Link
-            href="/results"
-            style={{
-              fontSize: '12px',
-              fontFamily: 'Arial, Helvetica, sans-serif',
-              fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: '#9999ff',
-              textDecoration: 'underline',
-            }}
-          >
-            View results
-          </Link>
         </div>
       </div>
     </section>

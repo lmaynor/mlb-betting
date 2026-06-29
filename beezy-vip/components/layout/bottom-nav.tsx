@@ -24,18 +24,20 @@ export function BottomNav() {
         bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 50,
+        zIndex: 60,
         justifyContent: 'space-around',
         alignItems: 'stretch',
-        height: '56px',
+        height: 'calc(60px + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        background: '#000',
-        borderTop: '1px solid #000',
+        background: 'color-mix(in oklab, var(--graphite) 92%, transparent)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderTop: '1px solid var(--basalt)',
       }}
     >
       {TABS.map(tab => {
-        const active = pathname.startsWith(tab.href)
-        const color = active ? '#fcc20f' : '#888890'
+        const active = pathname === tab.href || (tab.href !== '/' && pathname.startsWith(tab.href))
+        const color = active ? 'var(--signal)' : 'var(--fog)'
         return (
           <Link
             key={tab.href}
@@ -45,19 +47,24 @@ export function BottomNav() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '3px',
+              gap: '4px',
               textDecoration: 'none',
               flex: 1,
               padding: '8px 0',
               color,
-              borderTop: active ? '2px solid #fcc20f' : '2px solid transparent',
-              background: active ? '#111' : 'transparent',
             }}
           >
-            <tab.Icon size={17} strokeWidth={active ? 2.4 : 1.9} color={color} />
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: '40px', height: '26px', borderRadius: 'var(--radius-pill)',
+              background: active ? 'var(--win-wash)' : 'transparent',
+              transition: 'background var(--dur) var(--ease-out)',
+            }}>
+              <tab.Icon size={18} strokeWidth={active ? 2.3 : 1.9} color={color} />
+            </span>
             <span
               className="dell-heading"
-              style={{ fontSize: '10px', letterSpacing: '0.06em' }}
+              style={{ fontSize: '9.5px', letterSpacing: '0.05em' }}
             >
               {tab.label}
             </span>

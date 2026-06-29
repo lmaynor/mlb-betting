@@ -1,16 +1,10 @@
 'use client'
 
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { SYSTEM_PILL } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
-// Dell 1996 pill definitions -- mapped from tokens.ts tints
-const PILL: Record<string, { bg: string; color: string; border: string }> = {
-  NRFI: { bg: '#1a2218', color: '#b3bd95', border: '1px solid #8e9e78' },
-  HR:   { bg: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' },
-  F5:   { bg: '#131e24', color: '#9ab6c8', border: '1px solid #6a8fa0' },
-  K:    { bg: '#0f1024', color: '#8c9ae0', border: '1px solid #5c6bbc' },
-  OUTS: { bg: '#2a1a0f', color: '#e6915d', border: '1px solid #c06830' },
-}
+const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, #04040b)', color: '#c9c6cf', border: '1px solid var(--iron)' }
 
 export function LiveDot({ label }: { label?: string }) {
   return (
@@ -19,7 +13,7 @@ export function LiveDot({ label }: { label?: string }) {
       {label && (
         <span
           className="dell-heading"
-          style={{ fontSize: '10px', letterSpacing: '0.1em', color: '#888890' }}
+          style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}
         >
           {label}
         </span>
@@ -29,11 +23,11 @@ export function LiveDot({ label }: { label?: string }) {
 }
 
 export function SystemBadge({ system }: { system: string }) {
-  const p = PILL[system] ?? { bg: '#1f1f24', color: '#a1a1aa', border: '1px solid #2a2a31' }
+  const p = SYSTEM_PILL[system] ?? FALLBACK_PILL
   return (
     <span
       className="dell-heading"
-      style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 7px', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
+      style={{ fontSize: '9.5px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
     >
       {system}
     </span>
@@ -42,40 +36,40 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '20px', border: '1px solid #000', background: '#111114' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '20px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
       <span
         className="dell-heading"
-        style={{ fontSize: '9px', letterSpacing: '0.1em', color: '#888890', marginBottom: '4px' }}
+        style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '2px' }}
       >
         {label}
       </span>
       <span
         className="mono"
-        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? '#b3bd95' : '#f5f5f7' }}
+        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? 'var(--signal)' : 'var(--chalk)' }}
       >
         {value}
       </span>
-      {sub && <span className="mono" style={{ fontSize: '11px', color: '#888890' }}>{sub}</span>}
+      {sub && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</span>}
     </div>
   )
 }
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading" style={{ fontSize: '9px', color: '#888890' }}>PENDING</span>
+    return <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.06em', color: 'var(--fog)' }}>PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
   const isVoid = result === 'void'
   const style = isWin
-    ? { background: '#1a2218', color: '#b3bd95', border: '1px solid #8e9e78' }
+    ? { background: 'var(--win-wash)', color: 'var(--signal)', border: '1px solid var(--win-border)' }
     : isPush || isVoid
-    ? { background: '#1f1f24', color: '#888890', border: '1px solid #2a2a31' }
-    : { background: '#2a1818', color: '#d77a7a', border: '1px solid #b05050' }
+    ? { background: 'var(--slate)', color: 'var(--fog)', border: '1px solid var(--iron)' }
+    : { background: 'var(--loss-wash)', color: 'var(--loss)', border: '1px solid var(--loss-border)' }
   return (
     <span
       className="dell-heading"
-      style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 7px', display: 'inline-block', ...style }}
+      style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
     >
       {result.toUpperCase()}
     </span>
@@ -83,10 +77,10 @@ export function ResultPill({ result }: { result: string | null }) {
 }
 
 export function PnL({ value }: { value: number | null }) {
-  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: '#888890' }}>—</span>
+  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>&mdash;</span>
   const pos = value >= 0
   return (
-    <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? '#b3bd95' : '#d77a7a' }}>
+    <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{(value / 10).toFixed(2)}u
     </span>
   )
@@ -95,39 +89,20 @@ export function PnL({ value }: { value: number | null }) {
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div style={{ marginBottom: '24px' }}>
-      <h2 className="dell-display" style={{ fontSize: '18px', color: '#f5f5f7' }}>{label}</h2>
-      {sub && <p className="times" style={{ fontSize: '13px', color: '#888890', marginTop: '6px', lineHeight: 1.5 }}>{sub}</p>}
+      <h2 className="dell-display" style={{ fontSize: '24px', color: 'var(--chalk)' }}>{label}</h2>
+      {sub && <p className="times" style={{ fontSize: '14px', color: 'var(--fog)', marginTop: '7px', lineHeight: 1.5 }}>{sub}</p>}
     </div>
   )
 }
 
 export function Button({ children, variant = 'primary', href, onClick }: { children: React.ReactNode; variant?: 'primary' | 'ghost' | 'accent'; href?: string; onClick?: () => void }) {
-  const styles: Record<string, React.CSSProperties> = {
-    primary: { background: '#000', color: '#fff', border: '1px solid #000' },
-    ghost:   { background: 'transparent', color: '#f5f5f7', border: '1px solid #333' },
-    accent:  { background: '#fcc20f', color: '#000', border: '1px solid #000' },
-  }
-  const base: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'Arial, Helvetica, sans-serif',
-    fontSize: '11px',
-    fontWeight: 700,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    padding: '8px 18px',
-    cursor: 'pointer',
-    textDecoration: 'none',
-    borderRadius: 0,
-    ...styles[variant],
-  }
-  if (href) return <a href={href} style={base}>{children}</a>
-  return <button onClick={onClick} style={base}>{children}</button>
+  const cls = variant === 'ghost' ? 'btn btn-ghost' : variant === 'accent' ? 'btn btn-secondary' : 'btn btn-primary'
+  if (href) return <a href={href} className={cls}>{children}</a>
+  return <button onClick={onClick} className={cls}>{children}</button>
 }
 
 export function Divider() {
-  return <div style={{ width: '100%', height: '1px', background: '#1f1f24' }} />
+  return <div style={{ width: '100%', height: '1px', background: 'var(--basalt)' }} />
 }
 
 export function ScoreBadge({ bet }: { bet: Bet }) {
@@ -135,13 +110,13 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const tier  = scoreTier(score)
   const color = TIER_COLOR[tier]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+      <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>
       <span
         className="dell-heading"
-        style={{ fontSize: '8px', letterSpacing: '0.1em', padding: '2px 6px', border: `1px solid ${color}`, background: `${color}18`, color }}
+        style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color }}
       >
         {TIER_LABEL[tier]}
       </span>
