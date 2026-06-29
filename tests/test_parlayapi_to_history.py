@@ -22,9 +22,9 @@ def _raw_props_obj():
         "id": "evt1", "home_team": "Cleveland Guardians",
         "away_team": "Los Angeles Angels", "commence_time": "2024-05-01T22:10:00Z",
         "bookmakers": [{"key": "draftkings", "markets": [
-            {"key": "player_home_runs", "outcomes": [
-                {"name": "Over Mike Trout", "description": "Mike Trout", "price": 280, "point": 0.5},
-                {"name": "Under Mike Trout", "description": "Mike Trout", "price": -360, "point": 0.5}]},
+            {"key": "player_home_runs", "outcomes": [   # yes/no @ 0.5
+                {"name": "Yes", "description": "Mike Trout", "price": 280, "point": 0.5},
+                {"name": "No", "description": "Mike Trout", "price": -360, "point": 0.5}]},
             {"key": "player_hits", "outcomes": [
                 {"name": "Over Jose Ramirez", "description": "Jose Ramirez", "price": -115, "point": 1.5},
                 {"name": "Under Jose Ramirez", "description": "Jose Ramirez", "price": -105, "point": 1.5}]},

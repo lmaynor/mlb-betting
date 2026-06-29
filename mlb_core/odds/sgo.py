@@ -52,8 +52,19 @@ SGO_API_BASE = "https://api.sportsgameodds.com"
 SGO_REQUEST_INTERVAL_SEC = 7.0
 
 # Onshore US books we accept. Offshore (bovada, unibet, williamhill, etc.) excluded.
+# Best-line selection now uses a DENYLIST: every US book qualifies as onshore;
+# only offshore / foreign / non-US books are excluded (per product decision
+# 2026-06-29). OFFSHORE_BOOKS is the exclusion set; ONSHORE_BOOKS below is the
+# known-US set kept for priority ordering + canonicalization (not the gate).
+OFFSHORE_BOOKS = {
+    "bovada", "betfair", "pinnacle", "betonline", "mybookie", "bookmakereu",
+    "heritagesports", "lowvig", "betanysports", "sportsbetting", "betus",
+    "betonlineag",
+}
+
 ONSHORE_BOOKS = {
     "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+    "bet365", "betrivers", "fanatics", "hardrock", "novig", "parx", "underdog",
 }
 
 # Priority order for canonical line selection -- most liquid first.
@@ -62,6 +73,7 @@ ONSHORE_BOOKS = {
 # pollute each other's odds.
 ONSHORE_BOOKS_PRIORITY = [
     "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+    "bet365", "betrivers", "fanatics", "hardrock",
 ]
 
 # SGO key -> canonical name stored in DB.
@@ -74,6 +86,10 @@ BOOK_CANONICAL: dict[str, str] = {
     "espnbet":    "thescore",
     "thescore":   "thescore",
     "pointsbet":  "pointsbet",
+    "bet365":     "bet365",
+    "betrivers":  "betrivers",
+    "fanatics":   "fanatics",
+    "hardrock":   "hardrock",
 }
 
 # Slate windowing is done in Eastern Time.
@@ -136,7 +152,7 @@ def _best_book_odds_int(odd_entry: dict) -> tuple[Optional[int], Optional[str]]:
     by_book = odd_entry.get("byBookmaker") or {}
     best_odds, best_book = None, None
     for book, info in by_book.items():
-        if book not in ONSHORE_BOOKS:
+        if book in OFFSHORE_BOOKS:   # every US book qualifies; only offshore excluded
             continue
         if not info.get("available"):
             continue
@@ -190,7 +206,7 @@ def _best_book_odds_for_line(
     by_book = odd_entry.get("byBookmaker") or {}
     best_odds, best_book = None, None
     for book, info in by_book.items():
-        if book not in ONSHORE_BOOKS:
+        if book in OFFSHORE_BOOKS:   # every US book qualifies; only offshore excluded
             continue
         if not info.get("available"):
             continue

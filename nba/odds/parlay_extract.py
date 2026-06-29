@@ -29,9 +29,9 @@ def _market_short(sport: str, key: str) -> str:
 
 def _side(outcome_name: str) -> str:
     n = (outcome_name or "").strip().lower()
-    if n.startswith("over"):
+    if n.startswith("over") or n.startswith("yes"):   # yes/no props (MLB home runs)
         return "over"
-    if n.startswith("under"):
+    if n.startswith("under") or n.startswith("no"):
         return "under"
     return ""
 

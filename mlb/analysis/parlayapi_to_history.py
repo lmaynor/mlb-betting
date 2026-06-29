@@ -49,13 +49,15 @@ PARLAY_TO_HISTORY = {
 }
 
 # ParlayAPI/OddsAPI book key -> canonical (matches SGO/BettingPros naming where they overlap).
+# Verified against a live payload 2026-06-29. odds_history keeps ALL books
+# (incl. offshore/sharp like pinnacle) for analytics; unknown keys pass through
+# lowercased via _canon_book.
 PARLAY_BOOK_CANON = {
     "draftkings": "draftkings", "fanduel": "fanduel", "betmgm": "betmgm",
-    "caesars": "caesars", "williamhill_us": "caesars",
+    "caesars": "caesars", "bet365": "bet365", "betrivers": "betrivers",
+    "fanatics": "fanatics", "hardrock": "hardrock",
     "espnbet": "thescore", "thescore": "thescore",
     "pointsbet": "pointsbet", "pointsbetus": "pointsbet",
-    "bet365": "bet365", "fanatics": "fanatics", "betrivers": "betrivers",
-    "fliff": "fliff", "pinnacle": "pinnacle", "hardrockbet": "hardrock",
 }
 
 

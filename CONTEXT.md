@@ -897,8 +897,21 @@ env `ODDS_PRIMARY` (default `sgo`; set to `parlay` to cut over):
   historical comes from BettingPros. Cutover: shadow-run via `/snapshot-odds`
   with `{"provider":"parlay","out_prefix":"Odds/sgo/_shadow"}`, diff, then flip
   `ODDS_PRIMARY=parlay` (`gcloud run services update --update-env-vars`).
-  Rollback: set it back to `sgo` (no redeploy). Credit budget ~11.3k/mo < 20k.
-  Settlement is provider-independent (MLB Stats API).
+  Rollback: set it back to `sgo` (no redeploy). Settlement is provider-independent.
+
+  **Cadence:** 8 snapshots/day, concentrated 18:00-23:00 UTC (lineup->closing,
+  the bulk night slate moves most). SGO inning markets fetched on only 4 runs
+  (`include_sgo=true`: the two pre-/run times 15:55/21:55, night lineups, close);
+  the other 4 carry inning markets forward (`include_sgo=false`) so SGO stays
+  ~4x/day under its ~2500-entity free tier. The two late runs use `day_offset=1`
+  to bank tomorrow's slate (next-day lines post ~9pm ET); ParlayAPI events are
+  dated per-event from commence_time so multi-day slates resolve correctly.
+  **Credit budget:** an implicit guard in `snapshot_odds` paces ParlayAPI spend
+  EVENLY toward `PARLAY_CREDIT_CEILING` (19,500) -- allowance grows linearly
+  (`CEILING * day/days_in_month`), tracked in `OddsAccum/baseball_mlb/_credits/
+  {month}.json`; over-pace runs skip per-event props (game lines only). Pushes
+  to ~20k without ever exceeding. Schedulers: `deploy/add_snapshot_schedulers.sh`
+  (8-job cadence post-cutover; `LEGACY=1` keeps the 2 SGO jobs pre-cutover).
 
 ### SGO (legacy / inning fallback)
 

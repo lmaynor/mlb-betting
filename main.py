@@ -221,11 +221,14 @@ def snapshot_odds_handler():
     # Optional overrides: provider ("sgo"/"parlay", default env ODDS_PRIMARY) and
     # out_prefix (default "Odds/sgo"; pass a scratch prefix for a shadow run that
     # never touches the live latest.json).
-    provider   = body.get("provider")
-    out_prefix = body.get("out_prefix", "Odds/sgo")
+    provider    = body.get("provider")
+    out_prefix  = body.get("out_prefix", "Odds/sgo")
+    day_offset  = int(body.get("day_offset", 0))    # 1 = tomorrow (late-night jobs)
+    include_sgo = body.get("include_sgo")            # True on the 4 SGO runs, False on parlay-only
     try:
         from mlb.runners.snapshot_odds import run as snapshot_run
-        result = snapshot_run(run_date=run_date, provider=provider, out_prefix=out_prefix)
+        result = snapshot_run(run_date=run_date, provider=provider, out_prefix=out_prefix,
+                              day_offset=day_offset, include_sgo=include_sgo)
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"snapshot-odds failed:\n{tb}")

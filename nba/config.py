@@ -133,11 +133,11 @@ PARLAY_REGION = "us"
 PARLAY_PROP_MARKETS = {
     "basketball_nba": ["player_points", "player_rebounds", "player_assists"],
     "baseball_mlb": [
-        # batter props
+        # batter props (home_runs is a yes/no market: outcomes "Yes"/"No" @ 0.5)
         "player_hits", "player_total_bases", "player_home_runs",
-        # pitcher props (player_pitcher_outs is the live key; player_pitching_outs
-        # is NOT returned by the API -- requesting it just wastes a credit)
-        "player_strikeouts", "player_earned_runs", "player_pitcher_outs",
+        # pitcher props -- "player_outs" is the live outs-recorded key (verified
+        # payload 2026-06-29); player_pitcher_outs/_pitching_outs are NOT returned.
+        "player_strikeouts", "player_earned_runs", "player_outs",
     ],
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
