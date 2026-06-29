@@ -3,7 +3,7 @@ export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
 const KEY = process.env.BETTING_API_KEY!;
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://mlb-betting-rose.vercel.app";
+const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://beezy.fyi";
 
 // Team abbrev -> { primary, secondary, logo }
 const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
@@ -39,9 +39,12 @@ const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
   WSH: { p: "171,0,3",     s: "20,34,90",     slug: "wsh" },
 };
 
+// Per-system identity colors (match lib/tokens.ts SYSTEM_COLOR).
 const SYS: Record<string, { accent: string; bg: string }> = {
-  NRFI: { accent: "#10b981", bg: "#052016" },
-  F5:   { accent: "#3b82f6", bg: "#071228" },
+  NRFI: { accent: "#5fd0a0", bg: "#122422" },
+  F5:   { accent: "#4ea6f5", bg: "#0f1d30" },
+  F1H:  { accent: "#6f9cf5", bg: "#151c30" },
+  GAME: { accent: "#e3b261", bg: "#271f18" },
 };
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
@@ -91,57 +94,55 @@ export async function GET() {
   const H = HEADER_H + PAD + picks.length * ROW_H + (picks.length - 1) * GAP + PAD + FOOTER_H;
 
   return new ImageResponse((
-    <div style={{ width: `${W}px`, height: `${H}px`, background: "#08080a", display: "flex", flexDirection: "column", fontFamily: "monospace" }}>
+    <div style={{ width: `${W}px`, height: `${H}px`, background: "#04040b", display: "flex", flexDirection: "column", fontFamily: "monospace" }}>
 
       {/* top accent */}
-      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"4px", background:"linear-gradient(90deg,#3b82f6,#10b981)" }} />
+      <div style={{ display:"flex", position:"absolute", top:0, left:0, right:0, height:"4px", background:"linear-gradient(90deg,#4ea6f5,#5fd0a0)" }} />
 
       {/* HEADER */}
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"0.5px solid #1f1f24", gap:"8px", padding:"0 40px" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:"4px" }}>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#f5f5f7", letterSpacing:"-2px" }}>BEEZY</span>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#10b981", letterSpacing:"-2px" }}>.FYI</span>
+      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #2b292d", gap:"10px", padding:"0 40px" }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:"2px" }}>
+          <span style={{ fontSize:"44px", fontWeight:900, color:"#f3f2f5", letterSpacing:"-2px" }}>BEEZY</span>
+          <span style={{ fontSize:"44px", fontWeight:900, color:"#71d083", letterSpacing:"-2px" }}>.FYI</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-          <span style={{ fontSize:"13px", color:"#3b82f6", letterSpacing:"3px", fontWeight:700 }}>GAME PICKS</span>
-          <span style={{ fontSize:"13px", color:"#3f3f46" }}>·</span>
-          <span style={{ fontSize:"13px", color:"#52525b", letterSpacing:"1px" }}>{today}</span>
+          <span style={{ fontSize:"13px", color:"#4ea6f5", letterSpacing:"3px", fontWeight:700 }}>GAME PICKS</span>
+          <span style={{ fontSize:"13px", color:"#8a8893" }}>·</span>
+          <span style={{ fontSize:"13px", color:"#8a8893", letterSpacing:"1px" }}>{today}</span>
         </div>
       </div>
 
       {/* PICKS */}
       <div style={{ display:"flex", flexDirection:"column", padding:`${PAD}px 24px`, gap:`${GAP}px` }}>
         {picks.length === 0 ? (
-          <div style={{ display:"flex", height:`${ROW_H}px`, alignItems:"center", justifyContent:"center", color:"#3f3f46", fontSize:"18px", letterSpacing:"3px" }}>
+          <div style={{ display:"flex", height:`${ROW_H}px`, alignItems:"center", justifyContent:"center", color:"#8a8893", fontSize:"18px", letterSpacing:"3px" }}>
             NO GAME PICKS TODAY
           </div>
         ) : picks.map((pick, i) => {
           const away = teamInfo(pick.away_team);
           const home = teamInfo(pick.home_team);
-          const sys = SYS[pick.system] ?? { accent: "#71717a", bg: "#111114" };
+          const sys = SYS[pick.system] ?? { accent: "#b5b2bc", bg: "#1a191b" };
           const notes = (pick.notes ?? "").trim();
           const isBettingHome = pick.bet_type === "HOME";
           const featTeam = isBettingHome ? home : away;
-          const featSlug = featTeam.slug;
-          const logoUrl = `${BASE}/logos/${featSlug}.png`;
 
           return (
-            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"12px", overflow:"hidden", position:"relative" }}>
+            <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"14px", overflow:"hidden", position:"relative" }}>
 
               {/* gradient background using featured team colors */}
-              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(135deg, rgba(${featTeam.p},1) 0%, rgba(${featTeam.s},0.95) 50%, #0e0e11 100%)` }} />
-              <div style={{ display:"flex", position:"absolute", inset:0, background:"linear-gradient(90deg, transparent 0%, rgba(8,8,10,0.7) 100%)" }} />
+              <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(135deg, rgba(${featTeam.p},1) 0%, rgba(${featTeam.s},0.95) 50%, #04040b 100%)` }} />
+              <div style={{ display:"flex", position:"absolute", inset:0, background:"linear-gradient(90deg, transparent 0%, rgba(4,4,11,0.72) 100%)" }} />
 
               {/* content row */}
               <div style={{ display:"flex", alignItems:"center", width:"100%", padding:"0 28px", gap:"20px", position:"relative", zIndex:1 }}>
 
                 {/* rank */}
-                <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.3)", fontWeight:700, minWidth:"20px" }}>#{i+1}</span>
+                <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.4)", fontWeight:700, minWidth:"20px" }}>#{i+1}</span>
 
                 {/* team logos */}
                 <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
                   <img src={`${BASE}/logos/${away.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
-                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.4)", fontWeight:700 }}>@</span>
+                  <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.5)", fontWeight:700 }}>@</span>
                   <img src={`${BASE}/logos/${home.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
                 </div>
 
@@ -149,26 +150,26 @@ export async function GET() {
                 <div style={{ display:"flex", flexDirection:"column", flex:1, gap:"6px" }}>
                   <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
                     {/* system pill */}
-                    <div style={{ display:"flex", background:`${sys.bg}cc`, border:`1px solid ${sys.accent}50`, borderRadius:"4px", padding:"3px 10px" }}>
+                    <div style={{ display:"flex", background:`${sys.bg}cc`, border:`1px solid ${sys.accent}66`, borderRadius:"999px", padding:"3px 12px" }}>
                       <span style={{ fontSize:"11px", fontWeight:800, color:sys.accent, letterSpacing:"1px" }}>{pick.system}</span>
                     </div>
-                    <span style={{ fontSize:"20px", fontWeight:800, color:"#ffffff" }}>
+                    <span style={{ fontSize:"20px", fontWeight:800, color:"#f3f2f5" }}>
                       {pick.away_team ?? "?"} @ {pick.home_team ?? "?"}
                     </span>
                   </div>
-                  <span style={{ fontSize:"15px", color:"rgba(255,255,255,0.7)", fontWeight:600 }}>
+                  <span style={{ fontSize:"15px", color:"rgba(255,255,255,0.78)", fontWeight:600 }}>
                     {fmtPick(pick.bet_type, pick.system)} · {fmtOdds(pick.odds)}
                   </span>
                   {notes !== "" && (
-                    <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.45)", fontStyle:"italic" }}>▸ {notes}</span>
+                    <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.55)" }}>{notes}</span>
                   )}
                 </div>
 
                 {/* edge hero */}
-                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.5)", border:`1px solid ${sys.accent}40`, borderRadius:"10px", padding:"12px 18px", gap:"4px" }}>
-                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.4)", letterSpacing:"2px" }}>EDGE</span>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.5)", border:`1px solid ${sys.accent}55`, borderRadius:"12px", padding:"12px 18px", gap:"4px" }}>
+                  <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.5)", letterSpacing:"2px" }}>EDGE</span>
                   <span style={{ fontSize:"28px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
-                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.3)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
+                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.4)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
                 </div>
               </div>
             </div>
@@ -177,28 +178,28 @@ export async function GET() {
       </div>
 
       {/* FOOTER */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"0.5px solid #1f1f24" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 28px", height:`${FOOTER_H}px`, borderTop:"1px solid #2b292d" }}>
         <div style={{ display:"flex", gap:"32px" }}>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>SEASON ROI</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#10b981" : "#ef4444") : "#f5f5f7" }}>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>SEASON ROI</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#71d083" : "#ec6a6a") : "#f3f2f5" }}>
               {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—"}
             </span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>BETS TRACKED</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color:"#f5f5f7" }}>{ov.total_bets ?? "—"}</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>BETS TRACKED</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color:"#f3f2f5" }}>{ov.total_bets ?? "—"}</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>FULL PICKS</span>
-            <span style={{ fontSize:"18px", color:"#10b981", fontWeight:800 }}>beezy.fyi</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>FULL PICKS</span>
+            <span style={{ fontSize:"18px", color:"#71d083", fontWeight:800 }}>beezy.fyi</span>
           </div>
-          <div style={{ display:"flex", width:"1px", height:"36px", background:"#1f1f24" }} />
+          <div style={{ display:"flex", width:"1px", height:"36px", background:"#2b292d" }} />
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
-            <span style={{ fontSize:"9px", color:"#3f3f46", letterSpacing:"2px" }}>COMMUNITY</span>
-            <span style={{ fontSize:"18px", color:"#a78bfa", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
+            <span style={{ fontSize:"9px", color:"#8a8893", letterSpacing:"2px" }}>COMMUNITY</span>
+            <span style={{ fontSize:"18px", color:"#8b92f0", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
           </div>
         </div>
       </div>
