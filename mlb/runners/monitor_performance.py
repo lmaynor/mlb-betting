@@ -313,6 +313,13 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
         clv_str = ""
         if stats.get("clv_n", 0) >= 5:
             clv_str = f" | CLV: **{stats['mean_clv']:+.2f}%** (n={stats['clv_n']})"
+            # A4: promotion scorecard tag (does not affect suppression -- ROI-only).
+            from mlb_core.risk.clv import clv_verdict
+            cv = clv_verdict(stats.get("mean_clv"), stats.get("clv_tstat"), stats.get("clv_n"))
+            if cv["clv_promote_ready"]:
+                clv_str += " [PROMOTE-READY]"
+            elif cv["clv_status"] == "negative":
+                clv_str += " [CLV-NEG]"
         auc_str = f" | AUC: **{stats['auc']:.3f}**" if stats.get('auc') is not None else ""
         fields.append({
             "name":  f"{dot} {system}",

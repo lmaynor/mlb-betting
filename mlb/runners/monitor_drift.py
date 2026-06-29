@@ -44,7 +44,11 @@ N_BINS = 10  # PSI binning
 
 SYSTEM_CONFIG = {
     "1IOU": {
-        "gcs_meta":     "NRFI_Pro_System/models/model_meta_v17.json",
+        # Live runner loads the v18 ensemble (run_nrfi._load_v18_ensemble); v17 is
+        # fallback only. Must point at v18 meta or PSI checks the wrong (stale)
+        # training distribution. v18 nests feature_means/feature_stds under
+        # sub_models -- _flatten_meta_stats unions them. (Fixed 2026-06-28.)
+        "gcs_meta":     "NRFI_Pro_System/models/model_meta_v18.json",
         "gcs_features": "NRFI_Pro_System/data/model_features.csv",
     },
     "F5": {
@@ -103,6 +107,34 @@ def _psi(expected: np.ndarray, actual: np.ndarray, n_bins: int = N_BINS) -> floa
     return round(psi, 4)
 
 
+def _flatten_meta_stats(meta: dict) -> tuple[dict, dict, dict, bool]:
+    """Return (feature_means, feature_stds, feature_dists, is_ensemble).
+
+    Single-model metas (v17, HR, K, F5) store these flat at top level. Ensemble
+    metas (NRFI v18) store per-feature stats nested under meta["sub_models"][name]
+    (pitcher/lineup/context). Their feature groups are disjoint, so we union them.
+
+    is_ensemble flags whether to skip the top-N truncation in _check_system: for an
+    ensemble we want full coverage across every sub-model, otherwise the first
+    group's features (e.g. the 27 pitcher features) would crowd out lineup/context
+    -- and lineup is the only sub-model carrying live signal.
+    """
+    means = dict(meta.get("feature_means", {}) or {})
+    stds  = dict(meta.get("feature_stds",  {}) or {})
+    dists = dict(meta.get("feature_dists", {}) or {})
+    is_ensemble = False
+    sub_models = meta.get("sub_models")
+    if isinstance(sub_models, dict) and not stds:
+        is_ensemble = True
+        for sub in sub_models.values():
+            if not isinstance(sub, dict):
+                continue
+            means.update(sub.get("feature_means", {}) or {})
+            stds.update(sub.get("feature_stds",  {}) or {})
+            dists.update(sub.get("feature_dists", {}) or {})
+    return means, stds, dists, is_ensemble
+
+
 def _load_meta(gcs_key: str) -> dict | None:
     from mlb_core.storage import read_bytes, exists
     if not exists(gcs_key):
@@ -140,15 +172,16 @@ def _check_system(system: str, cfg: dict, run_date: str) -> dict:
     if meta is None:
         return {"status": "no_meta"}
 
-    feature_stds  = meta.get("feature_stds", {})
-    feature_means = meta.get("feature_means", {})
+    feature_means, feature_stds, feature_dists, is_ensemble = _flatten_meta_stats(meta)
 
     if not feature_stds:
         return {"status": "no_feature_stds",
                 "note": "Run retrain to populate feature_stds in meta (T10/T14)"}
 
-    # Select features to check: top-N by importance if available, else all
-    features_to_check = list(feature_stds.keys())[:TOP_N_FEATURES]
+    # Single-model metas cap at top-N; ensemble metas (NRFI v18) check every
+    # sub-model's features so lineup/context are not dropped by the truncation.
+    keys = list(feature_stds.keys())
+    features_to_check = keys if is_ensemble else keys[:TOP_N_FEATURES]
 
     recent = _load_recent_features(cfg["gcs_features"], LOOKBACK_DAYS, run_date)
     if recent.empty:
@@ -167,7 +200,8 @@ def _check_system(system: str, cfg: dict, run_date: str) -> dict:
 
         # C04: use empirical percentiles from model_meta if available.
         # Falls back to Gaussian for backward compatibility with old meta.
-        feature_dists = meta.get("feature_dists", {})
+        # (feature_dists is flattened across sub-models above; v18 has none yet
+        # so NRFI uses the Gaussian fallback until the retrain writes them.)
         fdist = feature_dists.get(feat)
         recent_vals = pd.to_numeric(recent[feat], errors="coerce").values
         if fdist is not None:
