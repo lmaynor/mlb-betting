@@ -219,8 +219,8 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
           )
         })}
         {lineY != null && <>
-          <line x1={padL} y1={lineY} x2={W - padR} y2={lineY} stroke="var(--signal)" strokeWidth="1" strokeDasharray="3 2" />
-          <text className="edge-axt" x={padL - 4} y={lineY + 3} textAnchor="end" fill="var(--signal)"
+          <line x1={padL} y1={lineY} x2={W - padR} y2={lineY} stroke="#71d083" strokeWidth="1" strokeDasharray="3 2" />
+          <text className="edge-axt" x={padL - 4} y={lineY + 3} textAnchor="end" fill="#71d083"
             style={{ fontWeight: 700 }}>{rf.line}</text>
         </>}
         <text className="edge-axt" x={padL} y={H - 4}>{games[0].date}</text>
@@ -275,8 +275,8 @@ function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>;
 }
 
 const PITCH_COLORS: Record<string, string> = {
-  FF: 'var(--loss)', SI: '#e6915d', FT: '#e6915d', FC: 'var(--signal)', SL: '#8c9ae0', ST: '#c0d4a7',
-  CU: '#9ab6c8', KC: '#8e8a25', CH: 'var(--signal)', FS: '#a5b8c0', SP: '#a5b8c0',
+  FF: '#ec6a6a', SI: '#ef9a52', FT: '#ef9a52', FC: '#e3b261', SL: '#a987f0', ST: '#c08cf0',
+  CU: '#4ea6f5', KC: '#6f9cf5', CH: '#5fd0a0', FS: '#4fc7bd', SP: '#46c0d8',
 }
 const PITCH_NAME: Record<string, string> = {
   FF: '4-Seam', SI: 'Sinker', FT: '2-Seam', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
@@ -302,9 +302,9 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
       <Take><b>{verdict}</b> &mdash; averaging <span className="mono">{avg.toFixed(1)} mph</span> off the bat, <b>{hardPct}%</b> hit hard.</Take>
       <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity versus launch angle">
         {/* sweet-spot band + barrel zone */}
-        <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="var(--signal)" opacity="0.06" />
-        <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="var(--signal)" opacity="0.10" />
-        <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="var(--signal)"
+        <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="#71d083" opacity="0.06" />
+        <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="#71d083" opacity="0.10" />
+        <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="#71d083"
           style={{ fontSize: '8px', fontWeight: 800, letterSpacing: '0.04em' }}>BARRELS</text>
         {yticks.map(v => (
           <g key={v}>

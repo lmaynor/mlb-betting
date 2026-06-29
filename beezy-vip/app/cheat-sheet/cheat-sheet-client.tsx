@@ -355,7 +355,7 @@ export function CheatSheetClient({
         }}>
           {/* Header */}
           <div style={{
-            background: '#0f1a14',
+            background: 'var(--graphite)',
             padding: '16px 16px 12px',
             borderBottom: '1px solid var(--basalt)',
           }}>
@@ -421,9 +421,9 @@ export function CheatSheetClient({
                 style={{
                   fontSize: '8px',
                   letterSpacing: '0.08em',
-                  color: allExpanded ? '#a5b8c0' : 'var(--fog)',
+                  color: allExpanded ? 'var(--chalk)' : 'var(--fog)',
                   background: 'transparent',
-                  border: `1px solid ${allExpanded ? '#a5b8c0' : 'var(--basalt)'}`,
+                  border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`,
                   padding: '4px 7px',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
@@ -443,9 +443,9 @@ export function CheatSheetClient({
                     padding: '5px 10px',
                     fontSize: '9px',
                     cursor: 'pointer',
-                    border: `1px solid ${filter === f.key ? '#a5b8c0' : 'var(--basalt)'}`,
+                    border: `1px solid ${filter === f.key ? 'var(--steel)' : 'var(--basalt)'}`,
                     background: filter === f.key ? '#131a1e' : 'transparent',
-                    color: filter === f.key ? '#a5b8c0' : 'var(--fog)',
+                    color: filter === f.key ? 'var(--chalk)' : 'var(--fog)',
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                   }}
@@ -481,7 +481,7 @@ export function CheatSheetClient({
                 </span>
               )}
               {topEdgePct > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: '#c0d4a7', letterSpacing: '0.06em' }}>
+                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
                   BEST EDGE +{topEdgePct.toFixed(1)}%
                 </span>
               )}
@@ -645,12 +645,12 @@ export function CheatSheetClient({
               SYSTEMS
             </div>
             {[
-              { key: 'NRFI', color: '#9ab6c8', desc: 'No Run First Inning — game pick' },
-              { key: 'F5',   color: '#e6915d', desc: 'First 5 innings ML — game pick' },
+              { key: 'NRFI', color: '#5fd0a0', desc: 'No Run First Inning — game pick' },
+              { key: 'F5',   color: '#4ea6f5', desc: 'First 5 innings ML — game pick' },
               { key: 'HR',   color: 'var(--loss)', desc: 'Home Run — batter prop' },
-              { key: 'K',    color: '#c0d4a7', desc: 'Strikeouts Over — pitcher prop' },
-              { key: 'OUTS', color: '#a5b8c0', desc: 'Outs Recorded — pitcher prop' },
-              { key: 'P.ER', color: '#8c9ae0', desc: 'Pitcher Earned Runs — pitcher prop' },
+              { key: 'K',    color: '#a987f0', desc: 'Strikeouts Over — pitcher prop' },
+              { key: 'OUTS', color: '#ef9a52', desc: 'Outs Recorded — pitcher prop' },
+              { key: 'P.ER', color: '#ef7f6e', desc: 'Pitcher Earned Runs — pitcher prop' },
               { key: 'HITS', color: 'var(--signal)', desc: 'Batter Hits Over — batter prop' },
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>

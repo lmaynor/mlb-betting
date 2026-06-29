@@ -13,7 +13,7 @@ const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTE
 
 function edgeColor(e: number) {
   if (e >= 8)  return 'var(--signal)'
-  if (e >= 5)  return '#e6915d'
+  if (e >= 5)  return 'var(--warn)'
   if (e >  0)  return 'var(--fog)'
   return 'var(--loss)'
 }
@@ -28,12 +28,13 @@ function Chip({ label, active, color, onClick }: {
 }) {
   return (
     <button onClick={onClick} style={{
-      padding: '4px 10px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
-      fontWeight: active ? 600 : 400,
-      border: `1px solid ${active ? (color ?? '#a5b8c0') : 'var(--iron)'}`,
-      background: active ? `${color ?? '#a5b8c0'}18` : 'transparent',
-      color: active ? (color ?? '#a5b8c0') : 'var(--steel)',
-      cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' as const,
+      padding: '5px 11px', fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
+      fontWeight: active ? 600 : 500, borderRadius: 'var(--radius-pill)',
+      border: `1px solid ${active ? (color ?? 'var(--silver)') : 'var(--basalt)'}`,
+      background: active ? `color-mix(in oklab, ${color ?? 'var(--silver)'} 16%, var(--carbon))` : 'var(--graphite)',
+      color: active ? (color ?? 'var(--silver)') : 'var(--silver)',
+      cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+      transition: 'all var(--dur) var(--ease-out)',
     }}>{label}</button>
   )
 }
@@ -95,7 +96,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
       {notes.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {notes.map((n, i) => (
-            <span key={i} className="mono" style={{ fontSize: '10px', color: '#3f3f46', background: 'var(--graphite)', padding: '3px 8px', border: '1px solid var(--basalt)' }}>
+            <span key={i} className="mono" style={{ fontSize: '10px', color: 'var(--steel)', background: 'var(--graphite)', padding: '3px 8px', border: '1px solid var(--basalt)' }}>
               {n}
             </span>
           ))}
@@ -136,7 +137,7 @@ function GameRow({ game }: { game: SlateGame }) {
             )}
           </div>
           {/* Starters */}
-          <div className="mono" style={{ fontSize: '11px', color: '#3f3f46', marginBottom: '8px' }}>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--steel)', marginBottom: '8px' }}>
             {game.away_pitcher
               ? <>{game.away_pitcher} <span style={{ color: '#27272a' }}>vs</span> {game.home_pitcher ?? 'TBA'}</>
               : <span style={{ color: '#27272a' }}>Starters TBA</span>
@@ -157,7 +158,7 @@ function GameRow({ game }: { game: SlateGame }) {
         {/* Right: expand toggle */}
         {hasPicks && (
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '12px', color: '#3f3f46', userSelect: 'none' }}>
+            <span className="mono" style={{ fontSize: '12px', color: 'var(--steel)', userSelect: 'none' }}>
               {open ? '-' : '+'}
             </span>
           </div>
@@ -211,14 +212,14 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {slateData.as_of && (
-            <span className="mono" style={{ fontSize: '10px', color: '#3f3f46' }}>
+            <span className="mono" style={{ fontSize: '10px', color: 'var(--steel)' }}>
               Updated {new Date(slateData.as_of).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })} CT
             </span>
           )}
           <button
             onClick={() => void refresh()}
             disabled={refreshing}
-            style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? '#3f3f46' : 'var(--fog)', cursor: refreshing ? 'default' : 'pointer' }}
+            style={{ fontSize: '10px', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? 'var(--steel)' : 'var(--fog)', cursor: refreshing ? 'default' : 'pointer' }}
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -232,7 +233,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
             onClick={() => setPicksOnly(o => !o)}
             style={{
               width: '28px', height: '16px',
-              background: picksOnly ? '#a5b8c0' : 'var(--basalt)',
+              background: picksOnly ? 'var(--signal)' : 'var(--basalt)',
               borderRadius: '8px', position: 'relative' as const, display: 'inline-block',
               flexShrink: 0, cursor: 'pointer', transition: 'background 0.15s',
             }}
@@ -251,7 +252,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         <div style={{ width: '0.5px', background: 'var(--basalt)', height: '20px', flexShrink: 0 }} />
 
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: '#3f3f46', marginRight: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>System</span>
+          <span className="mono" style={{ fontSize: '9px', color: 'var(--steel)', marginRight: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
@@ -268,7 +269,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Games list */}
       {filtered.length === 0 ? (
         <div style={{ border: B, padding: '60px 20px', textAlign: 'center' }}>
-          <div className="mono" style={{ fontSize: '12px', color: '#3f3f46', marginBottom: '8px' }}>
+          <div className="mono" style={{ fontSize: '12px', color: 'var(--steel)', marginBottom: '8px' }}>
             {slateData.total_games === 0 ? 'No games scheduled today.' : 'No games match the current filter.'}
           </div>
           {slateData.total_games === 0 && (
@@ -281,10 +282,10 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         <div style={{ border: B }}>
           {/* Column headers */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '8px 16px', background: 'var(--graphite)', borderBottom: B }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3f3f46' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--steel)' }}>
               Game -- Starters -- Picks
             </span>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3f3f46' }}>
+            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--steel)' }}>
               {filtered.length} games
             </span>
           </div>

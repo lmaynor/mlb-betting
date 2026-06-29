@@ -46,9 +46,9 @@ function Chip({ label, active, color, onClick }: {
     <button onClick={onClick} style={{
       padding: '4px 10px', fontSize: '10px', fontFamily: 'JetBrains Mono, monospace',
       fontWeight: active ? 600 : 400,
-      border: `1px solid ${active ? (color ?? '#a5b8c0') : 'var(--iron)'}`,
-      background: active ? `${color ?? '#a5b8c0'}18` : 'transparent',
-      color: active ? (color ?? '#a5b8c0') : 'var(--steel)',
+      border: `1px solid ${active ? (color ?? 'var(--silver)') : 'var(--basalt)'}`,
+      background: active ? `color-mix(in oklab, ${color ?? 'var(--silver)'} 16%, var(--carbon))` : 'var(--graphite)',
+      color: active ? (color ?? 'var(--silver)') : 'var(--silver)',
       cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' as const,
       transition: 'all 0.15s',
     }}>{label}</button>
@@ -60,7 +60,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
     <div style={{ padding: '16px 20px', flex: 1, minWidth: 0 }}>
       <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--steel)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--ash)', lineHeight: 1 }}>{value}</div>
-      {sub && <div className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginTop: '4px' }}>{sub}</div>}
+      {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginTop: '4px' }}>{sub}</div>}
     </div>
   )
 }
@@ -84,7 +84,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
         <span style={{ color: 'var(--steel)' }}>Open odds</span>
         <span className="mono" style={{ color: 'var(--ash)' }}>{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
       </div>
-      {p.player && <div className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginTop: '6px' }}>{p.player}</div>}
+      {p.player && <div className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginTop: '6px' }}>{p.player}</div>}
     </div>
   )
 }
@@ -176,19 +176,19 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         {/* Date range */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: '#3f3f46', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
+          <span className="mono" style={{ fontSize: '9px', color: 'var(--steel)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: '#3f3f46', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
+          <span className="mono" style={{ fontSize: '9px', color: 'var(--steel)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
         </div>
-        {loading && <span className="mono" style={{ fontSize: '10px', color: '#3f3f46', marginLeft: 'auto' }}>Loading...</span>}
+        {loading && <span className="mono" style={{ fontSize: '10px', color: 'var(--steel)', marginLeft: 'auto' }}>Loading...</span>}
       </div>
 
       {/* System chips */}
@@ -214,7 +214,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         {filtered.length === 0 ? (
           <div style={{ height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center' }}>
-              <div className="mono" style={{ fontSize: '12px', color: '#3f3f46', marginBottom: '8px' }}>No CLV data for this filter</div>
+              <div className="mono" style={{ fontSize: '12px', color: 'var(--steel)', marginBottom: '8px' }}>No CLV data for this filter</div>
               <div className="mono" style={{ fontSize: '11px', color: '#27272a' }}>CLV is captured as picks approach game time.</div>
             </div>
           </div>
@@ -236,7 +236,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 tick={{ fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
                 tickLine={false}
                 axisLine={{ stroke: 'var(--iron)' }}
-                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: '#3f3f46', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
+                label={{ value: 'Model Edge %', position: 'insideBottom', offset: -10, fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}
               />
               <YAxis
                 dataKey="y"
@@ -248,7 +248,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 tickLine={false}
                 axisLine={{ stroke: 'var(--iron)' }}
                 width={52}
-                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: '#3f3f46', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', dx: 14 }}
+                label={{ value: 'CLV %', angle: -90, position: 'insideLeft', fill: 'var(--steel)', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', dx: 14 }}
               />
 
               <ReferenceLine x={0} stroke="var(--iron)" strokeDasharray="4 2" />
@@ -303,7 +303,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
             label="Positive CLV"
             value={`${stats.pctPos.toFixed(0)}%`}
             sub="of bets beat the closing line"
-            color={stats.pctPos >= 50 ? 'var(--signal)' : '#e6915d'}
+            color={stats.pctPos >= 50 ? 'var(--signal)' : 'var(--warn)'}
           />
           <div style={{ width: '1px', background: 'var(--basalt)', flexShrink: 0 }} />
           <StatCard
@@ -328,7 +328,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
         >
           <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--steel)' }}>What is CLV?</span>
-          <span className="mono" style={{ fontSize: '12px', color: '#3f3f46' }}>{infoOpen ? '-' : '+'}</span>
+          <span className="mono" style={{ fontSize: '12px', color: 'var(--steel)' }}>{infoOpen ? '-' : '+'}</span>
         </button>
         {infoOpen && (
           <div style={{ padding: '0 16px 16px', borderTop: B }}>
