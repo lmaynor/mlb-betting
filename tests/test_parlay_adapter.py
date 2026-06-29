@@ -175,7 +175,7 @@ def _sgo_inning_event():
 def test_merge_splices_inning_markets(monkeypatch):
     _prime(monkeypatch)
     parlay = A.parlay_slate_to_sgo_events([_game_lines_event()], {"parlay-evt-1": _props_event()}, DATE)
-    merged = A.merge_events(parlay, [_sgo_inning_event()], DATE)
+    merged = A.merge_events(parlay, [_sgo_inning_event()])
     assert len(merged) == 1
     ev = merged[0]
     # NRFI spliced in from SGO
@@ -191,6 +191,6 @@ def test_merge_splices_inning_markets(monkeypatch):
 def test_merge_keeps_sgo_only_game_with_restamped_eventid(monkeypatch):
     _prime(monkeypatch)
     # no ParlayAPI events; SGO-only game must survive with eventID == game_pk
-    merged = A.merge_events([], [_sgo_inning_event()], DATE)
+    merged = A.merge_events([], [_sgo_inning_event()])
     assert len(merged) == 1
     assert merged[0]["eventID"] == "745101"
