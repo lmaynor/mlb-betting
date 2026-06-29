@@ -408,6 +408,95 @@ def calibration_vs_market(df: pd.DataFrame, preds: pd.DataFrame, n_bins: int = 1
 
 
 # --------------------------------------------------------------------------
+# Deliverable 4: bettable-slate metrics (why global AUC mis-judges NRFI)
+# --------------------------------------------------------------------------
+def _auc(y, p) -> float | None:
+    """Tie-aware ROC AUC via the Mann-Whitney rank identity (numpy only).
+
+    Self-contained copy of diagnose_nrfi_drift._auc_rank so this toolkit runs
+    anywhere (no xgboost/runner deps). Returns None if either class is absent.
+    """
+    y = np.asarray(y, dtype=float)
+    p = np.asarray(p, dtype=float)
+    mask = ~np.isnan(y) & ~np.isnan(p)
+    y, p = y[mask], p[mask]
+    n_pos = float(np.count_nonzero(y == 1))
+    n_neg = float(np.count_nonzero(y == 0))
+    if n_pos == 0 or n_neg == 0:
+        return None
+    order = np.argsort(p, kind="mergesort")
+    sp = p[order]
+    n = sp.shape[0]
+    ranks_sorted = np.empty(n, dtype=float)
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and sp[j + 1] == sp[i]:
+            j += 1
+        ranks_sorted[i:j + 1] = (i + j) / 2.0 + 1.0
+        i = j + 1
+    ranks = np.empty(n, dtype=float)
+    ranks[order] = ranks_sorted
+    auc = (float(ranks[y == 1].sum()) - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg)
+    return round(auc, 4)
+
+
+def bettable_slate_metrics(df: pd.DataFrame, preds: pd.DataFrame,
+                           min_edge: float = 0.03, price: str = "best",
+                           tail_margin: float = 0.07) -> dict:
+    """Show WHY global AUC mis-judges a tail-selective bettor, with the fix.
+
+    Global AUC weights every game equally and is dominated by the indifferent
+    mid-slate (model ~ market ~ 0.5), washing it toward 0.50 even when the model
+    is sharp where it bets. This contrasts three AUCs and breaks ROI out by
+    month x edge bucket so the per-period stability (or not) is visible.
+
+    Returns:
+      global_auc / global_n      -- AUC over every scored game (the misleading number)
+      tail_auc / tail_n          -- AUC over confident preds (|p-0.5| >= tail_margin)
+      bettable_auc / bettable_n  -- AUC over games whose best side clears min_edge
+      month_bucket_roi           -- ROI + n by calendar month x edge bucket
+    """
+    pred_cols = ["game_key", "p_yrfi"] + (["yrfi"] if "yrfi" in preds.columns else [])
+    m = df.merge(preds[pred_cols], on="game_key", how="inner", suffixes=("", "_pred"))
+    if "yrfi_pred" in m.columns:
+        m["yrfi"] = m["yrfi"].fillna(m["yrfi_pred"]) if "yrfi" in m.columns else m["yrfi_pred"]
+    if "yrfi" not in m.columns or m["yrfi"].notna().sum() == 0:
+        raise ValueError("bettable_slate_metrics needs realized outcomes (yrfi).")
+    m = m.dropna(subset=["p_yrfi", "fair_yrfi", "yrfi"]).copy()
+
+    out: dict = {}
+    y, p = m["yrfi"].values, m["p_yrfi"].values
+    out["global_auc"], out["global_n"] = _auc(y, p), len(m)
+
+    tail_mask = np.abs(p - 0.5) >= tail_margin
+    out["tail_auc"] = _auc(y[tail_mask], p[tail_mask])
+    out["tail_n"] = int(tail_mask.sum())
+
+    m["best_edge"] = np.maximum(m["p_yrfi"] - m["fair_yrfi"],
+                                (1.0 - m["p_yrfi"]) - m["fair_nrfi"])
+    bet = m[m["best_edge"] >= min_edge]
+    out["bettable_auc"] = _auc(bet["yrfi"].values, bet["p_yrfi"].values)
+    out["bettable_n"] = len(bet)
+
+    # Per-month x edge-bucket ROI -- reuse the backtest's bet ledger.
+    res = backtest_vs_lines(df, preds, min_edge=min_edge, price=price)
+    ledger = res.get("_bets")
+    if ledger is not None and len(ledger):
+        dates = df[["game_key", "date"]].drop_duplicates("game_key")
+        b = ledger.merge(dates, on="game_key", how="left")
+        b["month"] = pd.to_datetime(b["date"]).dt.to_period("M").astype(str)
+        b["edge_bucket"] = pd.cut(
+            b["edge"], [0, 0.05, 0.10, 0.15, 0.20, 1.0],
+            labels=["0-5%", "5-10%", "10-15%", "15-20%", "20%+"])
+        out["month_bucket_roi"] = (
+            b.groupby(["month", "edge_bucket"], observed=True)
+             .agg(n=("won", "size"), roi=("profit_units", "mean"))
+             .reset_index())
+    return out
+
+
+# --------------------------------------------------------------------------
 # CLI -- runs whatever the available inputs allow.
 # --------------------------------------------------------------------------
 def _print_section(title: str) -> None:
@@ -428,11 +517,16 @@ def main() -> None:
     ap.add_argument("--year", type=int, default=None,
                     help="restrict to one season (use the post-training year for the "
                          "honest out-of-sample read)")
+    ap.add_argument("--since", default=None,
+                    help="YYYY-MM-DD lower bound on game date; pass the model's "
+                         "test_from (e.g. 2024-08-20) for the full holdout sample")
     args = ap.parse_args()
 
     df = load_yrfi_master(args.odds, devig_method=args.devig)
     if args.year:
         df = df[df["year"] == args.year].copy()
+    if args.since:
+        df = df[df["date"] >= pd.Timestamp(args.since)].copy()
     print(f"Loaded {len(df)} games, {df['year'].min()}-{df['year'].max()}.")
 
     _print_section("Deliverable 2: market baseline (consensus de-vig)")
@@ -459,6 +553,13 @@ def main() -> None:
             for k, v in res.items():
                 if k.startswith("_"):
                     continue
+                print(f"\n-- {k} --")
+                print(v)
+
+            _print_section("Deliverable 4: bettable-slate metrics "
+                           "(global AUC mis-judges a tail bettor)")
+            for k, v in bettable_slate_metrics(
+                    df, preds, min_edge=args.min_edge, price=args.price).items():
                 print(f"\n-- {k} --")
                 print(v)
         else:

@@ -17,6 +17,16 @@ recency-weighted / lineup-only retrain (feeds Track B).
 Reuses run_nrfi._load_v18_ensemble + _score_v18(return_components=True) so this
 diagnostic can never diverge from the production scoring path.
 
+CORRECTION (2026-06-29): the "live AUC 0.498 -> not salvageable" reading was a
+METRIC artifact. Global stacked AUC is dominated by the indifferent mid-slate
+(~40% of games sit at model ~ market ~ 0.48), which washes the statistic to 0.50.
+A holdout backtest against real lines (mlb/analysis/nrfi_market.py, test_from
+2024-08-20, ~880 OOS bets) shows +8% ROI at consensus and model Brier < market.
+The model discriminates WHERE IT BETS (the tails). So this diagnostic now also
+reports `tail_auc` (AUC over confident predictions) and recommend() will NOT
+declare NRFI dead on global AUC alone when the tail clears the floor. Gate NRFI
+on tail/edge-bucket ROI, not global AUC.
+
 Entrypoint: python -m mlb.runners.diagnose_nrfi_drift [--since YYYY-MM-DD]
             (run in Cloud Shell / Cloud Run -- needs xgboost + GCS)
 """
@@ -42,6 +52,9 @@ WEAK_FLOOR   = float(os.getenv("DRIFT_WEAK_FLOOR", "0.55"))
 MIN_WINDOW_N = int(os.getenv("DRIFT_MIN_WINDOW_N", "200"))
 # Default recent window if --since not given.
 LOOKBACK_DAYS = int(os.getenv("DRIFT_LOOKBACK_DAYS", "150"))
+# A tail-selective bettor only acts on confident predictions; this is the
+# half-width around 0.5 that counts as "bettable" for the tail_auc metric.
+TAIL_MARGIN = float(os.getenv("DRIFT_TAIL_MARGIN", "0.07"))
 
 
 # --- pure functions (no GCS / xgboost; unit-tested) --------------------------
@@ -74,6 +87,23 @@ def _auc_rank(y: np.ndarray, p: np.ndarray) -> float | None:
     ranks[order] = ranks_sorted
     sum_ranks_pos = float(ranks[y == 1].sum())
     return (sum_ranks_pos - n_pos * (n_pos + 1.0) / 2.0) / (n_pos * n_neg)
+
+
+def tail_auc(y, p, margin: float = TAIL_MARGIN) -> tuple[float | None, int]:
+    """AUC over the model's CONFIDENT predictions (|p - 0.5| >= margin).
+
+    This is the slice a tail-selective bettor actually acts on. Global AUC is
+    dominated by the indifferent mass near 0.5 and understates such a bettor;
+    tail_auc is the truer signal for bet gating. Returns (auc|None, n_tail).
+    """
+    y = np.asarray(y, dtype=float)
+    p = np.asarray(p, dtype=float)
+    mask = ~np.isnan(p) & ~np.isnan(y) & (np.abs(p - 0.5) >= margin)
+    yt, pt = y[mask], p[mask]
+    if len(yt) < 2 or len(np.unique(yt)) < 2:
+        return None, int(len(yt))
+    auc = _auc_rank(yt, pt)
+    return (round(auc, 4) if auc is not None else None), int(len(yt))
 
 
 def _safe_auc(y, p) -> float | None:
@@ -135,10 +165,25 @@ def classify_submodels(live: dict, oos: dict) -> dict:
     return verdict
 
 
-def recommend(verdict: dict, stacked_live: float | None) -> str:
-    """Plain-English next step from the per-sub-model verdict."""
+def recommend(verdict: dict, stacked_live: float | None,
+              tail_auc_val: float | None = None) -> str:
+    """Plain-English next step from the per-sub-model verdict.
+
+    `tail_auc_val` (optional) is AUC over the model's confident predictions. When
+    the global stacked AUC looks dead but the tail clears the weak floor, the
+    model is a viable tail-selective bettor and global AUC is the wrong lens --
+    so that case overrides the "not salvageable" verdict.
+    """
     ok   = [n for n, v in verdict.items() if v["status"] == "ok"]
     dead = [n for n, v in verdict.items() if v["status"] == "dead"]
+    # Tail override: discriminates where it bets even if global AUC is washed out.
+    if tail_auc_val is not None and tail_auc_val > WEAK_FLOOR:
+        return (f"Global stacked AUC ({stacked_live}) is washed out by the "
+                f"indifferent mid-slate, but the BETTABLE tail scores "
+                f"{tail_auc_val} -- NRFI discriminates where it bets. Judge it on "
+                f"tail/edge-bucket ROI (mlb/analysis/nrfi_market.py), NOT global "
+                f"AUC. Candidate to un-pause with best-line shopping + skip the "
+                f"dead mid-edge band.")
     if stacked_live is not None and stacked_live <= DEAD_FLOOR and not ok:
         return ("All sub-models at/below noise live -- NRFI is not salvageable by "
                 "retrain alone; needs new features or a different target (Track B).")
@@ -198,7 +243,10 @@ def run(since: str | None = None) -> dict:
     live_subs = {n: overall[f"_sub_{n}"] for n in sub_names}
     verdict = classify_submodels(live_subs, oos_subs)
     stacked_live = overall["_stacked"]
-    rec = recommend(verdict, stacked_live)
+    # Tail-selective signal: AUC over the model's confident predictions. Global
+    # AUC is washed out by the indifferent mid-slate; this is what a bettor sees.
+    stacked_tail_auc, tail_n = tail_auc(y_all, scored["_stacked"].values)
+    rec = recommend(verdict, stacked_live, stacked_tail_auc)
 
     result = {
         "status":        "ok",
@@ -207,12 +255,16 @@ def run(since: str | None = None) -> dict:
         "n_rows":        int(len(scored)),
         "stacked_live_auc": stacked_live,
         "stacked_oos_auc":  meta.get("auc_oos"),
+        "stacked_tail_auc": stacked_tail_auc,
+        "tail_n":           tail_n,
+        "tail_margin":      TAIL_MARGIN,
         "submodels":     verdict,
         "monthly_auc":   monthly,
         "recommendation": rec,
     }
     logger.info("concept-drift verdict: %s", json.dumps(
         {"stacked_live": stacked_live, "stacked_oos": meta.get("auc_oos"),
+         "stacked_tail": stacked_tail_auc,
          "submodels": {k: v["status"] for k, v in verdict.items()}}))
     logger.info("recommendation: %s", rec)
     return result
