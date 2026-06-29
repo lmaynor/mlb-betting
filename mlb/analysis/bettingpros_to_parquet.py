@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from mlb_core.data import id_resolver
 from mlb_core.odds import bettingpros as bp
 from mlb_core.odds.utils import (
     american_to_decimal,
@@ -97,18 +98,22 @@ KIND_SIDES = {
 DEVIG_METHOD = "shin"  # two-way de-vig; roadmap default for ML/O-U markets
 
 
-# --- resolution stubs (the hard bridge -- fill these to make rows join-ready) -
+# --- resolution: delegate to the shared MLB Stats API bridge -----------------
+# Cached per date/season in id_resolver. Any failure -> None (column left null),
+# so a resolution miss never aborts the conversion.
 
 def resolve_game_pk(game_date: str, away: str, home: str):
-    """TODO: map (date, away, home) -> MLB game_pk via the schedule.
-    Returns None until implemented (column left null)."""
-    return None
+    try:
+        return id_resolver.resolve_game_pk(game_date, away, home)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def resolve_player_id(name: str, team: str, game_date: str):
-    """TODO: map (player name, team, date) -> MLBAM id via roster/schedule.
-    Returns None until implemented (column left null)."""
-    return None
+    try:
+        return id_resolver.resolve_player_id(name, team, game_date)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _parse_american(cell):
