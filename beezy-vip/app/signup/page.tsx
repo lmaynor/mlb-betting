@@ -72,7 +72,7 @@ export default async function SignupPage() {
   return (
     <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '64px 16px' }}>
       <div style={{ width: '100%', maxWidth: '360px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--ash)', marginBottom: '24px' }}>Create Account</h1>
+        <h1 className="dell-display" style={{ fontSize: '28px', color: 'var(--chalk)', marginBottom: '24px' }}>Create Account</h1>
         {/* <SignUp /> -- uncomment when PRE_LAUNCH = false */}
       </div>
     </div>

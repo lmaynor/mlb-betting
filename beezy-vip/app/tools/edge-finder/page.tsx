@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { americanToImpliedProb, formatProb, formatOdds, probToAmerican } from '@/lib/odds'
 
 const B = '1px solid var(--basalt)'
-const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--graphite)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
+const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
 const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '6px' }
 
 export default function EdgeFinderPage() {
@@ -21,10 +21,10 @@ export default function EdgeFinderPage() {
     <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 20px' }}>
       <div style={{ marginBottom: '24px' }}>
         <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools</p>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: 'var(--ash)', marginBottom: '6px' }}>Edge Finder</h1>
+        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '6px' }}>Edge Finder</h1>
         <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Enter the book line and your model probability. See your edge instantly.</p>
       </div>
-      <div style={{ border: B, padding: '20px', marginBottom: '16px' }}>
+      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '24px', marginBottom: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
             <label style={labelStyle}>Book Line (American)</label>

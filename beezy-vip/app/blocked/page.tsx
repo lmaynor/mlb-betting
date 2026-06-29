@@ -20,10 +20,10 @@ export default function BlockedPage({
         <p className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '16px' }}>
           Unavailable
         </p>
-        <h1 style={{ fontSize: '22px', fontWeight: 600, color: 'var(--ash)', letterSpacing: '-0.01em', marginBottom: '16px' }}>
-          Not Available Here
+        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '16px' }}>
+          Not available here
         </h1>
-        <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65, marginBottom: '24px' }}>
+        <p className="times" style={{ fontSize: '15px', color: 'var(--silver)', lineHeight: 1.6, marginBottom: '24px' }}>
           Beezy.FYI is not currently available in <strong style={{ color: 'var(--ash)' }}>{region}</strong>{' '}
           due to local regulations. We&apos;re working to expand availability.
         </p>

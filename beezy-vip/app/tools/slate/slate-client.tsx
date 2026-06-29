@@ -207,7 +207,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools — Pro</p>
-          <h1 className="dell-display" style={{ fontSize: '20px', color: 'var(--ash)', marginBottom: '4px' }}>Slate Command Center</h1>
+          <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '4px' }}>Slate Command Center</h1>
           <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>{dateLabel} &mdash; {slateData.total_games} games &mdash; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

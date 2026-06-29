@@ -168,7 +168,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       {/* Header */}
       <div style={{ marginBottom: '28px' }}>
         <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools — Pro</p>
-        <h1 className="dell-display" style={{ fontSize: '20px', color: 'var(--ash)', marginBottom: '6px' }}>CLV + Edge Correlation</h1>
+        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '6px' }}>CLV + Edge Correlation</h1>
         <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Each dot is a settled Beezy pick. X = model edge at bet time. Y = closing line value. Positive CLV in the top-right quadrant means the model consistently finds real market inefficiencies.</p>
       </div>
 
