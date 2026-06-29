@@ -28,11 +28,15 @@ acc() {  # sport kind schedule
 
 echo "=== ParlayAPI accumulator fleet ($PROJECT_ID) ==="
 
-# --- MLB (in-season -- active fleet) ---------------------------------------
-# props 5x/day spanning opening lines (8am ET) through near-first-pitch (7pm ET)
-acc baseball_mlb props      "0 13,16,19,22,0 * * *"
-# game lines every 3h (cheap; whole-slate h2h/spreads/totals)
-acc baseball_mlb game_lines "0 */3 * * *"
+# --- MLB -- RETIRED (credit unification) -----------------------------------
+# The live snapshot job (ODDS_PRIMARY=parlay; mlb-snapshot-* schedulers calling
+# /snapshot-odds 4x/day) is now the single ParlayAPI consumer: it pulls props +
+# game lines, writes the SGO-shaped snapshot AND banks the OddsAccum artifacts.
+# Running these standalone accumulators too would double-spend credits
+# (4x/day snapshot + 5x/day accumulator ~= 24k/mo > 20k). Jobs stay PROVISIONED
+# (schedule "") so they can be invoked manually if ever needed.
+acc baseball_mlb props      ""
+acc baseball_mlb game_lines ""
 
 # --- NBA (offseason -- stage jobs, NO scheduler until ~October) -------------
 acc basketball_nba props      ""

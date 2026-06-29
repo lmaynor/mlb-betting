@@ -49,8 +49,8 @@ gcloud run services update "$SERVICE" \
   --region="$REGION" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
-  --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
-   \
+  --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,PARLAY_API_KEY=parlay-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
+  --set-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-sgo}" \
   --project="$PROJECT_ID"
 
 # Route 100% traffic to new revision (separate command required)

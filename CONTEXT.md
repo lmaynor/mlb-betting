@@ -876,7 +876,31 @@ Default 600s was silently allowing long retrains to be killed mid-run.
 
 ---
 
-## 8. SGO API reference
+## 8. Odds providers (ParlayAPI primary, SGO inning fallback)
+
+**As of the ParlayAPI migration**, the live MLB snapshot (`Odds/sgo/latest.json`,
+written by `mlb/runners/snapshot_odds.py`) is a per-game **merge**, controlled by
+env `ODDS_PRIMARY` (default `sgo`; set to `parlay` to cut over):
+- **ParlayAPI primary** for the markets it covers -- player props (HR, K, OUTS,
+  BATTER_HITS, BATTER_TB, PITCHER_ER) + game moneyline (h2h). Pulled via
+  `nba.odds.parlayapi.ParlayApiClient`, converted to SGO shape by
+  `mlb_core.odds.parlay_adapter` (so the 9 runners + `sgo.py` extractors are
+  UNCHANGED -- the snapshot keeps the SGO event/oddID/byBookmaker shape).
+- **SGO fallback** only for inning markets ParlayAPI cannot express:
+  NRFI/YRFI (`points-all-1i-ou-*`), 1st-inn 3-way, F5 (`points-all-1ix5-*`),
+  F5-ML, F1H. One cheap `fetch_mlb_slate` call supplies these; the adapter
+  splices them per game.
+- The same ParlayAPI pull also banks `OddsAccum/baseball_mlb/` artifacts
+  (credit unification) -- the standalone `parlay-accum-mlb-*` schedules are
+  retired (`deploy/setup_parlay_schedules.sh`). Forward `odds_history` feed comes
+  from these via `mlb/analysis/parlayapi_to_history.py` (`source="parlayapi"`);
+  historical comes from BettingPros. Cutover: shadow-run via `/snapshot-odds`
+  with `{"provider":"parlay","out_prefix":"Odds/sgo/_shadow"}`, diff, then flip
+  `ODDS_PRIMARY=parlay` (`gcloud run services update --update-env-vars`).
+  Rollback: set it back to `sgo` (no redeploy). Credit budget ~11.3k/mo < 20k.
+  Settlement is provider-independent (MLB Stats API).
+
+### SGO (legacy / inning fallback)
 
 **Base URL:** `https://api.sportsgameodds.com`
 **Client:** `mlb_core.odds.sgo.SgoClient`
