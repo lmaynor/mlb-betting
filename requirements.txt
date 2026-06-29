@@ -9,6 +9,7 @@ selenium==4.27.1
 sqlalchemy==2.0.36
 pg8000==1.31.2
 google-cloud-storage==2.19.0
+pyarrow==17.0.0
 google-cloud-scheduler==2.13.5
 kagglehub==0.3.6
 pytz==2024.2

@@ -131,7 +131,10 @@ def list_keys(prefix: str) -> list[str]:
     directory = _local_path(prefix)
     if not directory.is_dir():
         return []
-    return [str(f.relative_to(BASE_DATA)) for f in sorted(directory.iterdir())]
+    # Resolve relative to the call-time base (matches _local_path / _get_base_data);
+    # using the import-time BASE_DATA constant here was inconsistent and broke when
+    # MLB_BASE_DATA changes after import.
+    return [str(f.relative_to(_get_base_data())) for f in sorted(directory.iterdir())]
 
 
 def delete(key: str) -> None:
