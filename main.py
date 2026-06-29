@@ -218,9 +218,14 @@ def build_all_features_handler():
 def snapshot_odds_handler():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
+    # Optional overrides: provider ("sgo"/"parlay", default env ODDS_PRIMARY) and
+    # out_prefix (default "Odds/sgo"; pass a scratch prefix for a shadow run that
+    # never touches the live latest.json).
+    provider   = body.get("provider")
+    out_prefix = body.get("out_prefix", "Odds/sgo")
     try:
         from mlb.runners.snapshot_odds import run as snapshot_run
-        result = snapshot_run(run_date=run_date)
+        result = snapshot_run(run_date=run_date, provider=provider, out_prefix=out_prefix)
     except Exception as e:
         tb = traceback.format_exc()
         logger.error(f"snapshot-odds failed:\n{tb}")
