@@ -25,8 +25,9 @@ def _prime(monkeypatch):
     # resolve_team gives ARI/.. ; here Angels->LAA, Guardians->CLE (dk_scraper map).
     monkeypatch.setitem(R._schedule_cache, DATE, {("LAA", "CLE"): [745101]})
     monkeypatch.setitem(R._player_cache, DATE[:4], (
-        {"mike trout": {545361}, "jose ramirez": {608070}},
-        {("mike trout", "LAA"): 545361, ("jose ramirez", "CLE"): 608070},
+        {"mike trout": {545361}, "jose ramirez": {608070}, "slade cecconi": {669373}},
+        {("mike trout", "LAA"): 545361, ("jose ramirez", "CLE"): 608070,
+         ("slade cecconi", "CLE"): 669373},
     ))
 
 
@@ -57,19 +58,23 @@ def _props_event():
         "commence_time": "2024-05-01T22:10:00Z",
         "bookmakers": [
             {"key": "draftkings", "markets": [
-                {"key": "player_home_runs", "outcomes": [
-                    {"name": "Over Mike Trout", "description": "Mike Trout", "price": 280, "point": 0.5},
-                    {"name": "Under Mike Trout", "description": "Mike Trout", "price": -360, "point": 0.5},
+                {"key": "player_home_runs", "outcomes": [   # yes/no market shape
+                    {"name": "Yes", "description": "Mike Trout", "price": 280, "point": 0.5},
+                    {"name": "No", "description": "Mike Trout", "price": -360, "point": 0.5},
+                ]},
+                {"key": "player_outs", "outcomes": [        # real outs key
+                    {"name": "Over Slade Cecconi", "description": "Slade Cecconi", "price": -120, "point": 16.5},
+                    {"name": "Under Slade Cecconi", "description": "Slade Cecconi", "price": 100, "point": 16.5},
                 ]},
                 {"key": "player_hits", "outcomes": [
                     {"name": "Over Jose Ramirez", "description": "Jose Ramirez", "price": -115, "point": 1.5},
                     {"name": "Under Jose Ramirez", "description": "Jose Ramirez", "price": -105, "point": 1.5},
                 ]},
             ]},
-            {"key": "fanduel", "markets": [
+            {"key": "fanatics", "markets": [   # non-DK/FD onshore book must survive
                 {"key": "player_home_runs", "outcomes": [
-                    {"name": "Over Mike Trout", "description": "Mike Trout", "price": 300, "point": 0.5},
-                    {"name": "Under Mike Trout", "description": "Mike Trout", "price": -380, "point": 0.5},
+                    {"name": "Yes", "description": "Mike Trout", "price": 300, "point": 0.5},
+                    {"name": "No", "description": "Mike Trout", "price": -380, "point": 0.5},
                 ]},
             ]},
         ],
@@ -85,13 +90,14 @@ def test_adapter_builds_sgo_event(monkeypatch):
     ev = A.parlay_to_sgo_event(_game_lines_event(), _props_event(), DATE)
     assert ev is not None
     assert ev["eventID"] == "745101"                       # == game_pk (load-bearing)
-    assert set(ev["players"].keys()) == {"545361", "608070"}  # MLBAM ids
+    assert set(ev["players"].keys()) == {"545361", "608070", "669373"}  # MLBAM ids
     assert ev["teams"]["home"]["names"]["short"] == "CLE"
-    # game ML + HR yn + hits over/under entries present
+    # game ML + HR yn + hits over/under + OUTS (player_outs key) entries present
     assert "points-home-game-ml-home" in ev["odds"]
     assert "batting_homeRuns-545361-game-yn-yes" in ev["odds"]
     assert "batting_hits-608070-game-ou-over" in ev["odds"]
     assert "batting_hits-608070-game-ou-under" in ev["odds"]
+    assert "pitching_outs-669373-game-ou-over" in ev["odds"]   # player_outs handled
 
 
 def test_adapter_drops_unresolvable_game(monkeypatch):
@@ -129,6 +135,11 @@ def test_roundtrip_through_real_extractors(monkeypatch):
     assert "745101" in gm
     assert gm["745101"]["home_odds"] == -125
     assert gm["745101"]["away_odds"] == 110
+
+    # OUTS: player_outs key -> pitching_outs extractor, line 16.5
+    outs = sgo.extract_outs_odds(events)
+    assert "Slade Cecconi" in outs
+    assert outs["Slade Cecconi"]["line"] == 16.5
 
 
 def test_every_parlay_market_maps_and_synthesizes():

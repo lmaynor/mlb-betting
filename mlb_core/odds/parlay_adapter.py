@@ -38,25 +38,30 @@ logger = logging.getLogger(__name__)
 PROP_MARKET_MAP = {
     "player_home_runs":    ("batting_homeRuns", "batting_homeRuns", "hr_yn"),
     "player_strikeouts":   ("pitching_strikeouts", "pitching_strikeouts", "ou"),
-    "player_pitcher_outs": ("pitching_outs", "pitching_outs", "ou"),
-    "player_pitching_outs": ("pitching_outs", "pitching_outs", "ou"),  # alias (verified live)
+    "player_outs":         ("pitching_outs", "pitching_outs", "ou"),   # live key (verified payload)
+    "player_pitcher_outs": ("pitching_outs", "pitching_outs", "ou"),   # alias (config legacy)
+    "player_pitching_outs": ("pitching_outs", "pitching_outs", "ou"),  # alias
     "player_hits":         ("batting_hits", "batting_hits", "ou"),
     "player_total_bases":  ("batting_totalBases", "batting_totalBases", "ou"),
     "player_earned_runs":  ("pitching_earnedRuns", "pitching_earnedRuns", "ou"),
 }
 
-# ParlayAPI / The-Odds-API book key -> SGO onshore book key (must land in
-# mlb_core.odds.sgo.ONSHORE_BOOKS; others are dropped by the extractors anyway).
+# ParlayAPI book key -> SGO onshore book key (verified against a live payload
+# 2026-06-29). Onshore US books only; offshore/exchange/DFS (bovada, novig, parx,
+# pinnacle, underdog) are intentionally excluded from live best-line selection.
 BOOK_MAP = {
     "draftkings": "draftkings",
     "fanduel": "fanduel",
     "betmgm": "betmgm",
     "caesars": "caesars",
-    "williamhill_us": "caesars",   # Caesars (William Hill US) alias
+    "bet365": "bet365",
+    "betrivers": "betrivers",
+    "fanatics": "fanatics",
+    "hardrock": "hardrock",
+    # not seen in the live payload but kept for resilience:
     "espnbet": "espnbet",          # extractor canonicalizes espnbet -> thescore
     "thescore": "thescore",
     "pointsbet": "pointsbet",
-    "pointsbetus": "pointsbet",
 }
 
 # SGO-only inning-market oddID prefixes spliced from SGO during merge.
@@ -70,10 +75,13 @@ def _abbr(team_full: str) -> str:
 
 
 def _side_of(outcome_name: str) -> str:
+    """Map a ParlayAPI outcome name to over/under. O/U props use 'Over/Under
+    <player>'; yes/no props (home runs) use 'Yes'/'No' -- treat Yes=over (>0.5),
+    No=under so the hr_yn synthesizer picks the 'over' (yes) side."""
     n = (outcome_name or "").strip().lower()
-    if n.startswith("over"):
+    if n.startswith("over") or n.startswith("yes"):
         return "over"
-    if n.startswith("under"):
+    if n.startswith("under") or n.startswith("no"):
         return "under"
     return ""
 

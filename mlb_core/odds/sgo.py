@@ -54,6 +54,9 @@ SGO_REQUEST_INTERVAL_SEC = 7.0
 # Onshore US books we accept. Offshore (bovada, unibet, williamhill, etc.) excluded.
 ONSHORE_BOOKS = {
     "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+    # Added with the ParlayAPI migration -- legal US books ParlayAPI carries that
+    # SGO did not list. Widens best-line selection (the line-shopping lever).
+    "bet365", "betrivers", "fanatics", "hardrock",
 }
 
 # Priority order for canonical line selection -- most liquid first.
@@ -62,6 +65,7 @@ ONSHORE_BOOKS = {
 # pollute each other's odds.
 ONSHORE_BOOKS_PRIORITY = [
     "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
+    "bet365", "betrivers", "fanatics", "hardrock",
 ]
 
 # SGO key -> canonical name stored in DB.
@@ -74,6 +78,10 @@ BOOK_CANONICAL: dict[str, str] = {
     "espnbet":    "thescore",
     "thescore":   "thescore",
     "pointsbet":  "pointsbet",
+    "bet365":     "bet365",
+    "betrivers":  "betrivers",
+    "fanatics":   "fanatics",
+    "hardrock":   "hardrock",
 }
 
 # Slate windowing is done in Eastern Time.
