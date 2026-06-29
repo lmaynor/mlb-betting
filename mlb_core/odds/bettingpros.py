@@ -431,3 +431,97 @@ def resolve_markets(arg: str) -> list:
                 f"unknown market token '{tok}'. groups: {list(GROUPS)} or ids in {sorted(MARKETS)}")
     seen = set()
     return [m for m in out if not (m in seen or seen.add(m))]
+
+
+# -----------------------------------------------------------------------------
+# Readers -- consume the partitioned GCS output written by
+# mlb.runners.backfill_bettingpros (Odds/bettingpros/{market}/{date}.csv).
+#
+# These read THROUGH mlb_core.storage, so they work against GCS (when
+# MLB_GCS_BUCKET/GCS_BUCKET is set) or local files transparently. They are the
+# raw-store accessors the roadmap's P0.3 bettingpros_to_parquet.py builds on to
+# normalize into the odds_history Parquet schema. pandas/storage are imported
+# lazily so the lightweight scrape/CLI path does not require them.
+#
+# NOTE: reading is per-date-file (one storage round-trip per date). Fine for
+# ad-hoc analysis; for repeated heavy scans, materialize to Parquet (P0.3).
+# -----------------------------------------------------------------------------
+
+DEFAULT_GCS_PREFIX = "Odds/bettingpros"
+
+
+def market_name(market) -> str:
+    """Accept a market id (int or digit-string) or a csv name; return csv name."""
+    if isinstance(market, int) or (isinstance(market, str) and market.isdigit()):
+        mid = int(market)
+        if mid not in MARKETS:
+            raise ValueError(f"unknown market id {mid}")
+        return MARKETS[mid][0]
+    names = {name for name, _ in MARKETS.values()}
+    if market in names:
+        return market
+    raise ValueError(f"unknown market '{market}'. names: {sorted(names)}")
+
+
+def list_market_dates(market, prefix: str = DEFAULT_GCS_PREFIX) -> list:
+    """Sorted list of YYYY-MM-DD strings present for a market in the store."""
+    from mlb_core import storage
+    name = market_name(market)
+    dates = []
+    for key in storage.list_keys(f"{prefix}/{name}/"):
+        stem = key.rsplit("/", 1)[-1]
+        if stem.endswith(".csv"):
+            dates.append(stem[:-4])
+    return sorted(dates)
+
+
+def read_market(market, start: str | None = None, end: str | None = None,
+                prefix: str = DEFAULT_GCS_PREFIX):
+    """Concatenate a market's partitioned daily CSVs into one DataFrame.
+
+    start/end (YYYY-MM-DD, inclusive) filter the dates read. Returns an empty
+    DataFrame with the right columns if no partitions match.
+    """
+    import pandas as pd
+    from mlb_core import storage
+    name = market_name(market)
+    kind = next(k for n, k in MARKETS.values() if n == name)
+    dates = list_market_dates(name, prefix)
+    if start:
+        dates = [d for d in dates if d >= start]
+    if end:
+        dates = [d for d in dates if d <= end]
+    frames = []
+    for d in dates:
+        try:
+            frames.append(storage.read_csv(f"{prefix}/{name}/{d}.csv", dtype=str))
+        except Exception:  # noqa: BLE001 -- skip a corrupt/missing partition, keep going
+            continue
+    if not frames:
+        return pd.DataFrame(columns=headers(kind))
+    return pd.concat(frames, ignore_index=True)
+
+
+def coverage_report(markets=None, prefix: str = DEFAULT_GCS_PREFIX) -> dict:
+    """Per-market coverage: date count, first/last date, dates-per-season.
+
+    The roadmap's coverage-gating discipline: a backtest should refuse/warn when
+    a market's coverage for the requested window is thin. This surfaces that.
+    """
+    if markets is None:
+        markets = [n for n, _ in MARKETS.values()]
+    report = {}
+    for m in markets:
+        name = market_name(m)
+        dates = list_market_dates(name, prefix)
+        per_season: dict = {}
+        for d in dates:
+            yr = d[:4]
+            per_season[yr] = per_season.get(yr, 0) + 1
+        report[name] = {
+            "n_dates": len(dates),
+            "first": dates[0] if dates else None,
+            "last": dates[-1] if dates else None,
+            "per_season": per_season,
+        }
+    return report
