@@ -35,6 +35,33 @@ logger = logging.getLogger(__name__)
 SYSTEMS = ["1IOU", "HR", "F5", "K", "OUTS"]
 
 
+def _norm_player(s) -> str:
+    """NFD + ASCII-fold + lower + strip -- matches SGO prop player-name keys."""
+    import unicodedata as _ud
+    n = _ud.normalize("NFD", str(s))
+    n = "".join(c for c in n if _ud.category(c) != "Mn")
+    return n.encode("ascii", "ignore").decode().lower().strip()
+
+
+def _parse_prop_bet_type(bet_type: str):
+    """Split a player-prop bet_type into (prefix, side, line).
+
+    'BATTER_HITS_OVER_0.5' -> ('BATTER_HITS', 'OVER', 0.5). The prefixes contain
+    underscores, so a naive split('_') is wrong -- match the known prefix first.
+    Returns None if bet_type is not a recognized player prop.
+    """
+    for prefix in ("BATTER_HITS", "BATTER_TB", "PITCHER_ER"):
+        if bet_type.startswith(prefix + "_"):
+            rest = bet_type[len(prefix) + 1:]
+            side, _, line_s = rest.partition("_")
+            try:
+                line = float(line_s)
+            except ValueError:
+                line = None
+            return prefix, side, line
+    return None
+
+
 def _load_open_bets(run_date: str) -> pd.DataFrame:
     """Load all open bets for today with no closing line yet."""
     from mlb_core.tracking.bet_tracker import _make_engine
@@ -44,7 +71,7 @@ def _load_open_bets(run_date: str) -> pd.DataFrame:
     with engine.connect() as conn:
         df = pd.read_sql(
             text("""
-                SELECT id, system, game_pk, bet_type, away_team, home_team,
+                SELECT id, system, game_pk, bet_type, player, away_team, home_team,
                        odds, market_prob, book
                   FROM bets
                  WHERE game_date   = :d
@@ -162,6 +189,32 @@ def _get_closing_odds_from_snapshot(
                             continue
                     odds_val = prop_info.get("over_odds") if side == "OVER" else prop_info.get("under_odds")
                     break
+
+        elif _parse_prop_bet_type(bet_type):
+            # Batter hits / total bases / pitcher earned runs O/U props.
+            prefix, side, line = _parse_prop_bet_type(bet_type)
+            _PROP_EXTRACTORS = {
+                "BATTER_HITS": sgo.extract_batter_hits_odds,
+                "BATTER_TB":   sgo.extract_batter_tb_odds,
+                "PITCHER_ER":  sgo.extract_pitcher_er_odds,
+            }
+            props = _PROP_EXTRACTORS[prefix]([ev])
+            player_norm = _norm_player(bet.get("player") or "")
+            for prop_name, prop_info in props.items():
+                if _norm_player(prop_name) == player_norm:
+                    if line is not None and prop_info.get("line") is not None:
+                        if abs(float(prop_info["line"]) - line) > 0.01:
+                            continue
+                    odds_val = prop_info.get("over_odds") if side == "OVER" else prop_info.get("under_odds")
+                    break
+
+        elif bet_type in ("1I_AWAY", "1I_HOME", "1I_DRAW"):
+            # First-inning 3-way moneyline (game-level); no single complement.
+            i1 = sgo.extract_1i_3way_odds([ev])
+            _key = {"1I_AWAY": "away_odds", "1I_HOME": "home_odds", "1I_DRAW": "draw_odds"}[bet_type]
+            for info in i1.values():
+                odds_val = info.get(_key)
+                break
 
         if odds_val is not None:
             closing[int(bet["id"])] = (float(odds_val), float(complement_val) if complement_val is not None else None)

@@ -107,6 +107,25 @@ def _psi(expected: np.ndarray, actual: np.ndarray, n_bins: int = N_BINS) -> floa
     return round(psi, 4)
 
 
+def _psi_binary(train_p: float, actual_vals: np.ndarray) -> float:
+    """Exact 2-category PSI for a 0/1 feature.
+
+    The continuous _psi approximates the training distribution by sampling from a
+    Gaussian(mean, std). That is invalid for binary features and produced absurd
+    PSI in the 10-12 range (false positives: high_wind, is_cold, opener_flag, ...).
+    For a binary feature the training proportion P(==1) IS the stored mean, so PSI
+    over the two categories {1, 0} is exact.
+    """
+    act = actual_vals[~np.isnan(actual_vals)]
+    if len(act) < 2:
+        return float("nan")
+    eps = 1e-6
+    p = min(max(float(train_p), eps), 1.0 - eps)   # train P(==1)
+    q = min(max(float(np.mean(act)), eps), 1.0 - eps)  # recent P(==1)
+    psi = (q - p) * np.log(q / p) + ((1.0 - q) - (1.0 - p)) * np.log((1.0 - q) / (1.0 - p))
+    return round(float(psi), 4)
+
+
 def _flatten_meta_stats(meta: dict) -> tuple[dict, dict, dict, bool]:
     """Return (feature_means, feature_stds, feature_dists, is_ensemble).
 
@@ -198,26 +217,33 @@ def _check_system(system: str, cfg: dict, run_date: str) -> dict:
         if mean is None or std is None or std < 1e-9:
             continue
 
-        # C04: use empirical percentiles from model_meta if available.
-        # Falls back to Gaussian for backward compatibility with old meta.
-        # (feature_dists is flattened across sub-models above; v18 has none yet
-        # so NRFI uses the Gaussian fallback until the retrain writes them.)
-        fdist = feature_dists.get(feat)
         recent_vals = pd.to_numeric(recent[feat], errors="coerce").values
-        if fdist is not None:
-            ptiles = [fdist.get(k) for k in ("p5", "p10", "p25", "p50", "p75", "p90", "p95")]
-            if all(v is not None for v in ptiles):
-                quantiles = np.array([0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])
-                rng = np.random.default_rng(seed=42)
-                u = rng.uniform(0, 1, size=10_000)
-                train_approx = np.interp(u, quantiles, ptiles)
+        nonnan = recent_vals[~np.isnan(recent_vals)]
+        is_binary = nonnan.size > 0 and bool(np.all(np.isin(nonnan, (0.0, 1.0))))
+
+        if is_binary:
+            # Exact 2-category PSI; Gaussian sampling is invalid for 0/1 features.
+            psi_val = _psi_binary(mean, recent_vals)
+        else:
+            # C04: use empirical percentiles from model_meta if available.
+            # Falls back to Gaussian for backward compatibility with old meta.
+            # (feature_dists is flattened across sub-models above; v18 has none yet
+            # so NRFI uses the Gaussian fallback until the retrain writes them.)
+            fdist = feature_dists.get(feat)
+            if fdist is not None:
+                ptiles = [fdist.get(k) for k in ("p5", "p10", "p25", "p50", "p75", "p90", "p95")]
+                if all(v is not None for v in ptiles):
+                    quantiles = np.array([0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95])
+                    rng = np.random.default_rng(seed=42)
+                    u = rng.uniform(0, 1, size=10_000)
+                    train_approx = np.interp(u, quantiles, ptiles)
+                else:
+                    rng = np.random.default_rng(seed=42)
+                    train_approx = rng.normal(loc=mean, scale=std, size=10_000)
             else:
                 rng = np.random.default_rng(seed=42)
                 train_approx = rng.normal(loc=mean, scale=std, size=10_000)
-        else:
-            rng = np.random.default_rng(seed=42)
-            train_approx = rng.normal(loc=mean, scale=std, size=10_000)
-        psi_val = _psi(train_approx, recent_vals)
+            psi_val = _psi(train_approx, recent_vals)
         if np.isnan(psi_val):
             continue
 

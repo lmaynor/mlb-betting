@@ -1146,13 +1146,23 @@ def model_health_handler():
     try:
         engine = _get_engine()
         season = datetime.now(_CT).year
+        # Optional since=YYYY-MM-DD: restrict to post-cutoff bets so a recent
+        # fix (e.g. the 2026-06-24 calibration coverage fix) can be evaluated
+        # without pre-fix bets polluting the season-cumulative stats.
+        since = (request.get_json(silent=True) or {}).get("since") or request.args.get("since")
+        _mh_params = {"y": f"{season}%"}
+        _mh_since_sql = ""
+        if since:
+            _mh_since_sql = "AND game_date >= :since "
+            _mh_params["since"] = since
         with engine.connect() as conn:
             rows = [dict(r._mapping) for r in conn.execute(_text(
                 "SELECT system, result, stake, profit, model_prob, market_prob, "
                 "edge, clv_pct, game_date FROM bets "
                 "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                f"{_mh_since_sql}"
                 "ORDER BY game_date ASC"
-            ), {"y": f"{season}%"})]
+            ), _mh_params)]
 
         systems = {}
         for r in rows:
@@ -1191,6 +1201,7 @@ def model_health_handler():
         return jsonify({
             "status":    "ok",
             "run_date":  datetime.now(_CT).date().isoformat(),
+            "since":     since,
             "systems":   results,
             "freshness": freshness,
         }), 200
@@ -1284,13 +1295,22 @@ def edge_analysis_handler():
     try:
         engine = _get_engine()
         season = datetime.now(_CT).year
+        # Optional since=YYYY-MM-DD (see /model-health): post-cutoff view so the
+        # adverse-selection curve can be read on post-fix bets only.
+        since = (request.get_json(silent=True) or {}).get("since") or request.args.get("since")
+        _ea_params = {"y": f"{season}%"}
+        _ea_since_sql = ""
+        if since:
+            _ea_since_sql = "AND game_date >= :since "
+            _ea_params["since"] = since
         with engine.connect() as conn:
             rows = [dict(r._mapping) for r in conn.execute(_text(
                 "SELECT system, result, stake, profit, model_prob, market_prob, "
                 "edge, clv_pct, game_date FROM bets "
                 "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                f"{_ea_since_sql}"
                 "ORDER BY game_date ASC"
-            ), {"y": f"{season}%"})]
+            ), _ea_params)]
 
         by_system = {}
         for r in rows:
@@ -1303,6 +1323,7 @@ def edge_analysis_handler():
         return jsonify({
             "status":   "ok",
             "season":   season,
+            "since":    since,
             "note":     "Edge bucket = gap between model_prob and de-vigged line. "
                         "If roi/mean_clv decline as edge grows => adverse selection "
                         "(biggest gaps are model error). See edge_analysis_handler docstring.",
