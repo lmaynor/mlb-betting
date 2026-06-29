@@ -126,7 +126,11 @@ PYTHONPATH=. python3 -m mlb.analysis.nrfi_market --odds yrfi_master_2026.csv \
 ## Open / next
 - [DONE 2026-06-29] Confirmed the skip-band on a 2024-25 vs 2026 split
   (validate_skip_band.py): skip[5,12) generalizes; do not extend to 15%.
-- Wire the bettable-slate / edge-bucket view into `monitor_performance.py` so NRFI
-  (and other tail-selective systems) are gated on bettable ROI, not global AUC.
+- [DONE 2026-06-29, commit 68457cc] Wired the bettable-slate / edge-bucket view
+  into `monitor_performance.py`: per-edge-bucket ROI + dead-band [5%,12%) tracking
+  in season stats / digest / gate file; placed-bet AUC no longer alerts on its own
+  (only with negative ROI + n>=100); new dead-band bleed alert. Suppression stays
+  ROI-only. Still TODO: apply skip[5,12) in run_nrfi itself (runner-side bet rule),
+  and flip registry.force_gate off to un-pause 1IOU once staged.
 - This overturns roadmap_2026-06-28 section 1's "NRFI not salvageable" conclusion --
   update the roadmap / Track B framing accordingly.
