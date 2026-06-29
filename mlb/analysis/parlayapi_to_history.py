@@ -167,15 +167,25 @@ def convert(since=None, until=None, ingested_at="", dry_run=False) -> dict:
 
 
 def main(argv=None) -> int:
+    from datetime import datetime, timedelta, timezone
     p = argparse.ArgumentParser(description="Normalize ParlayAPI OddsAccum -> odds_history")
-    p.add_argument("--ingested-at", required=True, help="ISO timestamp tag (pass via args)")
-    p.add_argument("--since", default=None)
+    p.add_argument("--ingested-at", default=None,
+                   help="ISO timestamp tag (default: now UTC)")
+    p.add_argument("--since", default=None,
+                   help="YYYY-MM-DD (default: today - --days-back)")
     p.add_argument("--until", default=None)
+    p.add_argument("--days-back", type=int, default=3,
+                   help="recent-window lookback when --since omitted (forward feed)")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
-    res = convert(args.since, args.until, args.ingested_at, args.dry_run)
+    # Scheduler-friendly defaults: a daily job runs with no args and processes the
+    # last --days-back days (catches late-arriving snapshots + re-dedups idempotently).
+    ingested_at = args.ingested_at or datetime.now(timezone.utc).isoformat()
+    since = args.since or (datetime.now(timezone.utc).date()
+                           - timedelta(days=args.days_back)).isoformat()
+    res = convert(since, args.until, ingested_at, args.dry_run)
     print(f"DONE. {res['rows']} rows across {res['dates']} dates, markets={res['markets']}"
-          f"{' (dry run)' if args.dry_run else ''}")
+          f" (since={since}){' (dry run)' if args.dry_run else ''}")
     return 0
 
 
