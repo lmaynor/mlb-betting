@@ -56,6 +56,20 @@ GATE_HYSTERESIS = int(os.getenv("GATE_HYSTERESIS", "2"))     # consecutive runs 
 GATE_AUC_MIN    = float(os.getenv("GATE_AUC_MIN",  "0.52"))
 GATE_CAL_TOL    = float(os.getenv("GATE_CAL_TOL",  "0.12"))
 
+# Edge-bucket / bettable-slate monitoring (NRFI misdiagnosis handoff 2026-06-29).
+# A tail-selective bettor is correctly judged on per-edge-bucket ROI, NOT on a
+# global AUC that the indifferent mid-slate washes to ~0.50. Placed-bet AUC is
+# therefore reported but NEVER alerts on its own -- only alongside negative ROI.
+AUC_ALERT_MIN_N = int(os.getenv("MONITOR_AUC_ALERT_MIN_N", "100"))
+EDGE_BUCKETS    = [0, 0.05, 0.10, 0.15, 0.20, 1.0]
+EDGE_LABELS     = ["0-5%", "5-10%", "10-15%", "15-20%", "20%+"]
+# The validated dead mid-edge band: negative on both 2024-25 and 2026 splits;
+# skipping it improved OOS ROI (validate_skip_band.py). Bet [3%,5%) and [>=12%].
+DEAD_BAND       = (float(os.getenv("MONITOR_DEAD_BAND_LO", "0.05")),
+                   float(os.getenv("MONITOR_DEAD_BAND_HI", "0.12")))
+BAND_FLAG_MIN_N = int(os.getenv("MONITOR_BAND_MIN_N", "40"))   # min band bets to flag
+BAND_FLAG_ROI   = float(os.getenv("MONITOR_BAND_FLAG_ROI", "-8"))  # % band ROI to flag
+
 GATE_FILE_KEY   = "Gates/model_gates.json"
 
 # Expected model hit rates — derived from registry.
@@ -171,7 +185,41 @@ def _season_stats(df: pd.DataFrame) -> dict:
         "auc":      round(auc_val, 4) if auc_val is not None else None,
     }
     stats.update(_clv_stats(resolved))
+    stats["edge_buckets"] = _edge_bucket_stats(resolved)
     return stats
+
+
+def _edge_bucket_stats(df: pd.DataFrame) -> dict:
+    """Per-edge-bucket ROI over settled placed bets -- the bettable-slate view.
+
+    A tail-selective system is judged here, not on global AUC. Returns
+    {bucket_label: {n, roi, pnl}} plus a `_dead_band` aggregate over edge in
+    [DEAD_BAND_lo, DEAD_BAND_hi) (the validated dead mid-edge band). Empty if no
+    settled bets carry an `edge`.
+    """
+    r = df[df["result"].notna()].copy() if "result" in df.columns else pd.DataFrame()
+    if r.empty or "edge" not in r.columns:
+        return {}
+    r = r[r["edge"].notna()]
+    if r.empty:
+        return {}
+
+    def _agg(sub: pd.DataFrame) -> dict:
+        staked = sub["stake"].sum()
+        pnl    = sub["profit"].sum()
+        return {"n": int(len(sub)),
+                "roi": round(pnl / staked * 100 if staked > 0 else 0.0, 2),
+                "pnl": round(float(pnl), 2)}
+
+    out: dict = {}
+    r["_bucket"] = pd.cut(r["edge"], EDGE_BUCKETS, labels=EDGE_LABELS)
+    for label, sub in r.groupby("_bucket", observed=True):
+        out[str(label)] = _agg(sub)
+    lo, hi = DEAD_BAND
+    band = r[(r["edge"] >= lo) & (r["edge"] < hi)]
+    if not band.empty:
+        out["_dead_band"] = {**_agg(band), "range": f"[{lo:.0%},{hi:.0%})"}
+    return out
 
 
 def _per_book_stats(df: pd.DataFrame) -> dict[str, dict]:
@@ -213,8 +261,13 @@ def _per_book_stats(df: pd.DataFrame) -> dict[str, dict]:
     return result
 
 
-def _check_alerts(system: str, stats: dict) -> list[str]:
-    """Return list of alert messages for this system. Empty = healthy."""
+def _check_alerts(system: str, stats: dict, season: dict | None = None) -> list[str]:
+    """Return list of alert messages for this system. Empty = healthy.
+
+    `season` (optional) carries full-season stats incl. `edge_buckets`, used for
+    the dead-mid-edge-band bleed check (per-bucket needs more bets than the
+    30-bet rolling window provides).
+    """
     alerts = []
     n = stats.get("n", 0)
     if n < MIN_BETS_FOR_ALERT:
@@ -235,19 +288,31 @@ def _check_alerts(system: str, stats: dict) -> list[str]:
             f"(expected ≥ {expected - HIT_RATE_DROP/100:.1%})"
         )
 
-    # AUC alert: < 0.50 means model is rank-ordering backwards -- structural failure.
+    # AUC alert: placed-bet AUC is a SELECTION-BIASED, near-pickem sample -- a
+    # tail-selective bettor profits with AUC ~0.50 (NRFI misdiagnosis handoff
+    # 2026-06-29). So AUC NEVER alerts on its own; only flag it when ROI ALSO
+    # confirms a problem, and only with a large enough sample to be meaningful.
     auc_val = stats.get("auc")
-    if auc_val is not None and n >= MIN_BETS_FOR_ALERT:
-        if auc_val < 0.50:
-            alerts.append(
-                f"AUC over last {n} bets: **{auc_val:.3f}** -- model is rank-ordering "
-                f"backwards. Calibration cannot fix this; retrain required."
-            )
-        elif auc_val < 0.52:
-            alerts.append(
-                f"AUC over last {n} bets: **{auc_val:.3f}** -- near coin-flip discrimination. "
-                f"Edge may not exist."
-            )
+    if (auc_val is not None and n >= AUC_ALERT_MIN_N
+            and roi < ROI_WARN_THRESHOLD and auc_val < 0.50):
+        alerts.append(
+            f"AUC **{auc_val:.3f}** AND ROI **{roi:+.1f}%** over {n} bets -- model may "
+            f"be rank-ordering backwards (AUC + negative ROI together, not AUC alone)."
+        )
+
+    # Dead-band bleed: if the validated mid-edge band keeps losing live while the
+    # system is otherwise fine, surface it so the runner can skip[5,12) (handoff
+    # 2026-06-29). Non-suppressing -- informational, actionable.
+    buckets = (season or {}).get("edge_buckets") or {}
+    band = buckets.get("_dead_band")
+    season_roi = (season or {}).get("roi", 0.0)
+    if (band and band["n"] >= BAND_FLAG_MIN_N and band["roi"] < BAND_FLAG_ROI
+            and season_roi >= 0):
+        alerts.append(
+            f"Mid-edge band {band.get('range', '[5%,12%)')} bleeding: "
+            f"**{band['roi']:+.1f}%** ROI over {band['n']} bets while season ROI is "
+            f"**{season_roi:+.1f}%** -- consider skipping this band (handoff 2026-06-29)."
+        )
 
     # CLV alert: if we have ≥ 20 CLV observations and mean CLV < 0, flag it.
     # Negative CLV is a leading indicator of negative edge — acts earlier than ROI.
@@ -321,11 +386,21 @@ def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
             elif cv["clv_status"] == "negative":
                 clv_str += " [CLV-NEG]"
         auc_str = f" | AUC: **{stats['auc']:.3f}**" if stats.get('auc') is not None else ""
+        # Bettable-slate view: per-edge-bucket ROI (the metric a tail bettor is
+        # judged on, vs the misleading global AUC). Compact, buckets with n >= 5.
+        bucket_str = ""
+        buckets = stats.get("edge_buckets") or {}
+        bparts = [f"{lbl} {buckets[lbl]['roi']:+.0f}%(n{buckets[lbl]['n']})"
+                  for lbl in EDGE_LABELS
+                  if lbl in buckets and buckets[lbl]["n"] >= 5]
+        if bparts:
+            bucket_str = "\nby edge: " + "  ".join(bparts)
         fields.append({
             "name":  f"{dot} {system}",
             "value": (f"`{stats['wins']}/{stats['n']} ({stats['hit_rate']:.0%})` "
                       f"P&L: **${stats['pnl']:+.2f}** | ROI: **{stats['roi']:+.1f}%** | "
-                      f"edge: {stats['avg_edge']:+.1%}{auc_str}{clv_str} | {stats['pending']} pending"),
+                      f"edge: {stats['avg_edge']:+.1%}{auc_str}{clv_str} | {stats['pending']} pending"
+                      f"{bucket_str}"),
             "inline": False,
         })
 
@@ -460,6 +535,7 @@ def _update_gate(system: str, should_suppress: bool, reason: str,
                         if rolling.get("avg_model_prob") is not None else None),
             "roi":   rolling.get("roi"),
             "n":     rolling.get("n", 0),
+            "edge_buckets": rolling.get("edge_buckets"),
         },
         "suppress_streak": suppress_streak,
         "clear_streak":    clear_streak,
@@ -545,8 +621,10 @@ def run(run_date: str = None) -> dict:
         rolling  = _rolling_stats(sys_bets, ROLLING_WINDOW)
         season_s = _season_stats(sys_bets)
         weekly_stats[system] = season_s
+        # Season-level edge buckets travel with rolling for gate-file observability.
+        rolling["edge_buckets"] = season_s.get("edge_buckets")
 
-        alerts = _check_alerts(system, rolling)
+        alerts = _check_alerts(system, rolling, season_s)
         if alerts:
             logger.warning(f"monitor: {system} ALERT -- {alerts}")
             _post_alert(system, alerts, rolling, run_date)
