@@ -153,6 +153,8 @@ mlb-betting/
 │   │   │                         CLI: PYTHONPATH=. python3 -m mlb_core.data.auxiliary_features
 │   │   │                         <dataset> [--force]. Writes AuxData/ masters to GCS.
 │   │   │                         norm_statcast_name() converts "Last, First" -> bref name_norm.
+│   │   ├── id_resolver.py        (date,teams)->game_pk + (name,team,date)->MLBAM id
+│   │   │                         via MLB Stats API (cached). Bridges odds -> game data.
 │   │   └── aux_joins.py          Shared join helpers for all 7 feature builders.
 │   │                             join_pitcher_aux() -- NRFI, K (bref + team_schedule + manager_hooks).
 │   │                             join_game_aux()    -- F5, GAME (team_schedule + manager_hooks x2).
@@ -171,7 +173,10 @@ mlb-betting/
 │   │   │                           extract_batter_tb_odds()
 │   │   │                           extract_pitcher_er_odds()
 │   │   ├── dk_scraper.py         LEGACY. Kept for resolve_team() only.
-│   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake.
+│   │   ├── parlay_adapter.py     ParlayAPI payload -> SGO snapshot shape + merge
+│   │   │                         (inning fallback). Primary live-odds path. See s8.
+│   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake,
+│   │                             american_to_decimal, devig_two_way (shin/proportional).
 │   ├── notify/
 │   │   └── discord.py            post_bets / post_error / post_all_systems_summary.
 │   │                             Webhook-based. post_summary() removed -- daily recap
@@ -263,9 +268,15 @@ mlb-betting/
 │                                (starters), bullpen_whiff_pct_L14, bullpen_hard_hit_L14,
 │                                team_hard_hit_L20 (home+away = 10 columns)
 │
+├── mlb/analysis/                 OFFLINE odds/backtest toolkit (not in daily loops):
+│   ├── odds_history.py           Parquet store: write_partition/read_history/coverage_report
+│   ├── bettingpros_to_parquet.py BettingPros CSV -> odds_history (historical, P0.3)
+│   ├── parlayapi_to_history.py   ParlayAPI OddsAccum -> odds_history (forward feed)
+│   └── nrfi_market.py, gen_nrfi_preds.py, ...  NRFI backtest (analysis branch)
 ├── notebooks/                    Modeling notebooks (moved from root 2026-06-24).
-├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops,
-│                                 fix_ops_issues*, pull_ops_logs, setup_discord, etc.)
+├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
+│                                 bettingpros_api.py = local CLI for the HR/multi-market
+│                                 odds scrape (Cloud Run Job is mlb-backfill-bettingpros).
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
 │   ├── SGO_DEPLOY_NOTES.md
@@ -313,9 +324,20 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   └── umpscorecards_master.csv        Umpire scorecards.
 │                                       Updated nightly by mlb-refresh-data.
 ├── Odds/
-│   └── sgo/
-│       ├── latest.json                 LATEST POINTER -- all runners read this.
-│       └── {YYYY-MM-DD}/snapshot_{HHMM}.json
+│   ├── sgo/                            LIVE snapshot (now ParlayAPI-primary, SGO
+│   │   ├── latest.json                 inning-merged; SGO-shaped -- runners read this).
+│   │   └── {YYYY-MM-DD}/snapshot_{HHMM}.json   (8x/day; see s8)
+│   ├── bettingpros/                    HISTORICAL odds backfill (raw store),
+│   │   └── {market}/{YYYY-MM-DD}.csv    partitioned; 29 markets. Written by the
+│   │                                   mlb-backfill-bettingpros Cloud Run Job.
+│   └── history/                        odds_history Parquet ANALYTICS store.
+│       ├── market={m}/date={YYYY-MM-DD}/part-0.parquet
+│       └── _coverage/{market}.json     per-market coverage (backtest gating)
+├── OddsAccum/baseball_mlb/             ParlayAPI capture (banked by the snapshot
+│   ├── raw/{date}/props_{HHMM}.json     job); feeds odds_history (parlayapi).
+│   ├── {date}/{kind}_{HHMM}.csv         best-book flattened rows
+│   ├── latest.json                     pointer + status
+│   └── _credits/{YYYY-MM}.json         implicit monthly credit tally (guard)
 ├── HR_Pro/
 │   ├── data/
 │   └── models/                         xgb_hr_v6.json, model_meta_hr_v6.json
@@ -407,9 +429,13 @@ HR and K are independent. Each system writes a build sentinel to GCS on success
 ### Loop C: Score + bet (16:00 and 22:00 UTC / 11am and 5pm CT)
 
 ```
-15:55 / 21:55 UTC -> /snapshot-odds  -> Odds/sgo/latest.json
-16:00 / 22:00 UTC -> /run            -> all runners score + post bets
+8x/day -> /snapshot-odds  -> Odds/sgo/latest.json  (ParlayAPI primary + SGO inning merge; see s8)
+16:00 / 22:00 UTC -> /run -> all runners score + post bets
 ```
+Snapshots now run 8x/day (ParlayAPI), concentrated in the 18:00-23:00 UTC
+lineup->closing window; SGO inning markets fetched on 4 of them, carried forward
+on the rest. The pre-/run snapshots are 15:55 and 21:55. See s8 for the cadence,
+credit pacing, and `ODDS_PRIMARY` cutover.
 
 Runners post bet signals to Discord only (`post_bets`). No per-runner
 performance summaries -- those come from the daily recap in `/settle`.
@@ -434,14 +460,21 @@ performance summaries -- those come from the daily recap in `/settle`.
 | 14:00 | `mlb-refresh-data` | Weather + umpire + scoring + Statcast masters |
 | 14:30 | `mlb-build-all-features` | All feature builds: HR -> NRFI -> K -> F5 (dependency order) |
 | 15:20 | `mlb-monitor-ops` | Infra health check after feature builds |
-| 15:55 | `mlb-snapshot-morning` | SGO odds snapshot (opening lines) |
+| 15:55 | `mlb-snapshot-1555` | Odds snapshot (ParlayAPI+SGO inning) -- pre-morning |
 | 16:00 | `mlb-betting-morning` | Score all runners |
-| 19:00 | `mlb-snapshot-afternoon` | SGO odds snapshot (lineup confirmation) |
+| 18:55 | `mlb-snapshot-1855` | Odds snapshot (parlay-only, carry inning) |
+| 20:25 | `mlb-snapshot-2025` | Odds snapshot (SGO inning) -- night lineups |
 | 21:00 | `mlb-refresh-statcast` | Refresh statcast (after Savant publishes) |
-| 21:55 | `mlb-snapshot-evening` | SGO odds snapshot (pre-evening bets) |
+| 21:25 | `mlb-snapshot-2125` | Odds snapshot (parlay-only, carry inning) |
+| 21:55 | `mlb-snapshot-2155` | Odds snapshot (SGO inning) -- pre-evening |
 | 22:00 | `mlb-betting-evening` | Score all runners |
-| 23:30 | `mlb-snapshot-pregame` | SGO odds snapshot (closing lines ~1hr before first pitch) |
+| 23:05 | `mlb-snapshot-2305` | Odds snapshot (SGO inning) -- closing |
 | 00:00 | `mlb-capture-closing` | Capture closing lines for CLV calculation |
+| 01:25 | `mlb-snapshot-0125` | Odds snapshot (parlay, `day_offset=1`) -- tomorrow's lines |
+| 03:25 | `mlb-snapshot-0325` | Odds snapshot (parlay, `day_offset=1`) -- tomorrow |
+
+Snapshot jobs are ParlayAPI-primary (env `ODDS_PRIMARY=parlay`); see s8. The old
+4 `mlb-snapshot-{morning,afternoon,evening,pregame}` jobs were replaced by these 8.
 
 ---
 
@@ -479,19 +512,26 @@ crashes XGBoost >=2.0.
 ### Multi-book odds contract
 
 All extractors use `_best_book_odds_int()` in `mlb_core/odds/sgo.py`.
-Picks best American odds across `ONSHORE_BOOKS` for the bettor.
-Result stored as `book` column in `bets` table.
+Picks best American odds for the bettor across all qualifying books; result
+stored as `book` column in `bets` table.
+
+**Book qualification is now a DENYLIST** (changed 2026-06-29 with the ParlayAPI
+migration): **every US book qualifies** as onshore; only `OFFSHORE_BOOKS`
+(bovada, betfair, pinnacle, betonline, mybookie, ...) are excluded. This widens
+best-line selection (the line-shopping lever) to all US books ParlayAPI carries
+(draftkings, fanduel, betmgm, caesars, bet365, betrivers, fanatics, hardrock,
+novig, parx, underdog, espnbet->thescore, pointsbet).
 
 ```python
-ONSHORE_BOOKS = {
-    "draftkings", "fanduel", "caesars", "betmgm", "espnbet", "thescore", "pointsbet",
-}
-BOOK_CANONICAL = {  # SGO key -> canonical name stored in DB
-    "espnbet":  "thescore",  # ESPN Bet rebranded to theScore Bet 2025
-    "thescore": "thescore",
-    # all others map to themselves
-}
+OFFSHORE_BOOKS = {"bovada", "betfair", "pinnacle", "betonline", "mybookie", ...}
+# _best_book_odds_int / _best_book_odds_for_line: skip `if book in OFFSHORE_BOOKS`.
+# ONSHORE_BOOKS (known-US set) + ONSHORE_BOOKS_PRIORITY drive line-selection
+# priority + canonicalization, not the gate. BOOK_CANONICAL maps espnbet->thescore;
+# unknown books canonical to themselves.
 ```
+
+To exclude a book: add it to `OFFSHORE_BOOKS`. The ParlayAPI adapter
+(`mlb_core/odds/parlay_adapter.py`) passes every non-offshore book through.
 
 To add/remove a book: edit both dicts in `sgo.py`. Historic bets have `book=NULL`.
 
@@ -982,13 +1022,17 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-monitor-ops` | `20 15 * * *` | `/monitor-ops` | 120s | `{}` |
 | `mlb-retrain-weekly` | `0 6 * * 1` | `/retrain-weekly` | 300s | `{}` |
 | `mlb-refresh-statcast` | `0 21 * * *` | `/refresh-data` | 300s | `{"systems":["statcast"]}` |
-| `mlb-snapshot-morning` | `55 15 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-snapshot-1555` | `55 15 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":true}` |
 | `mlb-betting-morning` | `0 16 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"morning"}` |
-| `mlb-snapshot-afternoon` | `0 19 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-snapshot-1855` | `55 18 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":false}` |
 | `mlb-betting-afternoon` | `5 19 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"afternoon"}` |
-| `mlb-snapshot-evening` | `55 21 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-snapshot-2025` | `25 20 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":true}` |
+| `mlb-snapshot-2125` | `25 21 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":false}` |
+| `mlb-snapshot-2155` | `55 21 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":true}` |
 | `mlb-betting-evening` | `0 22 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"evening"}` |
-| `mlb-snapshot-pregame` | `30 23 * * *` | `/snapshot-odds` | 180s | `{}` |
+| `mlb-snapshot-2305` | `5 23 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":true}` |
+| `mlb-snapshot-0125` | `25 1 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":false,"day_offset":1}` |
+| `mlb-snapshot-0325` | `25 3 * * *` | `/snapshot-odds` | 180s | `{"include_sgo":false,"day_offset":1}` |
 | `mlb-betting-pregame` | `35 23 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"pregame"}` |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |

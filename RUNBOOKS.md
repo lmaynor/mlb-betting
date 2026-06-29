@@ -15,6 +15,7 @@ contradicts CONTEXT.md, CONTEXT.md wins -- update this file.
 3. [Common manual actions (code fragments)](#3-common-manual-actions-code-fragments)
 4. [Social media content pipeline](#4-social-media-content-pipeline)
 5. [When to update this file](#5-when-to-update-this-file)
+6. [Odds provider (ParlayAPI / SGO)](#6-odds-provider-parlayapi-primary--sgo-inning-fallback)
 
 ---
 
@@ -660,3 +661,46 @@ curl -i https://beezy.fyi/api/stats/summary
 
 **Don't put architecture or contracts here.** That belongs in CONTEXT.md.
 **Don't put point-in-time state here.** That belongs in `handoffs/`.
+
+---
+
+## 6. Odds provider (ParlayAPI primary / SGO inning fallback)
+
+Live odds come from ParlayAPI (covered markets) merged with SGO (inning markets),
+written SGO-shaped to `Odds/sgo/latest.json`. Controlled by env `ODDS_PRIMARY`
+on the `mlb-betting` service. Architecture/contracts: CONTEXT.md s8.
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4; REGION=us-central1
+
+# Check which provider is live
+gcloud run services describe mlb-betting --region=$REGION \
+  --format="yaml(spec.template.spec.containers[0].env)" | grep -A1 ODDS_PRIMARY
+
+# Flip to ParlayAPI (cutover) / back to SGO (rollback) -- no redeploy
+gcloud run services update mlb-betting --region=$REGION --update-env-vars ODDS_PRIMARY=parlay
+gcloud run services update mlb-betting --region=$REGION --update-env-vars ODDS_PRIMARY=sgo
+
+# Schedulers: 8-job ParlayAPI cadence (post-cutover) vs 2 legacy SGO jobs (pre-cutover)
+PROJECT_ID=$PROJECT_ID ./deploy/add_snapshot_schedulers.sh             # 8 jobs
+LEGACY=1 PROJECT_ID=$PROJECT_ID ./deploy/add_snapshot_schedulers.sh    # 2 SGO jobs
+gcloud scheduler jobs list --location=$REGION | grep snapshot          # expect exactly 8 post-cutover
+
+# Shadow test (never touches live latest.json)
+SERVICE_URL=$(gcloud run services describe mlb-betting --region=$REGION --format='value(status.url)')
+TOKEN=$(gcloud auth print-identity-token)
+curl -s -X POST "$SERVICE_URL/snapshot-odds" -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"provider":"parlay","out_prefix":"Odds/sgo/_shadow"}' | python3 -m json.tool
+
+# Credit tally (implicit guard; x-requests-remaining header is blind)
+BUCKET=$(gcloud secrets versions access latest --secret=mlb-gcs-bucket)
+gsutil cat "gs://$BUCKET/OddsAccum/baseball_mlb/_credits/$(date -u +%Y-%m).json"
+```
+
+Gotchas:
+- Pre-cutover (`ODDS_PRIMARY=sgo`), EVERY snapshot does a full SGO fetch -- do NOT
+  register the 8-job cadence while on sgo or you blow the SGO free tier. Use LEGACY=1.
+- Secret `parlay-api-key` must be bound (deploy_service.sh does this). ParlayAPI is
+  reachable from Cloud Run only (office LAN blocks gambling sites).
+- To exclude a book from best-line: add it to `OFFSHORE_BOOKS` in `mlb_core/odds/sgo.py`.
