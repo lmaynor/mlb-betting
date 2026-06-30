@@ -133,7 +133,23 @@ export async function apiGetTodaySlate(): Promise<TodaySlate> {
 }
 
 // -- The Edge dashboard enrichment (weather / recent form / spray) ------------
+// Lineup/active status for a player pick. confirmed = in today's posted lineup;
+// out = on IL / not on active roster; expected = projected but lineup not posted;
+// unknown = no data yet. The cockpit never hides picks — it badges them.
+export type PlayerStatus = 'confirmed' | 'expected' | 'out' | 'unknown'
+
+// A season stat line. realized = traditional (AVG/HR/OBP, ERA/K/IP);
+// expected = Statcast quality (xwOBA/xBA/xSLG, xERA). Values are pre-formatted
+// strings (or numbers) keyed by short label; order preserved for display.
+export interface SeasonStats {
+  realized?: { label: string; value: string }[]
+  expected?: { label: string; value: string }[]
+}
+
 export interface PlayerEnrich {
+  position?: string | null            // "SS", "SP", ...
+  status?: PlayerStatus
+  season?: SeasonStats
   weather?: { temp_f: number | null; wind_mph: number | null; wind_dir: string | null }
   recent_form?: { stat: string; line: number | null; games: { date: string; value: number; over: boolean | null }[] }
   spray?: { x: number; y: number; hit: boolean; ev?: number | null }[]
@@ -157,5 +173,19 @@ export async function apiGetEdgeEnrich(date: string): Promise<EdgeEnrich> {
     return res.json() as Promise<EdgeEnrich>
   } catch {
     return { date, players: {} }
+  }
+}
+
+// Client-side lazy fetch of one player's enrichment (used when a pick is
+// selected in the cockpit). Goes through the /api/edge-enrich proxy so keys
+// stay server-side. `normName` must match the producer's normalized key.
+export async function apiGetPlayerEnrich(date: string, normName: string): Promise<PlayerEnrich | null> {
+  try {
+    const res = await fetch(`/api/edge-enrich?date=${encodeURIComponent(date)}&player=${encodeURIComponent(normName)}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = (await res.json()) as EdgeEnrich
+    return data.players?.[normName] ?? Object.values(data.players ?? {})[0] ?? null
+  } catch {
+    return null
   }
 }

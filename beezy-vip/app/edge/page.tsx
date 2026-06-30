@@ -92,6 +92,9 @@ export default async function EdgePage() {
       modelProbPct: toPct(bet.model_prob),
       marketProbPct: toPct(bet.market_prob),
       edgePctValue: edgePct(bet.edge),
+      position: en?.position ?? null,
+      status: en?.status ?? 'unknown',
+      season: en?.season ?? null,
       matchup: g ? {
         awayTeam: g.away_team, awayPitcher: g.away_pitcher,
         homeTeam: g.home_team, homePitcher: g.home_pitcher,

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import type { Bet } from '@/lib/types'
+import type { PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL } from '@/lib/tokens'
 
 export interface EdgePick extends Bet {
@@ -11,6 +12,9 @@ export interface EdgePick extends Bet {
   modelProbPct: number | null
   marketProbPct: number | null
   edgePctValue: number | null
+  position?: string | null
+  status?: PlayerStatus
+  season?: SeasonStats | null
   matchup?: {
     awayTeam: string; awayPitcher: string | null
     homeTeam: string; homePitcher: string | null
@@ -37,13 +41,6 @@ const BATTER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K'])
 const GAME_SYSTEMS = new Set(['NRFI', 'F5', 'F1H', 'F3', 'F7', 'GAME'])
 
 type Group = 'all' | 'batter' | 'pitcher' | 'game'
-const GROUPS: { key: Group; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'batter', label: 'Batters' },
-  { key: 'pitcher', label: 'Pitchers' },
-  { key: 'game', label: 'Game' },
-]
-
 function groupOf(system: string): Group {
   if (BATTER_SYSTEMS.has(system)) return 'batter'
   if (PITCHER_SYSTEMS.has(system)) return 'pitcher'
@@ -437,11 +434,93 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
 }
 
 // -- detail panel -------------------------------------------------------------
-function Detail({ p }: { p: EdgePick }) {
+// -- lineup/active status chip ------------------------------------------------
+const STATUS_CFG: Record<PlayerStatus, { label: string; color: string; mark: string }> = {
+  confirmed: { label: 'Confirmed',  color: 'var(--signal)', mark: '✓' },
+  expected:  { label: 'Expected',   color: 'var(--warn)',   mark: '∼' },
+  out:       { label: 'Out · IL', color: 'var(--loss)', mark: '✕' },
+  unknown:   { label: 'Lineup TBD', color: 'var(--fog)',    mark: '·' },
+}
+function StatusChip({ status, compact = false }: { status?: PlayerStatus; compact?: boolean }) {
+  const s = STATUS_CFG[status ?? 'unknown']
+  return (
+    <span className="edge-status" style={{
+      color: s.color,
+      borderColor: `color-mix(in oklab, ${s.color} 42%, var(--carbon))`,
+      background: `color-mix(in oklab, ${s.color} 14%, var(--carbon))`,
+    }}>{s.mark}{compact ? '' : ` ${s.label}`}</span>
+  )
+}
+
+// note phrase -> pill color, by keyword (preconfigured rationale -> pills)
+const NOTE_RULES: [RegExp, string][] = [
+  [/barrel|exit velo|hard.?hit|power|slug/i, '#ee6fae'],
+  [/matchup|platoon|split|vs\.? (l|r)h/i,    'var(--signal)'],
+  [/whiff|strikeout|\bk%|\bk\b|swing/i,       '#a987f0'],
+  [/wind|weather|temp|park|altitude|rain/i,   'var(--link)'],
+  [/form|streak|hot|cold|last \d|recent/i,    '#e3b261'],
+]
+function notePillColor(text: string): string {
+  for (const [re, c] of NOTE_RULES) if (re.test(text)) return c
+  return 'var(--silver)'
+}
+
+// American odds from a model win probability (fair line)
+function fairFromProb(pct: number | null | undefined): number | null {
+  if (pct == null) return null
+  const dp = pct / 100
+  if (dp <= 0 || dp >= 1) return null
+  return dp >= 0.5 ? -Math.round((dp / (1 - dp)) * 100) : Math.round(((1 - dp) / dp) * 100)
+}
+
+// Half-Kelly stake in dollars from bankroll, decimal model prob, american odds.
+function halfKellyDollars(bankroll: number, modelPct: number | null, odds: number): number | null {
+  if (modelPct == null || !bankroll) return null
+  const p = modelPct / 100
+  const b = odds > 0 ? odds / 100 : 100 / -odds
+  const f = (b * p - (1 - p)) / b
+  if (!isFinite(f) || f <= 0) return null
+  return bankroll * f * 0.5
+}
+
+function SeasonLine({ season }: { season?: SeasonStats | null }) {
+  if (!season || (!season.realized?.length && !season.expected?.length)) return null
+  const Row = ({ items, dim }: { items: { label: string; value: string }[]; dim?: boolean }) => (
+    <div className="edge-season-row">
+      {items.map(s => (
+        <span key={s.label} className="edge-season-cell">
+          <span className="edge-season-k">{s.label}</span>
+          <span className="edge-season-v" style={dim ? { color: 'var(--silver)' } : undefined}>{s.value}</span>
+        </span>
+      ))}
+    </div>
+  )
+  return (
+    <div className="edge-season">
+      {season.realized?.length ? <Row items={season.realized} /> : null}
+      {season.expected?.length ? (
+        <div className="edge-season-x">
+          <span className="edge-season-xk">Expected</span>
+          <Row items={season.expected} dim />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function Detail({ p, bankroll }: { p: EdgePick; bankroll: number }) {
   const color = SYSTEM_COLOR[p.system] ?? '#9aa0aa'
   const pill = SYSTEM_PILL[p.system] ?? SYSTEM_PILL.ALL
   const isGame = groupOf(p.system) === 'game'
   const model = p.modelProbPct ?? 0
+  // Editable odds: prefilled from the latest snapshot line, user can override to
+  // watch the gap move. Remounts per pick (key on parent) so it resets cleanly.
+  const [oddsStr, setOddsStr] = useState<string>(String(p.odds))
+  const enteredOdds = Number(oddsStr)
+  const oddsValid = oddsStr.trim() !== '' && isFinite(enteredOdds) && enteredOdds !== 0
+  const liveImplied = oddsValid ? americanToImplied(enteredOdds) * 100 : (p.marketProbPct ?? americanToImplied(p.odds) * 100)
+  const gap = p.modelProbPct != null ? p.modelProbPct - liveImplied : null
+  const kelly = halfKellyDollars(bankroll, p.modelProbPct, oddsValid ? enteredOdds : p.odds)
   const market = p.marketProbPct ?? americanToImplied(p.odds) * 100
   const fairOdds = (() => {
     if (p.modelProbPct == null) return null
@@ -469,49 +548,67 @@ function Detail({ p }: { p: EdgePick }) {
           )}
         </div>
         <div className="edge-detail-id">
-          <span className="edge-pill" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
-            {p.system}
-          </span>
+          <div className="edge-detail-tags">
+            <span className="edge-pill" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
+              {p.system}
+            </span>
+            {!isGame && p.position && <span className="edge-pos">{p.position}</span>}
+            {!isGame && <StatusChip status={p.status} />}
+          </div>
           <h2 className="edge-detail-name">{titleOf(p)}</h2>
           <div className="edge-detail-sub">
             {isGame ? null : <span>{p.away_team} @ {p.home_team}</span>}
             <span className="edge-strong" style={{ color }}>{betTypeLabel(p.bet_type, p.system)}</span>
-            <span>{fmtOdds(p.odds)}</span>
+            {p.matchup?.startTime && <span>{p.matchup.startTime}</span>}
             {p.book && <span className="edge-book">{p.book}</span>}
           </div>
         </div>
       </div>
 
-      {/* THE EDGE block */}
+      <SeasonLine season={p.season} />
+
+      {/* THE EDGE block — live: model − implied(odds) = gap */}
       <div className="edge-block">
         <div className="edge-block-top">
-          <div className="edge-hero" style={{ color }}>{fmtEdge(p.edgePctValue)}</div>
-          <div className="edge-hero-label">edge over the market</div>
+          <div className="edge-hero" style={{ color: gap != null && gap < 0 ? 'var(--loss)' : color }}>
+            {gap != null ? `${gap >= 0 ? '+' : ''}${gap.toFixed(1)}%` : fmtEdge(p.edgePctValue)}
+          </div>
+          <div className="edge-hero-label">model edge at this line</div>
         </div>
-        <EdgeTrack model={model} market={market} color={color} />
+        <EdgeTrack model={model} market={liveImplied} color={color} />
         <div className="edge-readout">
           <div className="edge-read">
             <span className="edge-read-dot" style={{ background: color }} />
             <span className="edge-read-k">Our model</span>
             <span className="edge-read-v">{fmtPct(p.modelProbPct)}</span>
           </div>
-          <div className="edge-read">
+          <div className="edge-read edge-read-odds">
             <span className="edge-read-dot edge-read-dot-market" />
-            <span className="edge-read-k">Market (de-vig)</span>
-            <span className="edge-read-v">{fmtPct(market)}</span>
+            <span className="edge-read-k">Live line</span>
+            <span className="edge-odds-in">
+              <input
+                inputMode="numeric"
+                value={oddsStr}
+                onChange={e => setOddsStr(e.target.value)}
+                aria-label="Live odds (American)"
+                className="edge-odds-field"
+              />
+              <span className="edge-odds-imp">{oddsValid ? `${liveImplied.toFixed(1)}% implied` : '—'}</span>
+            </span>
           </div>
         </div>
         <div className="edge-meta">
-          {p.kelly_pct != null && (
-            <div className="edge-meta-cell">
-              <span className="edge-meta-k">Kelly stake</span>
-              <span className="edge-meta-v">{(p.kelly_pct <= 1 ? p.kelly_pct * 100 : p.kelly_pct).toFixed(1)}%</span>
-            </div>
-          )}
+          <div className="edge-meta-cell">
+            <span className="edge-meta-k">Kelly stake</span>
+            <span className="edge-meta-v" style={{ color: 'var(--signal)' }}>
+              {kelly != null ? `$${kelly.toFixed(0)}` : '—'}
+              <span className="edge-meta-dim"> ½K</span>
+            </span>
+          </div>
           {fairOdds != null && (
             <div className="edge-meta-cell">
               <span className="edge-meta-k">Fair vs offered</span>
-              <span className="edge-meta-v">{fmtOdds(fairOdds)} <span className="edge-meta-dim">/ {fmtOdds(p.odds)}</span></span>
+              <span className="edge-meta-v">{fmtOdds(fairOdds)} <span className="edge-meta-dim">/ {oddsValid ? fmtOdds(enteredOdds) : fmtOdds(p.odds)}</span></span>
             </div>
           )}
         </div>
@@ -542,22 +639,41 @@ function Detail({ p }: { p: EdgePick }) {
       {bullets.length > 0 && (
         <div className="edge-why">
           <div className="edge-why-h">Why we like it</div>
-          <ul className="edge-why-list">
-            {bullets.map((b, i) => <li key={i}>{b}</li>)}
-          </ul>
+          <div className="edge-pills">
+            {bullets.map((b, i) => {
+              const c = notePillColor(b)
+              return (
+                <span key={i} className="edge-note-pill" style={{
+                  color: c,
+                  borderColor: `color-mix(in oklab, ${c} 40%, var(--carbon))`,
+                  background: `color-mix(in oklab, ${c} 12%, var(--carbon))`,
+                }}>{b}</span>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
+type Mode = 'players' | 'games'
+
 export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: string }) {
   const [sport, setSport] = useState<SportKey>('mlb')
-  const [group, setGroup] = useState<Group>('all')
+  const [mode, setMode] = useState<Mode>('players')
   const [team, setTeam] = useState<string>('all')
+  const [position, setPosition] = useState<string>('all')
+  const [markets, setMarkets] = useState<string[]>([])   // empty = all
   const [minEdge, setMinEdge] = useState<number>(0)
+  const [bankroll, setBankroll] = useState<number>(1000)
+  const [hideInactive, setHideInactive] = useState<boolean>(false)
+  const [query, setQuery] = useState<string>('')
   const [topOnly, setTopOnly] = useState<boolean>(false)
   const [selectedId, setSelectedId] = useState<number | null>(picks[0]?.id ?? null)
+
+  const inMode = (p: EdgePick) => mode === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game'
+  const modeCount = (m: Mode) => picks.filter(p => m === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game').length
 
   const teams = useMemo(() => {
     const set = new Set<string>()
@@ -565,19 +681,44 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
     return Array.from(set).sort()
   }, [picks])
 
+  const positions = useMemo(() => {
+    const set = new Set<string>()
+    picks.forEach(p => { if (groupOf(p.system) !== 'game' && p.position) set.add(p.position) })
+    return Array.from(set).sort()
+  }, [picks])
+
+  const marketList = useMemo(() => {
+    const set = new Set<string>()
+    picks.forEach(p => { if (inMode(p)) set.add(p.system) })
+    return Array.from(set).sort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picks, mode])
+
   const visible = useMemo(() => {
-    let v = picks
-    if (group !== 'all') v = v.filter(p => groupOf(p.system) === group)
+    const q = query.trim().toLowerCase()
+    let v = picks.filter(inMode)
     if (team !== 'all') v = v.filter(p => p.away_team === team || p.home_team === team)
+    if (mode === 'players' && position !== 'all') v = v.filter(p => p.position === position)
+    if (markets.length) v = v.filter(p => markets.includes(p.system))
     if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
+    if (hideInactive) v = v.filter(p => p.status !== 'out')
+    if (q) v = v.filter(p =>
+      (p.player ?? '').toLowerCase().includes(q) ||
+      (p.away_team ?? '').toLowerCase().includes(q) ||
+      (p.home_team ?? '').toLowerCase().includes(q) ||
+      p.system.toLowerCase().includes(q))
     v = v.slice().sort((a, b) => (b.edgePctValue ?? 0) - (a.edgePctValue ?? 0))
     if (topOnly) v = v.slice(0, 10)
     return v
-  }, [picks, group, team, minEdge, topOnly])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picks, mode, team, position, markets, minEdge, hideInactive, query, topOnly])
+
   const selected = useMemo(
     () => visible.find(p => p.id === selectedId) ?? visible[0] ?? null,
     [visible, selectedId],
   )
+  const hasFilters = team !== 'all' || position !== 'all' || markets.length > 0 || minEdge > 0 || hideInactive || query !== '' || topOnly
+  const toggleMarket = (m: string) => setMarkets(cur => cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m])
 
   return (
     <main className="edge">
@@ -602,43 +743,76 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
         </div>
       </header>
 
-      <div className="edge-filters" role="tablist" aria-label="Pick type">
-        {GROUPS.map(g => {
-          const n = g.key === 'all' ? picks.length : picks.filter(p => groupOf(p.system) === g.key).length
-          return (
-            <button key={g.key} role="tab" aria-selected={group === g.key}
-              onClick={() => setGroup(g.key)}
-              className={`edge-filter${group === g.key ? ' is-active' : ''}`}>
-              {g.label} <span className="edge-filter-n">{n}</span>
-            </button>
-          )
-        })}
+      {/* Players | Games mode switch */}
+      <div className="edge-mode" role="tablist" aria-label="Player or game props">
+        {(['players', 'games'] as Mode[]).map(m => (
+          <button key={m} role="tab" aria-selected={mode === m}
+            onClick={() => { setMode(m); setPosition('all'); setMarkets([]) }}
+            className={`edge-modebtn${mode === m ? ' is-active' : ''}`}>
+            {m === 'players' ? 'Players' : 'Games'}<span className="edge-filter-n">{modeCount(m)}</span>
+          </button>
+        ))}
       </div>
 
+      {/* Control bar */}
       <div className="edge-controls">
-        <button className={`edge-toggle${topOnly ? ' is-on' : ''}`} onClick={() => setTopOnly(v => !v)}
-          aria-pressed={topOnly}>Top 10 today</button>
+        <label className="edge-select">
+          <span className="edge-select-k">Team</span>
+          <select value={team} onChange={e => setTeam(e.target.value)} aria-label="Team">
+            <option value="all">All</option>
+            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        {mode === 'players' && positions.length > 0 && (
+          <label className="edge-select">
+            <span className="edge-select-k">Pos</span>
+            <select value={position} onChange={e => setPosition(e.target.value)} aria-label="Position">
+              <option value="all">All</option>
+              {positions.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+        )}
         <label className="edge-slider">
           <span>Min edge <strong>{minEdge}%</strong></span>
           <input type="range" min={0} max={20} step={1} value={minEdge}
             onChange={e => setMinEdge(Number(e.target.value))} aria-label="Minimum edge" />
         </label>
-        <label className="edge-select">
-          <span className="edge-select-k">Team</span>
-          <select value={team} onChange={e => setTeam(e.target.value)} aria-label="Team">
-            <option value="all">All teams</option>
-            {teams.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+        <label className="edge-select edge-bank">
+          <span className="edge-select-k">Bankroll $</span>
+          <input type="number" min={0} step={50} value={bankroll}
+            onChange={e => setBankroll(Math.max(0, Number(e.target.value) || 0))} aria-label="Bankroll" />
         </label>
-        {(team !== 'all' || minEdge > 0 || topOnly) && (
-          <button className="edge-clear" onClick={() => { setTeam('all'); setMinEdge(0); setTopOnly(false) }}>Clear</button>
+        <input className="edge-search" type="search" placeholder="Search player / team…"
+          value={query} onChange={e => setQuery(e.target.value)} aria-label="Search" />
+        <button className={`edge-toggle${hideInactive ? ' is-on' : ''}`} onClick={() => setHideInactive(v => !v)}
+          aria-pressed={hideInactive}>Active only</button>
+        <button className={`edge-toggle${topOnly ? ' is-on' : ''}`} onClick={() => setTopOnly(v => !v)}
+          aria-pressed={topOnly}>Top 10</button>
+        {hasFilters && (
+          <button className="edge-clear" onClick={() => { setTeam('all'); setPosition('all'); setMarkets([]); setMinEdge(0); setHideInactive(false); setQuery(''); setTopOnly(false) }}>Clear</button>
         )}
       </div>
 
+      {/* Market chips */}
+      {marketList.length > 1 && (
+        <div className="edge-markets">
+          {marketList.map(m => {
+            const on = markets.includes(m)
+            const c = SYSTEM_COLOR[m] ?? 'var(--silver)'
+            return (
+              <button key={m} onClick={() => toggleMarket(m)} className="edge-mchip"
+                style={on ? { color: c, borderColor: `color-mix(in oklab, ${c} 45%, var(--carbon))`, background: `color-mix(in oklab, ${c} 16%, var(--carbon))` } : undefined}>
+                {m}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <div className="edge-empty">
-          <p className="edge-empty-h">No picks posted yet{group === 'all' ? '' : ' in this category'}.</p>
-          <p className="edge-empty-s">Picks publish through the day &mdash; check back, or see <a href="/results" className="edge-link">recent results</a>.</p>
+          <p className="edge-empty-h">No picks match these filters.</p>
+          <p className="edge-empty-s">Picks publish through the day &mdash; loosen a filter, or see <a href="/results" className="edge-link">recent results</a>.</p>
         </div>
       ) : (
         <div className="edge-grid">
@@ -646,12 +820,13 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
             {visible.map((p, i) => {
               const color = SYSTEM_COLOR[p.system] ?? '#9aa0aa'
               const active = selected?.id === p.id
+              const isGame = groupOf(p.system) === 'game'
               return (
                 <li key={p.id}>
                   <button className={`edge-row${active ? ' is-active' : ''}`} onClick={() => setSelectedId(p.id)}>
                     <span className="edge-row-rank">{i + 1}</span>
                     <span className="edge-row-thumb" style={{ background: `${color}14`, borderColor: `${color}38` }}>
-                      {groupOf(p.system) !== 'game' && p.headshotUrl ? (
+                      {!isGame && p.headshotUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={p.headshotUrl} alt="" className="edge-row-img"
                           onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
@@ -661,7 +836,10 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
                       )}
                     </span>
                     <span className="edge-row-main">
-                      <span className="edge-row-name">{titleOf(p)}</span>
+                      <span className="edge-row-name">
+                        {titleOf(p)}
+                        {!isGame && <StatusChip status={p.status} compact />}
+                      </span>
                       <span className="edge-row-meta">
                         <span className="edge-row-sys" style={{ color }}>{p.system}</span>
                         <span>{betTypeLabel(p.bet_type, p.system)}</span>
@@ -675,7 +853,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
             })}
           </ol>
           <div className="edge-panel" key={selected?.id ?? 'none'}>
-            {selected && <Detail p={selected} />}
+            {selected && <Detail p={selected} bankroll={bankroll} />}
           </div>
         </div>
       )}
@@ -834,6 +1012,49 @@ function Styles() {
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
 .edge-empty-s { color: #9aa0aa; font-size: 13px; margin: 0; }
 .edge-link { color: var(--signal); }
+
+/* -- cockpit: mode switch -- */
+.edge-mode { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--basalt); border-radius: var(--radius-pill); background: var(--graphite); margin-bottom: 16px; }
+.edge-modebtn { display: inline-flex; align-items: center; gap: 7px; background: transparent; color: var(--silver); border: none; padding: 7px 16px; border-radius: var(--radius-pill); font-family: var(--font-text), sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out); }
+.edge-modebtn.is-active { background: var(--win-wash); color: var(--signal); }
+.edge-modebtn .edge-filter-n { background: color-mix(in oklab, var(--silver) 14%, var(--carbon)); color: var(--silver); border-radius: var(--radius-pill); padding: 1px 7px; font-size: 10px; }
+.edge-modebtn.is-active .edge-filter-n { background: color-mix(in oklab, var(--signal) 20%, var(--carbon)); color: var(--signal); }
+
+/* -- cockpit: bankroll + search + markets -- */
+.edge-bank input { width: 84px; background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); border-radius: var(--radius-sm); padding: 5px 8px; font-size: 12px; font-family: var(--font-mono), monospace; }
+.edge-search { background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); border-radius: var(--radius); padding: 6px 12px; font-size: 12px; min-width: 190px; flex: 1 1 190px; max-width: 280px; }
+.edge-search::placeholder { color: var(--fog); }
+.edge-markets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.edge-mchip { background: var(--graphite); color: var(--silver); border: 1px solid var(--basalt); border-radius: var(--radius-pill); padding: 5px 12px; font-family: var(--font-mono), monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; transition: all var(--dur) var(--ease-out); }
+
+/* -- scorecard: tags / status / position -- */
+.edge-detail-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.edge-pos { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--silver); border: 1px solid var(--basalt); border-radius: var(--radius-sm); padding: 2px 6px; }
+.edge-status { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-text), sans-serif; font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; border: 1px solid var(--basalt); border-radius: var(--radius-pill); padding: 2px 8px; white-space: nowrap; }
+.edge-row-name { display: inline-flex; align-items: center; gap: 8px; }
+.edge-row-name .edge-status { font-size: 9px; padding: 1px 6px; }
+
+/* -- scorecard: season line -- */
+.edge-season { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--basalt); border-radius: var(--radius); background: var(--obsidian); padding: 12px 14px; margin-bottom: 14px; }
+.edge-season-row { display: flex; flex-wrap: wrap; gap: 18px; }
+.edge-season-cell { display: flex; flex-direction: column; gap: 2px; }
+.edge-season-k { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fog); }
+.edge-season-v { font-family: var(--font-mono), monospace; font-size: 16px; font-weight: 700; color: var(--chalk); }
+.edge-season-x { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--basalt); padding-top: 8px; }
+.edge-season-xk { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); flex-shrink: 0; }
+.edge-season-x .edge-season-v { font-size: 13px; }
+
+/* -- scorecard: editable odds + Kelly -- */
+.edge-read-odds { align-items: center; }
+.edge-odds-in { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.edge-odds-field { width: 64px; background: var(--graphite); color: var(--chalk); border: 1px solid var(--steel); border-radius: var(--radius-sm); padding: 3px 7px; font-family: var(--font-mono), monospace; font-size: 14px; font-weight: 700; text-align: right; }
+.edge-odds-field:focus-visible { outline: none; border-color: var(--signal); box-shadow: 0 0 0 2px color-mix(in oklab, var(--signal) 25%, transparent); }
+.edge-odds-imp { font-family: var(--font-mono), monospace; font-size: 10px; color: var(--fog); white-space: nowrap; }
+
+/* -- scorecard: note pills -- */
+.edge-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.edge-note-pill { font-family: var(--font-text), sans-serif; font-size: 11px; font-weight: 500; border: 1px solid var(--basalt); border-radius: var(--radius-pill); padding: 4px 10px; }
+
 @media (prefers-reduced-motion: reduce) {
   .edge-live-dot { animation: none; }
   .edge-panel { animation: none; }
