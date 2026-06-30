@@ -120,6 +120,28 @@ def read_history(market: str, since: str | None = None, until: str | None = None
     return pd.concat(frames, ignore_index=True)
 
 
+# Source precedence when the same quote exists from >1 provider (e.g. SGO + ParlayAPI
+# for a 2026 game). Backtests should read ONE line per quote-key; pick the preferred
+# source. Default: live providers (parlayapi > sgo) over the historical scrape.
+SOURCE_PRECEDENCE = ("parlayapi", "sgo", "bettingpros")
+_QUOTE_KEY = ["market", "game_pk", "selection", "line", "book", "snapshot_ts"]
+
+
+def dedupe_by_source(df, precedence: tuple = SOURCE_PRECEDENCE):
+    """Collapse cross-source duplicates of the same quote, keeping the highest-
+    precedence source. No-op if `source` is absent or df is empty."""
+    if df is None or len(df) == 0 or "source" not in df.columns:
+        return df
+    rank = {s: i for i, s in enumerate(precedence)}
+    keys = [c for c in _QUOTE_KEY if c in df.columns]
+    df = df.copy()
+    df["_rank"] = df["source"].map(lambda s: rank.get(s, len(precedence)))
+    df = (df.sort_values("_rank")
+            .drop_duplicates(subset=keys, keep="first")
+            .drop(columns="_rank"))
+    return df
+
+
 def coverage_report(market: str, write: bool = True) -> dict:
     """Per-season partition (date) counts for a market, plus first/last.
 
