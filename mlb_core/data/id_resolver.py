@@ -46,13 +46,29 @@ _roster_cache: dict = {}     # game_pk -> {norm_name: mlbam_id} (boxscore fallba
 _ambiguous_doubleheaders = 0
 
 
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
 def _norm(s: str) -> str:
-    """NFD + ASCII fold + lower + strip -- matches game_result / auxiliary_features."""
+    """NFD + ASCII fold + lower, drop . and ', strip a trailing generational
+    suffix (Jr/Sr/II..). Symmetric on both index + query sides, so
+    'Lourdes Gurriel' == 'Lourdes Gurriel Jr.' and 'T.J.' == 'TJ'."""
     if not s:
         return ""
     n = unicodedata.normalize("NFD", s)
     n = "".join(c for c in n if unicodedata.category(c) != "Mn")
-    return n.encode("ascii", "ignore").decode().lower().strip()
+    n = n.encode("ascii", "ignore").decode().lower().replace(".", "").replace("'", "")
+    toks = n.split()
+    if len(toks) > 1 and toks[-1] in _NAME_SUFFIXES:
+        toks = toks[:-1]
+    return " ".join(toks).strip()
+
+
+def is_player_name(name: str) -> bool:
+    """False for non-player junk that some books put in the prop description:
+    unrendered templates ({...}) and matchup strings ('Away @ Home')."""
+    n = (name or "").strip()
+    return bool(n) and "{" not in n and "}" not in n and " @ " not in n
 
 
 # --- game_pk ----------------------------------------------------------------

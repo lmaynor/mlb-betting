@@ -65,6 +65,9 @@ def flatten_parlay_props(event_obj: dict, sport: str = "") -> list:
                 point = o.get("point")
                 if not player or not side or price is None or point is None:
                     continue
+                # skip non-player junk some books emit (templates, matchup strings)
+                if "{" in player or "}" in player or " @ " in player:
+                    continue
                 rec = by_player.setdefault((player, point),
                                            {"line": point, "over_odds": None, "under_odds": None})
                 rec[f"{side}_odds"] = int(price)

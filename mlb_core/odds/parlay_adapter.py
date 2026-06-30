@@ -146,6 +146,8 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                 price, point = o.get("price"), o.get("point")
                 if not player or not side or price is None or point is None:
                     continue
+                if not id_resolver.is_player_name(player):   # drop template/matchup junk
+                    continue
                 slot = acc.setdefault((mkey, player), {"over": {}, "under": {}})
                 slot[side][bk] = {"odds": str(int(price)), "overUnder": str(point)}
 

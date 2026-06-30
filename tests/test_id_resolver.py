@@ -25,3 +25,17 @@ def test_season_index_still_wins_first(monkeypatch):
                         ({"jose ramirez": {608070}}, {("jose ramirez", "CLE"): 608070}))
     monkeypatch.setitem(R._roster_cache, 1, {})   # empty roster -> would miss
     assert R.resolve_player_id("Jose Ramirez", "CLE", "2024-05-01", game_pk=1) == 608070
+
+
+def test_norm_suffix_and_punct():
+    assert R._norm("Lourdes Gurriel Jr.") == R._norm("Lourdes Gurriel") == "lourdes gurriel"
+    assert R._norm("T.J. Rumfield") == "tj rumfield"
+    assert R._norm("Ronald Acuna Jr.") == "ronald acuna"
+    assert R._norm("Jose O'Neill") == "jose oneill"
+
+
+def test_is_player_name_filters_junk():
+    assert R.is_player_name("Mike Trout")
+    assert not R.is_player_name("{optionTypeAbbr}{value} HR")
+    assert not R.is_player_name("Los Angeles Angels @ Seattle Mariners")
+    assert not R.is_player_name("")
