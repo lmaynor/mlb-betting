@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
 import { B, SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
+import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats } from '@/lib/types'
 import {
@@ -220,8 +221,6 @@ function exportCSV(bets: Bet[]) {
 }
 
 function ResultBetCard({ bet }: { bet: Bet }) {
-  const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
-
   return (
     <div className="card-hover" style={{
       border: B,
@@ -244,7 +243,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
       </div>
 
       <div>
-        <div className="mono" style={{ fontSize: '12px', color: 'var(--silver)', marginBottom: '5px' }}>{game}</div>
+        <div style={{ marginBottom: '5px' }}><Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" /></div>
         <div style={{ fontSize: '15px', lineHeight: 1.35, fontWeight: 700, color: 'var(--ash)' }}>{pickLabel(bet)}</div>
       </div>
 
@@ -622,14 +621,13 @@ export function ResultsClient({
             ))}
           </div>
           {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => {
-            const game = bet.home_team ? `${bet.away_team} @ ${bet.home_team}` : `Game ${bet.game_pk}`
             return (
               <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: B, alignItems: 'center' }}>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--fog)' }}>
                   {fmtDisplayDate(bet.game_date)}
                 </div>
                 <div style={{ padding: '8px 12px' }}><SystemBadge system={bet.system} /></div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--silver)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{game}</div>
+                <div style={{ padding: '8px 12px', minWidth: 0 }}><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--ash)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickLabel(bet)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--ash)' }}>{formatOdds(bet.odds)}</div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--signal)' }}>

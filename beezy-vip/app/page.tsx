@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Hero }             from '@/components/landing/hero'
+import { EdgeCompare }      from '@/components/landing/edge-compare'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { ModelsGrid }       from '@/components/landing/models-grid'
 import { RecentPicksTable } from '@/components/landing/recent-picks-table'
@@ -14,6 +15,9 @@ export default function HomePage() {
         <div style={{ marginTop: '36px', height: '320px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--basalt)', background: 'var(--graphite)' }} className="reveal" />
       }>
         <Hero />
+      </Suspense>
+      <Suspense fallback={null}>
+        <EdgeCompare />
       </Suspense>
       <Suspense fallback={null}>
         <RecentPicksTable />
