@@ -65,9 +65,9 @@ def _canon_book(key: str) -> str:
     return PARLAY_BOOK_CANON.get(key, (key or "").lower())
 
 
-def _resolve_pid(name, away_abbr, home_abbr, date):
-    return (id_resolver.resolve_player_id(name, away_abbr, date)
-            or id_resolver.resolve_player_id(name, home_abbr, date))
+def _resolve_pid(name, away_abbr, home_abbr, date, game_pk=None):
+    return (id_resolver.resolve_player_id(name, away_abbr, date, game_pk)
+            or id_resolver.resolve_player_id(name, home_abbr, date, game_pk))
 
 
 def _list_props_snapshots(date: str) -> list:
@@ -109,7 +109,7 @@ def rows_for_date(date: str, ingested_at: str) -> "list[dict]":
                 market, system = mh
                 player = r["player"]
                 if player not in pid_cache:
-                    pid_cache[player] = _resolve_pid(player, away_abbr, home_abbr, date)
+                    pid_cache[player] = _resolve_pid(player, away_abbr, home_abbr, date, game_pk)
                 pid = pid_cache[player]
                 book = _canon_book(r["book"])
                 over_am, under_am = r["over_odds"], r["under_odds"]

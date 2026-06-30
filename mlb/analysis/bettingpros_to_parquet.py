@@ -109,9 +109,9 @@ def resolve_game_pk(game_date: str, away: str, home: str):
         return None
 
 
-def resolve_player_id(name: str, team: str, game_date: str):
+def resolve_player_id(name: str, team: str, game_date: str, game_pk=None):
     try:
-        return id_resolver.resolve_player_id(name, team, game_date)
+        return id_resolver.resolve_player_id(name, team, game_date, game_pk)
     except Exception:  # noqa: BLE001
         return None
 
@@ -157,8 +157,9 @@ def _emit_quotes(row, kind, market, system, source, ingested_at,
     away, home = _away_home(kind, row)
     player = str(row.get("Player", "") or "")
     team = str(row.get("Team", "") or "")
-    player_id = resolve_player_id(player, team, game_date) if kind == "player_ou" else None
     game_pk = resolve_game_pk(game_date, away, home)
+    player_id = (resolve_player_id(player, team, game_date, game_pk)
+                 if kind == "player_ou" else None)
     sides = KIND_SIDES[kind]
 
     out = []

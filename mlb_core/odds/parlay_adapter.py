@@ -91,9 +91,9 @@ def _event_et_date(commence_time: str, fallback: str) -> str:
         return fallback
 
 
-def _resolve_pid(name: str, away_abbr: str, home_abbr: str, date: str):
-    return (id_resolver.resolve_player_id(name, away_abbr, date)
-            or id_resolver.resolve_player_id(name, home_abbr, date))
+def _resolve_pid(name: str, away_abbr: str, home_abbr: str, date: str, game_pk=None):
+    return (id_resolver.resolve_player_id(name, away_abbr, date, game_pk)
+            or id_resolver.resolve_player_id(name, home_abbr, date, game_pk))
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ def _game_ml_odds(game_lines_event: dict, home_full: str, away_full: str) -> dic
 
 
 def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
-                date: str) -> tuple[dict, dict]:
+                date: str, game_pk=None) -> tuple[dict, dict]:
     acc: dict = {}
     for book in (props_event or {}).get("bookmakers") or []:
         bk = _canon_book(book.get("key", ""))
@@ -152,7 +152,7 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
     odds, players = {}, {}
     for (mkey, player), sides in acc.items():
         prefix, stat_id, kind = PROP_MARKET_MAP[mkey]
-        pid = _resolve_pid(player, away_abbr, home_abbr, date)
+        pid = _resolve_pid(player, away_abbr, home_abbr, date, game_pk)
         if not pid:
             logger.info("parlay_adapter: unresolved player %r (%s)", player, mkey)
             continue
@@ -200,7 +200,7 @@ def parlay_to_sgo_event(game_lines_event: dict, props_event: dict | None,
         return None
 
     odds = _game_ml_odds(game_lines_event, home_full, away_full)
-    p_odds, players = _props_odds(props_event, away_abbr, home_abbr, game_date)
+    p_odds, players = _props_odds(props_event, away_abbr, home_abbr, game_date, game_pk)
     odds.update(p_odds)
 
     return {

@@ -37,10 +37,12 @@ _TEAM_ID_TO_ABBREV = {
 
 _SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}"
 _PLAYERS_URL = "https://statsapi.mlb.com/api/v1/sports/1/players?season={season}"
+_BOXSCORE_URL = "https://statsapi.mlb.com/api/v1/game/{pk}/boxscore"
 
 _session = requests.Session()
 _schedule_cache: dict = {}   # date -> {(away_abbr, home_abbr): [game_pk, ...]}
 _player_cache: dict = {}     # season -> (name->{ids}, (name,abbr)->id)
+_roster_cache: dict = {}     # game_pk -> {norm_name: mlbam_id} (boxscore fallback)
 _ambiguous_doubleheaders = 0
 
 
@@ -135,16 +137,51 @@ def season_player_index(season: str) -> tuple:
     return _player_cache[season]
 
 
-def resolve_player_id(name: str, team: str, date: str):
-    """MLBAM id for (name, team), or None. Tries (name, team) then unique name."""
+def _build_roster(boxscore_json: dict) -> dict:
+    """Pure: boxscore JSON -> {norm_name: mlbam_id} for both teams' players."""
+    out: dict = {}
+    teams = (boxscore_json or {}).get("teams", {}) or {}
+    for side in ("home", "away"):
+        for p in (teams.get(side, {}) or {}).get("players", {}).values():
+            person = p.get("person") or {}
+            pid, nm = person.get("id"), _norm(person.get("fullName", ""))
+            if pid and nm:
+                out[nm] = pid
+    return out
+
+
+def _fetch_boxscore(game_pk) -> dict:
+    r = _session.get(_BOXSCORE_URL.format(pk=game_pk), timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def game_roster_index(game_pk) -> dict:
+    """{norm_name: mlbam_id} for everyone in a game's boxscore (cached)."""
+    if game_pk not in _roster_cache:
+        try:
+            _roster_cache[game_pk] = _build_roster(_fetch_boxscore(game_pk))
+        except Exception:  # noqa: BLE001
+            _roster_cache[game_pk] = {}
+    return _roster_cache[game_pk]
+
+
+def resolve_player_id(name: str, team: str, date: str, game_pk=None):
+    """MLBAM id for a player, or None. Order: season (name,team) -> unique season
+    name -> game boxscore roster (when game_pk given). The boxscore fallback is
+    game-scoped (~50 players) so it disambiguates and guarantees the player was in
+    that game -- this closes the ~10-22% name->MLBAM gap the season index leaves."""
     season = (date or "")[:4]
-    if not season:
-        return None
-    name_to_ids, name_team_to_id = season_player_index(season)
     nm = _norm(name)
-    if (nm, team) in name_team_to_id:
-        return name_team_to_id[(nm, team)]
-    ids = name_to_ids.get(nm)
-    if ids and len(ids) == 1:
-        return next(iter(ids))
-    return None  # missing or ambiguous (same name, no team match)
+    if season:
+        name_to_ids, name_team_to_id = season_player_index(season)
+        if (nm, team) in name_team_to_id:
+            return name_team_to_id[(nm, team)]
+        ids = name_to_ids.get(nm)
+        if ids and len(ids) == 1:
+            return next(iter(ids))
+    if game_pk:
+        rid = game_roster_index(game_pk).get(nm)
+        if rid:
+            return rid
+    return None  # missing or ambiguous
