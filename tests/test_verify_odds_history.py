@@ -34,18 +34,18 @@ def test_verify_audit_flags_resolution_gap(tmp_path, monkeypatch):
     rows = [
         {"sport": "mlb", "market": "hr_yn", "selection": "OVER", "line": 0.5, "book": "dk",
          "american": 300, "implied_prob": 0.25, "fair_prob": 0.2, "game_pk": 5, "player_id": 99,
-         "game_date": "2026-06-29", "snapshot_ts": "t", "source": "parlayapi",
+         "game_date": "2024-05-01", "snapshot_ts": "t", "source": "parlayapi",
          "away_team": "X", "home_team": "Y"},
         {"sport": "mlb", "market": "hr_yn", "selection": "UNDER", "line": 0.5, "book": "dk",
          "american": -400, "implied_prob": 0.8, "fair_prob": 0.8, "game_pk": 5, "player_id": 99,
-         "game_date": "2026-06-29", "snapshot_ts": "t", "source": "parlayapi",
+         "game_date": "2024-05-01", "snapshot_ts": "t", "source": "parlayapi",
          "away_team": "X", "home_team": "Y"},
         {"sport": "mlb", "market": "hr_yn", "selection": "OVER", "line": 0.5, "book": "novig",
          "american": 1000, "implied_prob": 0.09, "fair_prob": None, "game_pk": 5, "player_id": None,
-         "game_date": "2026-06-29", "snapshot_ts": "t", "source": "parlayapi",
+         "game_date": "2024-05-01", "snapshot_ts": "t", "source": "parlayapi",
          "away_team": "X", "home_team": "Y"},
     ]
-    oh.write_partition(pd.DataFrame(rows, columns=oh.SCHEMA_COLUMNS), "hr_yn", "2026-06-29")
+    oh.write_partition(pd.DataFrame(rows, columns=oh.SCHEMA_COLUMNS), "hr_yn", "2024-05-01")
     r = V.audit_market("hr_yn")
     assert r["game_pk_resolved"] == 1.0
     assert round(r["player_id_resolved"], 2) == 0.67     # 1 of 3 null

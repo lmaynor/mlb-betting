@@ -45,7 +45,8 @@ REALIZED = {
 
 # Thresholds for the pass/fail flags.
 RESOLVE_GATE = 0.95   # game_pk + player_id non-null
-JOIN_GATE = 0.90      # realized-outcome joinable
+JOIN_GATE = 0.90      # realized-outcome joinable (on settled dates)
+STATCAST_LAG_DAYS = 2  # realized masters ingest nightly; exclude recent dates from join
 
 
 def _all_markets() -> list:
@@ -96,27 +97,37 @@ def oh_read_csv(key, **kw):
     return read_csv(key, **kw)
 
 
+def _settled(df):
+    """Rows on SETTLED dates only. Realized masters (statcast/scoring) ingest
+    nightly, so same-day/recent games haven't landed -- join coverage is only
+    meaningful once the outcome data exists. Excludes the last STATCAST_LAG_DAYS."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=STATCAST_LAG_DAYS)).isoformat()
+    return df[df["game_date"] <= cutoff]
+
+
 def _join_coverage(df, kind: str) -> float | None:
-    """Fraction of odds rows whose realized outcome is joinable."""
+    """Fraction of odds rows (on settled dates) whose realized outcome joins.
+    Returns None (N/A) when there are no settled rows yet (e.g. only today's data)."""
+    if kind == "boxscore":
+        return None  # earned runs come from game_result API, not a master
+    d = _settled(df).dropna(subset=["game_pk"])
+    if not len(d):
+        return None  # nothing settled to check yet
     if kind == "scoring":
         gp = _scoring_game_pks()
-        if not gp:
-            return None
-        d = df.dropna(subset=["game_pk"])
-        if not len(d):
-            return 0.0
-        return d["game_pk"].astype(int).isin(gp).mean()
+        return None if not gp else d["game_pk"].astype(int).isin(gp).mean()
     if kind in ("batter", "pitcher"):
         bp, pp = _statcast_pairs()
         pairs = bp if kind == "batter" else pp
         if not pairs:
             return None
-        d = df.dropna(subset=["game_pk", "player_id"])
+        d = d.dropna(subset=["player_id"])
         if not len(d):
-            return 0.0
+            return None
         hit = [(int(g), int(p)) in pairs for g, p in zip(d["game_pk"], d["player_id"])]
         return sum(hit) / len(hit)
-    return None  # boxscore -> N/A (needs game_result API)
+    return None
 
 
 def _devig_ok(df) -> float | None:
