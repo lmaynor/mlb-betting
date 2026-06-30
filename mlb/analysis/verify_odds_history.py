@@ -158,7 +158,8 @@ def audit_market(market: str) -> dict:
     r["game_pk_resolved"] = 1 - df["game_pk"].isna().mean()
     has_player = df["player_id"].notna().any()
     r["player_id_resolved"] = (1 - df["player_id"].isna().mean()) if has_player else None
-    r["american_bad"] = (~df["american"].between(-100000, 100000)).mean()
+    # books post extreme but valid juice (e.g. HR UNDER -200000); only flag absurd.
+    r["american_bad"] = (~df["american"].between(-1_000_000, 1_000_000)).mean()
     r["implied_bad"] = (~df["implied_prob"].between(0, 1)).mean()
     r["team_blank"] = ((df["away_team"] == "") | (df["home_team"] == "")).mean()
     r["devig_ok"] = _devig_ok(df)

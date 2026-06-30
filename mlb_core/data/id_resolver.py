@@ -105,10 +105,23 @@ def game_pks_for_date(date: str) -> dict:
     return _schedule_cache[date]
 
 
+# Odds-feed team abbreviations that differ from the MLB schedule's
+# (_TEAM_ID_TO_ABBREV). Most notably the Athletics: BettingPros uses "ATH"
+# (the 2025 rebrand) while the schedule keys on id 133 -> "OAK". Applied to the
+# query side of resolve_game_pk so feed abbrevs match the schedule index.
+_ABBR_ALIASES = {"ATH": "OAK", "OAK": "OAK", "AZ": "ARI", "CHW": "CWS",
+                 "WSN": "WSH", "SDP": "SD", "SFG": "SF", "TBR": "TB", "KCR": "KC"}
+
+
+def _canon_abbr(a: str) -> str:
+    return _ABBR_ALIASES.get(a, a)
+
+
 def resolve_game_pk(date: str, away: str, home: str):
-    """game_pk for (date, away, home), or None. First game on a doubleheader."""
+    """game_pk for (date, away, home), or None. First game on a doubleheader.
+    Feed abbrevs are canonicalized (ATH->OAK, etc.) to match the schedule index."""
     global _ambiguous_doubleheaders
-    pks = game_pks_for_date(date).get((away, home))
+    pks = game_pks_for_date(date).get((_canon_abbr(away), _canon_abbr(home)))
     if not pks:
         return None
     if len(pks) > 1:

@@ -39,3 +39,11 @@ def test_is_player_name_filters_junk():
     assert not R.is_player_name("{optionTypeAbbr}{value} HR")
     assert not R.is_player_name("Los Angeles Angels @ Seattle Mariners")
     assert not R.is_player_name("")
+
+
+def test_team_abbr_alias_athletics(monkeypatch):
+    # BettingPros 'ATH' must match the schedule's 'OAK' (id 133)
+    monkeypatch.setitem(R._schedule_cache, "2024-04-01", {("BOS", "OAK"): [745001]})
+    assert R.resolve_game_pk("2024-04-01", "BOS", "ATH") == 745001
+    assert R.resolve_game_pk("2024-04-01", "BOS", "OAK") == 745001
+    assert R._canon_abbr("AZ") == "ARI"
