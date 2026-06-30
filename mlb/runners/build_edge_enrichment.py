@@ -34,6 +34,7 @@ import requests
 
 from mlb_core import storage
 from mlb_core.config import DB_URL
+from mlb_core.data.lineups import get_today_schedule, confirmed_lineup_ids, fetch_il_ids
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +95,9 @@ def _line(bet_type: str):
 _ID_CACHE: dict[str, int] = {}
 
 
-def _batter_id(name: str):
-    """Resolve a batter name to an MLBAM id via the MLB Stats API (cached)."""
+def _person_id(name: str):
+    """Resolve a player name to an MLBAM id via the MLB Stats API (cached).
+    Works for batters and pitchers."""
     if name in _ID_CACHE:
         return _ID_CACHE[name]
     try:
@@ -108,6 +110,95 @@ def _batter_id(name: str):
         pid = None
     _ID_CACHE[name] = pid
     return pid
+
+
+_POS_CACHE: dict[int, str] = {}
+
+
+def _position(pid: int):
+    """primaryPosition abbreviation (e.g. 'SS', 'SP') via /people/{id}, cached."""
+    if pid in _POS_CACHE:
+        return _POS_CACHE[pid]
+    pos = None
+    try:
+        r = requests.get(f"https://statsapi.mlb.com/api/v1/people/{pid}", timeout=15)
+        if r.ok:
+            people = (r.json() or {}).get("people", [])
+            if people:
+                pos = (people[0].get("primaryPosition") or {}).get("abbreviation")
+    except Exception as exc:
+        logger.warning("position lookup failed for %s: %s", pid, exc)
+    _POS_CACHE[pid] = pos
+    return pos
+
+
+def _season_realized(pid: int, kind: str, season: str):
+    """Traditional season line via /people/{id}/stats. Batters: AVG/HR/OBP.
+    Pitchers: ERA/K/IP. Returns list of {label,value} (possibly empty)."""
+    group = "hitting" if kind == "batter" else "pitching"
+    try:
+        r = requests.get(f"https://statsapi.mlb.com/api/v1/people/{pid}/stats",
+                         params={"stats": "season", "group": group, "season": season},
+                         timeout=15)
+        blocks = (r.json() or {}).get("stats", []) if r.ok else []
+        splits = (blocks[0].get("splits") if blocks else []) or []
+        st = splits[0].get("stat", {}) if splits else {}
+    except Exception as exc:
+        logger.warning("season stats failed for %s: %s", pid, exc)
+        st = {}
+    out = []
+
+    def add(label, key):
+        v = st.get(key)
+        if v is not None and v != "":
+            out.append({"label": label, "value": str(v)})
+    if kind == "batter":
+        add("AVG", "avg"); add("HR", "homeRuns"); add("OBP", "obp")
+    else:
+        add("ERA", "era"); add("K", "strikeOuts"); add("IP", "inningsPitched")
+    return out
+
+
+_XSTATS = None   # lazy Savant expected-stats master (indexed by player_id)
+
+
+def _expected_master():
+    global _XSTATS
+    if _XSTATS is not None:
+        return _XSTATS
+    try:
+        df = storage.read_csv("Statcast/savant_expected_statistics_master.csv")
+        if "year" in df.columns:
+            df = df.sort_values("year").groupby("player_id", as_index=False).tail(1)
+        _XSTATS = df.set_index("player_id")
+    except Exception as exc:
+        logger.warning("expected-stats master unreadable: %s", exc)
+        _XSTATS = pd.DataFrame()
+    return _XSTATS
+
+
+def _season_expected(pid: int):
+    """Statcast expected stats from the Savant master. Best-effort: pulls
+    whichever of est_ba/est_slg/est_woba (+ xera) exist. Returns [{label,value}]."""
+    m = _expected_master()
+    if m.empty or pid not in m.index:
+        return []
+    row = m.loc[pid]
+    if getattr(row, "ndim", 1) > 1:        # duplicate ids -> first
+        row = row.iloc[0]
+    out = []
+
+    def add(label, col, fmt="{:.3f}"):
+        if col in m.columns:
+            v = row.get(col)
+            if v is not None and not pd.isna(v):
+                try:
+                    out.append({"label": label, "value": fmt.format(float(v))})
+                except Exception:
+                    out.append({"label": label, "value": str(v)})
+    add("xBA", "est_ba"); add("xSLG", "est_slg"); add("xwOBA", "est_woba")
+    add("xERA", "xera", "{:.2f}")
+    return out
 
 
 def _today_picks(engine, date: str):
@@ -242,17 +333,72 @@ def build(date: str) -> dict:
     if sc is not None:
         sc["_pname"] = sc["player_name"].map(_norm)
 
+    # --- status precompute (bounded network) --------------------------------
+    season = date[:4]
+    try:
+        il_ids = fetch_il_ids()
+    except Exception as exc:
+        logger.warning("IL fetch failed: %s", exc)
+        il_ids = set()
+    lineup_sets: dict[int, set] = {}
+    for gp in {gp for (_p, gp, _bt, _k, _s) in typed}:
+        try:
+            lineup_sets[gp] = confirmed_lineup_ids(gp)
+        except Exception:
+            lineup_sets[gp] = set()
+    probable: dict[int, set] = {}
+    try:
+        sched = get_today_schedule(date)
+        for _, r in sched.iterrows():
+            ids = set()
+            for col in ("home_pitcher_id", "away_pitcher_id"):
+                v = r.get(col)
+                if pd.notna(v):
+                    ids.add(int(v))
+            probable[int(r["game_pk"])] = ids
+    except Exception as exc:
+        logger.warning("schedule fetch failed: %s", exc)
+
+    def _status(pid, kind, game_pk) -> str:
+        if pid is None:
+            return "unknown"
+        if pid in il_ids:
+            return "out"
+        if kind == "pitcher":
+            return "confirmed" if pid in probable.get(game_pk, set()) else "expected"
+        ls = lineup_sets.get(game_pk, set())
+        if ls:
+            return "confirmed" if pid in ls else "out"
+        return "expected"
+
     for player, game_pk, bet_type, kind, stat in typed:
         key = _norm(player)
         rec = players.setdefault(key, {})
         if game_pk in weather:
             rec["weather"] = weather[game_pk]
+
+        pid = _person_id(player)
+        rec["status"] = _status(pid, kind, game_pk)
+        if pid is not None:
+            try:
+                pos = _position(pid)
+                if pos:
+                    rec["position"] = pos
+            except Exception as exc:
+                logger.warning("position failed for %s: %s", player, exc)
+            try:
+                realized = _season_realized(pid, kind, season)
+                expected = _season_expected(pid)
+                if realized or expected:
+                    rec["season"] = {"realized": realized, "expected": expected}
+            except Exception as exc:
+                logger.warning("season failed for %s: %s", player, exc)
+
         if sc is None:
             continue
         line = _line(bet_type)
         try:
             if kind == "batter":
-                pid = _batter_id(player)
                 g = sc[sc["batter"] == pid] if pid is not None else sc.iloc[0:0]
                 if not g.empty:
                     rec.update(_batter_block(g, stat, line))

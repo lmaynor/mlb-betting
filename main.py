@@ -970,6 +970,13 @@ def public_edge_enrich():
         key = f"Enrich/edge/{date}.json"
         if storage.exists(key):
             payload = json.loads(storage.read_bytes(key))
+        # Optional ?player= -- return just one player's enrichment (lazy fetch
+        # from the cockpit on select) to keep the payload small.
+        player = request.args.get("player")
+        if player and isinstance(payload.get("players"), dict):
+            one = payload["players"].get(player)
+            payload = {"date": payload.get("date", date),
+                       "players": ({player: one} if one else {})}
     except Exception:
         logger.exception("public_edge_enrich read failed (fail-soft)")
     resp = jsonify(payload)

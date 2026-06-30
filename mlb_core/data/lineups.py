@@ -110,8 +110,18 @@ def _get_lineup_for_game(game_pk: int) -> pd.DataFrame:
                 "player_id":     player_id,
                 "player_name":   info.get("person", {}).get("fullName", "Unknown"),
                 "bats":          info.get("batSide", {}).get("code", ""),
+                "position":      info.get("position", {}).get("abbreviation", ""),
             })
     return pd.DataFrame(rows)
+
+
+def confirmed_lineup_ids(game_pk: int) -> set:
+    """Set of MLBAM player ids in today's POSTED batting order for a game.
+    Empty set if the lineup has not been posted yet (or on error)."""
+    df = _get_lineup_for_game(game_pk)
+    if df.empty or "player_id" not in df.columns:
+        return set()
+    return {int(x) for x in df["player_id"].dropna().tolist()}
 
 
 def _pull_lineup_date(date_str: str, verbose: bool = False) -> pd.DataFrame:
@@ -265,5 +275,27 @@ def fetch_il_pitcher_ids() -> set:
         except Exception as exc:
             logger.warning("fetch_il_pitcher_ids: team %d failed: %s", tid, exc)
     logger.info("fetch_il_pitcher_ids: %d pitchers currently on IL", len(il_ids))
+    return il_ids
+
+
+def fetch_il_ids() -> set:
+    """Return the set of ALL player MLBAM IDs currently on the IL (any position),
+    across all 30 teams. For surfacing 'Out / IL' status on The Edge cockpit.
+    Returns empty set on any network error so callers degrade gracefully."""
+    import logging
+    logger = logging.getLogger(__name__)
+    il_ids = set()
+    base_url = "https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=injured"
+    for tid in _MLB_TEAM_IDS:
+        try:
+            r = _session.get(base_url.format(tid=tid), timeout=10)
+            r.raise_for_status()
+            for entry in r.json().get("roster", []):
+                pid = entry.get("person", {}).get("id")
+                if pid:
+                    il_ids.add(int(pid))
+        except Exception as exc:
+            logger.warning("fetch_il_ids: team %d failed: %s", tid, exc)
+    logger.info("fetch_il_ids: %d players currently on IL", len(il_ids))
     return il_ids
 
