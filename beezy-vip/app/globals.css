@@ -150,7 +150,7 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: clip;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.025em;
 }
 
 /* ── Typography classes (names retained from prior system) ──────────
@@ -159,7 +159,7 @@ body {
 .dell-display {
   font-family: var(--font-display), var(--font-text), system-ui, sans-serif;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.05;
   text-transform: none;
   color: var(--chalk);
@@ -173,7 +173,7 @@ body {
 .times {
   font-family: var(--font-text), system-ui, sans-serif;
   font-weight: 400;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.025em;
 }
 .mono {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;

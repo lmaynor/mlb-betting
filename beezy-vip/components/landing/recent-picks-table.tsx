@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { SYSTEM_PILL, TEAM_ABBREV, pickLabel } from '@/lib/tokens'
+import { SYSTEM_PILL, pickLabel } from '@/lib/tokens'
+import { Matchup } from '@/components/ui/matchup'
 import type { Bet } from '@/lib/types'
 
 function resultTone(result: string | null) {
@@ -17,12 +18,6 @@ function units(profit: number | null, stake: number | null) {
   if (profit == null) return '--'
   const unitSize = stake && stake > 0 ? stake : 10
   return `${profit >= 0 ? '+' : ''}${(profit / unitSize).toFixed(2)}u`
-}
-
-function matchup(bet: Bet) {
-  const away = TEAM_ABBREV[bet.away_team ?? ''] ?? bet.away_team
-  const home = TEAM_ABBREV[bet.home_team ?? ''] ?? bet.home_team
-  return away && home ? `${away} @ ${home}` : `Game ${bet.game_pk}`
 }
 
 function pickText(bet: Bet) {
@@ -115,8 +110,8 @@ export async function RecentPicksTable() {
                 <div key={bet.id} style={{ display: 'grid', gridTemplateColumns: COL, gap: '12px', alignItems: 'center', padding: '13px 16px', borderBottom: i < rows.length - 1 ? '1px solid #201f22' : undefined }}>
                   <ScoreMark score={row.score} tier={row.tier} />
                   <ResultPill result={bet.result} />
-                  <div className="mono" style={{ fontSize: '12px', color: 'var(--silver)', minWidth: 0 }}>
-                    {matchup(bet)}
+                  <div style={{ minWidth: 0 }}>
+                    <Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="12px" />
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
@@ -161,7 +156,7 @@ export async function RecentPicksTable() {
                       <span className="dell-heading" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
                         {bet.system}
                       </span>
-                      <span className="mono" style={{ fontSize: '12px', color: 'var(--silver)' }}>{matchup(bet)}</span>
+                      <Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="12px" />
                     </div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ash)', lineHeight: 1.25 }}>
                       {bet.player ?? pickText(bet)}

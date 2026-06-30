@@ -83,6 +83,21 @@ export const TEAM_ABBREV: Record<string, string> = {
   'White Sox': 'CWS', 'Yankees': 'NYY',
 }
 
+// Known team logo slugs (public/logos/{slug}.png). Derived from TEAM_ABBREV
+// so we only ever render a logo we actually ship — server components can't
+// use onError, so gating on this set avoids broken <img>s.
+const TEAM_SLUGS = new Set(Object.values(TEAM_ABBREV).map(a => a.toLowerCase()))
+
+/**
+ * Resolve a team (full name or 3-letter abbrev) to its logo path, or null if
+ * we don't ship a matching logo. Safe to call in server components.
+ */
+export function teamLogoSrc(team: string | null | undefined): string | null {
+  if (!team) return null
+  const abbrev = (TEAM_ABBREV[team] ?? (team.length <= 3 ? team : '')).toLowerCase()
+  return abbrev && TEAM_SLUGS.has(abbrev) ? `/logos/${abbrev}.png` : null
+}
+
 // Innings window human labels (used by pickLabel below)
 const INNINGS_LABEL: Record<string, string> = {
   F3:   'First 3 Innings',

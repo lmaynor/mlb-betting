@@ -2,10 +2,14 @@
 
 import { useState } from 'react'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { B, SYSTEM_PILL, TEAM_ABBREV, pickLabel } from '@/lib/tokens'
+import { B, SYSTEM_PILL, pickLabel } from '@/lib/tokens'
+import { americanToImpliedProb } from '@/lib/odds'
+import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey } from '@/lib/dates'
 import { getPickSystemByKey } from '@/lib/pick-systems'
 import type { Bet } from '@/lib/types'
+
+const impliedLabel = (odds: number) => `imp ${(americanToImpliedProb(odds) * 100).toFixed(0)}%`
 
 const PAGE_SIZE = 30
 const TABLE_GRID = '72px 72px 112px 96px minmax(330px, 1fr) 76px 72px 88px 72px 70px'
@@ -128,8 +132,6 @@ function pickDescription(bet: Bet, detail: string) {
 
 function TableRow({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
-  const awayAbbr = TEAM_ABBREV[bet.away_team ?? ''] ?? bet.away_team ?? '?'
-  const homeAbbr = TEAM_ABBREV[bet.home_team ?? ''] ?? bet.home_team ?? '?'
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(bet.system)
   const notes = splitNotes(bet.notes)
@@ -171,8 +173,8 @@ function TableRow({ bet }: { bet: Bet }) {
         </span>
       </div>
 
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', color: 'var(--silver)' }}>
-        {awayAbbr} @ {homeAbbr}
+      <div style={{ padding: '10px 6px' }}>
+        <Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" />
       </div>
 
       <div style={{ padding: '10px 6px', minWidth: 0 }}>
@@ -201,8 +203,9 @@ function TableRow({ bet }: { bet: Bet }) {
         )}
       </div>
 
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '12px', fontWeight: 700, color: 'var(--ash)' }}>
-        {fmtOdds(bet.odds)}
+      <div style={{ padding: '10px 6px' }}>
+        <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)' }}>{fmtOdds(bet.odds)}</div>
+        <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginTop: '2px' }}>{impliedLabel(bet.odds)}</div>
       </div>
       <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', fontWeight: 700, color: 'var(--signal)' }}>
         {fmtEdge(bet.edge)}
@@ -218,8 +221,6 @@ function TableRow({ bet }: { bet: Bet }) {
 
 function BetCard({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
-  const awayAbbr = TEAM_ABBREV[bet.away_team ?? ''] ?? bet.away_team ?? '?'
-  const homeAbbr = TEAM_ABBREV[bet.home_team ?? ''] ?? bet.home_team ?? '?'
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(bet.system)
   const notes = splitNotes(bet.notes)
@@ -257,9 +258,7 @@ function BetCard({ bet }: { bet: Bet }) {
         <CompactScore bet={bet} align="center" />
       </div>
 
-      <div className="mono" style={{ fontSize: '13px', color: 'var(--silver)' }}>
-        {awayAbbr} @ {homeAbbr}
-      </div>
+      <div><Matchup away={bet.away_team} home={bet.home_team} size={20} fontSize="13px" /></div>
 
       <div>
         {hasProp && bet.player ? (
@@ -289,13 +288,14 @@ function BetCard({ bet }: { bet: Bet }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '8px', alignItems: 'end' }}>
         {[
-          { label: 'ODDS', value: fmtOdds(bet.odds), strong: true },
+          { label: 'ODDS', value: fmtOdds(bet.odds), strong: true, sub: impliedLabel(bet.odds) },
           { label: 'EDGE', value: fmtEdge(bet.edge), strong: true, color: 'var(--signal)' },
           { label: 'BOOK', value: bet.book ?? '--' },
-        ].map(({ label: l, value, strong, color }) => (
+        ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
             <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
-            <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--ash)' : 'var(--silver)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--chalk)' : 'var(--silver)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            {sub && <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginTop: '2px' }}>{sub}</div>}
           </div>
         ))}
         <div><ResultPill result={bet.result} /></div>
