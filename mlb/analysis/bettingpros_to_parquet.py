@@ -269,12 +269,14 @@ def convert_market(bp_market_name: str, ingested_at: str,
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Normalize BettingPros CSVs -> odds_history Parquet")
+    from datetime import datetime, timezone
     p.add_argument("--markets", default="all", help="bp groups (player,lines,innings,all) or names")
-    p.add_argument("--ingested-at", required=True, help="ISO timestamp tag (pass via args)")
+    p.add_argument("--ingested-at", default=None, help="ISO timestamp tag (default: now UTC)")
     p.add_argument("--since", default=None)
     p.add_argument("--until", default=None)
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args(argv)
+    args.ingested_at = args.ingested_at or datetime.now(timezone.utc).isoformat()
 
     # resolve group/id tokens -> bp market NAMES that we have a mapping for
     ids = bp.resolve_markets(args.markets)
