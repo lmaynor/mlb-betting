@@ -63,8 +63,10 @@ def _won(kind: str, market: str, selection: str, line, realized) -> float | None
         return None
     sel = (selection or "").upper()
     if market == "hr_yn":
+        # adapters store the "homered" side as YES or OVER (yes/no -> over/under map)
         hit = realized >= 1
-        return 1.0 if (sel == "YES") == hit else 0.0
+        yes = sel in ("YES", "OVER")
+        return 1.0 if yes == hit else 0.0
     if market == "game_ml":
         home_won = realized >= 1   # realized = home_win
         return 1.0 if (sel == "HOME") == home_won else 0.0
@@ -85,7 +87,7 @@ def _model_prob(kind: str, market: str, selection: str, line, row) -> float | No
         if pd.isna(p):
             return None
         if market == "hr_yn":
-            return float(p) if sel == "YES" else float(1.0 - p)
+            return float(p) if sel in ("YES", "OVER") else float(1.0 - p)
         if market == "game_ml":
             return float(p) if sel == "HOME" else float(1.0 - p)
         return float(p)
