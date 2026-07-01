@@ -4,6 +4,14 @@
 lifted verbatim (2026-07-01) from the external hobby project
 `gmalbert/baseball-predictions` ("Betting Cleanup"), `src/models/extra_features.py`.
 
+`log5_matchup_projection.py` — the Log5 / odds-ratio matchup-rate primitive
+(rewritten from Python 2.7), extracted 2026-07-01 from the external DFS project
+`MLBDailyProjections` (`projections.py`). Combines a batter rate, pitcher rate,
+and league baseline into a matchup-specific expected rate; platoon + park
+layering documented. The rest of that project (DFS lineup optimizer, gradient
+descent for DK points, MySQL schema, 2017 static CSVs, MATLAB scripts) was
+discarded. Unlike the retrosheet recipes, this file is self-contained and runs.
+
 **Status: reference only.** Nothing here imports cleanly in our repo — the recipes
 depend on that project's Retrosheet parquet schema and its `retrosheet` /
 `src.ingestion.{fg_guts,fg_park,chadwick}` modules. Held as a recipe library for
