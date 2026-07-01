@@ -247,6 +247,29 @@ def market_rows_to_history(bp_market_name: str, wide_df, ingested_at: str):
     return pd.DataFrame(rows, columns=oh.SCHEMA_COLUMNS)
 
 
+def snapshot_market_to_history(bp_market_name: str, wide_df, snapshot_ts: str,
+                               ingested_at: str):
+    """LIVE snapshot: a market's wide frame -> odds_history rows at a REAL
+    snapshot_ts (all sportsbooks + Consensus), is_open/is_closing left False.
+    Used by the intraday tracker (mlb.runners.track_bettingpros) to bank free
+    BettingPros line movement. Multiple runs/day accumulate (dedup keys include
+    snapshot_ts), giving real open->close CLV -- unlike the daily converter's
+    synthetic 00:00/23:30 pair."""
+    import pandas as pd
+    market, system = BP_TO_HISTORY[bp_market_name]
+    kind = next(k for n, k in bp.MARKETS.values() if n == bp_market_name)
+    rows = []
+    for rec in wide_df.to_dict("records"):
+        if not str(rec.get("Date", "") or ""):
+            continue
+        rows += _emit_quotes(
+            rec, kind, market, system, "bettingpros", ingested_at,
+            book_suffix_lookup=lambda b, s: f"{b}_{s}",
+            snapshot_ts=snapshot_ts, is_open=False, is_closing=False,
+        )
+    return pd.DataFrame(rows, columns=oh.SCHEMA_COLUMNS)
+
+
 def convert_market(bp_market_name: str, ingested_at: str,
                    since=None, until=None, dry_run=False) -> dict:
     """Read one BettingPros market, normalize, write odds_history partitions."""

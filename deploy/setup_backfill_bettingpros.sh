@@ -32,9 +32,11 @@ BP_DELAY="${BP_DELAY:-0.4}"
 
 JOB="mlb-backfill-bettingpros"
 
-ENV_VARS="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
-ENV_VARS="${ENV_VARS},BP_START=${BP_START},BP_END=${BP_END},BP_MARKETS=${BP_MARKETS}"
-ENV_VARS="${ENV_VARS},BP_PREFIX=${BP_PREFIX},BP_DELAY=${BP_DELAY}"
+# BP_MARKETS may contain commas (e.g. "total_bases,hits") -> use gcloud's ^@^
+# alternate-delimiter so the comma is not parsed as a key=value separator.
+ENV_VARS="GCP_PROJECT=${PROJECT_ID}@GCP_REGION=${REGION}"
+ENV_VARS="${ENV_VARS}@BP_START=${BP_START}@BP_END=${BP_END}@BP_MARKETS=${BP_MARKETS}"
+ENV_VARS="${ENV_VARS}@BP_PREFIX=${BP_PREFIX}@BP_DELAY=${BP_DELAY}"
 
 action="create"
 if gcloud run jobs describe "$JOB" \
@@ -59,7 +61,7 @@ gcloud run jobs "$action" "$JOB" \
   --task-timeout="43200s" \
   --max-retries=3 \
   --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
-  --set-env-vars="$ENV_VARS"
+  --set-env-vars="^@^$ENV_VARS"
 
 echo ""
 echo "=== Done ==="
