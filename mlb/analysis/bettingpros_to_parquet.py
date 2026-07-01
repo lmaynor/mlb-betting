@@ -169,7 +169,7 @@ def _emit_quotes(row, kind, market, system, source, ingested_at,
         for suffix, selection in sides:
             col = book_suffix_lookup(book_display, suffix)
             am = _parse_american(row.get(col))
-            if am is None:
+            if not am:          # None or 0 -> invalid odds (american 0 is meaningless)
                 continue
             per_side[selection] = am
         if not per_side:

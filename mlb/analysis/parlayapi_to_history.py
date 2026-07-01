@@ -112,7 +112,8 @@ def rows_for_date(date: str, ingested_at: str) -> "list[dict]":
                     pid_cache[player] = _resolve_pid(player, away_abbr, home_abbr, date, game_pk)
                 pid = pid_cache[player]
                 book = _canon_book(r["book"])
-                over_am, under_am = r["over_odds"], r["under_odds"]
+                over_am = r["over_odds"] or None    # treat 0 as missing
+                under_am = r["under_odds"] or None
                 fair_o = fair_u = None
                 if over_am is not None and under_am is not None:
                     fo, fu = devig_two_way(american_to_implied_prob(over_am),
@@ -120,7 +121,7 @@ def rows_for_date(date: str, ingested_at: str) -> "list[dict]":
                                            method=DEVIG_METHOD)
                     fair_o, fair_u = round(fo, 6), round(fu, 6)
                 for sel, am, fair in (("OVER", over_am, fair_o), ("UNDER", under_am, fair_u)):
-                    if am is None:
+                    if not am:
                         continue
                     rows.append({
                         "sport": "mlb", "market": market, "system": system,
