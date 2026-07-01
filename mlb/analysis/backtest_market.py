@@ -132,9 +132,11 @@ def _closing_index(odds: pd.DataFrame) -> dict:
 
 def backtest(system: str, since: str | None = None, until: str | None = None,
              split: str | None = None, min_edge: float = 0.0,
-             books: set | None = None) -> dict:
+             books: set | None = None, preds: pd.DataFrame | None = None) -> dict:
     spec = gp.SPECS[system]
-    preds = gp.gen_preds(system, since=since, until=until)
+    if preds is None:
+        preds = gp.gen_preds(system, since=since, until=until)  # production (in-sample) scoring
+    # else: caller supplied out-of-sample preds (e.g. walk-forward) -- do not re-score.
     preds = preds[preds["game_pk"].notna()]
     if spec.id_col:
         preds = preds[preds["player_id"].notna()]
