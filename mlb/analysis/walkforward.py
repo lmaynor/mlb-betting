@@ -149,10 +149,13 @@ def main(argv=None) -> int:
     p.add_argument("--system", required=True, help=", ".join(WF_SYS))
     p.add_argument("--cutoff", required=True, help="YYYY-MM-DD: train<cutoff, score>=cutoff")
     p.add_argument("--min-edge", type=float, default=0.0)
+    p.add_argument("--select", choices=["best", "consensus"], default="best",
+                   help="'consensus' removes soft-book selection bias (clean edge test)")
     args = p.parse_args(argv)
 
     preds = walkforward_preds(args.system, args.cutoff)
-    res = bt.backtest(args.system, since=args.cutoff, min_edge=args.min_edge, preds=preds)
+    res = bt.backtest(args.system, since=args.cutoff, min_edge=args.min_edge,
+                      preds=preds, select=args.select)
     if "error" in res:
         print(f"walkforward[{args.system}] ERROR: {res['error']}")
         return 1

@@ -134,7 +134,8 @@ def _closing_index(odds: pd.DataFrame) -> dict:
 
 def backtest(system: str, since: str | None = None, until: str | None = None,
              split: str | None = None, min_edge: float = 0.0,
-             books: set | None = None, preds: pd.DataFrame | None = None) -> dict:
+             books: set | None = None, preds: pd.DataFrame | None = None,
+             select: str = "best") -> dict:
     spec = gp.SPECS[system]
     if preds is None:
         preds = gp.gen_preds(system, since=since, until=until)  # production (in-sample) scoring
@@ -197,9 +198,17 @@ def backtest(system: str, since: str | None = None, until: str | None = None,
     # If ROI survives at the MEDIAN price (not just the cherry-picked best), the edge is
     # robust; if it collapses, we were only beating one soft book (artifact).
     grp = keys + ["selection", "line"]
-    gb = cand.groupby(grp, dropna=False)["decimal"]
-    cand["consensus_dec"] = gb.transform("median")
-    cand["n_books"] = gb.transform("size")
+    gb = cand.groupby(grp, dropna=False)
+    cand["consensus_dec"] = gb["decimal"].transform("median")
+    cand["consensus_fair"] = gb["fair_prob"].transform("median")
+    cand["n_books"] = gb["decimal"].transform("size")
+
+    # SELECTION MODE:
+    #  "best"      -> edge vs each book's own price (softest quote), then line-shop.
+    #  "consensus" -> edge vs the cross-book median fair; removes soft-book outlier
+    #                 selection bias -- the truly clean 'does the model beat the market'.
+    if select == "consensus":
+        cand["edge"] = cand["model_prob"] - cand["consensus_fair"].fillna(cand["fair_prob"])
 
     # line shopping: per (game_pk, player_id) keep the single max-edge quote = the bet
     cand = cand.sort_values("edge", ascending=False).drop_duplicates(subset=keys, keep="first")
@@ -262,9 +271,11 @@ def _print_report(res: dict, label: str, df: pd.DataFrame):
         print(f"  [{label}] no bets")
         return
     tbl = _bucket_table(df)
+    over = (df["selection"].isin(["OVER", "YES", "HOME"])).mean() * 100
     print(f"  [{label}] {len(df)} bets  ROI(best) {df['roi'].mean()*100:+.2f}%  "
           f"ROI(consensus) {df['roi_cons'].mean()*100:+.2f}%  "
-          f"units_cons {df['roi_cons'].sum():+.1f}  CLV {df['clv_pct'].mean():+.2f}%")
+          f"units_cons {df['roi_cons'].sum():+.1f}  CLV {df['clv_pct'].mean():+.2f}%  "
+          f"over/yes/home={over:.0f}%")
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         print(tbl.to_string(float_format=lambda x: f"{x:,.2f}"))
 
@@ -278,10 +289,13 @@ def main(argv=None) -> int:
                    help="YYYY-MM-DD time-split; before=train, on/after=test (holdout)")
     p.add_argument("--min-edge", type=float, default=0.0,
                    help="only bet candidates with model edge >= this (default 0)")
+    p.add_argument("--select", choices=["best", "consensus"], default="best",
+                   help="'best'=edge vs softest book (line-shop); 'consensus'=edge vs "
+                        "cross-book median fair (removes soft-book selection bias)")
     args = p.parse_args(argv)
 
     res = backtest(args.system, since=args.since, until=args.until,
-                   split=args.split, min_edge=args.min_edge)
+                   split=args.split, min_edge=args.min_edge, select=args.select)
     if "error" in res:
         print(f"backtest[{args.system}] ERROR: {res['error']}")
         return 1
