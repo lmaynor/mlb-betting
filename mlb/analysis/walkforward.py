@@ -187,7 +187,28 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
           f"z={roi/se:.1f})  units {allb['roi_cons'].sum():+.1f}")
     print(f"  win-rate {(allb['won']==1).mean()*100:.1f}%  avg n_books {allb['n_books'].mean():.1f}  "
           f"CLV {allb['clv_pct'].mean():+.2f}%")
-    print(f"  line values: {allb['line'].value_counts().head(6).to_dict()}")
+
+    def _seg(name, g):
+        return (f"    {name:>14}  n={len(g):>5}  hit={ (g['won']==1).mean()*100:>4.1f}%  "
+                f"roi_cons={g['roi_cons'].mean()*100:>+7.2f}%  "
+                f"nbk={g['n_books'].mean():>3.1f}  clv={g['clv_pct'].mean():>+6.2f}%")
+    print("\n  -- by line value --")
+    for lv, g in allb.groupby("line"):
+        if len(g) >= 20:
+            print(_seg(f"line {lv}", g))
+    print("  -- by book depth --")
+    print(_seg("n_books<=2", allb[allb["n_books"] <= 2]))
+    print(_seg("n_books>=4", allb[allb["n_books"] >= 4]))
+    print("  -- by entry odds --")
+    print(_seg("dec<1.5 (juiced)", allb[allb["decimal"] < 1.5]))
+    print(_seg("1.5<=dec<=3.5", allb[(allb["decimal"] >= 1.5) & (allb["decimal"] <= 3.5)]))
+    print(_seg("dec>3.5 (longshot)", allb[allb["decimal"] > 3.5]))
+    print("\n  -- sample bets (10%+ edge) --")
+    cols = ["game_date", "player_id", "selection", "line", "book", "decimal",
+            "consensus_dec", "model_prob", "fair_prob", "realized", "won"]
+    smp = allb[cols].head(15)
+    with pd.option_context("display.width", 220, "display.max_columns", 20):
+        print(smp.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
     return {"pooled": allb, "roi": roi, "z": roi / se, "n": len(allb)}
 
 
