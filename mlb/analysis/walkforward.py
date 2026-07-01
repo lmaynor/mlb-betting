@@ -36,8 +36,10 @@ from mlb.analysis import backtest_market as bt
 # system -> (retrain module, kind). The retrain module must expose the production
 # contract constants used below. Count systems only (binary walk-forward = follow-up).
 WF_SYS = {
-    "K":    ("mlb.training.retrain_k_v1",    "count"),
-    "OUTS": ("mlb.training.retrain_outs_v1", "count"),
+    "K":           ("mlb.training.retrain_k_v1",           "count"),
+    "OUTS":        ("mlb.training.retrain_outs_v1",        "count"),
+    "BATTER_HITS": ("mlb.training.retrain_batter_hits_v1", "count"),
+    "BATTER_TB":   ("mlb.training.retrain_batter_tb_v1",   "count"),
 }
 
 
@@ -54,7 +56,8 @@ def _resolve_contract(system: str):
     mod = importlib.import_module(mod_name)
     params = _get(mod, "XGB_PARAMS")
     target = _get(mod, "TARGET")
-    feats = _get(mod, "K_FEATURES", "OUTS_FEATURES", "FEATURES")
+    feats = _get(mod, "K_FEATURES", "OUTS_FEATURES", "BATTER_HITS_FEATURES",
+                 "BATTER_TB_FEATURES", "FEATURES")
     n_round = int(_get(mod, "NUM_BOOST_ROUND", default=2000))
     early = int(_get(mod, "EARLY_STOPPING_ROUNDS", default=50))
     if not (params and target and feats):
