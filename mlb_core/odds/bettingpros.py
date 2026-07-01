@@ -448,6 +448,9 @@ def in_season(ds: str) -> bool:
     return lo <= d <= hi
 
 
+_NAME_TO_ID = {name: mid for mid, (name, _kind) in MARKETS.items()}
+
+
 def resolve_markets(arg: str) -> list:
     out: list = []
     for tok in (arg or "all").split(","):
@@ -458,9 +461,12 @@ def resolve_markets(arg: str) -> list:
             out.extend(GROUPS[tok])
         elif tok.isdigit() and int(tok) in MARKETS:
             out.append(int(tok))
+        elif tok in _NAME_TO_ID:                       # accept market names too
+            out.append(_NAME_TO_ID[tok])
         else:
             raise ValueError(
-                f"unknown market token '{tok}'. groups: {list(GROUPS)} or ids in {sorted(MARKETS)}")
+                f"unknown market token '{tok}'. groups: {list(GROUPS)}, "
+                f"names: {sorted(_NAME_TO_ID)}, or ids in {sorted(MARKETS)}")
     seen = set()
     return [m for m in out if not (m in seen or seen.add(m))]
 
