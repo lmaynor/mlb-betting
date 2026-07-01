@@ -234,6 +234,53 @@ def _sel_odds(sel: dict):
     return odds, line
 
 
+def _sel_by_line(sel: dict) -> dict:
+    """{line: {book_col: odds_str}} for ONE selection, keyed by EACH quote's own line.
+
+    Books quote DIFFERENT main lines for the same player (e.g. FanDuel posts TB 1.5
+    while others post 0.5). The old _sel_odds collapsed these to a single line, mixing
+    a book's 0.5-line price into a 1.5-line row (and vice versa) -- the root of the
+    OVER/UNDER "mirror" corruption. This keeps each quote under its actual line."""
+    out: dict = {}
+    op = sel.get("opening_line") or {}
+    oc, ol = op.get("cost"), op.get("line")
+    if oc is not None and ol is not None:
+        out.setdefault(ol, {})["Open"] = _fmt_odds(oc)
+    for book in sel.get("books") or []:
+        name = BOOK_ID_TO_NAME.get(book.get("id"))
+        for ln in book.get("lines") or []:
+            line, cost = ln.get("line"), ln.get("cost")
+            if line is None or cost is None:
+                continue
+            if ln.get("best"):
+                out.setdefault(line, {})["Best Odds"] = _fmt_odds(cost)
+            if name and name in FIXED_BOOK_COLUMNS:
+                out.setdefault(line, {})[name] = _fmt_odds(cost)
+    return out
+
+
+def _rows_by_line(base: dict, selections, sides: tuple, out: list) -> None:
+    """Emit ONE row per distinct line (each book paired with its own-line over/under),
+    appending to `out`. `base` = non-book meta; `sides` = ("Over","Under") etc."""
+    by_line: dict = {}   # line -> {book_col -> {side -> odds_str}}
+    for sel in selections or []:
+        side = _side(sel)
+        if side not in sides:
+            continue
+        for line, cols in _sel_by_line(sel).items():
+            lb = by_line.setdefault(line, {})
+            for col, odds in cols.items():
+                lb.setdefault(col, {})[side] = odds
+    for line in sorted(by_line, key=lambda x: (x is None, x)):
+        row = dict(base)
+        row["Line"] = str(line)
+        _blank_books(row, list(sides))
+        for col, side_odds in by_line[line].items():
+            for side, odds in side_odds.items():
+                row[f"{col}_{side}"] = odds
+        out.append(row)
+
+
 def _side(sel: dict):
     lab = (sel.get("selection") or sel.get("label") or "").lower()
     if lab.startswith("o"):
@@ -308,42 +355,37 @@ def _rows_player_ou(offers, ds, ev_map) -> list:
         player = p.get("player") or {}
         slug = player.get("slug") or ""
         ev = ev_map.get(o.get("event_id"), {})
-        row = {
+        base = {
             "Date": ds, "Player": name,
             "Player_Page": f"/mlb/props/{slug}/" if slug else (p.get("link") or ""),
             "Matchup": ev.get("matchup", ""), "Team": player.get("team") or "",
-            "Position": player.get("position") or "", "Line": "0.5",
+            "Position": player.get("position") or "",
         }
-        _blank_books(row, ["Over", "Under"])
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in ("Over", "Under"):
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and side == "Over":
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
+        # one row per (player, line) -- books that quote different main lines no
+        # longer collapse into one mislabeled row.
+        _rows_by_line(base, o.get("selections"), ("Over", "Under"), out)
     return out
 
 
 def _rows_two_sided_game(offers, ds, ev_map, kind) -> list:
-    sides = ("Over", "Under") if kind == "total" else ("Yes", "No")
     out = []
     for o in offers:
         ev = ev_map.get(o.get("event_id"), {})
-        row = {"Date": ds, "Matchup": ev.get("matchup", ""),
-               "Away": ev.get("away", ""), "Home": ev.get("home", ""), "Line": ""}
-        _blank_books(row, list(sides))
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in sides:
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and not row["Line"]:
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
+        base = {"Date": ds, "Matchup": ev.get("matchup", ""),
+                "Away": ev.get("away", ""), "Home": ev.get("home", "")}
+        if kind == "total":
+            # game totals also have per-book line divergence (8.5 vs 9) -> per-line rows
+            _rows_by_line(base, o.get("selections"), ("Over", "Under"), out)
+        else:  # yesno (NRFI etc.): no line, single row
+            row = {**base, "Line": ""}
+            _blank_books(row, ["Yes", "No"])
+            for sel in o.get("selections") or []:
+                side = _side(sel)
+                if side not in ("Yes", "No"):
+                    continue
+                odds, _line = _sel_odds(sel)
+                _assign(row, odds, side)
+            out.append(row)
     return out
 
 
@@ -355,19 +397,9 @@ def _rows_team_total(offers, ds, ev_map) -> list:
         if not team:
             parts = o.get("participants") or []
             team = parts[0].get("id") if parts else ""
-        row = {"Date": ds, "Matchup": ev.get("matchup", ""),
-               "Away": ev.get("away", ""), "Home": ev.get("home", ""),
-               "Team": team, "Line": ""}
-        _blank_books(row, ["Over", "Under"])
-        for sel in o.get("selections") or []:
-            side = _side(sel)
-            if side not in ("Over", "Under"):
-                continue
-            odds, line = _sel_odds(sel)
-            if line is not None and not row["Line"]:
-                row["Line"] = str(line)
-            _assign(row, odds, side)
-        out.append(row)
+        base = {"Date": ds, "Matchup": ev.get("matchup", ""),
+                "Away": ev.get("away", ""), "Home": ev.get("home", ""), "Team": team}
+        _rows_by_line(base, o.get("selections"), ("Over", "Under"), out)
     return out
 
 
