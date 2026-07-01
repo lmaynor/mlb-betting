@@ -452,10 +452,13 @@ function StatusChip({ status, compact = false }: { status?: PlayerStatus; compac
   )
 }
 
-// Team filter: custom popover so each option can carry its logo (native
-// <option> can't). Values are canonical 3-letter abbrevs (see teamAbbrev).
-function TeamSelect({ value, teams, onChange }: {
-  value: string; teams: string[]; onChange: (v: string) => void
+export interface MatchupOpt { key: string; away: string; home: string }
+
+// Matchup filter: bettors think in games, not single teams. Custom popover so
+// each option can carry both team logos (native <option> can't). Values are
+// game_pk strings; 'all' clears the filter.
+function MatchupSelect({ value, matchups, onChange }: {
+  value: string; matchups: MatchupOpt[]; onChange: (v: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -472,44 +475,51 @@ function TeamSelect({ value, teams, onChange }: {
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
-  const opts = ['all', ...teams]
-  const logo = value !== 'all' ? teamLogoSrc(value) : null
+  const sel = value !== 'all' ? matchups.find(m => m.key === value) ?? null : null
   const pick = (v: string) => { onChange(v); setOpen(false) }
+  const Logo = ({ team }: { team: string }) => {
+    const l = teamLogoSrc(team)
+    return l
+      ? <img src={l} alt="" width={16} height={16} className="edge-teamsel-logo" />
+      : <span className="edge-teamsel-logo" aria-hidden />
+  }
   return (
     <div className="edge-select edge-teamsel" ref={ref}>
-      <span className="edge-select-k">Team</span>
+      <span className="edge-select-k">Matchup</span>
       <button
         type="button"
-        className="edge-teamsel-btn"
+        className="edge-teamsel-btn edge-matchsel-btn"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Team filter"
+        aria-label="Matchup filter"
         onClick={() => setOpen(o => !o)}
       >
-        {logo && <img src={logo} alt="" width={16} height={16} className="edge-teamsel-logo" />}
-        <span>{value === 'all' ? 'All' : value}</span>
+        {sel
+          ? <span className="edge-matchsel-val"><Logo team={sel.away} />{sel.away}<span className="edge-matchsel-at">@</span><Logo team={sel.home} />{sel.home}</span>
+          : <span>All games</span>}
         <span className="edge-teamsel-caret" aria-hidden>{'▾'}</span>
       </button>
       {open && (
-        <div className="edge-teamsel-menu" role="listbox">
-          {opts.map(t => {
-            const l = t !== 'all' ? teamLogoSrc(t) : null
-            return (
-              <button
-                key={t}
-                type="button"
-                role="option"
-                aria-selected={t === value}
-                className={`edge-teamsel-opt${t === value ? ' is-sel' : ''}`}
-                onClick={() => pick(t)}
-              >
-                {l
-                  ? <img src={l} alt="" width={16} height={16} className="edge-teamsel-logo" />
-                  : <span className="edge-teamsel-logo" aria-hidden />}
-                <span>{t === 'all' ? 'All teams' : t}</span>
-              </button>
-            )
-          })}
+        <div className="edge-teamsel-menu edge-matchsel-menu" role="listbox">
+          <button
+            type="button" role="option" aria-selected={value === 'all'}
+            className={`edge-teamsel-opt${value === 'all' ? ' is-sel' : ''}`}
+            onClick={() => pick('all')}
+          >All games</button>
+          {matchups.map(m => (
+            <button
+              key={m.key}
+              type="button"
+              role="option"
+              aria-selected={m.key === value}
+              className={`edge-teamsel-opt edge-matchsel-opt${m.key === value ? ' is-sel' : ''}`}
+              onClick={() => pick(m.key)}
+            >
+              <Logo team={m.away} /><span>{m.away}</span>
+              <span className="edge-matchsel-at">@</span>
+              <Logo team={m.home} /><span>{m.home}</span>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -726,7 +736,7 @@ type Mode = 'players' | 'games'
 export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: string }) {
   const [sport, setSport] = useState<SportKey>('mlb')
   const [mode, setMode] = useState<Mode>('players')
-  const [team, setTeam] = useState<string>('all')
+  const [matchup, setMatchup] = useState<string>('all')
   const [position, setPosition] = useState<string>('all')
   const [markets, setMarkets] = useState<string[]>([])   // empty = all
   const [minEdge, setMinEdge] = useState<number>(0)
@@ -739,13 +749,22 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
   const inMode = (p: EdgePick) => mode === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game'
   const modeCount = (m: Mode) => picks.filter(p => m === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game').length
 
-  const teams = useMemo(() => {
-    const set = new Set<string>()
+  const matchups = useMemo(() => {
+    const byKey = new Map<string, MatchupOpt & { t: string }>()
     picks.forEach(p => {
-      const a = teamAbbrev(p.away_team); if (a) set.add(a)
-      const h = teamAbbrev(p.home_team); if (h) set.add(h)
+      if (p.game_pk == null) return
+      const key = String(p.game_pk)
+      if (byKey.has(key)) return
+      byKey.set(key, {
+        key,
+        away: teamAbbrev(p.away_team),
+        home: teamAbbrev(p.home_team),
+        t: p.matchup?.startTime ?? '',
+      })
     })
-    return Array.from(set).sort()
+    return Array.from(byKey.values())
+      .sort((a, b) => (a.t || '').localeCompare(b.t || '') || a.away.localeCompare(b.away))
+      .map(({ key, away, home }) => ({ key, away, home }))
   }, [picks])
 
   const positions = useMemo(() => {
@@ -764,7 +783,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     let v = picks.filter(inMode)
-    if (team !== 'all') v = v.filter(p => teamAbbrev(p.away_team) === team || teamAbbrev(p.home_team) === team)
+    if (matchup !== 'all') v = v.filter(p => String(p.game_pk) === matchup)
     if (mode === 'players' && position !== 'all') v = v.filter(p => p.position === position)
     if (markets.length) v = v.filter(p => markets.includes(p.system))
     if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
@@ -778,13 +797,13 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
     if (topOnly) v = v.slice(0, 10)
     return v
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picks, mode, team, position, markets, minEdge, hideInactive, query, topOnly])
+  }, [picks, mode, matchup, position, markets, minEdge, hideInactive, query, topOnly])
 
   const selected = useMemo(
     () => visible.find(p => p.id === selectedId) ?? visible[0] ?? null,
     [visible, selectedId],
   )
-  const hasFilters = team !== 'all' || position !== 'all' || markets.length > 0 || minEdge > 0 || hideInactive || query !== '' || topOnly
+  const hasFilters = matchup !== 'all' || position !== 'all' || markets.length > 0 || minEdge > 0 || hideInactive || query !== '' || topOnly
   const toggleMarket = (m: string) => setMarkets(cur => cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m])
 
   return (
@@ -823,7 +842,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
 
       {/* Control bar */}
       <div className="edge-controls">
-        <TeamSelect value={team} teams={teams} onChange={setTeam} />
+        <MatchupSelect value={matchup} matchups={matchups} onChange={setMatchup} />
         {mode === 'players' && positions.length > 0 && (
           <label className="edge-select">
             <span className="edge-select-k">Pos</span>
@@ -850,7 +869,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
         <button className={`edge-toggle${topOnly ? ' is-on' : ''}`} onClick={() => setTopOnly(v => !v)}
           aria-pressed={topOnly}>Top 10</button>
         {hasFilters && (
-          <button className="edge-clear" onClick={() => { setTeam('all'); setPosition('all'); setMarkets([]); setMinEdge(0); setHideInactive(false); setQuery(''); setTopOnly(false) }}>Clear</button>
+          <button className="edge-clear" onClick={() => { setMatchup('all'); setPosition('all'); setMarkets([]); setMinEdge(0); setHideInactive(false); setQuery(''); setTopOnly(false) }}>Clear</button>
         )}
       </div>
 
@@ -1077,6 +1096,11 @@ function Styles() {
 .edge-teamsel-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--ash); border: 0; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .edge-teamsel-opt:hover { background: var(--obsidian); }
 .edge-teamsel-opt.is-sel { color: var(--signal); }
+.edge-matchsel-btn { min-width: 140px; }
+.edge-matchsel-val { display: inline-flex; align-items: center; gap: 4px; }
+.edge-matchsel-at { color: #8a8a93; margin: 0 1px; }
+.edge-matchsel-menu { min-width: 190px; }
+.edge-matchsel-opt { gap: 4px; }
 .edge-clear { background: transparent; color: #8a8a93; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .edge-empty { border: 1px solid var(--basalt); background: #0d0d10; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
