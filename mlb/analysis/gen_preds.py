@@ -71,7 +71,7 @@ SPECS: dict[str, Spec] = {
         model_key="HR_Pro/models/xgb_hr_v6.json",
         meta_key="HR_Pro/models/model_meta_hr_v6.json",
         calibrator_key="HR_Pro/models/isotonic_calibrator_hr_v6.pkl",
-        id_col="batter", label_col="hr_flag",
+        id_col="batter", label_col="hr",
     ),
     "K": Spec(
         market="k_ou", kind="count",
