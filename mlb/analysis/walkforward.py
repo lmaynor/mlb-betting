@@ -34,12 +34,15 @@ from mlb.analysis import gen_preds as gp
 from mlb.analysis import backtest_market as bt
 
 # system -> (retrain module, kind). The retrain module must expose the production
-# contract constants used below. Count systems only (binary walk-forward = follow-up).
+# contract constants used below (XGB_PARAMS, TARGET, a *_FEATURES list OR a
+# _NON_FEATURE_COLS exclusion set for dynamic feature selection).
 WF_SYS = {
     "K":           ("mlb.training.retrain_k_v1",           "count"),
     "OUTS":        ("mlb.training.retrain_outs_v1",        "count"),
     "BATTER_HITS": ("mlb.training.retrain_batter_hits_v1", "count"),
     "BATTER_TB":   ("mlb.training.retrain_batter_tb_v1",   "count"),
+    "HR":          ("mlb.training.retrain_hr_v6",          "binary"),
+    "GAME":        ("mlb.training.retrain_game_v1",        "binary"),
 }
 
 
@@ -51,38 +54,49 @@ def _get(mod, *names, default=None):
 
 
 def _resolve_contract(system: str):
-    """Pull the production training contract from the system's retrain module."""
+    """Pull the production training contract from the system's retrain module.
+    feats=None means DYNAMIC selection (numeric, not in `exclude`, >=10% coverage) --
+    matches retrain_hr_v6, which builds its feature list at runtime."""
     mod_name, kind = WF_SYS[system]
     mod = importlib.import_module(mod_name)
     params = _get(mod, "XGB_PARAMS")
     target = _get(mod, "TARGET")
     feats = _get(mod, "K_FEATURES", "OUTS_FEATURES", "BATTER_HITS_FEATURES",
-                 "BATTER_TB_FEATURES", "FEATURES")
+                 "BATTER_TB_FEATURES", "GAME_FEATURES", "FEATURES")
+    exclude = set(_get(mod, "_NON_FEATURE_COLS", "NON_FEATURE_COLS", default=set()) or set())
     n_round = int(_get(mod, "NUM_BOOST_ROUND", default=2000))
-    early = int(_get(mod, "EARLY_STOPPING_ROUNDS", default=50))
-    if not (params and target and feats):
-        raise RuntimeError(f"{mod_name} missing XGB_PARAMS/TARGET/FEATURES")
-    return dict(params=params, target=target, feats=list(feats),
-                n_round=n_round, early=early, kind=kind)
+    early = int(_get(mod, "EARLY_STOPPING_ROUNDS", "EARLY_STOPPING", default=50))
+    if not (params and target):
+        raise RuntimeError(f"{mod_name} missing XGB_PARAMS/TARGET")
+    if not feats and not exclude:
+        raise RuntimeError(f"{mod_name}: no *_FEATURES list and no exclusion set")
+    return dict(params=params, target=target, feats=list(feats) if feats else None,
+                exclude=exclude, n_round=n_round, early=early, kind=kind)
 
 
 def _train_pre_cutoff(tr: pd.DataFrame, feats: list, c: dict):
     """Train exactly like production: carve a validation tail for early-stopping to
     find best_iteration, then full-retrain on ALL pre-cutoff rows with that many
-    rounds. Returns (booster, best_iter)."""
+    rounds. For rare-event binary (e.g. HR ~7%) add scale_pos_weight = n_neg/n_pos,
+    matching retrain_hr_v6. Returns (booster, best_iter)."""
     import xgboost as xgb
     X = tr[feats].apply(pd.to_numeric, errors="coerce")
     y = tr[c["target"]].astype(float)
+    params = dict(c["params"])
+    if c["kind"] == "binary" and "scale_pos_weight" not in params:
+        pos = float(y.mean())
+        if 0 < pos < 0.20:   # rare positive (HR); GAME ~0.54 -> untouched
+            params["scale_pos_weight"] = round((1 - pos) / pos, 2)
     nval = int(len(X) * (7 / 8))
     dtr = xgb.DMatrix(X.iloc[:nval], label=y.iloc[:nval], feature_names=feats)
     dval = xgb.DMatrix(X.iloc[nval:], label=y.iloc[nval:], feature_names=feats)
-    b = xgb.train(c["params"], dtr, num_boost_round=c["n_round"],
+    b = xgb.train(params, dtr, num_boost_round=c["n_round"],
                   evals=[(dval, "val")], early_stopping_rounds=c["early"],
                   verbose_eval=False)
     best = int(getattr(b, "best_iteration", c["n_round"] - 1)) + 1
     # full retrain on 100% of pre-cutoff data (production Section 7b)
     dall = xgb.DMatrix(X, label=y, feature_names=feats)
-    booster = xgb.train(c["params"], dall, num_boost_round=best, verbose_eval=False)
+    booster = xgb.train(params, dall, num_boost_round=best, verbose_eval=False)
     booster.best_ntree_limit = best
     return booster, best
 
@@ -109,9 +123,18 @@ def _prepare(system: str, quiet: bool = False):
     df = gp._read_csv(spec.feature_csv, low_memory=False)
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df.dropna(subset=[c["target"], "game_date"]).sort_values("game_date").reset_index(drop=True)
-    feats = [f for f in c["feats"] if f in df.columns]
-    if len(feats) < len(c["feats"]) and not quiet:
-        print(f"  note: {len(c['feats'])-len(feats)} contract features absent from CSV, using {len(feats)}")
+    if c["feats"]:
+        feats = [f for f in c["feats"] if f in df.columns]
+        if len(feats) < len(c["feats"]) and not quiet:
+            print(f"  note: {len(c['feats'])-len(feats)} contract features absent, using {len(feats)}")
+    else:
+        # dynamic (HR): numeric, not excluded, >=10% coverage -- mirrors retrain_hr_v6
+        feats = [col for col in df.columns
+                 if col not in c["exclude"] and col != c["target"]
+                 and pd.api.types.is_numeric_dtype(df[col])
+                 and df[col].notna().mean() >= 0.10]
+        if not quiet:
+            print(f"  dynamic feature selection: {len(feats)} features")
     return spec, c, df, feats
 
 
@@ -135,25 +158,35 @@ def walkforward_preds(system: str, cutoff: str, until: str | None = None,
               f"-> holdout {len(ho)} rows ([{cutoff}, {until or 'end'}))")
 
     booster, best = _train_pre_cutoff(tr, feats, c)
-    nb_alpha = _fit_nb_alpha(booster, tr, feats, c["target"])
     means = {f: float(pd.to_numeric(tr[f], errors="coerce").mean()) for f in feats}
-    if not quiet:
-        print(f"  trained best_iter={best} nb_alpha={nb_alpha:.4f}")
 
     Xh = ho[feats].apply(pd.to_numeric, errors="coerce")
     for f in feats:
         Xh[f] = Xh[f].fillna(means[f])
-    mu = booster.predict(xgb.DMatrix(Xh.astype(float), feature_names=feats),
-                         iteration_range=(0, best))
+    pred = booster.predict(xgb.DMatrix(Xh.astype(float), feature_names=feats),
+                           iteration_range=(0, best))
 
-    return pd.DataFrame({
-        "system": system, "market": spec.market, "kind": "count",
+    # game-level systems (GAME) have no player id -> NA player_id, join on game_pk only
+    pid = (pd.to_numeric(ho[spec.id_col], errors="coerce").astype("Int64")
+           if spec.id_col else pd.Series([pd.NA] * len(ho), dtype="Int64"))
+    base = {
+        "system": system, "market": spec.market,
         "game_pk": pd.to_numeric(ho["game_pk"], errors="coerce").astype("Int64"),
         "game_date": ho["game_date"].dt.strftime("%Y-%m-%d").values,
-        "player_id": pd.to_numeric(ho[spec.id_col], errors="coerce").astype("Int64"),
+        "player_id": pid,
         "realized": pd.to_numeric(ho[c["target"]], errors="coerce").values,
-        "p_model": np.nan, "mu": mu, "nb_alpha": nb_alpha,
-    })
+    }
+    if c["kind"] == "count":
+        nb_alpha = _fit_nb_alpha(booster, tr, feats, c["target"])
+        if not quiet:
+            print(f"  trained best_iter={best} nb_alpha={nb_alpha:.4f}")
+        return pd.DataFrame({**base, "kind": "count",
+                             "p_model": np.nan, "mu": pred, "nb_alpha": nb_alpha})
+    # binary (HR, GAME): booster.predict IS the probability of the positive class
+    if not quiet:
+        print(f"  trained best_iter={best} (binary; pos-rate hold {float(pred.mean()):.3f})")
+    return pd.DataFrame({**base, "kind": "binary",
+                         "p_model": pred, "mu": np.nan, "nb_alpha": np.nan})
 
 
 def rolling(system: str, start: str, end: str, step_months: int = 1,
