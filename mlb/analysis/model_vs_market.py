@@ -64,7 +64,7 @@ def _market_consensus(odds: pd.DataFrame, spec, min_books: int, max_spread: floa
 
 
 def evaluate(system: str, since=None, until=None, preds: pd.DataFrame | None = None,
-             min_books: int = 4, max_spread: float = 0.10) -> dict:
+             min_books: int = 4, max_spread: float = 0.10, oos: bool = False) -> dict:
     spec = gp.SPECS[system]
     if preds is None:
         preds = gp.gen_preds(system, since=since, until=until)  # in-sample (model-favored)
@@ -132,7 +132,7 @@ def evaluate(system: str, since=None, until=None, preds: pd.DataFrame | None = N
             return float("nan")
 
     res = {
-        "system": system, "n": len(d), "base_rate": float(y.mean()),
+        "system": system, "n": len(d), "base_rate": float(y.mean()), "oos": oos,
         "logloss_model": log_loss(y, np.clip(mp, 1e-6, 1 - 1e-6)),
         "logloss_market": log_loss(y, np.clip(kp, 1e-6, 1 - 1e-6)),
         "brier_model": brier_score_loss(y, mp),
@@ -157,9 +157,15 @@ def _fmt(res: dict) -> str:
         return f"  ERROR: {res['error']}"
     win_ll = "MODEL" if res["logloss_model"] < res["logloss_market"] else "market"
     win_auc = "MODEL" if res["auc_model"] > res["auc_market"] else "market"
-    verdict = ("MODEL beats market -- real edge to capture"
-               if res["model_adds_bits"] > 0.0005 and res["model_coef_in_joint"] > 0.05
-               else "market SUBSUMES model -- no capturable gap")
+    bits, coef = res["model_adds_bits"], res["model_coef_in_joint"]
+    if bits > 0.004 and coef > 0.05:
+        verdict = "MODEL beats market -- real orthogonal info"
+    elif bits > 0.001 and coef > 0.05:
+        verdict = "MARGINAL -- model adds a sliver; confirm OOS before trusting"
+    else:
+        verdict = "market SUBSUMES model -- no capturable gap"
+    if not res.get("oos"):
+        verdict += "  [IN-SAMPLE -- upper bound, re-run with --oos-cutoff]"
     return (
         f"  n={res['n']}  base_rate={res['base_rate']:.3f}\n"
         f"  log-loss : model {res['logloss_model']:.4f}  vs  market {res['logloss_market']:.4f}   -> {win_ll} better\n"
@@ -178,9 +184,19 @@ def main(argv=None) -> int:
     p.add_argument("--until", default=None)
     p.add_argument("--min-books", type=int, default=4)
     p.add_argument("--max-spread", type=float, default=0.10)
+    p.add_argument("--oos-cutoff", default=None,
+                   help="train a fresh model on <cutoff, score >=cutoff (walk-forward) "
+                        "-- the leakage-proof, out-of-sample forecaster test")
     args = p.parse_args(argv)
-    res = evaluate(args.system, since=args.since, until=args.until,
-                   min_books=args.min_books, max_spread=args.max_spread)
+
+    preds, oos = None, False
+    if args.oos_cutoff:
+        from mlb.analysis import walkforward as wf
+        preds = wf.walkforward_preds(args.system, args.oos_cutoff)   # OOS holdout preds
+        args.since = args.oos_cutoff
+        oos = True
+    res = evaluate(args.system, since=args.since, until=args.until, preds=preds,
+                   min_books=args.min_books, max_spread=args.max_spread, oos=oos)
     print(f"\nmodel_vs_market[{args.system}] (clean markets: >={args.min_books} books, "
           f"spread<={args.max_spread})")
     print(_fmt(res))
