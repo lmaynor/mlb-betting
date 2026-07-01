@@ -92,3 +92,27 @@ leakage because train≈test (both inside the training window).
 3. Optional: NRFI/F5 v18-ensemble support in gen_preds; binary walk-forward (HR/GAME);
    capture closing lines for game_ml (currently absent -> GAME CLV = nan).
 4. Do NOT productionize any system off this harness -- none earned it.
+
+## FINAL UPDATE (2026-07-01) -- the "edge" was a data bug, now fixed
+
+The huge walk-forward ROI (BATTER_TB +30%/z=16, HITS +24%) was NOT edge -- it was a
+BettingPros ingest bug: books quote DIFFERENT main lines per player (FanDuel TB 1.5 vs
+others 0.5; ~40% of players live), and `_rows_player_ou` collapsed all books into one
+row with a single `Line`, so a book's 1.5-price got stamped as 0.5. The max-edge
+line-shop fed on those mislabeled rows.
+
+- FIXED: `mlb_core/odds/bettingpros.py` `_sel_by_line` + `_rows_by_line` emit one row
+  per line (player_ou/total/team_total). See
+  `docs/solutions/integration-issues/bettingpros-per-book-line-collapse.md`.
+- PROVEN by the GATED backtest (`--min-books 4 --max-spread 0.10`, drops mixed-line
+  rows): BATTER_TB +30%->-2.7%, HITS +24%->-5% -- the edge VANISHES on clean markets.
+  Gated ROI negative/non-sig for K/HITS/TB; OUTS +7.6% but z=1.48 (n=385) + CLV -4% =
+  not real. CLV negative everywhere.
+- CONCLUSION: models CALIBRATED, NO capturable model-vs-line edge on props. (Supersedes
+  the earlier "soft-line" framing above -- the mechanism was the per-book line collapse.)
+- Store repair: re-run backfill (fixed parser, `BP_MARKETS=total_bases,hits`) +
+  `bettingpros_to_parquet --markets total_bases,hits`, then re-run walkforward UNGATED
+  to confirm it converges to the gated ~0.
+- NEW: free BettingPros intraday tracker shipped (`mlb/runners/track_bettingpros.py` +
+  `deploy/setup_track_bettingpros.sh`, 5 snapshots/day) -> banks real open->close line
+  movement for the CLV/line-movement pivot (free, unlike ParlayAPI credits).
