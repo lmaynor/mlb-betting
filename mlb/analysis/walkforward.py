@@ -99,9 +99,10 @@ def _fit_nb_alpha(booster, tr, feats, target) -> float:
     return float(np.clip((var - mu) / max(mu ** 2, 1e-6), 0.01, 0.50))
 
 
-def walkforward_preds(system: str, cutoff: str) -> pd.DataFrame:
-    """Train on game_date < cutoff, score game_date >= cutoff. Returns a preds
-    frame in gen_preds schema (kind=count: mu + nb_alpha), OUT OF SAMPLE."""
+def walkforward_preds(system: str, cutoff: str, until: str | None = None,
+                      quiet: bool = False) -> pd.DataFrame:
+    """Train on game_date < cutoff, score game_date in [cutoff, until). Returns a
+    preds frame in gen_preds schema (kind=count: mu + nb_alpha), OUT OF SAMPLE."""
     import xgboost as xgb
     if system not in WF_SYS:
         raise ValueError(f"walkforward supports {list(WF_SYS)}; got {system!r}")
@@ -112,16 +113,19 @@ def walkforward_preds(system: str, cutoff: str) -> pd.DataFrame:
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df.dropna(subset=[c["target"], "game_date"]).sort_values("game_date").reset_index(drop=True)
     feats = [f for f in c["feats"] if f in df.columns]
-    if len(feats) < len(c["feats"]):
+    if len(feats) < len(c["feats"]) and not quiet:
         print(f"  note: {len(c['feats'])-len(feats)} contract features absent from CSV, using {len(feats)}")
 
     tr = df[df["game_date"] < cutoff]
     ho = df[df["game_date"] >= cutoff]
+    if until:
+        ho = ho[ho["game_date"] < until]
     if len(tr) < 200 or len(ho) < 10:
         raise RuntimeError(f"bad split: train={len(tr)} holdout={len(ho)} at cutoff {cutoff}")
-    print(f"  walk-forward {system}: train {len(tr)} rows (<{cutoff}) "
-          f"[{tr['game_date'].min().date()}..{tr['game_date'].max().date()}] "
-          f"-> holdout {len(ho)} rows (>= {cutoff})")
+    if not quiet:
+        print(f"  walk-forward {system}: train {len(tr)} rows (<{cutoff}) "
+              f"[{tr['game_date'].min().date()}..{tr['game_date'].max().date()}] "
+              f"-> holdout {len(ho)} rows ([{cutoff}, {until or 'end'}))")
 
     booster, best = _train_pre_cutoff(tr, feats, c)
     nb_alpha = _fit_nb_alpha(booster, tr, feats, c["target"])
@@ -144,15 +148,72 @@ def walkforward_preds(system: str, cutoff: str) -> pd.DataFrame:
     })
 
 
+def rolling(system: str, start: str, end: str, step_months: int = 1,
+            edge: float = 0.10, select: str = "consensus") -> dict:
+    """Retrain at each monthly cutoff in [start, end); score the NEXT window cold;
+    pool the >= `edge` bucket across all windows. Each window is an independent
+    out-of-sample test -- a stable edge here (not one lucky month) is the real proof."""
+    cutoffs = [d.strftime("%Y-%m-%d") for d in
+               pd.date_range(start=start, end=end, freq=f"{step_months}MS")]
+    print(f"\nROLLING walk-forward {system}: {len(cutoffs)} windows "
+          f"[{start}..{end}] step={step_months}mo  edge>={edge:.0%}  select={select}\n")
+    print(f"  {'window':>12}  {'bets':>5}  {'hit%':>6}  {'roi_cons%':>9}  {'units':>7}  {'over%':>5}")
+    pooled = []
+    for i, cut in enumerate(cutoffs):
+        nxt = cutoffs[i + 1] if i + 1 < len(cutoffs) else end
+        try:
+            preds = walkforward_preds(system, cut, until=nxt, quiet=True)
+            res = bt.backtest(system, since=cut, until=nxt, preds=preds, select=select)
+            if "error" in res:
+                print(f"  {cut:>12}  (no bets)"); continue
+            c = res["candidates"]
+            b = c[c["edge"] >= edge]
+            if not len(b):
+                print(f"  {cut:>12}  (0 bets >= edge)"); continue
+            over = (b["selection"].isin(["OVER", "YES", "HOME"])).mean() * 100
+            print(f"  {cut:>12}  {len(b):>5}  {(b['won']==1).mean()*100:>5.1f}  "
+                  f"{b['roi_cons'].mean()*100:>+8.2f}  {b['roi_cons'].sum():>+6.1f}  {over:>4.0f}")
+            pooled.append(b)
+        except Exception as e:  # noqa: BLE001
+            print(f"  {cut:>12}  ERROR {e}")
+    if not pooled:
+        return {"error": "no pooled bets"}
+    allb = pd.concat(pooled, ignore_index=True)
+    roi = allb["roi_cons"].mean()
+    sd = allb["roi_cons"].std()
+    se = sd / (len(allb) ** 0.5)
+    print(f"\n  POOLED {len(allb)} bets across {len(pooled)} windows: "
+          f"roi_cons {roi*100:+.2f}%  (sd {sd:.2f}, se {se*100:.2f}%, "
+          f"z={roi/se:.1f})  units {allb['roi_cons'].sum():+.1f}")
+    print(f"  win-rate {(allb['won']==1).mean()*100:.1f}%  avg n_books {allb['n_books'].mean():.1f}  "
+          f"CLV {allb['clv_pct'].mean():+.2f}%")
+    print(f"  line values: {allb['line'].value_counts().head(6).to_dict()}")
+    return {"pooled": allb, "roi": roi, "z": roi / se, "n": len(allb)}
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Leakage-proof walk-forward ROI/CLV backtest")
     p.add_argument("--system", required=True, help=", ".join(WF_SYS))
-    p.add_argument("--cutoff", required=True, help="YYYY-MM-DD: train<cutoff, score>=cutoff")
+    p.add_argument("--cutoff", default=None, help="YYYY-MM-DD: train<cutoff, score>=cutoff")
     p.add_argument("--min-edge", type=float, default=0.0)
     p.add_argument("--select", choices=["best", "consensus"], default="best",
                    help="'consensus' removes soft-book selection bias (clean edge test)")
+    # rolling mode
+    p.add_argument("--rolling", action="store_true",
+                   help="retrain at monthly cutoffs across [--start,--end); pool the edge bucket")
+    p.add_argument("--start", default="2024-05-01")
+    p.add_argument("--end", default="2026-06-01")
+    p.add_argument("--step-months", type=int, default=1)
+    p.add_argument("--edge", type=float, default=0.10, help="edge-bucket threshold to pool (rolling)")
     args = p.parse_args(argv)
 
+    if args.rolling:
+        r = rolling(args.system, args.start, args.end, step_months=args.step_months,
+                    edge=args.edge, select=args.select)
+        return 1 if "error" in r else 0
+
+    if not args.cutoff:
+        p.error("--cutoff required unless --rolling")
     preds = walkforward_preds(args.system, args.cutoff)
     res = bt.backtest(args.system, since=args.cutoff, min_edge=args.min_edge,
                       preds=preds, select=args.select)
