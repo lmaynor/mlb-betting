@@ -93,9 +93,10 @@ def run(run_date: str | None = None) -> dict:
         from mlb_core import storage
         import pandas as pd
         if report:
-            rep_df = pd.DataFrame(report)[
-                ["system", "config", "n_bets", "n_windows", "roi_cons", "z", "win_rate",
-                 "clv", "avg_n_books"]].sort_values(["system", "config"])
+            cols = ["system", "config", "n_bets", "roi_best", "z_best", "roi_cons", "z",
+                    "win_rate", "clv", "avg_n_books"]
+            rep_df = pd.DataFrame(report)[[c for c in cols if c in report[0]]] \
+                .sort_values(["system", "config"])
             storage.write_csv(rep_df, f"{out}/REPORT.csv")
             log.info("\n=== CONSOLIDATED REPORT ===\n%s", rep_df.to_string(index=False))
         storage.write_bytes(json.dumps(report, indent=2).encode(), f"{out}/REPORT.json")

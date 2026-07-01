@@ -226,11 +226,17 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
     roi = allb["roi_cons"].mean()
     sd = allb["roi_cons"].std()
     se = sd / (len(allb) ** 0.5)
-    print(f"\n  POOLED {len(allb)} bets across {len(pooled)} windows: "
-          f"roi_cons {roi*100:+.2f}%  (sd {sd:.2f}, se {se*100:.2f}%, "
-          f"z={roi/se:.1f})  units {allb['roi_cons'].sum():+.1f}")
-    print(f"  win-rate {(allb['won']==1).mean()*100:.1f}%  avg n_books {allb['n_books'].mean():.1f}  "
-          f"CLV {allb['clv_pct'].mean():+.2f}%")
+    # roi_best = the SOFT-LINE strategy (bet the softest available price); roi_cons =
+    # the no-soft-line baseline (bet at consensus). best>>cons => real soft-line value.
+    roi_best = allb["roi"].mean()
+    se_best = allb["roi"].std() / (len(allb) ** 0.5)
+    print(f"\n  POOLED {len(allb)} bets across {len(pooled)} windows:")
+    print(f"    ROI(best/soft-line) {roi_best*100:+.2f}%  (z={roi_best/se_best:.1f})  "
+          f"units {allb['roi'].sum():+.1f}   <- YOUR soft-line strategy")
+    print(f"    ROI(consensus)      {roi*100:+.2f}%  (z={roi/se:.1f})  "
+          f"units {allb['roi_cons'].sum():+.1f}   <- no-soft-line baseline")
+    print(f"    win-rate {(allb['won']==1).mean()*100:.1f}%  avg n_books "
+          f"{allb['n_books'].mean():.1f}  CLV {allb['clv_pct'].mean():+.2f}% (adverse-selection check)")
 
     def _seg(name, g):
         return (f"    {name:>14}  n={len(g):>5}  hit={ (g['won']==1).mean()*100:>4.1f}%  "
@@ -256,6 +262,7 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
 
     summary = {"system": system, "start": start, "end": end, "select": select,
                "edge": edge, "n_windows": len(pooled), "n_bets": int(len(allb)),
+               "roi_best": round(roi_best, 4), "z_best": round(roi_best / se_best, 2),
                "roi_cons": round(roi, 4), "z": round(roi / se, 2),
                "win_rate": round((allb["won"] == 1).mean(), 4),
                "clv": round(allb["clv_pct"].mean(), 3),
