@@ -157,7 +157,8 @@ def walkforward_preds(system: str, cutoff: str, until: str | None = None,
 
 
 def rolling(system: str, start: str, end: str, step_months: int = 1,
-            edge: float = 0.10, select: str = "consensus", out_prefix: str | None = None) -> dict:
+            edge: float = 0.10, select: str = "consensus", out_prefix: str | None = None,
+            min_books: int = 1, max_spread: float = 1.0) -> dict:
     """Retrain at each monthly cutoff in [start, end); score the NEXT window cold;
     pool the >= `edge` bucket across all windows. Each window is an independent
     out-of-sample test -- a stable edge here (not one lucky month) is the real proof."""
@@ -172,7 +173,8 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
         nxt = cutoffs[i + 1] if i + 1 < len(cutoffs) else end
         try:
             preds = walkforward_preds(system, cut, until=nxt, quiet=True, prep=prep)
-            res = bt.backtest(system, since=cut, until=nxt, preds=preds, select=select)
+            res = bt.backtest(system, since=cut, until=nxt, preds=preds, select=select,
+                              min_books=min_books, max_spread=max_spread)
             if "error" in res:
                 print(f"  {cut:>12}  (no bets)"); continue
             c = res["candidates"]
@@ -251,6 +253,9 @@ def main(argv=None) -> int:
     p.add_argument("--end", default="2026-06-01")
     p.add_argument("--step-months", type=int, default=1)
     p.add_argument("--edge", type=float, default=0.10, help="edge-bucket threshold to pool (rolling)")
+    p.add_argument("--min-books", type=int, default=1, help="require >= N books quoting the side")
+    p.add_argument("--max-spread", type=float, default=1.0,
+                   help="drop markets where cross-book implied range exceeds this (e.g. 0.10)")
     p.add_argument("--out-prefix", default=None,
                    help="GCS/local prefix to persist per-system summary.json + pooled_bets.csv")
     args = p.parse_args(argv)
@@ -263,7 +268,8 @@ def main(argv=None) -> int:
         for s in systems:
             try:
                 r = rolling(s, args.start, args.end, step_months=args.step_months,
-                            edge=args.edge, select=args.select, out_prefix=args.out_prefix)
+                            edge=args.edge, select=args.select, out_prefix=args.out_prefix,
+                            min_books=args.min_books, max_spread=args.max_spread)
                 results[s] = r.get("summary", {"error": r.get("error")})
             except Exception as e:  # noqa: BLE001
                 print(f"\n{s}: ERROR {e}")
