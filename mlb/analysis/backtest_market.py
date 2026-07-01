@@ -170,7 +170,13 @@ def backtest(system: str, since: str | None = None, until: str | None = None,
         pr = pmap.get(k)
         if pr is None:
             continue
-        sel, line = q["selection"], q["line"]
+        sel, line = (q["selection"] or "").upper(), q["line"]
+        if spec.market == "game_ml" and sel not in ("HOME", "AWAY"):
+            # sides may be stored as team abbreviations -> resolve via the row's teams
+            if sel == str(q.get("home_team", "")).upper():
+                sel = "HOME"
+            elif sel == str(q.get("away_team", "")).upper():
+                sel = "AWAY"
         mp = _model_prob(kind, spec.market, sel, line, pr)
         fp = _fair_prob(q)
         if mp is None or fp is None:
