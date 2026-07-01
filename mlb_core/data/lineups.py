@@ -292,7 +292,14 @@ def fetch_il_ids() -> set:
             r.raise_for_status()
             for entry in r.json().get("roster", []):
                 pid = entry.get("person", {}).get("id")
-                if pid:
+                # Only count genuinely-injured entries. rosterType=injured can
+                # return active players too, so filter on status -- if status is
+                # missing/unparseable we exclude (no false 'out').
+                st = entry.get("status", {}) or {}
+                desc = (st.get("description") or "").lower()
+                code = (st.get("code") or "")
+                injured = ("injured" in desc) or code[:1] == "D"
+                if pid and injured:
                     il_ids.add(int(pid))
         except Exception as exc:
             logger.warning("fetch_il_ids: team %d failed: %s", tid, exc)
