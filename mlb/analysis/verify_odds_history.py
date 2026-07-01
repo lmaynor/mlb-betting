@@ -50,14 +50,9 @@ STATCAST_LAG_DAYS = 2  # realized masters ingest nightly; exclude recent dates f
 
 
 def _all_markets() -> list:
-    """Distinct market= partitions present in the store."""
-    from mlb_core import storage
-    out = set()
-    for key in storage.list_keys(f"{oh.HISTORY_PREFIX}/"):
-        for part in key.split("/"):
-            if part.startswith("market="):
-                out.add(part[len("market="):])
-    return sorted(out)
+    """Known market universe (avoids listing ~14k blobs, which times out).
+    Empty markets simply audit as empty."""
+    return sorted(REALIZED)
 
 
 # --- realized-outcome key sets (loaded once, cached) -------------------------
@@ -146,8 +141,8 @@ def _devig_ok(df) -> float | None:
     return (ok / tot) if tot else None
 
 
-def audit_market(market: str) -> dict:
-    df = oh.read_history(market)
+def audit_market(market: str, since: str | None = None) -> dict:
+    df = oh.read_history(market, since=since)
     n = len(df)
     r = {"market": market, "rows": n}
     if n == 0:
@@ -181,6 +176,7 @@ def _fmt(x):
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Audit odds_history integrity + joins")
     p.add_argument("--markets", default="all", help="'all' or comma list of canonical markets")
+    p.add_argument("--since", default=None, help="YYYY-MM-DD lower bound (speeds up / bounds the read)")
     args = p.parse_args(argv)
     markets = _all_markets() if args.markets == "all" else args.markets.split(",")
 
@@ -189,7 +185,7 @@ def main(argv=None) -> int:
     print(hdr); print("-" * len(hdr))
     fails = []
     for m in markets:
-        r = audit_market(m)
+        r = audit_market(m, since=args.since)
         if r.get("empty"):
             print(f"{m:16} {'0':>6}  (empty)")
             continue
