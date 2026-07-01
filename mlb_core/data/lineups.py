@@ -252,57 +252,56 @@ _MLB_TEAM_IDS = [
     139, 140, 141, 142, 143, 144, 145, 146, 147, 158,
 ]
 
-def fetch_il_pitcher_ids() -> set:
-    """
-    Return the set of pitcher MLBAM IDs currently on the IL (any variant:
-    10-day, 15-day, 60-day) across all 30 MLB teams.
-    Uses /api/v1/teams/{teamId}/roster?rosterType=injured.
-    Returns empty set on any network error so callers degrade gracefully.
-    """
+# rosterType=injured is unreliable -- MLB's API ignores it and returns the
+# active roster (every entry status.code="A"). The 40-man roster is the only
+# variant that carries real IL status codes (D7/D10/D15/D60 -> "Injured N-Day").
+_ROSTER_40MAN_URL = "https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=40Man"
+
+
+def _is_injured(entry: dict) -> bool:
+    """True if a 40-man roster entry is on the IL. Matches on the status
+    description ('Injured 10-Day' etc.) or a D-prefixed code (D7/D10/D15/D60).
+    Excludes RM/PL/DES/RA (reassigned, paternity, designated, restricted).
+    Missing/unparseable status -> False (never a false 'out')."""
+    st = entry.get("status", {}) or {}
+    desc = (st.get("description") or "").lower()
+    code = (st.get("code") or "")
+    return ("injured" in desc) or code[:1] == "D"
+
+
+def _fetch_40man_il(want_pitchers_only: bool, log_label: str) -> set:
     import logging
     logger = logging.getLogger(__name__)
     il_ids = set()
-    base_url = "https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=injured"
     for tid in _MLB_TEAM_IDS:
         try:
-            r = _session.get(base_url.format(tid=tid), timeout=10)
+            r = _session.get(_ROSTER_40MAN_URL.format(tid=tid), timeout=10)
             r.raise_for_status()
             for entry in r.json().get("roster", []):
-                pos = entry.get("position", {}).get("type", "")
                 pid = entry.get("person", {}).get("id")
-                if pid and pos == "Pitcher":
-                    il_ids.add(pid)
+                if not pid or not _is_injured(entry):
+                    continue
+                if want_pitchers_only and entry.get("position", {}).get("type", "") != "Pitcher":
+                    continue
+                il_ids.add(int(pid))
         except Exception as exc:
-            logger.warning("fetch_il_pitcher_ids: team %d failed: %s", tid, exc)
-    logger.info("fetch_il_pitcher_ids: %d pitchers currently on IL", len(il_ids))
+            logger.warning("%s: team %d failed: %s", log_label, tid, exc)
+    logger.info("%s: %d players currently on IL", log_label, len(il_ids))
     return il_ids
+
+
+def fetch_il_pitcher_ids() -> set:
+    """
+    Return the set of pitcher MLBAM IDs currently on the IL (any variant:
+    7/10/15/60-day) across all 30 MLB teams, from the 40-man roster.
+    Returns empty set on any network error so callers degrade gracefully.
+    """
+    return _fetch_40man_il(want_pitchers_only=True, log_label="fetch_il_pitcher_ids")
 
 
 def fetch_il_ids() -> set:
     """Return the set of ALL player MLBAM IDs currently on the IL (any position),
     across all 30 teams. For surfacing 'Out / IL' status on The Edge cockpit.
     Returns empty set on any network error so callers degrade gracefully."""
-    import logging
-    logger = logging.getLogger(__name__)
-    il_ids = set()
-    base_url = "https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=injured"
-    for tid in _MLB_TEAM_IDS:
-        try:
-            r = _session.get(base_url.format(tid=tid), timeout=10)
-            r.raise_for_status()
-            for entry in r.json().get("roster", []):
-                pid = entry.get("person", {}).get("id")
-                # Only count genuinely-injured entries. rosterType=injured can
-                # return active players too, so filter on status -- if status is
-                # missing/unparseable we exclude (no false 'out').
-                st = entry.get("status", {}) or {}
-                desc = (st.get("description") or "").lower()
-                code = (st.get("code") or "")
-                injured = ("injured" in desc) or code[:1] == "D"
-                if pid and injured:
-                    il_ids.add(int(pid))
-        except Exception as exc:
-            logger.warning("fetch_il_ids: team %d failed: %s", tid, exc)
-    logger.info("fetch_il_ids: %d players currently on IL", len(il_ids))
-    return il_ids
+    return _fetch_40man_il(want_pitchers_only=False, log_label="fetch_il_ids")
 

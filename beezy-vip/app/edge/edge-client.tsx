@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react'
 import type { Bet } from '@/lib/types'
 import type { PlayerStatus, SeasonStats } from '@/lib/betting-api'
-import { SYSTEM_COLOR, SYSTEM_PILL } from '@/lib/tokens'
+import { SYSTEM_COLOR, SYSTEM_PILL, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -452,6 +452,70 @@ function StatusChip({ status, compact = false }: { status?: PlayerStatus; compac
   )
 }
 
+// Team filter: custom popover so each option can carry its logo (native
+// <option> can't). Values are canonical 3-letter abbrevs (see teamAbbrev).
+function TeamSelect({ value, teams, onChange }: {
+  value: string; teams: string[]; onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const opts = ['all', ...teams]
+  const logo = value !== 'all' ? teamLogoSrc(value) : null
+  const pick = (v: string) => { onChange(v); setOpen(false) }
+  return (
+    <div className="edge-select edge-teamsel" ref={ref}>
+      <span className="edge-select-k">Team</span>
+      <button
+        type="button"
+        className="edge-teamsel-btn"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Team filter"
+        onClick={() => setOpen(o => !o)}
+      >
+        {logo && <img src={logo} alt="" width={16} height={16} className="edge-teamsel-logo" />}
+        <span>{value === 'all' ? 'All' : value}</span>
+        <span className="edge-teamsel-caret" aria-hidden>{'▾'}</span>
+      </button>
+      {open && (
+        <div className="edge-teamsel-menu" role="listbox">
+          {opts.map(t => {
+            const l = t !== 'all' ? teamLogoSrc(t) : null
+            return (
+              <button
+                key={t}
+                type="button"
+                role="option"
+                aria-selected={t === value}
+                className={`edge-teamsel-opt${t === value ? ' is-sel' : ''}`}
+                onClick={() => pick(t)}
+              >
+                {l
+                  ? <img src={l} alt="" width={16} height={16} className="edge-teamsel-logo" />
+                  : <span className="edge-teamsel-logo" aria-hidden />}
+                <span>{t === 'all' ? 'All teams' : t}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // note phrase -> pill color, by keyword (preconfigured rationale -> pills)
 const NOTE_RULES: [RegExp, string][] = [
   [/barrel|exit velo|hard.?hit|power|slug/i, '#ee6fae'],
@@ -677,7 +741,10 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
 
   const teams = useMemo(() => {
     const set = new Set<string>()
-    picks.forEach(p => { if (p.away_team) set.add(p.away_team); if (p.home_team) set.add(p.home_team) })
+    picks.forEach(p => {
+      const a = teamAbbrev(p.away_team); if (a) set.add(a)
+      const h = teamAbbrev(p.home_team); if (h) set.add(h)
+    })
     return Array.from(set).sort()
   }, [picks])
 
@@ -697,7 +764,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     let v = picks.filter(inMode)
-    if (team !== 'all') v = v.filter(p => p.away_team === team || p.home_team === team)
+    if (team !== 'all') v = v.filter(p => teamAbbrev(p.away_team) === team || teamAbbrev(p.home_team) === team)
     if (mode === 'players' && position !== 'all') v = v.filter(p => p.position === position)
     if (markets.length) v = v.filter(p => markets.includes(p.system))
     if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
@@ -756,13 +823,7 @@ export function EdgeClient({ picks, updated }: { picks: EdgePick[]; updated: str
 
       {/* Control bar */}
       <div className="edge-controls">
-        <label className="edge-select">
-          <span className="edge-select-k">Team</span>
-          <select value={team} onChange={e => setTeam(e.target.value)} aria-label="Team">
-            <option value="all">All</option>
-            {teams.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
+        <TeamSelect value={team} teams={teams} onChange={setTeam} />
         {mode === 'players' && positions.length > 0 && (
           <label className="edge-select">
             <span className="edge-select-k">Pos</span>
@@ -1007,6 +1068,15 @@ function Styles() {
 .edge-select { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .edge-select-k { color: #9aa0aa; }
 .edge-select select { background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); padding: 5px 8px; font-size: 12px; }
+.edge-teamsel { position: relative; }
+.edge-teamsel-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); padding: 5px 8px; font-size: 12px; cursor: pointer; min-width: 84px; }
+.edge-teamsel-btn:hover { border-color: var(--basalt); }
+.edge-teamsel-caret { margin-left: auto; color: #8a8a93; font-size: 10px; }
+.edge-teamsel-logo { width: 16px; height: 16px; object-fit: contain; flex: 0 0 16px; }
+.edge-teamsel-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; background: var(--graphite); border: 1px solid var(--basalt); box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-height: 320px; overflow-y: auto; min-width: 160px; padding: 4px; }
+.edge-teamsel-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--ash); border: 0; padding: 6px 8px; font-size: 12px; cursor: pointer; }
+.edge-teamsel-opt:hover { background: var(--obsidian); }
+.edge-teamsel-opt.is-sel { color: var(--signal); }
 .edge-clear { background: transparent; color: #8a8a93; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .edge-empty { border: 1px solid var(--basalt); background: #0d0d10; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }

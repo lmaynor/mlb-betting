@@ -88,13 +88,38 @@ export const TEAM_ABBREV: Record<string, string> = {
 // use onError, so gating on this set avoids broken <img>s.
 const TEAM_SLUGS = new Set(Object.values(TEAM_ABBREV).map(a => a.toLowerCase()))
 
+const TEAM_ABBREV_SET = new Set(Object.values(TEAM_ABBREV))
+
+/**
+ * Normalize any team string -- full name ("Yankees", "New York Yankees"),
+ * city+nickname, or an existing abbrev ("NYY") -- to its canonical 3-letter
+ * code. Falls back to the trimmed input uppercased if nothing matches, so the
+ * Team filter never shows a mix of names and abbrevs. Safe in server components.
+ */
+export function teamAbbrev(team: string | null | undefined): string {
+  if (!team) return ''
+  const t = team.trim()
+  if (!t) return ''
+  // exact nickname match ("Yankees" -> "NYY")
+  if (TEAM_ABBREV[t]) return TEAM_ABBREV[t]
+  const up = t.toUpperCase()
+  // already an abbrev
+  if (TEAM_ABBREV_SET.has(up)) return up
+  // "City Nickname" -- match by trailing nickname (longest key first so
+  // "Red Sox"/"White Sox"/"Blue Jays" beat a shorter accidental hit)
+  for (const name of Object.keys(TEAM_ABBREV).sort((a, b) => b.length - a.length)) {
+    if (t.endsWith(name)) return TEAM_ABBREV[name]
+  }
+  return up
+}
+
 /**
  * Resolve a team (full name or 3-letter abbrev) to its logo path, or null if
  * we don't ship a matching logo. Safe to call in server components.
  */
 export function teamLogoSrc(team: string | null | undefined): string | null {
   if (!team) return null
-  const abbrev = (TEAM_ABBREV[team] ?? (team.length <= 3 ? team : '')).toLowerCase()
+  const abbrev = teamAbbrev(team).toLowerCase()
   return abbrev && TEAM_SLUGS.has(abbrev) ? `/logos/${abbrev}.png` : null
 }
 
