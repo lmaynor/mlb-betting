@@ -29,12 +29,14 @@ WF_END="${WF_END:-2026-06-01}"
 WF_STEP="${WF_STEP:-1}"
 WF_EDGE="${WF_EDGE:-0.10}"
 WF_SELECT="${WF_SELECT:-consensus}"
+WF_CONFIGS="${WF_CONFIGS:-both}"
 
 JOB="mlb-walkforward-batch"
 
 ENV_VARS="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
 ENV_VARS="${ENV_VARS},WF_SYSTEMS=${WF_SYSTEMS},WF_START=${WF_START},WF_END=${WF_END}"
 ENV_VARS="${ENV_VARS},WF_STEP=${WF_STEP},WF_EDGE=${WF_EDGE},WF_SELECT=${WF_SELECT}"
+ENV_VARS="${ENV_VARS},WF_CONFIGS=${WF_CONFIGS}"
 
 action="create"
 if gcloud run jobs describe "$JOB" \
@@ -44,9 +46,11 @@ fi
 
 echo "${action^} job: $JOB (image: $IMAGE)"
 echo "  systems: $WF_SYSTEMS  range: $WF_START -> $WF_END  step: ${WF_STEP}mo"
-echo "  edge>=$WF_EDGE  select=$WF_SELECT"
+echo "  edge>=$WF_EDGE  select=$WF_SELECT  configs=$WF_CONFIGS"
 
 # XGBoost retrains on up to 268k rows are memory+CPU heavy -> 4Gi / 2 CPU.
+# task-timeout 5h: ~4 systems x 2 configs x ~15 monthly retrains, headroom for the
+# 268k-row batter systems. --max-retries 0 so a partial run isn't silently restarted.
 gcloud run jobs "$action" "$JOB" \
   --image="$IMAGE" \
   --region="$REGION" \
@@ -56,8 +60,8 @@ gcloud run jobs "$action" "$JOB" \
   --args="-m,mlb.runners.walkforward_batch" \
   --memory="4Gi" \
   --cpu="2" \
-  --task-timeout="10800s" \
-  --max-retries=1 \
+  --task-timeout="18000s" \
+  --max-retries=0 \
   --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest" \
   --set-env-vars="$ENV_VARS"
 
