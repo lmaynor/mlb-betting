@@ -99,22 +99,29 @@ def _fit_nb_alpha(booster, tr, feats, target) -> float:
     return float(np.clip((var - mu) / max(mu ** 2, 1e-6), 0.01, 0.50))
 
 
-def walkforward_preds(system: str, cutoff: str, until: str | None = None,
-                      quiet: bool = False) -> pd.DataFrame:
-    """Train on game_date < cutoff, score game_date in [cutoff, until). Returns a
-    preds frame in gen_preds schema (kind=count: mu + nb_alpha), OUT OF SAMPLE."""
-    import xgboost as xgb
+def _prepare(system: str, quiet: bool = False):
+    """Load + clean a system's feature table ONCE (spec, contract, df, feats).
+    Reused across all rolling cutoffs so the 268k-row CSV isn't re-read per window."""
     if system not in WF_SYS:
         raise ValueError(f"walkforward supports {list(WF_SYS)}; got {system!r}")
     spec = gp.SPECS[system]
     c = _resolve_contract(system)
-
     df = gp._read_csv(spec.feature_csv, low_memory=False)
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df.dropna(subset=[c["target"], "game_date"]).sort_values("game_date").reset_index(drop=True)
     feats = [f for f in c["feats"] if f in df.columns]
     if len(feats) < len(c["feats"]) and not quiet:
         print(f"  note: {len(c['feats'])-len(feats)} contract features absent from CSV, using {len(feats)}")
+    return spec, c, df, feats
+
+
+def walkforward_preds(system: str, cutoff: str, until: str | None = None,
+                      quiet: bool = False, prep: tuple | None = None) -> pd.DataFrame:
+    """Train on game_date < cutoff, score game_date in [cutoff, until). Returns a
+    preds frame in gen_preds schema (kind=count: mu + nb_alpha), OUT OF SAMPLE.
+    Pass `prep` (from _prepare) to avoid re-reading the feature CSV each window."""
+    import xgboost as xgb
+    spec, c, df, feats = prep or _prepare(system, quiet=quiet)
 
     tr = df[df["game_date"] < cutoff]
     ho = df[df["game_date"] >= cutoff]
@@ -130,7 +137,8 @@ def walkforward_preds(system: str, cutoff: str, until: str | None = None,
     booster, best = _train_pre_cutoff(tr, feats, c)
     nb_alpha = _fit_nb_alpha(booster, tr, feats, c["target"])
     means = {f: float(pd.to_numeric(tr[f], errors="coerce").mean()) for f in feats}
-    print(f"  trained best_iter={best} nb_alpha={nb_alpha:.4f}")
+    if not quiet:
+        print(f"  trained best_iter={best} nb_alpha={nb_alpha:.4f}")
 
     Xh = ho[feats].apply(pd.to_numeric, errors="coerce")
     for f in feats:
@@ -149,7 +157,7 @@ def walkforward_preds(system: str, cutoff: str, until: str | None = None,
 
 
 def rolling(system: str, start: str, end: str, step_months: int = 1,
-            edge: float = 0.10, select: str = "consensus") -> dict:
+            edge: float = 0.10, select: str = "consensus", out_prefix: str | None = None) -> dict:
     """Retrain at each monthly cutoff in [start, end); score the NEXT window cold;
     pool the >= `edge` bucket across all windows. Each window is an independent
     out-of-sample test -- a stable edge here (not one lucky month) is the real proof."""
@@ -157,12 +165,13 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
                pd.date_range(start=start, end=end, freq=f"{step_months}MS")]
     print(f"\nROLLING walk-forward {system}: {len(cutoffs)} windows "
           f"[{start}..{end}] step={step_months}mo  edge>={edge:.0%}  select={select}\n")
+    prep = _prepare(system)   # load the feature CSV ONCE, reuse every window
     print(f"  {'window':>12}  {'bets':>5}  {'hit%':>6}  {'roi_cons%':>9}  {'units':>7}  {'over%':>5}")
     pooled = []
     for i, cut in enumerate(cutoffs):
         nxt = cutoffs[i + 1] if i + 1 < len(cutoffs) else end
         try:
-            preds = walkforward_preds(system, cut, until=nxt, quiet=True)
+            preds = walkforward_preds(system, cut, until=nxt, quiet=True, prep=prep)
             res = bt.backtest(system, since=cut, until=nxt, preds=preds, select=select)
             if "error" in res:
                 print(f"  {cut:>12}  (no bets)"); continue
@@ -209,12 +218,27 @@ def rolling(system: str, start: str, end: str, step_months: int = 1,
     smp = allb[cols].head(15)
     with pd.option_context("display.width", 220, "display.max_columns", 20):
         print(smp.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    return {"pooled": allb, "roi": roi, "z": roi / se, "n": len(allb)}
+
+    summary = {"system": system, "start": start, "end": end, "select": select,
+               "edge": edge, "n_windows": len(pooled), "n_bets": int(len(allb)),
+               "roi_cons": round(roi, 4), "z": round(roi / se, 2),
+               "win_rate": round((allb["won"] == 1).mean(), 4),
+               "clv": round(allb["clv_pct"].mean(), 3),
+               "avg_n_books": round(allb["n_books"].mean(), 2),
+               "line_counts": {str(k): int(v) for k, v in allb["line"].value_counts().head(8).items()}}
+    if out_prefix:
+        import json as _json
+        from mlb_core import storage
+        storage.write_csv(allb, f"{out_prefix}/{system}_pooled_bets.csv")
+        storage.write_bytes(_json.dumps(summary, indent=2).encode(),
+                            f"{out_prefix}/{system}_summary.json")
+        print(f"\n  wrote -> {out_prefix}/{system}_{{summary.json,pooled_bets.csv}}")
+    return {"pooled": allb, "summary": summary, "roi": roi, "z": roi / se, "n": len(allb)}
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="Leakage-proof walk-forward ROI/CLV backtest")
-    p.add_argument("--system", required=True, help=", ".join(WF_SYS))
+    p.add_argument("--system", default=None, help=", ".join(WF_SYS))
     p.add_argument("--cutoff", default=None, help="YYYY-MM-DD: train<cutoff, score>=cutoff")
     p.add_argument("--min-edge", type=float, default=0.0)
     p.add_argument("--select", choices=["best", "consensus"], default="best",
@@ -222,16 +246,37 @@ def main(argv=None) -> int:
     # rolling mode
     p.add_argument("--rolling", action="store_true",
                    help="retrain at monthly cutoffs across [--start,--end); pool the edge bucket")
+    p.add_argument("--all", action="store_true", help="run rolling for ALL WF_SYS systems")
     p.add_argument("--start", default="2024-05-01")
     p.add_argument("--end", default="2026-06-01")
     p.add_argument("--step-months", type=int, default=1)
     p.add_argument("--edge", type=float, default=0.10, help="edge-bucket threshold to pool (rolling)")
+    p.add_argument("--out-prefix", default=None,
+                   help="GCS/local prefix to persist per-system summary.json + pooled_bets.csv")
     args = p.parse_args(argv)
 
-    if args.rolling:
-        r = rolling(args.system, args.start, args.end, step_months=args.step_months,
-                    edge=args.edge, select=args.select)
-        return 1 if "error" in r else 0
+    if (args.rolling and not args.system) and not args.all:
+        p.error("--rolling needs --system (or use --all)")
+    if args.rolling or args.all:
+        systems = list(WF_SYS) if args.all else [args.system]
+        results = {}
+        for s in systems:
+            try:
+                r = rolling(s, args.start, args.end, step_months=args.step_months,
+                            edge=args.edge, select=args.select, out_prefix=args.out_prefix)
+                results[s] = r.get("summary", {"error": r.get("error")})
+            except Exception as e:  # noqa: BLE001
+                print(f"\n{s}: ERROR {e}")
+                results[s] = {"error": str(e)}
+        if args.all:
+            print("\n===== BATCH SUMMARY =====")
+            print(f"  {'system':>12}  {'bets':>6}  {'roi_cons%':>9}  {'z':>6}  {'CLV%':>6}  {'nbk':>4}")
+            for s, v in results.items():
+                if "error" in v:
+                    print(f"  {s:>12}  ERROR {v['error']}"); continue
+                print(f"  {s:>12}  {v['n_bets']:>6}  {v['roi_cons']*100:>+8.2f}  "
+                      f"{v['z']:>6.1f}  {v['clv']:>+6.2f}  {v['avg_n_books']:>4.1f}")
+        return 0
 
     if not args.cutoff:
         p.error("--cutoff required unless --rolling")
