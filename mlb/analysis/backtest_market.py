@@ -193,6 +193,14 @@ def backtest(system: str, since: str | None = None, until: str | None = None,
         return {"error": "no joinable model<->odds candidates"}
     cand = pd.DataFrame(rows)
 
+    # consensus price per (key, selection, line) across ALL books -- the soft-line test.
+    # If ROI survives at the MEDIAN price (not just the cherry-picked best), the edge is
+    # robust; if it collapses, we were only beating one soft book (artifact).
+    grp = keys + ["selection", "line"]
+    gb = cand.groupby(grp, dropna=False)["decimal"]
+    cand["consensus_dec"] = gb.transform("median")
+    cand["n_books"] = gb.transform("size")
+
     # line shopping: per (game_pk, player_id) keep the single max-edge quote = the bet
     cand = cand.sort_values("edge", ascending=False).drop_duplicates(subset=keys, keep="first")
     cand = cand[cand["edge"] >= min_edge].copy()
@@ -205,6 +213,9 @@ def backtest(system: str, since: str | None = None, until: str | None = None,
     cand = cand[cand["won"].notna()].copy()
     cand["roi"] = np.where(cand["won"] == 1.0, cand["decimal"] - 1.0,
                            np.where(cand["won"] == 0.5, 0.0, -1.0))
+    # same bets, but priced at the cross-book CONSENSUS instead of the softest quote
+    cand["roi_cons"] = np.where(cand["won"] == 1.0, cand["consensus_dec"] - 1.0,
+                                np.where(cand["won"] == 0.5, 0.0, -1.0))
 
     def _clv(r):
         key = (r["game_pk"], r["player_id"] if spec.id_col else pd.NA,
@@ -237,10 +248,11 @@ def _bucket_table(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame({
         "bets": g.size(),
         "hit%": g["won"].apply(lambda s: (s == 1.0).mean() * 100),
-        "avg_odds": g["decimal"].mean(),
-        "roi%": g["roi"].mean() * 100,
+        "n_bk": g["n_books"].mean(),
+        "roi_best%": g["roi"].mean() * 100,
+        "roi_cons%": g["roi_cons"].mean() * 100,
         "clv%": g["clv_pct"].mean(),
-        "total_units": g["roi"].sum(),
+        "units_cons": g["roi_cons"].sum(),
     })
     return out
 
@@ -250,8 +262,9 @@ def _print_report(res: dict, label: str, df: pd.DataFrame):
         print(f"  [{label}] no bets")
         return
     tbl = _bucket_table(df)
-    print(f"  [{label}] {len(df)} bets  overall ROI {df['roi'].mean()*100:+.2f}%  "
-          f"units {df['roi'].sum():+.1f}  CLV {df['clv_pct'].mean():+.2f}%")
+    print(f"  [{label}] {len(df)} bets  ROI(best) {df['roi'].mean()*100:+.2f}%  "
+          f"ROI(consensus) {df['roi_cons'].mean()*100:+.2f}%  "
+          f"units_cons {df['roi_cons'].sum():+.1f}  CLV {df['clv_pct'].mean():+.2f}%")
     with pd.option_context("display.width", 200, "display.max_columns", 20):
         print(tbl.to_string(float_format=lambda x: f"{x:,.2f}"))
 
