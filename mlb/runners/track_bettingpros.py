@@ -74,7 +74,10 @@ def run(run_date: str | None = None) -> dict:
                     name, pd.DataFrame(rows), snapshot_ts, ingested_at)
                 market = b2p.BP_TO_HISTORY[name][0]
                 for d in long_df["game_date"].dropna().unique():
-                    total += oh.write_partition(long_df[long_df["game_date"] == d], market, d)
+                    # append=True -> accumulate intraday snapshots (dedup on snapshot_ts)
+                    # instead of overwriting the day's partition each run.
+                    total += oh.write_partition(long_df[long_df["game_date"] == d], market, d,
+                                                append=True)
             except Exception as exc:  # noqa: BLE001
                 errors += 1
                 log.warning("%s %s: %s", ds, name, exc)

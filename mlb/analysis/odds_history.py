@@ -67,10 +67,17 @@ def _to_parquet_bytes(df) -> bytes:
     return buf.getvalue()
 
 
-def write_partition(df, market: str, game_date: str) -> int:
+def write_partition(df, market: str, game_date: str, append: bool = False) -> int:
     """Write one (market, date) partition. Reorders to SCHEMA_COLUMNS, fills
     missing columns, de-dups on DEDUP_KEYS. Returns rows written. No-op for
-    an empty frame."""
+    an empty frame.
+
+    append=False (default): OVERWRITE the partition -- used by the historical
+      re-ingest to REPLACE corrupt rows.
+    append=True: MERGE with the existing partition, then de-dup on DEDUP_KEYS
+      (which includes snapshot_ts) -- used by the intraday tracker so multiple
+      snapshots/day ACCUMULATE instead of clobbering each other. Idempotent:
+      re-writing the same snapshot dedups to one row."""
     import pandas as pd
     from mlb_core import storage
 
@@ -81,6 +88,13 @@ def write_partition(df, market: str, game_date: str) -> int:
         if col not in df.columns:
             df[col] = None
     df = df[SCHEMA_COLUMNS]
+    if append:
+        try:
+            raw = storage.read_bytes(partition_path(market, game_date))
+            existing = pd.read_parquet(io.BytesIO(raw))
+            df = pd.concat([existing, df], ignore_index=True)
+        except Exception:  # noqa: BLE001 -- no existing partition yet
+            pass
     df = df.drop_duplicates(subset=DEDUP_KEYS, keep="last")
     storage.write_bytes(_to_parquet_bytes(df), partition_path(market, game_date))
     return len(df)
