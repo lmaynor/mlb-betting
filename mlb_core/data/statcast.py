@@ -242,11 +242,8 @@ def statcast_backfill_gcs(gcs_bucket: str, gcs_master_key: str, dates: list) -> 
     Loads master once, appends all dates, deduplicates, uploads once.
     Returns dict of {date: pitches_added}.
     """
-    from google.cloud import storage
-    client  = storage.Client()
-    bucket  = client.bucket(gcs_bucket)
-    blob    = bucket.blob(gcs_master_key)
-    existing = pd.read_csv(blob.open("r"), low_memory=False)
+    from mlb_core import storage as _st  # twin-aware master IO
+    existing = _st.read_csv(gcs_master_key, low_memory=False)
     print(f"  Existing master: {len(existing):,} rows")
     results = {}
     for d in dates:
@@ -268,9 +265,7 @@ def statcast_backfill_gcs(gcs_bucket: str, gcs_master_key: str, dates: list) -> 
         existing = pd.concat([existing, new_df], ignore_index=True)
     dedup_cols = [c for c in ["game_pk", "batter", "at_bat_number", "pitch_number"] if c in existing.columns]
     existing = existing.drop_duplicates(subset=dedup_cols)
-    tmp = "/tmp/statcast_master_backfill.csv"
-    existing.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    _st.write_csv(existing, gcs_master_key)
     print(f"  Master updated: {len(existing):,} rows")
     return results
 
@@ -297,18 +292,14 @@ def statcast_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
     new_df = new_df[available]
     print(f"  Fetched {len(new_df):,} pitches")
 
-    client = storage.Client()
-    bucket = client.bucket(gcs_bucket)
-    blob = bucket.blob(gcs_master_key)
+    from mlb_core import storage as _st  # twin-aware master IO
 
-    existing = pd.read_csv(blob.open("r"), low_memory=False)
+    existing = _st.read_csv(gcs_master_key, low_memory=False)
     print(f"  Existing master: {len(existing):,} rows")
 
     combined = pd.concat([existing, new_df], ignore_index=True)
     dedup_cols = [c for c in ["game_pk", "batter", "at_bat_number", "pitch_number"] if c in combined.columns]
     combined = combined.drop_duplicates(subset=dedup_cols)
 
-    tmp = "/tmp/statcast_master_new.csv"
-    combined.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    _st.write_csv(combined, gcs_master_key)
     print(f"  Master updated: {len(combined):,} rows | through {yesterday}")

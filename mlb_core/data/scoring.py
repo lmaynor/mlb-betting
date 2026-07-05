@@ -253,12 +253,10 @@ def scoring_nightly_gcs(gcs_bucket: str, gcs_master_key: str) -> None:
         logger.warning("scoring_nightly_gcs: no scoring data returned")
         return
 
-    client = storage.Client()
-    bucket = client.bucket(gcs_bucket)
-    blob = bucket.blob(gcs_master_key)
+    from mlb_core import storage as _st  # twin-aware master IO
 
-    if blob.exists():
-        existing = pd.read_csv(blob.open("r"), low_memory=False)
+    if _st.exists(gcs_master_key):
+        existing = _st.read_csv(gcs_master_key, low_memory=False)
         logger.info(f"scoring_nightly_gcs: existing master {len(existing):,} rows")
         combined = pd.concat([existing, new_df], ignore_index=True)
     else:
@@ -269,8 +267,6 @@ def scoring_nightly_gcs(gcs_bucket: str, gcs_master_key: str) -> None:
         subset=["game_pk", "inning", "half"], keep="last"
     )
 
-    tmp = "/tmp/scoring_master_new.csv"
-    combined.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    _st.write_csv(combined, gcs_master_key)
     logger.info(f"scoring_nightly_gcs: master updated {len(combined):,} rows "
                 f"| through {yesterday}")
