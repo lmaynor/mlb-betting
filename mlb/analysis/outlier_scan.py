@@ -41,28 +41,55 @@ _NON_BOOK = bt.OFFSHORE | {"open"}
 
 
 def scan(market: str, since: str | None = None, until: str | None = None,
-         min_ev: float = 0.03, min_books: int = 4, latest_only: bool = True) -> pd.DataFrame:
-    """Return +EV outlier quotes for one market vs the cross-book consensus."""
-    odds = oh.read_history(market, since=since, until=until)
-    if not len(odds):
+         min_ev: float = 0.03, min_books: int = 4, latest_only: bool = True,
+         anchor_book: str = "pinnacle") -> pd.DataFrame:
+    """Return +EV outlier quotes for one market vs the cross-book consensus.
+
+    anchor_book: when this (sharp, unbettable-for-us) book quotes a selection,
+    its de-vigged fair prob is used as the truth anchor instead of the soft-book
+    median -- soft books can all be slow together, Pinnacle rarely is. Falls
+    back to the median where the anchor has no quote. Set anchor_book=None (or
+    env OUTLIER_ANCHOR=none in callers) to disable.
+    """
+    raw = oh.read_history(market, since=since, until=until)
+    if not len(raw):
         return pd.DataFrame()
-    odds = oh.dedupe_by_source(odds)
-    odds = odds[~odds["book"].str.lower().isin(_NON_BOOK)]
-    odds = odds[odds["decimal"].notna() & odds["fair_prob"].notna()]
-    if not len(odds):
+    raw = oh.dedupe_by_source(raw)
+    raw = raw[raw["decimal"].notna() & raw["fair_prob"].notna()]
+    if not len(raw):
         return pd.DataFrame()
     # only the latest snapshot per market/selection (freshest lines) unless a window given
-    if latest_only and "snapshot_ts" in odds.columns:
-        odds = odds.sort_values("snapshot_ts")
-        odds = odds.groupby(["game_pk", "player_id", "line", "selection", "book"],
-                            dropna=False, as_index=False).tail(1)
+    if latest_only and "snapshot_ts" in raw.columns:
+        raw = raw.sort_values("snapshot_ts")
+        raw = raw.groupby(["game_pk", "player_id", "line", "selection", "book"],
+                          dropna=False, as_index=False).tail(1)
 
     grp = ["game_pk", "player_id", "line", "selection"]
+
+    # sharp-anchor fair probs (kept out of the bettable set below)
+    anchor = pd.DataFrame()
+    if anchor_book:
+        anchor = raw[raw["book"].str.lower() == anchor_book.lower()]
+        anchor = (anchor.groupby(grp, dropna=False)["fair_prob"].median()
+                  .rename("anchor_fair").reset_index())
+
+    odds = raw[~raw["book"].str.lower().isin(_NON_BOOK)].copy()
+    if not len(odds):
+        return pd.DataFrame()
     g = odds.groupby(grp, dropna=False)
     odds["consensus_fair"] = g["fair_prob"].transform("median")
     odds["n_books"] = g["book"].transform("nunique")
+    if len(anchor):
+        odds = odds.merge(anchor, on=grp, how="left")
+        odds["anchored"] = odds["anchor_fair"].notna()
+        odds["consensus_fair"] = odds["anchor_fair"].fillna(odds["consensus_fair"])
+        odds = odds.drop(columns=["anchor_fair"])
+    else:
+        odds["anchored"] = False
     odds["_impl"] = 1.0 / odds["decimal"]
-    odds["book_spread"] = g["_impl"].transform(lambda s: s.max() - s.min())
+    # regroup: the anchor merge above replaced the frame `g` was built on
+    odds["book_spread"] = odds.groupby(grp, dropna=False)["_impl"].transform(
+        lambda s: s.max() - s.min())
 
     odds = odds[odds["n_books"] >= min_books].copy()
     # EV of striking THIS book at its price, using the consensus as truth
@@ -72,18 +99,20 @@ def scan(market: str, since: str | None = None, until: str | None = None,
         return hits
     hits["edge_vs_consensus"] = odds["consensus_fair"] - hits["_impl"]  # how far book lags
     cols = ["game_date", "game_pk", "player_id", "selection", "line", "book",
-            "american", "decimal", "consensus_fair", "ev", "edge_vs_consensus",
-            "n_books", "book_spread", "snapshot_ts"]
+            "american", "decimal", "consensus_fair", "anchored", "ev",
+            "edge_vs_consensus", "n_books", "book_spread", "snapshot_ts"]
     cols = [c for c in cols if c in hits.columns]
     return hits[cols].sort_values("ev", ascending=False).reset_index(drop=True)
 
 
 def scan_markets(markets: list, since=None, until=None, min_ev=0.03,
-                 min_books=4, latest_only=True) -> pd.DataFrame:
+                 min_books=4, latest_only=True,
+                 anchor_book: str | None = "pinnacle") -> pd.DataFrame:
     frames = []
     for m in markets:
         df = scan(m, since=since, until=until, min_ev=min_ev,
-                  min_books=min_books, latest_only=latest_only)
+                  min_books=min_books, latest_only=latest_only,
+                  anchor_book=anchor_book)
         if len(df):
             df.insert(0, "market", m)
             frames.append(df)
