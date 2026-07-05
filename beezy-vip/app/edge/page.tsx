@@ -119,5 +119,5 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} />
+  return <EdgeClient picks={picks} updated={updated} dateKey={date} />
 }
