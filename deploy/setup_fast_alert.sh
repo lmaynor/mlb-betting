@@ -26,6 +26,9 @@ SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # every 15 min, 19:00-23:45 UTC (2-7pm ET: lineups post -> closing window)
 SCHEDULE="*/15 19-23 * * *"
+# opener watch: every 2h overnight/morning -- tomorrow's lines post overnight
+# and are the softest of the day; scan them before the market wakes up
+SCHEDULE_NIGHT="0 0-16/2 * * *"
 
 echo "=== Fast alert loop setup ==="
 echo "Job: $JOB_NAME  schedule='$SCHEDULE' UTC (20 runs/day in strike window)"
@@ -34,7 +37,7 @@ gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
   || { echo "ERROR: $IMAGE not found. Run ./deploy/deploy_service.sh first."; exit 1; }
 
 # BP_MARKETS commas -> ^@^ alternate delimiter
-ENVV="^@^GCP_PROJECT=${PROJECT_ID}@GCP_REGION=${REGION}@BP_MARKETS=player@BP_DAYS=1@FAL_MIN_EV=0.03@FAL_MIN_BOOKS=4@FAL_MAX_POSTS=10"
+ENVV="^@^GCP_PROJECT=${PROJECT_ID}@GCP_REGION=${REGION}@BP_MARKETS=player@BP_DAYS=2@FAL_DAYS=2@FAL_MIN_EV=0.03@FAL_MIN_BOOKS=4@FAL_MAX_POSTS=10"
 JOB_FLAGS=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
   --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest"
@@ -63,6 +66,21 @@ else
   gcloud scheduler jobs create http "$sjob" "${flags[@]}"
 fi
 echo "Scheduler set: $sjob @ '$SCHEDULE' UTC"
+
+njob="${JOB_NAME}-night"
+nflags=(
+  --location="$REGION" --schedule="$SCHEDULE_NIGHT" --time-zone="Etc/UTC"
+  --uri="$URI" --http-method=POST
+  --oauth-service-account-email="$SCHED_SA"
+  --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
+  --attempt-deadline=900s --project="$PROJECT_ID"
+)
+if gcloud scheduler jobs describe "$njob" --location="$REGION" --quiet >/dev/null 2>&1; then
+  gcloud scheduler jobs update http "$njob" "${nflags[@]}"
+else
+  gcloud scheduler jobs create http "$njob" "${nflags[@]}"
+fi
+echo "Scheduler set: $njob @ '$SCHEDULE_NIGHT' UTC (overnight opener watch)"
 
 echo ""
 echo "Run once now:"

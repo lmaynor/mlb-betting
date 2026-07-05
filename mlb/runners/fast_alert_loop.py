@@ -3,8 +3,12 @@ mlb.runners.fast_alert_loop -- the pager: snapshot -> scan -> notify, every 15 m
 
 The soft-line strategy only pays if a lagging quote is struck BEFORE it
 corrects (typical prop staleness: 10-60 min). The 3x/day odds_alert cadence
-misses that window; this loop closes it. Each execution (scheduled */15 in the
-19:00-23:45 UTC strike window):
+misses that window; this loop closes it. Scheduled */15 in the 19:00-23:45 UTC
+strike window PLUS every 2 hours overnight -- openers for TOMORROW's games
+post overnight and are the softest prices of the day (one book posts, the
+others copy lazily, nothing corrects until liquidity arrives). The scan
+covers today AND tomorrow (FAL_DAYS=2); next-day alerts are tagged
+[TMRW opener]. Each execution:
 
   1. LINEUP EVENTS: diff today's posted batting orders against the last-seen
      state (Alerts/{day}/lineup_state.json). A newly posted lineup or a
@@ -33,7 +37,7 @@ import io
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
@@ -119,7 +123,7 @@ def _fmt_american(a) -> str:
     return f"+{a}" if a > 0 else str(a)
 
 
-def notify(new: pd.DataFrame, hot: set, notes: list) -> None:
+def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '') -> None:
     from mlb_core.notify.discord import _post
     url = _alert_webhook()
     lines = []
@@ -130,10 +134,12 @@ def notify(new: pd.DataFrame, hot: set, notes: list) -> None:
         who = f"player {int(pid)}" if pd.notna(pid) else "team"
         flame = " **HOT**" if r.get("game_pk") in hot else ""
         anchor = " [pinn]" if r.get("anchored") else ""
+        gd = str(r.get("game_date", ""))
+        nextday = " [TMRW opener]" if today_str and gd and gd > today_str else ""
         lines.append(
             f"`{r['market']}` {game} {who} {r['selection']} {r.get('line', '')} "
             f"@ **{r['book']}** {_fmt_american(r.get('american'))} -> "
-            f"EV **{r['ev']*100:+.1f}%**{anchor} (fair {r['consensus_fair']:.3f}, "
+            f"EV **{r['ev']*100:+.1f}%**{anchor}{nextday} (fair {r['consensus_fair']:.3f}, "
             f"{int(r['n_books'])} books){flame}")
     body = "\n".join(lines)
     if notes:
@@ -151,6 +157,13 @@ def notify(new: pd.DataFrame, hot: set, notes: list) -> None:
 def run(run_date: str | None = None) -> dict:
     now = datetime.now(timezone.utc)
     day = run_date or now.date().isoformat()
+    # scan window: today + tomorrow. Openers for tomorrow's games post
+    # overnight and are the softest prices of the day -- one book posts, the
+    # others copy lazily, and nothing corrects until liquidity arrives. The
+    # trackers already bank next-day quotes (BP_DAYS=2, parlay day_offset=1);
+    # this makes the scanner actually look at them.
+    n_days = int(os.environ.get("FAL_DAYS", "2"))
+    until = (now.date() + timedelta(days=n_days - 1)).isoformat()
     markets = os.environ.get("FAL_MARKETS", "hr_yn,outs_ou,btb_ou,bhits_ou,k_ou").split(",")
     min_ev = float(os.environ.get("FAL_MIN_EV", "0.03"))
     min_books = int(os.environ.get("FAL_MIN_BOOKS", "4"))
@@ -166,7 +179,7 @@ def run(run_date: str | None = None) -> dict:
     # 2) fresh snapshot (free)
     if os.environ.get("FAL_SKIP_SNAPSHOT") != "1":
         from mlb.runners import track_bettingpros
-        os.environ.setdefault("BP_DAYS", "1")
+        os.environ.setdefault("BP_DAYS", str(n_days))  # bank tomorrow's openers too
         try:
             snap = track_bettingpros.run(run_date=day)
             log.info("snapshot: %s rows @ %s", snap.get("rows"), snap.get("snapshot_ts"))
@@ -175,7 +188,7 @@ def run(run_date: str | None = None) -> dict:
 
     # 3) scan
     from mlb.analysis import outlier_scan as osc
-    found = osc.scan_markets(markets, since=day, min_ev=min_ev,
+    found = osc.scan_markets(markets, since=day, until=until, min_ev=min_ev,
                              min_books=min_books, latest_only=True,
                              anchor_book=anchor)
     if not len(found):
@@ -198,7 +211,7 @@ def run(run_date: str | None = None) -> dict:
         new["_hot"] = new["game_pk"].isin(hot)
         new = new.sort_values(["_hot", "ev"], ascending=[False, False]).drop(columns="_hot")
         posted = new.head(max_posts)
-        notify(posted, hot, notes)
+        notify(posted, hot, notes, today_str=day)
         if len(new) > max_posts:
             log.info("capped: %d further alerts not posted this run", len(new) - max_posts)
         # persist notify-state and the shared alert log (for odds_alert resolve)
