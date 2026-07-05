@@ -54,6 +54,12 @@ else
   echo "Job not found -- creating..."; gcloud run jobs create "$JOB_NAME" "${JOB_FLAGS[@]}"
 fi
 
+# scheduler-invoker must hold run.invoker ON THE JOB or every scheduler firing
+# is PERMISSION_DENIED (code 7) -- this bit us for 3 jobs in a row.
+gcloud run jobs add-iam-policy-binding "$JOB_NAME" --region="$REGION" \
+  --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
+echo "run.invoker granted to $SCHED_SA on $JOB_NAME"
+
 URI="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}:run"
 i=0
 for cron in "${SCHEDULES[@]}"; do
