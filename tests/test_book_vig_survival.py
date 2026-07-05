@@ -131,3 +131,39 @@ class TestQuoteSurvival:
         assert r["n_events"] == 1
         assert r["median_surv_min"] == pytest.approx(60.0)
         assert r["pct_book_moved"] == pytest.approx(1.0)
+
+
+class TestOutlierAnchor:
+    def _hist(self, pinn_fair):
+        rows = []
+        for book, fair in [("draftkings", 0.50), ("betmgm", 0.50),
+                           ("caesars", 0.50), ("fanduel", 0.42)]:
+            rows.append(_quote(book, "OVER", fair, fair=fair))
+        if pinn_fair is not None:
+            rows.append(_quote("pinnacle", "OVER", pinn_fair, fair=pinn_fair))
+        return pd.DataFrame(rows)
+
+    def test_pinnacle_anchor_overrides_median(self, monkeypatch):
+        from mlb.analysis import outlier_scan as osc
+        # soft median says 0.50 -> fanduel @0.42 impl looks +EV; pinnacle at 0.43
+        # says the market IS ~0.43 -> anchored consensus kills the fake alert
+        monkeypatch.setattr(osc.oh, "read_history", lambda *a, **k: self._hist(0.43))
+        monkeypatch.setattr(osc.oh, "dedupe_by_source", lambda d, **k: d)
+        hits = osc.scan("k_ou", min_ev=0.03, min_books=4, anchor_book="pinnacle")
+        assert len(hits) == 0
+
+    def test_no_anchor_falls_back_to_median(self, monkeypatch):
+        from mlb.analysis import outlier_scan as osc
+        monkeypatch.setattr(osc.oh, "read_history", lambda *a, **k: self._hist(None))
+        monkeypatch.setattr(osc.oh, "dedupe_by_source", lambda d, **k: d)
+        hits = osc.scan("k_ou", min_ev=0.03, min_books=4, anchor_book="pinnacle")
+        assert len(hits) == 1 and hits.iloc[0]["book"] == "fanduel"
+        assert not hits.iloc[0]["anchored"]
+
+    def test_anchor_confirms_real_lag(self, monkeypatch):
+        from mlb.analysis import outlier_scan as osc
+        # pinnacle agrees with the soft median (0.50) -> fanduel truly lagging
+        monkeypatch.setattr(osc.oh, "read_history", lambda *a, **k: self._hist(0.50))
+        monkeypatch.setattr(osc.oh, "dedupe_by_source", lambda d, **k: d)
+        hits = osc.scan("k_ou", min_ev=0.03, min_books=4, anchor_book="pinnacle")
+        assert len(hits) == 1 and bool(hits.iloc[0]["anchored"])
