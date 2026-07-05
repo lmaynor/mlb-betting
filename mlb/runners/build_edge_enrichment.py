@@ -34,7 +34,7 @@ import requests
 
 from mlb_core import storage
 from mlb_core.config import DB_URL
-from mlb_core.data.lineups import get_today_schedule, confirmed_lineup_ids, fetch_il_ids
+from mlb_core.data.lineups import get_today_schedule, confirmed_lineup_sides, fetch_il_ids
 
 logger = logging.getLogger(__name__)
 
@@ -340,12 +340,12 @@ def build(date: str) -> dict:
     except Exception as exc:
         logger.warning("IL fetch failed: %s", exc)
         il_ids = set()
-    lineup_sets: dict[int, set] = {}
+    lineup_sides: dict[int, dict] = {}
     for gp in {gp for (_p, gp, _bt, _k, _s) in typed}:
         try:
-            lineup_sets[gp] = confirmed_lineup_ids(gp)
+            lineup_sides[gp] = confirmed_lineup_sides(gp)
         except Exception:
-            lineup_sets[gp] = set()
+            lineup_sides[gp] = {"away": set(), "home": set()}
     probable: dict[int, set] = {}
     try:
         sched = get_today_schedule(date)
@@ -360,16 +360,25 @@ def build(date: str) -> dict:
         logger.warning("schedule fetch failed: %s", exc)
 
     def _status(pid, kind, game_pk) -> str:
+        """il > confirmed > out > expected > unknown.
+
+        "out" is ONLY set when BOTH teams' lineups are posted and the batter
+        is in neither -- lineups post one side at a time, and the old
+        game-level check falsely tagged every batter on the not-yet-posted
+        side as out (surfaced as bogus 'Out - IL' chips on The Edge)."""
         if pid is None:
             return "unknown"
         if pid in il_ids:
-            return "out"
+            return "il"
         if kind == "pitcher":
             return "confirmed" if pid in probable.get(game_pk, set()) else "expected"
-        ls = lineup_sets.get(game_pk, set())
-        if ls:
-            return "confirmed" if pid in ls else "out"
-        return "expected"
+        sides = lineup_sides.get(game_pk, {"away": set(), "home": set()})
+        posted = sides["away"] | sides["home"]
+        if pid in posted:
+            return "confirmed"
+        if sides["away"] and sides["home"]:
+            return "out"          # both lineups up, he is in neither
+        return "expected"         # his side may simply not have posted yet
 
     for player, game_pk, bet_type, kind, stat in typed:
         key = _norm(player)

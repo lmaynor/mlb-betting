@@ -124,6 +124,24 @@ def confirmed_lineup_ids(game_pk: int) -> set:
     return {int(x) for x in df["player_id"].dropna().tolist()}
 
 
+def confirmed_lineup_sides(game_pk: int) -> dict:
+    """Posted batting-order ids PER SIDE: {"away": set, "home": set}.
+
+    Lineups post one team at a time; a game-level set cannot distinguish
+    "his team's lineup is up and he's not in it" (really out) from "his
+    team's lineup just isn't posted yet" (unknown). Callers should only mark
+    a batter out when the batter is absent from a game where BOTH sides have
+    posted (or, if the caller knows the team, that side has posted)."""
+    df = _get_lineup_for_game(game_pk)
+    out = {"away": set(), "home": set()}
+    if df.empty or "player_id" not in df.columns:
+        return out
+    for side in ("away", "home"):
+        sub = df[df["team_side"] == side]
+        out[side] = {int(x) for x in sub["player_id"].dropna().tolist()}
+    return out
+
+
 def _pull_lineup_date(date_str: str, verbose: bool = False) -> pd.DataFrame:
     games = _get_games_for_date(date_str)
     if not games:

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import fs from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks, apiGetTodaySlate, apiGetEdgeEnrich } from '@/lib/betting-api'
+import { apiGetTodayPicks, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { EdgeClient, type EdgePick } from './edge-client'
@@ -72,14 +72,30 @@ function normName(name: string | null): string {
 
 export default async function EdgePage() {
   const date = siteDateKey()
-  const [raw, slate, enrichData] = await Promise.all([
+  const [raw, slate, enrichData, alerts] = await Promise.all([
     apiGetTodayPicks().catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
     apiGetEdgeEnrich(date),
+    apiGetTodayAlerts(date),
   ])
 
   const gameMap = new Map<number, SlateGame>((slate.games ?? []).map(g => [g.game_pk, g]))
   const players = enrichData.players ?? {}
+
+  // live +EV outlier alerts, matched to picks: player props by (game_pk, MLBAM
+  // id via the headshot player_map); game markets by game_pk. Best EV wins.
+  const GAME_ALERT_MARKETS = new Set(['nrfi_ou', 'game_ml', 'f5_ml'])
+  function alertFor(bet: Bet): EdgeAlert | null {
+    const pid = bet.player ? (PLAYER_MAP[playerSlug(bet.player)] ?? PLAYER_MAP[playerSlugAscii(bet.player)]) : null
+    let best: EdgeAlert | null = null
+    for (const a of alerts) {
+      if (a.game_pk !== bet.game_pk || a.ev == null) continue
+      const match = pid != null ? a.player_id === pid
+        : (a.player_id == null && GAME_ALERT_MARKETS.has(a.market ?? ''))
+      if (match && (best == null || a.ev > (best.ev ?? 0))) best = a
+    }
+    return best
+  }
 
   function enrich(bet: Bet): EdgePick {
     const g = gameMap.get(bet.game_pk)
@@ -87,6 +103,7 @@ export default async function EdgePage() {
     return {
       ...bet,
       headshotUrl: headshotUrl(bet.player),
+      alert: alertFor(bet),
       awayLogoUrl: logoUrl(bet.away_team),
       homeLogoUrl: logoUrl(bet.home_team),
       modelProbPct: toPct(bet.model_prob),
@@ -119,5 +136,5 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} />
+  return <EdgeClient picks={picks} updated={updated} dateKey={date} />
 }
