@@ -35,6 +35,7 @@ import xgboost as xgb
 logger = logging.getLogger(__name__)
 
 from mlb_core.rationale import build_rationale
+from mlb_core.odds.utils import devig_two_way
 
 _IP_STD      = 1.5
 _OUTS_MC_SIMS = 10_000
@@ -456,7 +457,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 mkt_under = american_to_implied_prob(under_odds)
                 total = mkt_over + mkt_under
                 if total and total > 0:
-                    fair_over, fair_under = mkt_over / total, mkt_under / total
+                    fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
+                    if pd.isna(fair_over) or pd.isna(fair_under):
+                        continue
                     edge_over  = p_over  - fair_over
                     edge_under = p_under - fair_under
                     if edge_over >= edge_under:
@@ -568,7 +571,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 mkt_under = american_to_implied_prob(under_odds)
                 total = mkt_over + mkt_under
                 if total and total > 0:
-                    fair_over, fair_under = mkt_over / total, mkt_under / total
+                    fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
+                    if pd.isna(fair_over) or pd.isna(fair_under):
+                        continue
                     edge_over  = p_over  - fair_over
                     edge_under = p_under - fair_under
                     if edge_over >= edge_under:
@@ -727,7 +732,9 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
         total = mkt_over + mkt_under
         if not total:
             continue
-        fair_over, fair_under = mkt_over / total, mkt_under / total
+        fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
+        if pd.isna(fair_over) or pd.isna(fair_under):
+            continue
 
         edge_over  = p_over  - fair_over
         edge_under = p_under - fair_under

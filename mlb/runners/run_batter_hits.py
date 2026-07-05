@@ -430,14 +430,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         p_over  = _negbin_p_over(line, mu, nb_alpha)
         p_under = _negbin_p_under(line, mu, nb_alpha)
 
-        # Devig both sides of the O/U
+        # Devig both sides of the O/U. Shin (not proportional) -- corrects the
+        # favorite-longshot bias and matches the odds_history ingest devig.
+        from mlb_core.odds.utils import devig_two_way
         mkt_over  = american_to_implied_prob(odds_info["over_odds"])
         mkt_under = american_to_implied_prob(odds_info["under_odds"])
-        total = mkt_over + mkt_under
-        if not total:
+        if not (mkt_over + mkt_under):
             continue
-        fair_over  = mkt_over  / total
-        fair_under = mkt_under / total
+        fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
+        if pd.isna(fair_over) or pd.isna(fair_under):
+            continue
 
         edge_over  = p_over  - fair_over
         edge_under = p_under - fair_under

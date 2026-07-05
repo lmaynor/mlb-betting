@@ -407,8 +407,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         total    = mkt_home + mkt_away
         if not total or total <= 0:
             continue
-        fair_home = mkt_home / total
-        fair_away = mkt_away / total
+        # Shin devig (favorite-longshot correction; matches ingest)
+        from mlb_core.odds.utils import devig_two_way
+        fair_home, fair_away = devig_two_way(mkt_home, mkt_away, method="shin")
+        if pd.isna(fair_home) or pd.isna(fair_away):
+            continue
 
         edge_home = prob_home - fair_home
         edge_away = prob_away - fair_away

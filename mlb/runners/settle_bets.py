@@ -112,7 +112,7 @@ def _void_stale_nonfinal_bets(
 def _settle_nrfi(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     """Settle NRFI/YRFI and 1st inning 3-way ML bets via MLB API."""
     results = []
-    game_pks = sorted(set(pending["game_pk"].dropna().astype(int).tolist()))
+    game_pks = sorted(set(pd.to_numeric(pending["game_pk"], errors="coerce").dropna().astype(int).tolist()))
     logger.info(f"settle NRFI: {len(pending)} pending bets | game_pks={game_pks}")
 
     for _, bet in pending.iterrows():
@@ -148,7 +148,7 @@ def _settle_nrfi(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
 def _settle_f5(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     """Settle F5 moneyline bets via MLB API linescore."""
     results = []
-    game_pks = sorted(set(pending["game_pk"].dropna().astype(int).tolist()))
+    game_pks = sorted(set(pd.to_numeric(pending["game_pk"], errors="coerce").dropna().astype(int).tolist()))
     logger.info(f"settle F5: {len(pending)} pending bets | game_pks={game_pks}")
 
     for _, bet in pending.iterrows():
@@ -491,7 +491,7 @@ def run(settle_date: str = None) -> dict:
         )
 
     # Fetch game results in parallel
-    all_game_pks = set(pending_all["game_pk"].dropna().astype(int))
+    all_game_pks = set(pd.to_numeric(pending_all["game_pk"], errors="coerce").dropna().astype(int))
     logger.info(f"settle: fetching MLB API results for {len(all_game_pks)} game_pks")
     game_cache: dict = {}
 

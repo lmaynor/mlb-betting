@@ -104,6 +104,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
     from mlb_core.data.lineups import fetch_il_pitcher_ids
     _il_ids = fetch_il_pitcher_ids()
     from mlb_core.odds import american_to_implied_prob, remove_vig
+    from mlb_core.odds.utils import devig_two_way
 
     sched = get_today_schedule(run_date)
     if sched.empty:
@@ -153,7 +154,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
         if odds_info:
             ih = american_to_implied_prob(odds_info["home_odds"])
             ia = american_to_implied_prob(odds_info["away_odds"])
-            fh, _ = remove_vig(ih, ia)
+            fh, _ = devig_two_way(ih, ia, method="shin")
             row["implied_home_win_pct"] = fh
             row["_home_odds"] = odds_info["home_odds"]
             row["_away_odds"] = odds_info["away_odds"]
@@ -206,6 +207,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     """
     from mlb_core.odds import sgo
     from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct, remove_vig
+    from mlb_core.odds.utils import devig_two_way
     from mlb_core.odds.dk_scraper import resolve_team
 
     booster, features, feature_means = _load_model(cfg)
@@ -326,7 +328,9 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         ia = american_to_implied_prob(away_odds)
         if pd.isna(ih) or pd.isna(ia):
             continue
-        fair_home, fair_away = remove_vig(ih, ia)
+        fair_home, fair_away = devig_two_way(ih, ia, method="shin")
+        if pd.isna(fair_home) or pd.isna(fair_away):
+            continue
         edge_home = p_h - fair_home
         edge_away = p_a - fair_away
 
@@ -491,7 +495,9 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
             ia = american_to_implied_prob(odds_info["away_odds"])
             if pd.isna(ih) or pd.isna(ia) or (ih + ia) <= 0:
                 continue
-            fair_home, fair_away = remove_vig(ih, ia)
+            fair_home, fair_away = devig_two_way(ih, ia, method="shin")
+            if pd.isna(fair_home) or pd.isna(fair_away):
+                continue
 
             if p_home_s - fair_home >= p_away_s - fair_away:
                 side, edge, fair, odds, model_prob = (
