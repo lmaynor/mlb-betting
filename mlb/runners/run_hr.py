@@ -541,11 +541,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         market_prob = american_to_implied_prob(odds)
 
         # Remove vig from the one-sided HR prop market.
-        # DK HR props carry ~7% vig; devig_unilateral centralises this assumption.
-        # See mlb_core/odds/utils.py for the arithmetic justification.
-        # Calibrate HR_VIG_PCT periodically from closing-line analysis (T08/T15).
+        # Empirical per-(market,book) vig from mlb.analysis.book_vig where the
+        # fitted lookup exists (Odds/history/_vig/book_vig.json); flat 7%
+        # fallback otherwise. Refit: python3 -m mlb.analysis.book_vig --save
         HR_VIG_PCT  = 0.07
-        fair_prob   = devig_unilateral(market_prob, vig_pct=HR_VIG_PCT)
+        try:
+            from mlb.analysis.book_vig import get_vig
+            _vig = get_vig("hr_yn", odds_info.get("bookmaker") or "", default=HR_VIG_PCT)
+        except Exception:  # noqa: BLE001 -- vig lookup is best-effort
+            _vig = HR_VIG_PCT
+        fair_prob   = devig_unilateral(market_prob, vig_pct=_vig)
         model_prob, _cal = _cal_apply("HR", model_prob)
         edge        = model_prob - fair_prob
         _edge_capped = _cal and edge > _EDGE_CAP
