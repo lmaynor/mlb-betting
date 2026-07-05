@@ -112,7 +112,13 @@ def prefetch_exposure(
         return bankroll, {}
     try:
         from sqlalchemy import text as _text
-        placeholders = ",".join(str(g) for g in game_pks)
+        # Bind params for the IN list (game_pks are internal ints, but never
+        # interpolate values into SQL).
+        pk_params = {f"pk{i}": int(g) for i, g in enumerate(game_pks)}
+        placeholders = ",".join(f":{k}" for k in pk_params)
+        params: dict = {"gd": game_date, **pk_params}
+        if system:
+            params["sys"] = system
         with engine.connect() as conn:
             rows = conn.execute(_text(f"""
                 SELECT game_pk, COALESCE(SUM(stake), 0) as open_stake
@@ -123,7 +129,7 @@ def prefetch_exposure(
                   AND kelly_triggered = TRUE
                   {('AND system = :sys' if system else '')}
                 GROUP BY game_pk
-            """), {"gd": game_date, "sys": system} if system else {"gd": game_date}).fetchall()
+            """), params).fetchall()
         return bankroll, {int(r[0]): float(r[1]) for r in rows}
     except Exception as e:
         logger.warning(f"exposure: prefetch_exposure failed: {e} -- returning zeros")

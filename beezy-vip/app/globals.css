@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Tailwind v4 theme colors for the custom utility names used in
+   app/dashboard/* (text-accent, text-muted, bg-accent, border-bright, ...).
+   Without these the classes compile to nothing and the dashboard renders
+   unstyled. Hex values mirror the :root terminal palette below. */
+@theme {
+  --color-accent: #71d083;  /* --signal */
+  --color-muted:  #8a8893;  /* --fog */
+  --color-text:   #eeeef0;  /* --ash */
+  --color-bright: #f3f2f5;  /* --chalk */
+  --color-win:    #71d083;  /* --signal */
+  --color-loss:   #ec6a6a;  /* --loss */
+  --color-bg:     #04040b;  /* --carbon */
+}
+
 /* ===================================================================
    beezy.fyi — Terminal design system
    Dark near-black canvas, hairline borders, Signal Green brand accent,
@@ -296,7 +310,9 @@ body {
 .dell-btn-red:active,
 .btn-primary:active { transform: translateY(1px); }
 .btn:focus-visible,
-.dell-btn-primary:focus-visible {
+.dell-btn-primary:focus-visible,
+button:focus-visible,
+a:focus-visible {
   outline: 2px solid var(--signal);
   outline-offset: 2px;
 }

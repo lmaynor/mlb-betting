@@ -43,6 +43,32 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+def _require_db_url() -> str:
+    """MLB_DB_URL or a clear 500-able error instead of a bare KeyError."""
+    url = os.environ.get("MLB_DB_URL")
+    if not url:
+        raise RuntimeError("MLB_DB_URL env var is not set -- check Cloud Run secret wiring")
+    return url
+
+
+def _off_season() -> bool:
+    """True Dec 1 - Feb 14 (no MLB games; spring training starts late Feb).
+
+    Scheduler jobs fire year-round; the heavy handlers no-op with 202 in this
+    window instead of fetching odds / building features for an empty slate.
+    Override with MLB_FORCE_RUN=1 (manual backfills, testing).
+    """
+    if os.environ.get("MLB_FORCE_RUN") == "1":
+        return False
+    today = datetime.now(_CT).date()
+    return today.month in (12, 1) or (today.month == 2 and today.day < 15)
+
+
+def _off_season_response():
+    return jsonify({"status": "skipped",
+                    "reason": "off-season (set MLB_FORCE_RUN=1 to override)"}), 202
+
+
 VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
 DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
 DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "BATTER_TB", "GAME"]
@@ -79,8 +105,8 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
         try:
             from mlb_core.notify.discord import post_error
             post_error(system, f"Runner crashed:\n```\n{tb[:1500]}\n```", run_date)
-        except Exception:
-            pass
+        except Exception as _de:  # noqa: BLE001
+            logger.warning(f"discord notify failed (alert not delivered): {_de}")
         return {"system": system, "status": "error", "error": str(e)}
 
 
@@ -102,6 +128,8 @@ def healthz():
 
 @app.route("/run", methods=["POST"])
 def run_handler():
+    if _off_season():
+        return _off_season_response()
     body     = request.get_json(silent=True) or {}
     systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
     run_type = body.get("run_type", "morning")
@@ -128,6 +156,8 @@ def run_handler():
 
 @app.route("/build-features", methods=["POST"])
 def build_features_handler():
+    if _off_season():
+        return _off_season_response()
     body     = request.get_json(silent=True) or {}
     system   = body.get("system", "HR")
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
@@ -155,6 +185,8 @@ def build_features_handler():
 
 @app.route("/build-all-features", methods=["POST"])
 def build_all_features_handler():
+    if _off_season():
+        return _off_season_response()
     """Run all feature builders sequentially in dependency order.
 
     Dependency order: HR -> NRFI -> K -> F5 (F5 reads NRFI pitcher_start_features.csv).
@@ -216,6 +248,8 @@ def build_all_features_handler():
 
 @app.route("/snapshot-odds", methods=["POST"])
 def snapshot_odds_handler():
+    if _off_season():
+        return _off_season_response()
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     # Optional overrides: provider ("sgo"/"parlay", default env ODDS_PRIMARY) and
@@ -235,8 +269,8 @@ def snapshot_odds_handler():
         try:
             from mlb_core.notify.discord import post_error
             post_error("SGO", f"Snapshot crashed:\n```\n{tb[:1500]}\n```", run_date)
-        except Exception:
-            pass
+        except Exception as _de:  # noqa: BLE001
+            logger.warning(f"discord notify failed (alert not delivered): {_de}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
     http_status = 200 if result.get("status") == "ok" else 500
@@ -244,8 +278,8 @@ def snapshot_odds_handler():
         try:
             from mlb_core.notify.discord import post_error
             post_error("SGO", f"Snapshot returned error:\n```\n{result.get('error', '?')}\n```", run_date)
-        except Exception:
-            pass
+        except Exception as _de:  # noqa: BLE001
+            logger.warning(f"discord notify failed (alert not delivered): {_de}")
     return jsonify(result), http_status
 
 
@@ -263,8 +297,8 @@ def settle_handler():
             from mlb_core.notify.discord import post_error
             post_error("SETTLE", f"Settlement crashed:\n```\n{tb[:1500]}\n```",
                        settle_date or datetime.now(_CT).date().isoformat())
-        except Exception:
-            pass
+        except Exception as _de:  # noqa: BLE001
+            logger.warning(f"discord notify failed (alert not delivered): {_de}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
     return jsonify(result), 200
@@ -272,6 +306,8 @@ def settle_handler():
 
 @app.route("/refresh-data", methods=["POST"])
 def refresh_data_handler():
+    if _off_season():
+        return _off_season_response()
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
@@ -584,7 +620,7 @@ def reset_and_run():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
     systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
         with bt.engine.begin() as conn:
@@ -618,7 +654,7 @@ def reset_bets():
     game_pk = body.get("game_pk")
     if not date:
         return jsonify({"error": "date is required"}), 400
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
     where = "WHERE game_date = :date"
     params = {"date": date}
     if system:
@@ -646,7 +682,7 @@ def dashboard():
     from mlb_core.tracking.bet_tracker import BetTracker
     system_filter = request.args.get("system", None)
     days = int(request.args.get("days", 7))
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
 
     systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
     summary_rows = ""
@@ -783,7 +819,7 @@ def _get_engine():
     global _PUBLIC_API_ENGINE
     if _PUBLIC_API_ENGINE is None:
         from mlb_core.tracking.bet_tracker import BetTracker
-        _PUBLIC_API_ENGINE = BetTracker(os.environ["MLB_DB_URL"], "HR").engine
+        _PUBLIC_API_ENGINE = BetTracker(_require_db_url(), "HR").engine
     return _PUBLIC_API_ENGINE
 
 

@@ -80,7 +80,7 @@ export function Footer() {
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet.</p>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>
-            &copy; {new Date().getFullYear()} <Link href="/" style={{ color: 'var(--link)', textDecoration: 'none' }}>Beezy.FYI</Link> &middot; All rights reserved
+            &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> <Link href="/" style={{ color: 'var(--link)', textDecoration: 'none' }}>Beezy.FYI</Link> &middot; All rights reserved
           </p>
         </div>
       </div>

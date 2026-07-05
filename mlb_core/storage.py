@@ -95,8 +95,68 @@ def write_bytes(data: bytes, key: str) -> None:
     path.write_bytes(data)
 
 
+# ---------------------------------------------------------------------------
+# Parquet twins (cost/perf): the big masters are mirrored as .parquet next to
+# the canonical .csv. read_csv() transparently prefers the twin (5-10x smaller
+# download + faster parse); write_csv() keeps the twin fresh. The CSV stays
+# authoritative for rollback -- delete the .parquet objects (or set
+# MLB_PARQUET_TWIN=0) to revert instantly. One-time creation:
+#     python3 scripts/migrate_masters_to_parquet.py
+# ---------------------------------------------------------------------------
+
+PARQUET_TWIN_KEYS = {
+    "Statcast/statcast_master.csv",
+    "Scoring/scoring_master.csv",
+}
+
+
+def _twin_key(key: str) -> str:
+    return key[:-4] + ".parquet"
+
+
+def _twin_enabled(key: str) -> bool:
+    return (key in PARQUET_TWIN_KEYS
+            and os.environ.get("MLB_PARQUET_TWIN", "1") != "0")
+
+
+def read_parquet(key: str, columns=None) -> pd.DataFrame:
+    """Read a Parquet object from GCS or local disk (requires pyarrow)."""
+    if _get_bucket():
+        raw = _gcs_blob(key).download_as_bytes(timeout=_GCS_TIMEOUT)
+        return pd.read_parquet(io.BytesIO(raw), columns=columns)
+    return pd.read_parquet(_local_path(key), columns=columns)
+
+
+def write_parquet(df: pd.DataFrame, key: str) -> None:
+    """Write a DataFrame as Parquet to GCS or local disk (requires pyarrow)."""
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    write_bytes(buf.getvalue(), key)
+
+
 def read_csv(key: str, **kwargs) -> pd.DataFrame:
-    """Read a CSV into a DataFrame from GCS or local disk."""
+    """Read a CSV into a DataFrame from GCS or local disk.
+
+    For keys in PARQUET_TWIN_KEYS, transparently reads the .parquet twin when
+    it exists (much smaller/faster). `usecols` is honored (list or callable);
+    other pandas CSV kwargs (low_memory, dtype, ...) are CSV-parse concerns
+    and are ignored on the parquet path. Falls back to the CSV on any twin
+    read failure.
+    """
+    if _twin_enabled(key):
+        twin = _twin_key(key)
+        try:
+            if exists(twin):
+                usecols = kwargs.get("usecols")
+                columns = list(usecols) if isinstance(usecols, (list, tuple, set)) else None
+                df = read_parquet(twin, columns=columns)
+                if callable(usecols):
+                    df = df[[c for c in df.columns if usecols(c)]]
+                return df
+        except Exception as e:  # noqa: BLE001 -- twin is an optimization only
+            import logging
+            logging.getLogger(__name__).warning(
+                f"parquet twin read failed for {twin}: {e} -- falling back to CSV")
     if _get_bucket():
         raw = _gcs_blob(key).download_as_bytes(timeout=_GCS_TIMEOUT)
         return pd.read_csv(io.BytesIO(raw), **kwargs)
@@ -105,14 +165,24 @@ def read_csv(key: str, **kwargs) -> pd.DataFrame:
 
 
 def write_csv(df: pd.DataFrame, key: str, index: bool = False) -> None:
-    """Write a DataFrame as CSV to GCS or local disk."""
+    """Write a DataFrame as CSV to GCS or local disk.
+
+    For keys in PARQUET_TWIN_KEYS, also refreshes the .parquet twin
+    (best-effort -- a twin write failure never fails the CSV write)."""
     buf = df.to_csv(index=index).encode()
     if _get_bucket():
         _gcs_blob(key).upload_from_string(buf, content_type="text/csv", timeout=_GCS_TIMEOUT)
-        return
-    path = _local_path(key)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(buf)
+    else:
+        path = _local_path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(buf)
+    if _twin_enabled(key):
+        try:
+            write_parquet(df, _twin_key(key))
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning(
+                f"parquet twin write failed for {_twin_key(key)}: {e}")
 
 
 def exists(key: str) -> bool:

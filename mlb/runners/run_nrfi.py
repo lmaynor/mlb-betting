@@ -461,9 +461,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         total = nrfi_mkt + yrfi_mkt
         if not total or pd.isna(total) or total <= 0:
             continue
-        # No-vig: split the over-round proportionally
-        nrfi_fair = nrfi_mkt / total
-        yrfi_fair = yrfi_mkt / total
+        # No-vig: Shin devig (favorite-longshot correction; matches ingest)
+        from mlb_core.odds.utils import devig_two_way
+        nrfi_fair, yrfi_fair = devig_two_way(nrfi_mkt, yrfi_mkt, method="shin")
+        if pd.isna(nrfi_fair) or pd.isna(yrfi_fair):
+            continue
 
         edge_nrfi = float(row["model_nrfi_prob"]) - nrfi_fair
         edge_yrfi = float(row["model_yrfi_prob"]) - yrfi_fair
