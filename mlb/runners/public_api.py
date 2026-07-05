@@ -24,14 +24,19 @@ def _require_api_key(request_headers: dict, site_api_key: str) -> bool:
     return key.strip() == site_api_key
 
 
-def get_today_picks(engine):
+def get_today_picks(engine, include_all: bool = False):
+    """Today's picks. include_all=True returns EVERY scored prediction
+    (kelly_triggered false rows have stake 0) -- The Edge cockpit uses this
+    so every player with a model probability is browsable, not just the
+    qualified card."""
+    gate = "" if include_all else "AND kelly_triggered = true "
     with engine.connect() as conn:
         rows = conn.execute(text(
             "SELECT id, system, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
             "FROM bets "
-            "WHERE game_date = :_today AND kelly_triggered = true "
+            f"WHERE game_date = :_today {gate}"
             "ORDER BY system, created_at DESC"
         ), {"_today": _ct_today()}).mappings().all()
     return [dict(r) for r in rows]

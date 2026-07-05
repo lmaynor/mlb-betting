@@ -272,6 +272,16 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         line = odds_info.get("line")
         if line is None:
             continue
+        # SANITY GUARD vs cross-line mixing (per-book main-line collapse):
+        # an everyday player's u1.5 TB at better than -120, or u0.5 shorter
+        # than -120, is not a real market price -- it is a wrong-line quote.
+        _uo = odds_info.get("under_odds")
+        if _uo is not None and ((float(line) >= 1.5 and int(_uo) > -120)
+                                or (float(line) <= 0.5 and int(_uo) < -120)):
+            logger.warning(
+                "BATTER_TB %s: implausible u%.1f at %s -- cross-line quote, skipping",
+                row.get("player_name", "?"), float(line), _uo)
+            continue
 
         p_over = _negbin_p_over(line, mu, nb_alpha)
         p_under = _negbin_p_under(line, mu, nb_alpha)

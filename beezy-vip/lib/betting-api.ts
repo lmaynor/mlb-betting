@@ -59,6 +59,23 @@ export async function apiGetTodayPicks(): Promise<Bet[]> {
   return data.picks
 }
 
+// EVERY scored prediction today (kelly_triggered=false rows have stake 0) --
+// The Edge shows the full model board, not just the qualified card.
+export async function apiGetTodayAllPredictions(): Promise<Bet[]> {
+  if (!API_URL) return []
+  try {
+    const res = await fetch(`${API_URL}/api/public/picks/today?all=1`, {
+      headers: { 'X-API-Key': API_KEY },
+      next: { revalidate: 120 },
+    })
+    if (!res.ok) return []
+    const data = await res.json() as PicksResponse
+    return data.picks ?? []
+  } catch {
+    return []
+  }
+}
+
 export async function apiGetRecentSettled(limit = 20): Promise<Bet[]> {
   const data = await apiFetch<PicksResponse>(`/api/public/picks/recent?limit=${limit}`, 120)
   return data.picks

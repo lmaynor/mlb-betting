@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import fs from 'fs'
 import path from 'path'
 import type { Metadata } from 'next'
-import { apiGetTodayPicks, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
+import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { EdgeClient, type EdgePick } from './edge-client'
@@ -73,7 +73,7 @@ function normName(name: string | null): string {
 export default async function EdgePage() {
   const date = siteDateKey()
   const [raw, slate, enrichData, alerts] = await Promise.all([
-    apiGetTodayPicks().catch(() => [] as Bet[]),
+    apiGetTodayAllPredictions().catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
     apiGetEdgeEnrich(date),
     apiGetTodayAlerts(date),

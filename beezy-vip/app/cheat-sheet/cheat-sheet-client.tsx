@@ -306,6 +306,40 @@ export function CheatSheetClient({
     setExpandedIds(allExpanded ? new Set() : new Set(displayed.map(b => b.id)))
   }
 
+  // Tweet text for X: no external links (the algo deprioritizes them --
+  // the card link lives in bio), MLB keywords up front, under 280 chars.
+  const [tweetCopied, setTweetCopied] = useState(false)
+  const tweetText = useMemo(() => {
+    const top = sorted.filter(b => scoreTier(beezyscore(b)) !== 'watch').slice(0, 4)
+    const use = top.length ? top : sorted.slice(0, 3)
+    const header = `MLB model card — ${today}`
+    const lines = use.map(b => {
+      const label = SYSTEM_LABEL[b.system] ?? b.system
+      const who = b.player ?? `${b.away_team ?? ''}@${b.home_team ?? ''}`
+      const bet = pickLabel(b)
+      const odds = b.odds > 0 ? `+${b.odds}` : `${b.odds}`
+      const e = b.edge != null ? (Math.abs(b.edge) < 2 ? b.edge * 100 : b.edge) : null
+      const ev = e != null ? ` (+${e.toFixed(1)}% edge)` : ''
+      return `${label}: ${who} ${bet} ${odds}${ev}`
+    })
+    const rec = ydayWins + ydayLosses > 0 ? `\nYesterday: ${ydayWins}-${ydayLosses}.` : ''
+    const footer = `\nModel probability vs the market line on every play.${rec}\nFull card + record in bio.`
+    let text = `${header}\n\n${lines.join('\n')}${footer}`
+    while (text.length > 278 && lines.length > 2) {
+      lines.pop()
+      text = `${header}\n\n${lines.join('\n')}${footer}`
+    }
+    return text
+  }, [sorted, today, ydayWins, ydayLosses])
+
+  async function copyTweet() {
+    try {
+      await navigator.clipboard.writeText(tweetText)
+      setTweetCopied(true)
+      setTimeout(() => setTweetCopied(false), 2000)
+    } catch { /* clipboard unavailable */ }
+  }
+
   async function handleShare() {
     const url = 'https://beezy.fyi/cheat-sheet'
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -575,6 +609,26 @@ export function CheatSheetClient({
             <span className="mono" style={{ fontSize: '8px', color: 'var(--steel)', letterSpacing: '0.08em' }}>
               BEEZY.FYI
             </span>
+          </div>
+
+          {/* tweet composer: paste-ready text for X */}
+          <div style={{ marginTop: '14px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', background: 'var(--obsidian)', padding: '12px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)' }}>POST TO X</span>
+              <span className="mono" style={{ fontSize: '9px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={copyTweet} className="mono" style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
+                {tweetCopied ? 'COPIED!' : 'COPY TWEET'}
+              </button>
+            </div>
+            <textarea readOnly value={tweetText} rows={Math.min(10, tweetText.split('\n').length + 1)}
+              onFocus={e => e.currentTarget.select()}
+              aria-label="Tweet text"
+              className="mono"
+              style={{ width: '100%', background: 'var(--carbon)', color: 'var(--silver)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-sm)', fontSize: '11px', lineHeight: 1.5, padding: '10px 12px', resize: 'vertical' }} />
+            <p className="times" style={{ fontSize: '11px', color: 'var(--fog)', margin: '8px 0 0' }}>
+              No links in the text (X deprioritizes them) — the card link stays in your bio. Attach the card screenshot for reach.
+            </p>
           </div>
         </div>
 

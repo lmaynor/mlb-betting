@@ -205,6 +205,7 @@ def _best_book_odds_for_line(
         return _best_book_odds_int(odd_entry)
     by_book = odd_entry.get("byBookmaker") or {}
     best_odds, best_book = None, None
+    book_lines: set = set()
     for book, info in by_book.items():
         if book in OFFSHORE_BOOKS:   # every US book qualifies; only offshore excluded
             continue
@@ -214,6 +215,8 @@ def _best_book_odds_for_line(
             book_line = float(info.get("overUnder") or "nan")
         except (ValueError, TypeError):
             continue
+        if book_line == book_line:  # not NaN
+            book_lines.add(book_line)
         if book_line != target_line:
             continue
         val = _parse_odds_int(info.get("odds"))
@@ -222,6 +225,17 @@ def _best_book_odds_for_line(
         if best_odds is None or val > best_odds:
             best_odds, best_book = val, BOOK_CANONICAL.get(book, book)
     if best_odds is None:
+        # CROSS-LINE GUARD: if books quote MULTIPLE lines under this odd_id
+        # (ParlayAPI collapses per-book main lines, e.g. FD TB 1.5 vs DK 0.5)
+        # and none matches the target, falling back to best-across-all-lines
+        # stamps a wrong-line price onto target_line (u1.5 @ -100 class bug).
+        # Skip the quote instead.
+        if len(book_lines) > 1:
+            logger.warning(
+                "cross-line fallback REJECTED for %s: books quote lines %s, "
+                "target %s -- skipping quote",
+                odd_entry.get("oddID", "?"), sorted(book_lines), target_line)
+            return None, None
         return _best_book_odds_int(odd_entry)
     return best_odds, best_book
 

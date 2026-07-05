@@ -562,14 +562,18 @@ function fairFromProb(pct: number | null | undefined): number | null {
   return dp >= 0.5 ? -Math.round((dp / (1 - dp)) * 100) : Math.round(((1 - dp) / dp) * 100)
 }
 
-// Half-Kelly stake in dollars from bankroll, decimal model prob, american odds.
-function halfKellyDollars(bankroll: number, modelPct: number | null, odds: number): number | null {
+// Quarter-Kelly stake in dollars, HARD-CAPPED at 2.5% of bankroll. Model
+// edges on longshot props produce huge raw Kelly fractions (a 60% model prob
+// at +450 says "bet 51%" -- the old half-Kelly was suggesting ~25% of
+// bankroll on single props). Quarter Kelly + cap keeps worst-case risk sane.
+const STAKE_CAP_PCT = 0.025
+function kellyDollars(bankroll: number, modelPct: number | null, odds: number): number | null {
   if (modelPct == null || !bankroll) return null
   const p = modelPct / 100
   const b = odds > 0 ? odds / 100 : 100 / -odds
   const f = (b * p - (1 - p)) / b
   if (!isFinite(f) || f <= 0) return null
-  return bankroll * f * 0.5
+  return Math.min(bankroll * f * 0.25, bankroll * STAKE_CAP_PCT)
 }
 
 function SeasonLine({ season }: { season?: SeasonStats | null }) {
@@ -612,7 +616,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
   const oddsValid = oddsStr.trim() !== '' && isFinite(enteredOdds) && enteredOdds !== 0
   const liveImplied = oddsValid ? americanToImplied(enteredOdds) * 100 : (p.marketProbPct ?? americanToImplied(p.odds) * 100)
   const gap = p.modelProbPct != null ? p.modelProbPct - liveImplied : null
-  const kelly = halfKellyDollars(bankroll, p.modelProbPct, oddsValid ? enteredOdds : p.odds)
+  const kelly = kellyDollars(bankroll, p.modelProbPct, oddsValid ? enteredOdds : p.odds)
   const market = p.marketProbPct ?? americanToImplied(p.odds) * 100
   const fairOdds = (() => {
     if (p.modelProbPct == null) return null
@@ -712,7 +716,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
             <span className="edge-meta-k">Kelly stake</span>
             <span className="edge-meta-v" style={{ color: 'var(--signal)' }}>
               {kelly != null ? `$${kelly.toFixed(0)}` : '—'}
-              <span className="edge-meta-dim"> ½K</span>
+              <span className="edge-meta-dim"> ¼K, capped 2.5%</span>
             </span>
           </div>
           {fairOdds != null && (
@@ -795,11 +799,13 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
   const [minEdge, setMinEdge] = useState<number>(0)
   const [bankroll, setBankroll] = useState<number>(1000)
   const [hideInactive, setHideInactive] = useState<boolean>(false)
+  const [qualifiedOnly, setQualifiedOnly] = useState<boolean>(true)
   const [query, setQuery] = useState<string>('')
   const [topOnly, setTopOnly] = useState<boolean>(false)
   const [sortBy, setSortBy] = useState<SortKey>('edge')
   const [selectedId, setSelectedId] = useState<number | null>(picks[0]?.id ?? null)
   const [slip, setSlip] = useState<Slip>({})
+  const [slipOpen, setSlipOpen] = useState<boolean>(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
   // hydrate the slip after mount: state must start empty on the server render
@@ -869,6 +875,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
     if (markets.length) v = v.filter(p => markets.includes(p.system))
     if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
     if (hideInactive) v = v.filter(p => p.status !== 'out' && p.status !== 'il')
+    if (qualifiedOnly) v = v.filter(p => p.kelly_triggered)
     if (q) v = v.filter(p =>
       (p.player ?? '').toLowerCase().includes(q) ||
       (p.away_team ?? '').toLowerCase().includes(q) ||
@@ -887,7 +894,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
     if (topOnly) v = v.slice(0, 10)
     return v
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [picks, mode, matchup, position, markets, minEdge, hideInactive, query, topOnly, sortBy])
+  }, [picks, mode, matchup, position, markets, minEdge, hideInactive, qualifiedOnly, query, topOnly, sortBy])
 
   const selected = useMemo(
     () => visible.find(p => p.id === selectedId) ?? visible[0] ?? null,
@@ -900,8 +907,9 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
   const hud = useMemo(() => {
     if (!picks.length) return null
     const games = new Set(picks.map(p => p.game_pk)).size
-    const edges = picks.map(p => p.edgePctValue ?? 0)
-    const best = picks[0]  // server pre-sorts by edge desc
+    const qualified = picks.filter(p => p.kelly_triggered)
+    const edges = qualified.map(p => p.edgePctValue ?? 0)
+    const best = qualified[0] ?? picks[0]  // server pre-sorts by edge desc
     const strong = edges.filter(e => e >= 5).length
     const times = picks.map(p => startMinutes(p.matchup?.startTime)).filter(m => m <= 24 * 60)
     const first = times.length ? Math.min(...times) : null
@@ -909,7 +917,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
       ? `${((first / 60 + 11) % 12 + 1) | 0}:${String(first % 60).padStart(2, '0')} ${first >= 720 ? 'PM' : 'AM'}`
       : null
     const liveAlerts = picks.filter(p => p.alert?.ev != null).length
-    return { games, picks: picks.length, strong, best, firstStr, liveAlerts }
+    return { games, picks: qualified.length, scored: picks.length, strong, best, firstStr, liveAlerts }
   }, [picks])
 
   // slip totals
@@ -955,6 +963,10 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
           <div className="edge-hud-cell">
             <span className="edge-hud-v">{hud.picks}</span>
             <span className="edge-hud-k">picks</span>
+          </div>
+          <div className="edge-hud-cell">
+            <span className="edge-hud-v">{hud.scored}</span>
+            <span className="edge-hud-k">players scored</span>
           </div>
           <div className="edge-hud-cell">
             <span className="edge-hud-v">{hud.games}</span>
@@ -1030,12 +1042,15 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
         </label>
         <input className="edge-search" type="search" placeholder="Search player / team…"
           value={query} onChange={e => setQuery(e.target.value)} aria-label="Search" />
+        <button className={`edge-toggle${qualifiedOnly ? ' is-on' : ''}`} onClick={() => setQualifiedOnly(v => !v)}
+          aria-pressed={qualifiedOnly}
+          title="On: only Kelly-qualified picks. Off: every player the model scored today.">Qualified</button>
         <button className={`edge-toggle${hideInactive ? ' is-on' : ''}`} onClick={() => setHideInactive(v => !v)}
           aria-pressed={hideInactive}>Active only</button>
         <button className={`edge-toggle${topOnly ? ' is-on' : ''}`} onClick={() => setTopOnly(v => !v)}
           aria-pressed={topOnly}>Top 10</button>
         {hasFilters && (
-          <button className="edge-clear" onClick={() => { setMatchup('all'); setPosition('all'); setMarkets([]); setMinEdge(0); setHideInactive(false); setQuery(''); setTopOnly(false) }}>Clear</button>
+          <button className="edge-clear" onClick={() => { setMatchup('all'); setPosition('all'); setMarkets([]); setMinEdge(0); setHideInactive(false); setQuery(''); setTopOnly(false); setQualifiedOnly(true) }}>Clear</button>
         )}
       </div>
 
@@ -1124,17 +1139,47 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
         </div>
       )}
 
-      {/* bet slip: what you've actually taken today */}
+      {/* bet slip: expandable drawer of what you've actually taken today */}
       {slipIds.length > 0 && (
-        <div className="edge-slip" role="status" aria-label="Bet slip">
-          <span className="edge-slip-n">{slipIds.length} bet{slipIds.length === 1 ? '' : 's'} tracked</span>
-          <span className="edge-slip-t">
-            ${slipTotal.toFixed(0)}
-            <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--fog)' }}>
-              {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' — heavy' : ''}
+        <div className="edge-slip-wrap" role="region" aria-label="Bet slip">
+          {slipOpen && (
+            <ul className="edge-slip-list">
+              {slipIds.map(id => {
+                const pk = picks.find(p => p.id === id)
+                return (
+                  <li key={id} className="edge-slip-item">
+                    <button className="edge-slip-jump" onClick={() => pk && selectPick(id)}
+                      title="Open this pick">
+                      <span className="edge-slip-item-name">{pk ? titleOf(pk) : `pick #${id}`}</span>
+                      {pk && (
+                        <span className="edge-slip-item-meta">
+                          <span style={{ color: SYSTEM_COLOR[pk.system] ?? 'var(--silver)' }}>{systemLabel(pk.system, true)}</span>
+                          {' '}{betTypeLabel(pk.bet_type, pk.system)} {fmtOdds(pk.odds)}
+                        </span>
+                      )}
+                    </button>
+                    <span className="edge-slip-item-stake">${(slip[id] ?? 0).toFixed(0)}</span>
+                    <button className="edge-slip-remove" onClick={() => toggleSlip(id, null)}
+                      aria-label="Remove from slip">✕</button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <div className="edge-slip">
+            <button className="edge-slip-expand" onClick={() => setSlipOpen(v => !v)}
+              aria-expanded={slipOpen}>
+              <span className="edge-slip-n">{slipIds.length} bet{slipIds.length === 1 ? '' : 's'} tracked</span>
+              <span aria-hidden style={{ fontSize: '10px' }}>{slipOpen ? '▾' : '▴'}</span>
+            </button>
+            <span className="edge-slip-t">
+              ${slipTotal.toFixed(0)}
+              <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--fog)' }}>
+                {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' — heavy' : ''}
+              </span>
             </span>
-          </span>
-          <button className="edge-slip-clear" onClick={() => setSlip({})}>Clear</button>
+            <button className="edge-slip-clear" onClick={() => { setSlip({}); setSlipOpen(false) }}>Clear all</button>
+          </div>
         </div>
       )}
     </main>
@@ -1395,7 +1440,24 @@ function Styles() {
 .edge-slipbtn:hover { color: var(--ash); border-color: var(--steel); }
 .edge-slipbtn.is-in { background: color-mix(in oklab, var(--signal) 16%, var(--carbon));
   color: var(--signal); border-color: color-mix(in oklab, var(--signal) 45%, var(--carbon)); }
-.edge-slip { position: sticky; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 16px;
+.edge-slip-wrap { position: sticky; bottom: 12px; z-index: 3; margin-top: 20px; }
+.edge-slip-list { list-style: none; margin: 0 0 6px; padding: 6px; border: 1px solid var(--iron);
+  background: var(--obsidian); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.edge-slip-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-sm); }
+.edge-slip-item:hover { background: var(--slate); }
+.edge-slip-jump { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; background: transparent;
+  border: 0; color: var(--ash); text-align: left; cursor: pointer; padding: 0; }
+.edge-slip-item-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edge-slip-item-meta { font-size: 11px; color: var(--fog); font-family: var(--font-mono), ui-monospace, monospace; }
+.edge-slip-item-stake { font-family: var(--font-mono), ui-monospace, monospace; font-size: 12px;
+  font-weight: 700; color: var(--signal); font-variant-numeric: tabular-nums; }
+.edge-slip-remove { background: transparent; border: 0; color: var(--fog); cursor: pointer;
+  font-size: 12px; padding: 4px 6px; border-radius: var(--radius-sm); }
+.edge-slip-remove:hover { color: var(--loss); background: var(--slate); }
+.edge-slip-expand { display: inline-flex; align-items: center; gap: 8px; background: transparent;
+  border: 0; color: var(--ash); cursor: pointer; padding: 0; }
+.edge-slip { position: static; z-index: 3; display: flex; align-items: center; gap: 16px;
   margin-top: 20px; padding: 10px 16px; border: 1px solid var(--iron); background: var(--obsidian);
   box-shadow: 0 8px 24px rgba(0,0,0,0.45); border-radius: var(--radius); }
 .edge-slip-n { font-size: 12px; font-weight: 700; color: var(--ash); }

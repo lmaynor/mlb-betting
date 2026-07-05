@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 import unicodedata as _unicodedata
 
 RAINOUT_AUTO_VOID_DAYS = 2
+# pending bets no settler could grade (unmatched player, bad bet_type, ...)
+# get voided after this many days instead of pending forever
+UNSETTLEABLE_VOID_DAYS = 7
 
 
 def _norm(s: str) -> str:
@@ -81,14 +84,6 @@ def _void_stale_nonfinal_bets(
 
     outcomes: list[dict] = []
     for _, bet in pending.iterrows():
-        try:
-            gpk = int(bet["game_pk"])
-        except (TypeError, ValueError):
-            continue
-
-        if game_cache.get(gpk) is not None:
-            continue
-
         game_dt = _parse_game_date(bet.get("game_date"))
         if game_dt is None:
             logger.warning(
@@ -96,13 +91,34 @@ def _void_stale_nonfinal_bets(
                 f"for bet_id={bet.get('id')}; stale void check skipped"
             )
             continue
-
         age_days = (settle_dt - game_dt).days
-        if age_days >= grace_days:
+
+        try:
+            gpk = int(bet["game_pk"])
+        except (TypeError, ValueError):
+            gpk = None
+
+        # Non-final (or unresolvable) game past the rainout grace -> void.
+        if (gpk is None or game_cache.get(gpk) is None) and age_days >= grace_days:
             outcomes.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
             logger.info(
                 f"settle: auto-voiding stale non-final bet id={bet['id']} "
                 f"game_pk={gpk} game_date={game_dt.isoformat()} age_days={age_days}"
+            )
+            continue
+
+        # CATCH-ALL: anything still pending after 7 days could not be graded
+        # by any settler (unmatched player on a final game, malformed
+        # bet_type, unknown system, ...) and would otherwise pend FOREVER.
+        # Void it and alert -- a void is honest ("we could not grade this"),
+        # a permanent pending row is a lie in the record.
+        if age_days >= UNSETTLEABLE_VOID_DAYS:
+            outcomes.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
+            logger.warning(
+                f"settle: auto-voiding UNSETTLEABLE bet id={bet['id']} "
+                f"system={bet.get('system')} bet_type={bet.get('bet_type')} "
+                f"player={bet.get('player')} game_pk={gpk} age_days={age_days} "
+                f"-- investigate why no settler graded it"
             )
     return outcomes
 
@@ -204,7 +220,12 @@ def _settle_hr(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
             player_data = matches[0] if len(matches) == 1 else None
 
         if player_data is None:
-            logger.info(f"settle HR: {bet['player']} not found in boxscore for game_pk={gpk} -- skipping")
+            # Game is FINAL and the player is absent from the boxscore -> he
+            # did not play; DK rule voids. Silently skipping here left these
+            # bets pending FOREVER (the stale-void pass only covers non-final
+            # games).
+            results.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
+            logger.info(f"settle HR: {bet['player']} not in final boxscore game_pk={gpk} -- voiding")
             continue
 
         if not player_data["starter"]:

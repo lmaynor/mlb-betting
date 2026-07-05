@@ -853,7 +853,8 @@ def public_picks_today():
     if err:
         return err
     try:
-        picks = get_today_picks(_get_engine())
+        include_all = request.args.get("all") == "1"
+        picks = get_today_picks(_get_engine(), include_all=include_all)
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"

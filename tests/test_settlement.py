@@ -200,10 +200,14 @@ class TestSettleHr:
         assert results[0]["result"] == "void"
         assert results[0]["profit"] == 0.0
 
-    def test_player_not_in_boxscore_skipped(self):
-        # Not in boxscore at all → skip (retry tomorrow)
+    def test_player_not_in_final_boxscore_voided(self):
+        # Game is FINAL and the player is absent from the boxscore -> he did
+        # not play -> VOID (DK rule). The old skip-and-retry left these bets
+        # pending forever, since the game never stops being final.
         results = self._settle("Aaron Judge", {})
-        assert results == []
+        assert len(results) == 1
+        assert results[0]["result"] == "void"
+        assert results[0]["profit"] == 0.0
 
     def test_accent_normalization(self):
         # "José Abreu" should match "jose abreu" after NFD normalisation
