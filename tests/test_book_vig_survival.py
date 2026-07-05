@@ -167,3 +167,42 @@ class TestOutlierAnchor:
         monkeypatch.setattr(osc.oh, "dedupe_by_source", lambda d, **k: d)
         hits = osc.scan("k_ou", min_ev=0.03, min_books=4, anchor_book="pinnacle")
         assert len(hits) == 1 and bool(hits.iloc[0]["anchored"])
+
+
+class TestAltLineScan:
+    def _quotes(self):
+        rows = []
+        # main line 5.5 quoted by 3 books; alt 7.5 by one lazy book
+        for book, line, sel, dec in [("draftkings", 5.5, "OVER", 1.87),
+                                     ("fanduel", 5.5, "OVER", 1.91),
+                                     ("betmgm", 5.5, "OVER", 1.87),
+                                     ("hardrock", 7.5, "OVER", 5.10)]:
+            q = _quote(book, sel, 1.0 / dec, line=line, gpk=7, pid=500)
+            q["american"] = 100
+            rows.append(q)
+        return pd.DataFrame(rows)
+
+    def test_alt_flag_and_model_ev(self, monkeypatch):
+        from mlb.analysis import alt_line_scan as als
+        monkeypatch.setattr(als.oh, "read_history", lambda *a, **k: self._quotes())
+        monkeypatch.setattr(als.oh, "dedupe_by_source", lambda d, **k: d)
+        preds = pd.DataFrame({"player_id": [500], "mu": [7.4], "nb_alpha": [0.05],
+                              "game_pk": [7], "game_date": ["2026-07-06"]})
+        monkeypatch.setattr(als.gp, "gen_preds", lambda *a, **k: preds)
+        out = als.scan_system("K", "2026-07-06", min_ev=0.02)
+        assert len(out) >= 1
+        # with mu=7.4, over 5.5 at ~1.9 and over 7.5 at 5.1 should both be +EV,
+        # and the 7.5 quote must be flagged ALT (modal line is 5.5)
+        alt = out[out["line"] == 7.5]
+        assert len(alt) == 1 and bool(alt.iloc[0]["is_alt"])
+        main = out[out["line"] == 5.5]
+        assert (~main["is_alt"]).all()
+
+    def test_no_preds_returns_empty(self, monkeypatch):
+        from mlb.analysis import alt_line_scan as als
+        monkeypatch.setattr(als.gp, "gen_preds",
+                            lambda *a, **k: pd.DataFrame({"mu": [], "player_id": [],
+                                                          "nb_alpha": [], "game_pk": [],
+                                                          "game_date": []}))
+        out = als.scan_system("K", "2026-07-06", min_ev=0.02)
+        assert len(out) == 0
