@@ -27,6 +27,7 @@ historical -- join on player name + date.
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timedelta
 
@@ -39,7 +40,8 @@ except ImportError as exc:  # pragma: no cover - runtime guard
 API_BASE = "https://api.bettingpros.com/v3"
 # Public web key embedded in the BettingPros frontend. If requests start
 # returning 401/403, refresh from a browser network tab.
-API_KEY = "CHi8Hy5CEE4khd46XNYL23dCFX96oUdw6qOt1Dnh"
+# Overridable via env so a rotated key needs no code change.
+API_KEY = os.environ.get("BP_API_KEY", "CHi8Hy5CEE4khd46XNYL23dCFX96oUdw6qOt1Dnh")
 
 # market_id -> (csv_name, kind). Verified against /v3/markets 2026-06-28.
 MARKETS = {

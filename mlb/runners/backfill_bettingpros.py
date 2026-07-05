@@ -67,6 +67,7 @@ def main() -> int:
     markets_arg = os.environ.get("BP_MARKETS", "all")
     prefix = os.environ.get("BP_PREFIX", "Odds/bettingpros").rstrip("/")
     delay = float(os.environ.get("BP_DELAY", "0.4"))
+    market_sleep = float(os.environ.get("BP_MARKET_SLEEP", "0.2"))
 
     markets = bp.resolve_markets(markets_arg)
     sess = bp.make_session()
@@ -97,7 +98,7 @@ def main() -> int:
                     _write(prefix, mid, ds, rows)
                     day_rows += len(rows)
                 done[mid].add(ds)
-                time.sleep(0.2)
+                time.sleep(market_sleep)
             total_rows += day_rows
             log.info("%s: %d rows across %d markets", ds, day_rows, len(need))
         except Exception as exc:  # noqa: BLE001

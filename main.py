@@ -43,6 +43,14 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+def _require_db_url() -> str:
+    """MLB_DB_URL or a clear 500-able error instead of a bare KeyError."""
+    url = os.environ.get("MLB_DB_URL")
+    if not url:
+        raise RuntimeError("MLB_DB_URL env var is not set -- check Cloud Run secret wiring")
+    return url
+
+
 VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
 DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
 DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "BATTER_TB", "GAME"]
@@ -584,7 +592,7 @@ def reset_and_run():
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
     systems  = body.get("systems", DEFAULT_RUN_SYSTEMS)
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
     deleted = {}
     for sys in systems + ["OUTS"]:
         with bt.engine.begin() as conn:
@@ -618,7 +626,7 @@ def reset_bets():
     game_pk = body.get("game_pk")
     if not date:
         return jsonify({"error": "date is required"}), 400
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
     where = "WHERE game_date = :date"
     params = {"date": date}
     if system:
@@ -646,7 +654,7 @@ def dashboard():
     from mlb_core.tracking.bet_tracker import BetTracker
     system_filter = request.args.get("system", None)
     days = int(request.args.get("days", 7))
-    bt = BetTracker(os.environ["MLB_DB_URL"], "HR")
+    bt = BetTracker(_require_db_url(), "HR")
 
     systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
     summary_rows = ""
@@ -783,7 +791,7 @@ def _get_engine():
     global _PUBLIC_API_ENGINE
     if _PUBLIC_API_ENGINE is None:
         from mlb_core.tracking.bet_tracker import BetTracker
-        _PUBLIC_API_ENGINE = BetTracker(os.environ["MLB_DB_URL"], "HR").engine
+        _PUBLIC_API_ENGINE = BetTracker(_require_db_url(), "HR").engine
     return _PUBLIC_API_ENGINE
 
 

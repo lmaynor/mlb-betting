@@ -383,7 +383,7 @@ export function ResultsClient({
               <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
               <Area dataKey="dd_bot" fill="#ec6a6a26" stroke="none" legendType="none" />
               {chartSystems.map(s => (
-                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? 'var(--silver)'}
+                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#b5b2bc'}
                   strokeWidth={1} dot={false} connectNulls strokeOpacity={0.6} />
               ))}
               <Line type="monotone" dataKey="ALL" stroke="#eeeef0" strokeWidth={2.5} dot={false} connectNulls />
@@ -587,7 +587,12 @@ export function ResultsClient({
       {/* Bets table */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 20px', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
-          <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>No bets found.</p>
+          <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '8px' }}>No bets match these filters.</p>
+          <p className="times" style={{ fontSize: '12px', color: 'var(--silver)', marginBottom: '14px' }}>Try a different system, result, or date range.</p>
+          <button className="mono" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}
+            style={{ fontSize: '11px', padding: '6px 14px', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: 'var(--fog)', cursor: 'pointer' }}>
+            Reset filters
+          </button>
         </div>
       ) : (
         <>
@@ -648,7 +653,7 @@ export function ResultsClient({
           {filtered.length > PAGE_SIZE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: B, background: 'var(--obsidian)' }}>
               <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex === 0 ? 'default' : 'pointer', border: B, background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex === 0 ? 'not-allowed' : 'pointer', opacity: pageIndex === 0 ? 0.5 : 1, border: B, background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
                 Prev
               </button>
               <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
@@ -656,7 +661,7 @@ export function ResultsClient({
               </span>
               <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
                 disabled={pageIndex >= pageCount - 1}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex >= pageCount - 1 ? 'default' : 'pointer', border: B, background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
+                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex >= pageCount - 1 ? 'not-allowed' : 'pointer', opacity: pageIndex >= pageCount - 1 ? 0.5 : 1, border: B, background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
                 Next
               </button>
             </div>
@@ -671,7 +676,7 @@ export function ResultsClient({
           {filtered.length > PAGE_SIZE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 2px', marginTop: '12px' }}>
               <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
-                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
+                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex === 0 ? 'not-allowed' : 'pointer', opacity: pageIndex === 0 ? 0.5 : 1, border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
                 Prev
               </button>
               <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
@@ -679,7 +684,7 @@ export function ResultsClient({
               </span>
               <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
                 disabled={pageIndex >= pageCount - 1}
-                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex >= pageCount - 1 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
+                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex >= pageCount - 1 ? 'not-allowed' : 'pointer', opacity: pageIndex >= pageCount - 1 ? 0.5 : 1, border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
                 Next
               </button>
             </div>
