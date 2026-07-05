@@ -908,6 +908,53 @@ def public_picks_recent():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/public/alerts/today", methods=["GET", "OPTIONS"])
+def public_alerts_today():
+    """Today's +EV outlier alerts (fast_alert_loop / odds_alert log) for The Edge.
+
+    Reads Alerts/{day}/log.parquet from GCS. Short cache: the fast loop
+    refreshes every 15 minutes inside the strike window."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        import io as _io
+        import pandas as _pd
+        from mlb_core import storage as _st
+        day = request.args.get("date") or datetime.now(_CT).date().isoformat()
+        try:
+            df = _pd.read_parquet(_io.BytesIO(_st.read_bytes(f"Alerts/{day}/log.parquet")))
+        except Exception:  # noqa: BLE001 -- no alerts banked yet today
+            df = _pd.DataFrame()
+        alerts = []
+        if len(df):
+            df = df.sort_values("snapshot_ts").groupby(
+                [c for c in ["market", "game_pk", "player_id", "line", "selection", "book"]
+                 if c in df.columns], dropna=False, as_index=False).tail(1)
+            for _, r in df.iterrows():
+                alerts.append({
+                    "market": r.get("market"),
+                    "game_pk": int(r["game_pk"]) if _pd.notna(r.get("game_pk")) else None,
+                    "player_id": int(r["player_id"]) if _pd.notna(r.get("player_id")) else None,
+                    "selection": r.get("selection"),
+                    "line": float(r["line"]) if _pd.notna(r.get("line")) else None,
+                    "book": r.get("book"),
+                    "american": int(r["american"]) if _pd.notna(r.get("american")) else None,
+                    "ev": round(float(r["ev"]), 4) if _pd.notna(r.get("ev")) else None,
+                    "anchored": bool(r.get("anchored", False)),
+                    "snapshot_ts": str(r.get("snapshot_ts", "")),
+                })
+        resp = jsonify({"alerts": alerts, "count": len(alerts), "date": day})
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=120"
+        return resp
+    except Exception as exc:
+        logger.exception("public_alerts_today failed")
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/api/public/stats/sparkline", methods=["GET", "OPTIONS"])
 def public_stats_sparkline():
     if request.method == "OPTIONS":

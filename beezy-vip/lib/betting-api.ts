@@ -134,9 +134,10 @@ export async function apiGetTodaySlate(): Promise<TodaySlate> {
 
 // -- The Edge dashboard enrichment (weather / recent form / spray) ------------
 // Lineup/active status for a player pick. confirmed = in today's posted lineup;
-// out = on IL / not on active roster; expected = projected but lineup not posted;
-// unknown = no data yet. The cockpit never hides picks — it badges them.
-export type PlayerStatus = 'confirmed' | 'expected' | 'out' | 'unknown'
+// il = on the injured list; out = both lineups posted and he's in neither;
+// expected = projected but his lineup not posted yet; unknown = no data yet.
+// The cockpit never hides picks — it badges them.
+export type PlayerStatus = 'confirmed' | 'expected' | 'out' | 'il' | 'unknown'
 
 // A season stat line. realized = traditional (AVG/HR/OBP, ERA/K/IP);
 // expected = Statcast quality (xwOBA/xBA/xSLG, xERA). Values are pre-formatted
@@ -173,6 +174,36 @@ export async function apiGetEdgeEnrich(date: string): Promise<EdgeEnrich> {
     return res.json() as Promise<EdgeEnrich>
   } catch {
     return { date, players: {} }
+  }
+}
+
+// -- live +EV outlier alerts (fast_alert_loop, 15-min cadence) -----------------
+export interface EdgeAlert {
+  market: string | null
+  game_pk: number | null
+  player_id: number | null
+  selection: string | null
+  line: number | null
+  book: string | null
+  american: number | null
+  ev: number | null            // fraction, e.g. 0.062 = +6.2%
+  anchored: boolean            // confirmed vs the Pinnacle sharp anchor
+  snapshot_ts: string
+}
+
+// Server-only. Fail-soft: empty list on any error so /edge always renders.
+export async function apiGetTodayAlerts(date: string): Promise<EdgeAlert[]> {
+  if (!API_URL) return []
+  try {
+    const res = await fetch(`${API_URL}/api/public/alerts/today?date=${date}`, {
+      headers: { 'X-API-Key': API_KEY },
+      next: { revalidate: 120 },
+    })
+    if (!res.ok) return []
+    const data = await res.json() as { alerts: EdgeAlert[] }
+    return data.alerts ?? []
+  } catch {
+    return []
   }
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Bet } from '@/lib/types'
-import type { PlayerStatus, SeasonStats } from '@/lib/betting-api'
+import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL } from '@/lib/tokens'
 
 export interface EdgePick extends Bet {
@@ -12,6 +12,7 @@ export interface EdgePick extends Bet {
   modelProbPct: number | null
   marketProbPct: number | null
   edgePctValue: number | null
+  alert?: EdgeAlert | null
   position?: string | null
   status?: PlayerStatus
   season?: SeasonStats | null
@@ -449,10 +450,11 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
 // -- detail panel -------------------------------------------------------------
 // -- lineup/active status chip ------------------------------------------------
 const STATUS_CFG: Record<PlayerStatus, { label: string; color: string; mark: string }> = {
-  confirmed: { label: 'Confirmed',  color: 'var(--signal)', mark: '✓' },
-  expected:  { label: 'Expected',   color: 'var(--warn)',   mark: '∼' },
-  out:       { label: 'Out · IL', color: 'var(--loss)', mark: '✕' },
-  unknown:   { label: 'Lineup TBD', color: 'var(--fog)',    mark: '·' },
+  confirmed: { label: 'Confirmed',      color: 'var(--signal)', mark: '✓' },
+  expected:  { label: 'Expected',       color: 'var(--warn)',   mark: '∼' },
+  il:        { label: 'On IL',          color: 'var(--loss)',   mark: '✕' },
+  out:       { label: 'Not in lineup',  color: 'var(--loss)',   mark: '✕' },
+  unknown:   { label: 'Lineup TBD',     color: 'var(--fog)',    mark: '·' },
 }
 function StatusChip({ status, compact = false }: { status?: PlayerStatus; compact?: boolean }) {
   const s = STATUS_CFG[status ?? 'unknown']
@@ -582,6 +584,24 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
       </div>
 
       <SeasonLine season={p.season} />
+
+      {/* live line alert: a book is lagging the market on this pick RIGHT NOW */}
+      {p.alert?.ev != null && (
+        <div className="edge-alert">
+          <span className="edge-alert-flash" aria-hidden>⚡</span>
+          <div className="edge-alert-body">
+            <div className="edge-alert-h">
+              Live line alert &middot; <b>{p.alert.book}</b>
+              {p.alert.american != null && <span className="mono"> {fmtOdds(p.alert.american)}</span>}
+              {p.alert.selection && <span className="edge-alert-dim"> {p.alert.selection}{p.alert.line != null ? ` ${p.alert.line}` : ''}</span>}
+            </div>
+            <div className="edge-alert-s">
+              Priced <b>+{(p.alert.ev * 100).toFixed(1)}%</b> better than the cross-book fair line
+              {p.alert.anchored ? ' (sharp-anchor confirmed)' : ''} &mdash; stale quotes correct fast.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* THE EDGE block — live: model − implied(odds) = gap */}
       <div className="edge-block">
@@ -762,7 +782,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
     if (mode === 'players' && position !== 'all') v = v.filter(p => p.position === position)
     if (markets.length) v = v.filter(p => markets.includes(p.system))
     if (minEdge > 0) v = v.filter(p => (p.edgePctValue ?? 0) >= minEdge)
-    if (hideInactive) v = v.filter(p => p.status !== 'out')
+    if (hideInactive) v = v.filter(p => p.status !== 'out' && p.status !== 'il')
     if (q) v = v.filter(p =>
       (p.player ?? '').toLowerCase().includes(q) ||
       (p.away_team ?? '').toLowerCase().includes(q) ||
@@ -802,7 +822,8 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
     const firstStr = first != null
       ? `${((first / 60 + 11) % 12 + 1) | 0}:${String(first % 60).padStart(2, '0')} ${first >= 720 ? 'PM' : 'AM'}`
       : null
-    return { games, picks: picks.length, strong, best, firstStr }
+    const liveAlerts = picks.filter(p => p.alert?.ev != null).length
+    return { games, picks: picks.length, strong, best, firstStr, liveAlerts }
   }, [picks])
 
   // slip totals
@@ -861,6 +882,12 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
             <div className="edge-hud-cell">
               <span className="edge-hud-v">{hud.firstStr}</span>
               <span className="edge-hud-k">first pitch</span>
+            </div>
+          )}
+          {hud.liveAlerts > 0 && (
+            <div className="edge-hud-cell">
+              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>⚡ {hud.liveAlerts}</span>
+              <span className="edge-hud-k">line alerts</span>
             </div>
           )}
           <button className="edge-hud-best" onClick={() => selectPick(hud.best.id)}
@@ -986,6 +1013,11 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
                         <span>{betTypeLabel(p.bet_type, p.system)}</span>
                         <span className="edge-row-odds">{fmtOdds(p.odds)}</span>
                         {p.matchup?.startTime && <span className="edge-row-time">{p.matchup.startTime}</span>}
+                        {p.alert?.ev != null && (
+                          <span className="edge-row-alert" title={`Live outlier: ${p.alert.book} ${p.alert.american != null ? fmtOdds(p.alert.american) : ''} = +${(p.alert.ev * 100).toFixed(1)}% EV vs consensus`}>
+                            ⚡ +{(p.alert.ev * 100).toFixed(1)}%
+                          </span>
+                        )}
                       </span>
                     </span>
                     <span className="edge-row-right">
@@ -1247,6 +1279,20 @@ function Styles() {
 .edge-row-nums b { font-weight: 700; }
 .edge-row-time { color: var(--fog); font-variant-numeric: tabular-nums; }
 .edge-row-slipmark { color: var(--signal); font-weight: 800; }
+
+/* -- cockpit: live line alerts -- */
+.edge-row-alert { color: var(--warn); font-weight: 800; font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono), ui-monospace, monospace; font-size: 10.5px; white-space: nowrap; }
+.edge-alert { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 11px 14px;
+  border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--carbon));
+  background: color-mix(in oklab, var(--warn) 9%, var(--carbon)); border-radius: var(--radius); }
+.edge-alert-flash { font-size: 15px; line-height: 1.3; }
+.edge-alert-h { font-size: 13px; color: var(--ash); }
+.edge-alert-h b { font-weight: 800; }
+.edge-alert-h .mono { font-family: var(--font-mono), ui-monospace, monospace; font-weight: 700; color: var(--warn); }
+.edge-alert-dim { color: var(--silver); }
+.edge-alert-s { font-size: 11.5px; color: var(--silver); margin-top: 3px; line-height: 1.45; }
+.edge-alert-s b { color: var(--warn); font-weight: 800; }
 
 /* -- cockpit: slip button + slip bar -- */
 .edge-slipbtn { margin-left: auto; align-self: center; background: transparent; color: var(--silver);

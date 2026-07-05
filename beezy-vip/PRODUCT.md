@@ -28,13 +28,21 @@ Analytical · Credible · Sharp
 - Precision over warmth. "53.4% model probability" not "strong lean."
 
 ## Current Design Language
-Dell 1996 catalog aesthetic applied over a dark base:
-- Page frame: 8px solid black border around the viewport
-- Typography: Arial Black (display), Arial Bold (headings), JetBrains Mono (data), Times New Roman (body prose)
-- Color: Dell catalog tints (sage, salmon, sky, periwinkle, peach, olive, lime, steel) mapped to betting systems
-- Hard 1px black borders; no rounded corners; no soft shadows; no gradients
-- Dell red (#e91d2a) for primary CTA only; Dell yellow (#fcc20f) for sticker-style accent buttons
-- Classic Netscape link blue (#0000ee) for text links
+Dark terminal aesthetic (replaced the retro "Dell 1996" look 2026-06-28):
+- Near-black neutral surface ladder: carbon #04040b (canvas) -> graphite #121113
+  (cards/nav) -> obsidian #1a191b -> slate #232225 (inputs); hairline borders
+  basalt #2b292d / iron #323035
+- Text ladder: fog #8a8893 (muted) -> silver #b5b2bc -> ash #eeeef0 (body) ->
+  chalk #f3f2f5 (headings)
+- Brand: Signal Green #71d083 (primary CTA / WIN / live indicators); loss red
+  #ec6a6a; warn amber #e3b261 (line alerts); link blue #70b8ff
+- Per-system color taxonomy (Discord-style) in lib/tokens.ts SYSTEM_COLOR;
+  system colors drive pills, chart lines, and detail accents
+- Typography: Red Hat trio (font-text sans, font-mono for all data/numbers,
+  times for prose captions); tabular-nums everywhere numbers align
+- Tokens live in app/globals.css :root + lib/tokens.ts. RULE: CSS var() does
+  NOT work inside SVG attributes (recharts/inline SVG) or Satori OG routes --
+  use literal hex there
 
 ## Anti-References
 - **SaaS cream/beige landing page** — warm-tinted bg, rounded cards, Inter everywhere, hero metrics grid. The AI default. Never.
