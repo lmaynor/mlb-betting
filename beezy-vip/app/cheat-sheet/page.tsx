@@ -15,7 +15,14 @@ export const metadata: Metadata = {
   description: "Today's MLB Daily Card - top Beezy Score picks, filterable by game, pitcher, and player props.",
   openGraph: {
     title: 'MLB Daily Card - Beezy.FYI',
-    description: 'Top picks by Beezy Score. NRFI / HR / F5 / K / OUTS.',
+    description: 'Top picks by Beezy Score with model edge on every play.',
+    images: ['/api/og/picks-card'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MLB Daily Card - Beezy.FYI',
+    description: 'Top picks by Beezy Score with model edge on every play.',
+    images: ['/api/og/picks-card'],
   },
 }
 

@@ -2,17 +2,16 @@
 
 import { useState } from 'react'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { B, SYSTEM_PILL, pickLabel } from '@/lib/tokens'
+import { B, SYSTEM_PILL, pickLabel, systemLabel } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey } from '@/lib/dates'
-import { getPickSystemByKey } from '@/lib/pick-systems'
 import type { Bet } from '@/lib/types'
 
 const impliedLabel = (odds: number) => `imp ${(americanToImpliedProb(odds) * 100).toFixed(0)}%`
 
 const PAGE_SIZE = 30
-const TABLE_GRID = '72px 72px 112px 96px minmax(330px, 1fr) 76px 72px 88px 72px 70px'
+const TABLE_GRID = '72px 72px 112px 128px minmax(310px, 1fr) 76px 72px 88px 72px 70px'
 const TABLE_MIN_WIDTH = '1120px'
 const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER'])
 
@@ -115,7 +114,7 @@ function pickDetail(label: string, player: string | null) {
 }
 
 function systemDisplay(system: string) {
-  return getPickSystemByKey(system)?.shortName ?? system
+  return systemLabel(system, true)
 }
 
 function pickDescription(bet: Bet, detail: string) {

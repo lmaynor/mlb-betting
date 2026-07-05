@@ -48,6 +48,11 @@ export default function ToolsPage() {
               <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '8px', letterSpacing: '-0.01em' }}>{tool.title}</div>
               <div className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55, marginBottom: '14px', flex: 1 }}>{tool.description}</div>
               <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.02em' }}>{tool.keywords}</div>
+              {tool.tag !== 'Free' && (
+                <div className="mono" style={{ fontSize: '10px', color: 'var(--lilac)', marginTop: '10px' }}>
+                  Sign in required &rarr;
+                </div>
+              )}
             </Link>
           )
         })}

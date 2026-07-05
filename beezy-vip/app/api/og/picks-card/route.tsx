@@ -7,12 +7,22 @@ const KEY = process.env.BETTING_API_KEY!;
 // Per-system identity colors (match lib/tokens.ts SYSTEM_COLOR), with dark
 // tinted backgrounds approximating color-mix(in oklab, <hue> 16%, carbon).
 const SYS: Record<string, { bg: string; accent: string }> = {
-  NRFI: { bg: "#122422", accent: "#5fd0a0" },
-  HR:   { bg: "#291525", accent: "#ee6fae" },
-  F5:   { bg: "#0f1d30", accent: "#4ea6f5" },
-  K:    { bg: "#1e182f", accent: "#a987f0" },
-  OUTS: { bg: "#291c16", accent: "#ef9a52" },
+  NRFI:        { bg: "#122422", accent: "#5fd0a0" },
+  "1IOU":      { bg: "#122422", accent: "#5fd0a0" },
+  HR:          { bg: "#291525", accent: "#ee6fae" },
+  F5:          { bg: "#0f1d30", accent: "#4ea6f5" },
+  K:           { bg: "#1e182f", accent: "#a987f0" },
+  OUTS:        { bg: "#291c16", accent: "#ef9a52" },
+  GAME:        { bg: "#292213", accent: "#e3b261" },
+  BATTER_TB:   { bg: "#202813", accent: "#a9d166" },
+  BATTER_HITS: { bg: "#122624", accent: "#4fc7bd" },
+  PITCHER_ER:  { bg: "#291714", accent: "#ef7f6e" },
 };
+// short display name so the card never shows raw registry keys
+const SYS_NAME: Record<string, string> = {
+  "1IOU": "NRFI", BATTER_TB: "TB", BATTER_HITS: "HITS", PITCHER_ER: "ER",
+};
+const sysName = (sys: string) => SYS_NAME[sys] ?? sys;
 const s = (sys: string) => SYS[sys] ?? { bg: "#1a191b", accent: "#b5b2bc" };
 
 const fmtOdds = (o: number) => o > 0 ? `+${o}` : `${o}`;
@@ -31,7 +41,15 @@ const fmtPick = (bt: string, sys: string) => {
   if (bt.startsWith("K_UNDER"))    return `Under ${bt.split("_")[2]} Ks`;
   if (bt.startsWith("OUTS_OVER"))  return `Over ${bt.split("_")[2]} Outs`;
   if (bt.startsWith("OUTS_UNDER")) return `Under ${bt.split("_")[2]} Outs`;
-  return bt;
+  // BATTER_TB_OVER_1.5 / BATTER_HITS_UNDER_0.5 / PITCHER_ER_OVER_2.5
+  const m = bt.match(/^(BATTER_TB|BATTER_HITS|PITCHER_ER|BATTER_K)_(OVER|UNDER)_([\d.]+)$/);
+  if (m) {
+    const noun = m[1] === "BATTER_TB" ? "TB" : m[1] === "BATTER_HITS" ? "Hits"
+      : m[1] === "PITCHER_ER" ? "ER" : "Batter Ks";
+    return `${m[2] === "OVER" ? "Over" : "Under"} ${m[3]} ${noun}`;
+  }
+  if (bt.startsWith("GAME_")) return bt === "GAME_HOME" ? "Home ML" : "Away ML";
+  return bt.replace(/_/g, " ");
 };
 
 export async function GET() {
@@ -100,7 +118,7 @@ export async function GET() {
 
               {/* system pill */}
               <div style={{ display: "flex", background: c.bg, border: `1px solid ${c.accent}55`, borderRadius: "999px", padding: "6px 14px", minWidth: "60px", justifyContent: "center" }}>
-                <span style={{ fontSize: "13px", fontWeight: 800, color: c.accent, letterSpacing: "1px" }}>{pick.system}</span>
+                <span style={{ fontSize: "13px", fontWeight: 800, color: c.accent, letterSpacing: "1px" }}>{sysName(pick.system)}</span>
               </div>
 
               {/* game */}

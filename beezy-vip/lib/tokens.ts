@@ -71,6 +71,30 @@ SYSTEM_PILL.ALL = {
   border: '1px solid #323035',
 }
 
+// Canonical SHORT display label per system -- the ONE place pill wording
+// lives. Raw registry keys (BATTER_TB, PITCHER_ER, 1IOU) are internal ids,
+// not UI copy; every pill/chip should render systemLabel(sys) instead.
+export const SYSTEM_LABEL: Record<string, string> = {
+  NRFI: 'NRFI', YRFI: 'YRFI', '1IOU': 'NRFI', '1I': '1st Inn',
+  F5: 'F5', F3: 'F3', F7: 'F7', F1H: '1st Half', GAME: 'Game',
+  HR: 'HR', K: 'K', OUTS: 'Outs',
+  BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K',
+  PITCHER_ER: 'Earned Runs',
+}
+
+// Tighter variant for narrow table cells / chips.
+export const SYSTEM_LABEL_SHORT: Record<string, string> = {
+  ...SYSTEM_LABEL,
+  BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K',
+  PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME',
+}
+
+export function systemLabel(sys: string | null | undefined, short = false): string {
+  if (!sys) return '?'
+  const map = short ? SYSTEM_LABEL_SHORT : SYSTEM_LABEL
+  return map[sys] ?? sys
+}
+
 // Team full name -> 3-letter abbreviation
 export const TEAM_ABBREV: Record<string, string> = {
   'Angels': 'LAA', 'Astros': 'HOU', 'Athletics': 'OAK', 'Blue Jays': 'TOR',

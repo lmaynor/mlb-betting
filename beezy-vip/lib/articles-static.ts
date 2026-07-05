@@ -1880,6 +1880,100 @@ Start by opening Action Network before every game. Note opening and closing odds
 The pros don't see line movement as noise. They see it as the market confessing what it really believes.
 `,
   },
+  {
+    slug:        "closing-line-value-clv",
+    title:       "Closing Line Value: The Only Metric That Proves Edge",
+    category:    "Theory",
+    keyword:     "closing line value",
+    description: "A positive ROI over a few hundred bets can be pure luck -- or a soft-line artifact. Closing Line Value (CLV) is the leakage-proof test of whether you are actually beating the market.",
+    content:     `# Closing Line Value: The Only Metric That Proves Edge
+
+## The problem with ROI
+
+Imagine a model that shows +10% ROI over 400 backtested bets. Sounds like edge. Now ask one question: **could you have actually gotten those prices?**
+
+Historical odds databases are full of stale quotes -- lines captured once a day, hours before they corrected. A model can look brilliant against a soft, out-of-date price and be worthless against the price that actually existed at bet time. ROI measured against stale lines is not edge; it is an artifact of the data.
+
+Sample size does not save you either. Betting outcomes have enormous variance: at typical -110 prop pricing, a bettor with ZERO edge will show +5% ROI or better over 200 bets roughly one time in four. Most "hot streaks" you see posted online are exactly this.
+
+## What CLV measures
+
+**Closing Line Value** compares the price you bet to the price the market closed at:
+
+> CLV % = (your decimal odds / closing decimal odds) - 1
+
+If you bet a home run prop at +450 and it closes at +400, you beat the close by about 11%. If you bet +450 and it closes +500, the market moved against you.
+
+Why does this matter more than whether the bet won? Because the closing line is the sharpest number in the market -- it has absorbed every injury report, lineup card, weather update, and every dollar of informed money. Decades of research on betting markets converge on the same finding: **bettors who consistently beat the close win long-term; bettors who do not, do not** -- regardless of what their recent win-loss record says.
+
+## Why CLV is leakage-proof
+
+ROI can be gamed by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV cannot be faked this way. Either the line moved toward your bet after you placed it, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
+
+That is why our promotion rule for any Beezy system is CLV-based, not ROI-based. A system that shows positive ROI but flat-or-negative CLV is beating a soft historical line, not the market -- and we treat it as unproven no matter how pretty the profit curve looks.
+
+## How to use CLV yourself
+
+1. **Record the price at bet time.** Screenshot or log the exact odds you got.
+2. **Record the close.** Capture the same market's final pre-game price at your book or a sharp reference.
+3. **Compute CLV per bet and average it.** A sustained average above +1-2% with a decent sample is real evidence of edge. An average near zero means your wins are variance.
+4. **Diagnose by segment.** Positive CLV on strikeout props but negative on moneylines tells you where your process actually works.
+
+One warning: CLV against ONE soft book's close can flatter you (their close may itself be off-market). The gold standard is CLV against the sharpest available close -- Pinnacle where quoted, or a multi-book consensus.
+
+## The takeaway
+
+Win rate tells you what happened. CLV tells you whether it was skill. If you track one number about your own betting, make it this one.
+`,
+  },
+  {
+    slug:        "odds-boost-ev",
+    title:       "Odds Boosts: The Most Reliable +EV Bet You Will Ever Make",
+    category:    "Strategy",
+    keyword:     "odds boost EV",
+    description: "Profit boosts and promo odds are the one place a sportsbook voluntarily hands you positive expected value. Here is how to compute exactly how much a boost is worth before you tap it.",
+    content:     `# Odds Boosts: The Most Reliable +EV Bet You Will Ever Make
+
+## Why boosts are different
+
+Every normal price a sportsbook posts carries vig -- typically 5-12% on props. To profit against those prices you need a genuine informational edge, which is hard.
+
+An **odds boost** flips the arithmetic. The book takes a market price, improves it as a marketing expense, and caps your stake so it cannot be exploited at scale. When the boosted price exceeds the market's fair price, the bet is +EV *by construction* -- no model, no handicapping skill, no inside information required. It is the single most dependable source of positive expected value available to a recreational bettor.
+
+The catch: not every boost clears the bar. A "boost" from -150 to -135 on a market whose fair price is -160 is still a losing bet. You have to do the math every time.
+
+## The three-step calculation
+
+**Step 1 -- Find the fair probability.** Take the market's normal two-sided prices (your side and the opposite side) and remove the vig. Convert both to implied probability, then divide your side by the total:
+
+> implied(-120) = 120/220 = 54.5%
+> implied(+100) = 100/200 = 50.0%
+> fair prob = 54.5 / (54.5 + 50.0) = 52.2%
+
+**Step 2 -- Convert the boosted price to decimal.** A +150 boost = 2.50 decimal.
+
+**Step 3 -- Compute EV.**
+
+> EV per $1 = fair prob x boosted decimal - 1 = 0.522 x 2.50 - 1 = +30.5%
+
+A +30% EV bet is enormous -- for reference, professional bettors grind out careers on 2-4% edges. This is why sharp bettors max out every qualifying boost they see: the per-bet dollar amounts are capped, but the edge per dollar is often 10x anything obtainable at normal prices.
+
+Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boosted price and the market's normal two-sided prices, and it returns the true EV plus a Kelly-sized stake.
+
+## Rules of thumb
+
+- **Boost the longshot side when EV is equal.** Boosting +400 to +500 adds more EV than boosting -200 to -170, because the boost percentage compounds on the larger payout.
+- **Always max the stake cap** on a confirmed +EV boost. The cap IS the offer; betting less leaves free money.
+- **Beware parlay boosts.** Multi-leg boosts multiply vig across legs before applying the boost; most remain -EV after the math. Run the numbers per leg.
+- **Track them like real bets.** Boost EV is still an expectation, not a guarantee -- you will lose plenty of individual boosts. The edge shows up in the aggregate.
+
+## Why books keep offering them
+
+Boosts are customer acquisition priced as marketing. Books know the average user cannot or will not compute fair value, taps the shiny number, and then gives back the EV on -EV bets later the same session. Refuse the second half of that trade and the boost program becomes a small, steady subsidy from the book to you.
+
+Free money is rare in betting. This is what it looks like.
+`,
+  },
 ]
 
 export function getArticle(slug: string): Article | undefined {

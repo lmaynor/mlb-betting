@@ -124,7 +124,13 @@ def build_picks_prompt(picks):
 
     lines.append(
         "\nWrite 3 tweet drafts for @beezy_fyi announcing today's picks. "
-        f"Use {BEEZY_SITE_URL} as the site URL when linking. "
+        "EVERY draft must: (1) state the model probability vs the market's "
+        "implied probability, or the edge %, on at least one pick -- the EV "
+        "math IS the content; (2) end with the daily card link "
+        f"{BEEZY_SITE_URL}/cheat-sheet on its own line (Twitter unfurls the "
+        "card image from it -- do not describe the link, just include it); "
+        "(3) stay under 270 characters. No hashtag spam (max 1), no emojis, "
+        "no 'lock'/'smash' tout language. "
         "Return only a JSON array of 3 strings."
     )
     return "\n".join(lines)
@@ -169,7 +175,10 @@ def build_recap_prompt(settled, stats):
 
     prompt += (
         "\nWrite 3 tweet drafts for @beezy_fyi recapping today's results. "
-        f"Use {BEEZY_SITE_URL} as the site URL when linking. "
+        "Report the record and units honestly -- LOSING days get posted with "
+        "the same tone as winning days; the transparency is the brand. Cite "
+        f"the season sample size. Link {BEEZY_SITE_URL}/results on its own "
+        "line. Under 270 characters, max 1 hashtag, no emojis. "
         "Return only a JSON array of 3 strings."
     )
     return prompt

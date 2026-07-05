@@ -3,22 +3,14 @@
 import { useMemo, useState } from 'react'
 import type { Bet } from '@/lib/types'
 import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
-import { pickLabel, SYSTEM_COLOR } from '@/lib/tokens'
+import { pickLabel, SYSTEM_COLOR, SYSTEM_LABEL_SHORT as SYSTEM_LABEL } from '@/lib/tokens'
 import { ScoreBadge } from '@/components/ui/primitives'
 
-const SYSTEM_LABEL: Record<string, string> = {
-  NRFI: 'NRFI',
-  HR: 'HR',
-  F5: 'F5',
-  K: 'K',
-  OUTS: 'OUTS',
-  BATTER_HITS: 'HITS',
-  PITCHER_ER: 'P.ER',
-}
+
 
 const GAME_SYSTEMS = new Set(['NRFI', 'F5'])
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
-const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS'])
+const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K'])
 
 type FilterKey = 'all' | 'game' | 'pitcher' | 'player'
 

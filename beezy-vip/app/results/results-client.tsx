@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
-import { B, SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
+import { B, SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel } from '@/lib/tokens'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats } from '@/lib/types'
@@ -38,22 +38,7 @@ const RESULTS = ['ALL', 'WIN', 'LOSS', 'VOID']
 const GATE    = 200
 
 // Short display labels for system filter chips
-const SYSTEM_LABEL: Record<string, string> = {
-  ALL:         'ALL',
-  NRFI:        'NRFI',
-  F5:          'F5',
-  F3:          'F3',
-  F1H:         '1H',
-  F7:          'F7',
-  GAME:        'Game',
-  K:           'K',
-  OUTS:        'Outs',
-  PITCHER_ER:  'Pitcher ER',
-  HR:          'HR',
-  BATTER_K:    'Batter K',
-  BATTER_TB:   'Total Bases',
-  BATTER_HITS: 'Hits',
-}
+const SYSTEM_LABEL: Record<string, string> = { ALL: 'ALL', ..._SYS_LABEL }
 
 function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void

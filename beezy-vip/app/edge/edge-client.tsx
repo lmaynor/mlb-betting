@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Bet } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
-import { SYSTEM_COLOR, SYSTEM_PILL, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
+import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -642,7 +642,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
         <div className="edge-detail-id">
           <div className="edge-detail-tags">
             <span className="edge-pill" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
-              {p.system}
+              {systemLabel(p.system, true)}
             </span>
             {!isGame && p.position && <span className="edge-pos">{p.position}</span>}
             {!isGame && <StatusChip status={p.status} />}
@@ -1048,7 +1048,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
             return (
               <button key={m} onClick={() => toggleMarket(m)} className="edge-mchip"
                 style={on ? { color: c, borderColor: `color-mix(in oklab, ${c} 45%, var(--carbon))`, background: `color-mix(in oklab, ${c} 16%, var(--carbon))` } : undefined}>
-                {m}
+                {systemLabel(m, true)}
               </button>
             )
           })}
@@ -1089,7 +1089,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
                         {!isGame && <StatusChip status={p.status} compact />}
                       </span>
                       <span className="edge-row-meta">
-                        <span className="edge-row-sys" style={{ color }}>{p.system}</span>
+                        <span className="edge-row-sys" style={{ color }}>{systemLabel(p.system, true)}</span>
                         <span>{betTypeLabel(p.bet_type, p.system)}</span>
                         <span className="edge-row-odds">{fmtOdds(p.odds)}</span>
                         {p.matchup?.startTime && <span className="edge-row-time">{p.matchup.startTime}</span>}

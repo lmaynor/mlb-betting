@@ -1,7 +1,7 @@
 'use client'
 
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { SYSTEM_PILL } from '@/lib/tokens'
+import { SYSTEM_PILL, systemLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
 const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, #04040b)', color: '#c9c6cf', border: '1px solid var(--iron)' }
@@ -24,12 +24,13 @@ export function LiveDot({ label }: { label?: string }) {
 
 export function SystemBadge({ system }: { system: string }) {
   const p = SYSTEM_PILL[system] ?? FALLBACK_PILL
+  const label = systemLabel(system, true)
   return (
     <span
       className="dell-heading"
       style={{ fontSize: '9.5px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
     >
-      {system}
+      {label}
     </span>
   )
 }
