@@ -90,8 +90,16 @@ def _check_schedulers() -> list[str]:
     failures = []
     for job in jobs:
         name = job.name.split("/")[-1]
-        if name not in SCHEDULER_JOBS:
-            continue
+        # Check EVERY enabled scheduler, not an allowlist -- the hardcoded
+        # SCHEDULER_JOBS filter silently ignored all newer jobs, which is how
+        # PERMISSION_DENIED (code 7) and OOM 503s (code 14) ran for days
+        # unalerted. Paused jobs are deliberate; skip only those.
+        try:
+            from google.cloud import scheduler_v1 as _sv1
+            if job.state == _sv1.Job.State.PAUSED:
+                continue
+        except Exception:  # noqa: BLE001
+            pass
         code = job.status.code if job.status else 0
         if code not in (0, -1):  # -1 = never run, 0 = ok
             last_run = (
@@ -102,6 +110,21 @@ def _check_schedulers() -> list[str]:
                 f"`{name}` last run failed (code={code}, at={last_run})"
             )
     return failures
+
+
+def _check_odds_history_freshness() -> list[str]:
+    """The intraday odds tracker must have banked YESTERDAY's k_ou partition.
+    (Its failure mode is silent: schedulers denied or job broken -> the
+    survival/alert/alt-line chain quietly starves.)"""
+    from datetime import date, timedelta
+    yday = (date.today() - timedelta(days=1)).isoformat()
+    if date.today().month in (12, 1, 2):  # off-season
+        return []
+    key = f"Odds/history/market=k_ou/date={yday}/part-0.parquet"
+    age = _gcs_age_hours(key)
+    if age is None:
+        return [f"odds_history: no k_ou partition for {yday} -- BettingPros tracker not banking"]
+    return []
 
 
 # ── GCS freshness / existence checks ─────────────────────────────────────────
@@ -256,6 +279,7 @@ def run(run_date: str = None) -> dict:
 
     failures: list[str] = []
     failures += _check_schedulers()
+    failures += _check_odds_history_freshness()
     failures += _check_data_masters()
     failures += _check_snapshot_freshness()
     failures += _check_build_sentinels()
