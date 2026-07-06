@@ -100,6 +100,11 @@ model artifact, and lambda calibrator. It no longer uses the HR proxy artifact.
 
 - Always start proxy in the **foreground** (no `&`) in one tab, curl from a second tab
 - **Stale proxy returns Google 404** on `/healthz` -- kill and restart after any deploy
+- **Public-URL GET /healthz ALWAYS returns Google's "Error 404 (Not Found)!!1"** --
+  verified 2026-07-06: the request never reaches Cloud Run (request logs empty;
+  other GET routes like /robots.txt pass through fine). Google's edge intercepts
+  this path on run.app URLs. NOT an outage signal -- health-check via the proxy
+  only. Schedulers/POST routes/the site are unaffected.
 - Port already in use: `pkill -f "run services proxy"` then restart on a new port
 - `sleep N && curl` in the same command races with `&` proxy startup -- run separately
 
