@@ -197,6 +197,9 @@ export async function apiGetEdgeEnrich(date: string): Promise<EdgeEnrich> {
 // -- live +EV outlier alerts (fast_alert_loop, 15-min cadence) -----------------
 export interface EdgeAlert {
   market: string | null
+  player_name?: string | null
+  away_team?: string | null
+  home_team?: string | null
   game_pk: number | null
   player_id: number | null
   selection: string | null

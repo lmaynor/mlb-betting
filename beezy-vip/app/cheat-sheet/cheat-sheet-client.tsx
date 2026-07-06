@@ -611,29 +611,30 @@ export function CheatSheetClient({
             </span>
           </div>
 
-          {/* tweet composer: paste-ready text for X */}
-          <div style={{ marginTop: '14px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', background: 'var(--obsidian)', padding: '12px 14px' }}>
+        </div>
+
+        {/* ── Desktop sidebar ──────────────────────────────────────── */}
+        <aside className="cheat-sheet-sidebar">
+          {/* tweet composer: support tool for posting the card to X */}
+          <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)' }}>POST TO X</span>
+              <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}>POST TO X</span>
               <span className="mono" style={{ fontSize: '9px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
               <div style={{ flex: 1 }} />
               <button onClick={copyTweet} className="mono" style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
-                {tweetCopied ? 'COPIED!' : 'COPY TWEET'}
+                {tweetCopied ? 'COPIED!' : 'COPY'}
               </button>
             </div>
-            <textarea readOnly value={tweetText} rows={Math.min(10, tweetText.split('\n').length + 1)}
+            <textarea readOnly value={tweetText} rows={Math.min(12, tweetText.split('\n').length + 1)}
               onFocus={e => e.currentTarget.select()}
               aria-label="Tweet text"
               className="mono"
               style={{ width: '100%', background: 'var(--carbon)', color: 'var(--silver)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-sm)', fontSize: '11px', lineHeight: 1.5, padding: '10px 12px', resize: 'vertical' }} />
             <p className="times" style={{ fontSize: '11px', color: 'var(--fog)', margin: '8px 0 0' }}>
-              No links in the text (X deprioritizes them) — the card link stays in your bio. Attach the card screenshot for reach.
+              No links in the text (X deprioritizes them) &mdash; the card link stays in your bio. Attach the card screenshot for reach.
             </p>
           </div>
-        </div>
 
-        {/* ── Desktop sidebar ──────────────────────────────────────── */}
-        <aside className="cheat-sheet-sidebar">
           <div style={{
             border: '1px solid var(--basalt)',
             background: 'var(--graphite)',

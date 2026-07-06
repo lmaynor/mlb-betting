@@ -98,9 +98,10 @@ def scan(market: str, since: str | None = None, until: str | None = None,
     if not len(hits):
         return hits
     hits["edge_vs_consensus"] = odds["consensus_fair"] - hits["_impl"]  # how far book lags
-    cols = ["game_date", "game_pk", "player_id", "selection", "line", "book",
-            "american", "decimal", "consensus_fair", "anchored", "ev",
-            "edge_vs_consensus", "n_books", "book_spread", "snapshot_ts"]
+    cols = ["game_date", "game_pk", "away_team", "home_team", "player_id",
+            "selection", "line", "book", "american", "decimal", "consensus_fair",
+            "anchored", "ev", "edge_vs_consensus", "n_books", "book_spread",
+            "snapshot_ts"]
     cols = [c for c in cols if c in hits.columns]
     return hits[cols].sort_values("ev", ascending=False).reset_index(drop=True)
 

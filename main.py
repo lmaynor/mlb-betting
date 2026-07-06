@@ -937,6 +937,9 @@ def public_alerts_today():
             for _, r in df.iterrows():
                 alerts.append({
                     "market": r.get("market"),
+                    "player_name": r.get("player_name") or None,
+                    "away_team": r.get("away_team") or None,
+                    "home_team": r.get("home_team") or None,
                     "game_pk": int(r["game_pk"]) if _pd.notna(r.get("game_pk")) else None,
                     "player_id": int(r["player_id"]) if _pd.notna(r.get("player_id")) else None,
                     "selection": r.get("selection"),

@@ -108,6 +108,27 @@ def lineup_events(day: str) -> tuple[set, list]:
     return hot, notes
 
 
+# -- player-id -> name resolution (alerts must be ACTIONABLE: names, not ids) --
+
+def resolve_player_names(ids) -> dict:
+    """Batch MLBAM id -> full name via the MLB Stats API. Best-effort."""
+    import requests
+    ids = sorted({int(i) for i in ids if pd.notna(i)})
+    out: dict = {}
+    for i in range(0, len(ids), 50):
+        chunk = ids[i:i + 50]
+        try:
+            r = requests.get(
+                "https://statsapi.mlb.com/api/v1/people",
+                params={"personIds": ",".join(map(str, chunk))}, timeout=15)
+            r.raise_for_status()
+            for pers in r.json().get("people", []):
+                out[int(pers["id"])] = pers.get("fullName", "")
+        except Exception as e:  # noqa: BLE001
+            log.warning("player name resolution failed for %d ids: %s", len(chunk), e)
+    return out
+
+
 # -- 4. notify ----------------------------------------------------------------
 
 def _alert_webhook() -> str | None:
@@ -131,7 +152,9 @@ def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '') -> Non
         game = f"{r.get('away_team', '?')}@{r.get('home_team', '?')}" \
             if r.get("away_team") else f"game {r.get('game_pk')}"
         pid = r.get("player_id")
-        who = f"player {int(pid)}" if pd.notna(pid) else "team"
+        pname = r.get("player_name")
+        who = (pname if isinstance(pname, str) and pname
+               else (f"player {int(pid)}" if pd.notna(pid) else "team"))
         flame = " **HOT**" if r.get("game_pk") in hot else ""
         anchor = " [pinn]" if r.get("anchored") else ""
         gd = str(r.get("game_date", ""))
@@ -207,6 +230,11 @@ def run(run_date: str | None = None) -> dict:
         new = found.copy()
 
     if len(new):
+        # names, not ids -- Discord pings and the site must be actionable
+        if "player_id" in new.columns:
+            names = resolve_player_names(new["player_id"].dropna().unique())
+            new["player_name"] = new["player_id"].map(
+                lambda x: names.get(int(x), "") if pd.notna(x) else "")
         # hottest first: hot-game alerts, then by EV
         new["_hot"] = new["game_pk"].isin(hot)
         new = new.sort_values(["_hot", "ev"], ascending=[False, False]).drop(columns="_hot")
