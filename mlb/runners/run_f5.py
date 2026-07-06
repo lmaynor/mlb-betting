@@ -439,7 +439,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                                cfg: dict, run_date: str) -> dict:
     from mlb_core.odds import sgo
     from mlb_core.odds.sgo import extract_f1h_ml_odds, extract_game_ml_odds
-    from mlb_core.odds.utils import american_to_implied_prob, remove_vig
+    from mlb_core.odds.utils import american_to_implied_prob, devig_two_way, remove_vig
     from mlb_core.odds.dk_scraper import resolve_team
     from mlb_core.odds.utils import kelly_stake, kelly_pct as kpct
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
