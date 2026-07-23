@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 
+import numpy as np
 import pandas as pd
 
 from mlb.analysis import book_vig, odds_history as oh
@@ -143,6 +144,23 @@ def scan(markets, date=None, since=None, until=None, closing=False,
     return out.sort_values("ev_pct", ascending=False).reset_index(drop=True)
 
 
+def classify(df, kdev_max=0.04, stale_gap=0.15, min_books=4):
+    """Add a `verdict` column separating credible edges from artifacts:
+    thin_pack (too few books), kalshi_off (|k_dev|>kdev_max => Kalshi disagrees
+    with the whole pack), stale? (book >stale_gap below consensus => stale/
+    placeholder quote), check (survives all = modest, corroborated edge)."""
+    if not len(df):
+        return df
+    df = df.copy()
+    df["verdict"] = np.select(
+        [df["n_books"] < min_books,
+         df["k_dev"].abs() > kdev_max,
+         df["bk_dev"] < -stale_gap],
+        ["thin_pack", "kalshi_off", "stale?"],
+        default="check")
+    return df
+
+
 def main(argv=None) -> int:
     from datetime import datetime, timezone
     p = argparse.ArgumentParser(description="Soft-book +EV vs Kalshi sharp reference")
@@ -155,6 +173,14 @@ def main(argv=None) -> int:
     p.add_argument("--soft-only", action="store_true", help="only soft books (vig>=8%)")
     p.add_argument("--liquid-only", action="store_true",
                    help="only markets with trustworthy Kalshi mids (nrfi/game/total/runline)")
+    p.add_argument("--kdev-max", type=float, default=0.04,
+                   help="max |p_true - book consensus| for a trusted row (default 0.04)")
+    p.add_argument("--stale-gap", type=float, default=0.15,
+                   help="flag a book quote this far below consensus as stale (default 0.15)")
+    p.add_argument("--min-books", type=int, default=4,
+                   help="min books for a trustworthy consensus (default 4)")
+    p.add_argument("--all", action="store_true",
+                   help="show every verdict (default: only credible 'check' rows)")
     p.add_argument("--top", type=int, default=40)
     args = p.parse_args(argv)
 
@@ -171,20 +197,24 @@ def main(argv=None) -> int:
         return 0
     if args.soft_only:
         df = df[df["soft"]]
+    df = classify(df, kdev_max=args.kdev_max, stale_gap=args.stale_gap,
+                  min_books=args.min_books)
     names = _player_names(date) if date else {}
     df["player"] = df["player_id"].map(names).fillna(
         df["player_id"].map(lambda p: "" if pd.isna(p) else str(int(p))))
+    shown = df if args.all else df[df["verdict"] == "check"]
     cols = ["market", "game", "player", "selection", "line", "book", "american",
-            "implied_prob", "cons_impl", "n_books", "p_true", "k_dev",
-            "ev_pct", "soft"]
-    cols = [c for c in cols if c in df.columns]
-    print(f"\n{len(df)} soft-book +EV candidates vs Kalshi (min_ev={args.min_ev}, "
-          f"{'CLOSING' if args.closing else 'latest'} snapshots):")
-    print("  read: k_dev = Kalshi p_true - book-pack median. |k_dev| small => Kalshi")
-    print("  agrees with the pack and the lone cheap book is a real edge; |k_dev|")
-    print("  large => Kalshi is the outlier (thin/suspect mid), discount the row.\n")
-    with pd.option_context("display.max_rows", args.top, "display.width", 200):
-        print(df[cols].head(args.top).to_string(index=False))
+            "implied_prob", "cons_impl", "n_books", "p_true", "k_dev", "bk_dev",
+            "ev_pct", "verdict", "soft"]
+    cols = [c for c in cols if c in shown.columns]
+    counts = df["verdict"].value_counts().to_dict()
+    print(f"\nverdict mix (min_ev={args.min_ev}): {counts}")
+    print(f"showing {len(shown)} {'ALL rows' if args.all else 'credible check rows'} "
+          f"({'CLOSING' if args.closing else 'latest'} snapshots):")
+    print("  check = |k_dev|<=kdev_max (Kalshi corroborates the pack) AND book not")
+    print("  stale; kalshi_off = Kalshi is the lone outlier; stale? = junk book quote.\n")
+    with pd.option_context("display.max_rows", args.top, "display.width", 220):
+        print(shown[cols].head(args.top).to_string(index=False))
     return 0
 
 
