@@ -230,10 +230,10 @@ def run_system(system, cutoff, until, models, min_books, max_spread, calibrate):
     target, kind = c["target"], c["kind"]
     df = df.copy()
     df["__y__"] = pd.to_numeric(df[target], errors="coerce")  # sklearn label handle
-    tr = df[df["game_date"] < cutoff]
-    ho = df[df["game_date"] >= cutoff]
+    tr = df[df["game_date"] < cutoff].reset_index(drop=True)
+    ho = df[df["game_date"] >= cutoff].reset_index(drop=True)
     if until:
-        ho = ho[ho["game_date"] < until]
+        ho = ho[ho["game_date"] < until].reset_index(drop=True)
     if len(tr) < 200 or len(ho) < 10:
         print(f"  [{system}] SKIP -- train={len(tr)} holdout={len(ho)}")
         return []
@@ -284,11 +284,13 @@ def _verdict(board):
         mkt = MARKET_AUC.get(sysname)
         d_rank = (br["rank"] - prod["rank"]) if pd.notna(br["rank"]) and pd.notna(prod["rank"]) else np.nan
         rank_lbl = "AUC" if prod["kind"] == "binary" else "rho"
-        beats_mkt = (pd.notna(br["rank"]) and mkt is not None and br["rank"] > mkt)
+        # market bar is AUC -> only comparable to binary rank; count rank is Spearman.
+        mkt_tag = ""
+        if prod["kind"] == "binary" and mkt is not None and pd.notna(br["rank"]):
+            mkt_tag = f"  [{'>' if br['rank'] > mkt else '<'}market {mkt}]"
         print(f"  {sysname:<12} prod {rank_lbl}={prod['rank']} lo_clv={prod['lo_clv']}%"
               f"  |  best alt={bm} {rank_lbl}={br['rank']} (drank {d_rank:+.3f}) "
-              f"lo_clv={br['lo_clv']}%"
-              + (f"  [>market {mkt}]" if beats_mkt else (f"  [<market {mkt}]" if mkt else "")))
+              f"lo_clv={br['lo_clv']}%" + mkt_tag)
     print("\n  Under-optimized => an alt beats xgb_prod on rank AND low-edge CLV (real n).")
     print("  Beats market rank but no CLV => fix calibration/closing-lines, not the model.")
 
