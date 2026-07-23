@@ -628,6 +628,72 @@ def _ang_out(spd, deg_from, target_az):
     return spd * np.cos(delta)
 
 
+def add_savant_batter_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Join two Savant-leaderboard signals the market underweights, on
+    (batter MLBAM id, PRIOR season) -- prior-season avoids walk-forward leakage
+    (season-to-date values would include the game being predicted) and is stable
+    at serve time. Missing master / columns -> silently skipped (NaN, XGB-safe).
+
+    - bat tracking (2023+): avg_bat_speed / fast_swing_rate / swing_length /
+      squared_up -- newest Statcast data, least efficiently priced.
+    - xISO regression gap: (est_slg-est_ba) and (est_slg-est_ba)-(slg-ba). A high
+      xISO with low actual ISO = unlucky power the market (anchored to real HRs)
+      underprices.
+    """
+    if "batter" not in df.columns or "game_date" not in df.columns:
+        return df
+    from mlb_core.storage import read_csv, exists
+    df["_bat"] = pd.to_numeric(df["batter"], errors="coerce").astype("Int64")
+    # PRIOR season (leakage-clean): a 2026 game joins 2025 leaderboard values.
+    df["_yr"] = (pd.to_datetime(df["game_date"], errors="coerce").dt.year - 1).astype("Int64")
+
+    def _load(dataset):
+        key = f"Statcast/savant_{dataset}_master.csv"
+        try:
+            return read_csv(key, low_memory=False) if exists(key) else pd.DataFrame()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("savant %s load failed: %s", dataset, e)
+            return pd.DataFrame()
+
+    def _idcol(d):
+        for c in ("player_id", "id", "mlbam_id"):
+            if c in d.columns:
+                return c
+        return None
+
+    # -- bat tracking --
+    bt = _load("bat_tracking")
+    idc = _idcol(bt) if not bt.empty else None
+    if idc and "year" in bt.columns:
+        want = {"avg_bat_speed": "bat_speed", "fast_swing_rate": "fast_swing_rate",
+                "swing_length": "swing_length",
+                "squared_up_per_swing": "squared_up_rate",
+                "squared_up_per_bat_contact": "squared_up_contact",
+                "blasts_per_swing": "blast_rate"}
+        keep = {s: d for s, d in want.items() if s in bt.columns}
+        if keep:
+            sub = bt[[idc, "year"] + list(keep)].rename(columns={idc: "_bat", "year": "_yr", **keep})
+            sub["_bat"] = pd.to_numeric(sub["_bat"], errors="coerce").astype("Int64")
+            sub["_yr"] = pd.to_numeric(sub["_yr"], errors="coerce").astype("Int64")
+            df = df.merge(sub.drop_duplicates(["_bat", "_yr"]), on=["_bat", "_yr"], how="left")
+
+    # -- xISO regression gap --
+    es = _load("expected_statistics")
+    if not es.empty and "year" in es.columns and all(c in es.columns for c in ("est_slg", "est_ba", "slg", "ba")):
+        idc2 = _idcol(es)
+        if idc2:
+            e = es[[idc2, "year", "est_slg", "est_ba", "slg", "ba"]].copy()
+            e["xiso"] = pd.to_numeric(e["est_slg"], errors="coerce") - pd.to_numeric(e["est_ba"], errors="coerce")
+            iso = pd.to_numeric(e["slg"], errors="coerce") - pd.to_numeric(e["ba"], errors="coerce")
+            e["xiso_minus_iso"] = e["xiso"] - iso
+            e = e.rename(columns={idc2: "_bat", "year": "_yr"})[["_bat", "_yr", "xiso", "xiso_minus_iso"]]
+            e["_bat"] = pd.to_numeric(e["_bat"], errors="coerce").astype("Int64")
+            e["_yr"] = pd.to_numeric(e["_yr"], errors="coerce").astype("Int64")
+            df = df.merge(e.drop_duplicates(["_bat", "_yr"]), on=["_bat", "_yr"], how="left")
+
+    return df.drop(columns=["_bat", "_yr"], errors="ignore")
+
+
 def add_lever_b_features(df: pd.DataFrame) -> pd.DataFrame:
     """Additive HR features: expected PAs from batting-order slot, directional
     wind (out to CF / pull field), and arsenal-matchup interactions. Every input
@@ -785,6 +851,18 @@ def build_features(
         df = join_batter_aux(df, batter_col="batter", opp_pitcher_col="opp_pitcher_id")
     except Exception as _e:
         logger.warning("HR: aux_joins failed (non-fatal): %s", _e)
+
+    # Underweighted-signal features: bat tracking + xISO gap (prior-season, clean).
+    try:
+        df = add_savant_batter_features(df)
+        _sv = [c for c in ("bat_speed", "fast_swing_rate", "swing_length",
+                           "squared_up_rate", "squared_up_contact", "blast_rate",
+                           "xiso", "xiso_minus_iso") if c in df.columns]
+        if _sv:
+            logger.info("  Savant batter features: " + ", ".join(
+                f"{c}={df[c].notna().mean():.0%}" for c in _sv))
+    except Exception as _e:  # noqa: BLE001
+        logger.warning("HR: savant batter features failed (non-fatal): %s", _e)
 
     return df
 
