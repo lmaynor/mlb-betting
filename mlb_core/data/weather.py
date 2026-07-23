@@ -19,7 +19,8 @@ from mlb_core.odds.dk_scraper import TEAM_NAME_TO_ABBREV
 
 _session = requests.Session()
 
-WEATHER_VARS = "temperature_2m,windspeed_10m,winddirection_10m,precipitation,weathercode"
+WEATHER_VARS = ("temperature_2m,windspeed_10m,winddirection_10m,precipitation,"
+                "weathercode,relative_humidity_2m,surface_pressure")
 
 # (lat, lon, roof_type, utc_offset)
 # roof_type: "open" | "dome" | "retractable"
@@ -93,6 +94,11 @@ def _fetch_weather(lat, lon, date_str, hour_utc, is_forecast=False) -> dict | No
                 idx = 0
             dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
             deg = hourly["winddirection_10m"][idx]
+            def _at(var):
+                seq = hourly.get(var)
+                return seq[idx] if seq and idx < len(seq) else None
+            _hum = _at("relative_humidity_2m")
+            _pres = _at("surface_pressure")
             return {
                 "temperature_f":    round(hourly["temperature_2m"][idx] * 9 / 5 + 32, 1),
                 "wind_speed_mph":   round(hourly["windspeed_10m"][idx] * 0.621371, 1),
@@ -100,6 +106,8 @@ def _fetch_weather(lat, lon, date_str, hour_utc, is_forecast=False) -> dict | No
                 "wind_direction":   dirs[round(deg / 45) % 8] if deg is not None else None,
                 "precipitation_in": round(hourly["precipitation"][idx] * 0.0393701, 3),
                 "weather_code":     hourly.get("weathercode", [None])[idx],
+                "humidity_pct":     round(_hum, 1) if _hum is not None else None,
+                "pressure_hpa":     round(_pres, 1) if _pres is not None else None,
             }
         except Exception:
             time.sleep((2 ** attempt) + random.uniform(0.5, 1.0))
@@ -135,6 +143,7 @@ def _pull_weather_date(date_str: str, is_forecast: bool = False) -> pd.DataFrame
                 "temperature_f": None, "wind_speed_mph": None,
                 "wind_dir_degrees": None, "wind_direction": None,
                 "precipitation_in": None, "weather_code": None,
+                "humidity_pct": None, "pressure_hpa": None,
                 "wind_out": 0, "wind_in": 0, "is_cold": 0, "is_hot": 0, "high_wind": 0,
             })
         else:
@@ -153,6 +162,7 @@ def _pull_weather_date(date_str: str, is_forecast: bool = False) -> pd.DataFrame
                 row.update({k: None for k in [
                     "temperature_f", "wind_speed_mph", "wind_dir_degrees",
                     "wind_direction", "precipitation_in", "weather_code",
+                    "humidity_pct", "pressure_hpa",
                     "wind_out", "wind_in", "is_cold", "is_hot", "high_wind",
                 ]})
         rows.append(row)
@@ -354,6 +364,9 @@ def fetch_live_weather_for_slate(sched: "pd.DataFrame") -> dict:
             "high_wind":   int(spd > 15),
             "wind_out":    int(home in WIND_OUT_PARKS and spd > 10),
             "wind_in":     int(home in WIND_IN_PARKS  and spd > 10),
+            "humidity_pct": wx.get("humidity_pct"),
+            "pressure_hpa": wx.get("pressure_hpa"),
+            "precipitation_in": wx.get("precipitation_in"),
             "roof":        roof,
         }
 

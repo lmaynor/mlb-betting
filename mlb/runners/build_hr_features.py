@@ -166,6 +166,18 @@ def _air_density(altitude_ft, temp_f):
     pressure = 101325 * np.exp(-0.0289644 * 9.80665 * alt_m / (8.31447 * 293.15))
     return pressure / (287.058 * temp_k)
 
+
+def _air_density_moist(pressure_hpa, temp_f, humidity_pct):
+    """Moist-air density (kg/m^3) from MEASURED pressure + humidity -- the accurate
+    HR-flight driver (denser air = shorter fly balls). Returns NaN where inputs are
+    missing so the caller can fall back to the altitude+temp approximation."""
+    P = pd.to_numeric(pressure_hpa, errors="coerce") * 100.0       # Pa
+    T = (pd.to_numeric(temp_f, errors="coerce") - 32.0) * 5.0 / 9.0 + 273.15
+    Tc = T - 273.15
+    Psat = 610.78 * np.exp(17.27 * Tc / (Tc + 237.3))             # sat. vapor pressure, Pa
+    Pv = (pd.to_numeric(humidity_pct, errors="coerce") / 100.0) * Psat
+    return (P - Pv) / (287.058 * T) + Pv / (461.495 * T)
+
 def _normalize_name(name):
     import unicodedata, re
     if not isinstance(name, str): return ""
@@ -649,47 +661,72 @@ def add_savant_batter_features(df: pd.DataFrame) -> pd.DataFrame:
 
     def _load(dataset):
         key = f"Statcast/savant_{dataset}_master.csv"
+        if not exists(key):
+            logger.warning("savant %s: master ABSENT (%s) -- backfill via /backfill-savant", dataset, key)
+            return pd.DataFrame()
         try:
-            return read_csv(key, low_memory=False) if exists(key) else pd.DataFrame()
+            return read_csv(key, low_memory=False)
         except Exception as e:  # noqa: BLE001
             logger.warning("savant %s load failed: %s", dataset, e)
             return pd.DataFrame()
 
     def _idcol(d):
-        for c in ("player_id", "id", "mlbam_id"):
+        for c in ("player_id", "id", "mlbam_id", "batter", "entity_id"):
             if c in d.columns:
                 return c
         return None
 
-    # -- bat tracking --
-    bt = _load("bat_tracking")
-    idc = _idcol(bt) if not bt.empty else None
-    if idc and "year" in bt.columns:
-        want = {"avg_bat_speed": "bat_speed", "fast_swing_rate": "fast_swing_rate",
-                "swing_length": "swing_length",
-                "squared_up_per_swing": "squared_up_rate",
-                "squared_up_per_bat_contact": "squared_up_contact",
-                "blasts_per_swing": "blast_rate"}
-        keep = {s: d for s, d in want.items() if s in bt.columns}
-        if keep:
-            sub = bt[[idc, "year"] + list(keep)].rename(columns={idc: "_bat", "year": "_yr", **keep})
-            sub["_bat"] = pd.to_numeric(sub["_bat"], errors="coerce").astype("Int64")
-            sub["_yr"] = pd.to_numeric(sub["_yr"], errors="coerce").astype("Int64")
-            df = df.merge(sub.drop_duplicates(["_bat", "_yr"]), on=["_bat", "_yr"], how="left")
+    def _pick(d, want: dict) -> dict:
+        """{source_col: dest_col} restricted to columns present in d."""
+        return {s: dst for s, dst in want.items() if s in d.columns}
 
-    # -- xISO regression gap --
+    def _merge_season(d, idc, want):
+        sub = d[[idc, "year"] + list(want)].rename(columns={idc: "_bat", "year": "_yr", **want})
+        sub["_bat"] = pd.to_numeric(sub["_bat"], errors="coerce").astype("Int64")
+        sub["_yr"] = pd.to_numeric(sub["_yr"], errors="coerce").astype("Int64")
+        return sub.drop_duplicates(["_bat", "_yr"])
+
+    # -- bat tracking (broadened candidate names; self-diagnosing on miss) --
+    bt = _load("bat_tracking")
+    if not bt.empty:
+        idc = _idcol(bt)
+        want = _pick(bt, {
+            "avg_bat_speed": "bat_speed", "bat_speed": "bat_speed",
+            "fast_swing_rate": "fast_swing_rate", "fast_swing_pct": "fast_swing_rate",
+            "swing_length": "swing_length",
+            "squared_up_per_swing": "squared_up_rate", "squared_up_swing": "squared_up_rate",
+            "squared_up_per_bat_contact": "squared_up_contact", "squared_up_contact": "squared_up_contact",
+            "blasts_per_swing": "blast_rate", "blasts_swing": "blast_rate",
+            "attack_angle": "attack_angle",
+        })
+        if idc and "year" in bt.columns and want:
+            df = df.merge(_merge_season(bt, idc, want), on=["_bat", "_yr"], how="left")
+        else:
+            logger.warning("savant bat_tracking: no usable id/year/cols -- id=%s cols=%s",
+                           idc, list(bt.columns)[:25])
+
+    # -- xISO regression gap (try est_* then x* naming; self-diagnosing on miss) --
     es = _load("expected_statistics")
-    if not es.empty and "year" in es.columns and all(c in es.columns for c in ("est_slg", "est_ba", "slg", "ba")):
+    if not es.empty:
         idc2 = _idcol(es)
-        if idc2:
-            e = es[[idc2, "year", "est_slg", "est_ba", "slg", "ba"]].copy()
-            e["xiso"] = pd.to_numeric(e["est_slg"], errors="coerce") - pd.to_numeric(e["est_ba"], errors="coerce")
-            iso = pd.to_numeric(e["slg"], errors="coerce") - pd.to_numeric(e["ba"], errors="coerce")
-            e["xiso_minus_iso"] = e["xiso"] - iso
-            e = e.rename(columns={idc2: "_bat", "year": "_yr"})[["_bat", "_yr", "xiso", "xiso_minus_iso"]]
+        xslg = next((c for c in ("est_slg", "xslg", "est_slg_using_speedangle") if c in es.columns), None)
+        xba = next((c for c in ("est_ba", "xba", "est_ba_using_speedangle") if c in es.columns), None)
+        slg = "slg" if "slg" in es.columns else None
+        ba = "ba" if "ba" in es.columns else None
+        if idc2 and "year" in es.columns and xslg and xba:
+            e = es[[idc2, "year", xslg, xba] + [c for c in (slg, ba) if c]].copy()
+            e["xiso"] = pd.to_numeric(e[xslg], errors="coerce") - pd.to_numeric(e[xba], errors="coerce")
+            if slg and ba:
+                iso = pd.to_numeric(e[slg], errors="coerce") - pd.to_numeric(e[ba], errors="coerce")
+                e["xiso_minus_iso"] = e["xiso"] - iso
+            keep = ["xiso"] + (["xiso_minus_iso"] if "xiso_minus_iso" in e.columns else [])
+            e = e.rename(columns={idc2: "_bat", "year": "_yr"})[["_bat", "_yr"] + keep]
             e["_bat"] = pd.to_numeric(e["_bat"], errors="coerce").astype("Int64")
             e["_yr"] = pd.to_numeric(e["_yr"], errors="coerce").astype("Int64")
             df = df.merge(e.drop_duplicates(["_bat", "_yr"]), on=["_bat", "_yr"], how="left")
+        else:
+            logger.warning("savant expected_statistics: missing keys -- id=%s xslg=%s xba=%s cols=%s",
+                           idc2, xslg, xba, list(es.columns)[:25])
 
     return df.drop(columns=["_bat", "_yr"], errors="ignore")
 
@@ -718,11 +755,20 @@ def add_lever_b_features(df: pd.DataFrame) -> pd.DataFrame:
             pull_az = pd.Series(np.where(df["stand"].eq("R"), cf_az - 45.0, cf_az + 45.0)
                                 % 360.0, index=df.index)
             df["wind_out_pull_mph"] = _ang_out(spd, deg, pull_az)
-        # covered parks (dome + retractable) -> no wind effect
-        covered = df["home_abbr"].map(lambda t: 1 if STADIUMS_ROOF.get(t) else 0).eq(1)
+        # Roof-closed proxy: dome always closed; retractable closed only when the
+        # weather forces it (rain / cold / heat) -- otherwise treat as open so
+        # retractable-open games keep their wind signal (the prior code zeroed ALL
+        # retractable parks, discarding real wind info). No authoritative per-game
+        # roof-state feed yet (would need the MLB game feed -- TODO).
+        _roof = df["home_abbr"].map(STADIUMS_ROOF)
+        _precip = pd.to_numeric(df.get("precipitation_in"), errors="coerce").fillna(0.0)
+        _temp = pd.to_numeric(df.get("temperature_f"), errors="coerce")
+        _forced = (_precip > 0.0) | (_temp < 50) | (_temp > 95)
+        closed = _roof.eq("dome") | (_roof.eq("retractable") & _forced)
+        df["roof_closed_proxy"] = closed.astype(float)
         for c in ("wind_out_cf_mph", "wind_out_pull_mph"):
             if c in df.columns:
-                df.loc[covered, c] = 0.0
+                df.loc[closed, c] = 0.0
 
     # 3) Arsenal matchup: batter power vs the pitch types the SP throws most
     #    (interactions of already-computed pitcher-mix x batter-power features).
@@ -774,7 +820,8 @@ def build_features(
     if not wx.empty:
         wx_c = wx.copy()
         wx_c["game_pk"] = pd.to_numeric(wx_c["game_pk"], errors="coerce")
-        wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_dir_degrees","wind_direction","is_outdoor","roof"]
+        wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_dir_degrees","wind_direction",
+                   "humidity_pct","pressure_hpa","precipitation_in","is_outdoor","roof"]
         wx_keep = [c for c in wx_cols if c in wx_c.columns]
         df = df.merge(wx_c[wx_keep].drop_duplicates("game_pk"), on="game_pk", how="left")
 
@@ -784,11 +831,17 @@ def build_features(
             df.loc[dome_mask, "temperature_f"] = df.loc[dome_mask, "temperature_f"].fillna(70)
         df["temperature_f"] = df["temperature_f"].fillna(70)
 
-        # Air density
-        df["air_density"] = _air_density(
+        # Air density: prefer MEASURED pressure+humidity (accurate HR-flight physics);
+        # fall back to the altitude+temp approximation where those are missing.
+        _approx = _air_density(
             df.get("altitude_ft", pd.Series(0, index=df.index)).fillna(0),
             df["temperature_f"]
         )
+        if "pressure_hpa" in df.columns and "humidity_pct" in df.columns:
+            _moist = _air_density_moist(df["pressure_hpa"], df["temperature_f"], df["humidity_pct"])
+            df["air_density"] = _moist.where(_moist.notna(), _approx)
+        else:
+            df["air_density"] = _approx
 
         # Handedness park factor
         if "stand" in df.columns and "home_abbr" in df.columns:
