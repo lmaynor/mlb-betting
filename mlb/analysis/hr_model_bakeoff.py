@@ -189,6 +189,16 @@ def _scorecard_row(model, prob, ho, res):
             row["lo_roi%"] = round(lo["roi"].mean() * 100, 2)
             locl = lo["clv_pct"].dropna()
             row["lo_clv%"] = round(locl.mean(), 2) if len(locl) else np.nan
+        # LEVER A: split YES (homered = OVER/YES) vs NO (UNDER/NO) -- is the NO
+        # favorite side the whole loss? (83% of live HR bets are NO.)
+        sel = cand["selection"].str.upper()
+        for tag, mask in (("yes", sel.isin(["OVER", "YES"])), ("no", sel.isin(["UNDER", "NO"]))):
+            g = cand[mask]
+            row[f"{tag}_n"] = int(len(g))
+            if len(g):
+                row[f"{tag}_roi%"] = round(g["roi"].mean() * 100, 2)
+                gc = g["clv_pct"].dropna()
+                row[f"{tag}_clv%"] = round(gc.mean(), 2) if len(gc) else np.nan
     return row
 
 
