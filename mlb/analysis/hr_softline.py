@@ -51,15 +51,19 @@ def _decimal(df: pd.DataFrame) -> pd.Series:
 
 
 def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
-                   min_sharp: int = 2, latest_only: bool = True) -> pd.DataFrame:
+                   min_sharp: int = 1, latest_only: bool = True,
+                   sharp_max_vig: float = SHARP_MAX_VIG) -> pd.DataFrame:
     """Pure core: soft-book +EV vs the sharp low-vig anchor. No I/O.
-    Returns one row per flagged (game,player,line,selection,soft-book) quote."""
+    Returns one row per flagged (game,player,line,selection,soft-book) quote.
+
+    The anchor pool is ALL low-vig books (incl. exchanges/Pinnacle) -- NON_BOOK
+    only excludes them from the BETTABLE soft set, never from the anchor."""
     if raw is None or not len(raw):
         return pd.DataFrame()
     df = raw.copy()
     df = df[pd.to_numeric(df["implied_prob"], errors="coerce").notna()]
     df["book_l"] = df["book"].astype(str).str.lower()
-    df = df[~df["book_l"].isin(NON_BOOK)]
+    df = df[df["book_l"] != "open"]            # drop only the 'open' pseudo-marker
     if not len(df):
         return pd.DataFrame()
     df["line"] = pd.to_numeric(df["line"], errors="coerce").fillna(-999.0)
@@ -72,8 +76,8 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
     df["vig"] = [book_vig.get_vig(market, b, default=0.07) for b in df["book_l"]]
     # each book's own no-vig fair estimate (unilateral -- HR-YES is one-sided)
     df["fair"] = [devig_unilateral(p, vig_pct=v) for p, v in zip(df["impl"], df["vig"])]
-    df["is_sharp"] = df["vig"] <= SHARP_MAX_VIG
-    df["is_soft"] = df["vig"] >= SOFT_MIN_VIG
+    df["is_sharp"] = df["vig"] <= sharp_max_vig                       # anchor: any low-vig book
+    df["is_soft"] = (df["vig"] >= SOFT_MIN_VIG) & (~df["book_l"].isin(NON_BOOK))  # bettable soft only
 
     sharp = df[df["is_sharp"]]
     if not len(sharp):
@@ -95,7 +99,7 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
     return hits.sort_values("ev", ascending=False).reset_index(drop=True)
 
 
-def scan(markets, since, until, min_ev, min_sharp, latest_only):
+def scan(markets, since, until, min_ev, min_sharp, latest_only, sharp_max_vig=SHARP_MAX_VIG):
     frames = []
     for m in markets:
         try:
@@ -104,13 +108,15 @@ def scan(markets, since, until, min_ev, min_sharp, latest_only):
             print(f"  {m}: read failed -- {e}")
             continue
         raw = oh.dedupe_by_source(raw) if len(raw) else raw
-        hits = score_softline(raw, m, min_ev=min_ev, min_sharp=min_sharp, latest_only=latest_only)
-        n_sharp_books = 0
+        hits = score_softline(raw, m, min_ev=min_ev, min_sharp=min_sharp,
+                              latest_only=latest_only, sharp_max_vig=sharp_max_vig)
+        sharp_names = []
         if len(raw):
             bl = raw["book"].astype(str).str.lower()
             vigs = {b: book_vig.get_vig(m, b, default=0.07) for b in bl.unique()}
-            n_sharp_books = sum(1 for v in vigs.values() if v <= SHARP_MAX_VIG)
-        print(f"  {m:<10} rows={len(raw):>6}  sharp_books={n_sharp_books:>2}  +EV_soft_quotes={len(hits):>4}")
+            sharp_names = sorted(b for b, v in vigs.items() if v <= sharp_max_vig)
+        print(f"  {m:<10} rows={len(raw):>6}  sharp_books={len(sharp_names)} {sharp_names}  "
+              f"+EV_soft_quotes={len(hits):>4}")
         if len(hits):
             frames.append(hits)
     if not frames:
@@ -144,15 +150,18 @@ def main(argv=None) -> int:
     p.add_argument("--since", default=None)
     p.add_argument("--until", default=None)
     p.add_argument("--min-ev", type=float, default=0.03, help="EV threshold, 0.03 = +3%")
-    p.add_argument("--min-sharp", type=int, default=2, help="require >= N sharp books for the anchor")
+    p.add_argument("--min-sharp", type=int, default=1, help="require >= N sharp books for the anchor")
+    p.add_argument("--sharp-vig", type=float, default=SHARP_MAX_VIG,
+                   help=f"max vig to count a book as sharp (default {SHARP_MAX_VIG}; raise to ~0.07 to include pinnacle/thescore)")
     p.add_argument("--all-snapshots", action="store_true", help="scan every snapshot, not just freshest")
     args = p.parse_args(argv)
     markets = ([m.strip() for m in args.markets.split(",")] if args.markets else [args.market])
     since = args.date or args.since
     until = args.date or args.until
     print(f"HR soft-line scan | markets={markets} min_ev={args.min_ev:.0%} "
-          f"min_sharp={args.min_sharp} | sharp<= {SHARP_MAX_VIG:.0%} vig, soft>= {SOFT_MIN_VIG:.0%}")
-    scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots)
+          f"min_sharp={args.min_sharp} | sharp<= {args.sharp_vig:.0%} vig, soft>= {SOFT_MIN_VIG:.0%}")
+    scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots,
+         sharp_max_vig=args.sharp_vig)
     return 0
 
 
