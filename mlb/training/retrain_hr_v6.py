@@ -59,6 +59,9 @@ _NON_FEATURE_COLS = {
     "batter", "game_pk", "game_date", "home_team", "away_team", "home_abbr",
     "player_name", "opp_pitcher_id", "pitcher", "stand",
     "season", "year", "date", "hr",
+    # xHR target (Lever C) -- de-noised HR count, TARGET only, never a feature
+    # (derived from game-G batted balls -> would be leakage as a feature).
+    "game_xhr",
     # Removed market-derived (T03)
     "team_moneyline", "implied_win_pct",
     # Raw in-game aggregates (target proxies)

@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore")
 MARKET_AUC_REF = 0.683
 LOW_EDGE_MAX = 0.06   # the well-calibrated, +CLV zone from live /edge-analysis
 
-ALL_MODELS = ["xgb_prod", "xgb_reg", "xgb_tuned", "logistic", "hist_gbm", "random_forest"]
+ALL_MODELS = ["xgb_prod", "xhr_poisson", "xgb_reg", "xgb_tuned", "logistic", "hist_gbm", "random_forest"]
 
 
 # ── model trainers: each returns holdout probabilities (np.ndarray) ────────────
@@ -88,9 +88,39 @@ def _sk_predict(tr, ho, feats, build_estimator):
     return est.predict_proba(Xho_i)[:, 1]
 
 
+def _xhr_poisson_predict(tr, ho, feats, c) -> np.ndarray:
+    """Lever C: train count:poisson on the DE-NOISED xHR target (game_xhr), predict
+    expected-HR lambda, return P(HR>=1) = 1 - exp(-lambda). Requires the game_xhr
+    column (rebuild HR features first). Feeds the binary backtest path."""
+    import xgboost as xgb
+    if "game_xhr" not in tr.columns:
+        raise RuntimeError("game_xhr column absent -- rebuild HR features (build_xhr_target)")
+    X = tr[feats].apply(pd.to_numeric, errors="coerce")
+    y = pd.to_numeric(tr["game_xhr"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    params = {k: v for k, v in c["params"].items() if k != "scale_pos_weight"}
+    params.update(objective="count:poisson", eval_metric="rmse")
+    nval = int(len(X) * 7 / 8)
+    dtr = xgb.DMatrix(X.iloc[:nval], label=y.iloc[:nval], feature_names=feats)
+    dval = xgb.DMatrix(X.iloc[nval:], label=y.iloc[nval:], feature_names=feats)
+    b = xgb.train(params, dtr, num_boost_round=c["n_round"],
+                  evals=[(dval, "v")], early_stopping_rounds=c["early"], verbose_eval=False)
+    best = int(getattr(b, "best_iteration", c["n_round"] - 1)) + 1
+    booster = xgb.train(params, xgb.DMatrix(X, label=y, feature_names=feats),
+                        num_boost_round=best, verbose_eval=False)
+    means = _means(tr, feats)
+    Xh = ho[feats].apply(pd.to_numeric, errors="coerce")
+    for f in feats:
+        Xh[f] = Xh[f].fillna(means[f])
+    lam = booster.predict(xgb.DMatrix(Xh.astype(float), feature_names=feats),
+                          iteration_range=(0, best))
+    return np.clip(1.0 - np.exp(-np.clip(lam, 0.0, None)), 0.001, 0.999)
+
+
 def _predict(model: str, tr, ho, feats, c) -> np.ndarray:
     if model == "xgb_prod":
         return _xgb_predict(tr, ho, feats, c)
+    if model == "xhr_poisson":
+        return _xhr_poisson_predict(tr, ho, feats, c)
     if model == "xgb_reg":
         p = {**c["params"], "max_depth": 3, "min_child_weight": 20,
              "reg_lambda": 3.0, "subsample": 0.8, "colsample_bytree": 0.8}

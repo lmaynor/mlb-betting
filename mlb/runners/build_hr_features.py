@@ -543,6 +543,37 @@ def build_pitcher_features(sc: pd.DataFrame, existing: pd.DataFrame,
     return combined
 
 
+# ── xHR target (Lever C) ───────────────────────────────────────────────────
+
+def build_xhr_target(sc: pd.DataFrame) -> pd.DataFrame:
+    """Expected-HR (xHR) target: for each batted ball, the empirical HR rate of its
+    (exit-velo, launch-angle) bin, summed per batter-game. A DE-NOISED HR count --
+    smoother than the 0/1 outcome, so a model trained on it learns contact quality
+    instead of outcome luck (targets the anti-predictive YES side from Lever A).
+
+    The EV/LA -> HR map is a stable physical relationship (like a park factor),
+    built globally. It is a TARGET only (never a feature -- excluded via
+    _NON_FEATURE_COLS), so using game-G batted balls is not pre-game leakage.
+    Returns [batter, game_pk, game_xhr].
+    """
+    ev = pd.to_numeric(sc.get("launch_speed"), errors="coerce")
+    la = pd.to_numeric(sc.get("launch_angle"), errors="coerce")
+    bbe = sc["events"].notna() & ev.notna() & la.notna()
+    if not bbe.any():
+        return pd.DataFrame(columns=["batter", "game_pk", "game_xhr"])
+    d = sc.loc[bbe, ["batter", "game_pk", "events"]].copy()
+    d["_ev"] = ev[bbe].values
+    d["_la"] = la[bbe].values
+    d["_hr"] = (d["events"] == "home_run").astype(int)
+    d["_evb"] = (d["_ev"] // 2 * 2).astype(int)      # 2 mph bins
+    d["_lab"] = (d["_la"] // 3 * 3).astype(int)      # 3 deg bins
+    lut = d.groupby(["_evb", "_lab"])["_hr"].mean().rename("_xhr_bbe")
+    d = d.join(lut, on=["_evb", "_lab"])
+    g = (d.groupby(["batter", "game_pk"])["_xhr_bbe"].sum()
+           .rename("game_xhr").reset_index())
+    return g
+
+
 # ── Fetch moneylines from ActionNetwork ───────────────────────────────────
 
 def _fetch_moneylines(run_date: str) -> pd.DataFrame:
@@ -848,6 +879,14 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
 
     # ── 5. Build final feature table ──────────────────────────────────────
     model_features = build_features(pg, bf, pf, wx, gf, platoon, order_map)
+
+    # Lever C: xHR target (de-noised HR count) -- target only, not a feature.
+    try:
+        xhr = build_xhr_target(sc)
+        model_features = model_features.merge(xhr, on=["batter", "game_pk"], how="left")
+        logger.info(f"  xHR target: game_xhr {model_features['game_xhr'].notna().mean():.0%} coverage")
+    except Exception as _e:  # noqa: BLE001
+        logger.warning("xHR target build failed (non-fatal): %s", _e)
 
     # ── 6. Upload to GCS ──────────────────────────────────────────────────
     logger.info("HR features: uploading to GCS")
