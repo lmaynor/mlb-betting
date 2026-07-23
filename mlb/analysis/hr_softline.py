@@ -42,6 +42,10 @@ from mlb_core.odds.utils import devig_unilateral
 # book_vig's fallback (no fitted entry); soft = {fliff 9.1%, hardrock 7.4%}.
 SHARP_MAX_VIG = 0.065   # books at/under this empirical hold = sharp anchor set
 SOFT_MIN_VIG = 0.072    # books at/over this = bettable soft outlets
+# No real HR-YES price is longer than ~+1500. Anything beyond is a stale/placeholder
+# /broken line (e.g. hardrock's +20000 in odds_history) that manufactures fake +EV --
+# reject it before it pollutes the scan (2026-07-23 validation caught -100% on these).
+MAX_AMERICAN = 1500
 NON_BOOK = OFFSHORE | {"kalshi", "open", "consensus", "average"}
 KEYS = ["game_pk", "player_id", "line", "selection"]
 
@@ -56,7 +60,8 @@ def _decimal(df: pd.DataFrame) -> pd.Series:
 def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
                    min_sharp: int = 1, latest_only: bool = True,
                    sharp_max_vig: float = SHARP_MAX_VIG,
-                   soft_min_vig: float = SOFT_MIN_VIG) -> pd.DataFrame:
+                   soft_min_vig: float = SOFT_MIN_VIG,
+                   max_american: float = MAX_AMERICAN) -> pd.DataFrame:
     """Pure core: soft-book +EV vs the sharp low-vig anchor. No I/O.
     Returns one row per flagged (game,player,line,selection,soft-book) quote.
 
@@ -96,6 +101,10 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
     soft = df[df["is_soft"]].merge(anchor, on=KEYS, how="inner")
     if not len(soft):
         return pd.DataFrame()
+    # Odds sanity: drop stale/placeholder longshots (+20000-type lines) that fabricate EV.
+    soft = soft[pd.to_numeric(soft["american"], errors="coerce") <= max_american]
+    if not len(soft):
+        return pd.DataFrame()
     soft["ev"] = (soft["sharp_fair"] * soft["dec"] - 1.0).round(4)
     soft["edge_prob"] = (soft["sharp_fair"] - soft["impl"]).round(4)
     soft["market"] = market
@@ -104,7 +113,7 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
 
 
 def scan(markets, since, until, min_ev, min_sharp, latest_only,
-         sharp_max_vig=SHARP_MAX_VIG, soft_min_vig=SOFT_MIN_VIG):
+         sharp_max_vig=SHARP_MAX_VIG, soft_min_vig=SOFT_MIN_VIG, max_american=MAX_AMERICAN):
     frames = []
     for m in markets:
         try:
@@ -115,7 +124,7 @@ def scan(markets, since, until, min_ev, min_sharp, latest_only,
         raw = oh.dedupe_by_source(raw) if len(raw) else raw
         hits = score_softline(raw, m, min_ev=min_ev, min_sharp=min_sharp,
                               latest_only=latest_only, sharp_max_vig=sharp_max_vig,
-                              soft_min_vig=soft_min_vig)
+                              soft_min_vig=soft_min_vig, max_american=max_american)
         sharp_names = []
         if len(raw):
             bl = raw["book"].astype(str).str.lower()
@@ -204,6 +213,8 @@ def main(argv=None) -> int:
                    help=f"min vig to count a book as a bettable soft outlet (default {SOFT_MIN_VIG})")
     p.add_argument("--validate", action="store_true",
                    help="settle flagged quotes vs actual HR outcomes (go/no-go); best over full history")
+    p.add_argument("--max-odds", type=float, default=MAX_AMERICAN,
+                   help=f"reject soft quotes longer than +this (stale/fake lines; default {MAX_AMERICAN})")
     p.add_argument("--all-snapshots", action="store_true", help="scan every snapshot, not just freshest")
     args = p.parse_args(argv)
     markets = ([m.strip() for m in args.markets.split(",")] if args.markets else [args.market])
@@ -212,7 +223,7 @@ def main(argv=None) -> int:
     print(f"HR soft-line scan | markets={markets} min_ev={args.min_ev:.0%} "
           f"min_sharp={args.min_sharp} | sharp<= {args.sharp_vig:.0%} vig, soft>= {args.soft_vig:.0%}")
     allq = scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots,
-                sharp_max_vig=args.sharp_vig, soft_min_vig=args.soft_vig)
+                sharp_max_vig=args.sharp_vig, soft_min_vig=args.soft_vig, max_american=args.max_odds)
     if args.validate:
         validate(allq)
     return 0
