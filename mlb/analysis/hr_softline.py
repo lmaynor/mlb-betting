@@ -1,0 +1,160 @@
+"""
+mlb.analysis.hr_softline -- HR-YES soft-book +EV vs a SHARP low-vig anchor.
+
+The viable HR edge is NOT out-predicting the market (proven dead: model AUC 0.63 <
+market 0.68, YES side -22%). It's catching a SOFT book's stale HR-YES price before
+it corrects, measured against the SHARP low-vig consensus.
+
+Why a new tool vs outlier_scan: outlier_scan anchors on the full-book median or a
+single book (Pinnacle, which rarely quotes HR props). This anchors on the SET of
+low-vig sharp books (prophetx/novig/bet365/pinnacle per book_vig) -- robust when any
+one is absent -- and tags every quote soft/sharp so you bet only the SOFT outlets
+(where size + staleness live), not a sharp book that's merely leading the move.
+
+Per (game, player, line, selection):
+  sharp_fair = median over SHARP books of devig_unilateral(implied, that book's vig)
+  for each SOFT book:  ev = sharp_fair * book_decimal - 1   (bet the soft book's price)
+Kalshi is intentionally NOT the anchor here -- it's too thin on props (use
+kalshi_vs_books for game_ml/total/nrfi). This is books-vs-books on hr_yn.
+
+EV vs a sharp anchor, not a settled backtest: it needs no outcomes, but it's only as
+good as the sharp mid. Confirm flagged soft books hold up on realized CLV before sizing.
+
+Run (Cloud Shell):
+  export MLB_GCS_BUCKET=concrete-crow-445205-m4-mlb-data
+  PYTHONPATH=. python3 -m mlb.analysis.hr_softline --date 2026-07-23 --min-ev 0.03
+  PYTHONPATH=. python3 -m mlb.analysis.hr_softline --market hr_yn --since 2026-07-01
+"""
+from __future__ import annotations
+
+import argparse
+
+import numpy as np
+import pandas as pd
+
+from mlb.analysis import odds_history as oh
+from mlb.analysis import book_vig
+from mlb.analysis.backtest_market import OFFSHORE
+from mlb_core.odds.utils import devig_unilateral
+
+SHARP_MAX_VIG = 0.060   # books at/under this empirical hold = sharp anchor set
+SOFT_MIN_VIG = 0.080    # books at/over this = bettable soft outlets
+NON_BOOK = OFFSHORE | {"kalshi", "open", "consensus", "average"}
+KEYS = ["game_pk", "player_id", "line", "selection"]
+
+
+def _decimal(df: pd.DataFrame) -> pd.Series:
+    dec = pd.to_numeric(df.get("decimal"), errors="coerce")
+    am = pd.to_numeric(df.get("american"), errors="coerce")
+    from_am = np.where(am > 0, 1.0 + am / 100.0, 1.0 + 100.0 / am.abs())
+    return dec.where(dec.notna() & (dec > 1.0), pd.Series(from_am, index=df.index))
+
+
+def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
+                   min_sharp: int = 2, latest_only: bool = True) -> pd.DataFrame:
+    """Pure core: soft-book +EV vs the sharp low-vig anchor. No I/O.
+    Returns one row per flagged (game,player,line,selection,soft-book) quote."""
+    if raw is None or not len(raw):
+        return pd.DataFrame()
+    df = raw.copy()
+    df = df[pd.to_numeric(df["implied_prob"], errors="coerce").notna()]
+    df["book_l"] = df["book"].astype(str).str.lower()
+    df = df[~df["book_l"].isin(NON_BOOK)]
+    if not len(df):
+        return pd.DataFrame()
+    df["line"] = pd.to_numeric(df["line"], errors="coerce").fillna(-999.0)
+    if latest_only and "snapshot_ts" in df.columns:
+        df = (df.sort_values("snapshot_ts")
+                .groupby(KEYS + ["book_l"], dropna=False, as_index=False).tail(1))
+
+    df["dec"] = _decimal(df)
+    df["impl"] = pd.to_numeric(df["implied_prob"], errors="coerce")
+    df["vig"] = [book_vig.get_vig(market, b, default=0.07) for b in df["book_l"]]
+    # each book's own no-vig fair estimate (unilateral -- HR-YES is one-sided)
+    df["fair"] = [devig_unilateral(p, vig_pct=v) for p, v in zip(df["impl"], df["vig"])]
+    df["is_sharp"] = df["vig"] <= SHARP_MAX_VIG
+    df["is_soft"] = df["vig"] >= SOFT_MIN_VIG
+
+    sharp = df[df["is_sharp"]]
+    if not len(sharp):
+        return pd.DataFrame()
+    anchor = (sharp.groupby(KEYS, dropna=False)
+                   .agg(sharp_fair=("fair", "median"), n_sharp=("book_l", "nunique"))
+                   .reset_index())
+    anchor = anchor[anchor["n_sharp"] >= min_sharp]
+    if not len(anchor):
+        return pd.DataFrame()
+
+    soft = df[df["is_soft"]].merge(anchor, on=KEYS, how="inner")
+    if not len(soft):
+        return pd.DataFrame()
+    soft["ev"] = (soft["sharp_fair"] * soft["dec"] - 1.0).round(4)
+    soft["edge_prob"] = (soft["sharp_fair"] - soft["impl"]).round(4)
+    soft["market"] = market
+    hits = soft[soft["ev"] >= min_ev].copy()
+    return hits.sort_values("ev", ascending=False).reset_index(drop=True)
+
+
+def scan(markets, since, until, min_ev, min_sharp, latest_only):
+    frames = []
+    for m in markets:
+        try:
+            raw = oh.read_history(m, since=since, until=until)
+        except Exception as e:  # noqa: BLE001
+            print(f"  {m}: read failed -- {e}")
+            continue
+        raw = oh.dedupe_by_source(raw) if len(raw) else raw
+        hits = score_softline(raw, m, min_ev=min_ev, min_sharp=min_sharp, latest_only=latest_only)
+        n_sharp_books = 0
+        if len(raw):
+            bl = raw["book"].astype(str).str.lower()
+            vigs = {b: book_vig.get_vig(m, b, default=0.07) for b in bl.unique()}
+            n_sharp_books = sum(1 for v in vigs.values() if v <= SHARP_MAX_VIG)
+        print(f"  {m:<10} rows={len(raw):>6}  sharp_books={n_sharp_books:>2}  +EV_soft_quotes={len(hits):>4}")
+        if len(hits):
+            frames.append(hits)
+    if not frames:
+        print("\nno soft-book +EV vs sharp anchor (thin sharp coverage, or books in line).")
+        return pd.DataFrame()
+    allq = pd.concat(frames, ignore_index=True)
+
+    cols = ["market", "game_date", "away_team", "home_team", "player_id", "selection",
+            "line", "book_l", "american", "impl", "sharp_fair", "n_sharp", "edge_prob", "ev"]
+    cols = [c for c in cols if c in allq.columns]
+    print(f"\n=== HR SOFT-LINE +EV (soft book vs sharp low-vig anchor, EV >= {min_ev:.0%}) : {len(allq)} ===")
+    with pd.option_context("display.width", 220, "display.max_columns", 30, "display.max_rows", 40):
+        print(allq[cols].head(40).to_string(index=False, float_format=lambda x: f"{x:,.3f}"))
+
+    tbl = (allq.groupby("book_l")
+              .agg(n=("ev", "size"), mean_ev=("ev", "mean"), max_ev=("ev", "max"))
+              .sort_values("mean_ev", ascending=False))
+    print("\n=== soft books ranked by mean +EV vs the sharp anchor ===")
+    print(tbl.to_string(float_format=lambda x: f"{x:,.3f}"))
+    print("\nCAVEAT: +EV only if the sharp low-vig consensus is the true prob and the soft\n"
+          "book is LAGGING (corrects toward it). Confirm on realized CLV / quote_survival\n"
+          "before sizing. Kalshi is not the anchor here (too thin on props).")
+    return allq
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(description="HR-YES soft-book +EV vs a sharp low-vig anchor")
+    p.add_argument("--market", default="hr_yn", help="canonical market (default hr_yn)")
+    p.add_argument("--markets", default=None, help="comma list override (else --market)")
+    p.add_argument("--date", default=None, help="single game_date YYYY-MM-DD")
+    p.add_argument("--since", default=None)
+    p.add_argument("--until", default=None)
+    p.add_argument("--min-ev", type=float, default=0.03, help="EV threshold, 0.03 = +3%")
+    p.add_argument("--min-sharp", type=int, default=2, help="require >= N sharp books for the anchor")
+    p.add_argument("--all-snapshots", action="store_true", help="scan every snapshot, not just freshest")
+    args = p.parse_args(argv)
+    markets = ([m.strip() for m in args.markets.split(",")] if args.markets else [args.market])
+    since = args.date or args.since
+    until = args.date or args.until
+    print(f"HR soft-line scan | markets={markets} min_ev={args.min_ev:.0%} "
+          f"min_sharp={args.min_sharp} | sharp<= {SHARP_MAX_VIG:.0%} vig, soft>= {SOFT_MIN_VIG:.0%}")
+    scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
