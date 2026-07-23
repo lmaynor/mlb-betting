@@ -51,7 +51,9 @@ SCHEMA_COLUMNS = [
 
 # De-dup identity for a single quote. Source precedence on overlap is the
 # caller's job (SGO for 2026+ closing; BettingPros for history).
-DEDUP_KEYS = ["market", "game_pk", "selection", "line", "book", "snapshot_ts", "source"]
+# player_id is REQUIRED: without it, every player prop sharing
+# (market, game_pk, selection, line, book, snapshot_ts) collapses to one row.
+DEDUP_KEYS = ["market", "game_pk", "player_id", "selection", "line", "book", "snapshot_ts", "source"]
 
 HISTORY_PREFIX = "Odds/history"
 COVERAGE_PREFIX = "Odds/history/_coverage"
@@ -138,7 +140,7 @@ def read_history(market: str, since: str | None = None, until: str | None = None
 # for a 2026 game). Backtests should read ONE line per quote-key; pick the preferred
 # source. Default: live providers (parlayapi > sgo) over the historical scrape.
 SOURCE_PRECEDENCE = ("parlayapi", "sgo", "bettingpros")
-_QUOTE_KEY = ["market", "game_pk", "selection", "line", "book", "snapshot_ts"]
+_QUOTE_KEY = ["market", "game_pk", "player_id", "selection", "line", "book", "snapshot_ts"]
 
 
 def dedupe_by_source(df, precedence: tuple = SOURCE_PRECEDENCE):
