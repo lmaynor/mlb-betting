@@ -37,8 +37,11 @@ from mlb.analysis import book_vig
 from mlb.analysis.backtest_market import OFFSHORE
 from mlb_core.odds.utils import devig_unilateral
 
-SHARP_MAX_VIG = 0.060   # books at/under this empirical hold = sharp anchor set
-SOFT_MIN_VIG = 0.080    # books at/over this = bettable soft outlets
+# Thresholds calibrated to the hr_yn vig clusters (diagnostic 2026-07-23):
+# sharp = {bet365 4.2%, novig 6.0%, parx 6.0%} sit under 6.5%; the ~6.64% pack is
+# book_vig's fallback (no fitted entry); soft = {fliff 9.1%, hardrock 7.4%}.
+SHARP_MAX_VIG = 0.065   # books at/under this empirical hold = sharp anchor set
+SOFT_MIN_VIG = 0.072    # books at/over this = bettable soft outlets
 NON_BOOK = OFFSHORE | {"kalshi", "open", "consensus", "average"}
 KEYS = ["game_pk", "player_id", "line", "selection"]
 
@@ -52,7 +55,8 @@ def _decimal(df: pd.DataFrame) -> pd.Series:
 
 def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
                    min_sharp: int = 1, latest_only: bool = True,
-                   sharp_max_vig: float = SHARP_MAX_VIG) -> pd.DataFrame:
+                   sharp_max_vig: float = SHARP_MAX_VIG,
+                   soft_min_vig: float = SOFT_MIN_VIG) -> pd.DataFrame:
     """Pure core: soft-book +EV vs the sharp low-vig anchor. No I/O.
     Returns one row per flagged (game,player,line,selection,soft-book) quote.
 
@@ -77,7 +81,7 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
     # each book's own no-vig fair estimate (unilateral -- HR-YES is one-sided)
     df["fair"] = [devig_unilateral(p, vig_pct=v) for p, v in zip(df["impl"], df["vig"])]
     df["is_sharp"] = df["vig"] <= sharp_max_vig                       # anchor: any low-vig book
-    df["is_soft"] = (df["vig"] >= SOFT_MIN_VIG) & (~df["book_l"].isin(NON_BOOK))  # bettable soft only
+    df["is_soft"] = (df["vig"] >= soft_min_vig) & (~df["book_l"].isin(NON_BOOK))  # bettable soft only
 
     sharp = df[df["is_sharp"]]
     if not len(sharp):
@@ -99,7 +103,8 @@ def score_softline(raw: pd.DataFrame, market: str, min_ev: float = 0.03,
     return hits.sort_values("ev", ascending=False).reset_index(drop=True)
 
 
-def scan(markets, since, until, min_ev, min_sharp, latest_only, sharp_max_vig=SHARP_MAX_VIG):
+def scan(markets, since, until, min_ev, min_sharp, latest_only,
+         sharp_max_vig=SHARP_MAX_VIG, soft_min_vig=SOFT_MIN_VIG):
     frames = []
     for m in markets:
         try:
@@ -109,7 +114,8 @@ def scan(markets, since, until, min_ev, min_sharp, latest_only, sharp_max_vig=SH
             continue
         raw = oh.dedupe_by_source(raw) if len(raw) else raw
         hits = score_softline(raw, m, min_ev=min_ev, min_sharp=min_sharp,
-                              latest_only=latest_only, sharp_max_vig=sharp_max_vig)
+                              latest_only=latest_only, sharp_max_vig=sharp_max_vig,
+                              soft_min_vig=soft_min_vig)
         sharp_names = []
         if len(raw):
             bl = raw["book"].astype(str).str.lower()
@@ -142,6 +148,47 @@ def scan(markets, since, until, min_ev, min_sharp, latest_only, sharp_max_vig=SH
     return allq
 
 
+def _realized_hr():
+    """{(game_pk, batter): hr>=1} from the HR feature table -- the actual outcome."""
+    from mlb.analysis import gen_preds as gp
+    spec = gp.SPECS["HR"]
+    df = gp._read_csv(spec.feature_csv, low_memory=False)[["game_pk", spec.id_col, spec.label_col]].dropna()
+    g = pd.to_numeric(df["game_pk"], errors="coerce")
+    b = pd.to_numeric(df[spec.id_col], errors="coerce")
+    h = pd.to_numeric(df[spec.label_col], errors="coerce")
+    return {(int(gi), int(bi)): int(hi >= 1) for gi, bi, hi in zip(g, b, h)
+            if pd.notna(gi) and pd.notna(bi) and pd.notna(hi)}
+
+
+def validate(allq: pd.DataFrame) -> None:
+    """Settle the flagged soft +EV quotes vs the REAL HR outcome -- the go/no-go.
+    A soft-line edge is only real if these flagged bets actually PROFIT."""
+    if allq is None or not len(allq):
+        print("\nvalidate: no flagged quotes to settle.")
+        return
+    real = _realized_hr()
+    q = allq.copy()
+    q["hr"] = [real.get((int(g), int(p))) if pd.notna(g) and pd.notna(p) else None
+               for g, p in zip(pd.to_numeric(q["game_pk"], errors="coerce"),
+                               pd.to_numeric(q["player_id"], errors="coerce"))]
+    q = q[q["hr"].notna()].copy()
+    if not len(q):
+        print("\nvalidate: 0 flagged quotes matched a settled HR outcome (future games / id mismatch).")
+        return
+    yes = q["selection"].str.upper().isin(["OVER", "YES"])
+    q["won"] = ((q["hr"] >= 1) == yes).astype(int)
+    q["roi"] = q["won"].mul(q["dec"] - 1.0).where(q["won"] == 1, -1.0)
+    print("\n=== REALIZED validation: flagged soft +EV quotes settled vs actual HR ===")
+    print(f"  n={len(q)}  hit%={q['won'].mean()*100:.1f}  ROI={q['roi'].mean()*100:+.1f}%  "
+          f"units={q['roi'].sum():+.1f}")
+    by = q.groupby("book_l").agg(n=("won", "size"), hit=("won", "mean"), roi=("roi", "mean"))
+    by["hit"] = (by["hit"] * 100).round(1)
+    by["roi"] = (by["roi"] * 100).round(1)
+    print(by.sort_values("roi", ascending=False).to_string())
+    print("  REAL edge => ROI > 0 on decent n. ROI <= 0 => the '+EV vs anchor' was illusory\n"
+          "  (anchor mispriced, or soft prices not actually beatable). CLV/quote_survival next.")
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="HR-YES soft-book +EV vs a sharp low-vig anchor")
     p.add_argument("--market", default="hr_yn", help="canonical market (default hr_yn)")
@@ -152,16 +199,22 @@ def main(argv=None) -> int:
     p.add_argument("--min-ev", type=float, default=0.03, help="EV threshold, 0.03 = +3%")
     p.add_argument("--min-sharp", type=int, default=1, help="require >= N sharp books for the anchor")
     p.add_argument("--sharp-vig", type=float, default=SHARP_MAX_VIG,
-                   help=f"max vig to count a book as sharp (default {SHARP_MAX_VIG}; raise to ~0.07 to include pinnacle/thescore)")
+                   help=f"max vig to count a book as sharp (default {SHARP_MAX_VIG})")
+    p.add_argument("--soft-vig", type=float, default=SOFT_MIN_VIG,
+                   help=f"min vig to count a book as a bettable soft outlet (default {SOFT_MIN_VIG})")
+    p.add_argument("--validate", action="store_true",
+                   help="settle flagged quotes vs actual HR outcomes (go/no-go); best over full history")
     p.add_argument("--all-snapshots", action="store_true", help="scan every snapshot, not just freshest")
     args = p.parse_args(argv)
     markets = ([m.strip() for m in args.markets.split(",")] if args.markets else [args.market])
     since = args.date or args.since
     until = args.date or args.until
     print(f"HR soft-line scan | markets={markets} min_ev={args.min_ev:.0%} "
-          f"min_sharp={args.min_sharp} | sharp<= {args.sharp_vig:.0%} vig, soft>= {SOFT_MIN_VIG:.0%}")
-    scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots,
-         sharp_max_vig=args.sharp_vig)
+          f"min_sharp={args.min_sharp} | sharp<= {args.sharp_vig:.0%} vig, soft>= {args.soft_vig:.0%}")
+    allq = scan(markets, since, until, args.min_ev, args.min_sharp, not args.all_snapshots,
+                sharp_max_vig=args.sharp_vig, soft_min_vig=args.soft_vig)
+    if args.validate:
+        validate(allq)
     return 0
 
 
