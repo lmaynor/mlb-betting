@@ -65,6 +65,20 @@ STADIUMS_ROOF = {
     "TOR": "retractable", "TB":  "dome",
 }
 
+# Home-plate -> center-field compass bearing (degrees; 0=N, 90=E, 180=S, 270=W).
+# APPROXIMATE published ballpark orientations -- used only for the directional-wind
+# feature (wind blowing OUT toward CF/pull raises HR). A park absent here yields
+# NaN wind_out (XGBoost-safe). VERIFY against an authoritative orientation source
+# before trusting these features in production.
+PARK_CF_AZIMUTH = {
+    "ARI": 0,   "ATL": 46,  "BAL": 30,  "BOS": 45,  "CHC": 33,
+    "CWS": 128, "CIN": 40,  "CLE": 0,   "COL": 0,   "DET": 150,
+    "HOU": 348, "KC":  45,  "LAA": 44,  "LAD": 24,  "MIA": 40,
+    "MIL": 33,  "MIN": 0,   "NYM": 26,  "NYY": 78,  "OAK": 55,
+    "PHI": 15,  "PIT": 118, "SD":  0,   "SF":  88,  "SEA": 45,
+    "STL": 62,  "TB":  45,  "TEX": 135, "TOR": 348, "WSH": 30,
+}
+
 TEAM_NAME_TO_ABBR = {
     "ARI":"ARI","AZ":"ARI","ATL":"ATL","BAL":"BAL","BOS":"BOS",
     "CHC":"CHC","CWS":"CWS","CIN":"CIN","CLE":"CLE","COL":"COL",
@@ -572,6 +586,56 @@ def _fetch_moneylines(run_date: str) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# ── Lever B features (2026-07-23) ──────────────────────────────────────────
+
+def _ang_out(spd, deg_from, target_az):
+    """Wind component (mph) blowing OUT toward compass bearing target_az.
+    deg_from = meteorological direction the wind comes FROM; positive result =
+    blowing out (toward target), negative = blowing in."""
+    blowing_toward = (deg_from + 180.0) % 360.0
+    delta = np.radians(((blowing_toward - target_az + 180.0) % 360.0) - 180.0)
+    return spd * np.cos(delta)
+
+
+def add_lever_b_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Additive HR features: expected PAs from batting-order slot, directional
+    wind (out to CF / pull field), and arsenal-matchup interactions. Every input
+    is available at BOTH train and serve time (no train/serve skew), and each is
+    fail-safe: a missing input yields NaN, which XGBoost imputes via feature_means.
+    """
+    # 1) Expected plate appearances + top-of-order flag (from ewma_batting_order).
+    if "ewma_batting_order" in df.columns:
+        order = pd.to_numeric(df["ewma_batting_order"], errors="coerce")
+        slot = order.round().clip(1, 9)
+        df["expected_pa"] = slot.map(EXPECTED_PA).astype(float)
+        df["top_of_order"] = (order <= 4.0).astype(float)
+
+    # 2) Directional wind blowing out to CF and to the batter's pull field.
+    if "wind_dir_degrees" in df.columns and "home_abbr" in df.columns:
+        cf_az = df["home_abbr"].map(PARK_CF_AZIMUTH)
+        spd = pd.to_numeric(df.get("wind_speed_mph"), errors="coerce")
+        deg = pd.to_numeric(df["wind_dir_degrees"], errors="coerce")
+        df["wind_out_cf_mph"] = _ang_out(spd, deg, cf_az)
+        if "stand" in df.columns:
+            # RH batter pulls to LF (cf-45), LH pulls to RF (cf+45)
+            pull_az = pd.Series(np.where(df["stand"].eq("R"), cf_az - 45.0, cf_az + 45.0)
+                                % 360.0, index=df.index)
+            df["wind_out_pull_mph"] = _ang_out(spd, deg, pull_az)
+        # covered parks (dome + retractable) -> no wind effect
+        covered = df["home_abbr"].map(lambda t: 1 if STADIUMS_ROOF.get(t) else 0).eq(1)
+        for c in ("wind_out_cf_mph", "wind_out_pull_mph"):
+            if c in df.columns:
+                df.loc[covered, c] = 0.0
+
+    # 3) Arsenal matchup: batter power vs the pitch types the SP throws most
+    #    (interactions of already-computed pitcher-mix x batter-power features).
+    def _num(name):
+        return pd.to_numeric(df[name], errors="coerce") if name in df.columns else np.nan
+    df["matchup_fb_hr"] = _num("pitcher_fb_pct_L50") * _num("batter_hr_per_fb_L50")
+    df["matchup_high_fb_barrel"] = _num("pitcher_high_fb_pct_L50") * _num("batter_barrel_rate_L50")
+    return df
+
+
 # ── Section 9: Feature join ────────────────────────────────────────────────
 
 def build_features(
@@ -613,7 +677,7 @@ def build_features(
     if not wx.empty:
         wx_c = wx.copy()
         wx_c["game_pk"] = pd.to_numeric(wx_c["game_pk"], errors="coerce")
-        wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_direction","is_outdoor","roof"]
+        wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_dir_degrees","wind_direction","is_outdoor","roof"]
         wx_keep = [c for c in wx_cols if c in wx_c.columns]
         df = df.merge(wx_c[wx_keep].drop_duplicates("game_pk"), on="game_pk", how="left")
 
@@ -670,6 +734,14 @@ def build_features(
         logger.info(f"  After platoon join: 100.0% coverage")
 
     logger.info(f"  ✅ {len(df):,} rows | HR rate: {df.get('hr', pd.Series()).mean():.3f}")
+
+    # Lever B (2026-07-23): expected PAs, directional wind, arsenal matchup.
+    df = add_lever_b_features(df)
+    _lb = [c for c in ("expected_pa", "top_of_order", "wind_out_cf_mph",
+                       "wind_out_pull_mph", "matchup_fb_hr", "matchup_high_fb_barrel")
+           if c in df.columns]
+    logger.info("  Lever B features added: " + ", ".join(
+        f"{c}={df[c].notna().mean():.0%}" for c in _lb))
 
     # T13: Regime indicator — pitch clock rules 2023-03-30.
     if "game_date" in df.columns:
