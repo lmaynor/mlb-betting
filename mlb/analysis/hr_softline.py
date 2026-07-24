@@ -187,15 +187,33 @@ def validate(allq: pd.DataFrame) -> None:
     yes = q["selection"].str.upper().isin(["OVER", "YES"])
     q["won"] = ((q["hr"] >= 1) == yes).astype(int)
     q["roi"] = q["won"].mul(q["dec"] - 1.0).where(q["won"] == 1, -1.0)
+
+    def _tstat(vals):
+        from scipy import stats as scipy_stats
+        vals = vals.dropna()
+        if len(vals) < 2:
+            return None
+        sem = float(scipy_stats.sem(vals))
+        return round(float(vals.mean()) / sem, 3) if sem > 0 else None
+
+    t = _tstat(q["roi"])
     print("\n=== REALIZED validation: flagged soft +EV quotes settled vs actual HR ===")
     print(f"  n={len(q)}  hit%={q['won'].mean()*100:.1f}  ROI={q['roi'].mean()*100:+.1f}%  "
-          f"units={q['roi'].sum():+.1f}")
-    by = q.groupby("book_l").agg(n=("won", "size"), hit=("won", "mean"), roi=("roi", "mean"))
+          f"units={q['roi'].sum():+.1f}  t-stat={t}"
+          + ("  (|t|<2 -> NOT yet significant, small-n longshot variance)"
+             if t is not None and abs(t) < 2 else ""))
+    by = q.groupby("book_l").agg(n=("won", "size"), hit=("won", "mean"), roi=("roi", "mean"),
+                                 tstat=("roi", _tstat))
     by["hit"] = (by["hit"] * 100).round(1)
     by["roi"] = (by["roi"] * 100).round(1)
     print(by.sort_values("roi", ascending=False).to_string())
-    print("  REAL edge => ROI > 0 on decent n. ROI <= 0 => the '+EV vs anchor' was illusory\n"
-          "  (anchor mispriced, or soft prices not actually beatable). CLV/quote_survival next.")
+    if "game_date" in q.columns and q["game_date"].notna().any():
+        dmin, dmax = q["game_date"].min(), q["game_date"].max()
+        print(f"  flagged-bet date range: {dmin} .. {dmax} -- if narrow vs your --since window, "
+              f"that's a COVERAGE gap (sharp/soft book presence), not a seasonal effect; "
+              f"check with odds_freshness / per-book date range before trusting the rate.")
+    print("  REAL edge => ROI > 0 AND t-stat significant (|t|>=2) on decent n. ROI<=0 or |t|<2\n"
+          "  => not yet distinguishable from noise. CLV/quote_survival next regardless.")
 
 
 def main(argv=None) -> int:
