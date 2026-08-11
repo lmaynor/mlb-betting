@@ -21,19 +21,31 @@ Method (leakage-proof, mirrors mlb.analysis.walkforward):
   5. Print a scorecard: OOS AUC/Brier + overall & LOW-EDGE ROI/CLV per candidate.
 
 CLV is the go/no-go (walkforward RULE). ROI on best-shopped lines flatters every
-model; a candidate only "wins" if its low-edge bets carry positive, less-negative,
-or significant CLV vs the xgb_prod control.
+model; a candidate only "wins" if it clears the codified rubric
+(backtest_market.verdict: significant low-edge CLV AND a monotonic edge ladder --
+see docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md).
+
+--tune adds "xgb_optuna", a REAL per-system walk-forward-safe Optuna search
+(mlb.analysis.bakeoff_tuning) -- unlike "xgb_tuned", a fixed hardcoded guess kept
+around only as a cheap sanity check. --persist writes every run durably (candidates,
+scorecard, tuned params, run metadata) via mlb.analysis.bakeoff_persist -- nothing
+persists without it (otherwise print-only, same as before).
 
 Run (Cloud Shell; same env as gen_preds/walkforward):
   export MLB_GCS_BUCKET=concrete-crow-445205-m4-mlb-data
+  pip install optuna --break-system-packages   # once, only needed for --tune
   PYTHONPATH=. python3 -m mlb.analysis.hr_model_bakeoff --cutoff 2026-06-01 \
       --min-books 4 --max-spread 0.10
   # add --calibrate to fit a leakage-clean isotonic layer on each candidate
   # add --models xgb_prod,logistic,hist_gbm to run a subset
+  # real tuning + gated + persisted:
+  PYTHONPATH=. python3 -m mlb.analysis.hr_model_bakeoff --cutoff 2026-06-01 \
+      --min-books 4 --max-spread 0.10 --tune --tune-trials 30 --persist
 """
 from __future__ import annotations
 
 import argparse
+import logging
 import warnings
 
 import numpy as np
@@ -41,13 +53,21 @@ import pandas as pd
 
 from mlb.analysis import walkforward as wf
 from mlb.analysis import backtest_market as bt
+from mlb.analysis import bakeoff_tuning
+from mlb.analysis import bakeoff_persist
 
 warnings.filterwarnings("ignore")
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("hr_model_bakeoff")
+
 # Market AUC on live HR bets (model-health, 2026-07-22) -- the bar to beat.
 MARKET_AUC_REF = 0.683
-LOW_EDGE_MAX = 0.06   # the well-calibrated, +CLV zone from live /edge-analysis
 
+# "xgb_tuned" is a fixed hardcoded preset (cheap sanity check, kept as-is). "xgb_optuna"
+# -- the real per-system search (mlb.analysis.bakeoff_tuning) -- is deliberately NOT in
+# this default list: it needs tuned params resolved first (see --tune in main()), so a
+# plain run with no flags must behave exactly as before. --tune adds it dynamically.
 ALL_MODELS = ["xgb_prod", "xhr_poisson", "xgb_reg", "xgb_tuned", "logistic", "hist_gbm", "random_forest"]
 
 
@@ -130,6 +150,14 @@ def _predict(model: str, tr, ho, feats, c) -> np.ndarray:
              "min_child_weight": 10, "reg_lambda": 2.0, "reg_alpha": 0.5,
              "subsample": 0.9, "colsample_bytree": 0.9}
         return _xgb_predict(tr, ho, feats, {**c, "params": p})
+    if model == "xgb_optuna":
+        # real per-system search (bakeoff_tuning.tune_system_walkforward) -- run()
+        # resolves this ONCE before the model loop and stashes it on `c`.
+        tuned = c.get("tuned_params")
+        if not tuned:
+            raise RuntimeError("xgb_optuna requested but no tuned params on c -- "
+                               "run() should have resolved this before the model loop")
+        return _xgb_predict(tr, ho, feats, {**c, "params": tuned})
     if model == "logistic":
         from sklearn.linear_model import LogisticRegression
         return _sk_predict(tr, ho, feats,
@@ -195,7 +223,9 @@ def _scorecard_row(model, prob, ho, res):
     y = pd.to_numeric(ho["hr"], errors="coerce").values
     row = {"model": model, "auc": np.nan, "brier": np.nan, "brier_skill": np.nan,
            "n_bets": 0, "roi_best%": np.nan, "roi_cons%": np.nan, "clv%": np.nan,
-           "clv_n": 0, "lo_n": 0, "lo_roi%": np.nan, "lo_clv%": np.nan}
+           "clv_n": 0, "lo_n": 0, "lo_roi%": np.nan, "lo_clv%": np.nan,
+           "verdict": "INSUFFICIENT_N", "verdict_reason": "no candidates",
+           "clv_tstat": np.nan, "ladder_monotonic": None}
     try:
         row["auc"] = round(float(roc_auc_score(y, prob)), 4)
         base = float(np.mean(y))
@@ -213,7 +243,7 @@ def _scorecard_row(model, prob, ho, res):
         clv = cand["clv_pct"].dropna()
         row["clv_n"] = int(len(clv))
         row["clv%"] = round(clv.mean(), 2) if len(clv) else np.nan
-        lo = cand[cand["edge"] <= LOW_EDGE_MAX]
+        lo = cand[cand["edge"] <= bt.LOW_EDGE_MAX]
         row["lo_n"] = int(len(lo))
         if len(lo):
             row["lo_roi%"] = round(lo["roi"].mean() * 100, 2)
@@ -229,11 +259,18 @@ def _scorecard_row(model, prob, ho, res):
                 row[f"{tag}_roi%"] = round(g["roi"].mean() * 100, 2)
                 gc = g["clv_pct"].dropna()
                 row[f"{tag}_clv%"] = round(gc.mean(), 2) if len(gc) else np.nan
+        # codified go/no-go (docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md)
+        v = bt.verdict(cand)
+        row["verdict"] = v["verdict"]
+        row["verdict_reason"] = v["reason"]
+        row["clv_tstat"] = v["clv_tstat"]
+        row["ladder_monotonic"] = v["ladder_monotonic"]
     return row
 
 
 def run(cutoff: str, until: str | None, models: list, min_books: int,
-        max_spread: float, calibrate: bool) -> pd.DataFrame:
+        max_spread: float, calibrate: bool, tune_trials: int = 30, tune_folds: int = 3,
+        load_tuned_from: str | None = None, persist_prefix: str | None = None) -> pd.DataFrame:
     spec, c, df, feats = wf._prepare("HR", quiet=False)
     tr = df[df["game_date"] < cutoff]
     ho = df[df["game_date"] >= cutoff]
@@ -241,11 +278,27 @@ def run(cutoff: str, until: str | None, models: list, min_books: int,
         ho = ho[ho["game_date"] < until]
     if len(tr) < 200 or len(ho) < 10:
         raise RuntimeError(f"bad split: train={len(tr)} holdout={len(ho)} at {cutoff}")
-    print(f"\nHR bake-off | train {len(tr):,} (<{cutoff}) -> holdout {len(ho):,} "
-          f"[{cutoff}, {until or 'end'})  | {len(feats)} features | "
-          f"HR base rate {tr['hr'].mean():.3f} | calibrate={calibrate}")
-    print(f"gates: min_books={min_books} max_spread={max_spread}  "
-          f"(market AUC bar = {MARKET_AUC_REF})\n")
+    logger.info(f"HR bake-off | train {len(tr):,} (<{cutoff}) -> holdout {len(ho):,} "
+               f"[{cutoff}, {until or 'end'})  | {len(feats)} features | "
+               f"HR base rate {tr['hr'].mean():.3f} | calibrate={calibrate}")
+    logger.info(f"gates: min_books={min_books} max_spread={max_spread}  "
+               f"(market AUC bar = {MARKET_AUC_REF})")
+
+    if "xgb_optuna" in models:
+        loaded = bakeoff_persist.load_tuning(load_tuned_from, "HR") if load_tuned_from else None
+        if loaded:
+            tuned_params, tune_meta = loaded
+            logger.info(f"[HR][tune] loaded prior tuned params from {load_tuned_from} "
+                       f"(status={tune_meta.get('status')})")
+        else:
+            if load_tuned_from:
+                logger.warning(f"[HR][tune] no tuned params at {load_tuned_from} "
+                              f"-- searching fresh instead")
+            tuned_params, tune_meta = bakeoff_tuning.tune_system_walkforward(
+                "HR", cutoff, n_trials=tune_trials, n_folds=tune_folds, prep=(spec, c, df, feats))
+        c = {**c, "tuned_params": tuned_params}
+        if persist_prefix:
+            bakeoff_persist.write_tuning(persist_prefix, "HR", tuned_params, tune_meta)
 
     rows, best_cand, best_key = [], None, (-1e9, None)
     for m in models:
@@ -262,16 +315,18 @@ def run(cutoff: str, until: str | None, models: list, min_books: int,
             if isinstance(res, dict) and res.get("candidates") is not None and score > best_key[0]:
                 best_key = (score, m)
                 best_cand = res
-            print(f"  {m:<14} done  AUC={row['auc']}  bets={row['n_bets']}  "
-                  f"lo-edge CLV={row['lo_clv%']}%  (n={row['lo_n']})")
+            logger.info(f"[HR][{m}] done AUC={row['auc']} bets={row['n_bets']} "
+                       f"lo_clv={row['lo_clv%']}% (n={row['lo_n']}) verdict={row['verdict']}")
+            if persist_prefix and isinstance(res, dict) and res.get("candidates") is not None:
+                bakeoff_persist.write_candidates(persist_prefix, "HR", m, res["candidates"])
         except Exception as e:  # noqa: BLE001
-            print(f"  {m:<14} FAILED: {type(e).__name__}: {e}")
+            logger.error(f"[HR][{m}] FAILED: {type(e).__name__}: {e}")
             rows.append({"model": m, "auc": np.nan})
 
     board = pd.DataFrame(rows).set_index("model")
     print("\n=== HR MODEL SCORECARD (out-of-sample, gated) ===")
     print("  brier_skill>0 = beats base rate. lo_* = edge<=6% (the +CLV zone). "
-          "CLV is the go/no-go.")
+          "verdict = codified go/no-go (backtest_market.verdict).")
     with pd.option_context("display.width", 220, "display.max_columns", 30):
         print(board.to_string(float_format=lambda x: f"{x:,.3f}"))
 
@@ -279,8 +334,13 @@ def run(cutoff: str, until: str | None, models: list, min_books: int,
         print(f"\n=== edge-bucket drill-down: {best_key[1]} "
               f"(best low-edge CLV) ===")
         bt._print_report(best_cand, f"OOS >= {cutoff}", best_cand["candidates"])
-    print("\nRULE: a candidate only beats xgb_prod if its low-edge CLV is positive / "
-          "less-negative AND holds up on n. Best-line ROI flatters everyone.")
+    n_promoted = int((board.get("verdict") == "PROMOTE_CANDIDATE").sum()) if "verdict" in board else 0
+    print(f"\n  {n_promoted} of {len(board)} candidates cleared PROMOTE_CANDIDATE "
+         f"(low-edge CLV >=+2% at t>2, monotonic edge ladder, n>={bt.BAKEOFF_MIN_N}).")
+    if not n_promoted:
+        print("  No candidate cleared the bar -- consistent with the 2026-06-30 all-system "
+             "sweep finding no capturable model-vs-line edge; means the gap is "
+             "market/calibration-side, not model fit. Best-line ROI alone flatters everyone.")
     return board
 
 
@@ -294,9 +354,53 @@ def main(argv=None) -> int:
     p.add_argument("--max-spread", type=float, default=0.10, help="clean-market gate")
     p.add_argument("--calibrate", action="store_true",
                    help="fit a leakage-clean isotonic layer per candidate")
+    p.add_argument("--tune", action="store_true",
+                   help="add xgb_optuna (real walk-forward-safe Optuna search)")
+    p.add_argument("--tune-trials", type=int, default=30, help="Optuna trials")
+    p.add_argument("--tune-folds", type=int, default=3, help="inner CV month-folds for tuning")
+    p.add_argument("--load-tuned-from", default=None,
+                   help="reuse a prior --persist run's tuned params instead of re-searching")
+    p.add_argument("--persist", action="store_true", help="write results to GCS (see bakeoff_persist)")
+    p.add_argument("--run-root", default=bakeoff_persist.DEFAULT_RUN_ROOT,
+                   help=f"GCS prefix root for --persist (default {bakeoff_persist.DEFAULT_RUN_ROOT})")
     args = p.parse_args(argv)
+
     models = [m.strip() for m in args.models.split(",") if m.strip()]
-    run(args.cutoff, args.until, models, args.min_books, args.max_spread, args.calibrate)
+    if "xgb_optuna" in models and not args.tune:
+        p.error("--models includes xgb_optuna but --tune was not set (no params source)")
+    if args.tune and "xgb_optuna" not in models:
+        models.append("xgb_optuna")
+
+    persist_prefix, run_meta = None, None
+    if args.persist:
+        run_id = bakeoff_persist.make_run_id(args.cutoff)
+        persist_prefix = bakeoff_persist.run_prefix(run_id, args.run_root)
+        run_meta = bakeoff_persist.new_run_meta(
+            run_id, persist_prefix, args.cutoff, args.until, ["HR"],
+            tune=args.tune, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
+            min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
+            load_tuned_from=args.load_tuned_from)
+        bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+        logger.info(f"persisting to {persist_prefix}")
+
+    board = run(args.cutoff, args.until, models, args.min_books, args.max_spread, args.calibrate,
+               tune_trials=args.tune_trials, tune_folds=args.tune_folds,
+               load_tuned_from=args.load_tuned_from, persist_prefix=persist_prefix)
+
+    if persist_prefix:
+        # normalize to model_bakeoff.py's unsuffixed column names (clv/lo_clv/roi_best, not
+        # clv%/lo_clv%/roi_best%) so a persisted scorecard has ONE schema regardless of which
+        # script produced it -- bakeoff_report.py (and anyone else) shouldn't have to special-case
+        # HR's historical %-suffixed display convention, which stays unchanged on-screen above.
+        rename = {"clv%": "clv", "lo_clv%": "lo_clv", "roi_best%": "roi_best",
+                  "roi_cons%": "roi_cons", "lo_roi%": "lo_roi",
+                  "yes_roi%": "yes_roi", "yes_clv%": "yes_clv",
+                  "no_roi%": "no_roi", "no_clv%": "no_clv"}
+        scorecard = board.reset_index().assign(system="HR").rename(columns=rename)
+        bakeoff_persist.write_scorecard(persist_prefix, scorecard)
+        run_meta = bakeoff_persist.mark_system_complete(persist_prefix, run_meta, "HR")
+        bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="complete")
+        print(f"\n  persisted -> {persist_prefix}  (scorecard.csv, candidates/, tuning/, run_meta.json)")
     return 0
 
 
