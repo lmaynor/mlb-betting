@@ -27,23 +27,34 @@ CLV_TSTAT_MIN   = float(os.getenv("CLV_TSTAT_MIN",   "2.0"))   # |t| for signifi
 CLV_MIN_N       = int(os.getenv("CLV_MIN_N",         "100"))   # min bets w/ closing line
 
 
-def clv_verdict(mean_clv, clv_tstat, clv_n) -> dict:
+def clv_verdict(mean_clv, clv_tstat, clv_n, *,
+                min_n: int | None = None,
+                promote_min: float | None = None,
+                tstat_min: float | None = None) -> dict:
     """Classify a system's CLV into a promotion-scorecard status.
 
     Args:
         mean_clv:  mean closing-line value in percent (e.g. 2.3 == +2.3%), or None
         clv_tstat: t-statistic of the CLV mean vs 0, or None
         clv_n:     number of settled bets with a captured closing line
+        min_n, promote_min, tstat_min: override the module-level env-configured
+            bar (CLV_MIN_N/CLV_PROMOTE_MIN/CLV_TSTAT_MIN) for THIS call only, e.g. a
+            smaller min_n for a one-shot backtest sample vs. the live 100-bet T17
+            gate. None (default) keeps existing behavior for existing callers.
 
     Returns dict with:
         clv_status        in {ready, promising, flat, negative, insufficient}
         clv_note          one-line human-readable explanation
         clv_promote_ready bool -- True only when the full T17 bar is cleared
     """
-    if not clv_n or clv_n < CLV_MIN_N:
+    min_n = CLV_MIN_N if min_n is None else min_n
+    promote_min = CLV_PROMOTE_MIN if promote_min is None else promote_min
+    tstat_min = CLV_TSTAT_MIN if tstat_min is None else tstat_min
+
+    if not clv_n or clv_n < min_n:
         return {
             "clv_status": "insufficient",
-            "clv_note": f"only {clv_n or 0}/{CLV_MIN_N} bets with a closing line",
+            "clv_note": f"only {clv_n or 0}/{min_n} bets with a closing line",
             "clv_promote_ready": False,
         }
     if mean_clv is None:
@@ -53,13 +64,13 @@ def clv_verdict(mean_clv, clv_tstat, clv_n) -> dict:
             "clv_promote_ready": False,
         }
 
-    significant = clv_tstat is not None and abs(clv_tstat) > CLV_TSTAT_MIN
+    significant = clv_tstat is not None and abs(clv_tstat) > tstat_min
 
-    if mean_clv >= CLV_PROMOTE_MIN and clv_tstat is not None and clv_tstat > CLV_TSTAT_MIN:
+    if mean_clv >= promote_min and clv_tstat is not None and clv_tstat > tstat_min:
         return {
             "clv_status": "ready",
             "clv_note": (f"mean CLV {mean_clv:+.2f}% (t={clv_tstat}) clears the "
-                         f"+{CLV_PROMOTE_MIN:.0f}%/t>{CLV_TSTAT_MIN:.0f} bar over {clv_n} bets"),
+                         f"+{promote_min:.0f}%/t>{tstat_min:.0f} bar over {clv_n} bets"),
             "clv_promote_ready": True,
         }
     if mean_clv < 0 and significant:
@@ -73,7 +84,7 @@ def clv_verdict(mean_clv, clv_tstat, clv_n) -> dict:
         return {
             "clv_status": "promising",
             "clv_note": (f"mean CLV {mean_clv:+.2f}% (t={clv_tstat}) positive but short of "
-                         f"the +{CLV_PROMOTE_MIN:.0f}%/t>{CLV_TSTAT_MIN:.0f} promotion bar"),
+                         f"the +{promote_min:.0f}%/t>{tstat_min:.0f} promotion bar"),
             "clv_promote_ready": False,
         }
     return {
