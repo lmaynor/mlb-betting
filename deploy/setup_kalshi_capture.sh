@@ -46,6 +46,15 @@ _upsert_job() {  # job_name  extra_args
   else
     echo "Job $job_name not found -- creating..."; gcloud run jobs create "$job_name" "${flags[@]}"
   fi
+
+  # scheduler-invoker must hold run.invoker ON THE JOB or every scheduler firing
+  # is PERMISSION_DENIED (code 7) -- bit mlb-track-bettingpros/mlb-fast-alert/
+  # mlb-weekly-survival before (2026-07-05 postmortem), and this job again when
+  # it shipped 2026-07-23 without the binding (see docs/solutions/runtime-errors/
+  # scheduler-permission-denied-on-new-jobs.md). Idempotent -- safe on update too.
+  gcloud run jobs add-iam-policy-binding "$job_name" --region="$REGION" \
+    --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
+  echo "run.invoker granted to $SCHED_SA on $job_name"
 }
 
 _upsert_sched() {  # sched_name  cron  job_name  description
