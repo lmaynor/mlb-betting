@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-06-11 00:30 CST
+_Last updated: 2026-08-10 (ops: ODDS_PRIMARY/cadence coupling + kalshi IAM fix)
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -920,7 +920,18 @@ Default 600s was silently allowing long retrains to be killed mid-run.
 
 **As of the ParlayAPI migration**, the live MLB snapshot (`Odds/sgo/latest.json`,
 written by `mlb/runners/snapshot_odds.py`) is a per-game **merge**, controlled by
-env `ODDS_PRIMARY` (default `sgo`; set to `parlay` to cut over):
+env `ODDS_PRIMARY` (currently `parlay` as of 2026-08-10; app default if unset is
+`sgo` -- always check the live Cloud Run env, don't assume):
+
+**`ODDS_PRIMARY` and the snapshot cadence are coupled, not independent.** The
+8x/day cadence below assumes `parlay` primary (only 4 of the 8 windows call
+SGO at all). Setting `ODDS_PRIMARY=sgo` makes **every** window call SGO
+directly via a path with no graceful degradation -- a single SGO failure
+500s the whole request instead of just skipping the inning-market merge.
+This combination overloaded SGO's amateur tier and took the snapshot down
+for 24+ hours on 2026-08-09/10 before being caught by `monitor_ops`; see
+`docs/solutions/integration-issues/odds-primary-cadence-mismatch.md`. Do not
+flip back to `sgo` without also cutting the cadence back to ~4x/day.
 - **ParlayAPI primary** for the markets it covers -- player props (HR, K, OUTS,
   BATTER_HITS, BATTER_TB, PITCHER_ER) + game moneyline (h2h). Pulled via
   `nba.odds.parlayapi.ParlayApiClient`, converted to SGO shape by
@@ -937,7 +948,8 @@ env `ODDS_PRIMARY` (default `sgo`; set to `parlay` to cut over):
   historical comes from BettingPros. Cutover: shadow-run via `/snapshot-odds`
   with `{"provider":"parlay","out_prefix":"Odds/sgo/_shadow"}`, diff, then flip
   `ODDS_PRIMARY=parlay` (`gcloud run services update --update-env-vars`).
-  Rollback: set it back to `sgo` (no redeploy). Settlement is provider-independent.
+  Rollback: set it back to `sgo` (no redeploy) -- **but see the cadence warning
+  above first**. Settlement is provider-independent.
 
   **Cadence:** 8 snapshots/day, concentrated 18:00-23:00 UTC (lineup->closing,
   the bulk night slate moves most). SGO inning markets fetched on only 4 runs
@@ -2670,7 +2682,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-06-11 00:30 CST
+_Last updated: 2026-08-10 (ops: ODDS_PRIMARY/cadence coupling + kalshi IAM fix)
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
