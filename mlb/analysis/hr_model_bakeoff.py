@@ -363,16 +363,43 @@ def main(argv=None) -> int:
     p.add_argument("--persist", action="store_true", help="write results to GCS (see bakeoff_persist)")
     p.add_argument("--run-root", default=bakeoff_persist.DEFAULT_RUN_ROOT,
                    help=f"GCS prefix root for --persist (default {bakeoff_persist.DEFAULT_RUN_ROOT})")
+    p.add_argument("--resume", default=None, metavar="RUN_ID",
+                   help="resume a prior --persist run (implies --persist): if HR is already "
+                        "in its systems_completed, no-op; otherwise restore its cutoff/until/"
+                        "gates/tune settings and run -- you only need --resume RUN_ID, nothing "
+                        "else. RUN_ID is the value printed after 'persisted -> "
+                        "Analysis/bakeoff/runs/' by the original run.")
     args = p.parse_args(argv)
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     if "xgb_optuna" in models and not args.tune:
         p.error("--models includes xgb_optuna but --tune was not set (no params source)")
-    if args.tune and "xgb_optuna" not in models:
-        models.append("xgb_optuna")
 
     persist_prefix, run_meta = None, None
-    if args.persist:
+    if args.resume:
+        persist_prefix = bakeoff_persist.run_prefix(args.resume, args.run_root)
+        try:
+            run_meta = bakeoff_persist.read_run_meta(persist_prefix)
+        except Exception as e:  # noqa: BLE001
+            p.error(f"--resume {args.resume}: could not read run_meta.json at "
+                   f"{persist_prefix} ({type(e).__name__}: {e})")
+        if "HR" in (run_meta.get("systems_completed") or []):
+            logger.info(f"[HR] already completed in {persist_prefix} -- nothing to do.")
+            return 0
+        # keep every gate/tuning param identical to the original run.
+        args.cutoff = run_meta.get("cutoff", args.cutoff)
+        args.until = run_meta.get("until", args.until)
+        args.min_books = run_meta.get("min_books", args.min_books)
+        args.max_spread = run_meta.get("max_spread", args.max_spread)
+        args.calibrate = run_meta.get("calibrate", args.calibrate)
+        args.tune = run_meta.get("tune", args.tune)
+        args.tune_trials = run_meta.get("tune_trials", args.tune_trials)
+        args.tune_folds = run_meta.get("tune_folds", args.tune_folds)
+        args.load_tuned_from = run_meta.get("load_tuned_from", args.load_tuned_from)
+        logger.info(f"[resume] {persist_prefix} -- HR not yet completed; running "
+                   f"cutoff={args.cutoff} tune={args.tune}(trials={args.tune_trials}) "
+                   f"min_books={args.min_books} max_spread={args.max_spread}")
+    elif args.persist:
         run_id = bakeoff_persist.make_run_id(args.cutoff)
         persist_prefix = bakeoff_persist.run_prefix(run_id, args.run_root)
         run_meta = bakeoff_persist.new_run_meta(
@@ -381,7 +408,14 @@ def main(argv=None) -> int:
             min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
             load_tuned_from=args.load_tuned_from)
         bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+    if persist_prefix:
         logger.info(f"persisting to {persist_prefix}")
+
+    # append AFTER --resume may have flipped args.tune from run_meta -- a resumed
+    # invocation that only passes --resume (no --tune of its own) must still get
+    # xgb_optuna if the original run had --tune set.
+    if args.tune and "xgb_optuna" not in models:
+        models.append("xgb_optuna")
 
     board = run(args.cutoff, args.until, models, args.min_books, args.max_spread, args.calibrate,
                tune_trials=args.tune_trials, tune_folds=args.tune_folds,

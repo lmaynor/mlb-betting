@@ -350,6 +350,20 @@ def _verdict(board):
              "is market/calibration-side (closing-line capture), not model fit.")
 
 
+def _combined_board(prior_board, all_rows):
+    """Union a --resume run's already-persisted scorecard rows with this invocation's
+    freshly-produced ones. drop_duplicates is defensive, not load-bearing -- an
+    already-completed system is skipped before it can be re-added, so overlap should
+    never actually occur."""
+    new = pd.DataFrame(all_rows)
+    if prior_board is None or not len(prior_board):
+        return new
+    if not len(new):
+        return prior_board
+    return (pd.concat([prior_board, new], ignore_index=True)
+             .drop_duplicates(subset=["system", "model"], keep="last"))
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="All-system optimization-gap scorecard")
     p.add_argument("--systems", default=",".join(DEFAULT_SYSTEMS),
@@ -370,6 +384,12 @@ def main(argv=None) -> int:
     p.add_argument("--persist", action="store_true", help="write results to GCS (see bakeoff_persist)")
     p.add_argument("--run-root", default=bakeoff_persist.DEFAULT_RUN_ROOT,
                    help=f"GCS prefix root for --persist (default {bakeoff_persist.DEFAULT_RUN_ROOT})")
+    p.add_argument("--resume", default=None, metavar="RUN_ID",
+                   help="resume a prior --persist run (implies --persist): skip systems already "
+                        "in its systems_completed, merge new rows into its existing scorecard, "
+                        "and restore its cutoff/until/gates/tune settings -- you only need "
+                        "--resume RUN_ID, nothing else. RUN_ID is the value printed after "
+                        "'persisted -> Analysis/bakeoff/runs/' by the original run.")
     args = p.parse_args(argv)
 
     systems = [s.strip().upper() for s in args.systems.split(",") if s.strip()]
@@ -378,7 +398,37 @@ def main(argv=None) -> int:
         p.error("--models includes xgb_optuna but --tune was not set (no params source)")
 
     persist_prefix, run_meta = None, None
-    if args.persist:
+    prior_board, already_done = pd.DataFrame(), set()
+    if args.resume:
+        persist_prefix = bakeoff_persist.run_prefix(args.resume, args.run_root)
+        try:
+            run_meta = bakeoff_persist.read_run_meta(persist_prefix)
+        except Exception as e:  # noqa: BLE001
+            p.error(f"--resume {args.resume}: could not read run_meta.json at "
+                   f"{persist_prefix} ({type(e).__name__}: {e})")
+        already_done = set(run_meta.get("systems_completed") or [])
+        try:
+            prior_board = bakeoff_persist.read_scorecard(persist_prefix)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"--resume {args.resume}: no prior scorecard.csv yet "
+                          f"({type(e).__name__}: {e}) -- starting its board fresh")
+        # keep every gate/tuning param identical to the original run -- a resumed run
+        # must stay internally consistent, never mix differently-tuned/gated systems
+        # into one scorecard.
+        args.cutoff = run_meta.get("cutoff", args.cutoff)
+        args.until = run_meta.get("until", args.until)
+        args.min_books = run_meta.get("min_books", args.min_books)
+        args.max_spread = run_meta.get("max_spread", args.max_spread)
+        args.calibrate = run_meta.get("calibrate", args.calibrate)
+        args.tune = run_meta.get("tune", args.tune)
+        args.tune_trials = run_meta.get("tune_trials", args.tune_trials)
+        args.tune_folds = run_meta.get("tune_folds", args.tune_folds)
+        args.load_tuned_from = run_meta.get("load_tuned_from", args.load_tuned_from)
+        logger.info(f"[resume] {persist_prefix} -- already completed: "
+                   f"{sorted(already_done) or 'none'}; cutoff={args.cutoff} "
+                   f"tune={args.tune}(trials={args.tune_trials}) "
+                   f"min_books={args.min_books} max_spread={args.max_spread}")
+    elif args.persist:
         run_id = bakeoff_persist.make_run_id(args.cutoff)
         persist_prefix = bakeoff_persist.run_prefix(run_id, args.run_root)
         run_meta = bakeoff_persist.new_run_meta(
@@ -387,12 +437,16 @@ def main(argv=None) -> int:
             min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
             load_tuned_from=args.load_tuned_from)
         bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+    if persist_prefix:
         logger.info(f"persisting to {persist_prefix}")
 
     all_rows = []
     for s in systems:
         if s not in wf.WF_SYS:
             logger.warning(f"[{s}] SKIP -- no trainable contract (not in {list(wf.WF_SYS)})")
+            continue
+        if s in already_done:
+            logger.info(f"[{s}] SKIP -- already completed in {persist_prefix} (--resume)")
             continue
         kind = wf.WF_SYS[s][1]
         models = list(override or (BINARY_MODELS if kind == "binary" else COUNT_MODELS))
@@ -402,15 +456,15 @@ def main(argv=None) -> int:
                                args.calibrate, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
                                load_tuned_from=args.load_tuned_from, persist_prefix=persist_prefix)
         if persist_prefix:
-            bakeoff_persist.write_scorecard(persist_prefix, pd.DataFrame(all_rows))
+            bakeoff_persist.write_scorecard(persist_prefix, _combined_board(prior_board, all_rows))
             run_meta = bakeoff_persist.mark_system_complete(persist_prefix, run_meta, s)
 
-    if not all_rows:
+    board = _combined_board(prior_board, all_rows)
+    if not len(board):
         logger.error("no results")
         if persist_prefix:
             bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="failed")
         return 1
-    board = pd.DataFrame(all_rows)
     print("\n=== FULL SCORECARD (OOS, gates: "
           f"min_books={args.min_books} max_spread={args.max_spread}, calibrate={args.calibrate}) ===")
     print("  rank = AUC(binary)/Spearman(count). verdict = codified go/no-go "
