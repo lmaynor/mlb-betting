@@ -430,7 +430,17 @@ def main(argv=None) -> int:
                   "roi_cons%": "roi_cons", "lo_roi%": "lo_roi",
                   "yes_roi%": "yes_roi", "yes_clv%": "yes_clv",
                   "no_roi%": "no_roi", "no_clv%": "no_clv"}
-        scorecard = board.reset_index().assign(system="HR").rename(columns=rename)
+        hr_rows = board.reset_index().assign(system="HR").rename(columns=rename)
+        # merge, don't clobber: if this prefix already has a scorecard (e.g. it's shared
+        # with a model_bakeoff.py run that also scored a generic "HR"), keep every OTHER
+        # system's rows and only replace "HR"'s -- a plain write_scorecard(hr_rows) would
+        # silently wipe out every other system's already-persisted rows at this prefix.
+        try:
+            existing = bakeoff_persist.read_scorecard(persist_prefix)
+        except Exception:  # noqa: BLE001 -- no prior scorecard at this prefix is the common case
+            existing = pd.DataFrame()
+        scorecard = (pd.concat([existing[existing.get("system") != "HR"], hr_rows], ignore_index=True)
+                    if len(existing) else hr_rows)
         bakeoff_persist.write_scorecard(persist_prefix, scorecard)
         run_meta = bakeoff_persist.mark_system_complete(persist_prefix, run_meta, "HR")
         bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="complete")
