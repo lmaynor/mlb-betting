@@ -45,12 +45,12 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 - [x] **C5.7** Sub-`min_edge` rows dropped before logging (F1H/PITCHER_ER/1I)
 - [x] **C5.1** `settle_bets.py` GAME void threshold `<8` vs documented `<5`
 - [x] **C5.5/C5.6** `capture_closing_lines.py`: HR team-name mismatch + missing GAME/F1H branches
-- [ ] **C6.1** Suppression gate self-clears via zero-stake window dilution
-- [ ] **C6.2** NRFI AUC alert measures market, not model
-- [ ] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`)
+- [x] **C6.1** Suppression gate self-clears via zero-stake window dilution *(same fix also applied to `_season_stats`, byte-identical bug pattern, not in the audit's own line citation)*
+- [x] **C6.2** NRFI AUC alert measures market, not model *(fixed for every system, not just NRFI/1IOU -- market auc is never the right signal for this alert)*
+- [x] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`) *(both halves of the fix: dedup state now comes from `posted`; overflow persisted to a new `deferred.parquet` and given first priority next run)*
 - [x] **C6.4** `monitor_drift.py` missing BATTER_HITS/BATTER_TB/GAME *(CONTEXT.md s6 "adding a new system" checklist also updated)*
 - [x] **C6.8** Dead/stale `SCHEDULER_JOBS` list in `monitor_ops.py` *(deleted; CONTEXT.md s9 + the s18 quick-reference table both corrected)*
-- [ ] **C6.9** `odds_alert.py` never posts to Discord
+- [x] **C6.9** `odds_alert.py` never posts to Discord *(freshness failures -> #ops-alerts; resolution scorecard -> #performance, only on runs with new alerts to avoid reposting an unchanged cumulative summary)*
 - [x] **C6.6/C6.14** `public_api.py`: `get_today_picks` missing CLV cols + `get_picks` unbounded limit
 
 ## P3 — cloud-cost mechanical + cleanup

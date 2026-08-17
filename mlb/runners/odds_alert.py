@@ -57,6 +57,59 @@ def _write_parquet(df: pd.DataFrame, key: str) -> None:
     storage.write_bytes(buf.getvalue(), key)
 
 
+# Added 2026-08-17 (finding C6.9): this file's per-market lag-vs-informed
+# scorecard is described in its own module docstring as "the empirical
+# proof of whether books lag is bankable" -- the decisive evidence for the
+# soft-line strategy -- but only ever reached Alerts/{day}/*.parquet and
+# Cloud Logging. Nobody was paged on a freshness failure either. Post both
+# via the same shared webhook helpers every other alerting runner uses.
+def _post_freshness_alert(fr: dict, day: str) -> None:
+    """Freshness failure -> #ops-alerts (an infra/pipeline problem, not a
+    performance metric)."""
+    from mlb_core.notify.discord import _get_ops_webhook, _post
+
+    webhook_url = _get_ops_webhook()
+    if not webhook_url:
+        return
+    reasons = fr.get("reasons") or [fr.get("reason", "unknown")]
+    embed = {
+        "title":       f"⚠️ odds_alert freshness FAIL | {day}",
+        "description": "Intraday odds feed is stale -- the +EV scan below is "
+                       "running on outdated snapshots:\n" + "\n".join(f"• {r}" for r in reasons),
+        "color":       0xED4245,
+        "footer": {"text": "mlb-betting odds_alert"},
+    }
+    _post(webhook_url, {"embeds": [embed]})
+
+
+def _post_scorecard(scorecard, day: str, n_new: int) -> None:
+    """Lag-vs-informed resolution scorecard -> #performance."""
+    import os as _os
+    from mlb_core.notify.discord import _get_ops_webhook, _post
+
+    webhook_url = _os.getenv("DISCORD_WEBHOOK_PERFORMANCE") or _get_ops_webhook()
+    if not webhook_url:
+        return
+    fields = []
+    for market, row in scorecard.iterrows():
+        fields.append({
+            "name": market,
+            "value": (f"alerts={int(row['alerts'])} entry_ev={row['entry_ev']:+.3f} "
+                     f"ev_at_close={row['ev_at_close']:+.3f} held_up={row['held_up_pct']:.0%}"),
+            "inline": False,
+        })
+    embed = {
+        "title":       f"📊 odds_alert resolution scorecard | {day}",
+        "description": (f"{n_new} new +EV outlier(s) this run. ev_at_close>0 => the "
+                        f"flagged book was lagging = real +EV; ev_at_close<=0 => the "
+                        f"book was informed and the consensus caught up."),
+        "color":       0x5865F2,
+        "fields":      fields,
+        "footer": {"text": "mlb-betting odds_alert"},
+    }
+    _post(webhook_url, {"embeds": [embed]})
+
+
 def _latest_consensus(markets: list, day: str) -> dict:
     """{(market, game_pk, player_id, line, selection): latest-snapshot consensus fair}."""
     out = {}
@@ -90,6 +143,7 @@ def run(run_date: str | None = None) -> dict:
     fr = fresh.check(markets, today=day)
     if not fr["ok"]:
         log.warning("FRESHNESS WARN: %s", "; ".join(fr.get("reasons", [fr.get("reason", "?")])))
+        _post_freshness_alert(fr, day)
     else:
         log.info("freshness ok: %d snapshots today (%d ParlayAPI)", fr["today_snaps"], fr["parlay_today"])
 
@@ -126,6 +180,12 @@ def run(run_date: str | None = None) -> dict:
                           .round(4))
             log.info("RESOLVE scorecard (ev_at_close>0 => book was lagging = real +EV):\n%s",
                      scorecard.to_string())
+            # Only page on runs that actually found something new -- the
+            # scorecard aggregates ALL of today's alerts, so reposting the
+            # identical cumulative summary on every run (this file runs a
+            # few times/day, after each odds refresh) would just be noise.
+            if len(new):
+                _post_scorecard(scorecard, day, len(new))
 
     return {"status": "ok", "day": day, "alerts_today": int(len(merged)) if merged is not None else 0,
             "scorecard": scorecard.to_dict() if scorecard is not None else None}

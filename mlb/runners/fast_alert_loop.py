@@ -283,6 +283,7 @@ def run(run_date: str | None = None) -> dict:
 
     # 4) dedup vs already-notified, notify, persist
     notified_key = f"Alerts/{day}/notified.parquet"
+    deferred_key = f"Alerts/{day}/deferred.parquet"
     seen = _read_parquet(notified_key)
     if seen is not None and len(seen):
         keys = [k for k in _QUOTE_KEYS if k in found.columns and k in seen.columns]
@@ -298,18 +299,44 @@ def run(run_date: str | None = None) -> dict:
             names = resolve_player_names(new["player_id"].dropna().unique())
             new["player_name"] = new["player_id"].map(
                 lambda x: names.get(int(x), "") if pd.notna(x) else "")
+        # Fixed 2026-08-17 (finding C6.3): rows deferred by a PRIOR run's cap
+        # get first priority this run -- otherwise a persistently >max_posts
+        # scan (plausible right after a lineup-news cascade, exactly the
+        # highest-value moment for this pager) could keep bumping the same
+        # overflow rows indefinitely, never actually posting them even
+        # though they're correctly not blacklisted anymore.
+        deferred = _read_parquet(deferred_key)
+        if deferred is not None and len(deferred):
+            dkeys = [k for k in _QUOTE_KEYS if k in new.columns and k in deferred.columns]
+            dmerged = new.merge(deferred[dkeys].drop_duplicates(), on=dkeys,
+                                how="left", indicator="_defer_ind")
+            new["_deferred"] = (dmerged["_defer_ind"] == "both").values
+        else:
+            new["_deferred"] = False
         # hottest first: hot-game alerts, then by EV
         new["_hot"] = new["game_pk"].isin(hot)
-        new = new.sort_values(["_hot", "ev"], ascending=[False, False]).drop(columns="_hot")
+        new = new.sort_values(["_deferred", "_hot", "ev"], ascending=[False, False, False]) \
+                 .drop(columns=["_deferred", "_hot"])
         posted = new.head(max_posts)
+        overflow = new.iloc[max_posts:]
         notify(posted, hot, notes, today_str=day,
                min_ev=min_ev, min_books=min_books, anchor=anchor)
-        if len(new) > max_posts:
-            log.info("capped: %d further alerts not posted this run", len(new) - max_posts)
-        # persist notify-state and the shared alert log (for odds_alert resolve)
-        seen_new = pd.concat([seen, new[[c for c in _QUOTE_KEYS if c in new.columns]]],
+        if len(overflow):
+            log.info("capped: %d further alerts not posted this run -- deferred for retry",
+                     len(overflow))
+        # Persist deferred state from `overflow`, not `new` -- this run's
+        # cap-list supersedes whatever was deferred before (anything from
+        # the old deferred set either got boosted into `posted` above, or
+        # is still correctly present in this run's own overflow).
+        _write_parquet(overflow[[c for c in _QUOTE_KEYS if c in overflow.columns]], deferred_key)
+        # Persist notify-state from `posted`, NOT `new` -- this was the
+        # actual bug (finding C6.3): dedup state used to come from the full
+        # uncapped `new` set, so any row beyond max_posts got marked
+        # "notified" even though it was never actually sent to Discord,
+        # permanently blacklisting it from ever being reconsidered.
+        seen_new = pd.concat([seen, posted[[c for c in _QUOTE_KEYS if c in posted.columns]]],
                              ignore_index=True) if seen is not None else \
-            new[[c for c in _QUOTE_KEYS if c in new.columns]]
+            posted[[c for c in _QUOTE_KEYS if c in posted.columns]]
         _write_parquet(seen_new.drop_duplicates(), notified_key)
 
         logkey = f"Alerts/{day}/log.parquet"

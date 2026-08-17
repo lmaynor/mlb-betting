@@ -195,6 +195,11 @@ class TestRollingStatsModelFields:
             "market_prob": [0.50, 0.50, 0.50, 0.50],
             "model_prob":  [0.70, 0.40, 0.65, 0.45],
             "clv_pct":     [None, None, None, None],
+            # All 4 are real, staked bets (finding C6.1's kelly_triggered
+            # filter in _rolling_stats needs this column to exist -- every
+            # real bets-table row has it; this fixture just predates that
+            # fix and needs it added, not the production code weakened).
+            "kelly_triggered": [True, True, True, True],
         })
 
     def test_auc_model_and_avg_present(self):
