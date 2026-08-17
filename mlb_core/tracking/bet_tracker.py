@@ -26,6 +26,31 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(v):
+    """Coerce a value from a pandas row to a native Python int, or None.
+
+    Guards against a classic pandas footgun: a list-of-dicts with an
+    int-or-None column (e.g. morning_odds is None for any market not in the
+    morning snapshot) silently upcasts the WHOLE column to float64 once it
+    goes through pd.DataFrame(...) -- so a clean -149 becomes -149.0 by the
+    time a runner's .iterrows() loop reads it back out. Postgres's INTEGER
+    columns reject that outright (pg_strtoint32: 'invalid input syntax for
+    type integer: "-149.0"'), crashing the entire log_bet() insert -- not
+    just the one row. game_pk, odds, and morning_odds are all INTEGER columns
+    that pass through this exact list-of-dicts -> DataFrame -> iterrows() ->
+    log_bet() pipeline in run_k.py/run_f5.py/run_nrfi.py/run_hr.py, so all
+    three are cast here rather than trusting each caller to remember.
+    """
+    if v is None:
+        return None
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return int(v)
+
+
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS bets (
     id               SERIAL PRIMARY KEY,
@@ -273,6 +298,13 @@ class BetTracker:
         morning_odds: int = None,
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
+        # Sanitize INTEGER-column values before EITHER the dedup SELECT or the
+        # INSERT touches them -- see _safe_int()'s docstring for why a caller's
+        # pandas row can hand these in as float64.
+        game_pk = _safe_int(game_pk)
+        odds = _safe_int(odds)
+        morning_odds = _safe_int(morning_odds)
+
         if game_pk is not None and bet_type is not None and game_date is not None:
             if self.is_duplicate(game_date, game_pk, bet_type,
                                  kelly_triggered=kelly_triggered):
