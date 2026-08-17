@@ -55,7 +55,7 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 ## P3 — cloud-cost mechanical + cleanup
 
-- [ ] **B3.1** `id_resolver` caches not GCS-backed (rebuilt every cold start)
+- [x] **B3.1** `id_resolver` caches not GCS-backed (rebuilt every cold start) *(GCS-persisted JSON per date/season, same-day TTL; both caches' tuple/set-keyed shapes need a JSON adapter, round-trip tested separately from the cache-hit/expiry behavior)*
 - [x] **B3.2/B3.3** `bet_tracker` one-shot migration re-run forever + non-unique dedup index *(migration deleted; unique index on (system,game_date,game_pk,bet_type,kelly_triggered) + INSERT...ON CONFLICT DO NOTHING -- verified the race-safety test actually fails on the old code)*
 - [x] **B3.5** Raw GCS client bypass (weather/umpires/scoring-backfill)
 - [x] **B3.6** Unpaced 30-team IL roster loop
