@@ -9,8 +9,13 @@ independently-confirmed convention for the identical inning_topbot field.
 See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md.
 """
 import pandas as pd
+import pytest
 
-from mlb.runners.build_game_features import build_starter_features, build_bullpen_features
+from mlb.runners.build_game_features import (
+    build_starter_features, build_bullpen_features, build_team_offense_features,
+)
+
+JOSE_RAMIREZ = 608070  # CLE for his entire career -- see tests/test_id_resolver.py
 
 
 def _sc_row(game_pk, pitcher, inning_topbot, at_bat_number, game_date="2024-05-01",
@@ -80,4 +85,50 @@ def test_bullpen_features_top_half_reliever_credited_to_home_team():
         "away team (LAA, Bot-half reliever) should carry the prior game's "
         "0% strikeout rate forward -- got the home team's rate instead, "
         "the Top/Bot home/away mapping is inverted again"
+    )
+
+
+def test_team_offense_features_credits_the_correct_batting_team(monkeypatch, tmp_path):
+    """build_team_offense_features credits the BATTING team, not the pitching
+    team -- the opposite direction from build_starter_features/
+    build_bullpen_features above, for the same inning_topbot value. Anchored
+    on Jose Ramirez (608070, CLE for his entire career -- see
+    tests/test_id_resolver.py) batting in the home half (Bot) of a prior
+    game: CLE's rolled team_woba_L20 must carry his 1.0 xwOBA forward, not
+    the opposing (Top-batting, LAA) team's 0.0.
+
+    This function also had the same pandas-3.x groupby(...).apply(...)
+    incompatibility as build_starter_features/build_bullpen_features
+    (finding: grouping column dropped from the apply callback's result,
+    breaking a downstream drop_duplicates(subset=[...,"team"]) with a real
+    KeyError) -- fixed the same way (groupby(...).transform(...) per
+    metric); this test also stands as regression coverage for that fix
+    for the one function of the three with no prior test at all."""
+    monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    monkeypatch.setenv("MLB_BASE_DATA", str(tmp_path))  # no scoring_master.csv -> run_diff defaults to 0.0
+
+    sc = pd.DataFrame([
+        # Prior game (998): LAA bats Top (xwoba 0.0), CLE (incl. Ramirez) bats Bot (xwoba 1.0).
+        _sc_row(998, 100, "Top", 1, game_date="2024-04-01",
+               batter=99999999, estimated_woba_using_speedangle=0.0),
+        _sc_row(998, 200, "Bot", 2, game_date="2024-04-01",
+               batter=JOSE_RAMIREZ, estimated_woba_using_speedangle=1.0),
+        # Current game (999): just needs both sides present; its own stats aren't checked.
+        _sc_row(999, 101, "Top", 1, game_date="2024-05-01",
+               batter=99999999, estimated_woba_using_speedangle=0.5),
+        _sc_row(999, 201, "Bot", 2, game_date="2024-05-01",
+               batter=JOSE_RAMIREZ, estimated_woba_using_speedangle=0.5),
+    ])
+    offense = build_team_offense_features(sc, lookback_days=90, run_date="2024-05-02")
+    row_999 = offense[offense["game_pk"] == 999].set_index("team")
+    assert set(row_999.index) == {"CLE", "LAA"}
+    assert row_999.loc["CLE", "team_woba_L20"] == 1.0, (
+        "CLE (Ramirez's team, Bot-half batting) should carry the prior "
+        "game's 1.0 xwOBA forward -- got LAA's instead, the batting-team "
+        "credit is wrong"
+    )
+    assert row_999.loc["LAA", "team_woba_L20"] == 0.0, (
+        "LAA (Top-half batting) should carry the prior game's 0.0 xwOBA "
+        "forward -- got CLE's instead, the batting-team credit is wrong"
     )

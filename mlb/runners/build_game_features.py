@@ -303,30 +303,42 @@ def build_starter_features(
     agg["prev_start"] = agg.groupby("pitcher")["game_date"].shift(1)
     agg["days_rest"]  = (agg["game_date"] - agg["prev_start"]).dt.days.fillna(5.0)
 
-    # Rolling per pitcher (shift(1) prevents leakage)
-    def _roll_pitcher(grp: pd.DataFrame) -> pd.DataFrame:
-        grp = grp.sort_values("game_date").copy()
-        for metric, window, suffix in [
-            ("k_pct",          3, "k_pct_L3"),
-            ("xwoba_mean",     3, "xwoba_allowed_L3"),
-            ("velo_mean",      3, "velo_mean_L3"),
-            ("bb_pct",         3, "bb_pct_L3"),
-            ("ip_proxy",       5, "starter_ip_avg_L5"),
-            ("whiff_pct",      3, "whiff_pct_L3"),
-            ("hard_hit_allowed", 3, "hard_hit_allowed_L3"),
-        ]:
-            if metric in grp.columns:
-                grp[suffix] = (
-                    grp[metric].shift(1)
-                               .rolling(window, min_periods=1)
-                               .mean()
-                )
-            else:
-                grp[suffix] = np.nan
-        grp["starter_days_rest"] = grp["days_rest"].shift(1).fillna(5.0)
-        return grp
-
-    rolled = agg.groupby("pitcher", group_keys=False).apply(_roll_pitcher)
+    # Rolling per pitcher (shift(1) prevents leakage).
+    #
+    # Uses groupby(...).transform(...) per metric, NOT groupby(...).apply(fn)
+    # over a whole-DataFrame callback -- pandas changed whether the grouping
+    # column ("pitcher") is included in what a groupby.apply() callback
+    # receives (a FutureWarning as far back as pandas 2.2.3, the version
+    # actually pinned in requirements.txt; pandas 3.x enforces the change).
+    # The old code's downstream `drop_duplicates(subset=["game_pk",
+    # "pitcher"])` then raises a real KeyError once "pitcher" has been
+    # silently dropped -- reproduced directly against pandas 3.0.5 while
+    # verifying this fix, matching the exact traceback pandas 3.x users hit.
+    # transform() has never had this ambiguity (it always preserves every
+    # original column, on every pandas version) and is safe here because
+    # `agg` is already sorted by ["pitcher", "game_date"] two lines above --
+    # the per-group .sort_values("game_date") the old callback did was
+    # already a no-op given that global sort, so dropping it changes nothing.
+    rolled = agg
+    _grouped_pitcher = rolled.groupby("pitcher")
+    for metric, window, suffix in [
+        ("k_pct",          3, "k_pct_L3"),
+        ("xwoba_mean",     3, "xwoba_allowed_L3"),
+        ("velo_mean",      3, "velo_mean_L3"),
+        ("bb_pct",         3, "bb_pct_L3"),
+        ("ip_proxy",       5, "starter_ip_avg_L5"),
+        ("whiff_pct",      3, "whiff_pct_L3"),
+        ("hard_hit_allowed", 3, "hard_hit_allowed_L3"),
+    ]:
+        if metric in rolled.columns:
+            rolled[suffix] = _grouped_pitcher[metric].transform(
+                lambda s, w=window: s.shift(1).rolling(w, min_periods=1).mean()
+            )
+        else:
+            rolled[suffix] = np.nan
+    rolled["starter_days_rest"] = (
+        _grouped_pitcher["days_rest"].transform(lambda s: s.shift(1)).fillna(5.0)
+    )
 
     feat_cols = [
         "game_date", "game_pk", "pitcher", "side",
@@ -531,45 +543,38 @@ def build_bullpen_features(
 
     game_agg = game_agg.sort_values(["team", "game_date"]).reset_index(drop=True)
 
-    # Rolling per team with shift(1) -- date-based windows
-    def _roll_team(grp: pd.DataFrame) -> pd.DataFrame:
-        grp = grp.sort_values("game_date").copy()
-        grp["bullpen_k_pct_L14"]  = (
-            grp["bp_k_pct"].shift(1)
-                           .rolling(14, min_periods=1)
-                           .mean()
+    # Rolling per team with shift(1) -- date-based windows.
+    #
+    # transform(), not groupby(...).apply(whole-df callback) -- see the
+    # identical comment in build_starter_features above (finding: pandas
+    # 3.x drops the grouping column from an apply() callback's result,
+    # breaking the drop_duplicates(subset=[...,"team"]) a few lines below
+    # with a real KeyError; reproduced directly against pandas 3.0.5).
+    # Safe because game_agg is already sorted by ["team", "game_date"]
+    # two lines above.
+    rolled = game_agg
+    _grouped_team = rolled.groupby("team")
+    rolled["bullpen_k_pct_L14"] = _grouped_team["bp_k_pct"].transform(
+        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+    )
+    rolled["bullpen_bb_pct_L14"] = _grouped_team["bp_bb_pct"].transform(
+        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+    )
+    rolled["bullpen_xwoba_L14"] = _grouped_team["bp_xwoba"].transform(
+        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+    )
+    # Fatigue: sum IP over last 7 games (approx 7 days for daily schedule)
+    rolled["bullpen_ip_L7"] = _grouped_team["bp_ip"].transform(
+        lambda s: s.shift(1).rolling(7, min_periods=1).sum()
+    )
+    if "bp_whiff_pct" in rolled.columns:
+        rolled["bullpen_whiff_pct_L14"] = _grouped_team["bp_whiff_pct"].transform(
+            lambda s: s.shift(1).rolling(14, min_periods=1).mean()
         )
-        grp["bullpen_bb_pct_L14"] = (
-            grp["bp_bb_pct"].shift(1)
-                            .rolling(14, min_periods=1)
-                            .mean()
+    if "bp_hard_hit" in rolled.columns:
+        rolled["bullpen_hard_hit_L14"] = _grouped_team["bp_hard_hit"].transform(
+            lambda s: s.shift(1).rolling(14, min_periods=1).mean()
         )
-        grp["bullpen_xwoba_L14"]  = (
-            grp["bp_xwoba"].shift(1)
-                           .rolling(14, min_periods=1)
-                           .mean()
-        )
-        # Fatigue: sum IP over last 7 games (approx 7 days for daily schedule)
-        grp["bullpen_ip_L7"] = (
-            grp["bp_ip"].shift(1)
-                        .rolling(7, min_periods=1)
-                        .sum()
-        )
-        if "bp_whiff_pct" in grp.columns:
-            grp["bullpen_whiff_pct_L14"] = (
-                grp["bp_whiff_pct"].shift(1)
-                                   .rolling(14, min_periods=1)
-                                   .mean()
-            )
-        if "bp_hard_hit" in grp.columns:
-            grp["bullpen_hard_hit_L14"] = (
-                grp["bp_hard_hit"].shift(1)
-                                  .rolling(14, min_periods=1)
-                                  .mean()
-            )
-        return grp
-
-    rolled = game_agg.groupby("team", group_keys=False).apply(_roll_team)
 
     out_cols = [
         "game_date", "game_pk", "team",
@@ -712,32 +717,28 @@ def build_team_offense_features(
 
     game_agg = game_agg.sort_values(["team", "game_date"]).reset_index(drop=True)
 
-    def _roll_team(grp: pd.DataFrame) -> pd.DataFrame:
-        grp = grp.sort_values("game_date").copy()
-        grp["team_woba_L20"]  = (
-            grp["xwoba_mean"].shift(1)
-                             .rolling(20, min_periods=1)
-                             .mean()
+    # transform(), not groupby(...).apply(whole-df callback) -- see the
+    # identical comment in build_starter_features/build_bullpen_features
+    # above (pandas 3.x drops the grouping column from an apply() callback's
+    # result, breaking the drop_duplicates(subset=[...,"team"]) a few lines
+    # below with a real KeyError; reproduced directly against pandas 3.0.5).
+    # Safe because game_agg is already sorted by ["team", "game_date"]
+    # two lines above.
+    rolled = game_agg
+    _grouped_team = rolled.groupby("team")
+    rolled["team_woba_L20"] = _grouped_team["xwoba_mean"].transform(
+        lambda s: s.shift(1).rolling(20, min_periods=1).mean()
+    )
+    rolled["team_k_pct_L20"] = _grouped_team["off_k_pct"].transform(
+        lambda s: s.shift(1).rolling(20, min_periods=1).mean()
+    )
+    rolled["run_diff_L20"] = _grouped_team["run_diff"].transform(
+        lambda s: s.shift(1).rolling(20, min_periods=1).mean()
+    )
+    if "off_hard_hit" in rolled.columns:
+        rolled["team_hard_hit_L20"] = _grouped_team["off_hard_hit"].transform(
+            lambda s: s.shift(1).rolling(20, min_periods=1).mean()
         )
-        grp["team_k_pct_L20"] = (
-            grp["off_k_pct"].shift(1)
-                            .rolling(20, min_periods=1)
-                            .mean()
-        )
-        grp["run_diff_L20"]   = (
-            grp["run_diff"].shift(1)
-                           .rolling(20, min_periods=1)
-                           .mean()
-        )
-        if "off_hard_hit" in grp.columns:
-            grp["team_hard_hit_L20"] = (
-                grp["off_hard_hit"].shift(1)
-                                   .rolling(20, min_periods=1)
-                                   .mean()
-            )
-        return grp
-
-    rolled = game_agg.groupby("team", group_keys=False).apply(_roll_team)
 
     out_cols = [
         "game_date", "game_pk", "team",
