@@ -54,6 +54,13 @@ OFFSHORE = {"pinnacle", "bovada", "betfair", "matchbook", "betonline", "consensu
 EDGE_BINS = [-1.0, 0.0, 0.02, 0.04, 0.06, 0.10, 1.0]
 EDGE_LABELS = ["<0", "0-2%", "2-4%", "4-6%", "6-10%", "10%+"]
 
+# ── profitability rubric (codifies docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md) ──
+# The CLV significance bar itself (mean >= +2%, t-stat > 2) is NOT redefined here -- it's
+# mlb_core.risk.clv.clv_verdict's existing T17 promotion bar, reused via CLV_MIN_N override
+# below so there's one source of truth for "what counts as significant CLV" everywhere.
+LOW_EDGE_MAX = 0.06       # the well-calibrated, +CLV zone from live /edge-analysis
+BAKEOFF_MIN_N = 30        # T17's live gate uses clv_n>=100; scaled down for a single-cutoff sample
+
 
 # ── settling a candidate: did the bet side win? --------------------------------
 
@@ -275,6 +282,100 @@ def _bucket_table(df: pd.DataFrame) -> pd.DataFrame:
         "clv%": g["clv_pct"].mean(),
         "units_cons": g["roi_cons"].sum(),
     })
+    return out
+
+
+def _tstat(vals: pd.Series) -> float | None:
+    """Mean/SEM t-stat. Mirrors hr_softline.py::_tstat. None if <2 points or sem==0
+    (too thin / zero-variance to call significant either way)."""
+    from scipy import stats as scipy_stats
+    vals = vals.dropna()
+    if len(vals) < 2:
+        return None
+    sem = float(scipy_stats.sem(vals))
+    return round(float(vals.mean()) / sem, 3) if sem > 0 else None
+
+
+def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
+           min_n: int = BAKEOFF_MIN_N) -> dict:
+    """Mechanical, reproducible go/no-go on a settled `candidates` frame (backtest()'s
+    output, already gated/line-shopped/settled) -- turns the soft-line-artifact doc's
+    prose rubric into a repeatable check instead of an eyeballed printout comparison.
+
+    Rules (both required for PROMOTE_CANDIDATE):
+      1. Low-edge (<=low_edge_max) CLV clears the SAME T17 promotion bar used for the
+         live paper->live gate (mlb_core.risk.clv.clv_verdict: mean >= +2%, t-stat > 2),
+         just with min_n relaxed for a one-shot backtest sample instead of the live
+         100-bet requirement. One definition of "significant CLV", reused everywhere.
+      2. The edge-bucket ladder is roughly monotonic -- NOT the "only the 10%+ bucket
+         pays, everything below is flat/negative" shape already proven to be a
+         soft-line/leakage artifact on this exact harness (2026-06-30 sweep).
+
+    Returns every intermediate number (not just the label) so a scorecard row stays
+    traceable to why it landed where it did.
+
+    verdict values:
+      INSUFFICIENT_N    -- too few CLV-matched low-edge bets to judge (clv_verdict's gate)
+      PROMOTE_CANDIDATE -- both rules hold
+      NO_EDGE           -- neither/one rule fails
+    """
+    from mlb_core.risk.clv import clv_verdict
+
+    n_bets = int(len(cand)) if cand is not None else 0
+    out = dict(verdict="INSUFFICIENT_N", reason="no candidates", n_bets=n_bets, n_clv=0,
+              n_lo=0, clv_mean=np.nan, clv_tstat=np.nan, ladder_monotonic=None, ladder_rho=np.nan)
+    if not n_bets:
+        return out
+    out["n_clv"] = int(cand["clv_pct"].notna().sum())
+
+    lo = cand[cand["edge"] <= low_edge_max]
+    lo_clv = lo["clv_pct"].dropna()
+    out["n_lo"] = int(len(lo_clv))
+    t = _tstat(lo_clv)
+    clv_mean = float(lo_clv.mean()) if len(lo_clv) else None
+    out["clv_mean"] = round(clv_mean, 3) if clv_mean is not None else np.nan
+    out["clv_tstat"] = t
+
+    cv = clv_verdict(clv_mean, t, out["n_lo"], min_n=min_n)
+    clv_ok = bool(cv["clv_promote_ready"])
+    if cv["clv_status"] == "insufficient":
+        out["verdict"] = "INSUFFICIENT_N"
+        out["reason"] = cv["clv_note"]
+        return out
+
+    # monotonic-ladder check, reusing _bucket_table verbatim; only judge buckets with
+    # real n (>=5) -- thin/empty buckets are noise, not evidence either way.
+    tbl = _bucket_table(cand)
+    ladder_monotonic, ladder_rho = None, np.nan
+    if len(tbl):
+        real = tbl[tbl["bets"] >= 5]
+        if len(real) >= 2:
+            top = real[real.index == "10%+"]
+            low_buckets = real[real.index != "10%+"]
+            only_top_pays = bool(len(top) and len(low_buckets)
+                                 and (top["roi_cons%"] > 0).all()
+                                 and (low_buckets["roi_cons%"] <= 0).all())
+            if only_top_pays:
+                ladder_monotonic = False
+            else:
+                from scipy.stats import spearmanr
+                rho = spearmanr(np.arange(len(real)), real["roi_cons%"]).correlation
+                ladder_rho = round(float(rho), 3) if pd.notna(rho) else np.nan
+                ladder_monotonic = bool(pd.notna(rho) and rho > 0)
+    out["ladder_monotonic"] = ladder_monotonic
+    out["ladder_rho"] = ladder_rho
+
+    if clv_ok and ladder_monotonic:
+        out["verdict"] = "PROMOTE_CANDIDATE"
+        out["reason"] = f"{cv['clv_note']}; edge ladder monotonic"
+    else:
+        out["verdict"] = "NO_EDGE"
+        reasons = [cv["clv_note"]]
+        if ladder_monotonic is False:
+            reasons.append("edge ladder not monotonic (soft-line/artifact shape: only 10%+ pays)")
+        elif ladder_monotonic is None:
+            reasons.append("edge ladder undetermined (too few buckets with >=5 bets)")
+        out["reason"] = "; ".join(reasons)
     return out
 
 
