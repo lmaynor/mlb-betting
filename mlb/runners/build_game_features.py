@@ -120,7 +120,14 @@ def _identify_starters(sc: pd.DataFrame) -> pd.DataFrame:
 
     A starter is the pitcher with the lowest at_bat_number who appears in
     inning 1. Uses inning_topbot to separate home/away starters:
-      Top = away starter pitching, Bot = home starter pitching.
+      Top half = away team batting = HOME starter pitching.
+      Bot half = home team batting = AWAY starter pitching.
+    (Docstring corrected 2026-08-17 -- was backwards; this function itself
+    only keys by inning_topbot and never assigned a team label, so there was
+    no code bug here, just a misleading comment matching the same wrong
+    belief that caused the real bug in build_starter_features/
+    build_bullpen_features. See docs/audits/
+    2026-08-16_cloud_efficiency_and_profitability_review.md finding A4.)
 
     Falls back to lowest at_bat_number per (game_pk, pitcher) if
     inning_topbot is null (matches the F5 null-fix pattern).
@@ -281,8 +288,14 @@ def build_starter_features(
                 on=_merge_pitch_cols, how="left",
             )
 
-    # inning_topbot: Top = away pitcher, Bot = home pitcher
-    agg["side"] = agg["inning_topbot"].map({"Top": "away", "Bot": "home"})
+    # inning_topbot: Top half = away team BATTING = HOME pitcher on the mound
+    # (the team not batting is the one pitching); Bot half = away pitcher.
+    # Verified 16/16 starts in build_nrfi_features.py's diagnostics
+    # (2026-05-12) for the identical inning_topbot convention -- this file
+    # previously had it backwards (fixed 2026-08-17, see
+    # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    # finding A4). Requires a rebuild + full retrain to take effect live.
+    agg["side"] = agg["inning_topbot"].map({"Top": "home", "Bot": "away"})
     agg = agg.dropna(subset=["side"])
     agg = agg.sort_values(["pitcher", "game_date"]).reset_index(drop=True)
 
@@ -422,16 +435,18 @@ def build_bullpen_features(
     bullpen_pa = pa[~pa["is_starter"]].copy()
 
     # Need pitcher team. Use inning_topbot:
-    # Top = away pitcher is pitching -> team = away_team
-    # Bot = home pitcher is pitching -> team = home_team
+    # Top half = away team batting = HOME pitcher is pitching -> team = home_team
+    # Bot half = home team batting = AWAY pitcher is pitching -> team = away_team
+    # (fixed 2026-08-17 -- was backwards; see docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding A4)
     # Try to get team from the 'fielding_team' column if present, else infer.
     if "fielding_team" in bullpen_pa.columns:
         bullpen_pa["team"] = bullpen_pa["fielding_team"]
     elif all(c in bullpen_pa.columns for c in ["home_team", "away_team", "inning_topbot"]):
         bullpen_pa["team"] = np.where(
             bullpen_pa["inning_topbot"] == "Top",
-            bullpen_pa["away_team"],
             bullpen_pa["home_team"],
+            bullpen_pa["away_team"],
         )
     else:
         logger.warning("GAME: cannot determine bullpen team; bullpen features will be empty")
@@ -462,10 +477,12 @@ def build_bullpen_features(
     if "fielding_team" in bullpen_all.columns:
         bullpen_all["team"] = bullpen_all["fielding_team"]
     elif all(c in bullpen_all.columns for c in ["home_team", "away_team", "inning_topbot"]):
+        # Same Top=home-pitcher / Bot=away-pitcher convention as bullpen_pa
+        # above (fixed 2026-08-17 -- was backwards).
         bullpen_all["team"] = np.where(
             bullpen_all["inning_topbot"] == "Top",
-            bullpen_all["away_team"],
             bullpen_all["home_team"],
+            bullpen_all["away_team"],
         )
     else:
         bullpen_all = pd.DataFrame()  # can't determine team, skip pitch-level agg
