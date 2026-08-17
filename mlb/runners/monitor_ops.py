@@ -54,7 +54,11 @@ FEATURE_KEYS = {
 MODEL_KEYS = {
     s: cfg.model_artifact
     for s, cfg in SYSTEMS.items()
-    if cfg.active and s != "OUTS"   # OUTS uses K's model artifact in MODEL_KEYS
+    if cfg.active
+    # OUTS now has its own dedicated model_artifact (fixed 2026-08-17, see
+    # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    # finding A8) -- no longer excluded, so its real artifact gets checked
+    # like every other system's.
 }
 
 SGO_SNAPSHOT_KEY   = "Odds/sgo/latest.json"

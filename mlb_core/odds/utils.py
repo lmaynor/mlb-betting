@@ -165,7 +165,7 @@ def devig_unilateral(market_prob: float, vig_pct: float = 0.07) -> float:
 
 
 def kelly_stake(
-    edge: float,
+    model_prob: float,
     odds,
     bankroll: float,
     fraction: float = 0.25,
@@ -175,13 +175,38 @@ def kelly_stake(
     """Fractional Kelly criterion. Returns dollar stake.
 
     Full Kelly: f* = edge * (b + 1) / b
-    where b = decimal odds - 1 (net payout per unit wagered),
-    edge = p_model - p_fair (no-vig implied probability).
+    where b = decimal odds - 1 (net payout per unit wagered), and
+    edge = model_prob - p_breakeven. p_breakeven = 1/(b+1) is the
+    VIG-INCLUSIVE implied probability of the *same* odds used for b -- NOT
+    the de-vigged fair probability. b and the probability subtracted from
+    model_prob must share the same price basis or Kelly is mis-specified;
+    that basis is derived here internally (via american_to_implied_prob on
+    the same `odds` passed for b) so callers can't mismatch it.
+
+    Callers should still gate min_edge/EDGE_CAP on a de-vigged edge
+    (model_prob - fair_prob) -- "does the model disagree with the sharp
+    consensus" is a different, legitimate question from "is this specific
+    price +EV," which is what Kelly sizing must answer. Pass the model's
+    raw (post-calibration) probability here, not a precomputed edge.
 
     Previous formula used edge / b which undersized by ~52% at -110.
     Fixed 2026-05-19 (T01).
+
+    Probability-basis fix 2026-08-17: previously this function took a
+    precomputed `edge = model_prob - fair_prob` (de-vigged) while `b` came
+    from the vig-inclusive price -- a basis mismatch that inflated every
+    stake by roughly half the market's vig and could flag kelly_triggered
+    on bets that were breakeven-or-worse against the actual price taken.
+    See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    finding A1.
     """
-    if pd.isna(edge) or pd.isna(odds) or edge <= 0:
+    if pd.isna(model_prob) or pd.isna(odds):
+        return 0.0
+    market_prob = american_to_implied_prob(odds)
+    if pd.isna(market_prob):
+        return 0.0
+    edge = model_prob - market_prob
+    if edge <= 0:
         return 0.0
     b = odds / 100 if odds > 0 else 100 / abs(odds)
     pct = max(0.0, edge * (b + 1) / b * fraction)
@@ -190,12 +215,22 @@ def kelly_stake(
     return round(min(pct, max_pct) * bankroll, 2)
 
 
-def kelly_pct(edge: float, odds, fraction: float = 0.25) -> float:
+def kelly_pct(model_prob: float, odds, fraction: float = 0.25) -> float:
     """Returns Kelly as fraction of bankroll. Use for signal gating.
 
-    Full Kelly: f* = edge * (b + 1) / b  (fixed 2026-05-19, T01).
+    Full Kelly: f* = edge * (b + 1) / b (fixed 2026-05-19, T01).
+    Same probability-basis fix as kelly_stake (2026-08-17) -- see its
+    docstring. Pass the model's raw (post-calibration) probability, not a
+    precomputed edge; the vig-inclusive breakeven prob is derived internally
+    from `odds`.
     """
-    if pd.isna(edge) or pd.isna(odds) or edge <= 0:
+    if pd.isna(model_prob) or pd.isna(odds):
+        return 0.0
+    market_prob = american_to_implied_prob(odds)
+    if pd.isna(market_prob):
+        return 0.0
+    edge = model_prob - market_prob
+    if edge <= 0:
         return 0.0
     b = odds / 100 if odds > 0 else 100 / abs(odds)
     return max(0.0, edge * (b + 1) / b * fraction)

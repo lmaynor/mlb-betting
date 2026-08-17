@@ -250,6 +250,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
     bankroll, prefetched = prefetch_exposure(engine, game_pks, run_date, system="BATTER_TB")
     pending: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
+    _gate_suppressed = _is_suppressed("BATTER_TB")
+    if _gate_suppressed:
+        logger.warning("BATTER_TB gate active -- logging only, no staked bets this run")
     results = []
 
     for player_name, odds_info in tb_odds.items():
@@ -303,20 +308,29 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         else:
             side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
 
-        k_pct_val = kpct(edge, odds, cfg["kelly_fraction"])
+        # Calibrate against realized outcomes (corrects overconfidence) and
+        # recompute edge before sizing. Edge cap only applies once calibrated,
+        # matching every other system's winner's-curse defense (see
+        # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+        # finding A3 -- BATTER_TB previously had none of this at all).
+        model_prob, _cal = _cal_apply("BATTER_TB", model_prob)
+        edge = model_prob - fair
+        _edge_capped = _cal and edge > _EDGE_CAP
+
+        k_pct_val = kpct(model_prob, odds, cfg["kelly_fraction"])
         bankroll, cap = apply_cap(
             bankroll, int(row["game_pk"]), prefetched, pending,
             cap_units=cfg.get("cap_units", 10.0),
         )
         raw_stake = kelly_stake(
-            edge, odds,
+            model_prob, odds,
             bankroll=bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         )
         stake = min(raw_stake, cap)
-        triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _sgo.is_live_event(odds_info.get("commence_time")))
+        triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped) and (not _sgo.is_live_event(odds_info.get("commence_time")))
         if triggered:
             gp = int(row.get("game_pk", 0))
             pending[gp] = pending.get(gp, 0.0) + stake

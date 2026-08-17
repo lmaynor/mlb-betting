@@ -128,6 +128,9 @@ def healthz():
 
 @app.route("/run", methods=["POST"])
 def run_handler():
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     if _off_season():
         return _off_season_response()
     body     = request.get_json(silent=True) or {}
@@ -156,6 +159,9 @@ def run_handler():
 
 @app.route("/build-features", methods=["POST"])
 def build_features_handler():
+    err = _auth_required(request)
+    if err:
+        return err
     if _off_season():
         return _off_season_response()
     body     = request.get_json(silent=True) or {}
@@ -185,6 +191,9 @@ def build_features_handler():
 
 @app.route("/build-all-features", methods=["POST"])
 def build_all_features_handler():
+    err = _auth_required(request)
+    if err:
+        return err
     if _off_season():
         return _off_season_response()
     """Run all feature builders sequentially in dependency order.
@@ -248,6 +257,9 @@ def build_all_features_handler():
 
 @app.route("/snapshot-odds", methods=["POST"])
 def snapshot_odds_handler():
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     if _off_season():
         return _off_season_response()
     body     = request.get_json(silent=True) or {}
@@ -285,6 +297,9 @@ def snapshot_odds_handler():
 
 @app.route("/settle", methods=["POST"])
 def settle_handler():
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     body        = request.get_json(silent=True) or {}
     settle_date = body.get("settle_date", None)  # optional; defaults to yesterday
     try:
@@ -306,6 +321,9 @@ def settle_handler():
 
 @app.route("/refresh-data", methods=["POST"])
 def refresh_data_handler():
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     if _off_season():
         return _off_season_response()
     body     = request.get_json(silent=True) or {}
@@ -388,6 +406,9 @@ def backfill_data_handler():
     Runs synchronously -- use only from Cloud Shell proxy, not Scheduler.
     Gunicorn timeout 3600s is adequate for a full season backfill.
     """
+    err = _auth_required(request)
+    if err:
+        return err
     from datetime import date as _date, timedelta as _td
     body       = request.get_json(silent=True) or {}
     start_date = body.get("start_date")
@@ -513,6 +534,9 @@ def backfill_savant_handler():
     """One-time historical backfill for Savant leaderboard datasets.
     Body: dataset (str, optional), start_year (int), end_year (int), force (bool).
     """
+    err = _auth_required(request)
+    if err:
+        return err
     body       = request.get_json(silent=True) or {}
     dataset    = body.get("dataset")
     start_year = body.get("start_year")
@@ -549,6 +573,9 @@ def backfill_savant_handler():
 @app.route("/monitor", methods=["POST"])
 def monitor_handler():
     """Rolling performance monitor — model health (ROI, hit rate)."""
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
@@ -565,6 +592,9 @@ def monitor_handler():
 @app.route("/monitor-ops", methods=["POST"])
 def monitor_ops_handler():
     """Infrastructure health monitor — schedulers, GCS freshness, model artifacts."""
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
@@ -583,6 +613,9 @@ def backfill_statcast():
     """Backfill Statcast master for missing dates.
     Body: {"dates": ["2026-05-09", "2026-05-10"]}
     """
+    err = _auth_required(request)
+    if err:
+        return err
     from mlb_core.config import GCS_BUCKET
     from mlb_core.data.statcast import statcast_backfill_gcs
     body  = request.get_json(silent=True) or {}
@@ -678,6 +711,9 @@ def reset_bets():
 
 @app.route("/dashboard", methods=["GET"])
 def dashboard():
+    err = _auth_required(request)
+    if err:
+        return err
     from sqlalchemy import text
     from mlb_core.tracking.bet_tracker import BetTracker
     system_filter = request.args.get("system", None)
@@ -710,7 +746,7 @@ def dashboard():
     bind_params: dict = {}
     if system_filter:
         # Whitelist — never interpolate user input into SQL strings.
-        _VALID_SYSTEMS_DASH = {"HR","1IOU","F5","K","OUTS","F3","F1H","F7","GAME",
+        _VALID_SYSTEMS_DASH = {"HR","1IOU","F5","K","OUTS","F3","F1H","F7","GAME","1I",
                                "BATTER_K","BATTER_TB","BATTER_HITS","PITCHER_ER"}
         if system_filter.upper() not in _VALID_SYSTEMS_DASH:
             return jsonify({"error": f"Invalid system: {system_filter}"}), 400
@@ -843,6 +879,59 @@ def _auth_required(req):
     if not _require_api_key(req.headers, SITE_API_KEY):
         return jsonify({"error": "Unauthorized"}), 401
     return None
+
+
+_SCHEDULER_INVOKER_EMAIL = os.environ.get(
+    "SCHEDULER_INVOKER_EMAIL",
+    "scheduler-invoker@concrete-crow-445205-m4.iam.gserviceaccount.com",
+)
+
+
+def _verify_scheduler_oidc(req) -> bool:
+    """Verify the inbound Authorization: Bearer <token> is a real Google-signed
+    OIDC token issued to the Cloud Scheduler invoker service account.
+
+    Cloud Run IAM's allUsers grant (required for the public /api/public/*
+    routes) means IAM no longer blocks any route on this service -- the
+    Scheduler's OIDC token is sent on every scheduled call but nothing here
+    has ever verified it (see docs/audits/
+    2026-08-16_cloud_efficiency_and_profitability_review.md finding A5).
+    This verifies it server-side. Returns False (not raises) on any
+    malformed/missing/invalid token so callers can fail closed uniformly.
+    """
+    auth_header = req.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return False
+    token = auth_header[len("Bearer "):]
+    try:
+        from google.auth.transport import requests as _grequests
+        from google.oauth2 import id_token as _id_token
+        claims = _id_token.verify_oauth2_token(token, _grequests.Request())
+    except Exception as e:  # noqa: BLE001 -- any verification failure = reject
+        logger.warning(f"scheduler OIDC verification failed: {e}")
+        return False
+    return bool(claims.get("email_verified")) and claims.get("email") == _SCHEDULER_INVOKER_EMAIL
+
+
+def _scheduler_auth_required(req):
+    """Auth gate for the 9 Cloud-Scheduler-triggered routes (/run, /settle,
+    /refresh-data, /monitor, /monitor-ops, /monitor-drift, /snapshot-odds,
+    /capture-closing, /retrain-weekly).
+
+    OFF BY DEFAULT: only enforces once ENFORCE_SCHEDULER_AUTH is set to a
+    truthy value. This ships the verification logic ready to use, but it
+    cannot be exercised against a genuine Scheduler-signed token from a dev
+    sandbox -- flip ENFORCE_SCHEDULER_AUTH=1 on the live service only after
+    confirming a real Scheduler-triggered call still succeeds (e.g. `gcloud
+    scheduler jobs run <job-name>` followed by a Cloud Logging check), since
+    a false-positive rejection here would silently stop every automated
+    betting/settlement/monitoring run with no other safety net.
+    """
+    if os.environ.get("ENFORCE_SCHEDULER_AUTH", "").lower() not in ("1", "true", "yes"):
+        return None
+    if _verify_scheduler_oidc(req):
+        return None
+    return jsonify({"error": "Unauthorized -- scheduler OIDC verification failed"}), 401
 
 
 @app.route("/api/public/picks/today", methods=["GET", "OPTIONS"])
@@ -1442,6 +1531,9 @@ def edge_analysis_handler():
 @app.route("/capture-closing", methods=["POST"])
 def capture_closing_handler():
     """Capture closing lines for all open bets today. Run at T-5 min per game."""
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
@@ -1462,6 +1554,9 @@ def capture_closing_handler():
 @app.route("/monitor-drift", methods=["POST"])
 def monitor_drift_handler():
     """PSI feature drift monitor. Run weekly (Monday mornings)."""
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     body     = request.get_json(silent=True) or {}
     run_date = body.get("run_date", datetime.now(_CT).date().isoformat())
     try:
@@ -1481,6 +1576,9 @@ def diagnose_nrfi_drift_handler():
     Optional body/query `since` (YYYY-MM-DD) sets the recent-window lower bound;
     defaults to the last DRIFT_LOOKBACK_DAYS. Read-only diagnostic.
     """
+    err = _auth_required(request)
+    if err:
+        return err
     body  = request.get_json(silent=True) or {}
     since = body.get("since") or request.args.get("since")
     try:
@@ -1496,6 +1594,9 @@ def diagnose_nrfi_drift_handler():
 @app.route("/retrain-outs", methods=["POST"])
 def retrain_outs_handler():
     """Trigger OUTS Pro v1 retrain Cloud Run Job."""
+    err = _auth_required(request)
+    if err:
+        return err
     import google.auth
     import google.auth.transport.requests
     import requests as _req_lib
@@ -1521,6 +1622,9 @@ def retrain_weekly():
     Fires retrain jobs first, then calibrate jobs after a delay.
     Uses Cloud Run Jobs API with SA credentials from metadata server.
     """
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
     import threading
     import time
     import google.auth
@@ -1611,6 +1715,9 @@ def backfill_notes_handler():
     Body: { "date": "2026-05-25" }  (defaults to today)
     Auth: X-API-Key required.
     """
+    err = _auth_required(request)
+    if err:
+        return err
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
 

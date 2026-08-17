@@ -91,12 +91,18 @@ class TestRemoveVig:
         assert f_fav > f_dog
 
 
-# ── kelly_stake (T01 fix) ────────────────────────────────────────────────────
+# ── kelly_stake (T01 fix, probability-basis fix 2026-08-17) ─────────────────
 
 class TestKellyStake:
     """
     Full Kelly: f* = edge * (b + 1) / b
-    where b = decimal odds - 1.
+    where b = decimal odds - 1, edge = model_prob - market_prob (the
+    VIG-INCLUSIVE implied prob of the *same* odds, derived internally by
+    kelly_stake/kelly_pct via american_to_implied_prob -- NOT a de-vigged
+    fair prob the caller might have on hand for a different purpose, e.g.
+    min_edge gating). Callers now pass model_prob, not a precomputed edge --
+    see docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    finding A1 for why edge-vs-fair was the wrong basis for Kelly sizing.
 
     At -110: b = 100/110 ≈ 0.9091, (b+1)/b ≈ 2.1
     At +100: b = 1.0,              (b+1)/b = 2.0
@@ -104,87 +110,114 @@ class TestKellyStake:
     """
 
     def test_minus_110_known_value(self):
-        # p_model=0.55, p_fair=american_to_implied_prob(-110)*(110/210)
-        # Using devigged fair for -110/-110 market: fair = 0.5
-        # edge = 0.55 - 0.5 = 0.05
-        # b = 100/110, full_kelly = 0.05 * (1 + 110/100) = 0.05 * 2.1 = 0.105
-        # fractional = 0.105 * 0.25 = 0.02625
-        edge     = 0.05
-        odds     = -110
-        bankroll = 1000.0
-        fraction = 0.25
-        b        = 100 / 110
+        # p_model=0.55 at -110. market_prob (vig-inclusive, the correct Kelly
+        # basis) = american_to_implied_prob(-110) = 110/210 ≈ 0.52381 -- NOT
+        # the de-vigged fair=0.50 a -110/-110 two-way market would produce.
+        model_prob = 0.55
+        odds       = -110
+        bankroll   = 1000.0
+        fraction   = 0.25
+        market_prob  = american_to_implied_prob(odds)
+        edge         = model_prob - market_prob
+        b            = 100 / 110
         expected_pct = edge * (b + 1) / b * fraction
         expected_stake = round(min(expected_pct, 0.05) * bankroll, 2)
-        result = kelly_stake(edge, odds, bankroll, fraction=fraction)
+        result = kelly_stake(model_prob, odds, bankroll, fraction=fraction)
         assert abs(result - expected_stake) < 0.01, (
             f"kelly_stake(-110): expected {expected_stake}, got {result}"
         )
 
     def test_acceptance_criterion_from_task(self):
-        # T01 acceptance: p=0.55, odds=-110, fraction=1.0 → ≈ 0.105 of bankroll
-        # With bankroll=1, result ≈ 0.05 (capped by max_pct=0.05).
-        # Uncapped (max_pct=1.0) should be ≈ 0.105.
-        edge     = 0.05   # 0.55 - 0.50 at even-money fair
-        odds     = -110
-        bankroll = 1.0
-        fraction = 1.0
-        b        = 100 / abs(odds)  # 100/110 ≈ 0.909
-        expected = edge * (b + 1) / b * fraction  # ≈ 0.105
-        result   = kelly_stake(edge, odds, bankroll,
-                               fraction=fraction, min_pct=0.0, max_pct=1.0)
+        # T01's original acceptance value (~0.105 of bankroll) assumed edge was
+        # computed vs a hardcoded fair=0.50. Post the 2026-08-17 basis fix, the
+        # SAME model_prob=0.55 at -110 correctly yields a smaller edge (vs the
+        # vig-inclusive market_prob≈0.52381, not 0.50) and thus a smaller stake
+        # -- this is the fix working as intended, not a regression.
+        model_prob = 0.55
+        odds       = -110
+        bankroll   = 1.0
+        fraction   = 1.0
+        market_prob = american_to_implied_prob(odds)
+        edge        = model_prob - market_prob
+        b           = 100 / abs(odds)  # 100/110 ≈ 0.909
+        expected    = edge * (b + 1) / b * fraction
+        result      = kelly_stake(model_prob, odds, bankroll,
+                                  fraction=fraction, min_pct=0.0, max_pct=1.0)
         assert abs(result - expected) < 0.01, (
-            f"T01 acceptance: expected ≈{expected:.4f}, got {result:.4f}"
+            f"probability-basis fix: expected ≈{expected:.4f}, got {result:.4f}"
+        )
+        # And explicitly confirm the fix changed behavior: the pre-fix formula
+        # (edge vs a hardcoded 0.50 fair) would have given ≈0.105, materially
+        # larger than the corrected value.
+        pre_fix_edge = model_prob - 0.50
+        pre_fix_expected = pre_fix_edge * (b + 1) / b * fraction
+        assert result < pre_fix_expected - 0.01, (
+            "expected the basis fix to reduce the stake vs the old (wrong) "
+            "fair-prob-based calculation"
         )
 
     def test_zero_edge_returns_zero(self):
-        assert kelly_stake(0.0, -110, 1000.0) == 0.0
+        # model_prob exactly at the odds' own breakeven -> edge=0 -> no bet.
+        odds = -110
+        assert kelly_stake(american_to_implied_prob(odds), odds, 1000.0) == 0.0
 
     def test_negative_edge_returns_zero(self):
-        assert kelly_stake(-0.03, -110, 1000.0) == 0.0
+        odds = -110
+        model_prob = american_to_implied_prob(odds) - 0.03
+        assert kelly_stake(model_prob, odds, 1000.0) == 0.0
 
     def test_plus_200_stake(self):
-        # b = 2.0, full kelly = edge * 1.5
-        edge     = 0.10
+        # b = 2.0, full kelly = edge * 1.5. Construct model_prob to give a
+        # known edge=0.10 over +200's own market_prob (100/300 ≈ 0.3333).
         odds     = 200
         bankroll = 1000.0
         fraction = 0.25
+        market_prob = american_to_implied_prob(odds)
+        edge     = 0.10
+        model_prob = market_prob + edge
         b        = 2.0
         expected_pct = edge * (b + 1) / b * fraction
         expected_stake = round(min(expected_pct, 0.05) * bankroll, 2)
-        result = kelly_stake(edge, odds, bankroll, fraction=fraction)
+        result = kelly_stake(model_prob, odds, bankroll, fraction=fraction)
         assert abs(result - expected_stake) < 0.01
 
     def test_below_min_pct_returns_zero(self):
         # Very tiny edge — below min_kelly_pct=0.005 → no bet
-        result = kelly_stake(0.001, -110, 1000.0, fraction=0.25, min_pct=0.005)
+        odds = -110
+        model_prob = american_to_implied_prob(odds) + 0.001
+        result = kelly_stake(model_prob, odds, 1000.0, fraction=0.25, min_pct=0.005)
         assert result == 0.0
 
     def test_capped_at_max_pct(self):
         # Large edge should still be capped at max_pct * bankroll
-        result = kelly_stake(0.30, 200, 1000.0, fraction=1.0, max_pct=0.05)
+        odds = 200
+        model_prob = american_to_implied_prob(odds) + 0.30
+        result = kelly_stake(model_prob, odds, 1000.0, fraction=1.0, max_pct=0.05)
         assert result == 50.0  # 5% of 1000
 
 
 class TestKellyPct:
     def test_consistent_with_kelly_stake(self):
         """kelly_pct * bankroll should equal kelly_stake (before min/max clamps)."""
-        edge     = 0.06
         odds     = -115
         bankroll = 1000.0
         fraction = 0.25
-        pct    = kelly_pct(edge, odds, fraction)
-        stake  = kelly_stake(edge, odds, bankroll, fraction=fraction,
+        model_prob = american_to_implied_prob(odds) + 0.06
+        pct    = kelly_pct(model_prob, odds, fraction)
+        stake  = kelly_stake(model_prob, odds, bankroll, fraction=fraction,
                              min_pct=0.0, max_pct=1.0)
         assert abs(pct * bankroll - stake) < 0.01
 
     def test_zero_edge(self):
-        assert kelly_pct(0.0, -110) == 0.0
+        odds = -110
+        assert kelly_pct(american_to_implied_prob(odds), odds) == 0.0
 
     def test_plus_100_known_value(self):
+        # +100 -> market_prob = 100/200 = 0.5 exactly (even money), so this
+        # happens to numerically match the pre-fix hardcoded-fair=0.5 case.
         # b=1.0, (b+1)/b=2.0, fraction=1.0: pct = edge * 2
-        edge = 0.05
-        pct  = kelly_pct(edge, 100, fraction=1.0)
+        model_prob = 0.55
+        pct  = kelly_pct(model_prob, 100, fraction=1.0)
         assert abs(pct - 0.10) < 1e-6
 
 

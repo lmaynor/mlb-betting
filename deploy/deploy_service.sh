@@ -50,8 +50,15 @@ gcloud run services update "$SERVICE" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
   --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,PARLAY_API_KEY=parlay-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
-  --set-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-sgo}" \
+  --update-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-parlay}" \
   --project="$PROJECT_ID"
+# NOTE: --update-env-vars (merge), not --set-env-vars (destructive replace of
+# the whole plain env-var map). ODDS_PRIMARY defaults to "parlay" -- "sgo"
+# combined with the 8x/day snapshot cadence caused a 24+ hour SGO outage on
+# 2026-08-09/10 (docs/solutions/integration-issues/odds-primary-cadence-mismatch.md).
+# Do not flip this default back to "sgo" without also cutting the snapshot
+# cadence back to ~4x/day. See
+# docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md finding A2.
 
 # Route 100% traffic to new revision (separate command required)
 gcloud run services update-traffic "$SERVICE" \
