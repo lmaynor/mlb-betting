@@ -71,11 +71,41 @@ def _load_statcast(cfg: dict) -> pd.DataFrame:
 # ── Section 4 — pitcher feature aggregation ──────────────────────────────────
 
 def _identify_starters(sc: pd.DataFrame) -> pd.DataFrame:
-    """Starter = pitcher with most batters faced (PA-ending events) per game."""
+    """Starter = pitcher with most batters faced (PA-ending events) per
+    (game_pk, team) -- one per side, not one per game.
+
+    Must group by team, not game_pk alone, or whichever team's starter faced
+    fewer total batters (often the loser, or a bullpen game) is silently
+    dropped for the WHOLE game -- corrupting both K and OUTS (they share
+    this feature CSV) with ~50% missing pitcher-game rows plus survivorship
+    bias in every rolling feature. Fixed 2026-08-17, a recurrence of the
+    identical bug already found and fixed for manager_hooks in
+    mlb_core/data/auxiliary_features.py. See docs/audits/
+    2026-08-16_cloud_efficiency_and_profitability_review.md finding A12.
+    """
     pa = sc[sc["events"].notna()].copy()
-    bf = pa.groupby(["game_pk", "pitcher"]).size().reset_index(name="bf")
-    idx = bf.groupby("game_pk")["bf"].idxmax()
-    starters = bf.loc[idx].copy()
+    if not all(c in pa.columns for c in ("inning_topbot", "home_team", "away_team")):
+        logger.warning(
+            "K build: inning_topbot/home_team/away_team missing -- cannot "
+            "group starters by team, falling back to per-game idxmax "
+            "(will silently drop one side's starter every game)"
+        )
+        bf = pa.groupby(["game_pk", "pitcher"]).size().reset_index(name="bf")
+        idx = bf.groupby("game_pk")["bf"].idxmax()
+        starters = bf.loc[idx].copy()
+    else:
+        # Pitcher's team: Top half = away team batting = HOME pitcher on the
+        # mound; Bot half = AWAY pitcher (opposite of this file's own
+        # bat_team convention used correctly elsewhere for the BATTING team).
+        pa["_pitcher_team"] = np.where(
+            pa["inning_topbot"] == "Top", pa["home_team"], pa["away_team"]
+        )
+        bf = (
+            pa.groupby(["game_pk", "_pitcher_team", "pitcher"]).size()
+              .reset_index(name="bf")
+        )
+        idx = bf.groupby(["game_pk", "_pitcher_team"])["bf"].idxmax()
+        starters = bf.loc[idx].drop(columns=["_pitcher_team"]).copy()
 
     gdates = sc.groupby("game_pk")["game_date"].first().reset_index()
     starters = starters.merge(gdates, on="game_pk", how="left")

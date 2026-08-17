@@ -66,6 +66,16 @@ _NON_FEATURE_COLS = {
     "hr_per_fb_num", "fb_count_game", "hr_per_fb_game",
     "xwoba_game", "ev_game", "ev_max_game", "la_mean_game", "la_std_game",
     "sweet_spot_game", "hr_zone_game",
+    # Same-game (un-shifted) leakage -- fixed 2026-08-17 (finding A14).
+    # gb_game/pull_air_game have no rolled counterpart anywhere in
+    # build_hr_features.py (unlike the raw aggregates above, which all have
+    # a batter_*_L20/L50/season alias) -- they were never intended as
+    # pre-game features. whiff_pct/chase_pct/zone_contact_pct DO have safe
+    # lagged aliases (batter_whiff_pct_L20 etc, see build_hr_features.py's
+    # build_batter_rolling) -- denylisting the bare same-game names here
+    # loses no real signal, only the leaky duplicate. See docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding A14.
+    "gb_game", "pull_air_game", "whiff_pct", "chase_pct", "zone_contact_pct",
 }
 
 XGB_PARAMS = {

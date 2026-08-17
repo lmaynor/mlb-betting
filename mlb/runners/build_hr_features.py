@@ -239,7 +239,16 @@ def build_player_game(sc: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
 
     agg["home_abbr"]      = agg["home_team"].map(TEAM_NAME_TO_ABBR)
     agg["hr_park_factor"] = agg["home_abbr"].map(HR_PARK_FACTORS).fillna(1.0)
-    agg["is_outdoor"]     = agg["home_abbr"].map(lambda t: 0 if STADIUMS_ROOF.get(t) else 1)
+    # is_outdoor is NOT computed here -- it comes from the weather join below
+    # (mlb_core.data.weather, fixed 2026-08-17 to the "1 if roof in
+    # (open,retractable) else 0" convention). This used to be computed here
+    # too, with a THIRD, different, also-wrong convention (any roofed park
+    # including an open retractable roof = never outdoor) that then
+    # silently collided with the weather join's own is_outdoor column
+    # (no suffix handling -> both renamed to is_outdoor_x/_y, so the model
+    # never actually saw a column literally named "is_outdoor" either way).
+    # See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    # finding A13.
     agg["altitude_ft"]    = agg["home_abbr"].map(PARK_ALTITUDE).fillna(0)
     agg["pull_side_dist"] = agg.apply(lambda r: _get_pull_side_dist(r.get("home_abbr"), r.get("stand")), axis=1)
     agg["cf_dist"]        = agg["home_abbr"].map(lambda t: PARK_DIMENSIONS.get(t, {}).get("CF", np.nan))
@@ -615,6 +624,14 @@ def build_features(
         wx_c["game_pk"] = pd.to_numeric(wx_c["game_pk"], errors="coerce")
         wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_direction","is_outdoor","roof"]
         wx_keep = [c for c in wx_cols if c in wx_c.columns]
+        # Defensive: drop any of these columns df already carries before the
+        # merge (matches the pattern used correctly elsewhere, e.g. run_hr.py
+        # _join_weather) so a future overlapping column degrades to "weather
+        # wins" instead of silently renaming both sides to *_x/*_y -- exactly
+        # what happened to is_outdoor here until 2026-08-17 (finding A13).
+        overlap = (set(df.columns) & set(wx_keep)) - {"game_pk"}
+        if overlap:
+            df = df.drop(columns=list(overlap))
         df = df.merge(wx_c[wx_keep].drop_duplicates("game_pk"), on="game_pk", how="left")
 
         # Fix temperature for domes
