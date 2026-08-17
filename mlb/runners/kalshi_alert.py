@@ -180,6 +180,7 @@ def run(run_date: str | None = None) -> dict:
 
     # dedup vs already-notified quotes for today
     notified_key = f"Alerts/{day}/kalshi_notified.parquet"
+    deferred_key = f"Alerts/{day}/kalshi_deferred.parquet"
     seen = _read_parquet(notified_key)
     if seen is not None and len(seen):
         keys = [k for k in _QUOTE_KEYS if k in credible.columns and k in seen.columns]
@@ -193,19 +194,41 @@ def run(run_date: str | None = None) -> dict:
         log.info("scan: %d credible divergences, all already notified today", len(credible))
         return {"status": "ok", "day": day, "new_alerts": 0}
 
-    new = new.sort_values("ev_pct", ascending=False)
+    # Fixed 2026-08-17 (finding C6.3): rows deferred by a PRIOR run's cap get
+    # first priority this run -- otherwise a persistently >max_posts scan
+    # could keep bumping the same overflow rows indefinitely. Mirrors the
+    # identical fix in fast_alert_loop.py.
+    deferred = _read_parquet(deferred_key)
+    if deferred is not None and len(deferred):
+        dkeys = [k for k in _QUOTE_KEYS if k in new.columns and k in deferred.columns]
+        dmerged = new.merge(deferred[dkeys].drop_duplicates(), on=dkeys,
+                            how="left", indicator="_defer_ind")
+        new["_deferred"] = (dmerged["_defer_ind"] == "both").values
+    else:
+        new["_deferred"] = False
+    new = new.sort_values(["_deferred", "ev_pct"], ascending=[False, False]) \
+             .drop(columns="_deferred")
     posted = new.head(max_posts)
+    overflow = new.iloc[max_posts:]
 
     names_raw = _player_names(day)
     names = {int(pid): pname for pid, pname in names_raw.items()} if names_raw else {}
 
     notify(posted, names, min_ev, min_books)
-    if len(new) > max_posts:
-        log.info("capped: %d further alerts not posted this run", len(new) - max_posts)
+    if len(overflow):
+        log.info("capped: %d further alerts not posted this run -- deferred for retry",
+                 len(overflow))
 
-    seen_new = pd.concat([seen, new[[c for c in _QUOTE_KEYS if c in new.columns]]],
+    # Persist deferred state from `overflow`, not `new` (see comment above).
+    _write_parquet(overflow[[c for c in _QUOTE_KEYS if c in overflow.columns]], deferred_key)
+    # Persist notify-state from `posted`, NOT `new` -- this was the actual
+    # bug (finding C6.3): dedup state used to come from the full uncapped
+    # `new` set, so any row beyond max_posts got marked "notified" even
+    # though it was never actually sent to Discord, permanently
+    # blacklisting it from ever being reconsidered.
+    seen_new = pd.concat([seen, posted[[c for c in _QUOTE_KEYS if c in posted.columns]]],
                         ignore_index=True) if seen is not None else \
-        new[[c for c in _QUOTE_KEYS if c in new.columns]]
+        posted[[c for c in _QUOTE_KEYS if c in posted.columns]]
     _write_parquet(seen_new.drop_duplicates(), notified_key)
 
     logkey = f"Alerts/{day}/kalshi_log.parquet"

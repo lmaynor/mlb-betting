@@ -332,7 +332,12 @@ def _settle_innings_window(pending: pd.DataFrame, game_cache: dict, system: str)
             continue
         innings = r.get("innings") or []
         if system == "GAME":
-            if len(innings) < 8:
+            # Fixed 2026-08-17 (finding C5.1): was < 8, documented official-
+            # game rule (CONTEXT.md s5, s1228) is < 5 -- this was silently
+            # voiding legitimately-official 5-7 inning rain-shortened games,
+            # undercounting GAME's own settled-bet total against its 200-bet
+            # promotion gate.
+            if len(innings) < 5:
                 results.append({"id": int(bet["id"]), "result": "void", "profit": 0.0})
                 logger.info(f"settle {system}: game_pk={gpk} only {len(innings)} innings -- voiding")
                 continue

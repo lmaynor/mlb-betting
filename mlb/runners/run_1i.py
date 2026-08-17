@@ -256,14 +256,27 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         return pd.DataFrame()
     logger.info(f"1I: {len(odds_by_event)} events with 3-way 1st-inning odds")
 
-    # Index odds by (away_abbrev, home_abbrev)
+    # Index odds by (away_abbrev, home_abbrev) for matching to today's games.
+    # Fixed 2026-08-17 (finding C5.2): a doubleheader means 2 SGO events can
+    # share the same team pair -- this used to be a plain dict assignment, so
+    # the second game's odds silently overwrote the first's, either hiding a
+    # betting opportunity entirely or misattributing odds to the wrong
+    # game_pk while still displaying correct-looking team names (see the same
+    # fix in run_nrfi.py's by_abbrev construction). Keep a LIST per key
+    # instead and pair candidates off in schedule-iteration order below.
+    # Doesn't guarantee perfect event-to-game_pk pairing within a
+    # doubleheader (no commence_time on the schedule side to match against --
+    # the same structural gap id_resolver.py's own resolve_game_pk()
+    # documents via its _ambiguous_doubleheaders counter), but guarantees
+    # BOTH games get a betting decision instead of one being silently
+    # dropped.
     by_abbrev: dict = {}
     for ev_id, info in odds_by_event.items():
         away_abbr = resolve_team(info["away_team"])
         home_abbr = resolve_team(info["home_team"])
         if not away_abbr or not home_abbr:
             continue
-        by_abbrev[(away_abbr, home_abbr)] = {**info, "event_id": ev_id}
+        by_abbrev.setdefault((away_abbr, home_abbr), []).append({**info, "event_id": ev_id})
 
     _engine   = _make_engine("unused")
     _game_pks = list(game_probs["game_pk"].dropna().astype(int).unique())
@@ -285,10 +298,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     results = []
     for _, row in game_probs.iterrows():
-        key       = (row["away_team"], row["home_team"])
-        odds_info = by_abbrev.get(key)
-        if odds_info is None:
+        key        = (row["away_team"], row["home_team"])
+        candidates = by_abbrev.get(key)
+        if not candidates:
             continue
+        odds_info  = candidates.pop(0)
 
         mkt_away = american_to_implied_prob(odds_info["away_odds"])
         mkt_home = american_to_implied_prob(odds_info["home_odds"])
@@ -323,9 +337,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         edge = model_prob - fair
         _edge_capped = _cal and edge > _EDGE_CAP
 
-        if edge < cfg["min_edge"]:
-            continue
-
+        # Fixed 2026-08-17 (finding C5.7): was an early `continue` here,
+        # dropping every sub-min_edge prediction before it was ever logged
+        # -- violating the "log every scored prediction" contract every
+        # primary market honors, and starving the low-edge control-group
+        # population /edge-analysis needs to validate a calibration curve
+        # for this market. kelly_triggered below already re-checks
+        # `edge >= cfg["min_edge"]` -- that's the sole downstream gate now.
         k_pct_val = kpct(model_prob, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(
             _bankroll, int(row["game_pk"]),

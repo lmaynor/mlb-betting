@@ -63,6 +63,24 @@ SYSTEM_CONFIG = {
         "gcs_meta":     "K_Pro_System/models/model_meta_v1.json",
         "gcs_features": "K_Pro_System/data/model_features.csv",
     },
+    # Added 2026-08-17 (finding C6.4): BATTER_HITS/BATTER_TB/GAME had zero
+    # PSI/drift monitoring -- this dict hardcoded exactly the 4 systems that
+    # existed when it was written, and CONTEXT.md's own "adding a new
+    # system" checklist never mentioned this file, so every system added
+    # since silently repeated the gap. See CONTEXT.md s6 for the checklist
+    # line added alongside this fix.
+    "BATTER_HITS": {
+        "gcs_meta":     "BATTER_HITS_System/models/model_meta_batter_hits_v1.json",
+        "gcs_features": "BATTER_HITS_System/data/model_features.csv",
+    },
+    "BATTER_TB": {
+        "gcs_meta":     "BATTER_TB_System/models/model_meta_batter_tb_v1.json",
+        "gcs_features": "BATTER_TB_System/data/model_features.csv",
+    },
+    "GAME": {
+        "gcs_meta":     "GAME_Pro_System/models/model_meta_game_v1.json",
+        "gcs_features": "GAME_Pro_System/data/model_features.csv",
+    },
 }
 
 

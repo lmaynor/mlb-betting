@@ -428,14 +428,26 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("NRFI: 0 events have NRFI/YRFI prices on DK — skipping")
         return pd.DataFrame()
 
-    # Index odds by (away_abbrev, home_abbrev) for matching to today's schedule
+    # Index odds by (away_abbrev, home_abbrev) for matching to today's schedule.
+    # Fixed 2026-08-17 (finding C5.2): a doubleheader means 2 SGO events can
+    # share the same team pair -- this used to be a plain dict assignment,
+    # so the second game's odds silently overwrote the first's, either
+    # hiding a betting opportunity entirely or misattributing odds to the
+    # wrong game_pk while still displaying correct-looking team names. Keep
+    # a LIST per key instead and pair candidates off in order below.
+    # Doesn't guarantee perfect event-to-game_pk pairing within a
+    # doubleheader (no commence_time on the schedule/pivot side to match
+    # against -- the same structural gap id_resolver.py's own
+    # resolve_game_pk() documents via its _ambiguous_doubleheaders counter),
+    # but guarantees BOTH games get a betting decision instead of one being
+    # silently dropped.
     by_abbrev: dict = {}
     for ev_id, info in nrfi_odds_by_event.items():
         away_abbr = resolve_team(info["away_team"])
         home_abbr = resolve_team(info["home_team"])
         if not away_abbr or not home_abbr:
             continue
-        by_abbrev[(away_abbr, home_abbr)] = {**info, "event_id": ev_id}
+        by_abbrev.setdefault((away_abbr, home_abbr), []).append({**info, "event_id": ev_id})
 
     results = []
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
@@ -451,9 +463,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("1IOU gate active -- logging only, no staked bets this run")
     for _, row in pivot.iterrows():
         key = (row["away_team"], row["home_team"])
-        odds_info = by_abbrev.get(key)
-        if odds_info is None:
+        candidates = by_abbrev.get(key)
+        if not candidates:
             continue
+        odds_info = candidates.pop(0)
         nrfi_odds = odds_info["nrfi_odds"]
         yrfi_odds = odds_info["yrfi_odds"]
         nrfi_mkt  = american_to_implied_prob(nrfi_odds)

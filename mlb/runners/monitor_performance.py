@@ -103,6 +103,18 @@ def _clv_stats(df: pd.DataFrame) -> dict:
 
 def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
     """Compute rolling stats over the last `window` settled bets."""
+    # Fixed 2026-08-17 (finding C6.1): this used to filter only by
+    # result.notna(), not kelly_triggered -- once a suppressed system's
+    # trailing window fully turned over to stake=0/kelly_triggered=False
+    # rows (which the "log every scored prediction" contract means every
+    # primary market logs plenty of), `staked` summed to 0, roi hit the
+    # literal 0.0% fallback below -- not the real recovery signal it looked
+    # like -- and _gate_condition_met saw `0.0 < GATE_ROI_MIN` as False,
+    # auto-clearing the suppression gate and posting a "GATE CLEARED" alert
+    # that looked like genuine recovery. Matches BetTracker.summary()'s own
+    # convention (kelly_triggered.fillna(True) -- NULL/missing counts as a
+    # real bet, for historical rows logged before this column existed).
+    df = df[df["kelly_triggered"].fillna(True).astype(bool)]
     resolved = df[df["result"].notna()].copy()
     if resolved.empty:
         return {}
@@ -149,6 +161,13 @@ def _rolling_stats(df: pd.DataFrame, window: int) -> dict:
 
 def _season_stats(df: pd.DataFrame) -> dict:
     """Full season stats."""
+    # Same fix as _rolling_stats above (finding C6.1) -- not in the audit's
+    # own line citation for this finding (which named _rolling_stats/
+    # _gate_condition_met specifically, since those feed the automated
+    # suppression gate), but this function has the byte-identical bug
+    # pattern and feeds the weekly digest, so a log-only-heavy season would
+    # under-report ROI here the same way.
+    df = df[df["kelly_triggered"].fillna(True).astype(bool)]
     resolved = df[df["result"].notna()].copy()
     if resolved.empty:
         return {}
@@ -236,7 +255,18 @@ def _check_alerts(system: str, stats: dict) -> list[str]:
         )
 
     # AUC alert: < 0.50 means model is rank-ordering backwards -- structural failure.
-    auc_val = stats.get("auc")
+    # Fixed 2026-08-17 (finding C6.2): this used to unconditionally read
+    # stats["auc"], which _rolling_stats computes from market_prob -- i.e.
+    # it measures the BOOK's own rank-ordering skill, not our model's, for
+    # every system. auc_model (computed from model_prob) is the correct
+    # signal and was already sitting right there in stats, just never read
+    # here -- meaning the exact "NRFI live AUC 0.498" concept-drift scenario
+    # this alert exists to catch would essentially never trigger it, since
+    # books are generally well-calibrated regardless of how our own model
+    # is doing. Prefer auc_model whenever it's available (every system,
+    # not just NRFI/1IOU -- market AUC is never the right signal for this
+    # alert), falling back to market auc only if model_prob wasn't tracked.
+    auc_val = stats.get("auc_model") if stats.get("auc_model") is not None else stats.get("auc")
     if auc_val is not None and n >= MIN_BETS_FOR_ALERT:
         if auc_val < 0.50:
             alerts.append(

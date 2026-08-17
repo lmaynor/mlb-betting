@@ -39,19 +39,19 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 ## P2 — medium
 
-- [ ] **C5.2** Doubleheader team-pair dict collisions (NRFI/F5/GAME/1I)
-- [ ] **C5.4** `event_id` validation fail-open in BATTER_HITS/BATTER_TB
-- [ ] **C5.8** K/OUTS share one exposure-cap accumulator
-- [ ] **C5.7** Sub-`min_edge` rows dropped before logging (F1H/PITCHER_ER/1I)
-- [ ] **C5.1** `settle_bets.py` GAME void threshold `<8` vs documented `<5`
-- [ ] **C5.5/C5.6** `capture_closing_lines.py`: HR team-name mismatch + missing GAME/F1H branches
-- [ ] **C6.1** Suppression gate self-clears via zero-stake window dilution
-- [ ] **C6.2** NRFI AUC alert measures market, not model
-- [ ] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`)
-- [ ] **C6.4** `monitor_drift.py` missing BATTER_HITS/BATTER_TB/GAME
-- [ ] **C6.8** Dead/stale `SCHEDULER_JOBS` list in `monitor_ops.py`
-- [ ] **C6.9** `odds_alert.py` never posts to Discord
-- [ ] **C6.6/C6.14** `public_api.py`: `get_today_picks` missing CLV cols + `get_picks` unbounded limit
+- [x] **C5.2** Doubleheader team-pair dict collisions (NRFI/F5/GAME/1I) *(F5 turned out to have 2 independent collision sites, not 1 -- both fixed; no dedicated test, disproportionate mocking cost for a rare edge case vs. compile-check + review)*
+- [x] **C5.4** `event_id` validation fail-open in BATTER_HITS/BATTER_TB
+- [x] **C5.8** K/OUTS share one exposure-cap accumulator *(no dedicated test, same proportionality call as C5.2 -- `_build_predictions` needs GCS model/odds/feature mocking disproportionate to the risk already ruled out by a dangling-reference grep + compile-check)*
+- [x] **C5.7** Sub-`min_edge` rows dropped before logging (F1H/PITCHER_ER/1I)
+- [x] **C5.1** `settle_bets.py` GAME void threshold `<8` vs documented `<5`
+- [x] **C5.5/C5.6** `capture_closing_lines.py`: HR team-name mismatch + missing GAME/F1H branches
+- [x] **C6.1** Suppression gate self-clears via zero-stake window dilution *(same fix also applied to `_season_stats`, byte-identical bug pattern, not in the audit's own line citation)*
+- [x] **C6.2** NRFI AUC alert measures market, not model *(fixed for every system, not just NRFI/1IOU -- market auc is never the right signal for this alert)*
+- [x] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`) *(both halves of the fix: dedup state now comes from `posted`; overflow persisted to a new `deferred.parquet` and given first priority next run)*
+- [x] **C6.4** `monitor_drift.py` missing BATTER_HITS/BATTER_TB/GAME *(CONTEXT.md s6 "adding a new system" checklist also updated)*
+- [x] **C6.8** Dead/stale `SCHEDULER_JOBS` list in `monitor_ops.py` *(deleted; CONTEXT.md s9 + the s18 quick-reference table both corrected)*
+- [x] **C6.9** `odds_alert.py` never posts to Discord *(freshness failures -> #ops-alerts; resolution scorecard -> #performance, only on runs with new alerts to avoid reposting an unchanged cumulative summary)*
+- [x] **C6.6/C6.14** `public_api.py`: `get_today_picks` missing CLV cols + `get_picks` unbounded limit
 
 ## P3 — cloud-cost mechanical + cleanup
 
