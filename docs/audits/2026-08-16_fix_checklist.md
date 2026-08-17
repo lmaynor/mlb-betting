@@ -27,11 +27,11 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 - [x] **A14 / C2** HR same-game feature leakage past denylist — `2428a79` *(retrain still needed)*
 - [x] **C2.3** BATTER_HITS/BATTER_TB `is_home` constant-zero — `2428a79` *(rebuild+retrain still needed)*
 - [x] **B1.1-B1.5** Missing `usecols` (HR/NRFI/K/BATTER_TB) + F5 duplicate statcast read *(rebuild still needed to realize the memory/cost savings; behavior-neutral otherwise)*
-- [ ] **C3.1/C3.2** NRFI + HR walk-forward CV leaks test fold into early stopping
-- [ ] **C3.3** Hardcoded `CV_FOLDS=[2023,2024,2025]` frozen across 5 systems
-- [ ] **C3.4** `retrain_nrfi_v18.py` never computes `feature_dists`
-- [ ] **C3.5** F5 target-column mismatch (`tune_hyperparams.py` + `registry.py` say `home_win`, real col is `home_wins_f5`)
-- [ ] **C3.6/C3.7** BATTER_TB `nb_alpha` clip deviation + missing `prop_1` in 3 systems
+- [x] **C3.1/C3.2** NRFI + HR walk-forward CV leaks test fold into early stopping *(shared `XGBModel.train()` fix covers NRFI's v17/v18 diagnostic path; HR has its own separate inline CV loop, fixed to match; both carve an internal val slice from train's own tail instead of watching dtest directly)*
+- [x] **C3.3** Hardcoded `CV_FOLDS=[2023,2024,2025]` frozen across 5 systems *(K/OUTS/BATTER_HITS/BATTER_TB/GAME each got a `_cv_folds(df, n=3)` helper deriving the last 3 years actually present in the data)*
+- [x] **C3.4** `retrain_nrfi_v18.py` never computes `feature_dists` *(added per-sub-model, matching feature_means/feature_stds' existing per-sub-model shape; also deleted an unrelated exact-duplicate `feature_dists` compute-block found while fixing this in the sibling v17 file)*
+- [x] **C3.5** F5 target-column mismatch (`tune_hyperparams.py` + `registry.py` say `home_win`, real col is `home_wins_f5`)
+- [x] **C3.6/C3.7** BATTER_TB `nb_alpha` clip deviation + missing `prop_1` in 3 systems
 - [ ] **C4.1** Kalshi never excluded from `backtest_market.OFFSHORE`
 - [ ] **C4.3** `verdict()` never checks high-edge-bucket CLV
 - [ ] **C4.4** `odds_history.write_partition` overwrite collision (bettingpros/parlayapi ingest)

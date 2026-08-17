@@ -270,11 +270,42 @@ def run() -> dict:
         fstds  = {f: float(X[f].std(skipna=True))
                   for f in features if not pd.isna(X[f].std())}
 
+        # C3.4 / C04: empirical percentiles for the PSI drift monitor.
+        # This ensemble's sub-models computed feature_means/feature_stds
+        # but never feature_dists at all, unlike every other system's
+        # retrain script (see retrain_nrfi_v17.py / retrain_k_v1.py etc.) --
+        # a real gap given this file's own docstring documents live AUC
+        # drift (2024=0.5985, 2025=0.5876, 2026=0.5394) as the reason this
+        # ensemble architecture exists. Percentiles avoid the Gaussian
+        # misfit mean/std alone would have for binary/bounded/bimodal
+        # features. Keyed per-sub-model (not a flat top-level dict) since
+        # sub_info[name] -- not a module-level dict -- is what actually
+        # lands in meta["sub_models"] below.
+        fdists: dict = {}
+        for _f in features:
+            try:
+                _col = X[_f].dropna()
+                if len(_col) < 10:
+                    continue
+                fdists[_f] = {
+                    "p5":     round(float(np.percentile(_col,  5)), 6),
+                    "p10":    round(float(np.percentile(_col, 10)), 6),
+                    "p25":    round(float(np.percentile(_col, 25)), 6),
+                    "p50":    round(float(np.percentile(_col, 50)), 6),
+                    "p75":    round(float(np.percentile(_col, 75)), 6),
+                    "p90":    round(float(np.percentile(_col, 90)), 6),
+                    "p95":    round(float(np.percentile(_col, 95)), 6),
+                    "prop_1": round(float((_col == 1).mean()), 6),
+                }
+            except Exception:
+                continue
+
         sub_info[name] = {
             "features":      features,
             "best_iteration": best_iter,
             "feature_means": fmeans,
             "feature_stds":  fstds,
+            "feature_dists": fdists,
         }
 
         val_preds[name]  = _predict(booster, X_val, features, fmeans, best_iter)

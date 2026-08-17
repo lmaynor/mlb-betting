@@ -231,16 +231,31 @@ def _walk_forward_cv(df, features, scale_pos_weight):
         te = df_cv[df_cv["_year"] == test_year]
         if len(tr) < 500 or len(te) < 200:
             continue
-        X_tr = tr[features].apply(pd.to_numeric, errors="coerce")
-        y_tr = tr[TARGET].astype(int)
+        # C03 (finding C3.2): early stopping must watch an internal
+        # validation slice carved from tr's own tail, never `te` directly --
+        # `te` is the fold actually being scored below and must stay unseen
+        # until predict(). This used to put dtest straight into the
+        # early-stopping watchlist, so the reported per-fold AUC/Brier (the
+        # E05 drift narrative in CONTEXT.md is built on these) measured a
+        # model whose stopping point had already "seen" the fold it was
+        # scored on. Matches the 70/10/20 discipline _oos_eval() above
+        # already uses, and the shared XGBModel.train() fix (C3.1).
+        tr = tr.sort_values("game_date")
+        n_val = max(1, int(len(tr) * 0.125))
+        tr_inner, val_inner = tr.iloc[:-n_val], tr.iloc[-n_val:]
+        X_tr  = tr_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_tr  = tr_inner[TARGET].astype(int)
+        X_val = val_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_val = val_inner[TARGET].astype(int)
         X_te = te[features].apply(pd.to_numeric, errors="coerce")
         y_te = te[TARGET].astype(int)
-        dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-        dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+        dtrain = xgb.DMatrix(X_tr,  label=y_tr,  feature_names=features)
+        dval   = xgb.DMatrix(X_val, label=y_val, feature_names=features)
+        dtest  = xgb.DMatrix(X_te,  label=y_te,  feature_names=features)
         b = xgb.train(
             params, dtrain,
             num_boost_round=NUM_BOOST_ROUND,
-            evals=[(dtest, "test")],
+            evals=[(dtrain, "train"), (dval, "val")],
             early_stopping_rounds=EARLY_STOPPING,
             verbose_eval=False,
         )

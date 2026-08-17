@@ -159,7 +159,12 @@ SYSTEMS: dict[str, SystemConfig] = {
         # deterministic (no hysteresis flip-back on noisy ROI) until retrain.
         # Set to None after mlb-retrain-f5-v5 restores discrimination.
         force_gate="on",
-        tune_target="home_win",
+        # Fixed 2026-08-17 (finding C3.5): F5's real target column is
+        # home_wins_f5 (retrain_f5_v5.py TARGET), not home_win -- that's
+        # GAME's target. This and tune_hyperparams.py's identical F5 entry
+        # both had the same wrong value, so a diff between the two files
+        # alone would never have caught it.
+        tune_target="home_wins_f5",
         tune_objective="binary:logistic",
         tune_metric="auc",
         tune_metric_dir="max",
