@@ -57,9 +57,9 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 - [ ] **B3.1** `id_resolver` caches not GCS-backed (rebuilt every cold start)
 - [x] **B3.2/B3.3** `bet_tracker` one-shot migration re-run forever + non-unique dedup index *(migration deleted; unique index on (system,game_date,game_pk,bet_type,kelly_triggered) + INSERT...ON CONFLICT DO NOTHING -- verified the race-safety test actually fails on the old code)*
-- [ ] **B3.5** Raw GCS client bypass (weather/umpires/scoring-backfill)
+- [x] **B3.5** Raw GCS client bypass (weather/umpires/scoring-backfill)
 - [x] **B3.6** Unpaced 30-team IL roster loop
-- [ ] **B3.8/B3.9** `track_bettingpros` true call volume + credit-ledger month-boundary bug
+- [x] **B3.8/B3.9** `track_bettingpros` true call volume + credit-ledger month-boundary bug *(shared daily call ledger + error-rate backoff added; snapshot_odds.py's credit ledger now keys off wall-clock call date, not slate date -- verified the month-boundary test fails on the old code)*
 - [ ] **E1-E9** Doc drift + duplicated feature lists + deprecated deploy scripts
 
 ---

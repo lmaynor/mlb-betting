@@ -118,6 +118,37 @@ def test_target_date_offset():
     assert S._target_date("2024-05-01", 1) == "2024-05-02"
 
 
+# ── Regression coverage for the 2026-08-16 audit's credit-ledger
+# month-boundary fix (finding B3.9) ─────────────────────────────────────────
+
+def test_credit_ledger_uses_call_date_not_slate_date_at_month_boundary(env, monkeypatch):
+    """The call happens on the last day of a month (Aug 31), but
+    target_date (the slate -- day_offset=1's 'bank tomorrow's openers'
+    mode always pushes this forward) has already rolled into the next
+    month (Sep 1). The credit ledger -- and the pace ceiling judging it --
+    must both key off the REAL call date, not the slate date."""
+    real_datetime = S.datetime
+
+    class _FrozenDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is S._ET:
+                return real_datetime(2026, 8, 31, 20, 0, tzinfo=S._ET)
+            return real_datetime(2026, 8, 31, 23, 59, tzinfo=tz)
+
+    monkeypatch.setattr(S, "datetime", _FrozenDatetime)
+
+    S._gather_parlay("2026-09-01", "Odds/sgo/latest.json", include_sgo=True)
+
+    assert S._read_credits("2026-08") > 0, (
+        "spend must land in August's ledger (the real call month), not "
+        "September's (the slate month) -- B3.9 regression"
+    )
+    assert S._read_credits("2026-09") == 0, (
+        "September's ledger must not be pre-charged before the month even starts"
+    )
+
+
 # ── Regression coverage for the 2026-08-16 audit's ODDS_PRIMARY/include_sgo
 # safe-default fix (finding A2) ─────────────────────────────────────────────
 
