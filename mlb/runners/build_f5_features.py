@@ -440,7 +440,10 @@ GCS_HR_GAME_FEATURES      = "HR_Pro/data/game_features_master.csv"
 GCS_F5_PITCHER_STARTS     = "F5_Pro_System/data/pitcher_starts.csv"
 GCS_F5_TEAM_OFFENSE       = "F5_Pro_System/data/team_offense.csv"
 GCS_F5_MODEL_FEATURES     = "F5_Pro_System/data/model_features.csv"
-GCS_STATCAST_MASTER_FULL  = "Statcast/statcast_master.csv"  # full master for bullpen
+# GCS_STATCAST_MASTER_FULL removed 2026-08-17 -- it was the literal same
+# string as GCS_STATCAST_MASTER and only existed to justify a second,
+# redundant read of the same file (finding B1.5). Use GCS_STATCAST_MASTER
+# and reuse the already-loaded sc_all instead.
 
 
 def build_bullpen_rolling(sc_full: pd.DataFrame) -> pd.DataFrame:
@@ -540,16 +543,23 @@ def run(run_date: str = None) -> dict:
         return {"status": "error",
                 "error": "GCS_BUCKET not set — F5 feature build requires GCS mode"}
 
-    # 1. Load Statcast (full master; functions filter to inning <=5 internally)
+    # 1. Load Statcast ONCE (full master, all innings). sc_all feeds the
+    # bullpen builder (needs innings 6-9 too); sc is the inning<=5 slice the
+    # pitcher/offense builders need. Fixed 2026-08-17 (finding B1.5) -- this
+    # used to read the identical file a second time, under a second
+    # constant (GCS_STATCAST_MASTER_FULL) that was the literal same string,
+    # purely to get back the innings the first read's filter had already
+    # discarded. See docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md.
     logger.info("F5: loading Statcast master")
     try:
-        sc = read_csv(GCS_STATCAST_MASTER, low_memory=False)
+        sc_all = read_csv(GCS_STATCAST_MASTER, low_memory=False)
     except Exception as e:
         logger.error(f"Statcast load failed: {e}")
         return {"status": "error", "error": f"statcast load: {e}"}
-    logger.info(f"F5: loaded {len(sc):,} pitch rows")
-    sc["inning"] = pd.to_numeric(sc["inning"], errors="coerce")
-    sc = sc[sc["inning"] <= 5].copy()
+    logger.info(f"F5: loaded {len(sc_all):,} pitch rows")
+    sc_all["inning"] = pd.to_numeric(sc_all["inning"], errors="coerce")
+    sc = sc_all[sc_all["inning"] <= 5].copy()
     logger.info(f"F5: filtered to inning<=5: {len(sc):,} rows")
 
     # 2. Derive F5 outcomes from scoring_master
@@ -587,14 +597,13 @@ def run(run_date: str = None) -> dict:
         logger.warning(f"F5: team_offense upload failed: {e}")
 
     # 3b. T16: Bullpen rolling features — requires full Statcast (all innings).
-    # The sc loaded above is filtered to inning<=5; reload the full master for
-    # bullpen (inning > 1 across all innings).
+    # Reuses sc_all (already in memory, loaded once above) instead of
+    # re-reading the identical file a second time.
     bullpen_home = pd.DataFrame()
     bullpen_away = pd.DataFrame()
     try:
-        sc_full = read_csv(GCS_STATCAST_MASTER_FULL, low_memory=False)
-        bull = build_bullpen_rolling(sc_full)
-        del sc_full  # free memory
+        bull = build_bullpen_rolling(sc_all)
+        del sc_all  # free memory -- last use
         if not bull.empty:
             # Split into home/away bullpen perspectives for the game-level join
             bullpen_home = bull.rename(columns={

@@ -42,6 +42,38 @@ PARK_FACTORS = {
 }
 
 
+# Columns actually used by build_pitcher_features() / build_pitcher_handedness_splits()
+# -- the two functions that consume the full-master statcast load in run() below --
+# plus build_batter_rolling_stats() (defined in this file but not currently called
+# from run(); its columns are included so they don't silently start coming back
+# all-NaN if that function is ever wired in). ~31 of the master's ~80 columns.
+# Loading only these via usecols cuts peak memory for the Cloud Run Job. Two entries
+# (pitch_number, pitcher_days_since_prev_game) are read behind `in columns` guards and
+# are not known to exist in the current master (see CONTEXT.md s15.4 / F15 gotchas) --
+# kept here defensively in case a future master schema adds them.
+_STATCAST_COLS = frozenset([
+    # ids / keys
+    "game_pk", "game_date", "pitcher", "batter", "at_bat_number",
+    "inning", "inning_topbot", "home_team", "away_team", "player_name",
+    # handedness
+    "p_throws", "stand",
+    # pitch / PA outcome
+    "zone", "description", "events", "pitch_type",
+    # batted-ball outcome
+    "launch_speed", "launch_speed_angle",
+    # velo / spin / repertoire tracking
+    "release_speed", "release_spin", "release_spin_rate", "release_extension",
+    "arm_angle", "bat_speed",
+    # value metrics
+    "woba_value", "estimated_woba_using_speedangle",
+    # pre-scoring_master-overwrite yrfi calc (bat_score/post_bat_score are ~100% null
+    # 2021-2025 per CONTEXT.md but still read before being overwritten -- see run())
+    "bat_score", "post_bat_score",
+    # guarded (`in columns` checks) -- not confirmed present in current master
+    "pitch_number", "pitcher_days_since_prev_game", "n_thruorder_pitcher",
+])
+
+
 # ── Feature builders ──────────────────────────────────────────────────────
 
 
@@ -612,7 +644,8 @@ def run(run_date: str = None) -> dict:
     # 1. Load Statcast (full master, all innings — functions filter internally)
     logger.info("Loading Statcast master from GCS")
     try:
-        sc = read_csv(GCS_STATCAST_MASTER, low_memory=False)
+        sc = read_csv(GCS_STATCAST_MASTER, low_memory=False,
+                      usecols=lambda c: c in _STATCAST_COLS)
     except Exception as e:
         logger.error(f"Statcast load failed: {e}")
         return {"status": "error", "error": f"statcast load: {e}"}

@@ -38,11 +38,29 @@ TB_BY_EVENT = {
     "home_run": 4,
 }
 
+# Columns actually used by this builder (raw statcast fields only; a subset of
+# build_batter_hits_features.py's 18 -- no chase/contact_pct swing-zone analysis
+# here, so description/plate_x/plate_z/sz_top/sz_bot are dropped). Optional cols
+# (p_throws/stand/player_name/inning_topbot) are read with `in columns` guards
+# below but must stay in the set to preserve current behavior; everything else
+# here is referenced unguarded so is a hard requirement. `inning_topbot` is
+# needed for the is_home derivation (see build_batter_tb_rolling).
+_STATCAST_COLS = frozenset([
+    "game_date", "game_pk", "batter", "pitcher",          # ids
+    "events", "launch_speed", "launch_angle", "bb_type",  # outcome / batted ball
+    "p_throws", "stand", "home_team", "away_team",        # context
+    "player_name", "inning_topbot",                       # context / is_home derivation
+])
+
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
     from mlb_core.storage import read_csv
 
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
     if "bat_speed" in df.columns:
         df = df.drop(columns=["bat_speed"])
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")

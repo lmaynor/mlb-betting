@@ -14,19 +14,19 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 - [x] **A4** GAME builder home/away pitcher inversion *(code fixed, `431a5c7` — rebuild+retrain still needed to take live effect, not run from here)*
 - [x] **A5** No auth on state-changing `main.py` routes / service open to `allUsers` — `d072e2c`
 - [~] **A6** Single gunicorn worker shares process with long admin routes *(auth fix in d072e2c reduces exposure; the async-Jobs conversion itself not yet done — deferred to a future pass)*
-- [ ] **A7** Two deploy scripts collide on `/run` scheduler jobs; `RUNBOOKS.md` points at the stale one
-- [ ] **A8** `registry.py` OUTS `model_artifact` points at K's model
-- [ ] **A9** PITCHER_ER suppression gate structurally can never fire
-- [ ] **A10** F5/K IL-skip regressed to the twice-already-fixed dual-condition check
-- [ ] **A11** Banned XGBoost `iteration_range=None` pattern (`run_k.py` OUTS path)
+- [x] **A7** Two deploy scripts collide on `/run` scheduler jobs; `RUNBOOKS.md` points at the stale one — `6477158` *(docs-update commit `6a3f377` missed ticking this box even though the code fix landed first; corrected retroactively)*
+- [x] **A8** `registry.py` OUTS `model_artifact` points at K's model — `6477158`
+- [x] **A9** PITCHER_ER suppression gate structurally can never fire — `6477158` *(added `force_gate="on"` + a belt-and-suspenders `PITCHER_ER_LOG_ONLY` flag in `run_k.py` given it's a brand-new, unproven system)*
+- [x] **A10** F5/K IL-skip regressed to the twice-already-fixed dual-condition check — `6477158`
+- [x] **A11** Banned XGBoost `iteration_range=None` pattern (`run_k.py` OUTS path) — `6477158`
 
 ## P1 — high value, safe
 
-- [ ] **A12 / C2.2** K/OUTS starter-selection `idxmax` groupby bug *(needs rebuild+retrain)*
-- [ ] **A13 / C2** HR `is_outdoor` chaos (3 conventions + merge collision) *(needs rebuild+retrain)*
-- [ ] **A14 / C2** HR same-game feature leakage past denylist *(needs retrain)*
-- [ ] **C2.3** BATTER_HITS/BATTER_TB `is_home` constant-zero *(needs rebuild+retrain)*
-- [ ] **B1.1-B1.5** Missing `usecols` (HR/NRFI/K/BATTER_TB) + F5 duplicate statcast read
+- [x] **A12 / C2.2** K/OUTS starter-selection `idxmax` groupby bug — `2428a79` *(code fixed; rebuild+retrain still needed to take live effect)*
+- [x] **A13 / C2** HR `is_outdoor` chaos (3 conventions + merge collision) — `2428a79` *(rebuild+retrain still needed)*
+- [x] **A14 / C2** HR same-game feature leakage past denylist — `2428a79` *(retrain still needed)*
+- [x] **C2.3** BATTER_HITS/BATTER_TB `is_home` constant-zero — `2428a79` *(rebuild+retrain still needed)*
+- [x] **B1.1-B1.5** Missing `usecols` (HR/NRFI/K/BATTER_TB) + F5 duplicate statcast read *(rebuild still needed to realize the memory/cost savings; behavior-neutral otherwise)*
 - [ ] **C3.1/C3.2** NRFI + HR walk-forward CV leaks test fold into early stopping
 - [ ] **C3.3** Hardcoded `CV_FOLDS=[2023,2024,2025]` frozen across 5 systems
 - [ ] **C3.4** `retrain_nrfi_v18.py` never computes `feature_dists`

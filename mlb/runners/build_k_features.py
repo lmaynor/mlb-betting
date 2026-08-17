@@ -35,6 +35,52 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+# Columns read from the wide statcast_master.csv (~80 cols) by this builder.
+# Loading only these via usecols cuts peak memory substantially -- same
+# pattern as build_game_features.py (13 cols) / build_batter_hits_features.py
+# (18 cols). See CONTEXT.md s15.4 for the general usecols convention.
+#
+# Most are read behind an `if "<col>" in df.columns` guard -- the file
+# degrades gracefully when one is missing (e.g. no inning_topbot/home_team/
+# away_team falls back to a less-correct per-game idxmax for starter ID,
+# WARNING-logged). game_pk/game_date/pitcher/events are accessed
+# unconditionally and must always be present.
+#
+# pfx_x/pfx_z/outs_when_up/spin_axis/release_extension/effective_speed/
+# release_pos_x/release_pos_z are converted via pd.to_numeric() in the
+# numeric_cols loop below but have no other consumer found anywhere else in
+# this file -- kept anyway since that loop reads them unconditionally by name
+# (each individually guarded, so their absence would be harmless, but keeping
+# them preserves today's exact behavior at near-zero extra memory cost).
+#
+# bat_speed is intentionally EXCLUDED: _load_statcast loads it only to
+# immediately drop it (2024+-only column that would break walk-forward CV),
+# so omitting it via usecols reaches the same end state more cheaply.
+_STATCAST_COLS = frozenset([
+    # ids / core keys (accessed unconditionally)
+    "game_pk", "game_date", "pitcher",
+    # PA marker + team-side derivation -- bat_team / pitcher-team, used in
+    # _identify_starters, _prepare_pa_for_opp_features, _backfill_opponent_history
+    "events", "inning_topbot", "home_team", "away_team",
+    # pitcher handedness / platoon splits
+    "p_throws",
+    # pitch-level swing/whiff/zone features
+    "description", "zone", "balls", "strikes", "pitch_type",
+    # velocity mean/trend (velo_mean_L5, velo_trend_L5)
+    "release_speed",
+    # batter handedness (is_lhb) for opponent platoon features
+    "stand",
+    # weighted top-3-K-rate opponent feature (guarded; comment notes Statcast
+    # doesn't reliably carry this column)
+    "bat_order",
+    # backfilled onto pf for join_pitcher_aux() name matching
+    "player_name",
+    # defensive only -- see note above
+    "pfx_x", "pfx_z", "outs_when_up", "spin_axis", "release_extension",
+    "effective_speed", "release_pos_x", "release_pos_z",
+])
+
+
 # ── Section 1 — Statcast load ────────────────────────────────────────────────
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
@@ -44,7 +90,11 @@ def _load_statcast(cfg: dict) -> pd.DataFrame:
     and would break walk-forward CV (notebook Section 1 note).
     """
     from mlb_core.storage import read_csv
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
 
     numeric_cols = [
         "release_speed", "pfx_x", "pfx_z", "balls", "strikes",

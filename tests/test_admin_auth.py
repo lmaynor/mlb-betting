@@ -97,7 +97,21 @@ class TestDashboardSystemFilter:
         # so any failure past the whitelist check is an environment
         # limitation and is tolerated here -- this test only cares about
         # the whitelist check itself specifically rejecting '1I'.
+        #
+        # bet_tracker._make_engine() reads mlb_core.config.DB_URL, a
+        # module-level snapshot frozen at first import -- monkeypatching only
+        # the env var doesn't reach it (harmless in prod, where the env var
+        # never changes mid-process, but here it means _make_engine falls
+        # through to its SQLite fallback branch and treats this literal
+        # connection-string as a filesystem path, scribbling a stray
+        # "postgresql+pg8000:/fake:fake@localhost/fake" dir + sqlite file
+        # into the repo root). Patch the module attribute directly too, so
+        # it actually takes the Postgres branch instead.
         monkeypatch.setenv("MLB_DB_URL", "postgresql+pg8000://fake:fake@localhost/fake")
+        monkeypatch.setattr(
+            "mlb_core.tracking.bet_tracker.DB_URL",
+            "postgresql+pg8000://fake:fake@localhost/fake",
+        )
         try:
             r = client.get("/dashboard?system=1I", headers={"X-API-Key": VALID_KEY})
         except Exception as e:

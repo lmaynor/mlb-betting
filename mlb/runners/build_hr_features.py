@@ -98,6 +98,29 @@ LEAGUE_HR_BY_MATCHUP = {
     ("R","L"): 0.0325, ("R","R"): 0.0303,
 }
 
+# Columns actually used by this builder (~21 of ~80 in statcast_master). Loading
+# only these via usecols cuts peak memory substantially for the Cloud Run Job
+# (same fix already applied in build_game_features.py / build_batter_hits_features.py).
+# Several of these are read behind `if "col" in sc.columns` / `pa.columns` guards
+# (bb_type, hc_x+stand, description+plate_x/plate_z/sz_top/sz_bot, pitch_type,
+# p_throws) rather than a bare df["col"] lookup -- a usecols restriction makes
+# that check literally False (the column doesn't exist at all) instead of
+# raising, so omitting one of these here would NOT error. It would silently
+# switch the code to its degraded fallback (pull/pull_air forced to 0, swing
+# metrics skipped, pitch-mix columns skipped, platoon features returning empty)
+# with no warning. estimated_woba_using_speedangle is read via
+# `pa.get("estimated_woba_using_speedangle", pd.Series())` -- omitting it would
+# silently yield an all-NaN xwoba column rather than an error. All must stay in
+# this set even though some are conditionally accessed.
+_STATCAST_COLS = frozenset([
+    "game_date", "game_pk", "batter", "pitcher",                    # ids
+    "events", "launch_speed", "launch_angle", "bb_type",            # outcome / batted ball
+    "estimated_woba_using_speedangle", "hc_x",                      # xwoba / spray angle (pull)
+    "description", "plate_x", "plate_z", "sz_top", "sz_bot",        # swing / zone (whiff, chase)
+    "pitch_type",                                                   # pitcher pitch-mix (fb/brk/off %)
+    "p_throws", "stand", "home_team", "away_team", "player_name",   # context
+])
+
 # ── GCS helpers ────────────────────────────────────────────────────────────
 
 def _gcs_read_csv(key: str, **kwargs) -> pd.DataFrame:
@@ -736,9 +759,9 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     sc_key = cfg.get("gcs_statcast_master", cfg["statcast_master"])
     try:
         if GCS_BUCKET:
-            sc = read_csv(sc_key, low_memory=False)
+            sc = read_csv(sc_key, low_memory=False, usecols=lambda c: c in _STATCAST_COLS)
         else:
-            sc = pd.read_csv(cfg["statcast_master"], low_memory=False)
+            sc = pd.read_csv(cfg["statcast_master"], low_memory=False, usecols=lambda c: c in _STATCAST_COLS)
     except Exception as e:
         logger.error(f"Statcast load failed: {e}")
         return {"status": "error", "error": str(e)}
