@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-10 (ops: ODDS_PRIMARY/cadence coupling + kalshi IAM fix)
+_Last updated: 2026-08-16 (model bake-off tuning/persistence/verdict toolkit merged from analysis/hr-model-bakeoff)
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -272,7 +272,46 @@ mlb-betting/
 │   ├── odds_history.py           Parquet store: write_partition/read_history/coverage_report
 │   ├── bettingpros_to_parquet.py BettingPros CSV -> odds_history (historical, P0.3)
 │   ├── parlayapi_to_history.py   ParlayAPI OddsAccum -> odds_history (forward feed)
-│   └── nrfi_market.py, gen_nrfi_preds.py, ...  NRFI backtest (analysis branch)
+│   ├── kalshi_to_history.py, kalshi_history.py, kalshi_vs_books.py
+│   │                             Kalshi (no-vig exchange) as a sharp-reference feed +
+│   │                             soft-book +EV scanner vs its mid (game_ml/totals/runline/nrfi)
+│   ├── gen_preds.py              Score a system's full historical model_features.csv with the
+│   │                             SAME production artifacts the live runner uses (booster+meta+
+│   │                             calibrator). SPECS dict = per-system market/feature_csv/id_col.
+│   ├── walkforward.py            Leakage-proof OOS: train on game_date<cutoff, score >=cutoff,
+│   │                             reusing each system's production training contract verbatim.
+│   │                             WF_SYS = K/OUTS/BATTER_HITS/BATTER_TB/HR/GAME -- the only
+│   │                             systems with a single-booster contract (NRFI/F5/etc. need a
+│   │                             model BUILT, not tuned).
+│   ├── backtest_market.py        Join preds -> odds_history real lines, line-shop, settle,
+│   │                             edge-bucket ROI/CLV. verdict() (2026-08) codifies the go/no-go:
+│   │                             PROMOTE_CANDIDATE/NO_EDGE/INSUFFICIENT_N (significant low-edge
+│   │                             CLV via mlb_core.risk.clv.clv_verdict + monotonic edge ladder).
+│   │                             See docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md.
+│   ├── model_bakeoff.py, hr_model_bakeoff.py
+│   │                             Train several model families per system OOS (incl. xgb_optuna,
+│   │                             a real per-system walk-forward-safe search), backtest each via
+│   │                             backtest_market.verdict(). --tune/--persist/--resume/--notify
+│   │                             (bakeoff_persist.py: Analysis/bakeoff/runs/{run_id}/, GCS-
+│   │                             durable, survives a Cloud Shell disconnect or VM reclaim --
+│   │                             see mlb-bakeoff Cloud Run Job in s7). hr_model_bakeoff.py adds
+│   │                             HR-specific candidates (xhr_poisson) + a YES/NO side-split.
+│   ├── bakeoff_tuning.py, bakeoff_persist.py, bakeoff_report.py
+│   │                             Support modules for the above: Optuna search (month-folded,
+│   │                             pre-cutoff only -- never touches the walk-forward holdout),
+│   │                             GCS persistence + resume/notify, and a markdown handoff
+│   │                             renderer for a persisted run (bakeoff_report.py).
+│   ├── hr_softline.py            HR-YES soft-book +EV vs a SHARP low-vig anchor (book_vig-tagged
+│   │                             sharp/soft books) -- a market-structure strategy, independent of
+│   │                             the model. --validate settles flagged quotes vs real outcomes.
+│   ├── book_vig.py, quote_survival.py
+│   │                             Empirical per-(market,book) vig fit + stale-quote survival
+│   │                             analysis; posted weekly to Discord by mlb-weekly-survival.
+│   └── alt_line_scan.py, diagnose_bettingpros_ou.py, model_vs_market.py, odds_freshness.py,
+│       outlier_scan.py, verify_odds_history.py, nrfi_market.py, gen_nrfi_preds.py, ...
+│                                 Assorted diagnostics/scanners (alt-line pricing, BettingPros
+│                                 O/U parsing checks, model-vs-market comparison, snapshot
+│                                 freshness, outlier detection, odds_history integrity, NRFI backtest).
 ├── notebooks/                    Modeling notebooks (moved from root 2026-06-24).
 ├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
 │                                 bettingpros_api.py = local CLI for the HR/multi-market
@@ -394,6 +433,17 @@ gs://concrete-crow-445205-m4-mlb-data/
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
 │                                       by each feature builder. Checked by monitor_ops.
+├── Analysis/bakeoff/                   model_bakeoff.py / hr_model_bakeoff.py --persist output
+│   ├── runs/{run_id}/                  run_id = {cutoff}_{git_sha7}_{HHMMSS_UTC}
+│   │   ├── run_meta.json               git sha/branch, cutoff/until, gates, tune params,
+│   │   │                               timestamps, status, systems_completed (drives --resume)
+│   │   ├── scorecard.csv               one row per system x model, incl. verdict columns
+│   │   ├── candidates/{system}_{model}.csv   every settled bet (backtest()'s candidates frame)
+│   │   └── tuning/{system}_tuned.json, {system}_trials.csv
+│   │                                   tuned params for THIS run only -- never the production
+│   │                                   tuned_params.json key tune_hyperparams.py reads (see
+│   │                                   docs/solutions/conventions/bakeoff-tuned-params-storage.md)
+│   └── latest.json                     best-effort {run_id, prefix} pointer, updated on completion
 └── probes/                             Sandbox.
 ```
 
@@ -907,6 +957,18 @@ secretmanager.secretAccessor.
   so any failure aborts subsequent builders; 4Gi/2CPU; 3600s task timeout.
   Triggered by Scheduler via OAuth + Run API scope, NOT OIDC/service -- see §9 and §15.9.
   Scheduler attempt-deadline=1800s (max allowed); job execution timeout=3600s set on the job.)
+
+**Cloud Run Jobs (one-off, not scheduled -- not part of the count below):**
+- `mlb-bakeoff` (the model bake-off tuning exercise: `mlb.analysis.model_bakeoff` +
+  `mlb.analysis.hr_model_bakeoff` via `bash -c`, optuna pip-installed at container start
+  rather than added to requirements.txt; 8Gi/4CPU/21600s timeout/1 retry -- safe because
+  `--resume` makes a retry a no-op for whatever already finished. `--notify` pings
+  `#ops-alerts` on completion/failure instead of requiring a check-in. Provisioned by
+  `deploy/setup_bakeoff_job.sh`; trigger with
+  `gcloud run jobs execute mlb-bakeoff --region=us-central1 --async`. Built specifically
+  because a Cloud Shell VM got reclaimed mid-run three times -- `tmux` only survives a
+  client disconnect, not the underlying VM disappearing. Analysis-only, same as the rest
+  of `mlb/analysis/` -- never wired into any daily loop.)
 
 All 21 Cloud Run Jobs have explicit task timeouts set (added 2026-05-24):
 retrain jobs: 7200s, calibrate jobs: 1800s, build jobs: 3600s, tweet jobs: 300s.
