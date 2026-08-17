@@ -304,6 +304,12 @@ def _fetch_40man_il(want_pitchers_only: bool, log_label: str) -> set:
                 il_ids.add(int(pid))
         except Exception as exc:
             logger.warning("%s: team %d failed: %s", log_label, tid, exc)
+        # Fixed 2026-08-17 (finding B3.6): this loop made 30 sequential,
+        # unpaced HTTP calls where every other 30-team loop in this file
+        # sleeps between calls -- and this function is called independently
+        # (and was independently unpaced) by NRFI, K, and F5 each run, up to
+        # ~90 unpaced calls in a short window per scoring batch.
+        time.sleep(random.uniform(0.1, 0.3))
     logger.info("%s: %d players currently on IL", log_label, len(il_ids))
     return il_ids
 

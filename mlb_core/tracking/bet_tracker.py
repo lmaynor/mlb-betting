@@ -115,16 +115,26 @@ _MIGRATE_SQL = """
 ALTER TABLE bets ADD COLUMN kelly_triggered BOOLEAN DEFAULT TRUE
 """
 
-# One-shot: reclassify OUTS bets logged before the OUTS system split (2026-05-14).
-# Prior to the split, OUTS bets were logged under system="K". Safe to re-run.
-_MIGRATE_OUTS_SQL = """
-UPDATE bets SET system = 'OUTS' WHERE bet_type LIKE 'OUTS_%' AND system = 'K'
-"""
-
-# Composite index for is_duplicate() hot path.
+# Composite UNIQUE index for is_duplicate()'s hot path AND -- as of
+# 2026-08-17, finding B3.3 -- the actual race-safety net. The old version
+# of this index was a plain (non-unique) index; is_duplicate() + log_bet()
+# used two separate connections/transactions with a real check-then-insert
+# race window, so a double-log under concurrent or manually-retriggered
+# runs could double-stake a real bet with no error at all. Includes
+# kelly_triggered (not just system/game_date/game_pk/bet_type) so the
+# legitimate case is_duplicate() already permits -- a kelly_triggered=False
+# row existing, then a REAL kelly_triggered=True bet getting logged later
+# the same day -- still works: those are two DIFFERENT 5-tuples, not a
+# collision. What this DOES block at the DB level, no matter how racy the
+# caller is: two kelly_triggered=TRUE attempts for the same (system,
+# game_date, game_pk, bet_type) -- the actually dangerous, money-doubling
+# case. New index name (not reusing idx_bets_dedup) so CREATE ... IF NOT
+# EXISTS can never silently no-op against a lingering old non-unique index
+# of that name; _DROP_OLD_DEDUP_IDX_SQL below removes that old one anyway.
+_DROP_OLD_DEDUP_IDX_SQL = "DROP INDEX IF EXISTS idx_bets_dedup"
 _IDX_DEDUP_SQL = """
-CREATE INDEX IF NOT EXISTS idx_bets_dedup
-  ON bets(system, game_date, game_pk, bet_type)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v2
+  ON bets(system, game_date, game_pk, bet_type, kelly_triggered)
 """
 
 # Partial index for pending-bet queries (Postgres only -- SQLite ignores WHERE clause).
@@ -190,12 +200,12 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_SQL))
         except Exception:
             pass  # Column already exists — expected after first migration.
-        # One-shot reclassification — idempotent, safe to re-run.
-        try:
-            with self.engine.begin() as conn:
-                conn.execute(text(_MIGRATE_OUTS_SQL))
-        except Exception as e:
-            logger.warning(f"bet_tracker: OUTS migration failed: {e}")
+        # Deleted 2026-08-17 (finding B3.2): a one-shot OUTS-system
+        # reclassification UPDATE used to run here unconditionally on
+        # EVERY BetTracker construction -- every runner invocation, every
+        # system, 4-8x/day, forever. It did its job in 2026-05-14 and
+        # matches 0 rows in steady state, but the query cost grows with the
+        # bets table's size regardless of matching nothing.
         # Migrate lambda_k / proj_k columns.
         try:
             with self.engine.begin() as conn:
@@ -220,12 +230,25 @@ class BetTracker:
                     conn.execute(text(clv_sql))
             except Exception:
                 pass  # Column already exists.
-        # Composite index for is_duplicate() -- idempotent.
+        # Composite UNIQUE index for is_duplicate() + the log_bet() race
+        # safety net (finding B3.3) -- idempotent, but a real (not
+        # silently-swallowed) warning on failure: unlike every other
+        # migration above, CREATE UNIQUE INDEX can genuinely fail if
+        # pre-existing duplicate rows already violate it (this project has
+        # a history of manual re-triggers and backfills). A silent `pass`
+        # here would mean the safety net never gets installed with zero
+        # visibility -- the OLD non-unique index (if DROP also failed)
+        # keeps working, just without the new protection.
         try:
             with self.engine.begin() as conn:
+                conn.execute(text(_DROP_OLD_DEDUP_IDX_SQL))
                 conn.execute(text(_IDX_DEDUP_SQL))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                f"bet_tracker: unique dedup index migration failed (likely "
+                f"pre-existing duplicate (system,game_date,game_pk,bet_type,"
+                f"kelly_triggered) rows) -- {e}"
+            )
         # Partial index for pending queries (Postgres only).
         if self.engine.dialect.name != "sqlite":
             try:
@@ -311,6 +334,16 @@ class BetTracker:
                 return -1
 
         with self.engine.begin() as conn:
+            # ON CONFLICT ... DO NOTHING + RETURNING id (finding B3.3): the
+            # is_duplicate() check above is a separate SELECT on a separate
+            # transaction from this INSERT -- a real check-then-insert race
+            # window under concurrent or manually-retriggered runs. The
+            # idx_bets_dedup_v2 UNIQUE index (system, game_date, game_pk,
+            # bet_type, kelly_triggered) is what actually closes it: if
+            # another call wins the race and inserts the identical 5-tuple
+            # first, this INSERT silently matches zero rows instead of
+            # raising an IntegrityError, and RETURNING gives back nothing
+            # to fetch -- checked below.
             result = conn.execute(
                 text("""
                     INSERT INTO bets
@@ -321,6 +354,9 @@ class BetTracker:
                         (:system, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
                          :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book, :morning_odds)
+                    ON CONFLICT (system, game_date, game_pk, bet_type, kelly_triggered)
+                    DO NOTHING
+                    RETURNING id
                 """),
                 {
                     "system": self.system, "game_date": game_date,
@@ -339,8 +375,18 @@ class BetTracker:
                     "morning_odds": morning_odds,
                 },
             )
-            bet_id = result.lastrowid if self.engine.dialect.name == "sqlite" \
-                     else conn.execute(text("SELECT lastval()")).scalar()
+            row = result.fetchone()
+            if row is None:
+                # Lost the race: another call already inserted this exact
+                # (system, game_date, game_pk, bet_type, kelly_triggered)
+                # tuple between our is_duplicate() check and this INSERT.
+                logger.info(
+                    f"[{self.system}] log_bet: lost a dedup race for "
+                    f"{bet_type} game_pk={game_pk} kelly_triggered={kelly_triggered} "
+                    f"-- another call already inserted it"
+                )
+                return -1
+            bet_id = row[0]
 
         if kelly_triggered:
             label = player if player else f"{away_team} @ {home_team}"

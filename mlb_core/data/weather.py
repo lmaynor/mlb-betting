@@ -264,9 +264,10 @@ def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
 
     Mirrors statcast_nightly_gcs(): pulls one day from Open-Meteo archive via
     the existing _pull_weather_date() helper, then concat+dedupe against the
-    GCS master CSV and write back using upload_from_filename.
+    GCS master CSV and write back via mlb_core.storage (twin-aware, with a
+    local-disk fallback when no GCS bucket is configured).
     """
-    from google.cloud import storage
+    from mlb_core import storage as _st  # twin-aware master IO
 
     yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     print(f"Weather nightly (GCS): {yesterday}")
@@ -277,12 +278,8 @@ def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
         return
     print(f"  Fetched {len(new_df):,} games")
 
-    client = storage.Client()
-    bucket = client.bucket(gcs_bucket)
-    blob = bucket.blob(gcs_master_key)
-
-    if blob.exists():
-        existing = pd.read_csv(blob.open("r"), low_memory=False)
+    if _st.exists(gcs_master_key):
+        existing = _st.read_csv(gcs_master_key, low_memory=False)
         print(f"  Existing master: {len(existing):,} rows")
         combined = pd.concat([existing, new_df], ignore_index=True)
     else:
@@ -291,9 +288,7 @@ def weather_nightly_gcs(gcs_bucket: str, gcs_master_key: str, **kwargs):
 
     combined = combined.drop_duplicates(subset=["game_pk"], keep="last")
 
-    tmp = "/tmp/weather_master_new.csv"
-    combined.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    _st.write_csv(combined, gcs_master_key)
     print(f"  Master updated: {len(combined):,} rows | through {yesterday}")
 
 def fetch_live_weather_for_slate(sched: "pd.DataFrame") -> dict:

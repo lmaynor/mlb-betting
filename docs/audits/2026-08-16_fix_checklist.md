@@ -55,12 +55,20 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 ## P3 — cloud-cost mechanical + cleanup
 
-- [ ] **B3.1** `id_resolver` caches not GCS-backed (rebuilt every cold start)
-- [ ] **B3.2/B3.3** `bet_tracker` one-shot migration re-run forever + non-unique dedup index
-- [ ] **B3.5** Raw GCS client bypass (weather/umpires/scoring-backfill)
-- [ ] **B3.6** Unpaced 30-team IL roster loop
-- [ ] **B3.8/B3.9** `track_bettingpros` true call volume + credit-ledger month-boundary bug
-- [ ] **E1-E9** Doc drift + duplicated feature lists + deprecated deploy scripts
+- [x] **B3.1** `id_resolver` caches not GCS-backed (rebuilt every cold start) *(GCS-persisted JSON per date/season, same-day TTL; both caches' tuple/set-keyed shapes need a JSON adapter, round-trip tested separately from the cache-hit/expiry behavior)*
+- [x] **B3.2/B3.3** `bet_tracker` one-shot migration re-run forever + non-unique dedup index *(migration deleted; unique index on (system,game_date,game_pk,bet_type,kelly_triggered) + INSERT...ON CONFLICT DO NOTHING -- verified the race-safety test actually fails on the old code)*
+- [x] **B3.5** Raw GCS client bypass (weather/umpires/scoring-backfill)
+- [x] **B3.6** Unpaced 30-team IL roster loop
+- [x] **B3.8/B3.9** `track_bettingpros` true call volume + credit-ledger month-boundary bug *(shared daily call ledger + error-rate backoff added; snapshot_odds.py's credit ledger now keys off wall-clock call date, not slate date -- verified the month-boundary test fails on the old code)*
+- [x] **E1** CONTEXT.md s15.4's stale "BATTER_HITS... no usecols" gotcha *(corrected to match current code + the s16 E15 entry)*
+- [x] **E2** K/BATTER_HITS/GAME/OUTS feature lists duplicated 2-3x across config/retrain/calibrate *(consolidated to a single source per system, BATTER_TB's existing pattern -- found + fixed 2 REAL drifts in the process: calibrate_k_v1.py was missing 4 features, calibrate_game_v1.py missing 10, vs their own retrain/config copies. Currently dead-code-in-practice for both (their scoring code prefers meta.get("features"), which always wins in production) but a real landmine if that fallback path is ever exercised -- now structurally impossible since there's only one list per system)*
+- [x] **E3** `registry.py` missing F1H/PITCHER_ER entries *(already fixed earlier this session, commit 6477158 -- confirmed still present)*
+- [x] **E4** `main.py` `_VALID_SYSTEMS_DASH` missing `"1I"` *(already fixed earlier this session, commit d072e2c -- confirmed still present)*
+- [x] **E5** `DEFAULT_RUN_SYSTEMS`/scheduler `SYSTEMS_JSON` match *(verified still true, no action needed -- "keep it that way" per the finding itself)*
+- [x] **E6** Deprecated/superseded `deploy/` scripts *(deleted 4 confirmed-dead retrain setup scripts -- setup_retrain_job.sh, setup_retrain_hr_meta.sh, setup_retrain_nrfi_v17.sh, setup_retrain_k_v1.sh, the last confirmed via a real sizing conflict against setup_model_jobs.sh's current 4Gi/2CPU/7200s vs the old script's 2Gi/2CPU/1800s; guarded deploy.sh with a hard `exit 1` per B2.5's own suggested fix rather than deleting it, since it has some historical-bootstrap reference value)*
+- [x] **E7** `scripts/patch_e10_line_movement.py` stale pre-pillarize path *(deleted -- one-time patch script, feature it applied already shipped and confirmed live in current code, exact-string anchors wouldn't match today's code even with the path fixed)*
+- [x] **E8** `retrain-calibrate-sequence.md` references a nonexistent `mlb-calibrate-outs` job *(corrected against main.py's actual /retrain-weekly calibrate-job list -- also fixed a second, separate staleness gap found in the same table: BATTER_TB's calibrate job was missing entirely)*
+- [ ] **E9 / B2.4** `mlb-build-batter-hits-features`/`mlb-build-game-features` sizing named in CONTEXT.md s7 but no script provisions either standalone *(genuinely unresolved -- the finding's own fix is "confirm in GCP directly," and this sandboxed environment has no gcloud/GCP access. Needs a human to check whether these 2 jobs exist hand-created in the live project or CONTEXT.md's inventory is stale, then either write a provisioning script or prune the doc.)*
 
 ---
 

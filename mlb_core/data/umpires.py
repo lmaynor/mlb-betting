@@ -69,7 +69,7 @@ def umpires_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
     Use this for the initial bootstrap (e.g. start_date='2021-04-01' to
     today). For daily updates, use umpires_nightly_gcs() instead.
     """
-    from google.cloud import storage
+    from mlb_core import storage as _st  # twin-aware master IO
 
     print(f"Umpires backfill (GCS): {start_date} → {end_date}")
     new_df = umpires_fetch_range(start_date, end_date, season_type=season_type)
@@ -78,12 +78,8 @@ def umpires_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
         return pd.DataFrame()
     print(f"  Fetched {len(new_df):,} rows")
 
-    client = storage.Client()
-    bucket = client.bucket(gcs_bucket)
-    blob = bucket.blob(gcs_master_key)
-
-    if blob.exists():
-        existing = pd.read_csv(blob.open("r"), low_memory=False)
+    if _st.exists(gcs_master_key):
+        existing = _st.read_csv(gcs_master_key, low_memory=False)
         print(f"  Existing master: {len(existing):,} rows")
         combined = pd.concat([existing, new_df], ignore_index=True)
     else:
@@ -92,9 +88,7 @@ def umpires_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
 
     combined = combined.drop_duplicates(subset=["game_pk"], keep="last")
 
-    tmp = "/tmp/umpires_master_new.csv"
-    combined.to_csv(tmp, index=False)
-    blob.upload_from_filename(tmp, content_type="text/csv", timeout=600)
+    _st.write_csv(combined, gcs_master_key)
     print(f"  Master updated: {len(combined):,} rows")
     return combined
 

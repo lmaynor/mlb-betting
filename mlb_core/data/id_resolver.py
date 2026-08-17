@@ -46,6 +46,97 @@ _roster_cache: dict = {}     # game_pk -> {norm_name: mlbam_id} (boxscore fallba
 _ambiguous_doubleheaders = 0
 
 
+# --- GCS-backed persistence for the two module-level caches above (finding
+# B3.1) ------------------------------------------------------------------
+#
+# Both caches used to be PURE in-process dicts with zero persistence --
+# rebuilt from the MLB Stats API on every cold start, and the Cloud Run
+# service very plausibly scales to zero between the ~8 daily /snapshot-odds
+# calls. _fetch_players(season) in particular downloads every active MLB
+# player just to resolve prop names, on every cold start rather than once
+# per season. /snapshot-odds has only a 180s scheduler deadline, so this
+# plausibly contributed to occasional deadline-exceeded failures -- i.e. a
+# cloud-cost bug that's also a "missed betting window" bug.
+#
+# Persists to a small GCS JSON object per date/season, with a same-day TTL:
+# a cache entry is only trusted if it was fetched on TODAY's calendar date.
+# This is intentionally simple rather than "trust past-date schedules
+# forever" (which would also be technically correct, since a finalized
+# past date's schedule doesn't change) -- one fetch/day per date/season is
+# already the entire cost win this finding is about, and a uniform same-day
+# rule is much easier to reason about than a permanent-for-the-past
+# special case that a future maintainer has to remember not to break.
+# Best-effort throughout: any read/write failure here just falls back to
+# the live HTTP fetch this module already had -- this is purely an
+# optimization layer, never a new failure mode.
+def _today_str() -> str:
+    from datetime import date as _date
+    return _date.today().isoformat()
+
+
+def _gcs_schedule_key(sched_date: str) -> str:
+    return f"IdResolver/schedule/{sched_date}.json"
+
+
+def _gcs_player_key(season: str) -> str:
+    return f"IdResolver/players/{season}.json"
+
+
+def _load_gcs_cache(key: str):
+    """Return the cached JSON-safe payload if present and fetched today,
+    else None (a cache miss -- caller falls back to a live fetch)."""
+    from mlb_core.storage import exists, read_bytes
+    import json as _json
+    if not exists(key):
+        return None
+    try:
+        payload = _json.loads(read_bytes(key))
+        if payload.get("fetched_on") != _today_str():
+            return None
+        return payload.get("data")
+    except Exception:  # noqa: BLE001 -- corrupt/unreadable entry = cache miss, not an error
+        return None
+
+
+def _save_gcs_cache(key: str, data) -> None:
+    from mlb_core.storage import write_bytes
+    import json as _json
+    try:
+        write_bytes(_json.dumps({"fetched_on": _today_str(), "data": data}).encode(), key)
+    except Exception:  # noqa: BLE001 -- best-effort; in-memory cache still works this process
+        pass
+
+
+def _schedule_index_to_json(index: dict) -> dict:
+    """{(away,home): [pk,...]} -> {"AWAY|HOME": [pk,...]} (JSON object keys
+    must be strings; tuples aren't allowed)."""
+    return {f"{away}|{home}": pks for (away, home), pks in index.items()}
+
+
+def _schedule_index_from_json(obj: dict) -> dict:
+    out = {}
+    for k, pks in obj.items():
+        away, _, home = k.partition("|")
+        out[(away, home)] = pks
+    return out
+
+
+def _player_index_to_json(name_to_ids: dict, name_team_to_id: dict) -> dict:
+    return {
+        "name_to_ids": {name: sorted(ids) for name, ids in name_to_ids.items()},
+        "name_team_to_id": {f"{name}|{abbr}": pid for (name, abbr), pid in name_team_to_id.items()},
+    }
+
+
+def _player_index_from_json(obj: dict) -> tuple:
+    name_to_ids = {name: set(ids) for name, ids in obj.get("name_to_ids", {}).items()}
+    name_team_to_id = {}
+    for k, pid in obj.get("name_team_to_id", {}).items():
+        name, _, abbr = k.partition("|")
+        name_team_to_id[(name, abbr)] = pid
+    return name_to_ids, name_team_to_id
+
+
 _NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
 
 
@@ -98,10 +189,16 @@ def _fetch_schedule(date: str) -> dict:
 
 def game_pks_for_date(date: str) -> dict:
     if date not in _schedule_cache:
-        try:
-            _schedule_cache[date] = _build_game_index(_fetch_schedule(date))
-        except Exception:  # noqa: BLE001 -- treat a failed/empty date as no games
-            _schedule_cache[date] = {}
+        cached = _load_gcs_cache(_gcs_schedule_key(date))
+        if cached is not None:
+            _schedule_cache[date] = _schedule_index_from_json(cached)
+        else:
+            try:
+                index = _build_game_index(_fetch_schedule(date))
+            except Exception:  # noqa: BLE001 -- treat a failed/empty date as no games
+                index = {}
+            _schedule_cache[date] = index
+            _save_gcs_cache(_gcs_schedule_key(date), _schedule_index_to_json(index))
     return _schedule_cache[date]
 
 
@@ -159,10 +256,17 @@ def _fetch_players(season: str) -> dict:
 
 def season_player_index(season: str) -> tuple:
     if season not in _player_cache:
-        try:
-            _player_cache[season] = _build_player_index(_fetch_players(season))
-        except Exception:  # noqa: BLE001
-            _player_cache[season] = ({}, {})
+        cached = _load_gcs_cache(_gcs_player_key(season))
+        if cached is not None:
+            _player_cache[season] = _player_index_from_json(cached)
+        else:
+            try:
+                name_to_ids, name_team_to_id = _build_player_index(_fetch_players(season))
+            except Exception:  # noqa: BLE001
+                name_to_ids, name_team_to_id = {}, {}
+            _player_cache[season] = (name_to_ids, name_team_to_id)
+            _save_gcs_cache(_gcs_player_key(season),
+                           _player_index_to_json(name_to_ids, name_team_to_id))
     return _player_cache[season]
 
 

@@ -149,10 +149,28 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
     # linearly (CEILING * day/days_in_month), so cumulative spend tracks a line to
     # ~CEILING by month end instead of front-loading. Skip the expensive per-event
     # props when this run would push the month ahead of pace.
-    month = target_date[:7]
+    #
+    # Fixed 2026-08-17 (finding B3.9): both the ledger key AND the pace
+    # ceiling used to be derived from `target_date` -- the SLATE being
+    # fetched (which day_offset can push into tomorrow, or day_offset=1's
+    # "bank tomorrow's openers" mode always does) -- not the WALL-CLOCK
+    # date this call is actually spending credits on. Right at a month
+    # boundary (e.g. this call happens on Aug 31 but target_date is Sep
+    # 1), the real spend landed in the wrong month's ledger AND was judged
+    # against the wrong month's (brand-new, day-1) pace ceiling instead of
+    # the real month's (day-31, tightest) one -- under-counting the
+    # current month's true spend right when the linear pace-cap is
+    # tightest, and pre-loading next month's day-1 bucket early. Both
+    # `month` and `pace_cap` must move together (same call_date input) or
+    # comparing spent-in-the-right-month against a ceiling-for-the-wrong-
+    # month is just a different, equally wrong mismatch. call_date uses
+    # the same _ET convention _target_date() itself uses -- not UTC, which
+    # would flip months several hours before ET's actual day-boundary.
+    call_date = datetime.now(_ET).date().isoformat()
+    month = call_date[:7]
     spent = _read_credits(month)
     est_props = n_events * max(1, len(markets))
-    pace_cap = _pace_ceiling(target_date)
+    pace_cap = _pace_ceiling(call_date)
     do_props = (spent + 3 + est_props) <= pace_cap
 
     props_by_id, raw_props, prop_rows = {}, [], []

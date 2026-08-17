@@ -17,14 +17,19 @@ Isotonic calibrators are fit on the OOS model output range. If the model is upda
 
 sklearn's isotonic regression clips out-of-bounds inputs to the nearest boundary value: if model outputs shift outside the calibrator's `X_min`/`X_max`, everything maps to 0 or 1. This causes the runner to post extreme (0% or 100%) calibrated probabilities for all bets.
 
-Manual retrain sequence per system:
+Manual retrain sequence per system (corrected 2026-08-17, finding E8 -- this
+table previously listed a `mlb-calibrate-outs` job that has never existed,
+and was separately missing BATTER_TB; cross-checked against main.py's actual
+`/retrain-weekly` calibrate-job list, the source of truth):
 ```
 NRFI: mlb-retrain-nrfi-v18  -> mlb-calibrate-nrfi
 F5:   mlb-retrain-f5-v5     -> mlb-calibrate-f5
 K:    mlb-retrain-k-v1      -> mlb-calibrate-k
 HR:   mlb-retrain-hr-v6     -> mlb-calibrate-hr
-OUTS: mlb-retrain-outs-v1   -> mlb-calibrate-outs (uses OUTS isotonic calibrator)
+OUTS: mlb-retrain-outs-v1   -> (none -- OUTS self-calibrates inline inside
+                                 retrain_outs_v1.py; no separate calibrate job)
 BATTER_HITS: mlb-retrain-batter-hits -> mlb-calibrate-batter-hits
+BATTER_TB:   mlb-retrain-batter-tb   -> mlb-calibrate-batter-tb
 GAME: mlb-retrain-game-v1   -> mlb-calibrate-game
 ```
 

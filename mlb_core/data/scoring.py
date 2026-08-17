@@ -134,14 +134,12 @@ def fetch_scores_for_game_pks(game_pks: list, verbose: bool = True) -> pd.DataFr
     return out
 
 
-def _upload_scoring_csv(df: pd.DataFrame, bucket, key: str):
+def _upload_scoring_csv(df: pd.DataFrame, key: str):
     """Helper: dedupe + write a scoring DataFrame to GCS."""
+    from mlb_core import storage as _st  # twin-aware master IO
+
     df = df.drop_duplicates(subset=["game_pk", "inning", "half"], keep="last")
-    tmp = "/tmp/scoring_master_new.csv"
-    df.to_csv(tmp, index=False)
-    bucket.blob(key).upload_from_filename(
-        tmp, content_type="text/csv", timeout=600
-    )
+    _st.write_csv(df, key)
     return df
 
 
@@ -163,15 +161,11 @@ def scoring_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
 
     Idempotent. Dedupes on (game_pk, inning, half) with keep="last".
     """
-    from google.cloud import storage
-
-    client = storage.Client()
-    bucket = client.bucket(gcs_bucket)
-    blob = bucket.blob(gcs_master_key)
+    from mlb_core import storage as _st  # twin-aware master IO
 
     # 1. Load existing master (if any) and identify what we already have
-    if blob.exists():
-        existing = pd.read_csv(blob.open("r"), low_memory=False)
+    if _st.exists(gcs_master_key):
+        existing = _st.read_csv(gcs_master_key, low_memory=False)
         already_have = set(existing["game_pk"].astype(int).unique())
         logger.info(f"  Existing master: {len(existing):,} rows | "
                     f"{len(already_have):,} games already covered")
@@ -212,7 +206,7 @@ def scoring_backfill_gcs(gcs_bucket: str, gcs_master_key: str,
             chunk_df = pd.concat(chunk_frames, ignore_index=True)
             accumulated.append(chunk_df)
             combined = pd.concat(accumulated, ignore_index=True)
-            combined = _upload_scoring_csv(combined, bucket, gcs_master_key)
+            combined = _upload_scoring_csv(combined, gcs_master_key)
             # Keep memory bounded: replace the list with the deduped result
             accumulated = [combined]
             chunk_frames = []
