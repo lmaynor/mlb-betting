@@ -19,7 +19,11 @@ covers today AND tomorrow (FAL_DAYS=2); next-day alerts are tagged
   3. SCAN: +EV outliers vs the Pinnacle-anchored consensus
      (mlb.analysis.outlier_scan) at the latest snapshot.
   4. NOTIFY: post only NEW alerts (never re-ping the same quote; dedup state in
-     Alerts/{day}/notified.parquet) to Discord, hot games flagged. Alerts are
+     Alerts/{day}/notified.parquet) to Discord as a structured embed -- one
+     field per alert, human market/book/team names (mlb_core.notify.discord
+     market_label/book_display), EV-tiered emoji, and the fair-price anchor
+     spelled out (vs Pinnacle / vs consensus) instead of packed into a single
+     cryptic text blob. Hot games and next-day openers are flagged. Alerts are
      also appended to Alerts/{day}/log.parquet so the nightly odds_alert
      resolve/scorecard pass covers them.
 
@@ -144,35 +148,94 @@ def _fmt_american(a) -> str:
     return f"+{a}" if a > 0 else str(a)
 
 
-def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '') -> None:
-    from mlb_core.notify.discord import _post
+_SEL_WORDS = {"OVER": "Over", "UNDER": "Under", "YES": "Yes", "NO": "No"}
+
+
+def _alert_parts(r: pd.Series, hot: set, today_str: str, anchor_book: str | None,
+                 book_display, market_label, ev_alert_emoji, team_nickname: dict) -> dict:
+    """Compute the human-readable pieces of one +EV alert row. Shared by the
+    Discord embed fields and the no-webhook print fallback so both stay in sync."""
+    sel = str(r.get("selection", "")).upper()
+    sel_word = _SEL_WORDS.get(sel, sel.title())
+    line = r.get("line")
+    label = market_label(r["market"])
+    if sel in ("YES", "NO"):
+        what = f"{label} ({sel_word})"
+    elif pd.notna(line):
+        what = f"{sel_word} {line:g} {label}"
+    else:
+        what = f"{sel_word} {label}"
+
+    away, home = r.get("away_team"), r.get("home_team")
+    matchup = (f"{team_nickname.get(away, away)} @ {team_nickname.get(home, home)}"
+               if away else f"game {r.get('game_pk')}")
+    pname = r.get("player_name")
+    has_player = isinstance(pname, str) and bool(pname)
+    who = pname if has_player else matchup
+
+    gd = str(r.get("game_date", ""))
+    badge = ("🔥 " if r.get("game_pk") in hot else "") + \
+            ("🌙 " if today_str and gd and gd > today_str else "")
+
+    fair = r.get("consensus_fair")
+    n_books = r.get("n_books")
+    return {
+        "emoji":        ev_alert_emoji(r["ev"]),
+        "badge":        badge,
+        "who":          who,
+        "what":         what,
+        "matchup_tag":  f" | {matchup}" if has_player else "",
+        "book":         book_display(r.get("book")),
+        "american":     _fmt_american(r.get("american")),
+        "ev":           r["ev"],
+        "anchor_label": book_display(anchor_book) if r.get("anchored") and anchor_book else "consensus",
+        "fair":         fair if pd.notna(fair) else None,
+        "n_books":      int(n_books) if pd.notna(n_books) else 0,
+    }
+
+
+def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '',
+           min_ev: float = 0.03, min_books: int = 4, anchor: str | None = None) -> None:
+    from mlb_core.notify.discord import (
+        _post, book_display, market_label, ev_alert_emoji, TEAM_NICKNAME,
+    )
     url = _alert_webhook()
-    lines = []
-    for _, r in new.iterrows():
-        game = f"{r.get('away_team', '?')}@{r.get('home_team', '?')}" \
-            if r.get("away_team") else f"game {r.get('game_pk')}"
-        pid = r.get("player_id")
-        pname = r.get("player_name")
-        who = (pname if isinstance(pname, str) and pname
-               else (f"player {int(pid)}" if pd.notna(pid) else "team"))
-        flame = " **HOT**" if r.get("game_pk") in hot else ""
-        anchor = " [pinn]" if r.get("anchored") else ""
-        gd = str(r.get("game_date", ""))
-        nextday = " [TMRW opener]" if today_str and gd and gd > today_str else ""
-        lines.append(
-            f"`{r['market']}` {game} {who} {r['selection']} {r.get('line', '')} "
-            f"@ **{r['book']}** {_fmt_american(r.get('american'))} -> "
-            f"EV **{r['ev']*100:+.1f}%**{anchor}{nextday} (fair {r['consensus_fair']:.3f}, "
-            f"{int(r['n_books'])} books){flame}")
-    body = "\n".join(lines)
+
+    fields = []
     if notes:
-        body = "**Lineup events:** " + "; ".join(notes[:6]) + "\n\n" + body
+        fields.append({"name": "📋 Lineup events",
+                       "value": "; ".join(notes[:6])[:1024], "inline": False})
+    for _, r in new.iterrows():
+        p = _alert_parts(r, hot, today_str, anchor, book_display, market_label,
+                         ev_alert_emoji, TEAM_NICKNAME)
+        fair_str = f"{p['fair']:.1%}" if p["fair"] is not None else "N/A"
+        name = f"{p['emoji']} {p['badge']}{p['who']}"[:256]
+        value = (
+            f"{p['what']}{p['matchup_tag']}\n"
+            f"**{p['book']} {p['american']}** -> EV **{p['ev']:+.1%}** "
+            f"vs {p['anchor_label']} fair **{fair_str}** ({p['n_books']} books)"
+        )[:1024]
+        fields.append({"name": name, "value": value, "inline": False})
+
     if not url:
         log.warning("no Discord webhook -- printing alerts only")
-        print(body)
+        for f in fields:
+            print(f"{f['name']}\n  {f['value']}")
         return
-    _post(url, {"embeds": [{"title": f"+EV alerts ({len(new)})",
-                            "description": body[:3900], "color": 0xE3B261}]})
+
+    anchor_disp = book_display(anchor) if anchor else "consensus only"
+    embed = {
+        "title": f"📡 +EV Alerts -- {len(new)} new",
+        "description": (
+            f"Soft-book price lagging the sharp reference by >= {min_ev:.0%} -- "
+            f"a line worth striking before it corrects."
+        ),
+        "color": 0xE3B261,
+        "fields": fields[:25],
+        "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
+                           f"anchor: {anchor_disp} | fast_alert_loop"},
+    }
+    _post(url, {"embeds": [embed]})
 
 
 # -- main ---------------------------------------------------------------------
@@ -239,7 +302,8 @@ def run(run_date: str | None = None) -> dict:
         new["_hot"] = new["game_pk"].isin(hot)
         new = new.sort_values(["_hot", "ev"], ascending=[False, False]).drop(columns="_hot")
         posted = new.head(max_posts)
-        notify(posted, hot, notes, today_str=day)
+        notify(posted, hot, notes, today_str=day,
+               min_ev=min_ev, min_books=min_books, anchor=anchor)
         if len(new) > max_posts:
             log.info("capped: %d further alerts not posted this run", len(new) - max_posts)
         # persist notify-state and the shared alert log (for odds_alert resolve)

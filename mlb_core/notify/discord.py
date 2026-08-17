@@ -11,6 +11,8 @@ Webhook URLs read from environment variables:
     DISCORD_WEBHOOK_URL         — default picks webhook (#daily-picks)
     DISCORD_WEBHOOK_SUMMARY     — recap webhook (#daily-recap)
     DISCORD_WEBHOOK_OPS         — ops/error webhook (#ops-alerts)
+    DISCORD_WEBHOOK_ALERTS      — intraday +EV pager (mlb.runners.fast_alert_loop);
+                                  falls back to DISCORD_WEBHOOK_URL if unset
     DISCORD_WEBHOOK_<SYSTEM>    — per-system override (e.g. DISCORD_WEBHOOK_NRFI)
 
 If no webhook is configured, calls are no-ops and a warning is logged.
@@ -60,6 +62,41 @@ TEAM_NICKNAME = {
     "TEX": "Rangers",      "TOR": "Blue Jays",  "WSH": "Nationals",
 }
 
+# Canonical book key (odds_history / bet_tracker / mlb_core.odds.sgo.ONSHORE_BOOKS)
+# -> display name for Discord. Covers every onshore book plus the sharp/reference
+# books used as fair-value anchors (pinnacle) and BettingPros-only softs that
+# aren't in SGO (fliff, sugarhouse, partycasino). An unmapped book falls back to
+# Title Case in book_display() rather than showing up raw/lowercase.
+BOOK_DISPLAY = {
+    "draftkings":  "DraftKings",
+    "fanduel":     "FanDuel",
+    "caesars":     "Caesars",
+    "betmgm":      "BetMGM",
+    "espnbet":     "theScore",   # rebranded; BOOK_CANONICAL maps this upstream too
+    "thescore":    "theScore",
+    "pointsbet":   "PointsBet",
+    "bet365":      "Bet365",
+    "betrivers":   "BetRivers",
+    "fanatics":    "Fanatics",
+    "hardrock":    "Hard Rock Bet",
+    "novig":       "Novig",
+    "parx":        "Parx",
+    "underdog":    "Underdog",
+    "fliff":       "Fliff",
+    "sugarhouse":  "SugarHouse",
+    "partycasino": "PartyCasino",
+    "pinnacle":    "Pinnacle",
+    "consensus":   "Consensus",
+}
+
+
+def book_display(book: Optional[str]) -> str:
+    """Canonical book key -> display name. Falls back to Title Case for an
+    unmapped/unknown book instead of leaving it raw (e.g. "hardrock")."""
+    if not book:
+        return ""
+    return BOOK_DISPLAY.get(book.lower(), book.title())
+
 
 def _edge_emoji(edge: Optional[float]) -> str:
     if edge is None:
@@ -73,6 +110,45 @@ def _edge_emoji(edge: Optional[float]) -> str:
     if edge >= 0.04:
         return "✅"
     return "📄"
+
+
+# odds_history canonical market code (see mlb/analysis/*_to_history.py producers
+# and mlb/analysis/outlier_scan.py) -> human noun phrase for alert headlines.
+MARKET_LABELS = {
+    "hr_yn":      "Home Run",
+    "k_ou":       "Strikeouts",
+    "outs_ou":    "Outs Recorded",
+    "btb_ou":     "Total Bases",
+    "bhits_ou":   "Hits",
+    "per_ou":     "Earned Runs",
+    "phits_ou":   "Hits Allowed",
+    "pwalks_ou":  "Walks Allowed",
+    "nrfi_ou":    "1st Inning Runs",
+    "game_ml":    "Moneyline",
+    "f5_ml":      "1st 5 Innings Moneyline",
+    "game_rl":    "Run Line",
+    "game_total": "Total Runs",
+    "runs_ou":    "Runs",
+}
+
+
+def market_label(market: str) -> str:
+    """odds_history market code -> human noun phrase, e.g. "k_ou" -> "Strikeouts"."""
+    return MARKET_LABELS.get(market, (market or "").replace("_", " ").title())
+
+
+def ev_alert_emoji(ev: float) -> str:
+    """Tier a soft-line +EV scan alert (mlb.runners.fast_alert_loop) by EV
+    magnitude. Alerts are pre-filtered to ev >= FAL_MIN_EV before this is ever
+    called, so unlike _edge_emoji there is no "no signal" floor case -- the
+    lowest tier is still a qualifying "yes, strike this" checkmark."""
+    if ev >= 0.15:
+        return "☢️"
+    if ev >= 0.10:
+        return "🔥"
+    if ev >= 0.06:
+        return "⚡"
+    return "✅"
 
 
 def _round_stake(stake: Optional[float]) -> Optional[float]:
@@ -257,12 +333,8 @@ def post_bets(
         stake_str = f"${stake:.0f}"     if stake is not None else "N/A"
         emoji     = _edge_emoji(edge)
         headline  = _format_bet_headline(b, system)
-        _book = (b.get("book") or b.get("bookmaker") or "").replace(
-            "draftkings","DraftKings").replace("fanduel","FanDuel").replace(
-            "caesars","Caesars").replace("betmgm","BetMGM").replace(
-            "espnbet","ESPN Bet").replace("thescore","theScore").replace(
-            "pointsbet","PointsBet")
-        book_tag = f" · {_book}" if _book else ""
+        _book     = book_display(b.get("book") or b.get("bookmaker") or "")
+        book_tag  = f" · {_book}" if _book else ""
         fields.append({
             "name":   f"{emoji} {headline}",
             "value":  f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}**{book_tag} | stake: **{stake_str}**",

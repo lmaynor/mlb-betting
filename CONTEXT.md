@@ -643,6 +643,20 @@ Runners call `post_bets()` only -- bet signals for today's slate.
 `settle_bets.run()` via `post_all_systems_summary()` after settlement.
 This gives one clean daily embed covering all active systems.
 
+`mlb.runners.fast_alert_loop` (the intraday +EV pager, see s14) posts its own
+embed directly rather than via `post_bets()` -- its alerts come from
+`odds_history` scan rows (market/selection/book codes), not a bet dict. It
+reuses `mlb_core.notify.discord`'s shared presentation helpers rather than
+formatting its own strings: `book_display()` (canonical book key -> display
+name, e.g. `hardrock` -> `Hard Rock Bet`), `market_label()` (odds_history
+market code -> human noun, e.g. `k_ou` -> `Strikeouts`), and `ev_alert_emoji()`
+(EV-magnitude tiering, same visual ladder as `_edge_emoji` but with no
+"no signal" floor since scan rows are pre-filtered to `ev >= min_ev`). Any
+new Discord-posting runner should reuse these instead of inventing its own
+ad hoc text formatting -- that drift (raw market codes, lowercase book names,
+one wall-of-text description instead of embed fields) is what made the +EV
+pager's alerts hard to read before the 2026-08-16 restructure.
+
 ### Bet type naming convention
 
 | System | bet_type format | Examples |
@@ -1880,6 +1894,7 @@ service as environment variables:
 | `discord-webhook-url` | `DISCORD_WEBHOOK_URL` | `#daily-picks` | `post_bets()` |
 | `discord-webhook-summary` | `DISCORD_WEBHOOK_SUMMARY` | `#daily-recap` | `post_all_systems_summary()` |
 | `discord-ops-webhook-url` | `DISCORD_WEBHOOK_OPS` | `#ops-alerts` | `post_error()`, `post_ops_alert()` |
+| `discord-webhook-alerts` (not yet provisioned) | `DISCORD_WEBHOOK_ALERTS` | none dedicated -- falls back to `#daily-picks` via `DISCORD_WEBHOOK_URL` | `mlb.runners.fast_alert_loop` (intraday +EV pager) |
 
 `post_error()` previously routed to the main picks webhook. It now uses
 `DISCORD_WEBHOOK_OPS`, keeping errors out of member-facing channels.
