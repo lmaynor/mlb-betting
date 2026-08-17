@@ -3,11 +3,21 @@ runners/snapshot_odds.py — Fetch the MLB slate and save it SGO-shaped to GCS.
 
 Runs on Cloud Scheduler via main.py's /snapshot-odds endpoint.
 
-Provider (env ODDS_PRIMARY, default "sgo"):
-  - "sgo":    legacy — SGO /v2/events for all markets.
+Provider (env ODDS_PRIMARY, default "parlay"):
   - "parlay": ParlayAPI primary (HR/K/OUTS/HITS/TB/ER props + game ML) adapted to
               SGO shape (mlb_core.odds.parlay_adapter), MERGED with SGO inning
               markets (NRFI/1I-3way/F5/F5-ML/F1H, which ParlayAPI can't express).
+  - "sgo":    legacy — SGO /v2/events for all markets. Do NOT run this at the
+              current 8x/day snapshot cadence -- combined with SGO's 2500
+              entities/month amateur-tier quota, this caused a 24+ hour SGO
+              outage on 2026-08-09/10 (see
+              docs/solutions/integration-issues/odds-primary-cadence-mismatch.md).
+              Only safe at ~4x/day or below.
+
+The default here and in deploy/deploy_service.sh's --update-env-vars must
+both stay "parlay" -- this is deliberately the safe-by-default direction so
+an unset env var (a fresh environment, a dropped var, a careless manual
+call) can never silently reproduce the incident above.
 
 Cadence: ParlayAPI runs ~8x/day, SGO only 4x/day (free tier ~2500 entities/mo).
 On the 4 SGO runs pass include_sgo=true (fresh inning markets); the other ~4 runs
@@ -58,7 +68,7 @@ def _target_date(run_date: str | None, day_offset: int) -> str:
 
 def run(run_date: str = None, provider: str = None, out_prefix: str = DEFAULT_PREFIX,
         day_offset: int = 0, include_sgo: bool = None) -> dict:
-    provider = (provider or os.environ.get("ODDS_PRIMARY", "sgo")).lower()
+    provider = (provider or os.environ.get("ODDS_PRIMARY", "parlay")).lower()
     target_date = _target_date(run_date, day_offset)
     started = datetime.now(timezone.utc)
     logger.info(f"snapshot | date={target_date} | provider={provider} | "
@@ -116,7 +126,9 @@ def _gather_sgo(run_date: str):
 def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
     """ParlayAPI covered markets (adapted) merged with SGO inning markets.
     include_sgo: True -> fetch SGO fresh; False -> carry inning markets forward
-    from the prior snapshot; None -> default True (treat as an SGO run)."""
+    from the prior snapshot; None -> default False (the safe/cheap direction --
+    an unset flag must never silently turn into an extra SGO call; only the 4
+    explicitly-flagged daily windows should ever touch SGO)."""
     import pandas as pd
     from nba.config import (PARLAY_PROP_MARKETS, oddsaccum_csv_key,
                             oddsaccum_latest_key, oddsaccum_raw_key)
@@ -127,7 +139,7 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
     from mlb_core.storage import write_bytes, write_csv
 
     if include_sgo is None:
-        include_sgo = True
+        include_sgo = False
     markets = PARLAY_PROP_MARKETS.get(SPORT, [])
     client = ParlayApiClient(delay=0.2)
     game_lines = client.get_slate(SPORT, markets="game")   # ~3 credits (whole slate)
@@ -199,8 +211,22 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
             "props_pulled": do_props, "credits_month": _read_credits(month),
             "include_sgo": include_sgo}
     if not merged:
-        logger.warning("snapshot(parlay): empty merge — falling back to pure SGO")
-        return _gather_sgo(target_date)[0], {**meta, "fallback": "sgo"}
+        if include_sgo:
+            # This window was already budgeted to touch SGO -- falling back
+            # to pure SGO here doesn't add any *new* SGO load.
+            logger.warning("snapshot(parlay): empty merge — falling back to pure SGO")
+            return _gather_sgo(target_date)[0], {**meta, "fallback": "sgo"}
+        # include_sgo=False windows must never sneak in an SGO call -- a
+        # sustained ParlayAPI outage would otherwise silently turn every one
+        # of the 8 daily windows into an SGO caller, reproducing the
+        # 2026-08-09/10 incident through a different trigger. Return empty;
+        # run() already handles this by leaving latest.json untouched.
+        logger.warning(
+            "snapshot(parlay): empty merge on an include_sgo=False run -- "
+            "NOT falling back to SGO (would defeat the 4x/day SGO budget); "
+            "leaving latest.json unchanged this run"
+        )
+        return [], meta
     return merged, meta
 
 

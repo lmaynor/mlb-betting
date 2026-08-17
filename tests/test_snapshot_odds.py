@@ -116,3 +116,46 @@ def test_target_date_offset():
     # day_offset shifts the target ET date forward
     assert S._target_date("2024-05-01", 0) == "2024-05-01"
     assert S._target_date("2024-05-01", 1) == "2024-05-02"
+
+
+# ── Regression coverage for the 2026-08-16 audit's ODDS_PRIMARY/include_sgo
+# safe-default fix (finding A2) ─────────────────────────────────────────────
+
+def test_unset_include_sgo_defaults_to_false_not_true(env):
+    """An omitted include_sgo must resolve to the cheap/safe direction (no
+    SGO call), never silently treat a missing flag as an SGO-touching run."""
+    from mlb_core import storage
+    prior = [{"eventID": "745101", "odds": {"points-all-1i-ou-over": {
+        "oddID": "points-all-1i-ou-over",
+        "byBookmaker": {"draftkings": {"odds": "118", "available": True}}}}}]
+    storage.write_bytes(json.dumps(prior).encode(), "Odds/sgo/latest.json")
+    events, meta = S._gather_parlay(DATE, "Odds/sgo/latest.json", include_sgo=None)
+    assert meta["include_sgo"] is False
+    # carried forward from the prior snapshot, not freshly fetched from SGO
+    assert "points-all-1i-ou-over" in events[0]["odds"]
+
+
+class _PoisonedSgo:
+    """Fails loudly if SGO is ever touched -- used to prove the empty-merge
+    fallback does not sneak in an SGO call on an include_sgo=False run."""
+    def __init__(self, *a, **k):
+        raise AssertionError("SGO must not be called on an include_sgo=False run")
+
+
+def test_empty_merge_with_include_sgo_false_does_not_fall_back_to_sgo(env, monkeypatch):
+    monkeypatch.setattr(_FakeParlay, "get_slate", lambda self, sport, markets=None: [])
+    monkeypatch.setattr("mlb_core.odds.sgo.SgoClient", _PoisonedSgo)
+    events, meta = S._gather_parlay(DATE, "Odds/sgo/latest.json", include_sgo=False)
+    assert events == []
+    assert meta.get("fallback") != "sgo"
+
+
+def test_empty_merge_with_include_sgo_true_still_falls_back_to_sgo(env, monkeypatch):
+    """The 4 windows that were already budgeted to touch SGO this run may
+    still fall back to it if the merge is genuinely empty -- that adds no
+    *new* SGO load beyond the fetch this run already made."""
+    monkeypatch.setattr(_FakeParlay, "get_slate", lambda self, sport, markets=None: [])
+    monkeypatch.setattr(_FakeSgo, "fetch_mlb_slate", lambda self, run_date=None: [])
+    events, meta = S._gather_parlay(DATE, "Odds/sgo/latest.json", include_sgo=True)
+    assert meta.get("fallback") == "sgo"
+    assert events == []
