@@ -269,6 +269,19 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _game_pks = list(game_probs["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="1I")
     _pending: dict[int, float] = {}
+    from mlb_core.risk.gates import is_suppressed as _is_suppressed
+    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
+    # 1I derives its probabilities from the same NRFI half-inning model that
+    # is force-suppressed under the "1IOU" system name (registry.py: "no live
+    # edge, bet-sample AUC ~0.50, negative every week -- calibration cannot
+    # fix broken rank ordering"). That discrimination problem is in the
+    # underlying model, not the market it's quoted against, so it applies
+    # here too. force_gate="on" on the "1I" registry entry (added alongside
+    # this fix) makes is_suppressed("1I") reflect that; this call also covers
+    # the dynamic ROI-based gate once 1I has its own bet history.
+    _gate_suppressed = _is_suppressed("1I")
+    if _gate_suppressed:
+        logger.warning("1I gate active -- logging only, no staked bets this run")
 
     results = []
     for _, row in game_probs.iterrows():
@@ -301,6 +314,15 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         best_bt = max(edges, key=lambda b: edges[b][0])
         edge, odds, model_prob, fair = edges[best_bt]
 
+        # Calibrate against realized outcomes (corrects overconfidence) and
+        # recompute edge before gating/sizing -- same winner's-curse defense
+        # every other system has. See
+        # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+        # finding A3 -- 1I previously had none of this at all.
+        model_prob, _cal = _cal_apply("1I", model_prob)
+        edge = model_prob - fair
+        _edge_capped = _cal and edge > _EDGE_CAP
+
         if edge < cfg["min_edge"]:
             continue
 
@@ -318,7 +340,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         )
         stake = min(raw_stake, _cap)
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY)
+        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped)
         if kelly_triggered and stake > 0:
             gp = int(row["game_pk"])
             _pending[gp] = _pending.get(gp, 0.0) + stake

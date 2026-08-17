@@ -211,6 +211,17 @@ SYSTEMS: dict[str, SystemConfig] = {
         retrain_jobs=["mlb-retrain-nrfi-v18"],
         calibrate_jobs=["mlb-calibrate-nrfi"],
         expected_hit_rate=0.52,
+        # Force-suppressed 2026-08-17 alongside 1IOU: 1I derives its
+        # probabilities from the IDENTICAL NRFI half-inning model that is
+        # force-suppressed under the "1IOU" entry above for "no live edge
+        # (bet-sample AUC ~0.50, negative every week) -- calibration cannot
+        # fix broken rank ordering." That's a defect in the underlying model,
+        # not the market it's quoted against, so it applies here too. Clear
+        # this (set to None) only alongside 1IOU, once a retrain restores
+        # discrimination. See
+        # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+        # finding A3.
+        force_gate="on",
     ),
 }
 
