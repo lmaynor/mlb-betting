@@ -6,6 +6,7 @@ Offline: local storage mode (tmp MLB_BASE_DATA), id_resolver caches primed.
 
 import json
 
+import pandas as pd
 import pytest
 
 from mlb_core import storage
@@ -75,3 +76,43 @@ def test_convert_writes_partitions(monkeypatch, tmp_path):
     from mlb.analysis import odds_history as oh
     back = oh.read_history("hr_yn")
     assert (back["source"] == "parlayapi").all()
+
+
+def test_convert_does_not_clobber_a_concurrent_writers_rows(monkeypatch, tmp_path):
+    """Finding C4.4: convert() must pass append=True to write_partition --
+    otherwise a different writer to this exact (market, date) partition
+    (e.g. bettingpros_to_parquet.py's historical backfill, whose date range
+    is not code-enforced disjoint from this forward/live feed's) would have
+    its rows silently discarded the moment this script's forward ingest next
+    touches that same partition. Simulates that other writer directly via
+    odds_history.write_partition, then confirms convert() doesn't wipe it."""
+    pytest.importorskip("pyarrow")
+    _prime(monkeypatch, tmp_path)
+    from mlb.analysis import odds_history as oh
+
+    other_writer_row = pd.DataFrame([{
+        "sport": "mlb", "market": "hr_yn", "system": "HR",
+        "game_pk": 745101, "game_date": DATE, "event_id": "bp-evt-1",
+        "away_team": "LAA", "home_team": "CLE", "player_id": 545361,
+        "selection": "OVER", "line": 0.5, "book": "average",
+        "american": 275, "decimal": None, "implied_prob": None,
+        "fair_prob": 0.3, "snapshot_ts": f"{DATE} 23:59:00",
+        "is_open": False, "is_closing": True,
+        "source": "bettingpros", "ingested_at": "2026-01-01T00:00:00Z",
+    }])
+    oh.write_partition(other_writer_row, "hr_yn", DATE, append=True)
+
+    res = P.convert(since=DATE, until=DATE, ingested_at="2026-06-29T00:00:00Z")
+    # write_partition returns the partition's post-merge row COUNT, not a
+    # delta -- 5 = hr_yn's 2 parlayapi rows merged with the 1 pre-seeded
+    # bettingpros row (3), plus bhits_ou's untouched 2 parlayapi rows.
+    assert res["rows"] == 5
+
+    back = oh.read_history("hr_yn")
+    assert (back["source"] == "bettingpros").sum() == 1, (
+        "the other writer's row was clobbered -- convert() is not merging "
+        "into the shared partition (finding C4.4 regression)"
+    )
+    # hr_yn's own 2 parlayapi rows (OVER+UNDER); bhits_ou's other 2 parlayapi
+    # rows live in a separate partition, not read by read_history("hr_yn").
+    assert (back["source"] == "parlayapi").sum() == 2

@@ -225,7 +225,8 @@ def _scorecard_row(model, prob, ho, res):
            "n_bets": 0, "roi_best%": np.nan, "roi_cons%": np.nan, "clv%": np.nan,
            "clv_n": 0, "lo_n": 0, "lo_roi%": np.nan, "lo_clv%": np.nan,
            "verdict": "INSUFFICIENT_N", "verdict_reason": "no candidates",
-           "clv_tstat": np.nan, "ladder_monotonic": None}
+           "clv_tstat": np.nan, "ladder_monotonic": None,
+           "hi_n": 0, "hi_clv%": np.nan}  # C4.3: top ("10%+") edge-bucket CLV
     try:
         row["auc"] = round(float(roc_auc_score(y, prob)), 4)
         base = float(np.mean(y))
@@ -265,6 +266,8 @@ def _scorecard_row(model, prob, ho, res):
         row["verdict_reason"] = v["reason"]
         row["clv_tstat"] = v["clv_tstat"]
         row["ladder_monotonic"] = v["ladder_monotonic"]
+        row["hi_n"] = v["hi_n"]        # C4.3: top edge-bucket CLV sample size
+        row["hi_clv%"] = v["hi_clv"]   # C4.3: top edge-bucket mean CLV -- winner's-curse check
     return row
 
 
@@ -372,6 +375,16 @@ def main(argv=None) -> int:
                         "gates/tune settings and run -- you only need --resume RUN_ID, nothing "
                         "else. RUN_ID is the value printed after 'persisted -> "
                         "Analysis/bakeoff/runs/' by the original run.")
+    p.add_argument("--create-if-missing", action="store_true",
+                   help="with --resume RUN_ID: if RUN_ID has no persisted run yet, start a "
+                        "fresh run using that EXACT id instead of erroring (finding B4.1) -- "
+                        "for orchestration that computes a deterministic id ahead of time so "
+                        "an automatic retry lands on the same prefix as the attempt it's "
+                        "retrying, e.g. the mlb-bakeoff Cloud Run Job keying off Cloud Run "
+                        "Jobs' CLOUD_RUN_EXECUTION (stable across one execution's retries, "
+                        "different across separate `gcloud run jobs execute` invocations). "
+                        "Off by default: a genuine typo in --resume should still error "
+                        "loudly, not silently start a new empty run.")
     args = p.parse_args(argv)
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -384,8 +397,24 @@ def main(argv=None) -> int:
         try:
             run_meta = bakeoff_persist.read_run_meta(persist_prefix)
         except Exception as e:  # noqa: BLE001
-            p.error(f"--resume {args.resume}: could not read run_meta.json at "
-                   f"{persist_prefix} ({type(e).__name__}: {e})")
+            if not args.create_if_missing:
+                p.error(f"--resume {args.resume}: could not read run_meta.json at "
+                       f"{persist_prefix} ({type(e).__name__}: {e})")
+            # B4.1: caller pre-computed a deterministic id and there's genuinely
+            # nothing persisted yet (this is a true first attempt, not a retry) --
+            # start fresh using that EXACT id rather than erroring, so a
+            # mid-run retry (which re-passes the same --resume id) lands on
+            # this same prefix and actually resumes next time, instead of
+            # HR's 7-candidate tuning restarting from scratch on every retry.
+            logger.info(f"[resume] nothing persisted yet at {persist_prefix} "
+                       f"({type(e).__name__}) -- --create-if-missing set, "
+                       f"starting fresh with this exact id")
+            run_meta = bakeoff_persist.new_run_meta(
+                args.resume, persist_prefix, args.cutoff, args.until, ["HR"],
+                tune=args.tune, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
+                min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
+                load_tuned_from=args.load_tuned_from)
+            bakeoff_persist.write_run_meta(persist_prefix, run_meta)
         if "HR" in (run_meta.get("systems_completed") or []):
             logger.info(f"[HR] already completed in {persist_prefix} -- nothing to do.")
             return 0
@@ -432,7 +461,8 @@ def main(argv=None) -> int:
         rename = {"clv%": "clv", "lo_clv%": "lo_clv", "roi_best%": "roi_best",
                   "roi_cons%": "roi_cons", "lo_roi%": "lo_roi",
                   "yes_roi%": "yes_roi", "yes_clv%": "yes_clv",
-                  "no_roi%": "no_roi", "no_clv%": "no_clv"}
+                  "no_roi%": "no_roi", "no_clv%": "no_clv",
+                  "hi_clv%": "hi_clv"}  # C4.3: top edge-bucket CLV (hi_n has no % suffix already)
         hr_rows = board.reset_index().assign(system="HR").rename(columns=rename)
         # merge, don't clobber: if this prefix already has a scorecard (e.g. it's shared
         # with a model_bakeoff.py run that also scored a generic "HR"), keep every OTHER

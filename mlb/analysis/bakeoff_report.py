@@ -33,7 +33,13 @@ import pandas as pd
 from mlb.analysis import bakeoff_persist as bp
 
 EVIDENCE_COLS = ["system", "model", "rank", "n_bets", "clv", "clv_tstat",
-                 "lo_n", "lo_clv", "ladder_monotonic", "verdict"]
+                 "lo_n", "lo_clv", "hi_n", "hi_clv", "ladder_monotonic", "verdict"]
+# hi_n/hi_clv (finding C4.3): the top ("10%+") edge bucket's CLV sample size
+# and mean -- the persisted handoff report used to have no per-bucket CLV
+# column at all for the high-edge side, so the documented winner's-curse
+# pattern (small edge = good CLV, big edge = bad CLV) could clear
+# PROMOTE_CANDIDATE completely invisibly in anything that wasn't the live
+# stdout table.
 
 
 def _fmt(v) -> str:

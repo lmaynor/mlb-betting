@@ -32,10 +32,10 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 - [x] **C3.4** `retrain_nrfi_v18.py` never computes `feature_dists` *(added per-sub-model, matching feature_means/feature_stds' existing per-sub-model shape; also deleted an unrelated exact-duplicate `feature_dists` compute-block found while fixing this in the sibling v17 file)*
 - [x] **C3.5** F5 target-column mismatch (`tune_hyperparams.py` + `registry.py` say `home_win`, real col is `home_wins_f5`)
 - [x] **C3.6/C3.7** BATTER_TB `nb_alpha` clip deviation + missing `prop_1` in 3 systems
-- [ ] **C4.1** Kalshi never excluded from `backtest_market.OFFSHORE`
-- [ ] **C4.3** `verdict()` never checks high-edge-bucket CLV
-- [ ] **C4.4** `odds_history.write_partition` overwrite collision (bettingpros/parlayapi ingest)
-- [ ] **B4.1** `mlb-bakeoff` job's HR leg never gets `--resume`
+- [x] **C4.1** Kalshi never excluded from `backtest_market.OFFSHORE`
+- [x] **C4.3** `verdict()` never checks high-edge-bucket CLV *(Rule 3 added; `hi_clv`/`hi_n` surfaced in `bakeoff_report.py` EVIDENCE_COLS + both bakeoff scripts' scorecard rows)*
+- [x] **C4.4** `odds_history.write_partition` overwrite collision (bettingpros/parlayapi ingest) *(both call sites now pass `append=True`)*
+- [x] **B4.1** `mlb-bakeoff` job's HR leg never gets `--resume` *(new `--create-if-missing` flag + deploy script keys HR_RUN_ID off Cloud Run Jobs' `CLOUD_RUN_EXECUTION`, stable across a retry, different across executions)*
 
 ## P2 — medium
 
