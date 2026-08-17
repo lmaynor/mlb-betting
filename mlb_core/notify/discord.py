@@ -11,6 +11,8 @@ Webhook URLs read from environment variables:
     DISCORD_WEBHOOK_URL         — default picks webhook (#daily-picks)
     DISCORD_WEBHOOK_SUMMARY     — recap webhook (#daily-recap)
     DISCORD_WEBHOOK_OPS         — ops/error webhook (#ops-alerts)
+    DISCORD_WEBHOOK_PERFORMANCE — perf webhook (#performance); read directly by
+                                  monitor_performance.py / weekly_survival_report.py
     DISCORD_WEBHOOK_ALERTS      — intraday +EV pager (mlb.runners.fast_alert_loop);
                                   falls back to DISCORD_WEBHOOK_URL if unset
     DISCORD_WEBHOOK_<SYSTEM>    — per-system override (e.g. DISCORD_WEBHOOK_NRFI)

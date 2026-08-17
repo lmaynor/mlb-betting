@@ -1886,14 +1886,15 @@ tailored pings and lower member friction.
 
 ### Webhook routing
 
-Three webhooks, each stored in Secret Manager and mounted on the Cloud Run
-service as environment variables:
+Each webhook is stored in Secret Manager and mounted on the Cloud Run
+service as an environment variable:
 
 | Secret | Env var | Channel | Used by |
 | --- | --- | --- | --- |
 | `discord-webhook-url` | `DISCORD_WEBHOOK_URL` | `#daily-picks` | `post_bets()` |
 | `discord-webhook-summary` | `DISCORD_WEBHOOK_SUMMARY` | `#daily-recap` | `post_all_systems_summary()` |
 | `discord-ops-webhook-url` | `DISCORD_WEBHOOK_OPS` | `#ops-alerts` | `post_error()`, `post_ops_alert()` |
+| `discord-webhook-performance` | `DISCORD_WEBHOOK_PERFORMANCE` | `#performance` | `monitor_performance.py` (rolling perf alerts + Monday digest), `weekly_survival_report.py` |
 | `discord-webhook-alerts` (not yet provisioned) | `DISCORD_WEBHOOK_ALERTS` | none dedicated -- falls back to `#daily-picks` via `DISCORD_WEBHOOK_URL` | `mlb.runners.fast_alert_loop` (intraday +EV pager) |
 
 `post_error()` previously routed to the main picks webhook. It now uses
