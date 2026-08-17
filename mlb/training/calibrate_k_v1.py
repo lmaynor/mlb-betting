@@ -28,6 +28,8 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.isotonic import IsotonicRegression
 
+from mlb.systems.K_Pro_System.config_k import K_FEATURES
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
@@ -42,21 +44,6 @@ GCS_MODEL_FEATURES = "K_Pro_System/data/model_features.csv"
 GCS_BOOSTER        = "K_Pro_System/models/xgb_k_v1.json"
 GCS_META           = "K_Pro_System/models/model_meta_v1.json"
 GCS_CALIBRATOR     = "K_Pro_System/models/lambda_calibrator_k_v1.pkl"
-
-K_FEATURES = [
-    "k_pct_L5", "k_pct_L10", "k_pct_STD", "k_per_9_L5", "k_per_9_L10",
-    "first_pitch_strike_pct_L10", "hitter_count_rate_L10", "two_strike_k_rate_L10",
-    "whiff_pct_L10", "zone_contact_pct_L10", "chase_pct_L10",
-    "velo_mean_L5", "velo_trend_L5",
-    "fb_pct_L10", "breaking_pct_L10", "primary_whiff_rate_L10",
-    "avg_ip_L5", "avg_bf_L5", "days_rest", "short_rest",
-    "opp_k_rate_L14", "opp_k_rate_vs_hand_L14", "opp_chase_rate_L14",
-    "opp_whiff_rate_L14", "opp_lineup_pct_L", "opp_platoon_k_edge",
-    "opp_top3_k_rate_L50",
-    "ump_overall_accuracy_L30", "ump_k_boost_L30", "ump_consistency_L30",
-    # implied_win_pct removed 2026-05-19 (T02): market circularity.
-    "is_home", "temperature_f", "is_dome",
-]
 
 
 def _load_data():

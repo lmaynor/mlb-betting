@@ -55,6 +55,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from mlb.systems.OUTS_Pro_System.config_outs import OUTS_FEATURES
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
@@ -69,42 +71,6 @@ TARGET  = "starter_outs"   # actual outs recorded by SP -- must be in K feature 
 #   chase_pct_*, two_strike_k_rate_*, primary_whiff_rate_*, first_pitch_strike_pct_*
 # Kept: IP proxies, rest, opponent, park, regime, umpire
 # Added: opp_bb_rate_L14 (walks proxy for command -- short outings)
-OUTS_FEATURES = [
-    # Pitcher durability
-    "avg_ip_L5",
-    "avg_bf_L5",
-    "days_rest",
-    "short_rest",
-    # Pitch volume and deep-outing tendency (added 2026-05-28)
-    "pitch_count_mean_L5",
-    "pitch_count_std_L5",
-    "deep_outing_pct_L10",
-    # Pitcher quality (general, not K-specific)
-    "k_pct_L5",
-    "k_pct_L10",
-    "velo_mean_L5",
-    "velo_trend_L5",
-    "fb_pct_L10",
-    "breaking_pct_L10",
-    # Savant season-level pitch mix (added 2026-05-27)
-    "arsenal_fb_usage",
-    "arsenal_breaking_usage",
-    "arsenal_pitch_diversity",
-    # Opponent lineup
-    "opp_k_rate_L14",
-    "opp_k_rate_vs_hand_L14",
-    "opp_lineup_pct_L",
-    "opp_top3_k_rate_L50",
-    # Umpire (affects pitch count efficiency -> IP)
-    "ump_overall_accuracy_L30",
-    "ump_k_boost_L30",
-    "ump_consistency_L30",
-    # Context
-    "is_home",
-    "temperature_f",
-    "is_dome",
-    "post_pitch_clock",
-]
 
 XGB_PARAMS = {
     "objective":        "count:poisson",

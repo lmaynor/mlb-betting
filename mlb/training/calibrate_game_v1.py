@@ -25,6 +25,8 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.isotonic import IsotonicRegression
 
+from mlb.systems.GAME_Pro_System.config_game import GAME_FEATURES
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s -- %(message)s",
@@ -39,41 +41,6 @@ GCS_MODEL_FEATURES = "GAME_Pro_System/data/model_features.csv"
 GCS_BOOSTER        = "GAME_Pro_System/models/xgb_game_v1.json"
 GCS_META           = "GAME_Pro_System/models/model_meta_game_v1.json"
 GCS_CALIBRATOR     = "GAME_Pro_System/models/isotonic_calibrator_game_v1.pkl"
-
-GAME_FEATURES = [
-    "home_k_pct_L3",
-    "home_xwoba_allowed_L3",
-    "home_velo_mean_L3",
-    "home_bb_pct_L3",
-    "home_starter_ip_avg_L5",
-    "home_starter_days_rest",
-    "away_k_pct_L3",
-    "away_xwoba_allowed_L3",
-    "away_velo_mean_L3",
-    "away_bb_pct_L3",
-    "away_starter_ip_avg_L5",
-    "away_starter_days_rest",
-    "home_bullpen_xwoba_L14",
-    "home_bullpen_k_pct_L14",
-    "home_bullpen_bb_pct_L14",
-    "home_bullpen_ip_L7",
-    "away_bullpen_xwoba_L14",
-    "away_bullpen_k_pct_L14",
-    "away_bullpen_bb_pct_L14",
-    "away_bullpen_ip_L7",
-    "home_team_woba_L20",
-    "away_team_woba_L20",
-    "home_team_k_pct_L20",
-    "away_team_k_pct_L20",
-    "home_run_diff_L20",
-    "park_factor",
-    "temperature_f",
-    "wind_speed_mph",
-    "wind_out",
-    "wind_in",
-    "is_dome",
-    "post_pitch_clock",
-]
 
 
 def _brier(y_true, y_pred):

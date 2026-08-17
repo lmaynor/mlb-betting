@@ -26,6 +26,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from mlb.systems.BATTER_HITS_System.config_batter_hits import BATTER_HITS_FEATURES
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
@@ -35,22 +37,6 @@ logger = logging.getLogger(__name__)
 
 VERSION = "v1"
 TARGET  = "batter_hits"
-
-# Feature contract — keep in sync with BATTER_HITS_System/config_batter_hits.py
-BATTER_HITS_FEATURES = [
-    "hits_per_game_L20", "hits_per_game_L50",
-    "hits_rate_L20", "hits_rate_season",
-    "babip_L20", "babip_L50",
-    "contact_pct_L20", "chase_pct_L20",
-    "ld_rate_L20", "gb_rate_L20",
-    "hard_hit_L20",
-    "batter_pa_per_game_L20", "ewma_batting_order",
-    "hits_vs_hand_career", "hits_vs_hand_season",
-    "pitcher_babip_allowed_L20", "pitcher_hits_per_9_L20",
-    "pitcher_gb_rate_L20", "pitcher_k_pct_L20",
-    "hits_park_factor",
-    "is_home", "temperature_f", "is_dome", "post_pitch_clock",
-]
 
 XGB_PARAMS = {
     "objective":        "count:poisson",
