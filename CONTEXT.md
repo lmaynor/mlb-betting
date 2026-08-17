@@ -2808,7 +2808,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-17 13:26 CST_PRIMARY/cadence coupling + kalshi IAM fix)
+_Last updated: 2026-08-17 14:23 CST_PRIMARY/cadence coupling + kalshi IAM fix)
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
