@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
+# deploy.sh — DO NOT RUN. Stale, superseded bootstrap script (finding B2.5,
+# 2026-08-16 audit): its own "then use deploy_update.sh for subsequent
+# pushes" instruction below already references a script that doesn't exist
+# in this repo. Re-running this would actively regress the live service --
+# --no-allow-unauthenticated (breaks the public API), a 3-secret list (wipes
+# 7 others the service now needs), no ODDS_PRIMARY at all, and a 900s
+# request timeout (aborts the documented 15-25 min Savant backfill).
+#
+# Use deploy/deploy_service.sh instead -- it's the current, actively-
+# maintained build+deploy+smoke-test script and always preserves the Cloud
+# SQL binding. Kept here (guarded, not deleted) only as a historical record
+# of the original one-time GCP bootstrap steps below.
+echo "deploy.sh is stale and superseded -- use deploy/deploy_service.sh instead (finding B2.5)." >&2
+exit 1
+
+# --- everything below this line is historical reference only, unreachable ---
+#
 # deploy.sh — provision GCP infrastructure and deploy to Cloud Run.
 #
 # Run once to bootstrap, then use deploy_update.sh for subsequent pushes.

@@ -2151,10 +2151,13 @@ builders that only need a subset of the ~80 statcast columns should pass:
 `build_game_features.py` uses 13 columns; full-width load was killed by
 signal 9 at row 3M.
 
-**BATTER_HITS statcast load is intentionally full-width (no `usecols`).** The
-batter-hits feature builder needs many statcast columns for contact rate/BABIP/launch
-metrics. Its Cloud Run Job is configured with 8Gi/4CPU to handle the full-width load.
-Do not add `usecols` restriction without verifying all needed columns are included.
+**BATTER_HITS statcast load uses `usecols` (18 columns) -- this note used to say
+the opposite.** Corrected 2026-08-17 (finding E1): this gotcha claimed the load
+was "intentionally full-width (no `usecols`)," contradicting the actual, current
+code and the backlog's own §16 E15 entry (`[x] Done 2026-06-01 -- 18 cols
+identified, _STATCAST_COLS added, job downsized to 2CPU/4Gi`). If you're adding a
+new statcast-derived feature to this builder, verify its source column is in
+`build_batter_hits_features.py`'s `_STATCAST_COLS` set, not the other way around.
 
 **`build_model_features()` team_map requires `game_meta` with `home_team`/`away_team`.**
 If starter DataFrames don't carry team columns, the team_map is empty and all
