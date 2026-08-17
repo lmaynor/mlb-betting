@@ -363,6 +363,9 @@ def main(argv=None) -> int:
     p.add_argument("--persist", action="store_true", help="write results to GCS (see bakeoff_persist)")
     p.add_argument("--run-root", default=bakeoff_persist.DEFAULT_RUN_ROOT,
                    help=f"GCS prefix root for --persist (default {bakeoff_persist.DEFAULT_RUN_ROOT})")
+    p.add_argument("--notify", action="store_true",
+                   help="post a completion/failure summary to Discord #ops-alerts "
+                        "(for unattended runs, e.g. the mlb-bakeoff Cloud Run Job)")
     p.add_argument("--resume", default=None, metavar="RUN_ID",
                    help="resume a prior --persist run (implies --persist): if HR is already "
                         "in its systems_completed, no-op; otherwise restore its cutoff/until/"
@@ -445,6 +448,11 @@ def main(argv=None) -> int:
         run_meta = bakeoff_persist.mark_system_complete(persist_prefix, run_meta, "HR")
         bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="complete")
         print(f"\n  persisted -> {persist_prefix}  (scorecard.csv, candidates/, tuning/, run_meta.json)")
+    if args.notify:
+        n_promoted = int((board.get("verdict") == "PROMOTE_CANDIDATE").sum()) if "verdict" in board else 0
+        bakeoff_persist.notify_discord(
+            f"hr_model_bakeoff {persist_prefix or '(no persist)'} complete -- "
+            f"{n_promoted}/{len(board)} PROMOTE_CANDIDATE")
     return 0
 
 

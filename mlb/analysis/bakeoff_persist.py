@@ -174,6 +174,17 @@ def finish_run_meta(prefix: str, meta: dict, status: str = "complete") -> dict:
     return meta
 
 
+def notify_discord(message: str) -> None:
+    """Best-effort completion/failure alert to #ops-alerts (opt-in via --notify --
+    intended for the unattended Cloud Run Job, not spammy for ad-hoc Cloud Shell runs).
+    Never raises -- a Discord hiccup must not affect the bake-off's own exit status."""
+    try:
+        from mlb_core.notify.discord import post_ops_alert
+        post_ops_alert(message)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"discord notify failed (non-fatal): {type(e).__name__}: {e}")
+
+
 def update_latest_pointer(run_id: str, prefix: str) -> None:
     """Best-effort convenience pointer at Analysis/bakeoff/latest.json -- never raises;
     a failed write here must not fail the run itself."""

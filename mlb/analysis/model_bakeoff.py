@@ -384,6 +384,9 @@ def main(argv=None) -> int:
     p.add_argument("--persist", action="store_true", help="write results to GCS (see bakeoff_persist)")
     p.add_argument("--run-root", default=bakeoff_persist.DEFAULT_RUN_ROOT,
                    help=f"GCS prefix root for --persist (default {bakeoff_persist.DEFAULT_RUN_ROOT})")
+    p.add_argument("--notify", action="store_true",
+                   help="post a completion/failure summary to Discord #ops-alerts "
+                        "(for unattended runs, e.g. the mlb-bakeoff Cloud Run Job)")
     p.add_argument("--resume", default=None, metavar="RUN_ID",
                    help="resume a prior --persist run (implies --persist): skip systems already "
                         "in its systems_completed, merge new rows into its existing scorecard, "
@@ -464,6 +467,9 @@ def main(argv=None) -> int:
         logger.error("no results")
         if persist_prefix:
             bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="failed")
+        if args.notify:
+            bakeoff_persist.notify_discord(f"model_bakeoff {persist_prefix or '(no persist)'}: "
+                                           f"FAILED -- no results")
         return 1
     print("\n=== FULL SCORECARD (OOS, gates: "
           f"min_books={args.min_books} max_spread={args.max_spread}, calibrate={args.calibrate}) ===")
@@ -479,6 +485,12 @@ def main(argv=None) -> int:
         bakeoff_persist.write_scorecard(persist_prefix, board)
         bakeoff_persist.finish_run_meta(persist_prefix, run_meta, status="complete")
         print(f"\n  persisted -> {persist_prefix}  (scorecard.csv, candidates/, tuning/, run_meta.json)")
+    if args.notify:
+        n_promoted = int((board["verdict"] == "PROMOTE_CANDIDATE").sum())
+        done = run_meta.get("systems_completed") if run_meta else systems
+        bakeoff_persist.notify_discord(
+            f"model_bakeoff {persist_prefix or '(no persist)'} complete -- "
+            f"{n_promoted}/{len(board)} PROMOTE_CANDIDATE. systems={done}")
     return 0
 
 
