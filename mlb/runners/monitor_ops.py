@@ -23,24 +23,17 @@ from mlb_core.registry import SYSTEMS
 
 logger = logging.getLogger(__name__)
 
-SCHEDULER_JOBS = [
-    "mlb-refresh-data",
-    "mlb-settle",
-    "mlb-monitor",
-    "mlb-build-all-features",
-    "mlb-monitor-ops",
-    "mlb-retrain-weekly",
-    "mlb-snapshot-morning",
-    "mlb-snapshot-afternoon",
-    "mlb-snapshot-evening",
-    "mlb-snapshot-pregame",
-    "mlb-betting-morning",
-    "mlb-betting-afternoon",
-    "mlb-betting-evening",
-    "mlb-betting-pregame",
-    "mlb-capture-closing",
-    "mlb-monitor-drift",
-]
+# Deleted 2026-08-17 (finding C6.8): a hardcoded SCHEDULER_JOBS allowlist
+# used to live here (4 of its 16 entries were already-retired legacy
+# snapshot job names). It was dead code -- _check_schedulers() below was
+# already rewritten to enumerate every live job from the Scheduler API
+# directly (see its own comment) -- but CONTEXT.md s9 still told engineers
+# to keep it in sync "because it drives the health check," which it no
+# longer did. A future "cleanup" restoring allowlist filtering, believing
+# that to be the intended behavior, would have silently reintroduced
+# exactly the blind-spot class that caused the original SGO incident this
+# file's health check exists to catch. CONTEXT.md s9 corrected alongside
+# this deletion.
 
 # Derived from registry — OUTS shares K's feature CSV so deduplicate by value.
 # Use a dict comprehension; OUTS will map to the same path as K (that's correct —

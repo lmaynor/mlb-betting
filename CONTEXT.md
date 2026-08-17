@@ -892,6 +892,12 @@ To add a new betting system:
     line already covers new dirs under `mlb/runners/`, `mlb/training/`, and
     `mlb/systems/`. (Cloud Run Job `-m` commands still point at `mlb.runners.*` /
     `mlb.training.*` -- provision them in step 7.)
+12. Add an entry to `mlb/runners/monitor_drift.py`'s `SYSTEM_CONFIG` dict
+    (gcs_meta + gcs_features) -- **NOT auto-populated by the registry** (see
+    the list right below), so skipping this step means the new system gets
+    zero PSI/drift monitoring with no error or warning. Added 2026-08-17
+    (finding C6.4) after BATTER_HITS/BATTER_TB/GAME sat with this exact gap
+    for months because this step didn't exist yet.
 
 Step 1 (registry) also auto-populates:
 - `monitor_ops.py` FEATURE_KEYS + MODEL_KEYS
@@ -1192,9 +1198,15 @@ runner aborts). Re-run it after any module move.
 - `2` -- error (HTTP non-2xx)
 - `13` -- deadline exceeded (DEADLINE_EXCEEDED)
 
-### monitor_ops.SCHEDULER_JOBS list
-`monitor_ops.py` has a hardcoded `SCHEDULER_JOBS` list. Update it when
-adding or removing jobs -- it drives the scheduler health check.
+### monitor_ops scheduler health check
+`monitor_ops._check_schedulers()` enumerates every enabled job directly from
+the Cloud Scheduler API (`client.list_jobs(...)`) -- no allowlist, nothing
+to update when adding or removing a job. A hardcoded `SCHEDULER_JOBS` list
+used to live in `monitor_ops.py` and this section used to say it "drives
+the scheduler health check," but that filter was the root cause of a real
+incident (PERMISSION_DENIED/OOM failures on newer jobs went unnoticed for
+days because they weren't in the list) and was deleted 2026-08-17 (finding
+C6.8) once the health check itself was rewritten to check everything.
 
 For manual trigger commands, deploy fragments, and Cloud Run Job creation see
 **RUNBOOKS.md**.
@@ -3266,7 +3278,7 @@ Full site-wide replacement of the terminal-palette color set with Dell 1996 cata
 - Changes to file layout -> §2
 - Performance monitor threshold change -> §11
 - Ops monitor check change -> §12
-- Scheduler job added/removed -> §9 + update monitor_ops.SCHEDULER_JOBS
+- Scheduler job added/removed -> §9 (monitor_ops' health check needs no update -- it enumerates the API directly, no allowlist)
 - SGO API change -> §8
 - DK house rule change -> §10
 - Discord server change -> §14

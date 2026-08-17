@@ -48,10 +48,10 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 - [ ] **C6.1** Suppression gate self-clears via zero-stake window dilution
 - [ ] **C6.2** NRFI AUC alert measures market, not model
 - [ ] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`)
-- [ ] **C6.4** `monitor_drift.py` missing BATTER_HITS/BATTER_TB/GAME
-- [ ] **C6.8** Dead/stale `SCHEDULER_JOBS` list in `monitor_ops.py`
+- [x] **C6.4** `monitor_drift.py` missing BATTER_HITS/BATTER_TB/GAME *(CONTEXT.md s6 "adding a new system" checklist also updated)*
+- [x] **C6.8** Dead/stale `SCHEDULER_JOBS` list in `monitor_ops.py` *(deleted; CONTEXT.md s9 + the s18 quick-reference table both corrected)*
 - [ ] **C6.9** `odds_alert.py` never posts to Discord
-- [ ] **C6.6/C6.14** `public_api.py`: `get_today_picks` missing CLV cols + `get_picks` unbounded limit
+- [x] **C6.6/C6.14** `public_api.py`: `get_today_picks` missing CLV cols + `get_picks` unbounded limit
 
 ## P3 — cloud-cost mechanical + cleanup
 

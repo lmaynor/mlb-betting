@@ -34,7 +34,12 @@ def get_today_picks(engine, include_all: bool = False):
         rows = conn.execute(text(
             "SELECT id, system, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
-            "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at "
+            "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, "
+            # Added 2026-08-17 (finding C6.6): the historical fix that added
+            # closing_odds/clv_pct/morning_odds/line_move_pct covered
+            # get_picks and get_clv_data below but missed this third query
+            # function -- the endpoint backing The Edge cockpit itself.
+            "closing_odds, clv_pct, morning_odds, line_move_pct "
             "FROM bets "
             f"WHERE game_date = :_today {gate}"
             "ORDER BY system, created_at DESC"
@@ -76,7 +81,15 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
         conditions.append("result = 'loss'")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    params["limit"] = int(limit)
+    # Capped 2026-08-17 (finding C6.14): this is the one endpoint hit on
+    # every public page load and had no upper bound on caller-supplied
+    # limit -- get_clv_data below already hardcodes LIMIT 2000, so the
+    # pattern was known but never applied here.
+    # Capped 2026-08-17 (finding C6.14): this is the one endpoint hit on
+    # every public page load and had no upper bound on caller-supplied
+    # limit -- get_clv_data below already hardcodes LIMIT 2000, so the
+    # pattern was known but never applied here.
+    params["limit"] = min(int(limit), 200)
     params["offset"] = int(offset)
 
     sql = text(
