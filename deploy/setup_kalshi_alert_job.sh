@@ -37,7 +37,11 @@ gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
 ENVV="^@^GCP_PROJECT=${PROJECT_ID}@GCP_REGION=${REGION}@KALSHI_ALERT_MIN_EV=0.03@KALSHI_ALERT_MIN_BOOKS=4@KALSHI_ALERT_SOFT_ONLY=1@KALSHI_ALERT_MAX_POSTS=10"
 JOB_FLAGS=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
-  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest"
+  # DISCORD_WEBHOOK_ALERTS routes to the dedicated #soft-line-alerts channel
+  # once that secret exists (see setup_fast_alert.sh's identical mapping);
+  # falls back to DISCORD_WEBHOOK_URL (#daily-picks) via _alert_webhook() in
+  # code if discord-webhook-alerts doesn't exist yet.
+  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest"
   --set-env-vars="$ENVV"
   --command="python3" --args="-m,mlb.runners.kalshi_alert"
   --memory=1Gi --cpu=1 --task-timeout=600 --max-retries=0 --quiet
