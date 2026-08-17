@@ -8,12 +8,12 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 ## P0 — fix first
 
-- [ ] **A1** Kelly stake formula uses wrong probability basis (`mlb_core/odds/utils.py`)
-- [ ] **A2** `ODDS_PRIMARY` unsafe defaults — `deploy/deploy_service.sh` + `snapshot_odds.py`
-- [ ] **A3** BATTER_TB + 1I have zero calibration/EDGE_CAP/gate defense
-- [ ] **A4** GAME builder home/away pitcher inversion *(needs rebuild+retrain to take effect)*
-- [ ] **A5** No auth on state-changing `main.py` routes / service open to `allUsers`
-- [ ] **A6** Single gunicorn worker shares process with long admin routes (folded into A5's fix)
+- [x] **A1** Kelly stake formula uses wrong probability basis (`mlb_core/odds/utils.py`) — `28bb4f0`
+- [x] **A2** `ODDS_PRIMARY` unsafe defaults — `deploy/deploy_service.sh` + `snapshot_odds.py` — `964a479`
+- [x] **A3** BATTER_TB + 1I have zero calibration/EDGE_CAP/gate defense — `f6c7028`
+- [x] **A4** GAME builder home/away pitcher inversion *(code fixed, `431a5c7` — rebuild+retrain still needed to take live effect, not run from here)*
+- [x] **A5** No auth on state-changing `main.py` routes / service open to `allUsers` — `d072e2c`
+- [~] **A6** Single gunicorn worker shares process with long admin routes *(auth fix in d072e2c reduces exposure; the async-Jobs conversion itself not yet done — deferred to a future pass)*
 - [ ] **A7** Two deploy scripts collide on `/run` scheduler jobs; `RUNBOOKS.md` points at the stale one
 - [ ] **A8** `registry.py` OUTS `model_artifact` points at K's model
 - [ ] **A9** PITCHER_ER suppression gate structurally can never fire
