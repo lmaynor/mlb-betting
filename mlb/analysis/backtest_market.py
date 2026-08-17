@@ -49,7 +49,19 @@ from mlb_core.odds.utils import american_to_decimal, devig_unilateral
 
 # Offshore / non-bettable pseudo-books excluded from line shopping (user rule:
 # "all US books qualify as onshore, we just don't want books like Bovada/Betfair").
-OFFSHORE = {"pinnacle", "bovada", "betfair", "matchbook", "betonline", "consensus", "average"}
+OFFSHORE = {"pinnacle", "bovada", "betfair", "matchbook", "betonline", "consensus", "average",
+            # Fixed 2026-08-17 (finding C4.1): Kalshi is a no-vig SHARP
+            # REFERENCE feed (mid = fair prob), not a real sportsbook a bet
+            # could actually be placed at -- same category as pinnacle/
+            # consensus/average above, and already treated that way by
+            # hr_softline.py/kalshi_vs_books.py. Without this,
+            # _closing_index() (keyed by (game_pk, player_id, selection,
+            # line) with NO book in the key) could pick Kalshi's tighter
+            # no-vig price as "the closing line" for a real sportsbook bet,
+            # systematically biasing CLV negative and risking false
+            # NO_EDGE verdicts -- inherited by every consumer of OFFSHORE,
+            # including outlier_scan.py's live fast_alert_loop.py pager.
+            "kalshi"}
 
 EDGE_BINS = [-1.0, 0.0, 0.02, 0.04, 0.06, 0.10, 1.0]
 EDGE_LABELS = ["<0", "0-2%", "2-4%", "4-6%", "6-10%", "10%+"]
@@ -323,7 +335,8 @@ def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
 
     n_bets = int(len(cand)) if cand is not None else 0
     out = dict(verdict="INSUFFICIENT_N", reason="no candidates", n_bets=n_bets, n_clv=0,
-              n_lo=0, clv_mean=np.nan, clv_tstat=np.nan, ladder_monotonic=None, ladder_rho=np.nan)
+              n_lo=0, clv_mean=np.nan, clv_tstat=np.nan, ladder_monotonic=None, ladder_rho=np.nan,
+              hi_n=0, hi_clv=np.nan, hi_tstat=np.nan)
     if not n_bets:
         return out
     out["n_clv"] = int(cand["clv_pct"].notna().sum())
@@ -342,6 +355,25 @@ def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
         out["verdict"] = "INSUFFICIENT_N"
         out["reason"] = cv["clv_note"]
         return out
+
+    # C4.3: the low-edge check above says nothing about the top ("10%+")
+    # edge bucket -- the documented winner's-curse pattern (small edge =
+    # good CLV, big edge = bad CLV, see docs/audits/2026-08-16_...) can
+    # clear the rules above completely invisibly, since nothing else here
+    # computes or thresholds high-edge CLV. Rule 3: the top bucket's CLV
+    # must not be SIGNIFICANTLY negative (thin/no high-edge data is not
+    # itself a failure -- clv_verdict returns "insufficient" for that,
+    # which is intentionally not treated as blocking here).
+    hi = cand[cand["edge"] > 0.10]
+    hi_clv_s = hi["clv_pct"].dropna()
+    hi_n = int(len(hi_clv_s))
+    hi_t = _tstat(hi_clv_s)
+    hi_mean = float(hi_clv_s.mean()) if hi_n else None
+    out["hi_n"] = hi_n
+    out["hi_clv"] = round(hi_mean, 3) if hi_mean is not None else np.nan
+    out["hi_tstat"] = hi_t
+    hi_cv = clv_verdict(hi_mean, hi_t, hi_n, min_n=min_n)
+    hi_not_significantly_negative = hi_cv["clv_status"] != "negative"
 
     # monotonic-ladder check, reusing _bucket_table verbatim; only judge buckets with
     # real n (>=5) -- thin/empty buckets are noise, not evidence either way.
@@ -365,9 +397,9 @@ def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
     out["ladder_monotonic"] = ladder_monotonic
     out["ladder_rho"] = ladder_rho
 
-    if clv_ok and ladder_monotonic:
+    if clv_ok and ladder_monotonic and hi_not_significantly_negative:
         out["verdict"] = "PROMOTE_CANDIDATE"
-        out["reason"] = f"{cv['clv_note']}; edge ladder monotonic"
+        out["reason"] = f"{cv['clv_note']}; edge ladder monotonic; {hi_cv['clv_note']} (10%+ bucket)"
     else:
         out["verdict"] = "NO_EDGE"
         reasons = [cv["clv_note"]]
@@ -375,6 +407,8 @@ def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
             reasons.append("edge ladder not monotonic (soft-line/artifact shape: only 10%+ pays)")
         elif ladder_monotonic is None:
             reasons.append("edge ladder undetermined (too few buckets with >=5 bets)")
+        if not hi_not_significantly_negative:
+            reasons.append(f"10%+ bucket {hi_cv['clv_note']} (winner's-curse pattern)")
         out["reason"] = "; ".join(reasons)
     return out
 

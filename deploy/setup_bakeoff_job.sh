@@ -44,15 +44,26 @@ SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 MODEL_RUN="${MODEL_RUN:-2026-06-01_4abef3d_221339}"
 CUTOFF="${CUTOFF:-2026-06-01}"
 
-# NOTE: hr_model_bakeoff.py has no run yet (it never got that far in Cloud Shell),
-# so it's a fresh --persist invocation here, not --resume -- same as every prior
-# instruction in this exercise. If THIS job's execution itself gets retried
-# (--max-retries below) after HR has already started, HR restarts from scratch;
-# model_bakeoff's --resume is unaffected either way (it's the part that kept dying).
+# Two-phase HR invocation (finding B4.1, fixed 2026-08-17): this job's own
+# --max-retries below meant a mid-run retry restarted HR's entire 7-candidate
+# tuning exercise from scratch, defeating the whole reason this Cloud Run Job
+# exists. HR_RUN_ID is deterministic per EXECUTION -- $CLOUD_RUN_EXECUTION is a
+# Cloud Run Jobs builtin env var, stable across this execution's own automatic
+# retry attempts but different across separate `gcloud run jobs execute`
+# invocations. It's deliberately inside single quotes below (unexpanded by
+# THIS script) so it's resolved by the CONTAINER's bash at run time, not by
+# this deploy script's shell at provisioning time -- $CUTOFF, by contrast, IS
+# expanded now (same as always) since it only needs to be stable, not
+# execution-scoped. hr_model_bakeoff.py's new --resume + --create-if-missing
+# (added for this finding): the first attempt finds nothing persisted at that
+# id yet and starts fresh using it; the automatic retry computes the SAME id
+# and actually resumes.
 BAKEOFF_CMD='pip install optuna --break-system-packages -q'
 BAKEOFF_CMD+=' && (PYTHONPATH=. python3 -m mlb.analysis.model_bakeoff --resume "'"${MODEL_RUN}"'" --notify)'
+BAKEOFF_CMD+=' && HR_RUN_ID="'"${CUTOFF}"'_${CLOUD_RUN_EXECUTION:-manual}"'
 BAKEOFF_CMD+=' && (PYTHONPATH=. python3 -m mlb.analysis.hr_model_bakeoff --cutoff "'"${CUTOFF}"'"'
-BAKEOFF_CMD+=' --tune --tune-trials 30 --tune-folds 3 --min-books 4 --max-spread 0.10 --persist --notify)'
+BAKEOFF_CMD+=' --tune --tune-trials 30 --tune-folds 3 --min-books 4 --max-spread 0.10'
+BAKEOFF_CMD+=' --resume "$HR_RUN_ID" --create-if-missing --notify)'
 
 echo "=== Bake-off Cloud Run Job setup ==="
 echo "Job: $JOB_NAME (one-off, no schedule)  MODEL_RUN=$MODEL_RUN  CUTOFF=$CUTOFF"

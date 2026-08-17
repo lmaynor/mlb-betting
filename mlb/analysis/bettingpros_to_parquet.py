@@ -285,7 +285,18 @@ def convert_market(bp_market_name: str, ingested_at: str,
         if dry_run:
             total += len(part)
         else:
-            total += oh.write_partition(part, market, d)
+            # C4.4: append=True (merge+dedup on DEDUP_KEYS, not overwrite) --
+            # the default append=False was fine only as long as this
+            # script's date range never overlapped another writer's. It
+            # can: parlayapi_to_history.py's forward/live ingest and this
+            # historical backfill both write odds_history partitions with
+            # no code-enforced disjoint date ranges, so whichever ran last
+            # for an overlapping (market, date) silently discarded the
+            # other's rows -- a real risk of destroying exactly the
+            # intraday CLV snapshot density the team pivoted to. A genuine
+            # "replace corrupt rows" maintenance rewrite should be an
+            # explicit, deliberate action, not this job's silent default.
+            total += oh.write_partition(part, market, d, append=True)
     if not dry_run and dates:
         oh.coverage_report(market)
     return {"market": market, "dates": len(dates), "rows": total}

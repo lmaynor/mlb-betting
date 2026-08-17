@@ -234,7 +234,8 @@ def _rank_metric(kind, pred_ho, y):
 def _bet_stats(res):
     row = dict(n_bets=0, roi_best=np.nan, clv=np.nan, clv_n=0, lo_n=0, lo_clv=np.nan,
               verdict="INSUFFICIENT_N", verdict_reason="no candidates",
-              clv_tstat=np.nan, ladder_monotonic=None)
+              clv_tstat=np.nan, ladder_monotonic=None,
+              hi_n=0, hi_clv=np.nan)  # C4.3: top ("10%+") edge-bucket CLV
     cand = res.get("candidates") if isinstance(res, dict) else None
     if cand is None or not len(cand):
         return row
@@ -253,6 +254,8 @@ def _bet_stats(res):
     row["verdict_reason"] = v["reason"]
     row["clv_tstat"] = v["clv_tstat"]
     row["ladder_monotonic"] = v["ladder_monotonic"]
+    row["hi_n"] = v["hi_n"]        # C4.3: top ("10%+") edge-bucket CLV sample size
+    row["hi_clv"] = v["hi_clv"]    # C4.3: top edge-bucket mean CLV -- winner's-curse check
     return row
 
 
@@ -474,9 +477,10 @@ def main(argv=None) -> int:
     print("\n=== FULL SCORECARD (OOS, gates: "
           f"min_books={args.min_books} max_spread={args.max_spread}, calibrate={args.calibrate}) ===")
     print("  rank = AUC(binary)/Spearman(count). verdict = codified go/no-go "
-          "(backtest_market.verdict); lo_clv shown for context.")
+          "(backtest_market.verdict); lo_clv/hi_clv shown for context -- hi_clv "
+          "significantly negative is the winner's-curse pattern (finding C4.3).")
     show = board[["system", "model", "rank", "fit2", "n_bets", "clv_n", "clv",
-                  "lo_n", "lo_clv", "roi_best", "verdict"]]
+                  "lo_n", "lo_clv", "hi_n", "hi_clv", "roi_best", "verdict"]]
     with pd.option_context("display.width", 240, "display.max_columns", 30, "display.max_rows", 100):
         print(show.to_string(index=False, float_format=lambda x: f"{x:,.3f}"))
     _verdict(board)

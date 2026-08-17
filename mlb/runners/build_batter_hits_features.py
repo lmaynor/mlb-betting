@@ -215,7 +215,22 @@ def build_batter_hits_rolling(
         home_team      =("home_team", "first"),
         away_team      =("away_team", "first"),
         player_name    =("player_name", "first") if "player_name" in sc.columns else ("batter", "first"),
+        _topbot        =("inning_topbot", "first") if "inning_topbot" in sc.columns else ("batter", "first"),
     ).reset_index()
+    # is_home derived here, from real historical inning_topbot (Bot half =
+    # home team batting), NOT re-derived in build_model_features(), where
+    # batter_team_side is never actually assigned for historical rows --
+    # that dead branch previously left is_home=0 for 100% of training data,
+    # a zero-variance column XGBoost can never learn a real home-field
+    # effect through. Fixed 2026-08-17, see docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding C2.3.
+    # (The live runner's own candidate-building path already derives
+    # is_home correctly from posted lineups -- this bug was training-data-only.)
+    if "inning_topbot" in sc.columns:
+        opp_info["is_home"] = (opp_info["_topbot"] == "Bot").astype(int)
+    else:
+        opp_info["is_home"] = 0
+    opp_info = opp_info.drop(columns=["_topbot"])
 
     game_agg = pa.groupby(["batter", "game_pk", "season"]).agg(
         game_date    =("game_date",     "first"),
@@ -461,12 +476,22 @@ def build_model_features(
     df["home_abbr"]      = home_abbr
     df["hits_park_factor"] = df["home_abbr"].map(HITS_PARK_FACTORS).fillna(1.0)
 
-    # is_home: batter's team side
-    # Derive from batter_team_side if present; otherwise use home_team == away_team heuristic
-    if "batter_team_side" in df.columns:
-        df["is_home"] = (df["batter_team_side"] == "home").astype(int)
-    else:
-        df["is_home"] = 0  # conservative default; corrected at score time
+    # is_home: inherited from opp_info's real inning_topbot-derived value
+    # (set in build_batter_hits_rolling) for historical rows. batter_team_side
+    # is a live-scoring-only field (set by run_batter_hits.py from posted
+    # lineups) and is never present here -- that branch was dead code that
+    # masked is_home=0 for 100% of training data. Fixed 2026-08-17, finding
+    # C2.3. Only fall back to batter_team_side/0 if is_home somehow wasn't
+    # already populated (e.g. a pre-fix cached model_features.csv row).
+    if "is_home" not in df.columns or df["is_home"].isna().any():
+        if "batter_team_side" in df.columns:
+            df["is_home"] = df.get("is_home", 0)
+            df.loc[df["is_home"].isna(), "is_home"] = (
+                df.loc[df["is_home"].isna(), "batter_team_side"] == "home"
+            ).astype(int)
+        else:
+            df["is_home"] = df.get("is_home", pd.Series(0, index=df.index)).fillna(0)
+    df["is_home"] = df["is_home"].astype(int)
 
     # Batting order
     if not order_map.empty:

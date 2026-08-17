@@ -98,6 +98,29 @@ LEAGUE_HR_BY_MATCHUP = {
     ("R","L"): 0.0325, ("R","R"): 0.0303,
 }
 
+# Columns actually used by this builder (~21 of ~80 in statcast_master). Loading
+# only these via usecols cuts peak memory substantially for the Cloud Run Job
+# (same fix already applied in build_game_features.py / build_batter_hits_features.py).
+# Several of these are read behind `if "col" in sc.columns` / `pa.columns` guards
+# (bb_type, hc_x+stand, description+plate_x/plate_z/sz_top/sz_bot, pitch_type,
+# p_throws) rather than a bare df["col"] lookup -- a usecols restriction makes
+# that check literally False (the column doesn't exist at all) instead of
+# raising, so omitting one of these here would NOT error. It would silently
+# switch the code to its degraded fallback (pull/pull_air forced to 0, swing
+# metrics skipped, pitch-mix columns skipped, platoon features returning empty)
+# with no warning. estimated_woba_using_speedangle is read via
+# `pa.get("estimated_woba_using_speedangle", pd.Series())` -- omitting it would
+# silently yield an all-NaN xwoba column rather than an error. All must stay in
+# this set even though some are conditionally accessed.
+_STATCAST_COLS = frozenset([
+    "game_date", "game_pk", "batter", "pitcher",                    # ids
+    "events", "launch_speed", "launch_angle", "bb_type",            # outcome / batted ball
+    "estimated_woba_using_speedangle", "hc_x",                      # xwoba / spray angle (pull)
+    "description", "plate_x", "plate_z", "sz_top", "sz_bot",        # swing / zone (whiff, chase)
+    "pitch_type",                                                   # pitcher pitch-mix (fb/brk/off %)
+    "p_throws", "stand", "home_team", "away_team", "player_name",   # context
+])
+
 # ── GCS helpers ────────────────────────────────────────────────────────────
 
 def _gcs_read_csv(key: str, **kwargs) -> pd.DataFrame:
@@ -239,7 +262,16 @@ def build_player_game(sc: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
 
     agg["home_abbr"]      = agg["home_team"].map(TEAM_NAME_TO_ABBR)
     agg["hr_park_factor"] = agg["home_abbr"].map(HR_PARK_FACTORS).fillna(1.0)
-    agg["is_outdoor"]     = agg["home_abbr"].map(lambda t: 0 if STADIUMS_ROOF.get(t) else 1)
+    # is_outdoor is NOT computed here -- it comes from the weather join below
+    # (mlb_core.data.weather, fixed 2026-08-17 to the "1 if roof in
+    # (open,retractable) else 0" convention). This used to be computed here
+    # too, with a THIRD, different, also-wrong convention (any roofed park
+    # including an open retractable roof = never outdoor) that then
+    # silently collided with the weather join's own is_outdoor column
+    # (no suffix handling -> both renamed to is_outdoor_x/_y, so the model
+    # never actually saw a column literally named "is_outdoor" either way).
+    # See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+    # finding A13.
     agg["altitude_ft"]    = agg["home_abbr"].map(PARK_ALTITUDE).fillna(0)
     agg["pull_side_dist"] = agg.apply(lambda r: _get_pull_side_dist(r.get("home_abbr"), r.get("stand")), axis=1)
     agg["cf_dist"]        = agg["home_abbr"].map(lambda t: PARK_DIMENSIONS.get(t, {}).get("CF", np.nan))
@@ -615,6 +647,14 @@ def build_features(
         wx_c["game_pk"] = pd.to_numeric(wx_c["game_pk"], errors="coerce")
         wx_cols = ["game_pk","temperature_f","wind_speed_mph","wind_direction","is_outdoor","roof"]
         wx_keep = [c for c in wx_cols if c in wx_c.columns]
+        # Defensive: drop any of these columns df already carries before the
+        # merge (matches the pattern used correctly elsewhere, e.g. run_hr.py
+        # _join_weather) so a future overlapping column degrades to "weather
+        # wins" instead of silently renaming both sides to *_x/*_y -- exactly
+        # what happened to is_outdoor here until 2026-08-17 (finding A13).
+        overlap = (set(df.columns) & set(wx_keep)) - {"game_pk"}
+        if overlap:
+            df = df.drop(columns=list(overlap))
         df = df.merge(wx_c[wx_keep].drop_duplicates("game_pk"), on="game_pk", how="left")
 
         # Fix temperature for domes
@@ -719,9 +759,9 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     sc_key = cfg.get("gcs_statcast_master", cfg["statcast_master"])
     try:
         if GCS_BUCKET:
-            sc = read_csv(sc_key, low_memory=False)
+            sc = read_csv(sc_key, low_memory=False, usecols=lambda c: c in _STATCAST_COLS)
         else:
-            sc = pd.read_csv(cfg["statcast_master"], low_memory=False)
+            sc = pd.read_csv(cfg["statcast_master"], low_memory=False, usecols=lambda c: c in _STATCAST_COLS)
     except Exception as e:
         logger.error(f"Statcast load failed: {e}")
         return {"status": "error", "error": str(e)}

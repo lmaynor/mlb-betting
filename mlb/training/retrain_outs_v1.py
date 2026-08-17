@@ -122,7 +122,19 @@ XGB_PARAMS = {
 
 NUM_BOOST_ROUND      = 2000
 EARLY_STOPPING_ROUNDS = 50
-CV_FOLDS             = [2023, 2024, 2025]
+
+
+def _cv_folds(df: pd.DataFrame, n: int = 3) -> list[int]:
+    """Walk-forward test years: the most recent `n` years actually present in
+    the data (finding C3.3), not a hardcoded literal. [2023, 2024, 2025] used
+    to sit here as a fixed constant -- it goes silently stale every offseason
+    (it's 2026-08-17 as this fix lands and that literal still stopped at
+    2025), quietly excluding the newest season from CV, from the OOS
+    train/test split, and from the leakage check, with no error or warning.
+    """
+    years = sorted(int(y) for y in df["year"].dropna().unique())
+    return years[-n:] if len(years) >= n else years
+
 
 # GCS keys
 GCS_MODEL_FEATURES   = "K_Pro_System/data/model_features.csv"   # shared with K
@@ -195,7 +207,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
     results = []
     logger.info("=== Walk-forward CV ===")
 
-    for test_year in CV_FOLDS:
+    for test_year in _cv_folds(df):
         train_years = [test_year - 2, test_year - 1]
         df_tr = df[df["year"].isin(train_years)]
         df_te = df[df["year"] == test_year]
@@ -246,7 +258,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
 # ── OOS eval ─────────────────────────────────────────────────────────────────
 
 def _oos_eval(df: pd.DataFrame, features: list) -> dict:
-    last   = CV_FOLDS[-1]
+    last   = _cv_folds(df)[-1]
     df_tr  = df[df["year"] < last]
     df_te  = df[df["year"] == last]
 
@@ -472,7 +484,7 @@ def run() -> dict:
         "feature_dists":  fpdists,
         "feature_means":  fmeans,
         "feature_stds":   fstds,
-        "cv_folds":       CV_FOLDS,
+        "cv_folds":       _cv_folds(df),
         "cv_mae_ci_lo":   cv_ci_lo,
         "cv_mae_ci_hi":   cv_ci_hi,
         "gcs_calibrator": GCS_CALIBRATOR,

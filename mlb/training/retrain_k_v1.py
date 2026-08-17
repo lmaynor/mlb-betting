@@ -86,7 +86,19 @@ XGB_PARAMS = {
 
 NUM_BOOST_ROUND = 2000
 EARLY_STOPPING_ROUNDS = 50
-CV_FOLDS = [2023, 2024, 2025]   # walk-forward test years (notebook default)
+
+
+def _cv_folds(df: pd.DataFrame, n: int = 3) -> list[int]:
+    """Walk-forward test years: the most recent `n` years actually present in
+    the data (finding C3.3), not a hardcoded literal. [2023, 2024, 2025] used
+    to sit here as a fixed constant -- it goes silently stale every offseason
+    (it's 2026-08-17 as this fix lands and that literal still stopped at
+    2025), quietly excluding the newest season from CV, from the OOS
+    train/test split, and from the leakage check, with no error or warning.
+    """
+    years = sorted(int(y) for y in df["year"].dropna().unique())
+    return years[-n:] if len(years) >= n else years
+
 
 # GCS keys — must match K_Pro_System/config_k.py
 GCS_MODEL_FEATURES  = "K_Pro_System/data/model_features.csv"
@@ -140,7 +152,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
     """Section 7 walk-forward CV: train on prior 2 years, test on held-out year."""
     results = []
     logger.info("=== Walk-forward CV ===")
-    for test_year in CV_FOLDS:
+    for test_year in _cv_folds(df):
         train_years = [test_year - 2, test_year - 1]
         df_tr = df[df["year"].isin(train_years)]
         df_te = df[df["year"] == test_year]
@@ -188,7 +200,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
 
 def _oos_eval(df: pd.DataFrame, features: list) -> dict:
     """Section 7 OOS model: train pre-last-fold, test on last-fold."""
-    last = CV_FOLDS[-1]
+    last = _cv_folds(df)[-1]
     df_tr = df[df["year"] < last]
     df_te = df[df["year"] == last]
     if len(df_te) < 10:
@@ -286,7 +298,7 @@ def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
         logger.info("leakage check skipped (K_SKIP_LEAKAGE_CHECK=1)")
         return []
 
-    last = CV_FOLDS[-1]
+    last = _cv_folds(df)[-1]
     df_tr = df[df["year"] < last].copy()
     df_te = df[df["year"] == last].copy()
     if len(df_te) < 10:
@@ -459,7 +471,7 @@ def run() -> dict:
         "feature_dists":  fpdists,
         "feature_means": fmeans,
         "feature_stds":  fstds,
-        "cv_folds":      CV_FOLDS,
+        "cv_folds":      _cv_folds(df),
         "cv_mae_ci_lo":  cv_ci_lo,
         "cv_mae_ci_hi":  cv_ci_hi,
         **oos,

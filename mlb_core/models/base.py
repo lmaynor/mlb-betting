@@ -49,28 +49,62 @@ class XGBModel:
         early_stopping: int = 50,
         num_boost_round: int = 2000,
         verbose_eval: int = 0,
+        val_frac: float = 0.125,
     ) -> dict:
         """
         Train model. Returns dict with AUC, Brier, log_loss, best_iteration.
         If X_test/y_test provided, evaluates OOS metrics.
+
+        Early stopping watches an internal validation slice carved from the
+        TAIL of X_train (val_frac, default last 1/8 by date -- X_train is
+        re-sorted here to guarantee that), NEVER X_test/y_test. Fixed
+        2026-08-17 (finding C3.1): this used to put dtest directly into the
+        early-stopping watchlist, so walk_forward_cv()'s reported per-fold
+        AUC/Brier (retrain_nrfi_v17.py/v18.py's only callers of this class)
+        measured a model whose stopping point had already "seen" the exact
+        fold it was being scored on -- the textbook C03 leak this repo's
+        other retrain scripts were specifically fixed to avoid, and which
+        this class's own docstring claims ("shared by NRFI, HR, F5, and K
+        Pro") to already be free of. In practice only NRFI's diagnostic
+        walk_forward_cv path uses this class -- HR/F5/K each have their own,
+        already-correct inline CV loops -- so this fix changes NRFI's
+        reported cv_mean_auc/cv_summary numbers (used for the E05 drift
+        narrative in CONTEXT.md) without touching any production booster.
+        See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md.
         """
-        dtrain = self._to_dmatrix(X_train)
-        dtrain.set_label(y_train.values)
+        # Caller (walk_forward_cv) is responsible for passing X_train already
+        # sorted chronologically -- this just takes the tail as-given, the
+        # same convention every other retrain script's own inline CV loop
+        # already uses (e.g. retrain_f5_v5.py's _walk_forward_cv).
+        n = len(X_train)
+        n_val = max(1, int(n * val_frac)) if val_frac and n >= 20 else 0
 
-        watchlist = [dtrain]
+        if n_val:
+            X_tr_inner, y_tr_inner = X_train.iloc[:-n_val], y_train.iloc[:-n_val]
+            X_val_inner, y_val_inner = X_train.iloc[-n_val:], y_train.iloc[-n_val:]
+        else:
+            X_tr_inner, y_tr_inner = X_train, y_train
+            X_val_inner, y_val_inner = None, None
+
+        dtrain = self._to_dmatrix(X_tr_inner)
+        dtrain.set_label(y_tr_inner.values)
+
+        watchlist = [(dtrain, "train")]
         evals_result = {}
+        _early_stopping = None
 
-        if X_test is not None and y_test is not None:
-            dtest = self._to_dmatrix(X_test)
-            dtest.set_label(y_test.values)
-            watchlist = [(dtrain, "train"), (dtest, "eval")]
+        if X_val_inner is not None:
+            dval = self._to_dmatrix(X_val_inner)
+            dval.set_label(y_val_inner.values)
+            watchlist.append((dval, "val"))
+            _early_stopping = early_stopping
 
         self.booster = xgb.train(
             self.params,
             dtrain,
             num_boost_round=num_boost_round,
             evals=watchlist,
-            early_stopping_rounds=early_stopping,
+            early_stopping_rounds=_early_stopping,
             evals_result=evals_result,
             verbose_eval=verbose_eval,
         )
@@ -130,7 +164,11 @@ class XGBModel:
         print(f"Walk-forward CV: {len(folds)} folds")
 
         for test_year in folds:
-            train_df = df[df["_year"] < test_year]
+            # Sort chronologically so train()'s tail-slice validation carve
+            # (see its val_frac docstring, finding C3.1) is genuinely the
+            # most-recent-before-cutoff rows, not an arbitrary tail of
+            # whatever order df happened to arrive in.
+            train_df = df[df["_year"] < test_year].sort_values(date_col)
             test_df  = df[df["_year"] == test_year]
 
             if train_df.empty or test_df.empty:

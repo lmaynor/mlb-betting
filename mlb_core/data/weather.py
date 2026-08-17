@@ -128,9 +128,16 @@ def _pull_weather_date(date_str: str, is_forecast: bool = False) -> pd.DataFrame
             "away_team":     TEAM_NAME_TO_ABBREV.get(game["away_team_name"], ""),
             "game_time_utc": game.get("game_time_utc", ""),
             "roof":          roof,
-            "is_outdoor":    int(roof == "open"),
+            # Matches fetch_live_weather_for_slate's convention exactly (a
+            # retractable roof can be open) -- fixed 2026-08-17, this was
+            # int(roof=="open") here vs "1 if roof in (open,retractable)"
+            # live, a train/serve skew for every retractable-roof stadium
+            # (~23% of parks). See docs/audits/
+            # 2026-08-16_cloud_efficiency_and_profitability_review.md
+            # finding A13.
+            "is_outdoor":    int(roof in ("open", "retractable")),
         }
-        if roof in ("dome", "retractable"):
+        if roof == "dome":
             row.update({
                 "temperature_f": None, "wind_speed_mph": None,
                 "wind_dir_degrees": None, "wind_direction": None,

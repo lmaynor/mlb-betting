@@ -159,7 +159,16 @@ def convert(since=None, until=None, ingested_at="", dry_run=False) -> dict:
         for market in df["market"].unique():
             part = df[df["market"] == market]
             markets_touched.add(market)
-            total += len(part) if dry_run else oh.write_partition(part, market, d)
+            # C4.4: append=True -- this is the forward/live ingest path, whose
+            # whole point is multiple intraday snapshots per (market, date)
+            # ACCUMULATING (dedup on DEDUP_KEYS, which includes snapshot_ts).
+            # The default append=False overwrote the whole partition on
+            # every run, so re-running this for a date already written
+            # earlier today silently discarded every prior snapshot for it --
+            # and it can collide with bettingpros_to_parquet.py's historical
+            # backfill too, since neither script's date range is
+            # code-enforced disjoint from the other's.
+            total += len(part) if dry_run else oh.write_partition(part, market, d, append=True)
         print(f"  {d}: {len(rows)} rows")
     if not dry_run:
         for m in markets_touched:

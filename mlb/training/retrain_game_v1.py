@@ -109,7 +109,19 @@ XGB_PARAMS = {
 
 NUM_BOOST_ROUND       = 2000
 EARLY_STOPPING_ROUNDS = 50
-CV_FOLDS              = [2023, 2024, 2025]
+
+
+def _cv_folds(df: pd.DataFrame, n: int = 3) -> list[int]:
+    """Walk-forward test years: the most recent `n` years actually present in
+    the data (finding C3.3), not a hardcoded literal. [2023, 2024, 2025] used
+    to sit here as a fixed constant -- it goes silently stale every offseason
+    (it's 2026-08-17 as this fix lands and that literal still stopped at
+    2025), quietly excluding the newest season from CV, from the OOS
+    train/test split, and from the leakage check, with no error or warning.
+    """
+    years = sorted(int(y) for y in df["year"].dropna().unique())
+    return years[-n:] if len(years) >= n else years
+
 
 GCS_MODEL_FEATURES  = "GAME_Pro_System/data/model_features.csv"
 GCS_BOOSTER_LATEST  = f"GAME_Pro_System/models/xgb_game_{VERSION}.json"
@@ -184,7 +196,7 @@ def _logloss(y_true, y_pred):
 def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
     results = []
     logger.info("=== Walk-forward CV ===")
-    for test_year in CV_FOLDS:
+    for test_year in _cv_folds(df):
         train_years = [test_year - 2, test_year - 1]
         df_tr = df[df["year"].isin(train_years)]
         df_te = df[df["year"] == test_year]
@@ -227,7 +239,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list) -> list[dict]:
 
 
 def _oos_eval(df: pd.DataFrame, features: list) -> dict:
-    last  = CV_FOLDS[-1]
+    last  = _cv_folds(df)[-1]
     df_tr = df[df["year"] < last]
     df_te = df[df["year"] == last]
     if len(df_te) < 20:
@@ -306,7 +318,7 @@ def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
         logger.info("leakage check skipped (GAME_SKIP_LEAKAGE_CHECK=1)")
         return []
 
-    last         = CV_FOLDS[-1]
+    last         = _cv_folds(df)[-1]
     df_tr        = df[df["year"] < last].copy()
     df_te        = df[df["year"] == last].copy()
     if len(df_te) < 10:
@@ -414,6 +426,11 @@ def run() -> dict:
                 "p75": round(float(np.percentile(_col, 75)), 6),
                 "p90": round(float(np.percentile(_col, 90)), 6),
                 "p95": round(float(np.percentile(_col, 95)), 6),
+                # Added 2026-08-17 (finding C3.7): every other system's
+                # feature_dists includes prop_1 (needed for monitor_drift.py
+                # to PSI-check binary features correctly); this file's copy
+                # was missing it.
+                "prop_1": round(float((_col == 1).mean()), 6),
             }
         except Exception:
             continue
@@ -452,7 +469,7 @@ def run() -> dict:
         "feature_dists":  fpdists,
         "feature_means":  fmeans,
         "feature_stds":   fstds,
-        "cv_folds":       CV_FOLDS,
+        "cv_folds":       _cv_folds(df),
         "cv_auc_ci_lo":   cv_ci_lo,
         "cv_auc_ci_hi":   cv_ci_hi,
         **oos,

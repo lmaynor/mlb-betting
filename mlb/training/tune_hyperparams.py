@@ -104,7 +104,16 @@ SYSTEM_CONFIG = {
     },
     "F5": {
         "gcs_features":  "F5_Pro_System/data/model_features.csv",
-        "target":        "home_win",
+        # "home_win" was wrong here (fixed 2026-08-17, finding C3.5) --
+        # build_f5_features.py / retrain_f5_v5.py's real target column is
+        # home_wins_f5; "home_win" doesn't exist in F5's model_features.csv.
+        # Running `tune_hyperparams --system F5` raised a KeyError on this
+        # alone, wasting the Cloud Run Job's compute for zero tuned params.
+        # registry.py's tune_target="home_win" for F5 had the identical bug
+        # (fixed in the same change) -- a same-file diff between the two
+        # would never have caught this, since both agreed with each other
+        # and both disagreed with the actual data.
+        "target":        "home_wins_f5",
         "objective":     "binary:logistic",
         "eval_metric":   "auc",
         "metric_dir":    "max",

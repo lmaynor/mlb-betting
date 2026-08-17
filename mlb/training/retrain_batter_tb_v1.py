@@ -44,7 +44,18 @@ XGB_PARAMS = {
 }
 NUM_BOOST_ROUND = 2000
 EARLY_STOPPING_ROUNDS = 50
-CV_FOLDS = [2023, 2024, 2025]
+
+
+def _cv_folds(df: pd.DataFrame, n: int = 3) -> list[int]:
+    """Walk-forward test years: the most recent `n` years actually present in
+    the data (finding C3.3), not a hardcoded literal. [2023, 2024, 2025] used
+    to sit here as a fixed constant -- it goes silently stale every offseason
+    (it's 2026-08-17 as this fix lands and that literal still stopped at
+    2025), quietly excluding the newest season from CV, from the OOS
+    train/test split, and from the leakage check, with no error or warning.
+    """
+    years = sorted(int(y) for y in df["year"].dropna().unique())
+    return years[-n:] if len(years) >= n else years
 
 
 def _ts() -> str:
@@ -123,7 +134,7 @@ def _fit_eval(df_tr: pd.DataFrame, df_te: pd.DataFrame, features: list[str]) -> 
 
 def _walk_forward_cv(df: pd.DataFrame, features: list[str]) -> list[dict]:
     out = []
-    for year in CV_FOLDS:
+    for year in _cv_folds(df):
         df_tr = df[df["year"].isin([year - 2, year - 1])]
         df_te = df[df["year"] == year]
         if len(df_tr) < 100 or len(df_te) < 20:
@@ -141,7 +152,7 @@ def _walk_forward_cv(df: pd.DataFrame, features: list[str]) -> list[dict]:
 
 
 def _oos_eval(df: pd.DataFrame, features: list[str]) -> dict:
-    last = CV_FOLDS[-1]
+    last = _cv_folds(df)[-1]
     df_tr = df[df["year"] < last]
     df_te = df[df["year"] == last]
     if len(df_te) < 20:
@@ -191,6 +202,11 @@ def _feature_stats(df: pd.DataFrame, features: list[str]) -> tuple[dict, dict, d
                 "p75": round(float(np.percentile(col, 75)), 6),
                 "p90": round(float(np.percentile(col, 90)), 6),
                 "p95": round(float(np.percentile(col, 95)), 6),
+                # Added 2026-08-17 (finding C3.7): every other system's
+                # feature_dists includes prop_1 (needed for monitor_drift.py
+                # to PSI-check binary features like is_home/is_dome
+                # correctly); this file's copy was missing it.
+                "prop_1": round(float((col == 1).mean()), 6),
             }
     return means, stds, dists
 
@@ -234,7 +250,13 @@ def run() -> dict:
     pred = booster.predict(xgb.DMatrix(X_all, feature_names=features))
     resid_var = float(np.var(y_all - pred))
     mu_mean = float(np.mean(pred))
-    nb_alpha = float(np.clip((resid_var - mu_mean) / max(mu_mean ** 2, 1e-6), 0.01, 0.75))
+    # Clip bound fixed 2026-08-17 (finding C3.6): was 0.75 here with no
+    # comment explaining the deviation; K/OUTS/BATTER_HITS's identical
+    # method-of-moments formula all clip to (0.01, 0.50) -- a materially
+    # fatter-tailed NegBin distribution could be silently adopted here vs
+    # every other system from the same residual pattern. See docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md.
+    nb_alpha = float(np.clip((resid_var - mu_mean) / max(mu_mean ** 2, 1e-6), 0.01, 0.50))
     means, stds, dists = _feature_stats(df, features)
 
     wf_summary = {}
@@ -258,7 +280,7 @@ def run() -> dict:
         "feature_stds": stds,
         "feature_dists": dists,
         "nb_alpha": nb_alpha,
-        "cv_folds": CV_FOLDS,
+        "cv_folds": _cv_folds(df),
         **oos,
         **wf_summary,
     }

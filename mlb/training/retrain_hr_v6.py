@@ -66,6 +66,16 @@ _NON_FEATURE_COLS = {
     "hr_per_fb_num", "fb_count_game", "hr_per_fb_game",
     "xwoba_game", "ev_game", "ev_max_game", "la_mean_game", "la_std_game",
     "sweet_spot_game", "hr_zone_game",
+    # Same-game (un-shifted) leakage -- fixed 2026-08-17 (finding A14).
+    # gb_game/pull_air_game have no rolled counterpart anywhere in
+    # build_hr_features.py (unlike the raw aggregates above, which all have
+    # a batter_*_L20/L50/season alias) -- they were never intended as
+    # pre-game features. whiff_pct/chase_pct/zone_contact_pct DO have safe
+    # lagged aliases (batter_whiff_pct_L20 etc, see build_hr_features.py's
+    # build_batter_rolling) -- denylisting the bare same-game names here
+    # loses no real signal, only the leaky duplicate. See docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding A14.
+    "gb_game", "pull_air_game", "whiff_pct", "chase_pct", "zone_contact_pct",
 }
 
 XGB_PARAMS = {
@@ -221,16 +231,31 @@ def _walk_forward_cv(df, features, scale_pos_weight):
         te = df_cv[df_cv["_year"] == test_year]
         if len(tr) < 500 or len(te) < 200:
             continue
-        X_tr = tr[features].apply(pd.to_numeric, errors="coerce")
-        y_tr = tr[TARGET].astype(int)
+        # C03 (finding C3.2): early stopping must watch an internal
+        # validation slice carved from tr's own tail, never `te` directly --
+        # `te` is the fold actually being scored below and must stay unseen
+        # until predict(). This used to put dtest straight into the
+        # early-stopping watchlist, so the reported per-fold AUC/Brier (the
+        # E05 drift narrative in CONTEXT.md is built on these) measured a
+        # model whose stopping point had already "seen" the fold it was
+        # scored on. Matches the 70/10/20 discipline _oos_eval() above
+        # already uses, and the shared XGBModel.train() fix (C3.1).
+        tr = tr.sort_values("game_date")
+        n_val = max(1, int(len(tr) * 0.125))
+        tr_inner, val_inner = tr.iloc[:-n_val], tr.iloc[-n_val:]
+        X_tr  = tr_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_tr  = tr_inner[TARGET].astype(int)
+        X_val = val_inner[features].apply(pd.to_numeric, errors="coerce")
+        y_val = val_inner[TARGET].astype(int)
         X_te = te[features].apply(pd.to_numeric, errors="coerce")
         y_te = te[TARGET].astype(int)
-        dtrain = xgb.DMatrix(X_tr, label=y_tr, feature_names=features)
-        dtest  = xgb.DMatrix(X_te, label=y_te, feature_names=features)
+        dtrain = xgb.DMatrix(X_tr,  label=y_tr,  feature_names=features)
+        dval   = xgb.DMatrix(X_val, label=y_val, feature_names=features)
+        dtest  = xgb.DMatrix(X_te,  label=y_te,  feature_names=features)
         b = xgb.train(
             params, dtrain,
             num_boost_round=NUM_BOOST_ROUND,
-            evals=[(dtest, "test")],
+            evals=[(dtrain, "train"), (dval, "val")],
             early_stopping_rounds=EARLY_STOPPING,
             verbose_eval=False,
         )

@@ -35,6 +35,52 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+# Columns read from the wide statcast_master.csv (~80 cols) by this builder.
+# Loading only these via usecols cuts peak memory substantially -- same
+# pattern as build_game_features.py (13 cols) / build_batter_hits_features.py
+# (18 cols). See CONTEXT.md s15.4 for the general usecols convention.
+#
+# Most are read behind an `if "<col>" in df.columns` guard -- the file
+# degrades gracefully when one is missing (e.g. no inning_topbot/home_team/
+# away_team falls back to a less-correct per-game idxmax for starter ID,
+# WARNING-logged). game_pk/game_date/pitcher/events are accessed
+# unconditionally and must always be present.
+#
+# pfx_x/pfx_z/outs_when_up/spin_axis/release_extension/effective_speed/
+# release_pos_x/release_pos_z are converted via pd.to_numeric() in the
+# numeric_cols loop below but have no other consumer found anywhere else in
+# this file -- kept anyway since that loop reads them unconditionally by name
+# (each individually guarded, so their absence would be harmless, but keeping
+# them preserves today's exact behavior at near-zero extra memory cost).
+#
+# bat_speed is intentionally EXCLUDED: _load_statcast loads it only to
+# immediately drop it (2024+-only column that would break walk-forward CV),
+# so omitting it via usecols reaches the same end state more cheaply.
+_STATCAST_COLS = frozenset([
+    # ids / core keys (accessed unconditionally)
+    "game_pk", "game_date", "pitcher",
+    # PA marker + team-side derivation -- bat_team / pitcher-team, used in
+    # _identify_starters, _prepare_pa_for_opp_features, _backfill_opponent_history
+    "events", "inning_topbot", "home_team", "away_team",
+    # pitcher handedness / platoon splits
+    "p_throws",
+    # pitch-level swing/whiff/zone features
+    "description", "zone", "balls", "strikes", "pitch_type",
+    # velocity mean/trend (velo_mean_L5, velo_trend_L5)
+    "release_speed",
+    # batter handedness (is_lhb) for opponent platoon features
+    "stand",
+    # weighted top-3-K-rate opponent feature (guarded; comment notes Statcast
+    # doesn't reliably carry this column)
+    "bat_order",
+    # backfilled onto pf for join_pitcher_aux() name matching
+    "player_name",
+    # defensive only -- see note above
+    "pfx_x", "pfx_z", "outs_when_up", "spin_axis", "release_extension",
+    "effective_speed", "release_pos_x", "release_pos_z",
+])
+
+
 # ── Section 1 — Statcast load ────────────────────────────────────────────────
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
@@ -44,7 +90,11 @@ def _load_statcast(cfg: dict) -> pd.DataFrame:
     and would break walk-forward CV (notebook Section 1 note).
     """
     from mlb_core.storage import read_csv
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
 
     numeric_cols = [
         "release_speed", "pfx_x", "pfx_z", "balls", "strikes",
@@ -71,11 +121,41 @@ def _load_statcast(cfg: dict) -> pd.DataFrame:
 # ── Section 4 — pitcher feature aggregation ──────────────────────────────────
 
 def _identify_starters(sc: pd.DataFrame) -> pd.DataFrame:
-    """Starter = pitcher with most batters faced (PA-ending events) per game."""
+    """Starter = pitcher with most batters faced (PA-ending events) per
+    (game_pk, team) -- one per side, not one per game.
+
+    Must group by team, not game_pk alone, or whichever team's starter faced
+    fewer total batters (often the loser, or a bullpen game) is silently
+    dropped for the WHOLE game -- corrupting both K and OUTS (they share
+    this feature CSV) with ~50% missing pitcher-game rows plus survivorship
+    bias in every rolling feature. Fixed 2026-08-17, a recurrence of the
+    identical bug already found and fixed for manager_hooks in
+    mlb_core/data/auxiliary_features.py. See docs/audits/
+    2026-08-16_cloud_efficiency_and_profitability_review.md finding A12.
+    """
     pa = sc[sc["events"].notna()].copy()
-    bf = pa.groupby(["game_pk", "pitcher"]).size().reset_index(name="bf")
-    idx = bf.groupby("game_pk")["bf"].idxmax()
-    starters = bf.loc[idx].copy()
+    if not all(c in pa.columns for c in ("inning_topbot", "home_team", "away_team")):
+        logger.warning(
+            "K build: inning_topbot/home_team/away_team missing -- cannot "
+            "group starters by team, falling back to per-game idxmax "
+            "(will silently drop one side's starter every game)"
+        )
+        bf = pa.groupby(["game_pk", "pitcher"]).size().reset_index(name="bf")
+        idx = bf.groupby("game_pk")["bf"].idxmax()
+        starters = bf.loc[idx].copy()
+    else:
+        # Pitcher's team: Top half = away team batting = HOME pitcher on the
+        # mound; Bot half = AWAY pitcher (opposite of this file's own
+        # bat_team convention used correctly elsewhere for the BATTING team).
+        pa["_pitcher_team"] = np.where(
+            pa["inning_topbot"] == "Top", pa["home_team"], pa["away_team"]
+        )
+        bf = (
+            pa.groupby(["game_pk", "_pitcher_team", "pitcher"]).size()
+              .reset_index(name="bf")
+        )
+        idx = bf.groupby(["game_pk", "_pitcher_team"])["bf"].idxmax()
+        starters = bf.loc[idx].drop(columns=["_pitcher_team"]).copy()
 
     gdates = sc.groupby("game_pk")["game_date"].first().reset_index()
     starters = starters.merge(gdates, on="game_pk", how="left")

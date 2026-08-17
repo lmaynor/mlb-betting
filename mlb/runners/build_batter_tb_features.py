@@ -38,11 +38,29 @@ TB_BY_EVENT = {
     "home_run": 4,
 }
 
+# Columns actually used by this builder (raw statcast fields only; a subset of
+# build_batter_hits_features.py's 18 -- no chase/contact_pct swing-zone analysis
+# here, so description/plate_x/plate_z/sz_top/sz_bot are dropped). Optional cols
+# (p_throws/stand/player_name/inning_topbot) are read with `in columns` guards
+# below but must stay in the set to preserve current behavior; everything else
+# here is referenced unguarded so is a hard requirement. `inning_topbot` is
+# needed for the is_home derivation (see build_batter_tb_rolling).
+_STATCAST_COLS = frozenset([
+    "game_date", "game_pk", "batter", "pitcher",          # ids
+    "events", "launch_speed", "launch_angle", "bb_type",  # outcome / batted ball
+    "p_throws", "stand", "home_team", "away_team",        # context
+    "player_name", "inning_topbot",                       # context / is_home derivation
+])
+
 
 def _load_statcast(cfg: dict) -> pd.DataFrame:
     from mlb_core.storage import read_csv
 
-    df = read_csv("Statcast/statcast_master.csv", low_memory=False)
+    df = read_csv(
+        "Statcast/statcast_master.csv",
+        low_memory=False,
+        usecols=lambda c: c in _STATCAST_COLS,
+    )
     if "bat_speed" in df.columns:
         df = df.drop(columns=["bat_speed"])
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
@@ -98,7 +116,19 @@ def build_batter_tb_rolling(
         home_team=("home_team", "first"),
         away_team=("away_team", "first"),
         player_name=("player_name", "first") if "player_name" in sc.columns else ("batter", "first"),
+        _topbot=("inning_topbot", "first") if "inning_topbot" in sc.columns else ("batter", "first"),
     ).reset_index()
+    # is_home derived here from real historical inning_topbot (Bot half =
+    # home team batting) -- build_model_features()'s old batter_team_side
+    # branch was dead code (that field is live-scoring-only, never present
+    # in historical rows), leaving is_home=0 for 100% of training data.
+    # Fixed 2026-08-17, see docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding C2.3.
+    if "inning_topbot" in sc.columns:
+        opp_info["is_home"] = (opp_info["_topbot"] == "Bot").astype(int)
+    else:
+        opp_info["is_home"] = 0
+    opp_info = opp_info.drop(columns=["_topbot"])
 
     game_agg = pa.groupby(["batter", "game_pk", "season"]).agg(
         game_date=("game_date", "first"),
@@ -269,7 +299,21 @@ def build_model_features(
     df["tb_park_factor"] = home_abbr.map(TB_PARK_FACTORS).fillna(1.0)
     df["is_dome"] = home_abbr.map(lambda t: 1 if STADIUMS_ROOF.get(t) else 0).fillna(0).astype(int)
     df["temperature_f"] = df.get("temperature_f", pd.Series(70, index=df.index)).fillna(70)
-    df["is_home"] = (df.get("batter_team_side", pd.Series("", index=df.index)) == "home").astype(int)
+    # is_home: inherited from opp_info's real inning_topbot-derived value
+    # (set in build_batter_tb_rolling) for historical rows -- batter_team_side
+    # is live-scoring-only (never present here) and this line used to
+    # unconditionally overwrite the correct upstream value with a fallback
+    # that was always False, leaving is_home=0 for 100% of training data.
+    # Fixed 2026-08-17, finding C2.3.
+    if "is_home" not in df.columns or df["is_home"].isna().any():
+        if "batter_team_side" in df.columns:
+            df["is_home"] = df.get("is_home", 0)
+            df.loc[df["is_home"].isna(), "is_home"] = (
+                df.loc[df["is_home"].isna(), "batter_team_side"] == "home"
+            ).astype(int)
+        else:
+            df["is_home"] = df.get("is_home", pd.Series(0, index=df.index)).fillna(0)
+    df["is_home"] = df["is_home"].astype(int)
 
     if not order_map.empty:
         om = order_map.rename(columns={"batter_id": "batter"})
