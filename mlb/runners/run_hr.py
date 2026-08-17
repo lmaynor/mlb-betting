@@ -554,10 +554,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         model_prob, _cal = _cal_apply("HR", model_prob)
         edge        = model_prob - fair_prob
         _edge_capped = _cal and edge > _EDGE_CAP
-        k_pct       = kpct(edge, odds, cfg["kelly_fraction"])
+        k_pct       = kpct(model_prob, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake       = min(kelly_stake(
-            edge, odds,
+            model_prob, odds,
             bankroll=_bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],

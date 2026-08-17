@@ -444,14 +444,14 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob, fair, edge,
         )
 
-        k_pct_val = kpct(edge, odds, cfg["kelly_fraction"])
+        k_pct_val = kpct(model_prob, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(
             _bankroll, game_pk,
             _prefetched, _pending,
             cap_units=cfg.get("cap_units", 10.0),
         )
         raw_stake = kelly_stake(
-            edge, odds,
+            model_prob, odds,
             bankroll=_bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],

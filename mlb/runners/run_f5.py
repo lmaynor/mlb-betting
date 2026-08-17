@@ -347,10 +347,10 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         edge = model_prob - fair
         _edge_capped = _cal and edge > _EDGE_CAP
 
-        k_pct = kpct(edge, odds, cfg["kelly_fraction"])
+        k_pct = kpct(model_prob, odds, cfg["kelly_fraction"])
         _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
         stake = min(kelly_stake(
-            edge, odds,
+            model_prob, odds,
             bankroll=_bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],
@@ -517,14 +517,14 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
             if edge < cfg["min_edge"]:
                 continue
 
-            k_pct_val = round(kpct(edge, odds, cfg["kelly_fraction"]), 4)
+            k_pct_val = round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4)
             bankroll, cap = apply_cap(
                 bankroll, int(game_pk),
                 prefetched, pending,
                 cap_units=cfg.get("cap_units", 2.0),
             )
             would_be = min(kelly_stake(
-                edge, odds,
+                model_prob, odds,
                 bankroll=bankroll,
                 fraction=cfg["kelly_fraction"],
                 min_pct=cfg["min_kelly_pct"],

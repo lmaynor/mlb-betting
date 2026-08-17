@@ -480,7 +480,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     )
                     _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
                     _stake = min(kelly_stake(
-                        edge, odds, bankroll=_bankroll,
+                        model_prob, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
@@ -505,7 +505,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "model_prob":      round(model_prob, 4),
                         "market_prob":     round(fair, 4),
                         "edge":            round(edge, 4),
-                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
+                        "kelly_pct":       round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4),
                         "odds":            odds,
                         "stake":           round(_stake, 4) if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
@@ -599,7 +599,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     )
                     _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
                     _stake = min(kelly_stake(
-                        edge, odds, bankroll=_bankroll,
+                        model_prob, odds, bankroll=_bankroll,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
@@ -625,7 +625,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "model_prob":      round(model_prob, 4),
                         "market_prob":     round(fair, 4),
                         "edge":            round(edge, 4),
-                        "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
+                        "kelly_pct":       round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4),
                         "odds":            odds,
                         "stake":           round(_stake, 4) if kelly_triggered else 0.0,
                         "kelly_triggered": kelly_triggered,
@@ -759,7 +759,7 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             cap_units=cfg.get("cap_units", 2.0),
         )
         stake = min(kelly_stake(
-            edge, odds,
+            model_prob, odds,
             bankroll=_bankroll,
             fraction=cfg["kelly_fraction"],
             min_pct=cfg["min_kelly_pct"],
@@ -781,7 +781,7 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             "model_prob":      round(model_prob, 4),
             "market_prob":     round(fair, 4),
             "edge":            round(edge, 4),
-            "kelly_pct":       round(kpct(edge, odds, cfg["kelly_fraction"]), 4),
+            "kelly_pct":       round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4),
             "odds":            odds,
             "stake":           round(stake, 4) if kelly_triggered else 0.0,
             "kelly_triggered": kelly_triggered,
