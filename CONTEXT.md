@@ -228,12 +228,23 @@ mlb-betting/
 │   │                             fetch_game_result() called once per game_pk, cached.
 │   │                             Retries non-Final games automatically on next run.
 │   ├── monitor_performance.py    Daily: rolling perf check, Discord alerts, Mon digest.
-│   └── monitor_ops.py            Daily: infra health check after feature builds.
-│                                 Checks: scheduler job status, GCS freshness of SGO
-│                                 snapshot + all model_features.csv + all data
-│                                 masters (scoring/statcast/weather/umpires), model
-│                                 artifact existence, bets pending > 3 days.
-│                                 Silent on clean run. Posts Discord alert on failure.
+│   ├── monitor_ops.py            Daily: infra health check after feature builds.
+│   │                             Checks: scheduler job status, GCS freshness of SGO
+│   │                             snapshot + all model_features.csv + all data
+│   │                             masters (scoring/statcast/weather/umpires), model
+│   │                             artifact existence, bets pending > 3 days.
+│   │                             Silent on clean run. Posts Discord alert on failure.
+│   ├── fast_alert_loop.py        The intraday +EV pager (own schedule, not part of
+│   │                             Loop A-D below): Pinnacle-anchored outlier_scan vs
+│   │                             fresh BettingPros snapshots, Discord alert on NEW
+│   │                             +EV quotes only (per-day dedup). See s5 Discord
+│   │                             posting contract + deploy/setup_fast_alert.sh.
+│   └── kalshi_alert.py           Same pager pattern for mlb.analysis.kalshi_vs_books
+│                                 (soft book vs Kalshi no-vig mid, not vs Pinnacle) --
+│                                 read-only against odds_history, no snapshot of its
+│                                 own. 6x/day, offset after mlb-kalshi-capture + the
+│                                 mlb-snapshot-* cadence land. See deploy/
+│                                 setup_kalshi_alert_job.sh.
 │
 │   ├── training/                RETRAIN PIPELINE (was top-level training/)
 │   │   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
@@ -377,6 +388,20 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   ├── {date}/{kind}_{HHMM}.csv         best-book flattened rows
 │   ├── latest.json                     pointer + status
 │   └── _credits/{YYYY-MM}.json         implicit monthly credit tally (guard)
+├── Alerts/{YYYY-MM-DD}/                Per-day state for the intraday +EV pagers
+│   │                                   (fast_alert_loop.py, kalshi_alert.py). Not
+│   │                                   read by anything else -- pure notify-dedup.
+│   ├── notified.parquet                fast_alert_loop: quote keys already pinged
+│   │                                   today (market/game_pk/player_id/line/
+│   │                                   selection/book) -- never re-ping the same one.
+│   ├── log.parquet                     fast_alert_loop: full alert rows, all
+│   │                                   snapshots -- feeds the nightly odds_alert
+│   │                                   resolve/scorecard pass.
+│   ├── kalshi_notified.parquet         kalshi_alert: same dedup role, separate file
+│   │                                   so the two pagers' state never collides.
+│   ├── kalshi_log.parquet              kalshi_alert: same audit-trail role.
+│   └── lineup_state.json               fast_alert_loop: last-seen posted lineups,
+│                                       for lineup-POSTED/CHANGED "hot game" detection.
 ├── HR_Pro/
 │   ├── data/
 │   └── models/                         xgb_hr_v6.json, model_meta_hr_v6.json
@@ -656,6 +681,14 @@ new Discord-posting runner should reuse these instead of inventing its own
 ad hoc text formatting -- that drift (raw market codes, lowercase book names,
 one wall-of-text description instead of embed fields) is what made the +EV
 pager's alerts hard to read before the 2026-08-16 restructure.
+
+`mlb.runners.kalshi_alert` (shipped 2026-08-16, same day) is the second
+consumer of this pattern: same shared helpers, same per-day dedup-parquet
+convention (`Alerts/{day}/kalshi_*.parquet`, kept separate from
+fast_alert_loop's own state files), same `DISCORD_WEBHOOK_ALERTS ->
+DISCORD_WEBHOOK_URL` fallback -- but its own `notify()`/field-building code,
+not a shared one, since its rows carry a genuinely different shape (a Kalshi
+mid AND a book-pack consensus to show, not one anchor).
 
 ### Bet type naming convention
 
