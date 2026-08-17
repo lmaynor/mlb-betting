@@ -126,7 +126,10 @@ def score_f5_historical(f5: pd.DataFrame) -> pd.DataFrame:
 
     dm    = xgb.DMatrix(X, feature_names=features)
     ntree = getattr(booster, "best_ntree_limit", 0)
-    preds = booster.predict(dm, iteration_range=(0, ntree) if ntree else None)
+    # Safe iteration_range pattern (CONTEXT.md contract) -- passing
+    # iteration_range=None crashes XGBoost>=2.0. See docs/audits/
+    # 2026-08-16_cloud_efficiency_and_profitability_review.md finding A11.
+    preds = booster.predict(dm, iteration_range=(0, ntree)) if ntree else booster.predict(dm)
 
     f5 = f5.copy()
     f5["p_home"] = preds

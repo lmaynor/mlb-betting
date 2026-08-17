@@ -41,7 +41,7 @@ Cloud Shell before they can be deployed.
 1. Claude Code edits files on Mac, commits locally
 2. git push origin main   (from Mac -- works via macOS keychain)
 3. Cloud Shell: git pull && ./deploy/deploy_service.sh
-4. Cloud Shell: ./deploy/setup_active_market_schedulers.sh
+4. Cloud Shell: ./deploy/setup_betting_schedulers.sh
 5. Cloud Shell: ./deploy/setup_model_jobs.sh
 ```
 
@@ -261,11 +261,17 @@ Max `attempt-deadline`: 1800s.
 
 ```bash
 cd ~/mlb-betting
-PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_active_market_schedulers.sh
+PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_betting_schedulers.sh
 ```
 
-This updates/creates morning and evening `/run` jobs with:
-`HR, 1IOU, F5, K, BATTER_HITS, BATTER_TB, GAME, 1I`.
+This updates/creates the four `/run` jobs (morning/afternoon/evening/pregame,
+paired ~5 min after each odds snapshot) with the authoritative system list:
+`HR, 1IOU, F5, K, BATTER_HITS, BATTER_TB, GAME, 1I`. `setup_betting_schedulers.sh`
+is the single source of truth for these jobs -- do not use any other script
+to touch `mlb-betting-morning`/`-afternoon`/`-evening`/`-pregame`
+(`setup_active_market_schedulers.sh`, which duplicated this with different,
+stale cron times, was deleted 2026-08-17 -- see
+docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md finding A7).
 
 ### Create a new Cloud Run Job
 

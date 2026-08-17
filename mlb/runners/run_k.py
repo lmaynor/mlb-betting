@@ -151,12 +151,6 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
-    from mlb_core.data.lineups import fetch_il_pitcher_ids
-    try:
-        _il_ids = fetch_il_pitcher_ids()
-    except Exception as _ile:
-        logger.warning(f"K: fetch_il_pitcher_ids failed: {_ile} -- failing open")
-        _il_ids = set()
 
     sched = get_today_schedule(run_date)
     if sched.empty:
@@ -203,15 +197,18 @@ def _build_today_feature_rows(cfg: dict, run_date: str) -> pd.DataFrame:
             row = match.iloc[0].to_dict()
             _last_app = match.iloc[0]["game_date"]
             _days_since = (pd.Timestamp(run_date) - _last_app).days
-            if _days_since > 15 and pid in _il_ids:
-                logger.info(
-                    f"K: skipping {pname} -- {_days_since}d gap + confirmed on IL"
-                )
-                continue
             if _days_since > 15:
-                logger.info(
-                    f"K: {pname} has {_days_since}d snapshot gap but NOT on IL -- including"
-                )
+                # Simplified 2026-05-23, re-fixed 2026-08-17 after a
+                # regression reintroduced the dual IL-API condition this
+                # replaced: the roster API lags activations by 1-2 days
+                # (false positives skipping healthy rotation pitchers) and
+                # the gap-only threshold alone already reliably separates
+                # genuine IL stints (always >15d) from normal rotation
+                # (never >15d) -- see docs/audits/
+                # 2026-08-16_cloud_efficiency_and_profitability_review.md
+                # finding A10. Do not reintroduce an IL-API cross-check here.
+                logger.info(f"K: skipping {pname} -- {_days_since}d gap")
+                continue
             row["game_pk"]            = g["game_pk"]
             row["game_date"]          = pd.Timestamp(run_date)
             row["home_team"]          = g["home_team"]
@@ -544,10 +541,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                             _X_outs[_fc] = _X_outs[_fc].fillna(float(_fmv))
                     _dm_outs = xgb.DMatrix(_X_outs, feature_names=_outs_features)
                     _ntree_outs = getattr(_outs_booster, "best_ntree_limit", 0)
-                    _lam_outs = float(_outs_booster.predict(
-                        _dm_outs,
-                        iteration_range=(0, _ntree_outs) if _ntree_outs else None
-                    )[0])
+                    # Safe iteration_range pattern (CONTEXT.md contract) --
+                    # passing iteration_range=None crashes XGBoost>=2.0; this
+                    # was the one call site still using the banned ternary,
+                    # dormant only because OUTS's best_iteration is currently
+                    # truthy. See docs/audits/
+                    # 2026-08-16_cloud_efficiency_and_profitability_review.md
+                    # finding A11.
+                    _outs_pred = (
+                        _outs_booster.predict(_dm_outs, iteration_range=(0, _ntree_outs))
+                        if _ntree_outs else _outs_booster.predict(_dm_outs)
+                    )
+                    _lam_outs = float(_outs_pred[0])
                     _raw_lam_outs = _lam_outs
                     if _outs_cal is not None:
                         try:
@@ -656,7 +661,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
-# PITCHER_ER ships as an active K-derived sub-market.
+# PITCHER_ER is a Gamma proxy anchored to K's lambda/avg_ip, not a dedicated
+# trained model. CONTEXT.md documents it as log-only pending ~100 settled
+# bets confirming the proxy edge predicts outcomes -- but until 2026-08-17
+# the code had NO hardcoded guard enforcing that (unlike F1H's
+# LOG_ONLY_SYSTEMS in run_f5.py) and no working registry entry for its
+# is_suppressed("PITCHER_ER") gate to act on either, so it had been sizing
+# real Kelly stakes with zero working protection. Fixed alongside adding a
+# PITCHER_ER registry entry (mlb_core/registry.py) -- see docs/audits/
+# 2026-08-16_cloud_efficiency_and_profitability_review.md finding A9.
+# Flip to False only after the documented ~100-bet post-hoc validation.
+PITCHER_ER_LOG_ONLY = True
 
 _LEAGUE_ER_PER_9 = 4.5   # 2026 season -- derived from median DK ER line (2.5) over median starter IP (~5.0)
 
@@ -765,7 +780,7 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed_er and not _edge_capped and not _sgo.is_live_event(odds_info.get("commence_time"))
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not PITCHER_ER_LOG_ONLY and not _gate_suppressed_er and not _edge_capped and not _sgo.is_live_event(odds_info.get("commence_time"))
         if kelly_triggered and stake > 0:
             gp = int(row.get("game_pk", 0))
             _pending[gp] = _pending.get(gp, 0.0) + stake

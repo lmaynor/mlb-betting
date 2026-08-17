@@ -44,7 +44,7 @@ class SystemConfig:
 
 
 # Canonical system order — used for ordered iteration, display, and digests.
-CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "F5", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
+CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "PITCHER_ER", "F5", "F1H", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
 
 SYSTEMS: dict[str, SystemConfig] = {
 
@@ -115,12 +115,32 @@ SYSTEMS: dict[str, SystemConfig] = {
         builder_module="mlb.runners.build_k_features",   # shares K builder
         runner_module="mlb.runners.run_k",   # OUTS is scored inside run_k; no run_outs module exists
         feature_csv="K_Pro_System/data/model_features.csv",  # shared with K
-        model_artifact="K_Pro_System/models/xgb_k_v1.json",  # OUTS uses K model artifact (no separate OUTS artifact in MODEL_KEYS)
+        model_artifact="OUTS_Pro_System/models/xgb_outs_v1.json",  # dedicated model (mlb-retrain-outs-v1); fixed 2026-08-17, see docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md finding A8 -- previously pointed at K's model, so no health check ever verified this file exists
         build_sentinel="K_Pro_System/data/last_build.json",   # shares K sentinel
         retrain_jobs=["mlb-retrain-outs-v1"],
         calibrate_jobs=[],                           # no separate calibrate job
         expected_hit_rate=0.52,
         # OUTS not in tune_hyperparams SYSTEM_CONFIG — no tune fields
+    ),
+
+    "PITCHER_ER": SystemConfig(
+        name="PITCHER_ER",
+        icon="🟤",
+        builder_module="mlb.runners.build_k_features",   # shares K builder (Gamma proxy off K's lambda/avg_ip)
+        runner_module="mlb.runners.run_k",   # scored inside run_k._score_pitcher_er; no run_pitcher_er module exists
+        feature_csv="K_Pro_System/data/model_features.csv",  # shared with K -- no dedicated feature build
+        model_artifact="K_Pro_System/models/xgb_k_v1.json",  # proxy depends on K's model, not a dedicated PITCHER_ER model
+        build_sentinel="K_Pro_System/data/last_build.json",   # shares K sentinel
+        expected_hit_rate=0.52,
+        # Added 2026-08-17 (finding A9): PITCHER_ER previously had NO registry
+        # entry at all, so is_suppressed("PITCHER_ER") -- which run_k.py DOES
+        # call -- could never actually suppress anything: it fell through to
+        # the dynamic gate file, which monitor_performance.py only ever
+        # populates for registry-known systems. Combined with run_k.py having
+        # no hardcoded log-only fallback (unlike F1H below), PITCHER_ER had
+        # zero working protection despite CONTEXT.md documenting it as
+        # log-only pending ~100-settled-bet validation -- see the paired
+        # PITCHER_ER_LOG_ONLY flag added to run_k.py in the same fix.
     ),
 
     "F5": SystemConfig(
@@ -144,6 +164,28 @@ SYSTEMS: dict[str, SystemConfig] = {
         tune_metric="auc",
         tune_metric_dir="max",
         tune_output="F5_Pro_System/models/f5_tuned_params.json",
+    ),
+
+    "F1H": SystemConfig(
+        name="F1H",
+        icon="🔵",
+        builder_module="mlb.runners.build_f5_features",   # shares F5 builder
+        runner_module="mlb.runners.run_f5",   # scored inside run_f5._score_innings_submarkets; no run_f1h module exists
+        feature_csv="F5_Pro_System/data/model_features.csv",  # shared with F5 -- scalar proxy off F5's p_home
+        model_artifact="F5_Pro_System/models/xgb_f5_v5.json",  # proxy depends on F5's model, not a dedicated F1H model
+        build_sentinel="F5_Pro_System/data/last_build.json",   # shares F5 sentinel
+        expected_hit_rate=0.52,
+        # Added 2026-08-17 (finding A9/E3): F1H previously had no registry
+        # entry, so is_suppressed("F1H") could never reflect real state. Its
+        # own retirement note ("no live edge, bet-sample AUC ~0.50,
+        # net-negative trend") plus F5's own force_gate="on" above both apply
+        # here too (F1H is a scalar proxy OFF that same model) -- force_gate
+        # mirrors F5's rather than left to the dynamic gate. run_f5.py's
+        # hardcoded LOG_ONLY_SYSTEMS={"F1H"} already keeps this at stake=0
+        # regardless, but that hardcoded guard and this registry gate should
+        # agree, not leave the registry one silently absent. Clear only
+        # alongside F5's force_gate, once a dedicated F1H model exists.
+        force_gate="on",
     ),
 
     "BATTER_HITS": SystemConfig(

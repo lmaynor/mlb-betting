@@ -101,8 +101,6 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
-    from mlb_core.data.lineups import fetch_il_pitcher_ids
-    _il_ids = fetch_il_pitcher_ids()
     from mlb_core.odds import american_to_implied_prob, remove_vig
     from mlb_core.odds.utils import devig_two_way
 
@@ -230,8 +228,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         post_error("F5", msg)
         return pd.DataFrame()
     logger.info("F5: sentinel ok -- %s", _sreason)
-    from mlb_core.data.lineups import fetch_il_pitcher_ids
-    _il_ids = fetch_il_pitcher_ids()
     # E10: load morning snapshot for line movement signal
     from mlb_core.odds.line_movement import load_morning_odds
     _morning_odds = load_morning_odds(run_date)
@@ -304,19 +300,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     for _, row in feat_df.iterrows():
         if _starter_stale(row, "home", run_date) or _starter_stale(row, "away", run_date):
-            _home_pid = int(row.get("home_pitcher_id") or 0)
-            _away_pid = int(row.get("away_pitcher_id") or 0)
-            _on_il = (_home_pid and _home_pid in _il_ids) or (_away_pid and _away_pid in _il_ids)
-            if _on_il:
-                logger.info(
-                    f"F5: skipping game_pk={int(row['game_pk'])} -- "
-                    f"starter gap >{_IL_DAYS}d + confirmed on IL"
-                )
-                continue
+            # Simplified 2026-05-23, re-fixed 2026-08-17 after a regression
+            # reintroduced the dual IL-API condition this replaced: the
+            # roster API lags activations by 1-2 days (false positives
+            # skipping healthy rotation pitchers) and the gap-only threshold
+            # alone already reliably separates genuine IL stints (always
+            # >_IL_DAYS) from normal rotation (never >_IL_DAYS) -- see
+            # docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md
+            # finding A10. Do not reintroduce an IL-API cross-check here.
             logger.info(
-                f"F5: game_pk={int(row['game_pk'])} has starter gap >{_IL_DAYS}d "
-                f"but NOT on IL -- including"
+                f"F5: skipping game_pk={int(row['game_pk'])} -- starter gap >{_IL_DAYS}d"
             )
+            continue
         home_odds = row.get("_home_odds")
         away_odds = row.get("_away_odds")
         if home_odds is None or away_odds is None:
