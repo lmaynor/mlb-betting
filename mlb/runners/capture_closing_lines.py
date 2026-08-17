@@ -118,7 +118,19 @@ def _get_closing_odds_from_snapshot(
     for _, bet in bets.iterrows():
         away = bet.get("away_team", "")
         home = bet.get("home_team", "")
-        ev   = market_map.get((away, home))
+        # Fixed 2026-08-17 (finding C5.5): market_map's keys are SGO's
+        # abbreviation-style .names.short field, but HR bets store full
+        # medium team names ("Red Sox," not "BOS") per a known, still-open
+        # backlog item -- this lookup used the bet's raw team names
+        # directly, so it failed silently (this debug log is the only
+        # trace) for every single HR bet, starving CLV evidence for the
+        # system with the longest live history in the repo. resolve_team()
+        # is idempotent on already-abbreviated input (e.g. "BOS" -> "BOS"),
+        # so this is a strict fix -- every other system's bets, which
+        # already store abbreviations, resolve to themselves unchanged.
+        away_key = resolve_team(away) or away
+        home_key = resolve_team(home) or home
+        ev   = market_map.get((away_key, home_key))
         if ev is None:
             logger.debug(f"capture_closing: no SGO event for {away}@{home}")
             continue
@@ -151,6 +163,35 @@ def _get_closing_odds_from_snapshot(
                         odds_val = info.get("away_odds")
                         complement_val = info.get("home_odds")
                     break
+
+        # Fixed 2026-08-17 (finding C5.6): GAME and F1H had no dispatch
+        # branch at all -- both silently fell through to odds_val=None.
+        # GAME is the system closest to a real promotion decision of any
+        # log-only system and could never accumulate CLV evidence for that
+        # gate as a result. Mirrors the F5 branch above; both extractors
+        # share the same home_odds/away_odds shape (_extract_two_sided_
+        # innings_ml in mlb_core/odds/sgo.py).
+        elif bet_type in ("GAME_ML_HOME", "GAME_ML_AWAY"):
+            game_info = sgo.extract_game_ml_odds([ev])
+            for info in game_info.values():
+                if bet_type == "GAME_ML_HOME":
+                    odds_val = info.get("home_odds")
+                    complement_val = info.get("away_odds")
+                else:
+                    odds_val = info.get("away_odds")
+                    complement_val = info.get("home_odds")
+                break
+
+        elif bet_type in ("F1H_HOME", "F1H_AWAY"):
+            f1h_info = sgo.extract_f1h_ml_odds([ev])
+            for info in f1h_info.values():
+                if bet_type == "F1H_HOME":
+                    odds_val = info.get("home_odds")
+                    complement_val = info.get("away_odds")
+                else:
+                    odds_val = info.get("away_odds")
+                    complement_val = info.get("home_odds")
+                break
 
         elif (bet.get("system") or "").upper() == "HR":
             hr_props = sgo.extract_hr_props([ev])

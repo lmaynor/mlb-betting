@@ -362,10 +362,24 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     feat_df["_home_abbr"] = feat_df.get("home_team", pd.Series("", index=feat_df.index)).apply(_abbr)
     feat_df["_away_abbr"] = feat_df.get("away_team", pd.Series("", index=feat_df.index)).apply(_abbr)
+    # Fixed 2026-08-17 (finding C5.2, 2026-08-16 audit): a doubleheader means
+    # 2 games can share the same team pair on the same day -- this used to be
+    # a plain dict assignment (team_pair_to_idx[key] = i), so the second
+    # game's row index silently overwrote the first's, either hiding a
+    # betting opportunity entirely (game 1 never scored) or misattributing
+    # odds to the wrong game_pk while still displaying correct-looking team
+    # names. Keep a LIST of row indices per key instead and pair candidates
+    # off below in the order game_odds.items() is iterated. This does NOT
+    # guarantee perfect event-to-game_pk pairing within a doubleheader (no
+    # commence_time on the feat_df side to match against -- the same
+    # structural gap mlb_core/data/id_resolver.py's resolve_game_pk()
+    # documents via its _ambiguous_doubleheaders counter), but it DOES
+    # guarantee both games get a betting decision instead of one being
+    # silently dropped.
     team_pair_to_idx: dict = {}
     for i, row in feat_df.iterrows():
         key = (_abbr(row.get("home_team", "")), _abbr(row.get("away_team", "")))
-        team_pair_to_idx[key] = i
+        team_pair_to_idx.setdefault(key, []).append(i)
 
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
     from mlb_core.tracking.bet_tracker import _make_engine
@@ -386,10 +400,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         home_t = _abbr(odds_info.get("home_team", ""))
         away_t = _abbr(odds_info.get("away_team", ""))
 
-        row_idx = team_pair_to_idx.get((home_t, away_t))
-        if row_idx is None:
+        row_idxs = team_pair_to_idx.get((home_t, away_t))
+        if not row_idxs:
             logger.debug("GAME: no feature row for %s vs %s", away_t, home_t)
             continue
+        row_idx = row_idxs.pop(0)
 
         row = feat_df.loc[row_idx]
         prob_home = float(row["prob_home"])

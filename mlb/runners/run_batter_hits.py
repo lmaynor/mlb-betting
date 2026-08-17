@@ -421,7 +421,19 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 )
                 continue
         except (TypeError, ValueError):
-            pass
+            # Fixed 2026-08-17 (finding C5.4): was `pass` -- a None/non-
+            # numeric event_id (can't even run the check above) silently
+            # fell through to scoring the prop WITHOUT ever having
+            # validated the match, on the exact market class that produced
+            # the historically-quantified ~$933 fake-P&L incident this
+            # guard exists to prevent a repeat of. `continue` instead: no
+            # validated match, no bet.
+            logger.warning(
+                "BATTER_HITS: skipping %s -- event_id/game_pk not comparable "
+                "(odds_event=%r feature_game=%r)",
+                player_name, odds_info.get("event_id"), row.get("game_pk"),
+            )
+            continue
         mu   = float(row["lambda_hits"])
         line = odds_info.get("line")
         if line is None:

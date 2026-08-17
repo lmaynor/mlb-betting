@@ -39,12 +39,12 @@ effect (noted inline) · `[x]` fixed and effective immediately on merge.
 
 ## P2 — medium
 
-- [ ] **C5.2** Doubleheader team-pair dict collisions (NRFI/F5/GAME/1I)
-- [ ] **C5.4** `event_id` validation fail-open in BATTER_HITS/BATTER_TB
-- [ ] **C5.8** K/OUTS share one exposure-cap accumulator
-- [ ] **C5.7** Sub-`min_edge` rows dropped before logging (F1H/PITCHER_ER/1I)
-- [ ] **C5.1** `settle_bets.py` GAME void threshold `<8` vs documented `<5`
-- [ ] **C5.5/C5.6** `capture_closing_lines.py`: HR team-name mismatch + missing GAME/F1H branches
+- [x] **C5.2** Doubleheader team-pair dict collisions (NRFI/F5/GAME/1I) *(F5 turned out to have 2 independent collision sites, not 1 -- both fixed; no dedicated test, disproportionate mocking cost for a rare edge case vs. compile-check + review)*
+- [x] **C5.4** `event_id` validation fail-open in BATTER_HITS/BATTER_TB
+- [x] **C5.8** K/OUTS share one exposure-cap accumulator *(no dedicated test, same proportionality call as C5.2 -- `_build_predictions` needs GCS model/odds/feature mocking disproportionate to the risk already ruled out by a dangling-reference grep + compile-check)*
+- [x] **C5.7** Sub-`min_edge` rows dropped before logging (F1H/PITCHER_ER/1I)
+- [x] **C5.1** `settle_bets.py` GAME void threshold `<8` vs documented `<5`
+- [x] **C5.5/C5.6** `capture_closing_lines.py`: HR team-name mismatch + missing GAME/F1H branches
 - [ ] **C6.1** Suppression gate self-clears via zero-stake window dilution
 - [ ] **C6.2** NRFI AUC alert measures market, not model
 - [ ] **C6.3** Capped alerts marked "notified" without posting (`fast_alert_loop.py` + `kalshi_alert.py`)

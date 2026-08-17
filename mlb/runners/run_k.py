@@ -416,8 +416,20 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
-    _bankroll, _prefetched_stakes = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="K")
-    _pending_stakes: dict[int, float] = {}
+    # Fixed 2026-08-17 (finding C5.8): K and OUTS are independently-tracked
+    # systems with independent exposure caps (CONTEXT.md s5's contract --
+    # "per-system... do not count against each other's cap"), but used to
+    # share ONE _prefetched_stakes/_pending_stakes pair prefetched with
+    # system="K" only. OUTS's own already-open stakes were invisible to its
+    # own cap-check, while K's and OUTS's in-run stakes accumulated into the
+    # same dict, so whichever market is scored first (always K, in this
+    # loop) ate into what should have been OUTS's independent per-game
+    # budget. Give each its own pair, matching _score_pitcher_er below
+    # (which already prefetches with system="PITCHER_ER" correctly).
+    _bankroll_k, _prefetched_stakes_k = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="K")
+    _pending_stakes_k: dict[int, float] = {}
+    _bankroll_outs, _prefetched_stakes_outs = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="OUTS")
+    _pending_stakes_outs: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
     from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed_k    = _is_suppressed("K")
@@ -475,17 +487,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
+                    _bankroll_k, _cap = apply_cap(_bankroll_k, int(row["game_pk"]), _prefetched_stakes_k, _pending_stakes_k, cap_units=cfg.get("cap_units", 2.0))
                     _stake = min(kelly_stake(
-                        model_prob, odds, bankroll=_bankroll,
+                        model_prob, odds, bankroll=_bankroll_k,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_k and not _edge_capped and not sgo.is_live_event(k_info.get("commence_time"))
                     if kelly_triggered and _stake > 0:
-                        _pending_stakes[int(row["game_pk"])] = (
-                            _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
+                        _pending_stakes_k[int(row["game_pk"])] = (
+                            _pending_stakes_k.get(int(row["game_pk"]), 0.0) + _stake
                         )
                     results.append({
                         "player":          row["_pitcher_name"],
@@ -602,17 +614,17 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         side,
                         model_prob, fair, edge,
                     )
-                    _bankroll, _cap = apply_cap(_bankroll, int(row["game_pk"]), _prefetched_stakes, _pending_stakes, cap_units=cfg.get("cap_units", 2.0))
+                    _bankroll_outs, _cap = apply_cap(_bankroll_outs, int(row["game_pk"]), _prefetched_stakes_outs, _pending_stakes_outs, cap_units=cfg.get("cap_units", 2.0))
                     _stake = min(kelly_stake(
-                        model_prob, odds, bankroll=_bankroll,
+                        model_prob, odds, bankroll=_bankroll_outs,
                         fraction=cfg["kelly_fraction"],
                         min_pct=cfg["min_kelly_pct"],
                         max_pct=cfg["max_kelly_pct"],
                     ), _cap)
                     kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_outs and not _edge_capped and not sgo.is_live_event(outs_info.get("commence_time"))
                     if kelly_triggered and _stake > 0:
-                        _pending_stakes[int(row["game_pk"])] = (
-                            _pending_stakes.get(int(row["game_pk"]), 0.0) + _stake
+                        _pending_stakes_outs[int(row["game_pk"])] = (
+                            _pending_stakes_outs.get(int(row["game_pk"]), 0.0) + _stake
                         )
                     results.append({
                         "player":          row["_pitcher_name"],
@@ -765,9 +777,12 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
         edge = model_prob - fair
         _edge_capped = _cal and edge > _EDGE_CAP
 
-        if edge < cfg["min_edge"]:
-            continue
-
+        # Fixed 2026-08-17 (finding C5.7): was an early `continue` here,
+        # dropping every sub-min_edge PITCHER_ER prediction before it was
+        # ever logged -- violating the "log every scored prediction"
+        # contract every primary market honors. kelly_triggered below
+        # already re-checks `edge >= cfg["min_edge"]` -- that's the sole
+        # downstream gate now.
         _bankroll, _cap = apply_cap(
             _bankroll, int(row["game_pk"]),
             _prefetched, _pending,

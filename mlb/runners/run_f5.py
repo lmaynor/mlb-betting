@@ -148,7 +148,11 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
                 row[k] = v
 
         # Live implied home win pct from DK (no-vig)
-        odds_info = ml_odds_by_abbrev.get((away, home))
+        # C5.2: ml_odds_by_abbrev holds a list per team pair now (see the
+        # doubleheader comment where it's built, in _build_predictions()) --
+        # pop the next candidate in schedule-iteration order.
+        ml_candidates = ml_odds_by_abbrev.get((away, home))
+        odds_info = ml_candidates.pop(0) if ml_candidates else None
         if odds_info:
             ih = american_to_implied_prob(odds_info["home_odds"])
             ia = american_to_implied_prob(odds_info["away_odds"])
@@ -241,13 +245,28 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("F5: 0 events have F5 ML prices on DK — skipping")
         return pd.DataFrame()
 
+    # Index odds by (away_abbr, home_abbr) for matching to today's schedule
+    # in _build_today_feature_rows() below.
+    # Fixed 2026-08-17 (finding C5.2): a doubleheader means 2 SGO events can
+    # share the same team pair -- this used to be a plain dict assignment,
+    # so the second game's odds silently overwrote the first's, either
+    # hiding a betting opportunity entirely or misattributing odds to the
+    # wrong game_pk while still displaying correct-looking team names. Keep
+    # a LIST per key instead and pair candidates off in schedule-iteration
+    # order.
+    # Doesn't guarantee perfect event-to-game_pk pairing within a
+    # doubleheader (no commence_time on the schedule side to match against
+    # -- the same structural gap id_resolver.py's own resolve_game_pk()
+    # documents via its _ambiguous_doubleheaders counter), but guarantees
+    # BOTH games get a betting decision instead of one being silently
+    # dropped.
     ml_by_abbrev: dict = {}
     for ev_id, info in ml_by_event.items():
         away_abbr = resolve_team(info["away_team"])
         home_abbr = resolve_team(info["home_team"])
         if not away_abbr or not home_abbr:
             continue
-        ml_by_abbrev[(away_abbr, home_abbr)] = {**info, "event_id": ev_id}
+        ml_by_abbrev.setdefault((away_abbr, home_abbr), []).append({**info, "event_id": ev_id})
 
     feat_df = _build_today_feature_rows(cfg, run_date, ml_by_abbrev)
     if feat_df.empty:
@@ -453,14 +472,32 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
     _engine = _make_engine("unused")
     _all_game_pks = list(predictions_df["game_pk"].dropna().astype(int).unique())
 
+    # Index this system's model predictions by (away_team, home_team) so
+    # each sub-market below can join its own odds events to the right game.
+    # Fixed 2026-08-17 (finding C5.2): a doubleheader means 2 games can
+    # share the same team pair -- this used to be a plain dict assignment,
+    # so the second game's prediction silently overwrote the first's,
+    # either hiding a betting opportunity entirely or misattributing the
+    # wrong game's model prob/game_pk to a sub-market bet while still
+    # displaying correct-looking team names. Keep a LIST per key instead
+    # and pair candidates off in odds-iteration order below.
+    # Doesn't guarantee perfect event-to-game_pk pairing within a
+    # doubleheader (no commence_time on either side to match against --
+    # the same structural gap id_resolver.py's own resolve_game_pk()
+    # documents via its _ambiguous_doubleheaders counter), but guarantees
+    # BOTH games get a betting decision instead of one being silently
+    # dropped. Candidates are popped across the whole function call (all of
+    # _INNINGS_SUBMARKET_CONFIG share these lists) -- fine while F1H is the
+    # only active entry; a future second team-pair-keyed entry here would
+    # need its own copy of these lists so it doesn't starve on F1H's pops.
     game_probs: dict = {}
     game_pks:   dict = {}
     for _, row in predictions_df.iterrows():
         p_h = float(row["p_home"]) if "p_home" in row and not pd.isna(row.get("p_home"))               else (float(row["model_prob"]) if row["side"] == "HOME"
                     else 1.0 - float(row["model_prob"]))
         key = (row["away_team"], row["home_team"])
-        game_probs[key] = p_h
-        game_pks[key]   = int(row["game_pk"])
+        game_probs.setdefault(key, []).append(p_h)
+        game_pks.setdefault(key, []).append(int(row["game_pk"]))
 
     for sys_key, extractor_name, bt_prefix, scalar_key in _INNINGS_SUBMARKET_CONFIG:
         extractor = extractor_fns[extractor_name]
@@ -477,11 +514,12 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
             home_abbr = resolve_team(odds_info["home_team"])
             if not away_abbr or not home_abbr:
                 continue
-            key    = (away_abbr, home_abbr)
-            p_home = game_probs.get(key)
-            if p_home is None:
+            key = (away_abbr, home_abbr)
+            prob_candidates = game_probs.get(key)
+            if not prob_candidates:
                 continue
-            game_pk = game_pks[key]
+            p_home  = prob_candidates.pop(0)
+            game_pk = game_pks[key].pop(0)
 
             p_home_s = float(_np.clip(0.5 + (p_home - 0.5) * scalar, 0.02, 0.98))
             p_away_s = 1.0 - p_home_s
@@ -509,9 +547,12 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
             edge = model_prob - fair
             _edge_capped = _cal and edge > _EDGE_CAP
 
-            if edge < cfg["min_edge"]:
-                continue
-
+            # Fixed 2026-08-17 (finding C5.7): was an early `continue` here,
+            # dropping every sub-min_edge F1H prediction before it was ever
+            # logged -- violating the "log every scored prediction" contract
+            # every primary market honors. kelly_triggered below already
+            # re-checks `edge >= cfg["min_edge"]` -- that's the sole
+            # downstream gate now.
             k_pct_val = round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4)
             bankroll, cap = apply_cap(
                 bankroll, int(game_pk),
@@ -529,6 +570,13 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
             kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and not _edge_capped
             if kelly_triggered:
                 pending[game_pk] = pending.get(game_pk, 0.0) + stake
+            # Defensive (log_only currently forces stake=0.0 above for every
+            # system in this loop today, so this is a no-op right now, but
+            # matches the "stake if kelly_triggered else 0.0" convention
+            # every other runner uses -- protects against a future
+            # non-log-only sub-market added to _INNINGS_SUBMARKET_CONFIG
+            # ever logging a nonzero stake for an untriggered row).
+            stake = stake if kelly_triggered else 0.0
 
             results[sys_key].append({
                 "player":          f"{away_abbr} @ {home_abbr} ({(home_abbr if side=='HOME' else away_abbr)} {bt_prefix})",
