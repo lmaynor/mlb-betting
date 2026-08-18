@@ -149,6 +149,22 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                 if not id_resolver.is_player_name(player):   # drop template/matchup junk
                     continue
                 slot = acc.setdefault((mkey, player), {"over": {}, "under": {}})
+                if PROP_MARKET_MAP[mkey][2] == "hr_yn":
+                    # Some books (DraftKings observed 2026-08-18) list a
+                    # standard "1+ HR" outcome (point=1.0, or 0.5 depending on
+                    # book convention) AND a much-longer-odds "2+ HR" alt-line
+                    # under the exact same market/player/book -- e.g. Ronald
+                    # Acuna Jr. priced at both +400 (point=1.0) and +4300
+                    # (point=2.0) simultaneously. HR is modeled purely as
+                    # "at least 1 HR" (the yn-yes oddID has no line dimension
+                    # downstream at all), so grouping only by (mkey, player)
+                    # let the 2+ HR outcome silently clobber the correct one
+                    # whenever it happened to be processed second -- not a
+                    # rare edge case, since JSON key order isn't guaranteed.
+                    # Keep only the lowest point seen per (player, book, side).
+                    existing = slot[side].get(bk)
+                    if existing is not None and float(existing["overUnder"]) <= point:
+                        continue
                 slot[side][bk] = {"odds": str(int(price)), "overUnder": str(point)}
 
     odds, players = {}, {}
