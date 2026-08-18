@@ -100,6 +100,46 @@ def test_adapter_builds_sgo_event(monkeypatch):
     assert "pitching_outs-669373-game-ou-over" in ev["odds"]   # player_outs handled
 
 
+def _hr_alt_line_props_event(alt_line_first: bool):
+    """DraftKings offering BOTH the standard "1+ HR" outcome (point=1.0,
+    a normal price) AND a much-longer "2+ HR" alt-line (point=2.0) for the
+    same player under the identical market key -- the real shape observed
+    2026-08-18 for Ronald Acuna Jr. (+400 at point=1.0 vs +4300 at point=2.0,
+    DraftKings listed the alt-line second). `alt_line_first` flips the
+    outcome order to prove the fix doesn't depend on JSON key order, since
+    that's never guaranteed from an API."""
+    standard = {"name": "Yes", "description": "Mike Trout", "price": 280, "point": 1.0}
+    alt_line = {"name": "Yes", "description": "Mike Trout", "price": 4500, "point": 2.0}
+    outcomes = [alt_line, standard] if alt_line_first else [standard, alt_line]
+    return {
+        "id": "parlay-evt-1",
+        "home_team": "Cleveland Guardians",
+        "away_team": "Los Angeles Angels",
+        "commence_time": "2024-05-01T22:10:00Z",
+        "bookmakers": [
+            {"key": "draftkings", "markets": [
+                {"key": "player_home_runs", "outcomes": outcomes},
+            ]},
+        ],
+    }
+
+
+@pytest.mark.parametrize("alt_line_first", [False, True])
+def test_hr_alt_line_does_not_clobber_the_real_price(monkeypatch, alt_line_first):
+    """Regression (2026-08-18): a "2+ HR" alt-line outcome from the same book
+    silently overwrote the standard "1+ HR" price because _props_odds grouped
+    only by (market key, player), with no line dimension -- HR has no line
+    downstream at all (pure yes/no), so the alt-line always must lose."""
+    _prime(monkeypatch)
+    odds, players = A._props_odds(
+        _hr_alt_line_props_event(alt_line_first), "LAA", "CLE", DATE, game_pk=745101,
+    )
+    trout_hr = next(o for o in odds.values() if o["statID"] == "batting_homeRuns")
+    assert trout_hr["byBookmaker"]["draftkings"]["odds"] == "280", (
+        "the standard 1+ HR price must win regardless of outcome order in the API response"
+    )
+
+
 def test_adapter_drops_unresolvable_game(monkeypatch):
     # no schedule cache entry -> game_pk None -> drop
     monkeypatch.setitem(R._schedule_cache, DATE, {})
