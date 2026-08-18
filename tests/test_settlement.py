@@ -396,7 +396,7 @@ class TestBetTrackerDedup:
         # Evening: edge crosses gate → triggered
         # Should NOT be blocked by the non-triggered morning row
         assert not tracker.is_duplicate("2026-05-19", 100, "NRFI",
-                                        kelly_triggered=True)
+                                        player="CLE@LAA", kelly_triggered=True)
 
     def test_triggered_blocks_second_triggered(self, tmp_path):
         """Once a triggered bet is logged, a second triggered bet on the
@@ -408,7 +408,7 @@ class TestBetTrackerDedup:
                         model_prob=0.58, market_prob=0.52, edge=0.06,
                         kelly_pct=0.02)
         assert tracker.is_duplicate("2026-05-19", 100, "NRFI",
-                                    kelly_triggered=True)
+                                    player="CLE@LAA", kelly_triggered=True)
 
     def test_any_row_blocks_non_triggered_duplicate(self, tmp_path):
         """A non-triggered prediction should not be logged twice (already
@@ -420,4 +420,41 @@ class TestBetTrackerDedup:
                         model_prob=0.54, market_prob=0.52, edge=0.02,
                         kelly_pct=0.0)
         assert tracker.is_duplicate("2026-05-19", 100, "NRFI",
-                                    kelly_triggered=False)
+                                    player="CLE@LAA", kelly_triggered=False)
+
+    def test_different_players_same_game_do_not_collide(self, tmp_path):
+        """Regression test (2026-08-18): two different players qualifying
+        for the same bet_type in the same game on the same day must NOT be
+        treated as duplicates of each other. bet_type alone is not a unique
+        key for per-player markets -- e.g. every HR bet has bet_type="HR"
+        regardless of which batter. This is what idx_bets_dedup_v3 adding
+        `player` to the key is meant to guarantee; found via a live incident
+        where 24 distinct HR bets across 7 games were misidentified as
+        23 "duplicate" rows by a dedup key missing `player`."""
+        from mlb_core.tracking.bet_tracker import BetTracker
+        db = str(tmp_path / "test_bets.db")
+        tracker = BetTracker(db, system="HR")
+
+        id_a = tracker.log_bet(game_date="2026-05-12", game_pk=823385,
+                               bet_type="HR", kelly_triggered=True,
+                               player="Hunter Goodman", stake=5.31, odds=529,
+                               model_prob=0.2048, market_prob=0.16, edge=0.0562,
+                               kelly_pct=0.01)
+        id_b = tracker.log_bet(game_date="2026-05-12", game_pk=823385,
+                               bet_type="HR", kelly_triggered=True,
+                               player="Willi Castro", stake=0.0, odds=1200,
+                               model_prob=0.1221, market_prob=0.08, edge=0.0502,
+                               kelly_pct=0.0)
+
+        assert id_a != -1, "first player's HR bet should log normally"
+        assert id_b != -1, "second player's HR bet must not be dropped as a duplicate"
+        assert id_a != id_b
+
+        # And logging Hunter Goodman's HR bet again (same player, same
+        # everything) IS still correctly caught as a real duplicate.
+        id_a_again = tracker.log_bet(game_date="2026-05-12", game_pk=823385,
+                                     bet_type="HR", kelly_triggered=True,
+                                     player="Hunter Goodman", stake=5.31, odds=529,
+                                     model_prob=0.2048, market_prob=0.16, edge=0.0562,
+                                     kelly_pct=0.01)
+        assert id_a_again == -1

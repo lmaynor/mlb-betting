@@ -11,8 +11,18 @@ Regression tests for the 2026-08-16 audit's bet_tracker.py fixes:
   race window, not a DB constraint -- is_duplicate() and log_bet() used
   two separate connections with a real TOCTOU gap, so a double-log could
   double-stake a real bet with no error. Fixed with a genuinely UNIQUE
-  index on (system, game_date, game_pk, bet_type, kelly_triggered) and
-  INSERT ... ON CONFLICT DO NOTHING.
+  index and INSERT ... ON CONFLICT DO NOTHING.
+
+  v3 (2026-08-18): the index's first shape -- (system, game_date, game_pk,
+  bet_type, kelly_triggered), no `player` -- crashed in production the
+  first time it ran (pre-existing duplicate rows blocked CREATE UNIQUE
+  INDEX), and investigating found a second bug behind the first: for
+  every per-player market (HR/K/OUTS/BATTER_HITS/BATTER_TB/PITCHER_ER),
+  bet_type alone doesn't identify a bet -- e.g. every HR bet has
+  bet_type="HR" regardless of batter, so two different players
+  qualifying in the same game on the same day collided on the same key.
+  `player` is now part of the index: (system, game_date, game_pk,
+  player, bet_type, kelly_triggered).
 
 See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md.
 """
@@ -93,3 +103,36 @@ def test_db_constraint_catches_a_race_that_bypasses_is_duplicate(tracker, monkey
             "SELECT COUNT(*) FROM bets WHERE game_pk=777 AND kelly_triggered=1"
         )).scalar()
     assert n == 1, f"expected exactly 1 row despite the bypassed race, found {n}"
+
+
+def test_db_constraint_does_not_collide_across_different_players(tracker, monkeypatch):
+    """v3 regression: the UNIQUE index must key on `player` too, not just
+    bet_type. Bypass is_duplicate() (same technique as the test above) so
+    this hits the actual DB constraint, not the Python-level pre-check --
+    the strongest possible proof the index itself has the right shape.
+    Two different players qualifying for the same bet_type in the same
+    game on the same day are DISTINCT bets and must both be allowed."""
+    monkeypatch.setattr(tracker, "is_duplicate", lambda *a, **kw: False)
+
+    id1 = tracker.log_bet(
+        game_date="2026-08-17", game_pk=888, player="Player One",
+        away_team="NYY", home_team="BOS", bet_type="HR_YES",
+        model_prob=0.15, market_prob=0.10, edge=0.05, kelly_pct=0.02,
+        odds=650, stake=10.0, kelly_triggered=True, paper=True,
+    )
+    id2 = tracker.log_bet(
+        game_date="2026-08-17", game_pk=888, player="Player Two",
+        away_team="NYY", home_team="BOS", bet_type="HR_YES",
+        model_prob=0.12, market_prob=0.09, edge=0.03, kelly_pct=0.01,
+        odds=800, stake=8.0, kelly_triggered=True, paper=True,
+    )
+    assert id1 != -1
+    assert id2 != -1, "a different player's bet must not collide with an unrelated player's row"
+    assert id1 != id2
+
+    from sqlalchemy import text
+    with tracker.engine.connect() as conn:
+        n = conn.execute(text(
+            "SELECT COUNT(*) FROM bets WHERE game_pk=888 AND kelly_triggered=1"
+        )).scalar()
+    assert n == 2, f"expected both distinct-player rows to survive, found {n}"
