@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-16 (model bake-off tuning/persistence/verdict toolkit merged from analysis/hr-model-bakeoff)
+_Last updated: 2026-08-17 (E9/B2.4 closed: mlb-build-batter-hits-features/mlb-build-game-features confirmed orphaned in GCP -- pruned from the live job inventory in section 7, documented as dead jobs instead)
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -1001,15 +1001,30 @@ secretmanager.secretAccessor.
 - `mlb-retrain-outs-v1` (full OUTS retrain; E04 2026-05-21)
 - `mlb-retrain-batter-hits` (full BATTER_HITS retrain; run after build_batter_hits_features)
 - `mlb-calibrate-batter-hits` (fit lambda calibrator for BATTER_HITS v1; run after retrain)
-- `mlb-build-batter-hits-features` (nightly BATTER_HITS feature build; 8Gi/4CPU for full-width statcast from 2021)
-- `mlb-build-game-features` (nightly GAME feature build; 4Gi; usecols reduces statcast to 13 cols)
 - `mlb-retrain-game-v1` (full GAME Pro v1 retrain; binary:logistic on home_win)
 - `mlb-calibrate-game` (fit isotonic calibrator for GAME v1; run after retrain)
 - `mlb-build-all-features` (daily feature build; chains all 7 builders in dependency order:
   HR -> NRFI -> K -> F5 -> BATTER_HITS -> BATTER_TB -> GAME via `/bin/sh -c "cmd1 && cmd2 && ..."`
   so any failure aborts subsequent builders; 4Gi/2CPU; 3600s task timeout.
   Triggered by Scheduler via OAuth + Run API scope, NOT OIDC/service -- see §9 and §15.9.
-  Scheduler attempt-deadline=1800s (max allowed); job execution timeout=3600s set on the job.)
+  Scheduler attempt-deadline=1800s (max allowed); job execution timeout=3600s set on the job.
+  This is the only build job actually in the daily loop -- see E9/B2.4 note below.)
+
+**Orphaned Cloud Run Jobs (confirmed to exist in GCP, hand-created, no setup script,
+not part of any daily loop -- do not treat these as live):**
+- `mlb-build-batter-hits-features` -- last executed 2026-06-24, never provisioned by a
+  script. BATTER_HITS feature builds happen via `mlb-build-all-features` (above) or the
+  in-process `/build-features` Flask route, not this job. Confirmed 2026-08-17 (E9/B2.4).
+- `mlb-build-game-features` -- last executed 2026-05-25, same story: orphaned, no
+  provisioning script, superseded by `mlb-build-all-features`. Confirmed 2026-08-17.
+  Both predate the 2026-06-24 pillarize restructure's module-path rename and, since
+  nothing has updated their container command since, would very likely fail with
+  `ModuleNotFoundError` if ever hand-triggered today (the same failure mode
+  `mlb-build-all-features` itself hit before `setup_build_all_features.sh` was written --
+  see that script's header comment). Safe to delete
+  (`gcloud run jobs delete mlb-build-batter-hits-features` /
+  `mlb-build-game-features`) whenever convenient; not required for correctness, they're
+  just unused and a source of confusion if anyone assumes they're the nightly path.
 
 **Cloud Run Jobs (one-off, not scheduled -- not part of the count below):**
 - `mlb-bakeoff` (the model bake-off tuning exercise: `mlb.analysis.model_bakeoff` +
