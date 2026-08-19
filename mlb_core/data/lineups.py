@@ -19,7 +19,7 @@ from mlb_core.odds.dk_scraper import TEAM_NAME_TO_ABBREV
 
 _session = requests.Session()
 
-MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=probablePitcher"
+MLB_SCHEDULE_URL = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=probablePitcher,venue(location)"
 MLB_BOXSCORE_URL = "https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
 
 _LINEUP_COLS = [
@@ -37,12 +37,27 @@ def _get_games_for_date(date_str: str) -> list:
     games = []
     for d in r.json().get("dates", []):
         for g in d.get("games", []):
+            # venue(location) hydration -- per-game ground truth, not a static
+            # per-team assumption. Added 2026-08-19 after confirming teams can
+            # play a full season at a relocated venue (Athletics -> Sutter
+            # Health Park, Sacramento, 2025-2026; Rays -> George M. Steinbrenner
+            # Field, Tampa, 2025 only) while the old static STADIUMS dict in
+            # weather.py kept pointing at the original ballpark. Coordinates
+            # are None if the API omits location for some venue -- callers
+            # must fall back to the static dict in that case, same as a
+            # network failure. See docs/audits/
+            # 2026-08-19_feature_data_pipeline_review.md findings 2.2/2.6.
+            venue = g.get("venue", {}) or {}
+            coords = (venue.get("location", {}) or {}).get("defaultCoordinates", {}) or {}
             games.append({
                 "game_pk":        g["gamePk"],
                 "game_date":      date_str,
                 "game_time_utc":  g.get("gameDate", ""),
                 "away_team_name": g["teams"]["away"]["team"]["name"],
                 "home_team_name": g["teams"]["home"]["team"]["name"],
+                "venue_name":     venue.get("name"),
+                "venue_lat":      coords.get("latitude"),
+                "venue_lon":      coords.get("longitude"),
             })
     return games
 
@@ -50,13 +65,17 @@ def _get_games_for_date(date_str: str) -> list:
 def get_today_schedule(date_str: str) -> pd.DataFrame:
     """
     Public helper for the runners. Returns one row per game with home/away
-    team abbrevs, game start time, and probable pitcher info (id+name+throws)
-    if posted by MLB. Columns:
+    team abbrevs, game start time, probable pitcher info (id+name+throws)
+    if posted by MLB, and the actual venue (name + coordinates, ground truth
+    from the Stats API rather than an assumed static home park -- see
+    weather.py's per-game venue lookup). Columns:
         game_pk, game_date, game_time_utc, home_team, away_team,
         home_pitcher_id, home_pitcher_name, home_pitcher_throws,
-        away_pitcher_id, away_pitcher_name, away_pitcher_throws
+        away_pitcher_id, away_pitcher_name, away_pitcher_throws,
+        venue_name, venue_lat, venue_lon
 
-    Probable-pitcher fields are NaN if the team hasn't announced one yet.
+    Probable-pitcher and venue fields are NaN/None if MLB hasn't posted them
+    yet or the API omitted them for that game.
     """
     try:
         r = _session.get(MLB_SCHEDULE_URL.format(date=date_str), timeout=30)
@@ -67,10 +86,15 @@ def get_today_schedule(date_str: str) -> pd.DataFrame:
     rows = []
     for d in r.json().get("dates", []):
         for g in d.get("games", []):
+            venue = g.get("venue", {}) or {}
+            coords = (venue.get("location", {}) or {}).get("defaultCoordinates", {}) or {}
             row = {
                 "game_pk":       g["gamePk"],
                 "game_date":     date_str,
                 "game_time_utc": g.get("gameDate", ""),
+                "venue_name":    venue.get("name"),
+                "venue_lat":     coords.get("latitude"),
+                "venue_lon":     coords.get("longitude"),
             }
             for side in ("home", "away"):
                 tm = g["teams"][side]

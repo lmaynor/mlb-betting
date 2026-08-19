@@ -62,6 +62,33 @@ STADIUMS: dict = {
 STADIUMS["AZ"]  = STADIUMS["ARI"]
 STADIUMS["ATH"] = STADIUMS["OAK"]
 
+# STADIUMS is now a FALLBACK, not the primary source. The primary source is a
+# real per-game venue lookup (mlb_core.data.lineups: MLB_SCHEDULE_URL hydrates
+# venue(location); _get_games_for_date / get_today_schedule expose
+# venue_name/venue_lat/venue_lon per game). STADIUMS only kicks in when that
+# lookup is missing (network failure, or a venue the API didn't return
+# coordinates for) -- which also means it's now wrong-by-construction for any
+# team playing away from its usual park, exactly the failure mode that hid
+# two real bugs: the Athletics have played 2025-2026 at Sutter Health Park in
+# West Sacramento (not Oakland Coliseum), and the Rays played all of 2025 at
+# the open-air George M. Steinbrenner Field in Tampa after Hurricane Milton
+# damaged Tropicana Field's roof (back at Tropicana for 2026). Confirmed live
+# via the MLB Stats API -- see docs/audits/
+# 2026-08-19_feature_data_pipeline_review.md findings 2.2/2.6.
+#
+# Roof type is a property of the physical VENUE, not the team, so a relocated
+# team's roof type must come from the venue it's actually playing in, not the
+# team's usual STADIUMS entry. The API doesn't return a simple roof-type
+# field, so known non-standard venues get a small explicit override table
+# instead -- add an entry here for any future relocation once its venue name
+# is known (both current cases are open-air, easily confirmed via
+# https://statsapi.mlb.com/api/v1/venues/{id}?hydrate=location and public
+# reporting on the venue).
+VENUE_ROOF_OVERRIDES: dict = {
+    "Sutter Health Park":          "open",  # Athletics, West Sacramento, 2025-2026+
+    "George M. Steinbrenner Field": "open", # Rays, Tampa, 2025 only (Tropicana Field roof repair)
+}
+
 WIND_OUT_PARKS = {"CHC", "COL", "TEX", "LAD"}
 WIND_IN_PARKS  = {"CHC", "COL", "SF", "BOS"}
 
@@ -115,7 +142,14 @@ def _pull_weather_date(date_str: str, is_forecast: bool = False) -> pd.DataFrame
         abbrev = TEAM_NAME_TO_ABBREV.get(game["home_team_name"])
         if not abbrev or abbrev not in STADIUMS:
             continue
-        lat, lon, roof, tz = STADIUMS[abbrev]
+        fallback_lat, fallback_lon, fallback_roof, tz = STADIUMS[abbrev]
+        venue_name = game.get("venue_name")
+        v_lat, v_lon = game.get("venue_lat"), game.get("venue_lon")
+        if v_lat is not None and v_lon is not None:
+            lat, lon = v_lat, v_lon
+        else:
+            lat, lon = fallback_lat, fallback_lon
+        roof = VENUE_ROOF_OVERRIDES.get(venue_name, fallback_roof)
         try:
             game_dt = datetime.strptime(game["game_time_utc"], "%Y-%m-%dT%H:%M:%SZ")
             hour_utc = game_dt.hour
@@ -320,7 +354,18 @@ def fetch_live_weather_for_slate(sched: "pd.DataFrame") -> dict:
         stadium = STADIUMS.get(home)
         if stadium is None:
             continue
-        lat, lon, roof, _tz = stadium
+        fallback_lat, fallback_lon, fallback_roof, _tz = stadium
+
+        # Prefer the real per-game venue (get_today_schedule now hydrates
+        # venue_name/venue_lat/venue_lon from the Stats API) over the static
+        # STADIUMS fallback -- same rationale as _pull_weather_date above.
+        venue_name = g.get("venue_name")
+        v_lat, v_lon = g.get("venue_lat"), g.get("venue_lon")
+        if pd.notna(v_lat) and pd.notna(v_lon):
+            lat, lon = v_lat, v_lon
+        else:
+            lat, lon = fallback_lat, fallback_lon
+        roof = VENUE_ROOF_OVERRIDES.get(venue_name, fallback_roof)
 
         if roof == "dome":
             out[g["game_pk"]] = {
