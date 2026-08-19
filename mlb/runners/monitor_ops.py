@@ -60,6 +60,17 @@ DATA_MASTER_KEYS = {
     "statcast_master": "Statcast/statcast_master.csv",
     "weather_master":  "Weather/weather_master.csv",
     "umpires_master":  "Umpires/umpscorecards_master.csv",
+    # Added 2026-08-19: these four had NO freshness check anywhere, on top of
+    # having no scheduled refresh at all -- the combination is exactly how
+    # fangraphs_pitching/swing_take/manager_hooks sat frozen for 11+ weeks
+    # (since ~2026-06-02) with zero alerts. Now refreshed by
+    # auxiliary_features_nightly_gcs() via /refresh-data (see main.py) and
+    # checked here the same way as the four sources above. See docs/audits/
+    # 2026-08-19_feature_data_pipeline_review.md finding 2.3.
+    "fangraphs_pitching_master": "AuxData/fangraphs_pitching_master.csv",
+    "swing_take_master":         "AuxData/swing_take_master.csv",
+    "team_schedule_master":      "AuxData/team_schedule_master.csv",
+    "manager_hooks_master":      "AuxData/manager_hooks_master.csv",
 }
 DATA_STALE_HOURS = float(os.getenv("MONITOR_OPS_DATA_STALE_HOURS", "26"))
 STALE_HOURS        = float(os.getenv("MONITOR_OPS_STALE_HOURS", "26"))

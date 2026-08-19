@@ -377,11 +377,36 @@ def refresh_data_handler():
             logger.error(f"refresh-data: savant_leaderboards failed: {se}")
             savant_results = {"error": str(se)}
 
+        # auxiliary_features_nightly_gcs()'s own docstring has claimed since it
+        # was written that it's "Called by /refresh-data (Loop A, 08:00 UTC)"
+        # -- it never actually was. Confirmed by grep: zero references to
+        # auxiliary_features/manager_hooks/team_schedule/fangraphs_pitching/
+        # swing_take anywhere in this file before this fix. Result: bref/
+        # FanGraphs pitching (FIP/WHIP/SO9/BB9) and Savant swing-take
+        # (heart/shadow/chase/waste), which feed NRFI/K/HR/BATTER_HITS/
+        # BATTER_TB via aux_joins.py, were frozen at whatever the last manual
+        # CLI run happened to leave them (~2026-06-02, 11+ weeks stale as of
+        # this fix). manager_hooks (feeds NRFI/K/F5/GAME) had ZERO rows past
+        # 2026-05-31. team_schedule happened to look fresh only because it's
+        # forward-looking schedule data captured once per season, not because
+        # anything was refreshing it. See docs/audits/
+        # 2026-08-19_feature_data_pipeline_review.md finding 2.3.
+        auxiliary_results = {}
+        try:
+            from mlb_core.data.auxiliary_features import auxiliary_features_nightly_gcs
+            auxiliary_results = auxiliary_features_nightly_gcs()
+            ok_count = sum(1 for r in auxiliary_results.values() if isinstance(r, dict) and r.get("status") == "ok")
+            logger.info(f"refresh-data: auxiliary_features {ok_count}/{len(auxiliary_results)} sources refreshed")
+        except Exception as ae:
+            logger.error(f"refresh-data: auxiliary_features failed: {ae}")
+            auxiliary_results = {"error": str(ae)}
+
         all_ok = all(v.get("status") == "ok" for v in fetcher_results.values())
         result = {
             "status": "ok" if all_ok else "partial",
             "fetchers": fetcher_results,
             "savant_leaderboards": savant_results,
+            "auxiliary_features": auxiliary_results,
         }
     except Exception as e:
         tb = traceback.format_exc()
@@ -1614,98 +1639,132 @@ def retrain_outs_handler():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+# -- Shared helpers for triggering Cloud Run Jobs via their REST API --------
+# Used by /retrain-weekly and /calibrate-weekly, which used to be one route:
+# retrain fired synchronously, then a `time.sleep(1800)` daemon thread fired
+# calibrate 30 min later, AFTER the HTTP response had already returned. This
+# service has no always-allocated-CPU annotation (confirmed via `gcloud run
+# services describe`), so it runs under Cloud Run's default CPU throttling --
+# CPU is only reliably allocated while a request is actively being served. A
+# thread that needs to keep running 30 minutes past its own request's
+# response is exactly the pattern that makes unreliable. Confirmed via full
+# execution history, not just the latest run: retrain jobs never missed a
+# scheduled Monday; the paired calibrate jobs for NRFI/F5/K/HR/GAME missed
+# 4 straight Mondays (2026-07-27 through 2026-08-17) before this fix. See
+# docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.4.
+# Fixed 2026-08-19 by splitting into two Scheduler-triggered routes, each
+# firing its own jobs synchronously within its own request -- the same
+# pattern this codebase already uses correctly for /run relative to
+# /snapshot-odds. mlb-calibrate-weekly is a new Scheduler job at 06:35 UTC
+# Monday (35 min after mlb-retrain-weekly's 06:00 UTC).
+_JOBS_PROJECT  = "concrete-crow-445205-m4"
+_JOBS_REGION   = "us-central1"
+_JOBS_BASE_URL = f"https://{_JOBS_REGION}-run.googleapis.com/v2/projects/{_JOBS_PROJECT}/locations/{_JOBS_REGION}/jobs"
+
+RETRAIN_JOBS = [
+    "mlb-retrain-nrfi-v18",
+    "mlb-retrain-f5-v5",      # was mlb-retrain-f5-meta (T11: deprecated shim)
+    "mlb-retrain-k-v1",
+    "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
+    "mlb-retrain-outs-v1",    # E04: OUTS trained model
+    "mlb-retrain-game-v1",    # GAME Pro v1
+    "mlb-retrain-batter-hits",
+    "mlb-retrain-batter-tb",
+]
+CALIBRATE_JOBS = [
+    "mlb-calibrate-nrfi",
+    "mlb-calibrate-f5",
+    "mlb-calibrate-k",
+    "mlb-calibrate-hr",
+    "mlb-calibrate-game",
+    "mlb-calibrate-batter-hits",
+    "mlb-calibrate-batter-tb",
+]
+
+
+def _jobs_get_token() -> str:
+    import google.auth
+    import google.auth.transport.requests
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    req = google.auth.transport.requests.Request()
+    creds.refresh(req)
+    return creds.token
+
+
+def _jobs_trigger(job_name: str, token: str) -> dict:
+    import requests as req_lib
+    url = f"{_JOBS_BASE_URL}/{job_name}:run"
+    r = req_lib.post(
+        url,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={},
+        timeout=30,
+    )
+    return {"job": job_name, "status": r.status_code, "ok": r.status_code in (200, 201)}
+
+
 @app.route("/retrain-weekly", methods=["POST"])
 def retrain_weekly():
     """
-    Trigger weekly retrain + calibrate for trained model systems.
+    Trigger weekly retrain for trained model systems.
     Called by mlb-retrain-weekly scheduler every Monday 06:00 UTC.
-    Fires retrain jobs first, then calibrate jobs after a delay.
-    Uses Cloud Run Jobs API with SA credentials from metadata server.
+    Calibration is a separate route -- see /calibrate-weekly and the module
+    comment above _jobs_get_token for why this is no longer one route.
     """
     err = _scheduler_auth_required(request)
     if err:
         return err
-    import threading
-    import time
-    import google.auth
-    import google.auth.transport.requests
-
-    PROJECT  = "concrete-crow-445205-m4"
-    REGION   = "us-central1"
-    BASE_URL = f"https://{REGION}-run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs"
-
-    RETRAIN_JOBS  = [
-        "mlb-retrain-nrfi-v18",
-        "mlb-retrain-f5-v5",      # was mlb-retrain-f5-meta (T11: deprecated shim)
-        "mlb-retrain-k-v1",
-        "mlb-retrain-hr-v6",      # was mlb-retrain-hr-meta (T11: deprecated shim)
-        "mlb-retrain-outs-v1",    # E04: OUTS trained model
-        "mlb-retrain-game-v1",    # GAME Pro v1
-        "mlb-retrain-batter-hits",
-        "mlb-retrain-batter-tb",
-    ]
-    CALIBRATE_JOBS = [
-        "mlb-calibrate-nrfi",
-        "mlb-calibrate-f5",
-        "mlb-calibrate-k",
-        "mlb-calibrate-hr",
-        "mlb-calibrate-game",
-        "mlb-calibrate-batter-hits",
-        "mlb-calibrate-batter-tb",
-    ]
-    CALIBRATE_DELAY_S = 1800  # 30 min -- enough for all retrains to finish
-
-    def _get_token():
-        creds, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        req = google.auth.transport.requests.Request()
-        creds.refresh(req)
-        return creds.token
-
-    def _trigger_job(job_name: str, token: str) -> dict:
-        import requests as req_lib
-        url = f"{BASE_URL}/{job_name}:run"
-        r = req_lib.post(
-            url,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json={},
-            timeout=30,
-        )
-        return {"job": job_name, "status": r.status_code, "ok": r.status_code in (200, 201)}
-
-    def _run_calibrate_after_delay():
-        time.sleep(CALIBRATE_DELAY_S)
-        try:
-            token = _get_token()
-            for job in CALIBRATE_JOBS:
-                result = _trigger_job(job, token)
-                logger.info(f"retrain-weekly calibrate: {result}")
-        except Exception as e:
-            logger.error(f"retrain-weekly calibrate phase failed: {e}")
 
     try:
-        token = _get_token()
+        token = _jobs_get_token()
     except Exception as e:
         logger.error(f"retrain-weekly: failed to get credentials: {e}")
         return jsonify({"error": str(e)}), 500
 
-    # Fire all retrain jobs immediately
     retrain_results = []
     for job in RETRAIN_JOBS:
-        result = _trigger_job(job, token)
+        result = _jobs_trigger(job, token)
         retrain_results.append(result)
         logger.info(f"retrain-weekly retrain: {result}")
 
-    # Fire calibrate jobs after delay in background thread
-    t = threading.Thread(target=_run_calibrate_after_delay, daemon=True)
-    t.start()
+    return jsonify({
+        "status":       "triggered",
+        "retrain_jobs": retrain_results,
+    })
+
+
+@app.route("/calibrate-weekly", methods=["POST"])
+def calibrate_weekly():
+    """
+    Trigger weekly calibrate for trained model systems.
+    Called by mlb-calibrate-weekly scheduler every Monday ~06:35 UTC -- 35
+    minutes after /retrain-weekly, enough for the 8 retrain jobs (each
+    ~2-8 min per observed execution history) to finish. Split out from
+    /retrain-weekly 2026-08-19 -- see the module comment above
+    _jobs_get_token for why the old single-route + sleeping-thread design
+    was unreliable.
+    """
+    err = _scheduler_auth_required(request)
+    if err:
+        return err
+
+    try:
+        token = _jobs_get_token()
+    except Exception as e:
+        logger.error(f"calibrate-weekly: failed to get credentials: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    calibrate_results = []
+    for job in CALIBRATE_JOBS:
+        result = _jobs_trigger(job, token)
+        calibrate_results.append(result)
+        logger.info(f"calibrate-weekly: {result}")
 
     return jsonify({
-        "status":          "triggered",
-        "retrain_jobs":    retrain_results,
-        "calibrate_delay": f"{CALIBRATE_DELAY_S}s",
-        "calibrate_jobs":  CALIBRATE_JOBS,
+        "status":         "triggered",
+        "calibrate_jobs": calibrate_results,
     })
 
 @app.route("/admin/backfill-notes", methods=["POST"])
