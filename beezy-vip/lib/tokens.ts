@@ -155,6 +155,19 @@ const INNINGS_LABEL: Record<string, string> = {
   GAME: 'Full Game',
 }
 
+// Extract "N+" from a threshold sub-market bet_type (e.g. "K_2PLUS_2.0" ->
+// "2+"), or null if this bet_type isn't one. Added 2026-08-19 for K/OUTS/
+// BATTER_TB/BATTER_HITS's one-sided 2+/3+ sub-markets -- checked before each
+// system's existing OVER/UNDER string-replace logic below, which would
+// otherwise silently mislabel these (side defaults to 'Under', and since
+// neither '..._OVER_' nor '..._UNDER_' is a substring, .replace() is a
+// no-op and the whole raw bet_type leaks into the line field --
+// e.g. "Under K_3PLUS_3.0 Strikeouts").
+function plusLabel(bt: string): string | null {
+  const m = bt.match(/_(\d+)PLUS_/)
+  return m ? `${m[1]}+` : null
+}
+
 // Human-readable pick label from a Bet row
 export function pickLabel(bet: Bet): string {
   const bt     = bet.bet_type ?? ''
@@ -194,11 +207,15 @@ export function pickLabel(bet: Bet): string {
 
   // -- Pitcher Props ----------------------------------------------------
   if (sys === 'K') {
+    const plus = plusLabel(bt)
+    if (plus) return `${player} (${team}) ${plus} Strikeouts`
     const side = bt.startsWith('K_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('K_OVER_', '').replace('K_UNDER_', '')
     return `${player} (${team}) ${side} ${line} Strikeouts`
   }
   if (sys === 'OUTS') {
+    const plus = plusLabel(bt)
+    if (plus) return `${player} (${team}) ${plus} Outs Recorded`
     const side = bt.startsWith('OUTS_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('OUTS_OVER_', '').replace('OUTS_UNDER_', '')
     return `${player} (${team}) ${side} ${line} Outs Recorded`
@@ -218,11 +235,15 @@ export function pickLabel(bet: Bet): string {
     return `${player} (${team}) ${side} ${line} Strikeouts`
   }
   if (sys === 'BATTER_TB') {
+    const plus = plusLabel(bt)
+    if (plus) return `${player} (${team}) ${plus} Total Bases`
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_TB_OVER_', '').replace('BATTER_TB_UNDER_', '')
     return `${player} (${team}) ${side} ${line} Total Bases`
   }
   if (sys === 'BATTER_HITS') {
+    const plus = plusLabel(bt)
+    if (plus) return `${player} (${team}) ${plus} Hits`
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_HITS_OVER_', '').replace('BATTER_HITS_UNDER_', '')
     return `${player} (${team}) ${side} ${line} Hits`

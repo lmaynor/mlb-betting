@@ -165,11 +165,25 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
     # picking the best price ACROSS books at whatever canonical line each book
     # reports -- this step only stops a single book's own alt-lines from
     # clobbering that book's own real line before it ever gets that far).
+    #
+    # Every point NOT chosen as canonical is preserved (not discarded) in
+    # `by_point_all`, keyed per (mkey, player): {point: {side: {book: price}}}.
+    # This is the raw material for 2+/3+ threshold sub-markets -- e.g. K's
+    # one-sided ladder rungs (point=N directly: "N+ Ks") and BATTER_TB/
+    # BATTER_HITS's occasional second two-sided line (point=N-0.5 "over" =
+    # "N+"). Deliberately NOT interpreted here -- what a given point *means*
+    # (ladder rung vs. a second real O/U line) is a per-market question, left
+    # to sgo.py's extractors, same separation of concerns as every other
+    # market-specific extract_*_odds() function.
     acc: dict = {}
+    by_point_all: dict = {}
     for (mkey, player), by_book in raw.items():
         kind = PROP_MARKET_MAP[mkey][2]
         slot = acc.setdefault((mkey, player), {"over": {}, "under": {}})
+        points_key = by_point_all.setdefault((mkey, player), {})
         for bk, entries in by_book.items():
+            for sd, pt, pr in entries:
+                points_key.setdefault(pt, {}).setdefault(sd, {})[bk] = pr
             if kind == "hr_yn":
                 # HR has no line dimension downstream at all (pure "at least 1
                 # HR"), so the answer is unambiguous: lowest point wins.
@@ -199,7 +213,7 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                     slot["under"][bk] = {"odds": str(int(at_main["under"])),
                                          "overUnder": str(main_point)}
 
-    odds, players = {}, {}
+    odds, players, alt_lines = {}, {}, {}
     for (mkey, player), sides in acc.items():
         prefix, stat_id, kind = PROP_MARKET_MAP[mkey]
         pid = _resolve_pid(player, away_abbr, home_abbr, date, game_pk)
@@ -228,7 +242,19 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                              "byBookmaker": {b: {"odds": v["odds"], "available": True,
                                                  "overUnder": v["overUnder"]}
                                              for b, v in bp.items()}}
-    return odds, players
+        # JSON-safe nesting (this round-trips through GCS as Odds/sgo/latest.json,
+        # and JSON object keys must be strings) -- statID (not the ParlayAPI
+        # mkey) as the outer key, matching how everything else in this module
+        # keys off statID once past the raw ParlayAPI shape; point stringified
+        # like `overUnder` already is elsewhere in this file, for the same reason.
+        raw_points = by_point_all.get((mkey, player), {})
+        if raw_points:
+            alt_lines.setdefault(stat_id, {})[pid] = {
+                str(pt): {sd: {bk: str(int(pr)) for bk, pr in books.items()}
+                         for sd, books in sides_at_pt.items()}
+                for pt, sides_at_pt in raw_points.items()
+            }
+    return odds, players, alt_lines
 
 
 def parlay_to_sgo_event(game_lines_event: dict, props_event: dict | None,
@@ -250,7 +276,7 @@ def parlay_to_sgo_event(game_lines_event: dict, props_event: dict | None,
         return None
 
     odds = _game_ml_odds(game_lines_event, home_full, away_full)
-    p_odds, players = _props_odds(props_event, away_abbr, home_abbr, game_date, game_pk)
+    p_odds, players, alt_lines = _props_odds(props_event, away_abbr, home_abbr, game_date, game_pk)
     odds.update(p_odds)
 
     return {
@@ -262,6 +288,14 @@ def parlay_to_sgo_event(game_lines_event: dict, props_event: dict | None,
         },
         "players": players,
         "odds": odds,
+        # {statID: {playerID: {point_str: {side: {book: odds_str}}}}} -- every
+        # quoted point per player/market, main line included, not just the
+        # canonical one selected into `odds` above. Feeds 2+/3+ threshold
+        # sub-markets (sgo.py's extract_*_alt_lines()); absent/empty for
+        # markets with no alt-line activity that pull. New key, so anything
+        # reading an older cached snapshot without it should treat missing as
+        # "no alt-line data available," not an error.
+        "alt_lines": alt_lines,
     }
 
 

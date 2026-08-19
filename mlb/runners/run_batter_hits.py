@@ -26,6 +26,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
+from mlb_core.risk.threshold_bets import score_threshold_bet
+
 logger = logging.getLogger(__name__)
 
 # Active sizing enabled.
@@ -325,6 +327,11 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         logger.warning("BATTER_HITS: no odds in SGO snapshot")
         return pd.DataFrame()
     logger.info(f"BATTER_HITS: {len(hits_odds)} players with odds")
+    # 2+/3+ threshold sub-markets (2026-08-19) -- see run_batter_tb.py's
+    # identical comment: only scored for players who also have a main-line
+    # quote this run.
+    hits_2plus_odds = _sgo.extract_batter_hits_alt_line_odds(events, 2) if events else {}
+    hits_3plus_odds = _sgo.extract_batter_hits_alt_line_odds(events, 3) if events else {}
 
     # Score all candidates
     X = feat_df.reindex(columns=features).apply(pd.to_numeric, errors="coerce")
@@ -523,6 +530,47 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "kelly_triggered": kelly_triggered,
             "bookmaker":       odds_info.get("bookmaker"),
         })
+
+        for n, alt_info in ((2, hits_2plus_odds.get(player_name)),
+                           (3, hits_3plus_odds.get(player_name))):
+            if alt_info is None:
+                continue
+            trow, _bankroll = score_threshold_bet(
+                model_prob_raw=_negbin_p_over(n - 0.5, mu, nb_alpha),
+                alt_odds_info=alt_info,
+                vig_market_key=f"bhits_{n}plus",
+                game_pk=int(row.get("game_pk", 0)),
+                bankroll=_bankroll,
+                prefetched_stakes=_prefetched,
+                pending_stakes=_pending,
+                cfg=cfg,
+                gate_suppressed=_gate_suppressed or LOG_ONLY,
+            )
+            if trow is None:
+                continue
+            logger.info(
+                "BATTER_HITS pred | %s | %d+ hits | lam=%.3f | model=%.3f fair=%.3f edge=%+.3f",
+                player_name, n, mu, trow["model_prob"], trow["market_prob"], trow["edge"],
+            )
+            results.append({
+                "player":          player_name,
+                "game_pk":         int(row.get("game_pk", 0)),
+                "away_team":       trow["away_team"] or odds_info["away_team"],
+                "home_team":       trow["home_team"] or odds_info["home_team"],
+                "line":            float(n),
+                "side":            f"{n}PLUS",
+                "bet_type":        f"BATTER_HITS_{n}PLUS_{float(n)}",
+                "raw_lambda_hits": round(float(row.get("raw_lambda_hits", mu)), 4),
+                "lambda_hits":     round(mu, 4),
+                "model_prob":      trow["model_prob"],
+                "market_prob":     trow["market_prob"],
+                "edge":            trow["edge"],
+                "kelly_pct":       trow["kelly_pct"],
+                "odds":            trow["odds"],
+                "stake":           trow["stake"],
+                "kelly_triggered": trow["kelly_triggered"],
+                "bookmaker":       trow["bookmaker"],
+            })
 
     if not results:
         return pd.DataFrame()

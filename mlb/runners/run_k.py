@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 from mlb_core.rationale import build_rationale
 from mlb_core.odds.utils import devig_two_way
+from mlb_core.risk.threshold_bets import score_threshold_bet
 
 _IP_STD      = 1.5
 _OUTS_MC_SIMS = 10_000
@@ -401,6 +402,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
     k_odds_by_name    = sgo.extract_k_odds(events)
     outs_odds_by_name = sgo.extract_outs_odds(events)
+    # 2+/3+ threshold sub-markets (2026-08-19) -- independent presence check
+    # from the main O/U line above; a pitcher can have alt-line quotes with
+    # or without a main line being priced this run.
+    k_2plus_by_name    = sgo.extract_k_alt_line_odds(events, 2)
+    k_3plus_by_name    = sgo.extract_k_alt_line_odds(events, 3)
+    outs_2plus_by_name = sgo.extract_outs_alt_line_odds(events, 2)
+    outs_3plus_by_name = sgo.extract_outs_alt_line_odds(events, 3)
 
     if not k_odds_by_name and not outs_odds_by_name:
         logger.warning("K: 0 pitchers have DK K or outs prices — skipping")
@@ -410,6 +418,14 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                     for n, info in k_odds_by_name.items()}
     outs_by_norm = {_normalize_name(n): {"name": n, **info}
                     for n, info in outs_odds_by_name.items()}
+    k_2plus_by_norm    = {_normalize_name(n): {"name": n, **info}
+                         for n, info in k_2plus_by_name.items()}
+    k_3plus_by_norm    = {_normalize_name(n): {"name": n, **info}
+                         for n, info in k_3plus_by_name.items()}
+    outs_2plus_by_norm = {_normalize_name(n): {"name": n, **info}
+                         for n, info in outs_2plus_by_name.items()}
+    outs_3plus_by_norm = {_normalize_name(n): {"name": n, **info}
+                         for n, info in outs_3plus_by_name.items()}
 
     results = []
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
@@ -445,20 +461,81 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         avg_ip_f = float(avg_ip) if avg_ip is not None and not pd.isna(avg_ip) else 5.0
         team     = row["home_team"] if row["is_home"] == 1 else row["away_team"]
 
-        # ── Strikeout O/U ──────────────────────────────────────────────────
-        k_info = k_by_norm.get(norm)
+        # ── Strikeout O/U + 2+/3+ threshold sub-markets ─────────────────────
+        k_info       = k_by_norm.get(norm)
+        k_2plus_info = k_2plus_by_norm.get(norm)
+        k_3plus_info = k_3plus_by_norm.get(norm)
+        if k_info or k_2plus_info or k_3plus_info:
+            # Simulated once per pitcher, shared by the main O/U line (if
+            # present) and the threshold sub-markets (if present) -- the
+            # simulation itself only needs the model's own lambda_k, not
+            # whether any particular market happens to be priced this run.
+            k_per_9 = row.get("k_per_9_L5")
+            k_per_9_f = float(k_per_9) if k_per_9 is not None and not pd.isna(k_per_9) else None
+            probs = _simulate_k(
+                float(row["lambda_k"]), avg_ip,
+                n_sims=cfg["mc_sims"], cap=cfg["mc_cap"],
+                k_per_9_L5=k_per_9_f,
+            )
+
+            for _n, _info in ((2, k_2plus_info), (3, k_3plus_info)):
+                if _info is None:
+                    continue
+                _trow, _bankroll_k = score_threshold_bet(
+                    model_prob_raw=probs.get(f"p_{_n}plus", 0.0),
+                    alt_odds_info=_info,
+                    vig_market_key=f"k_{_n}plus",
+                    game_pk=int(row["game_pk"]),
+                    bankroll=_bankroll_k,
+                    prefetched_stakes=_prefetched_stakes_k,
+                    pending_stakes=_pending_stakes_k,
+                    cfg=cfg,
+                    gate_suppressed=_gate_suppressed_k,
+                )
+                if _trow is None:
+                    continue
+                logger.info(
+                    f"K pred | {row['_pitcher_name']} | {_n}+ Ks | proj={probs['mean']:.2f} | "
+                    f"model={_trow['model_prob']:.3f} fair={_trow['market_prob']:.3f} "
+                    f"edge={_trow['edge']:+.3f}"
+                )
+                results.append({
+                    "player":          row["_pitcher_name"],
+                    "team":            team,
+                    "game_pk":         int(row["game_pk"]),
+                    "away_team":       _trow["away_team"] or row["away_team"],
+                    "home_team":       _trow["home_team"] or row["home_team"],
+                    "side":            f"{_n}PLUS",
+                    "line":            float(_n),
+                    "raw_lambda_k":    round(float(row.get("raw_lambda_k", row["lambda_k"])), 3),
+                    "lambda_k":        round(float(row["lambda_k"]), 3),
+                    "proxy_lambda_k":  round(float(probs["proxy_lambda_k"]), 3) if probs.get("proxy_lambda_k") is not None else None,
+                    "proj_k":          round(probs["mean"], 3),
+                    "model_prob":      _trow["model_prob"],
+                    "market_prob":     _trow["market_prob"],
+                    "edge":            _trow["edge"],
+                    "kelly_pct":       _trow["kelly_pct"],
+                    "odds":            _trow["odds"],
+                    "stake":           _trow["stake"],
+                    "kelly_triggered": _trow["kelly_triggered"],
+                    "market":          "K",
+                    "bookmaker":       _trow["bookmaker"],
+                    "morning_odds":    None,  # alt-lines have no oddID scheme (yet) for line-movement tracking
+                    "k_pct_L3":               row.get("k_pct_L3"),
+                    "whiff_pct_L3":           row.get("whiff_pct_L3"),
+                    "velo_mean_L3":           row.get("velo_mean_L3"),
+                    "bb_pct_L3":              row.get("bb_pct_L3"),
+                    "xwoba_allowed_L3":       row.get("xwoba_allowed_L3"),
+                    "days_rest":              row.get("days_rest"),
+                    "short_rest":             row.get("short_rest"),
+                    "ump_total_run_impact_L30": row.get("ump_total_run_impact_L30"),
+                })
+
         if k_info:
             line       = k_info.get("line")
             over_odds  = k_info.get("over_odds")
             under_odds = k_info.get("under_odds")
             if line is not None and over_odds is not None and under_odds is not None:
-                k_per_9 = row.get("k_per_9_L5")
-                k_per_9_f = float(k_per_9) if k_per_9 is not None and not pd.isna(k_per_9) else None
-                probs = _simulate_k(
-                    float(row["lambda_k"]), avg_ip,
-                    n_sims=cfg["mc_sims"], cap=cfg["mc_cap"],
-                    k_per_9_L5=k_per_9_f,
-                )
                 p_over, p_under = _ou_probs(probs, float(line))
                 p_over  = min(max(p_over,  0.001), 0.999)
                 p_under = min(max(p_under, 0.001), 0.999)
@@ -534,50 +611,112 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "ump_total_run_impact_L30": row.get("ump_total_run_impact_L30"),
                     })
 
-        # ── Pitcher outs O/U ───────────────────────────────────────────────
-        outs_info = outs_by_norm.get(norm)
+        # ── Pitcher outs O/U + 2+/3+ threshold sub-markets ──────────────────
+        outs_info       = outs_by_norm.get(norm)
+        outs_2plus_info = outs_2plus_by_norm.get(norm)
+        outs_3plus_info = outs_3plus_by_norm.get(norm)
+        if outs_info or outs_2plus_info or outs_3plus_info:
+            # E04: use trained OUTS model if available, else Normal proxy.
+            # Computed once per pitcher (booster predict is the expensive
+            # part here), shared by the main O/U line and the threshold
+            # sub-markets, same reasoning as K's probs above.
+            _raw_lam_outs = None
+            _outs_cal_in_range = False
+            if _outs_booster is not None and _outs_features:
+                _X_outs = pd.DataFrame([row.to_dict()]).reindex(columns=_outs_features)
+                _X_outs = _X_outs.apply(pd.to_numeric, errors="coerce")
+                for _fc in _outs_features:
+                    _fmv = _outs_feat_means.get(_fc)
+                    if _fmv is not None:
+                        _X_outs[_fc] = _X_outs[_fc].fillna(float(_fmv))
+                _dm_outs = xgb.DMatrix(_X_outs, feature_names=_outs_features)
+                _ntree_outs = getattr(_outs_booster, "best_ntree_limit", 0)
+                # Safe iteration_range pattern (CONTEXT.md contract) --
+                # passing iteration_range=None crashes XGBoost>=2.0; this
+                # was the one call site still using the banned ternary,
+                # dormant only because OUTS's best_iteration is currently
+                # truthy. See docs/audits/
+                # 2026-08-16_cloud_efficiency_and_profitability_review.md
+                # finding A11.
+                _outs_pred = (
+                    _outs_booster.predict(_dm_outs, iteration_range=(0, _ntree_outs))
+                    if _ntree_outs else _outs_booster.predict(_dm_outs)
+                )
+                _lam_outs = float(_outs_pred[0])
+                _raw_lam_outs = _lam_outs
+                if _outs_cal is not None:
+                    try:
+                        _x_min = getattr(_outs_cal, "X_min_", None)
+                        _x_max = getattr(_outs_cal, "X_max_", None)
+                        if _x_min is None or _x_max is None or (_x_min <= _raw_lam_outs <= _x_max):
+                            _lam_outs = float(_outs_cal.predict([_raw_lam_outs])[0])
+                            _outs_cal_in_range = True
+                    except Exception:
+                        pass
+                dist = _simulate_outs_model(_lam_outs, _outs_nb_alpha)
+            else:
+                dist = _simulate_outs(avg_ip_f)
+
+            for _n, _info in ((2, outs_2plus_info), (3, outs_3plus_info)):
+                if _info is None:
+                    continue
+                _p_n_plus = float(np.mean(dist["_samples"] >= _n))
+                _trow, _bankroll_outs = score_threshold_bet(
+                    model_prob_raw=_p_n_plus,
+                    alt_odds_info=_info,
+                    vig_market_key=f"outs_{_n}plus",
+                    game_pk=int(row["game_pk"]),
+                    bankroll=_bankroll_outs,
+                    prefetched_stakes=_prefetched_stakes_outs,
+                    pending_stakes=_pending_stakes_outs,
+                    cfg=cfg,
+                    gate_suppressed=_gate_suppressed_outs,
+                )
+                if _trow is None:
+                    continue
+                logger.info(
+                    f"OUTS pred | {row['_pitcher_name']} | {_n}+ outs | "
+                    f"proj_outs={dist['mean_outs']:.2f} | model={_trow['model_prob']:.3f} "
+                    f"fair={_trow['market_prob']:.3f} edge={_trow['edge']:+.3f}"
+                )
+                results.append({
+                    "player":          row["_pitcher_name"],
+                    "team":            team,
+                    "game_pk":         int(row["game_pk"]),
+                    "away_team":       _trow["away_team"] or row["away_team"],
+                    "home_team":       _trow["home_team"] or row["home_team"],
+                    "side":            f"{_n}PLUS",
+                    "line":            float(_n),
+                    "raw_lambda_outs": round(float(_raw_lam_outs), 3) if _raw_lam_outs is not None else None,
+                    "lambda_outs":     round(float(_lam_outs), 3) if _outs_booster is not None and _outs_features else None,
+                    "outs_calibrator_in_range": _outs_cal_in_range,
+                    "lambda_k":        round(float(row["lambda_k"]), 3),
+                    "proj_k":          round(dist["mean_outs"] / 3, 3),  # matches main OUTS block: proj_k stores projected IP, not raw outs
+                    "model_prob":      _trow["model_prob"],
+                    "market_prob":     _trow["market_prob"],
+                    "edge":            _trow["edge"],
+                    "kelly_pct":       _trow["kelly_pct"],
+                    "odds":            _trow["odds"],
+                    "stake":           _trow["stake"],
+                    "kelly_triggered": _trow["kelly_triggered"],
+                    "market":          "OUTS",
+                    "bookmaker":       _trow["bookmaker"],
+                    "morning_odds":    None,
+                    "k_pct_L3":               row.get("k_pct_L3"),
+                    "whiff_pct_L3":           row.get("whiff_pct_L3"),
+                    "velo_mean_L3":           row.get("velo_mean_L3"),
+                    "bb_pct_L3":              row.get("bb_pct_L3"),
+                    "xwoba_allowed_L3":       row.get("xwoba_allowed_L3"),
+                    "days_rest":              row.get("days_rest"),
+                    "short_rest":             row.get("short_rest"),
+                    "ump_total_run_impact_L30": row.get("ump_total_run_impact_L30"),
+                })
+
         if outs_info:
             line       = outs_info.get("line")
             over_odds  = outs_info.get("over_odds")
             under_odds = outs_info.get("under_odds")
             if line is not None and over_odds is not None and under_odds is not None:
-                # E04: use trained OUTS model if available, else Normal proxy
-                _raw_lam_outs = None
-                _outs_cal_in_range = False
-                if _outs_booster is not None and _outs_features:
-                    _X_outs = pd.DataFrame([row.to_dict()]).reindex(columns=_outs_features)
-                    _X_outs = _X_outs.apply(pd.to_numeric, errors="coerce")
-                    for _fc in _outs_features:
-                        _fmv = _outs_feat_means.get(_fc)
-                        if _fmv is not None:
-                            _X_outs[_fc] = _X_outs[_fc].fillna(float(_fmv))
-                    _dm_outs = xgb.DMatrix(_X_outs, feature_names=_outs_features)
-                    _ntree_outs = getattr(_outs_booster, "best_ntree_limit", 0)
-                    # Safe iteration_range pattern (CONTEXT.md contract) --
-                    # passing iteration_range=None crashes XGBoost>=2.0; this
-                    # was the one call site still using the banned ternary,
-                    # dormant only because OUTS's best_iteration is currently
-                    # truthy. See docs/audits/
-                    # 2026-08-16_cloud_efficiency_and_profitability_review.md
-                    # finding A11.
-                    _outs_pred = (
-                        _outs_booster.predict(_dm_outs, iteration_range=(0, _ntree_outs))
-                        if _ntree_outs else _outs_booster.predict(_dm_outs)
-                    )
-                    _lam_outs = float(_outs_pred[0])
-                    _raw_lam_outs = _lam_outs
-                    if _outs_cal is not None:
-                        try:
-                            _x_min = getattr(_outs_cal, "X_min_", None)
-                            _x_max = getattr(_outs_cal, "X_max_", None)
-                            if _x_min is None or _x_max is None or (_x_min <= _raw_lam_outs <= _x_max):
-                                _lam_outs = float(_outs_cal.predict([_raw_lam_outs])[0])
-                                _outs_cal_in_range = True
-                        except Exception:
-                            pass
-                    dist = _simulate_outs_model(_lam_outs, _outs_nb_alpha)
-                else:
-                    dist = _simulate_outs(avg_ip_f)
                 p_over, p_under = _outs_ou_probs(dist, float(line))
                 p_over  = min(max(p_over,  0.001), 0.999)
                 p_under = min(max(p_under, 0.001), 0.999)

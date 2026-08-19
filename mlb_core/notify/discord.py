@@ -161,6 +161,21 @@ def _round_stake(stake: Optional[float]) -> Optional[float]:
     return round(stake / 5) * 5
 
 
+def _side_word(side: str) -> str:
+    """'OVER'->'Over', 'UNDER'->'Under', '2PLUS'/'3PLUS'->'2+'/'3+' (one-sided
+    threshold sub-markets, 2026-08-19: K/OUTS/BATTER_TB/BATTER_HITS). Anything
+    else passed through raw rather than guessed at, matching how the K/OUTS
+    branch already degraded before this existed -- better an unrecognized
+    raw string in a Discord message than a wrong-but-plausible-looking one."""
+    if side == "OVER":
+        return "Over"
+    if side == "UNDER":
+        return "Under"
+    if side.endswith("PLUS") and side[:-len("PLUS")].isdigit():
+        return f"{side[:-len('PLUS')]}+"
+    return side
+
+
 def _format_bet_headline(b: dict, system: str) -> str:
     away = b.get("away_team", "")
     home = b.get("home_team", "")
@@ -200,8 +215,10 @@ def _format_bet_headline(b: dict, system: str) -> str:
         team_tag = f" ({team})" if team else ""
         line   = b.get("line")
         side   = (b.get("side") or "").upper()
-        side_word = "Over" if side == "OVER" else ("Under" if side == "UNDER" else side)
-        line_str  = f" {line}" if line is not None else ""
+        side_word = _side_word(side)
+        # "2+"/"3+" already carries the threshold -- don't also tack on the
+        # redundant/confusing raw line value (2+ Strikeouts, not 2+ 2.0 Strikeouts).
+        line_str  = f" {line}" if line is not None and not side.endswith("PLUS") else ""
         market = "Outs Recorded" if sys == "OUTS" or bt.startswith("OUTS_") else "Strikeouts"
         return f"{player}{team_tag} - {side_word}{line_str} {market}"
 
@@ -231,16 +248,16 @@ def _format_bet_headline(b: dict, system: str) -> str:
         player = b.get("player", "")
         line   = b.get("line")
         side   = (b.get("side") or "").upper()
-        side_word = "Over" if side == "OVER" else "Under"
-        line_str  = f" {line}" if line is not None else ""
+        side_word = _side_word(side)
+        line_str  = f" {line}" if line is not None and not side.endswith("PLUS") else ""
         return f"{player} - {side_word}{line_str} Total Bases"
 
     if sys == "BATTER_HITS":
         player = b.get("player", "")
         line   = b.get("line")
         side   = (b.get("side") or "").upper()
-        side_word = "Over" if side == "OVER" else "Under"
-        line_str  = f" {line}" if line is not None else ""
+        side_word = _side_word(side)
+        line_str  = f" {line}" if line is not None and not side.endswith("PLUS") else ""
         return f"{player} - {side_word}{line_str} Hits"
 
     if sys == "PITCHER_ER":
