@@ -131,7 +131,15 @@ def _game_ml_odds(game_lines_event: dict, home_full: str, away_full: str) -> dic
 
 def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                 date: str, game_pk=None) -> tuple[dict, dict]:
-    acc: dict = {}
+    # Pass 1: collect every (side, point, price) outcome per (mkey, player, book)
+    # WITHOUT collapsing -- some books quote more than one point under the same
+    # market/player/book (DraftKings' strikeouts ladder observed 2026-08-19 sends
+    # a full "2+ through 9+ Ks" run of one-sided outcomes alongside its real
+    # Over/Under 4.5 line; HR's "2+ HR" alt-line, fixed 2026-08-18, is the same
+    # shape). Collapsing during collection let whichever outcome a book happened
+    # to list last in its JSON silently win -- not a rare edge case, since JSON
+    # key order isn't guaranteed. See docs/solutions if this needs revisiting.
+    raw: dict = {}
     for book in (props_event or {}).get("bookmakers") or []:
         bk = _canon_book(book.get("key", ""))
         if not bk:
@@ -148,24 +156,48 @@ def _props_odds(props_event: dict, away_abbr: str, home_abbr: str,
                     continue
                 if not id_resolver.is_player_name(player):   # drop template/matchup junk
                     continue
-                slot = acc.setdefault((mkey, player), {"over": {}, "under": {}})
-                if PROP_MARKET_MAP[mkey][2] == "hr_yn":
-                    # Some books (DraftKings observed 2026-08-18) list a
-                    # standard "1+ HR" outcome (point=1.0, or 0.5 depending on
-                    # book convention) AND a much-longer-odds "2+ HR" alt-line
-                    # under the exact same market/player/book -- e.g. Ronald
-                    # Acuna Jr. priced at both +400 (point=1.0) and +4300
-                    # (point=2.0) simultaneously. HR is modeled purely as
-                    # "at least 1 HR" (the yn-yes oddID has no line dimension
-                    # downstream at all), so grouping only by (mkey, player)
-                    # let the 2+ HR outcome silently clobber the correct one
-                    # whenever it happened to be processed second -- not a
-                    # rare edge case, since JSON key order isn't guaranteed.
-                    # Keep only the lowest point seen per (player, book, side).
-                    existing = slot[side].get(bk)
-                    if existing is not None and float(existing["overUnder"]) <= point:
-                        continue
-                slot[side][bk] = {"odds": str(int(price)), "overUnder": str(point)}
+                (raw.setdefault((mkey, player), {})
+                    .setdefault(bk, [])
+                    .append((side, point, price)))
+
+    # Pass 2: pick ONE canonical point per (mkey, player, book) for the main-line
+    # extractors (sgo.py's _best_book_odds_for_line still does its own job of
+    # picking the best price ACROSS books at whatever canonical line each book
+    # reports -- this step only stops a single book's own alt-lines from
+    # clobbering that book's own real line before it ever gets that far).
+    acc: dict = {}
+    for (mkey, player), by_book in raw.items():
+        kind = PROP_MARKET_MAP[mkey][2]
+        slot = acc.setdefault((mkey, player), {"over": {}, "under": {}})
+        for bk, entries in by_book.items():
+            if kind == "hr_yn":
+                # HR has no line dimension downstream at all (pure "at least 1
+                # HR"), so the answer is unambiguous: lowest point wins.
+                overs = [(pt, pr) for (sd, pt, pr) in entries if sd == "over"]
+                if not overs:
+                    continue
+                pt, pr = min(overs, key=lambda x: x[0])
+                slot["over"][bk] = {"odds": str(int(pr)), "overUnder": str(pt)}
+            else:
+                # OU markets: a book's alt-line rungs are one-sided ("2+ Ks",
+                # "yes" only, no matching "under 2 Ks") while its real O/U main
+                # line has both sides quoted -- prefer whichever point has both
+                # over AND under over any one-sided point. Falls back to the
+                # lowest point seen if nothing is two-sided (e.g. only a
+                # one-sided ladder was quoted at all, no real line yet).
+                by_point: dict = {}
+                for sd, pt, pr in entries:
+                    by_point.setdefault(pt, {})[sd] = pr
+                two_sided = [pt for pt, s in by_point.items()
+                            if "over" in s and "under" in s]
+                main_point = min(two_sided) if two_sided else min(by_point)
+                at_main = by_point[main_point]
+                if "over" in at_main:
+                    slot["over"][bk] = {"odds": str(int(at_main["over"])),
+                                        "overUnder": str(main_point)}
+                if "under" in at_main:
+                    slot["under"][bk] = {"odds": str(int(at_main["under"])),
+                                         "overUnder": str(main_point)}
 
     odds, players = {}, {}
     for (mkey, player), sides in acc.items():
