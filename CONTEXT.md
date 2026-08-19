@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-17 (E9/B2.4 closed: mlb-build-batter-hits-features/mlb-build-game-features confirmed orphaned in GCP -- pruned from the live job inventory in section 7, documented as dead jobs instead)
+_Last updated: 2026-08-19 (2+/3+ threshold sub-markets shipped for K/OUTS/BATTER_TB/BATTER_HITS -- see s5/s6 "2+/3+ threshold sub-markets"; also since 2026-08-17: bet dedup key fixed to include `player`, and a live HR odds alt-line-clobbering bug fixed -- both deployed and verified live)
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -705,6 +705,16 @@ mid AND a book-pack consensus to show, not one anchor).
 | BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
 | PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
 
+2+/3+ threshold sub-markets (2026-08-19, K/OUTS/BATTER_TB/BATTER_HITS only --
+see s5 "2+/3+ threshold sub-markets" below): `"{SYSTEM}_{N}PLUS_{N}.0"`, e.g.
+`"K_2PLUS_2.0"`, `"OUTS_3PLUS_3.0"`, `"BATTER_TB_2PLUS_2.0"`,
+`"BATTER_HITS_3PLUS_3.0"`. Deliberately reuses each system's existing
+`"{SYSTEM}_{SIDE}_{LINE}"` bet_type CONSTRUCTION line unchanged (`side` is
+just `"{N}PLUS"` instead of `"OVER"`/`"UNDER"`, `line` is `float(N)`) --
+settlement/Discord/frontend each detect the `PLUS` suffix on `side` and grade
+one-sided (HR-style: exactly N is a WIN, no push, since there's no
+complementary "under N" side to this bet at all).
+
 ### Settlement sources
 
 All settlement uses MLB Stats API via `mlb_core.data.game_result.fetch_game_result(game_pk)`.
@@ -918,6 +928,65 @@ When a new SGO market maps directly to an existing MLB API field in `game_result
 
 For markets that need a new model: build the model in a notebook first, then
 follow the full "adding a new system" checklist above.
+
+### Adding a 2+/3+ threshold sub-market (no new model needed either)
+Shipped 2026-08-19 for K/OUTS/BATTER_TB/BATTER_HITS -- a different shape from
+the section above (that one's for a brand-new SGO market mapping straight to
+a `game_result` field; this one's for a NEW ONE-SIDED THRESHOLD reusing an
+EXISTING count model's own probability, just evaluated at a different N).
+Came from a real user request ("model 2+/3+ HR/TB/hits/Ks -- even at 80-to-1
+for a 2% modeled chance, that's still worth betting").
+
+**Why this was mostly plumbing, not modeling**: BATTER_TB/BATTER_HITS/K/OUTS
+already fit a full NegBin count distribution (`mu`/`nb_alpha`), not just "beat
+this one line" -- `P(X>=N)` for ANY N is a pure CDF re-evaluation
+(`mlb.runners.run_batter_hits._negbin_p_over(N-0.5, mu, nb_alpha)`; K's own
+Monte Carlo simulator, `_simulate_k`, already computes every `p_Nplus` rung
+per pitcher and was just throwing them away). **HR is the exception** -- it's
+a binary "at least 1" classifier, not a count model, so HR 2+/3+ needs an
+actual new count regression, not just this pattern. Deferred; see
+[[project_ops_incident_2026-08-19_hr_odds]] memory for why the existing bakeoff's
+`xhr_poisson` candidate isn't a shortcut here (still only outputs P(HR>=1),
+needs a `main`-absent feature, never successfully scored in any bakeoff run).
+
+**Two genuinely different market shapes for the odds side** (confirmed via
+real captured ParlayAPI data, not assumed) -- `mlb_core/odds/parlay_adapter.py`'s
+`_props_odds()` now preserves every quoted point (not just each book's
+canonical line) in a new `alt_lines` field on the SGO event
+(`{statID: {playerID: {point_str: {side: {book: odds_str}}}}}`, JSON-safe):
+- K's strikeout market has a dedicated one-sided ladder prop (`point=N`
+  directly IS "N+ Ks", no complementary "under N" quote at all).
+- OUTS/BATTER_TB/BATTER_HITS have no such ladder -- an alt line, when quoted
+  at all, is an ordinary second two-sided O/U market one tick below the
+  threshold (`point=N-0.5`'s "over" side = "N+").
+
+`mlb_core/odds/sgo.py`'s `extract_{k,outs,batter_tb,batter_hits}_alt_line_odds(events, n)`
+read `alt_lines` (never `odds` -- the canonical dict has no line dimension for
+these at all) and return the same `{player_name: {odds, line, ...}}` shape
+every other extractor uses. `mlb_core/risk/threshold_bets.score_threshold_bet()`
+holds the shared one-sided scoring math (mirrors `run_hr.py`'s own
+`devig_unilateral` + empirical `book_vig.get_vig()` pattern, since there's no
+complementary side to pair a two-way devig against -- conservative 10%
+default vig market key, e.g. `"k_2plus"`, until book_vig's weekly refit has
+real settled history to fit against).
+
+**Exposure cap, a deliberate design call, not an oversight**: a 2+/3+ bet on
+the same player/game as the main line shares that SAME per-game system cap
+(`mlb_core.risk.exposure`) -- not given a separate allowance. Revisit if that
+turns out too conservative once there's real settled data.
+
+Settlement (`settle_bets.py`'s `_settle_k`/`_settle_batter_props`) and both
+UI-facing formatters (`mlb_core/notify/discord.py`'s `_format_bet_headline`,
+`beezy-vip/lib/tokens.ts`'s `pickLabel`) all detect the bet_type's `PLUS`
+suffix and grade/render one-sided (HR-style: exactly N is a WIN, not a push --
+there's no "under N" side to tie against). Getting this wrong was the
+easiest mistake to make touching this: the pre-existing generic
+`actual==line -> push` / `"Over"/"Under"` two-way logic in every one of those
+three files would otherwise silently mishandle a `PLUS` bet_type (settlement
+would wrongly push an exact hit; Discord's K/OUTS branch would print the raw
+"2PLUS" string; BATTER_TB/BATTER_HITS's Discord branch and the frontend's
+`pickLabel` would actively mislabel it "Under" since neither had a fallback
+branch for anything other than `OVER`/`UNDER`).
 
 ### Feature/column naming drift
 Several places where the same concept has different names:

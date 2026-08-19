@@ -284,6 +284,34 @@ class TestSettleK:
         results  = self._settle("K_OVER_6.5", "José Berríos", pitchers)
         assert results[0]["result"] == "win"
 
+    def test_k_2plus_exact_hit_is_a_win_not_a_push(self):
+        """Regression (2026-08-19): a threshold bet has no complementary
+        'under N' side -- hitting exactly N must be a WIN, not the generic
+        actual==line push the main O/U logic would otherwise apply."""
+        pitchers = self._make_pitchers("gerrit cole", 2, 15)
+        results  = self._settle("K_2PLUS_2.0", "Gerrit Cole", pitchers)
+        assert results[0]["result"] == "win"
+
+    def test_k_2plus_below_threshold_is_a_loss(self):
+        pitchers = self._make_pitchers("gerrit cole", 1, 15)
+        results  = self._settle("K_2PLUS_2.0", "Gerrit Cole", pitchers)
+        assert results[0]["result"] == "loss"
+
+    def test_k_3plus_above_threshold_is_a_win(self):
+        pitchers = self._make_pitchers("gerrit cole", 9, 21)
+        results  = self._settle("K_3PLUS_3.0", "Gerrit Cole", pitchers)
+        assert results[0]["result"] == "win"
+
+    def test_outs_2plus_exact_hit_is_a_win_not_a_push(self):
+        pitchers = self._make_pitchers("gerrit cole", 5, 2)
+        results  = self._settle("OUTS_2PLUS_2.0", "Gerrit Cole", pitchers)
+        assert results[0]["result"] == "win"
+
+    def test_outs_2plus_below_threshold_is_a_loss(self):
+        pitchers = self._make_pitchers("gerrit cole", 5, 1)
+        results  = self._settle("OUTS_2PLUS_2.0", "Gerrit Cole", pitchers)
+        assert results[0]["result"] == "loss"
+
 
 # ── Batter props ──────────────────────────────────────────────────────────────
 
@@ -316,6 +344,32 @@ class TestSettleBatterProps:
     def test_batter_tb_non_starter_void(self):
         batters = self._make_batters("aaron judge", starter=False, total_bases=0)
         results = self._settle("BATTER_TB_OVER_1.5", "Aaron Judge", batters)
+        assert results[0]["result"] == "void"
+        assert results[0]["profit"] == 0.0
+
+    def test_batter_tb_2plus_exact_hit_is_a_win_not_a_push(self):
+        """Regression (2026-08-19): same reasoning as K's identical fix --
+        a threshold bet has no complementary 'under N' side, so hitting
+        exactly N must be a WIN, not a push."""
+        batters = self._make_batters("aaron judge", total_bases=2)
+        results = self._settle("BATTER_TB_2PLUS_2.0", "Aaron Judge", batters)
+        assert results[0]["result"] == "win"
+
+    def test_batter_tb_2plus_below_threshold_is_a_loss(self):
+        batters = self._make_batters("aaron judge", total_bases=1)
+        results = self._settle("BATTER_TB_2PLUS_2.0", "Aaron Judge", batters)
+        assert results[0]["result"] == "loss"
+
+    def test_batter_hits_2plus_exact_hit_is_a_win_not_a_push(self):
+        batters = self._make_batters("aaron judge", hits=2)
+        results = self._settle("BATTER_HITS_2PLUS_2.0", "Aaron Judge", batters)
+        assert results[0]["result"] == "win"
+
+    def test_batter_hits_2plus_non_starter_void(self):
+        """Threshold bets go through the same starter check as the main
+        line -- the PLUS branch must not bypass it."""
+        batters = self._make_batters("aaron judge", starter=False, hits=5)
+        results = self._settle("BATTER_HITS_2PLUS_2.0", "Aaron Judge", batters)
         assert results[0]["result"] == "void"
         assert results[0]["profit"] == 0.0
 

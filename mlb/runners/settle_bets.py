@@ -290,6 +290,27 @@ def _settle_k(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
             continue
 
         actual = pitcher_data[stat_key]
+
+        # 2+/3+ threshold sub-markets (2026-08-19): one-sided "at least N"
+        # bets (bet_type e.g. K_2PLUS_2.0, OUTS_3PLUS_3.0) -- must be graded
+        # BEFORE the generic actual==line push check below, since hitting
+        # exactly N is a WIN here (no complementary "under N" side exists
+        # for this bet at all, same shape as HR's settlement).
+        if side.endswith("PLUS"):
+            try:
+                n = int(float(side[:-len("PLUS")]))
+            except ValueError:
+                logger.warning(f"settle K: unparseable threshold side '{side}' in bet_type {bt} -- skipping")
+                continue
+            result = "win" if actual >= n else "loss"
+            results.append({
+                "id": int(bet["id"]), "result": result,
+                "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result),
+                "actual": actual,
+            })
+            logger.info(f"settle K: {bet['player']} game_pk={gpk} {stat_key}={actual} {n}+ -> {result}")
+            continue
+
         if actual == line:
             if line == int(line):
                 logger.warning(
@@ -414,6 +435,23 @@ def _settle_batter_props(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
             logger.info(f"settle batter_props: {bet['player']} not starter game_pk={gpk} -- voiding")
             continue
         actual = int(bdata.get(STAT_MAP[prefix], 0))
+
+        # 2+/3+ threshold sub-markets (2026-08-19): one-sided "at least N"
+        # bets (bet_type e.g. BATTER_TB_2PLUS_2.0) -- graded BEFORE the
+        # generic actual==line push check below; hitting exactly N is a WIN
+        # here, not a push, same reasoning as _settle_k's identical fix.
+        if side.endswith("PLUS"):
+            try:
+                n = int(line)  # line is already float(N) from bet_type construction
+            except ValueError:
+                logger.warning(f"settle batter_props: unparseable threshold side '{side}' in bet_type {bt} -- skipping")
+                continue
+            result = "win" if actual >= n else "loss"
+            results.append({"id": int(bet["id"]), "result": result,
+                            "profit": _calc_profit(float(bet["stake"]), int(bet["odds"]), result)})
+            logger.info(f"settle batter_props: {bet['player']} game_pk={gpk} {STAT_MAP[prefix]}={actual} {n}+ -> {result}")
+            continue
+
         if actual == line:
             result = "push"
         elif side == "OVER":
