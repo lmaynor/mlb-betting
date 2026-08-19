@@ -207,8 +207,65 @@ def test_alt_lines_preserves_every_quoted_point_not_just_the_canonical_one(monke
     assert set(by_point.keys()) == {"2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0"}
     assert by_point["4.5"]["over"]["draftkings"] == "-121"
     assert by_point["4.5"]["under"]["draftkings"] == "-105"
-    assert by_point["2.0"]["over"]["draftkings"] == "-3400"   # "2+ Ks" ladder rung, survives
-    assert "under" not in by_point["2.0"]                     # one-sided, no complementary "under 2 Ks"
+
+
+def test_k_alt_line_extraction_end_to_end(monkeypatch):
+    """Real adapter output -> sgo.extract_k_alt_line_odds(), full pipeline:
+    ParlayAPI ladder outcomes -> _props_odds' alt_lines -> parlay_to_sgo_event
+    -> the new extractor. Confirms the "point=N directly" mapping for K's
+    ladder shape end to end, not just at the parlay_adapter layer."""
+    _prime(monkeypatch)
+    ev = A.parlay_to_sgo_event(_game_lines_event(), _k_ladder_props_event(False), DATE)
+    events = [ev]
+
+    two_plus = sgo.extract_k_alt_line_odds(events, 2)
+    three_plus = sgo.extract_k_alt_line_odds(events, 3)
+
+    assert two_plus["Slade Cecconi"]["odds"] == -3400
+    assert two_plus["Slade Cecconi"]["line"] == 2
+    assert three_plus["Slade Cecconi"]["odds"] == -1400
+    # every other quoted ladder rung is reachable the same way
+    assert sgo.extract_k_alt_line_odds(events, 5)["Slade Cecconi"]["odds"] == 150
+    # a threshold nothing quoted (the main 4.5 line isn't an integer "N+"
+    # rung) correctly yields no entry at all, not a wrong/fallback price
+    assert "Slade Cecconi" not in sgo.extract_k_alt_line_odds(events, 10)
+
+
+def _tb_second_line_props_event():
+    """Underdog offering TWO complete two-sided total-bases markets for the
+    same player (real shape observed 2026-08-19: 0.5 AND 1.5, both with
+    over+under) -- the OUTS/BATTER_TB/BATTER_HITS alt-line shape, distinct
+    from K's one-sided ladder. Main line 0.5, second line 1.5 -- "over 1.5"
+    IS the "2+ total bases" market."""
+    return {
+        "id": "parlay-evt-1",
+        "home_team": "Cleveland Guardians",
+        "away_team": "Los Angeles Angels",
+        "commence_time": "2024-05-01T22:10:00Z",
+        "bookmakers": [
+            {"key": "underdog", "markets": [{"key": "player_total_bases", "outcomes": [
+                {"name": "Over Jose Ramirez",  "description": "Jose Ramirez", "price": -176, "point": 0.5},
+                {"name": "Under Jose Ramirez", "description": "Jose Ramirez", "price": 136,  "point": 0.5},
+                {"name": "Over Jose Ramirez",  "description": "Jose Ramirez", "price": 170,  "point": 1.5},
+                {"name": "Under Jose Ramirez", "description": "Jose Ramirez", "price": -220, "point": 1.5},
+            ]}]},
+        ],
+    }
+
+
+def test_batter_tb_alt_line_extraction_end_to_end(monkeypatch):
+    """Same pipeline as the K test above, but for the second-two-sided-line
+    shape (point=N-0.5's over side = "N+"), confirming the two genuinely
+    different market shapes both work through the same shared extractor."""
+    _prime(monkeypatch)
+    ev = A.parlay_to_sgo_event(_game_lines_event(), _tb_second_line_props_event(), DATE)
+    events = [ev]
+
+    two_plus = sgo.extract_batter_tb_alt_line_odds(events, 2)
+    assert two_plus["Jose Ramirez"]["odds"] == 170
+    assert two_plus["Jose Ramirez"]["line"] == 1.5
+    # the main 0.5 line's own "over" (i.e. "1+") must NOT satisfy a "2+" ask
+    assert two_plus["Jose Ramirez"]["odds"] != -176
 
 
 def test_adapter_drops_unresolvable_game(monkeypatch):

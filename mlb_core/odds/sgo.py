@@ -866,6 +866,104 @@ def extract_pitcher_er_odds(events: list) -> dict:
                                     "extract_pitcher_er_odds")
 
 
+# ---------------------------------------------------------------------------
+# 2+/3+ threshold sub-markets (2026-08-19) -- one-sided "at least N" props,
+# sourced from parlay_adapter.py's alt_lines (every quoted point, not just
+# each book's canonical main line). Two shapes observed in the live feed:
+#   - K's strikeout ladder: books quote the threshold directly as a one-sided
+#     "yes" outcome (point=N, e.g. point=2.0 IS "2+ Ks" priced on its own).
+#   - OUTS/BATTER_TB/BATTER_HITS: no dedicated ladder prop type seen for these
+#     -- when a book offers an alt line at all, it's a second ordinary
+#     two-sided O/U market one tick below the threshold (point=N-0.5's "over"
+#     side = "N+"), same as any other alt-line convention in the sport.
+# Each system gets its own point_for_n mapping below rather than guessing one
+# shared rule, since the two shapes are genuinely different market types, not
+# just different numbers.
+# ---------------------------------------------------------------------------
+
+def _best_alt_book_odds(by_book: dict) -> tuple[Optional[int], Optional[str]]:
+    """Best American odds across onshore books for one alt_lines point/side
+    entry (book -> odds string). Same onshore/offshore semantics as
+    _best_book_odds_int, just operating on alt_lines' simpler {book: odds_str}
+    shape -- alt_lines only ever stores books that were actually quoted, no
+    'available' flag to check."""
+    best_odds, best_book = None, None
+    for book, odds_str in (by_book or {}).items():
+        if book in OFFSHORE_BOOKS:
+            continue
+        val = _parse_odds_int(odds_str)
+        if val is None:
+            continue
+        if best_odds is None or val > best_odds:
+            best_odds, best_book = val, BOOK_CANONICAL.get(book, book)
+    return best_odds, best_book
+
+
+def _extract_alt_line_odds(events: list, stat_id: str, n: int, point_for_n) -> dict:
+    """Shared 'N+' threshold extractor. `point_for_n(n)` maps the desired
+    threshold to the ParlayAPI point value that represents it for this
+    market (see module note above) -- only the 'over' side is ever read,
+    since every use of this is a one-sided "at least N" bet, mirroring how
+    HR's single yes/no side already works. Reads event["alt_lines"], NOT
+    event["odds"] -- the main-line dict never carries alt-line points at all
+    (that's the whole point of the collapsing fix), so this is the only path
+    to them.
+    """
+    point = point_for_n(n)
+    point_str = str(float(point))
+    out: dict = {}
+    for event in events:
+        away, home = _event_teams(event)
+        event_id = event.get("eventID")
+        by_player = ((event.get("alt_lines") or {}).get(stat_id)) or {}
+        for player_id, by_point in by_player.items():
+            over_books = (by_point.get(point_str) or {}).get("over")
+            if not over_books:
+                continue
+            odds, book = _best_alt_book_odds(over_books)
+            if odds is None:
+                continue
+            name = _player_name(event, player_id)
+            if not name:
+                continue
+            out[name] = {
+                "odds": odds, "line": point, "away_team": away, "home_team": home,
+                "event_id": event_id, "bookmaker": book,
+            }
+    return out
+
+
+def extract_k_alt_line_odds(events: list, n: int) -> dict:
+    """'N+ strikeouts' (n=2 -> "2+ Ks", n=3 -> "3+ Ks"). Ladder market: point
+    quoted directly as N. Returns {pitcher_name: {odds, line, away_team,
+    home_team, event_id, bookmaker}}."""
+    out = _extract_alt_line_odds(events, "pitching_strikeouts", n, lambda k: float(k))
+    logger.info(f"SGO extract_k_alt_line_odds({n}+): {len(out)} pitchers with onshore prices")
+    return out
+
+
+def extract_outs_alt_line_odds(events: list, n: int) -> dict:
+    """'N+ outs recorded'. Second-two-sided-line market: point=N-0.5 over side
+    (no dedicated ladder prop type seen for outs)."""
+    out = _extract_alt_line_odds(events, "pitching_outs", n, lambda k: k - 0.5)
+    logger.info(f"SGO extract_outs_alt_line_odds({n}+): {len(out)} pitchers with onshore prices")
+    return out
+
+
+def extract_batter_tb_alt_line_odds(events: list, n: int) -> dict:
+    """'N+ total bases'. Second-two-sided-line market: point=N-0.5 over side."""
+    out = _extract_alt_line_odds(events, "batting_totalBases", n, lambda k: k - 0.5)
+    logger.info(f"SGO extract_batter_tb_alt_line_odds({n}+): {len(out)} players with onshore prices")
+    return out
+
+
+def extract_batter_hits_alt_line_odds(events: list, n: int) -> dict:
+    """'N+ hits'. Second-two-sided-line market: point=N-0.5 over side."""
+    out = _extract_alt_line_odds(events, "batting_hits", n, lambda k: k - 0.5)
+    logger.info(f"SGO extract_batter_hits_alt_line_odds({n}+): {len(out)} players with onshore prices")
+    return out
+
+
 # F1H and GAME innings-window two-way ML extractors.
 # F3 and F7 intentionally omitted -- SGO serves them as 3-way markets
 # (draw/not-draw) incompatible with the F5 home/away proxy model.
