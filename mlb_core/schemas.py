@@ -40,12 +40,23 @@ SCHEMAS: dict[str, dict] = {
         "min_rows": 100,
     },
     "f5_model_features": {
-        "required_cols": ["game_pk", "game_date", "home_win"],
+        # Was "home_win" -- verified against the real build_f5_features.py
+        # output (2026-08-19): the actual target column is "home_wins_f5".
+        # This schema was never wired to a validate_df() call anywhere, so
+        # the mismatch was never caught; the same wrong name was already
+        # found and fixed in tune_hyperparams.py/registry.py (audit finding
+        # C3.5) but this file was missed. See docs/audits/
+        # 2026-08-19_feature_data_pipeline_review.md finding 2.8.
+        "required_cols": ["game_pk", "game_date", "home_wins_f5"],
         "no_all_nan": ["game_date"],
         "min_rows": 100,
     },
     "hr_model_features": {
-        "required_cols": ["game_pk", "game_date", "hr_flag", "batter"],
+        # Was "hr_flag" -- verified against the real build_hr_features.py
+        # output (2026-08-19): the actual column is "hr" (see build_player_game
+        # / build_features' own "HR rate: {df.get('hr', ...)}" log line).
+        # Same never-wired-up story as f5_model_features above.
+        "required_cols": ["game_pk", "game_date", "hr", "batter"],
         "no_all_nan": ["game_date"],
         "min_rows": 100,
     },
@@ -56,6 +67,16 @@ SCHEMAS: dict[str, dict] = {
     },
     "batter_hits_model_features": {
         "required_cols": ["game_pk", "game_date", "batter_hits", "batter"],
+        "no_all_nan": ["game_date"],
+        "min_rows": 100,
+    },
+    # Added 2026-08-19: BATTER_TB is a fully trained NegBin count model (same
+    # shape as batter_hits_model_features above) but had no schema entry at
+    # all, so a malformed build would pass validate_df silently where the
+    # same defect in BATTER_HITS would be caught. See docs/audits/
+    # 2026-08-19_feature_data_pipeline_review.md finding 2.8.
+    "batter_tb_model_features": {
+        "required_cols": ["game_pk", "game_date", "batter_total_bases", "batter"],
         "no_all_nan": ["game_date"],
         "min_rows": 100,
     },

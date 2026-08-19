@@ -678,6 +678,15 @@ def run(run_date: str = None) -> dict:
         logger.warning(f"F5: {GCS_NRFI_PITCHER_FEATURES} missing — "
                        "NRFI features build must run before F5")
 
+    # A schema entry has existed for this since the original audit but was
+    # never actually called anywhere in this file -- added 2026-08-19 (along
+    # with fixing the schema's own required-column name, which was wrong --
+    # see mlb_core/schemas.py). See docs/audits/
+    # 2026-08-19_feature_data_pipeline_review.md finding 2.8.
+    from mlb_core.schemas import validate_df
+    validate_df(gf, "f5_model_features",
+                context="F5 model_features output", raise_on_error=True)
+
     # 8. Upload final
     try:
         write_csv(gf, GCS_F5_MODEL_FEATURES)

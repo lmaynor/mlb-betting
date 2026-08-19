@@ -696,6 +696,13 @@ def run(run_date: str = None) -> dict:
     if model_features.empty:
         return {"status": "error", "error": "model_features empty after join"}
 
+    # A schema entry has existed for this since the original audit but was
+    # never actually called anywhere in this file -- added 2026-08-19. See
+    # docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8.
+    from mlb_core.schemas import validate_df
+    validate_df(model_features, "nrfi_model_features",
+                context="NRFI build_feature_table output", raise_on_error=True)
+
     # 9. Upload final model_features.csv
     try:
         write_csv(model_features, GCS_NRFI_MODEL_FEATURES)

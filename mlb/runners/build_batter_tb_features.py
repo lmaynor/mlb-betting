@@ -367,6 +367,15 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     pf = build_pitcher_tb_features(sc, pf_existing, run_date=run_date)
     model_features = build_model_features(bf, pf, wx, order_map)
 
+    # BATTER_TB had no schema entry at all until 2026-08-19 -- every other
+    # trained system had one, even if (per the other builders' edits in this
+    # same change) most of them were never actually wired to a validate_df()
+    # call either. See docs/audits/2026-08-19_feature_data_pipeline_review.md
+    # finding 2.8.
+    from mlb_core.schemas import validate_df
+    validate_df(model_features, "batter_tb_model_features",
+                context="BATTER_TB build_model_features output", raise_on_error=True)
+
     def _save(df: pd.DataFrame, gcs_key: str, local_path: str) -> None:
         if GCS_BUCKET:
             write_csv(df, gcs_key)

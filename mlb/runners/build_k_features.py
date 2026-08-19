@@ -980,6 +980,13 @@ def run(run_date: str | None = None) -> dict:
     else:
         logger.info(f"K build: NaN audit OK -- all {len(K_FEATURES)} features < 5% NaN")
 
+    # A schema entry has existed for this since the original audit but was
+    # never actually called anywhere in this file -- added 2026-08-19. See
+    # docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8.
+    from mlb_core.schemas import validate_df
+    validate_df(pf, "k_model_features",
+                context="K build model_features output", raise_on_error=True)
+
     # Write outputs
     from mlb_core.storage import write_csv
     write_csv(pf, cfg["gcs_model_features"])

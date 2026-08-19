@@ -817,6 +817,13 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     # ── 5. Build final feature table ──────────────────────────────────────
     model_features = build_features(pg, bf, pf, wx, gf, platoon, order_map)
 
+    # A schema entry has existed for this since the original audit but was
+    # never actually called anywhere in this file -- added 2026-08-19. See
+    # docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8.
+    from mlb_core.schemas import validate_df
+    validate_df(model_features, "hr_model_features",
+                context="HR build_features output", raise_on_error=True)
+
     # ── 6. Upload to GCS ──────────────────────────────────────────────────
     logger.info("HR features: uploading to GCS")
 
