@@ -140,6 +140,54 @@ def test_hr_alt_line_does_not_clobber_the_real_price(monkeypatch, alt_line_first
     )
 
 
+def _k_ladder_props_event(ladder_first: bool):
+    """DraftKings offering a full "2+ through 9+ strikeouts" one-sided ladder
+    (real shape observed 2026-08-19 for Chris Bassitt) alongside its actual
+    two-sided Over/Under 4.5 main line, all under the identical market key/
+    player/book. `ladder_first` flips ordering to prove the fix doesn't
+    depend on JSON key order."""
+    main_over  = {"name": "Over Slade Cecconi",  "description": "Slade Cecconi", "price": -121, "point": 4.5}
+    main_under = {"name": "Under Slade Cecconi", "description": "Slade Cecconi", "price": -105, "point": 4.5}
+    ladder = [
+        {"name": "Yes", "description": "Slade Cecconi", "price": p, "point": float(n)}
+        for n, p in [(2, -3400), (3, -1400), (4, -400), (5, 150), (6, 550), (7, 1500)]
+    ]
+    outcomes = (ladder + [main_over, main_under] if ladder_first
+                else [main_over, main_under] + ladder)
+    return {
+        "id": "parlay-evt-1",
+        "home_team": "Cleveland Guardians",
+        "away_team": "Los Angeles Angels",
+        "commence_time": "2024-05-01T22:10:00Z",
+        "bookmakers": [
+            {"key": "draftkings", "markets": [
+                {"key": "player_strikeouts", "outcomes": outcomes},
+            ]},
+        ],
+    }
+
+
+@pytest.mark.parametrize("ladder_first", [False, True])
+def test_ou_alt_line_ladder_does_not_clobber_the_real_line(monkeypatch, ladder_first):
+    """Regression (2026-08-19): the HR fix above only guarded kind=="hr_yn";
+    the O/U markets (hits/total bases/strikeouts/outs/earned runs) shared the
+    same unconditional last-write-wins collapse. A one-sided alt-line ladder
+    ("2+ Ks" through "9+ Ks", real DraftKings shape) landed in the same
+    accumulator slot as the real two-sided Over/Under 4.5 line and could
+    clobber it depending on JSON order. Fix: prefer whichever point has BOTH
+    over and under quoted (the real line) over any one-sided ladder rung."""
+    _prime(monkeypatch)
+    odds, players = A._props_odds(
+        _k_ladder_props_event(ladder_first), "LAA", "CLE", DATE, game_pk=745101,
+    )
+    over  = next(o for o in odds.values() if o["sideID"] == "over"  and o["statID"] == "pitching_strikeouts")
+    under = next(o for o in odds.values() if o["sideID"] == "under" and o["statID"] == "pitching_strikeouts")
+    assert over["byBookmaker"]["draftkings"]["odds"] == "-121"
+    assert over["byBookmaker"]["draftkings"]["overUnder"] == "4.5"
+    assert under["byBookmaker"]["draftkings"]["odds"] == "-105"
+    assert under["byBookmaker"]["draftkings"]["overUnder"] == "4.5"
+
+
 def test_adapter_drops_unresolvable_game(monkeypatch):
     # no schedule cache entry -> game_pk None -> drop
     monkeypatch.setitem(R._schedule_cache, DATE, {})
