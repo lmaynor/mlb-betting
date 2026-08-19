@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-19 14:20 CST_TB/BATTER_HITS -- see s5/s6 "2+/3+ threshold sub-markets"; also since 2026-08-17: bet dedup key fixed to include `player`, and a live HR odds alt-line-clobbering bug fixed -- both deployed and verified live)
+_Last updated: 2026-08-19 15:29 CST_TB/BATTER_HITS -- see s5/s6 "2+/3+ threshold sub-markets"; also since 2026-08-17: bet dedup key fixed to include `player`, and a live HR odds alt-line-clobbering bug fixed -- both deployed and verified live)
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -2927,7 +2927,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-19 10:57 CST_PRIMARY/cadence coupling + kalshi IAM fix)
+_Last updated: 2026-08-19 15:29 CST_PRIMARY/cadence coupling + kalshi IAM fix)
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
