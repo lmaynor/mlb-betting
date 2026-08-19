@@ -445,7 +445,16 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── isotonic_calibrator_game_v1.pkl
 │       └── archive/
 ├── AuxData/
-│   ├── bref_pitching_master.csv        FIP/WHIP/SO9/BB9 per pitcher-season (B-Ref via FanGraphs).
+│   ├── fangraphs_pitching_master.csv   FIP/WHIP/SO9/BB9 per pitcher-season (B-Ref via FanGraphs).
+│   │                                   (This file used to be documented here as
+│   │                                   bref_pitching_master.csv, which does not exist --
+│   │                                   the real GCS object and the code's own
+│   │                                   _FG_PREFIX both say fangraphs_pitching_master.csv.
+│   │                                   Fixed 2026-08-19, see docs/audits/
+│   │                                   2026-08-19_feature_data_pipeline_review.md finding 2.8.)
+│   │                                   Refreshed nightly by auxiliary_features_nightly_gcs()
+│   │                                   via /refresh-data (wired in 2026-08-19 -- see §15.4
+│   │                                   for why it wasn't before).
 │   ├── swing_take_master.csv           Batter swing/take run values per (MLBAM ID, season).
 │   │                                   Fetched from Savant /leaderboard/swing-take.
 │   │                                   player_id is BATTER MLBAM ID only -- see §15.4 gotcha.
@@ -490,6 +499,16 @@ finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
 Also refreshes six Savant leaderboards for the current season via
 `savant_leaderboards_nightly_all_gcs()`. In-season: ~60s added to refresh time.
 Off-season (Dec-Feb): no-op, returns status="skipped".
+
+Also refreshes the four AuxData sources (FanGraphs pitching, Savant
+swing-take, team schedule, manager hooks) via `auxiliary_features_nightly_gcs()`.
+Wired in 2026-08-19 -- this function's own docstring had claimed since it was
+written that it was "Called by /refresh-data," but nothing ever actually
+called it; 3 of the 4 sources sat frozen for 11+ weeks (since ~2026-06-02)
+with no scheduled refresh and no freshness alert (now added to
+`monitor_ops.DATA_MASTER_KEYS`). See docs/audits/
+2026-08-19_feature_data_pipeline_review.md finding 2.3. Same in-season-only
+guard as the Savant leaderboards.
 
 ### Loop B: Feature builds (12:00 UTC)
 
@@ -2349,6 +2368,22 @@ hundreds (near-zero overlap). swing_take is intentionally excluded from
 `join_batter_aux(batter_col="batter")` using the batter's own MLBAM ID.
 Output columns: `batter_runs_chase`, `batter_runs_heart`, `batter_runs_shadow`,
 `batter_runs_waste`.
+
+**HR's `opp_pitcher_id` is the batter's FIRST pitcher faced that game, not
+necessarily the pitcher who actually allowed the HR.** `build_player_game()`
+aggregates each batter-game to one row (`hr = max` across all that batter's
+PAs that game) but attributes opponent-pitcher features
+(`opp_pitcher_id=("pitcher","first")`) from only the first-faced pitcher. If
+a batter's HR came off a mid-game reliever after starting against the
+starter, the model still sees the starter's rolling stats as "the opposing
+pitcher" for that row. This is a known, documented simplification, not a
+bug to fix casually -- the market itself (HR yes/no, any pitcher, that game)
+is game-grained, not pitcher-grained, so this is a genuine judgment call
+about model grain, not an oversight. A fully pitcher-specific model would
+need to move to per-PA rows, a materially bigger redesign. Confirmed via a
+real traced game (José Ramírez, `game_pk` 824452, 2026-04-19) where this
+happened to match anyway; that was coincidence, not guaranteed. See
+docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8.
 
 **manager_hooks `compute_manager_hooks` must group by `(game_pk, dominant_half)`, not `game_pk`.**
 Using `groupby("game_pk")["bf"].idxmax()` picks only one pitcher per entire game,
