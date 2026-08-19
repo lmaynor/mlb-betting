@@ -52,26 +52,44 @@ def test_starter_features_top_half_pitcher_is_home():
 
 
 def test_bullpen_features_top_half_reliever_credited_to_home_team():
-    """Direction-sensitive: a prior game's Top-half reliever throws only
-    strikeouts (bp_k_pct=1.0), the Bot-half reliever throws none (0.0). The
-    CURRENT game's rolled bullpen_k_pct_L14 (shift(1)-ed from that one prior
-    game) must show 1.0 for the HOME team (CLE) and 0.0 for AWAY (LAA) -- if
-    the Top/Bot <-> home/away mapping were still inverted, these would be
-    swapped, so this test fails loudly on a regression rather than merely
-    checking both teams appear (which an inverted mapping would also pass)."""
+    """Direction-sensitive: three prior games' Top-half relievers throw only
+    strikeouts (bp_k_pct=1.0), the Bot-half relievers throw none (0.0). The
+    CURRENT game's rolled bullpen_k_pct_L14 (shift(1)-ed from those three
+    prior games) must show 1.0 for the HOME team (CLE) and 0.0 for AWAY
+    (LAA) -- if the Top/Bot <-> home/away mapping were still inverted, these
+    would be swapped, so this test fails loudly on a regression rather than
+    merely checking both teams appear (which an inverted mapping would also
+    pass).
+
+    Three prior games, not one: min_periods=3 on the L14 rolling means (a
+    single team-day is a noise-dominated sample for a rate stat -- see
+    docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8)
+    means a single prior game now correctly rolls up to NaN, not a real
+    average; this test needs enough history to exercise the real code path.
+    """
     sc = pd.DataFrame([
-        # Prior game (998): starters (excluded from bullpen via is_starter),
-        # then one reliever per side with opposite strikeout outcomes.
-        _sc_row(998, 100, "Top", 1, game_date="2024-04-01"),
-        _sc_row(998, 200, "Bot", 2, game_date="2024-04-01"),
-        _sc_row(998, 110, "Top", 30, game_date="2024-04-01", inning=7, events="strikeout"),
-        _sc_row(998, 210, "Bot", 31, game_date="2024-04-01", inning=7, events="field_out"),
+        # Three prior games (996/997/998): starters (excluded from bullpen
+        # via is_starter), then one reliever per side with opposite
+        # strikeout outcomes, consistently across all three so the L14
+        # average is still exactly 1.0 / 0.0 once enough history exists.
+        _sc_row(996, 100, "Top", 1, game_date="2024-03-28"),
+        _sc_row(996, 200, "Bot", 2, game_date="2024-03-28"),
+        _sc_row(996, 110, "Top", 30, game_date="2024-03-28", inning=7, events="strikeout"),
+        _sc_row(996, 210, "Bot", 31, game_date="2024-03-28", inning=7, events="field_out"),
+        _sc_row(997, 101, "Top", 1, game_date="2024-03-30"),
+        _sc_row(997, 201, "Bot", 2, game_date="2024-03-30"),
+        _sc_row(997, 111, "Top", 30, game_date="2024-03-30", inning=7, events="strikeout"),
+        _sc_row(997, 211, "Bot", 31, game_date="2024-03-30", inning=7, events="field_out"),
+        _sc_row(998, 102, "Top", 1, game_date="2024-04-01"),
+        _sc_row(998, 202, "Bot", 2, game_date="2024-04-01"),
+        _sc_row(998, 112, "Top", 30, game_date="2024-04-01", inning=7, events="strikeout"),
+        _sc_row(998, 212, "Bot", 31, game_date="2024-04-01", inning=7, events="field_out"),
         # Current game (999): just needs starters + one reliever per side to
         # exist so both teams get a row; its own-game stats aren't checked.
-        _sc_row(999, 101, "Top", 1, game_date="2024-05-01"),
-        _sc_row(999, 201, "Bot", 2, game_date="2024-05-01"),
-        _sc_row(999, 111, "Top", 30, game_date="2024-05-01", inning=7, events="field_out"),
-        _sc_row(999, 211, "Bot", 31, game_date="2024-05-01", inning=7, events="field_out"),
+        _sc_row(999, 103, "Top", 1, game_date="2024-05-01"),
+        _sc_row(999, 203, "Bot", 2, game_date="2024-05-01"),
+        _sc_row(999, 113, "Top", 30, game_date="2024-05-01", inning=7, events="field_out"),
+        _sc_row(999, 213, "Bot", 31, game_date="2024-05-01", inning=7, events="field_out"),
     ])
     bp = build_bullpen_features(sc, lookback_days=90, run_date="2024-05-02")
     row_999 = bp[bp["game_pk"] == 999].set_index("team")

@@ -552,16 +552,25 @@ def build_bullpen_features(
     # with a real KeyError; reproduced directly against pandas 3.0.5).
     # Safe because game_agg is already sorted by ["team", "game_date"]
     # two lines above.
+    #
+    # min_periods=3 (was 1) on the five rate-based rolling means below --
+    # a 14-day rate average from a single team-day of bullpen usage is a
+    # tiny, noise-dominated sample. Confirmed empirically: home_bullpen_
+    # xwoba_L14 reached 0.719 in live data (league average is ~0.30-0.32)
+    # on a row with only 5.0 innings of L7 bullpen usage behind it. Doesn't
+    # apply to bullpen_ip_L7 just below (a sum, not a rate -- a 1-day sum
+    # is just a smaller real total, not a distorted average). See
+    # docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.8.
     rolled = game_agg
     _grouped_team = rolled.groupby("team")
     rolled["bullpen_k_pct_L14"] = _grouped_team["bp_k_pct"].transform(
-        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+        lambda s: s.shift(1).rolling(14, min_periods=3).mean()
     )
     rolled["bullpen_bb_pct_L14"] = _grouped_team["bp_bb_pct"].transform(
-        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+        lambda s: s.shift(1).rolling(14, min_periods=3).mean()
     )
     rolled["bullpen_xwoba_L14"] = _grouped_team["bp_xwoba"].transform(
-        lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+        lambda s: s.shift(1).rolling(14, min_periods=3).mean()
     )
     # Fatigue: sum IP over last 7 games (approx 7 days for daily schedule)
     rolled["bullpen_ip_L7"] = _grouped_team["bp_ip"].transform(
@@ -569,11 +578,11 @@ def build_bullpen_features(
     )
     if "bp_whiff_pct" in rolled.columns:
         rolled["bullpen_whiff_pct_L14"] = _grouped_team["bp_whiff_pct"].transform(
-            lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+            lambda s: s.shift(1).rolling(14, min_periods=3).mean()
         )
     if "bp_hard_hit" in rolled.columns:
         rolled["bullpen_hard_hit_L14"] = _grouped_team["bp_hard_hit"].transform(
-            lambda s: s.shift(1).rolling(14, min_periods=1).mean()
+            lambda s: s.shift(1).rolling(14, min_periods=3).mean()
         )
 
     out_cols = [
@@ -1081,18 +1090,41 @@ def run(run_type: str = "daily", run_date: str | None = None) -> dict:
     except Exception as e:
         return {"status": "error", "error": f"offense features: {e}"}
 
-    # -- 6. Weather (live for daily, skip for backfill)
+    # -- 6. Weather
+    # Historical archive first (weather_master.csv, keyed by game_pk) so every
+    # backfilled/incremental row gets real temperature/wind instead of the
+    # dead 70.0/0.0 fallback in build_model_features(). Previously this step
+    # only ran `if run_type == "daily"`, so the historical build path never
+    # loaded weather_master.csv at all -- confirmed empirically: temperature_f
+    # was a hard constant 70.0 across all 11,300 training rows. See
+    # docs/audits/2026-08-19_feature_data_pipeline_review.md finding 2.5.
+    # Live daily runs additionally overlay a fresh forecast for TODAY's games
+    # (which can't be in the archive yet, and a live forecast beats nothing).
     wx: dict = {}
+    _WX_COLS = ["game_pk", "temperature_f", "wind_speed_mph", "wind_dir_degrees",
+                "is_outdoor", "roof", "wind_out", "wind_in", "is_cold", "is_hot", "high_wind"]
+    try:
+        wx_master = read_csv("Weather/weather_master.csv", low_memory=False) if GCS_BUCKET else pd.DataFrame()
+        if not wx_master.empty and "game_pk" in wx_master.columns:
+            wx_slim = wx_master[[c for c in _WX_COLS if c in wx_master.columns]].dropna(subset=["game_pk"]).copy()
+            wx_slim["game_pk"] = wx_slim["game_pk"].astype(int)
+            wx_slim = wx_slim.drop_duplicates(subset=["game_pk"], keep="last")
+            wx = wx_slim.set_index("game_pk").to_dict(orient="index")
+            logger.info("GAME: historical weather loaded for %d games", len(wx))
+    except Exception as e:
+        logger.warning("GAME: historical weather load failed (non-fatal): %s", e)
+
     if run_type == "daily":
         try:
             from mlb_core.data.lineups import get_today_schedule
             from mlb_core.data.weather import fetch_live_weather_for_slate
             sched = get_today_schedule(run_date)
             if not sched.empty:
-                wx = fetch_live_weather_for_slate(sched)
-                logger.info("GAME: weather fetched for %d/%d games", len(wx), len(sched))
+                live_wx = fetch_live_weather_for_slate(sched)
+                wx.update(live_wx)  # today's live forecast wins over (nonexistent) archive rows
+                logger.info("GAME: live weather overlay for %d/%d games", len(live_wx), len(sched))
         except Exception as e:
-            logger.warning("GAME: weather fetch failed: %s", e)
+            logger.warning("GAME: live weather fetch failed: %s", e)
 
     # -- 7. Join into model_features
     try:
