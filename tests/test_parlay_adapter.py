@@ -131,7 +131,7 @@ def test_hr_alt_line_does_not_clobber_the_real_price(monkeypatch, alt_line_first
     only by (market key, player), with no line dimension -- HR has no line
     downstream at all (pure yes/no), so the alt-line always must lose."""
     _prime(monkeypatch)
-    odds, players = A._props_odds(
+    odds, players, _alt = A._props_odds(
         _hr_alt_line_props_event(alt_line_first), "LAA", "CLE", DATE, game_pk=745101,
     )
     trout_hr = next(o for o in odds.values() if o["statID"] == "batting_homeRuns")
@@ -177,7 +177,7 @@ def test_ou_alt_line_ladder_does_not_clobber_the_real_line(monkeypatch, ladder_f
     clobber it depending on JSON order. Fix: prefer whichever point has BOTH
     over and under quoted (the real line) over any one-sided ladder rung."""
     _prime(monkeypatch)
-    odds, players = A._props_odds(
+    odds, players, _alt = A._props_odds(
         _k_ladder_props_event(ladder_first), "LAA", "CLE", DATE, game_pk=745101,
     )
     over  = next(o for o in odds.values() if o["sideID"] == "over"  and o["statID"] == "pitching_strikeouts")
@@ -186,6 +186,29 @@ def test_ou_alt_line_ladder_does_not_clobber_the_real_line(monkeypatch, ladder_f
     assert over["byBookmaker"]["draftkings"]["overUnder"] == "4.5"
     assert under["byBookmaker"]["draftkings"]["odds"] == "-105"
     assert under["byBookmaker"]["draftkings"]["overUnder"] == "4.5"
+
+
+def test_alt_lines_preserves_every_quoted_point_not_just_the_canonical_one(monkeypatch):
+    """The ladder rungs discarded by the collapsing fix above aren't gone --
+    they feed 2+/3+ threshold sub-markets. Every point DraftKings quoted for
+    Slade Cecconi's strikeouts (the real main line AND all 6 ladder rungs)
+    must survive into alt_lines, keyed by statID -> playerID -> point ->
+    side -> book -> odds (JSON-safe: all string keys, since this round-trips
+    through GCS as part of Odds/sgo/latest.json)."""
+    _prime(monkeypatch)
+    odds, players, alt = A._props_odds(
+        _k_ladder_props_event(ladder_first=False), "LAA", "CLE", DATE, game_pk=745101,
+    )
+    pid = "669373"  # Slade Cecconi, per _prime()
+    assert "pitching_strikeouts" in alt
+    assert pid in alt["pitching_strikeouts"]
+    by_point = alt["pitching_strikeouts"][pid]
+    # main line + all 6 ladder rungs, all present
+    assert set(by_point.keys()) == {"2.0", "3.0", "4.0", "4.5", "5.0", "6.0", "7.0"}
+    assert by_point["4.5"]["over"]["draftkings"] == "-121"
+    assert by_point["4.5"]["under"]["draftkings"] == "-105"
+    assert by_point["2.0"]["over"]["draftkings"] == "-3400"   # "2+ Ks" ladder rung, survives
+    assert "under" not in by_point["2.0"]                     # one-sided, no complementary "under 2 Ks"
 
 
 def test_adapter_drops_unresolvable_game(monkeypatch):
