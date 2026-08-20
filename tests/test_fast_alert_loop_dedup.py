@@ -56,6 +56,13 @@ def stub_environment(monkeypatch):
     # Avoid a real network call to statsapi.mlb.com -- resolve_player_names
     # already fails gracefully offline, but don't rely on that by accident.
     monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {})
+    # 2026-08-20: run() now also logs posted alerts to BetTracker(system="EV")
+    # (see test_fast_alert_loop_ev.py for that behavior's own tests). Stub it
+    # here so this dedup-focused test never opens a real DB connection --
+    # _EV_BET_DB is a relative path, and BetTracker falls back to a real
+    # Postgres connection instead if MLB_DB_URL happens to be set in whatever
+    # environment runs this suite.
+    monkeypatch.setattr(fal, "_log_ev_bets", lambda posted, day: 0)
 
 
 def _run_with_found(monkeypatch, found_df, notify_spy):

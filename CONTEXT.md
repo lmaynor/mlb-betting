@@ -1,6 +1,8 @@
 # Project Context
 
-_Last updated: 2026-08-19 15:35 CST_TB/BATTER_HITS -- see s5/s6 "2+/3+ threshold sub-markets"; also since 2026-08-17: bet dedup key fixed to include `player`, and a live HR odds alt-line-clobbering bug fixed -- both deployed and verified live)
+_Last updated: 2026-08-20 (session: EV alert profitability tracking + Discord
+double group-by + a PITCHER_ER/F1H Discord-posting bug fix -- see handoffs/
+for the full writeup)_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -237,8 +239,18 @@ mlb-betting/
 │   ├── fast_alert_loop.py        The intraday +EV pager (own schedule, not part of
 │   │                             Loop A-D below): Pinnacle-anchored outlier_scan vs
 │   │                             fresh BettingPros snapshots, Discord alert on NEW
-│   │                             +EV quotes only (per-day dedup). See s5 Discord
-│   │                             posting contract + deploy/setup_fast_alert.sh.
+│   │                             +EV quotes only (per-day dedup). Discord embed is a
+│   │                             double group-by (2026-08-20): one field per
+│   │                             sportsbook (books ordered by their best EV), alerts
+│   │                             within a book ordered by EV -- replaced the old
+│   │                             one-field-per-alert layout. The separate raw-game_pk
+│   │                             "Lineup events" field was removed the same day (not
+│   │                             actionable on its own); lineup_events() still drives
+│   │                             the per-alert hot-game badge/sort priority. Every
+│   │                             POSTED alert is also logged to the `bets` table
+│   │                             (system="EV", flat stake) for profitability tracking
+│   │                             -- see s5 "EV bet tracking" + s5 Discord posting
+│   │                             contract + deploy/setup_fast_alert.sh.
 │   └── kalshi_alert.py           Same pager pattern for mlb.analysis.kalshi_vs_books
 │                                 (soft book vs Kalshi no-vig mid, not vs Pinnacle) --
 │                                 read-only against odds_history, no snapshot of its
@@ -687,6 +699,23 @@ Runners call `post_bets()` only -- bet signals for today's slate.
 `settle_bets.run()` via `post_all_systems_summary()` after settlement.
 This gives one clean daily embed covering all active systems.
 
+**RULE: a log-only system's Discord-bound rows must be gated on
+`kelly_triggered`, same as a graduated system's.** `post_bets()` itself
+posts whatever list it's handed, unconditionally -- every caller is
+responsible for filtering to `kelly_triggered=True` rows first (the
+model systems all do this: `if triggered: bet_rows.append(...)` before
+`post_bets(bet_rows, ...)`). Bug found 2026-08-20 (user report: a
+negative-edge Cade Cavalli PITCHER_ER prediction posted to #daily-picks):
+PITCHER_ER's sub-market loop in `run_k.py` and F1H's identical sub-market
+loop in `run_f5.py` both appended to their Discord-bound list
+unconditionally, with no `kelly_triggered` gate at all -- so while each is
+log-only (kelly_triggered structurally always False), `post_bets()` was
+receiving the FULL scored slate every run, including negative-edge,
+zero-stake predictions, and posting all of it looking like real picks.
+Every prediction is still logged to the DB regardless (the "log every
+scored prediction" contract), only the Discord-bound rows need the gate.
+Fixed in both files same day.
+
 `mlb.runners.fast_alert_loop` (the intraday +EV pager, see s14) posts its own
 embed directly rather than via `post_bets()` -- its alerts come from
 `odds_history` scan rows (market/selection/book codes), not a bet dict. It
@@ -700,6 +729,15 @@ new Discord-posting runner should reuse these instead of inventing its own
 ad hoc text formatting -- that drift (raw market codes, lowercase book names,
 one wall-of-text description instead of embed fields) is what made the +EV
 pager's alerts hard to read before the 2026-08-16 restructure.
+
+2026-08-20: the embed's fields are now a double group-by -- one field PER
+SPORTSBOOK (`fast_alert_loop._grouped_fields()`), book groups ordered by
+that book's own best EV, alerts within a group ordered by EV. Replaces the
+old one-field-per-alert layout, which made "what's DraftKings got today"
+a matter of reading every field's value text. The separate "Lineup events"
+summary field (a semicolon-joined list of raw game_pks) was removed the
+same day as unnecessary -- not actionable on its own; `lineup_events()`
+still drives the per-alert hot-game badge (🔥) and sort priority.
 
 `mlb.runners.kalshi_alert` (shipped 2026-08-16, same day) is the second
 consumer of this pattern: same shared helpers, same per-day dedup-parquet
@@ -723,6 +761,7 @@ mid AND a book-pack consensus to show, not one anchor).
 | BATTER_TB | `"BATTER_TB_{SIDE}_{LINE}"` | `"BATTER_TB_OVER_1.5"`, `"BATTER_TB_UNDER_1.5"` |
 | BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
 | PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
+| EV | underlying system's own format + `"_{book}"` | `"K_OVER_7.5_draftkings"`, `"HR_hardrock"` |
 
 2+/3+ threshold sub-markets (2026-08-19, K/OUTS/BATTER_TB/BATTER_HITS only --
 see s5 "2+/3+ threshold sub-markets" below): `"{SYSTEM}_{N}PLUS_{N}.0"`, e.g.
@@ -733,6 +772,58 @@ just `"{N}PLUS"` instead of `"OVER"`/`"UNDER"`, `line` is `float(N)`) --
 settlement/Discord/frontend each detect the `PLUS` suffix on `side` and grade
 one-sided (HR-style: exactly N is a WIN, no push, since there's no
 complementary "under N" side to this bet at all).
+
+### EV bet tracking (fast_alert_loop's posted +EV alerts) -- added 2026-08-20
+
+**Is the soft-line +EV pager actually profitable?** Before this, the only
+answer was `odds_alert.py`'s CLV-style `resolved.parquet` scorecard --
+does the flagged price hold up vs a LATER quote, not vs a real settled
+outcome (its own docstring calls real ROI settlement "a follow-up"). Every
+alert `fast_alert_loop.notify()` actually posts is now ALSO logged into
+the same `bets` table every model system uses, under `system="EV"`, at a
+flat stake (env `EV_STAKE_UNIT`, default 100 -- there's no model
+probability to Kelly-size by here, so a flat unit makes ROI directly
+comparable across alerts). `kelly_triggered` is always `True`: a posted
+alert already cleared `FAL_MIN_EV`/`FAL_MIN_BOOKS`, so by construction
+every logged row IS the signal.
+
+`bet_type` reuses the underlying market's OWN convention (see table above),
+suffixed with `"_{book}"` (`fast_alert_loop._ev_bet_type()`) so two
+different books flagging the identical prop don't collide on BetTracker's
+`(system, game_date, game_pk, player, bet_type)` dedup key -- every settler
+parses `bet_type` by prefix (`str.split("_")` / `str.startswith(...)`), so
+the trailing book suffix is inert to their parsing. Settlement dispatches
+through a new `settle_bets._settle_ev()` that sniffs the `bet_type` prefix
+and delegates to the EXACT SAME settler a real bet on that market would
+use -- an EV alert on `K_OVER_7.5` grades identically to a real K-system
+bet on that line, because it's the same market/selection/line, just a
+different source (soft-book-vs-consensus scan instead of the model).
+
+**Deliberately NOT registered in `mlb_core.registry.SYSTEMS` /
+`CANONICAL_ORDER`.** `monitor_performance.py`'s `CANONICAL_ORDER` loop
+drives the live suppression-gate + Discord performance-alert machinery,
+calibrated for model systems (AUC, calibration, `expected_hit_rate`) --
+none of which apply to a book-vs-consensus outlier feed. Keeping EV out of
+that registry means it can never trip a false suppression-gate alert, and
+never needs a feature_csv/model_artifact/build_sentinel it doesn't have.
+Consequences of this scope boundary:
+- EV settles via the normal nightly `/settle` job (`settle_bets.SYSTEM_MAP`
+  + `ALL_SYSTEMS` both include it) and is fully queryable --
+  `BetTracker(db, system="EV").summary()` -- but does **not** render in the
+  cross-system Discord recap embed (`post_all_systems_summary()` only
+  walks `CANONICAL_ORDER`) and is **not** covered by `monitor_performance.py`
+  or `monitor_ops.py`.
+- `capture_closing_lines.py` does not capture closing lines/CLV for EV rows
+  either (not wired in this pass) -- `closing_odds`/`clv_pct` stay NULL.
+- A retrospective real-outcome settlement of ~14 days of already-posted
+  alerts (2026-08-06..19, ex the 2026-08-10..17 window where Kalshi was
+  still incorrectly a bettable book in this same scan -- see finding C4.1,
+  `backtest_market.OFFSHORE`) showed +9.2% ROI / 54.2% hit rate across
+  ~1500 decided bets, positive in every market (hr_yn/k_ou/outs_ou/
+  btb_ou/bhits_ou) -- promising, but a one-off ad hoc analysis, not yet a
+  standing figure this tracking will keep current automatically. Re-check
+  via `BetTracker(db, system="EV").summary()` after a few more weeks of
+  real settlement before drawing a firm conclusion.
 
 ### Settlement sources
 
@@ -755,6 +846,7 @@ result cached and shared across all systems in the same settle run.
 | BATTER_TB | `batters[name].total_bases` | vs line O/U; void if not starter |
 | BATTER_HITS | `batters[name].hits` | vs line O/U; void if not starter |
 | PITCHER_ER | `pitchers[name].earned_runs` | vs line O/U; void if not in boxscore |
+| EV | (delegates) | `_settle_ev` sniffs the `bet_type` prefix and calls whichever settler above matches -- see "EV bet tracking" |
 
 ### SGO market coverage (all markets, settlement status)
 

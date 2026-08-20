@@ -13,6 +13,9 @@ Systems:
   K / OUTS       → Strikeout / outs recorded O/U (MLB API boxscore)
   BATTER_K/TB/HITS → Batter prop O/U (MLB API boxscore, starter rule)
   PITCHER_ER     → Earned runs O/U (MLB API boxscore)
+  EV             → fast_alert_loop's posted +EV alerts; delegates to whichever
+                    settler above matches the bet_type's embedded market
+                    (see _settle_ev) -- not in the Discord recap, see there.
 
 Ops alerts route to #ops-alerts via DISCORD_WEBHOOK_OPS.
 Settlement recap routes to #daily-recap via DISCORD_WEBHOOK_SUMMARY.
@@ -464,6 +467,50 @@ def _settle_batter_props(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     return results
 
 
+def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
+    """Settle mlb.runners.fast_alert_loop's +EV alerts (system="EV") by
+    delegating to the SAME per-market settlers above -- an EV alert on
+    K_OVER_7.5 grades IDENTICALLY to a real K-system bet on that exact line,
+    because it's the exact same market/selection/line, just sourced from a
+    soft-book-vs-consensus scan instead of the model.
+
+    bet_type convention (see fast_alert_loop._ev_bet_type): the underlying
+    system's own bet_type string, suffixed with "_{book}" so two different
+    books flagging the same prop don't collide on the (system, game_date,
+    game_pk, player, bet_type) dedup key. Every settler below parses
+    bet_type by prefix (str.split("_") / str.startswith(...)), so the
+    trailing book suffix is inert to their parsing.
+    """
+    bt = pending["bet_type"].fillna("").str.upper()
+    # HR's own bet_type is the bare constant "HR" (no line/side to encode),
+    # but an EV row's is "HR_{book}" (fast_alert_loop._ev_bet_type always
+    # appends the book suffix) -- so this must be a prefix check, not an
+    # exact match, unlike the other four markets below which never have
+    # "HR" as a false-positive prefix.
+    is_hr   = bt.str.startswith("HR")
+    is_outs = bt.str.startswith("OUTS_")
+    is_k    = bt.str.startswith("K_")
+    is_er   = bt.str.startswith("PITCHER_ER_")
+    is_prop = bt.str.startswith(("BATTER_TB_", "BATTER_HITS_", "BATTER_K_"))
+    known   = is_hr | is_outs | is_k | is_er | is_prop
+
+    results: list[dict] = []
+    if is_hr.any():
+        results.extend(_settle_hr(pending[is_hr], game_cache))
+    if (is_k | is_outs).any():
+        results.extend(_settle_k(pending[is_k | is_outs], game_cache))
+    if is_prop.any():
+        results.extend(_settle_batter_props(pending[is_prop], game_cache))
+    if is_er.any():
+        results.extend(_settle_pitcher_er(pending[is_er], game_cache))
+    if (~known).any():
+        logger.warning(
+            "settle EV: %d bet(s) with unrecognised bet_type -- skipping: %s",
+            int((~known).sum()), pending.loc[~known, "bet_type"].unique().tolist(),
+        )
+    return results
+
+
 def _settle_pitcher_er(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     """Settle PITCHER_ER O/U bets via MLB API boxscore.
 
@@ -595,6 +642,7 @@ def run(settle_date: str = None) -> dict:
         "BATTER_TB":  _settle_batter_props,
         "BATTER_HITS":_settle_batter_props,
         "PITCHER_ER": _settle_pitcher_er,
+        "EV":         _settle_ev,   # mlb.runners.fast_alert_loop's posted +EV alerts
     }
 
     # Group batter props so they are settled together (single pass over boxscore)
@@ -661,6 +709,15 @@ def run(settle_date: str = None) -> dict:
         "HR", "1IOU", "1I", "F5", "K", "OUTS",
         "F3", "F1H", "F7", "GAME",
         "BATTER_K", "BATTER_TB", "BATTER_HITS", "PITCHER_ER",
+        "EV",   # mlb.runners.fast_alert_loop's posted +EV alerts (settled via
+                # _settle_ev above). Safe/additive here -- this list only feeds
+                # season_stats in this function's own return value. It is
+                # deliberately NOT added to mlb_core.registry.CANONICAL_ORDER,
+                # which is what post_all_systems_summary() actually renders
+                # into the Discord recap AND what monitor_performance.py walks
+                # for its model-system-calibrated suppression-gate logic --
+                # neither is designed for a book-vs-consensus outlier feed.
+                # Query EV's own stats directly: BetTracker(db, system="EV").summary().
     ]
     system_stats = {}
     for system in ALL_SYSTEMS:
