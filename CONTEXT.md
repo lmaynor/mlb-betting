@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-20_
+_Last updated: 2026-08-20 11:48 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -3043,7 +3043,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-19 15:35 CST_PRIMARY/cadence coupling + kalshi IAM fix)
+_Last updated: 2026-08-20 11:48 CST_PRIMARY/cadence coupling + kalshi IAM fix)
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
