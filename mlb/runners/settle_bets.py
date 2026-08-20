@@ -13,9 +13,10 @@ Systems:
   K / OUTS       → Strikeout / outs recorded O/U (MLB API boxscore)
   BATTER_K/TB/HITS → Batter prop O/U (MLB API boxscore, starter rule)
   PITCHER_ER     → Earned runs O/U (MLB API boxscore)
-  EV             → fast_alert_loop's posted +EV alerts; delegates to whichever
-                    settler above matches the bet_type's embedded market
-                    (see _settle_ev) -- not in the Discord recap, see there.
+  EV             → fast_alert_loop's AND kalshi_alert's posted +EV alerts
+                    (pooled); delegates to whichever settler above matches
+                    the bet_type's embedded market (see _settle_ev) -- not
+                    in the Discord recap, see there.
 
 Ops alerts route to #ops-alerts via DISCORD_WEBHOOK_OPS.
 Settlement recap routes to #daily-recap via DISCORD_WEBHOOK_SUMMARY.
@@ -467,32 +468,62 @@ def _settle_batter_props(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     return results
 
 
+def _strip_ev_book_suffix(bet_type, book) -> str:
+    """EV bet_types are the underlying system's own convention + "_{book}"
+    (fast_alert_loop._ev_bet_type). Most settlers already tolerate the
+    trailing suffix fine (they parse bet_type via a fixed-position prefix
+    or split and simply ignore extra trailing tokens) -- but NRFI's
+    exact-string match ("NRFI"/"YRFI"), F5's exact-string match
+    ("HOME"/"AWAY"), and the innings-window settler's rsplit("_", 1) (which
+    takes the LAST underscore-token as the side) do not. Strip the suffix
+    before handing those three families their pending rows, rather than
+    touching their parsing -- which is also what grades the real, live
+    NRFI/F5/GAME systems' own bets."""
+    bt = bet_type or ""
+    tag = f"_{str(book or 'unknown').lower()}"
+    return bt[: -len(tag)] if bt.lower().endswith(tag) else bt
+
+
 def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
-    """Settle mlb.runners.fast_alert_loop's +EV alerts (system="EV") by
-    delegating to the SAME per-market settlers above -- an EV alert on
-    K_OVER_7.5 grades IDENTICALLY to a real K-system bet on that exact line,
-    because it's the exact same market/selection/line, just sourced from a
-    soft-book-vs-consensus scan instead of the model.
+    """Settle fast_alert_loop's/kalshi_alert's posted +EV alerts
+    (system="EV") by delegating to the SAME per-market settlers above -- an
+    EV alert on K_OVER_7.5 grades IDENTICALLY to a real K-system bet on
+    that exact line, because it's the exact same market/selection/line,
+    just sourced from a soft-book-vs-consensus (or soft-book-vs-Kalshi)
+    scan instead of the model.
 
     bet_type convention (see fast_alert_loop._ev_bet_type): the underlying
     system's own bet_type string, suffixed with "_{book}" so two different
     books flagging the same prop don't collide on the (system, game_date,
-    game_pk, player, bet_type) dedup key. Every settler below parses
+    game_pk, player, bet_type) dedup key. Most settlers below parse
     bet_type by prefix (str.split("_") / str.startswith(...)), so the
-    trailing book suffix is inert to their parsing.
+    trailing book suffix is inert to their parsing; NRFI/F5/GAME need it
+    stripped first -- see _strip_ev_book_suffix.
     """
     bt = pending["bet_type"].fillna("").str.upper()
     # HR's own bet_type is the bare constant "HR" (no line/side to encode),
     # but an EV row's is "HR_{book}" (fast_alert_loop._ev_bet_type always
     # appends the book suffix) -- so this must be a prefix check, not an
-    # exact match, unlike the other four markets below which never have
-    # "HR" as a false-positive prefix.
+    # exact match, unlike the K/OUTS/prop/PITCHER_ER markets below which
+    # never have "HR" as a false-positive prefix.
     is_hr   = bt.str.startswith("HR")
     is_outs = bt.str.startswith("OUTS_")
     is_k    = bt.str.startswith("K_")
     is_er   = bt.str.startswith("PITCHER_ER_")
     is_prop = bt.str.startswith(("BATTER_TB_", "BATTER_HITS_", "BATTER_K_"))
-    known   = is_hr | is_outs | is_k | is_er | is_prop
+    # NRFI ("NRFI"/"YRFI"), GAME ("GAME_{SIDE}"), and F5 ("HOME"/"AWAY" bare)
+    # -- kalshi_alert's game-level markets (nrfi_ou/game_ml/f5_ml). No other
+    # prefix above collides with any of these.
+    is_nrfi = bt.str.startswith(("NRFI", "YRFI"))
+    is_game = bt.str.startswith("GAME_")
+    is_f5   = bt.str.startswith(("HOME", "AWAY"))
+    known   = is_hr | is_outs | is_k | is_er | is_prop | is_nrfi | is_game | is_f5
+
+    def _stripped(mask):
+        sub = pending[mask].copy()
+        books = sub["book"] if "book" in sub.columns else [None] * len(sub)
+        sub["bet_type"] = [_strip_ev_book_suffix(b, bk) for b, bk in zip(sub["bet_type"], books)]
+        return sub
 
     results: list[dict] = []
     if is_hr.any():
@@ -503,6 +534,12 @@ def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
         results.extend(_settle_batter_props(pending[is_prop], game_cache))
     if is_er.any():
         results.extend(_settle_pitcher_er(pending[is_er], game_cache))
+    if is_nrfi.any():
+        results.extend(_settle_nrfi(_stripped(is_nrfi), game_cache))
+    if is_game.any():
+        results.extend(_settle_innings_window(_stripped(is_game), game_cache, "GAME"))
+    if is_f5.any():
+        results.extend(_settle_f5(_stripped(is_f5), game_cache))
     if (~known).any():
         logger.warning(
             "settle EV: %d bet(s) with unrecognised bet_type -- skipping: %s",

@@ -290,6 +290,18 @@ def notify(new: pd.DataFrame, hot: set, today_str: str = '',
 # settle_bets.SYSTEM_MAP / ALL_SYSTEMS) and is queryable directly; it just
 # doesn't render in the cross-system Discord recap embed (yet -- see
 # CONTEXT.md).
+#
+# mlb.runners.kalshi_alert (the sibling pager, same soft-line strategy,
+# Kalshi mid instead of Pinnacle-consensus as the fair-price anchor) pools
+# its OWN posted alerts into this SAME system="EV" table (its own
+# _log_ev_bets, since its rows carry a different shape -- ev_pct/p_true/
+# cons_impl, not ev/consensus_fair/decimal -- but reuses _ev_bet_type and
+# _EV_BET_DB/_EV_STAKE_UNIT from here). Deliberately pooled, not kept in a
+# separate system="EV_KALSHI": when both pagers independently flag the
+# identical real-world quote (same market/game_pk/player/line/book -- they
+# scan overlapping prop markets), it's the SAME bet either way, and the
+# shared (system, game_date, game_pk, player, bet_type) dedup key correctly
+# collapses it to one row instead of double-counting it.
 
 _EV_BET_DB = "EV_Alerts/data/ev_bets.db"  # local/offline fallback only; prod uses DB_URL (Cloud SQL)
 _EV_STAKE_UNIT = float(os.environ.get("EV_STAKE_UNIT", "100"))
@@ -307,23 +319,52 @@ _EV_MARKET_PREFIX = {
     "per_ou":   "PITCHER_ER",
 }
 
+# Markets bettingpros_to_parquet.BP_TO_HISTORY carries into odds_history with
+# system="" (no production settler exists for them at all yet -- run_line and
+# total_runs are tracked for coverage/analysis but nothing grades them). Do
+# NOT log these under system="EV"; there is nothing to settle them against.
+# mlb.analysis.kalshi_vs_books.DEFAULT_MARKETS includes both (it scans every
+# LIQUID Kalshi market) -- fast_alert_loop itself never scans either.
+_EV_UNSETTLEABLE_MARKETS = {"game_total", "game_rl"}
+
 
 def _ev_bet_type(market: str, selection: str, line, book: str | None) -> str | None:
     """(market, selection, line) -> a bet_type settle_bets.py already knows
     how to grade, suffixed with "_{book}" so two different books flagging
     the same prop don't collide on BetTracker's (system, game_date, game_pk,
-    player, bet_type) dedup key. Every existing settler parses bet_type by
-    prefix (str.split("_") / str.startswith(...)), so the trailing book
-    suffix is inert to their parsing -- see settle_bets._settle_ev.
-    Returns None for a market with no settler (do not log the unsettleable)."""
+    player, bet_type) dedup key. Every settler parses bet_type by a
+    fixed-position prefix or split, so a trailing book suffix is inert to
+    THEIR parsing -- but NRFI's/F5's bare-string bet_types ("NRFI"/"YRFI",
+    "HOME"/"AWAY") and the innings-window settler's "GAME_{SIDE}" need the
+    suffix stripped back off before dispatch (settle_bets._settle_ev does
+    that; this function just needs to produce it consistently).
+    Returns None for a market with no settler (do not log the unsettleable)
+    -- either genuinely uncovered (_EV_UNSETTLEABLE_MARKETS) or unrecognised.
+    """
     book_tag = (book or "unknown").lower()
+    sel = str(selection).upper()
+
     if market == "hr_yn":
         base = "HR"
+    elif market == "nrfi_ou":
+        # NRFI/YRFI's own bet_type is the bare word (settle_bets._settle_nrfi
+        # matches it exactly) -- there's no line, the side IS the whole bet.
+        # odds_history's O/U convention for this market: OVER 0.5 = a run
+        # scored = YRFI, UNDER 0.5 = no run = NRFI (bettingpros_to_parquet's
+        # "run_in_1st_inning" entry is kind="total", i.e. OVER/UNDER, not
+        # yes/no).
+        base = "YRFI" if sel == "OVER" else "NRFI"
+    elif market == "game_ml":
+        base = f"GAME_{sel}"   # matches settle_bets._settle_innings_window's "GAME_{SIDE}"
+    elif market == "f5_ml":
+        base = sel             # F5's own bet_type IS the bare side string "HOME"/"AWAY"
+    elif market in _EV_UNSETTLEABLE_MARKETS:
+        return None
     else:
         prefix = _EV_MARKET_PREFIX.get(market)
         if prefix is None or pd.isna(line):
             return None
-        base = f"{prefix}_{str(selection).upper()}_{float(line):g}"
+        base = f"{prefix}_{sel}_{float(line):g}"
     return f"{base}_{book_tag}"
 
 

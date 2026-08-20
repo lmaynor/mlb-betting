@@ -3,10 +3,16 @@
 Picked up from `handoffs/handoff_2026-08-19_dedup_hr_odds_and_threshold_submarkets.md`.
 User-driven session: four separate asks bundled into one message (logging/
 profitability of the +EV alert pager, a Discord embed cleanup, a Discord
-grouping request, and a reported bug). All four resolved. **Code is
-committed on branch `fix/ev-alert-tracking-and-pitcher-er-bug-2026-08-20`,
-pushed to origin, tests green (589/589) -- NOT yet merged to main or
-deployed.** This session did not touch prod.
+grouping request, and a reported bug), followed by a same-day follow-up
+("kalshi too" + merge + deploy). All resolved.
+
+**UPDATE (same day, follow-up message):** kalshi_alert.py wired into the
+same `system="EV"` pool (was deliberately deferred in the first pass --
+see the now-superseded bullet below), branch merged to `main`, deployed.
+See "Follow-up: kalshi wiring + merge + deploy" near the end for exactly
+what changed and how the deploy was verified -- the rest of this handoff
+below is the FIRST pass's original writeup, left as-is for the reasoning
+trail rather than rewritten in place.
 
 ## TL;DR
 
@@ -159,8 +165,74 @@ whatever ran the suite -- produces no red test output at all; only
   handoff are still uncorrected (unrelated to this session, just still
   open).
 
+## Follow-up (same day): kalshi wiring + merge + deploy
+
+User's next message: "Merge this to main and deploy it kalshi too."
+
+**kalshi_alert.py now pools into the same `system="EV"`** the first pass
+built for fast_alert_loop.py -- the "deliberately deferred" bullet above
+is superseded. Both pagers' posted alerts settle through the identical
+`settle_bets._settle_ev()` dispatcher. This took more than copy-pasting
+the logging call, because kalshi_alert.py scans markets fast_alert_loop
+never does (`nrfi_ou`, `game_ml`, `f5_ml`, plus `game_total`/`game_rl`
+which have no settler at all) and three of those needed real changes:
+
+- `fast_alert_loop._ev_bet_type()` extended: `nrfi_ou` -> bare
+  `"NRFI"`/`"YRFI"` (OVER 0.5 = a run scored = YRFI), `game_ml` ->
+  `"GAME_{SIDE}"`, `f5_ml` -> bare `"{SIDE}"` (F5's own bet_type has no
+  prefix at all). `game_total`/`game_rl` explicitly return `None` --
+  carried in `odds_history` (`bettingpros_to_parquet`'s `system=""`
+  entries) but genuinely have no settler to grade them against.
+- **Found a real bug in my own first-pass design before it ever shipped**:
+  the "_{book}" suffix convention that already worked fine for HR/K/OUTS/
+  BATTER_TB/BATTER_HITS/PITCHER_ER (all fixed-position-prefix parsers that
+  ignore trailing tokens) breaks NRFI's exact-string match, F5's
+  exact-string match, and the innings-window settler's
+  `rsplit("_", 1)` -- appending a book suffix to `"NRFI"` or `"HOME"`
+  means those settlers' equality checks never fire. Fixed by adding
+  `settle_bets._strip_ev_book_suffix()`: strip the suffix back off before
+  handing those three families their pending rows, rather than touching
+  their parsing (which also grades the real, live NRFI/F5/GAME systems'
+  own bets -- safer to leave alone). Caught this via tracing the existing
+  settler code before writing tests, not via a failing test -- worth
+  tracing exact-match vs prefix-match parsing explicitly next time this
+  convention gets extended to a new market shape, rather than assuming
+  the suffix trick generalizes.
+- kalshi_alert.py's own `_log_ev_bets()` is a separate small adapter (not
+  a reuse of fast_alert_loop's), since its row shape differs
+  (`ev_pct`/`p_true`/`cons_impl`, not `ev`/`consensus_fair`/`decimal`) --
+  it does reuse `_ev_bet_type`/`_EV_BET_DB`/`_EV_STAKE_UNIT` from
+  fast_alert_loop.
+
+**Also fixed, before deploying**: my own first-pass CONTEXT.md edit had
+made the `_Last updated:` header a 3-line sentence. `deploy/
+deploy_service.sh` auto-stamps that line every deploy via
+`re.sub(r"_Last updated:.*?_", ...)` -- non-DOTALL, so it only matches
+within a single line. This is *exactly* how the original garbled fragment
+I fixed earlier this session (`_TB/BATTER_HITS -- see s5/s6...`) got stuck
+there permanently: some past edit appended text after the closing `_`
+on the same line, and every subsequent auto-stamp since has replaced only
+the `_..._` portion, silently leaving that trailing fragment untouched
+forever. Reverted my line to a bare `_Last updated: 2026-08-20_` with no
+trailing content, so the auto-stamp mechanism works correctly on every
+future deploy instead of accumulating more stale text. If this line ever
+needs commentary again, it belongs in a handoff (or right below the
+line, outside the `_..._` span), not appended inside/after it.
+
+Tests: `tests/test_fast_alert_loop_ev.py` gained 6 more cases (nrfi_ou/
+game_ml/f5_ml/game_total/game_rl bet_type mapping); `tests/
+test_settlement.py`'s `TestSettleEv` gained 6 more (NRFI/GAME/F5
+dispatch + the suffix-stripping + a two-books-collide-to-one-row check);
+new `tests/test_kalshi_alert_ev.py` (6 tests, including one that verifies
+the cross-pager pooling/dedup claim above -- fast_alert_loop logs a quote
+first, kalshi_alert independently finds the identical one, second logging
+call must hit the dedup key and log zero new rows). Full suite: 609
+passed (was 589 after the first pass; +20 new, 0 broken).
+
+**Merge + deploy**: [[fill in below once actually done]]
+
 ## Where things stand
 
-Branch `fix/ev-alert-tracking-and-pitcher-er-bug-2026-08-20`, pushed to
-origin. 589 Python tests passing. Not merged, not deployed. `main` itself
-is untouched and still at the commit from the last handoff.
+[[fill in once merge + deploy are actually verified -- do not mark this
+done from intent alone, see this repo's own "verification discipline"
+convention from the 2026-08-19 handoff]]

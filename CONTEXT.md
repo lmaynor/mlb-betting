@@ -1,8 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-20 (session: EV alert profitability tracking + Discord
-double group-by + a PITCHER_ER/F1H Discord-posting bug fix -- see handoffs/
-for the full writeup)_
+_Last updated: 2026-08-20_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -255,8 +253,10 @@ mlb-betting/
 │                                 (soft book vs Kalshi no-vig mid, not vs Pinnacle) --
 │                                 read-only against odds_history, no snapshot of its
 │                                 own. 6x/day, offset after mlb-kalshi-capture + the
-│                                 mlb-snapshot-* cadence land. See deploy/
-│                                 setup_kalshi_alert_job.sh.
+│                                 mlb-snapshot-* cadence land. Every posted alert also
+│                                 logs to the `bets` table (system="EV", pooled with
+│                                 fast_alert_loop's own -- 2026-08-20, see s5 "EV bet
+│                                 tracking"). See deploy/setup_kalshi_alert_job.sh.
 │
 │   ├── training/                RETRAIN PIPELINE (was top-level training/)
 │   │   ├── retrain_f5_meta.py        Patches feature_means into F5 model meta.
@@ -773,31 +773,55 @@ settlement/Discord/frontend each detect the `PLUS` suffix on `side` and grade
 one-sided (HR-style: exactly N is a WIN, no push, since there's no
 complementary "under N" side to this bet at all).
 
-### EV bet tracking (fast_alert_loop's posted +EV alerts) -- added 2026-08-20
+### EV bet tracking (posted +EV alerts, both pagers) -- added 2026-08-20
 
-**Is the soft-line +EV pager actually profitable?** Before this, the only
-answer was `odds_alert.py`'s CLV-style `resolved.parquet` scorecard --
+**Is the soft-line +EV strategy actually profitable?** Before this, the
+only answer was `odds_alert.py`'s CLV-style `resolved.parquet` scorecard --
 does the flagged price hold up vs a LATER quote, not vs a real settled
 outcome (its own docstring calls real ROI settlement "a follow-up"). Every
-alert `fast_alert_loop.notify()` actually posts is now ALSO logged into
-the same `bets` table every model system uses, under `system="EV"`, at a
-flat stake (env `EV_STAKE_UNIT`, default 100 -- there's no model
-probability to Kelly-size by here, so a flat unit makes ROI directly
-comparable across alerts). `kelly_triggered` is always `True`: a posted
-alert already cleared `FAL_MIN_EV`/`FAL_MIN_BOOKS`, so by construction
-every logged row IS the signal.
+alert `fast_alert_loop.notify()` **and** `kalshi_alert.notify()` actually
+post is now ALSO logged into the same `bets` table every model system
+uses, under one pooled `system="EV"`, at a flat stake (env
+`EV_STAKE_UNIT`, default 100 -- there's no model probability to
+Kelly-size by here, so a flat unit makes ROI directly comparable across
+alerts). `kelly_triggered` is always `True`: a posted alert already
+cleared its pager's own EV/books threshold, so by construction every
+logged row IS the signal.
 
-`bet_type` reuses the underlying market's OWN convention (see table above),
-suffixed with `"_{book}"` (`fast_alert_loop._ev_bet_type()`) so two
-different books flagging the identical prop don't collide on BetTracker's
-`(system, game_date, game_pk, player, bet_type)` dedup key -- every settler
-parses `bet_type` by prefix (`str.split("_")` / `str.startswith(...)`), so
-the trailing book suffix is inert to their parsing. Settlement dispatches
-through a new `settle_bets._settle_ev()` that sniffs the `bet_type` prefix
-and delegates to the EXACT SAME settler a real bet on that market would
-use -- an EV alert on `K_OVER_7.5` grades identically to a real K-system
-bet on that line, because it's the same market/selection/line, just a
-different source (soft-book-vs-consensus scan instead of the model).
+**The two pagers pool into ONE system, not `system="EV"` +
+`system="EV_KALSHI"`.** They scan overlapping markets (both cover
+hr_yn/k_ou/outs_ou/btb_ou/bhits_ou; kalshi_alert additionally covers the
+game-level markets below) with different fair-price anchors (Pinnacle-
+consensus vs Kalshi mid) -- when they independently flag the IDENTICAL
+real-world quote (same market/game_pk/player/line/book), that's the same
+bet you'd only strike once, and the shared `(system, game_date, game_pk,
+player, bet_type)` dedup key correctly collapses it to one row instead of
+double-counting P&L for it.
+
+`bet_type` reuses the underlying market's OWN convention (see table
+above), suffixed with `"_{book}"` (`fast_alert_loop._ev_bet_type()`, the
+single shared market -> bet_type mapping both pagers' own
+`_log_ev_bets()` call) so two different books flagging the identical prop
+don't collide on that dedup key. Settlement dispatches through
+`settle_bets._settle_ev()`, which sniffs the `bet_type` prefix and
+delegates to the EXACT SAME settler a real bet on that market would use --
+an EV alert on `K_OVER_7.5` grades identically to a real K-system bet on
+that line, because it's the same market/selection/line, just a different
+source (a soft-book-vs-consensus or soft-book-vs-Kalshi scan instead of
+the model). Most settlers parse `bet_type` by a fixed-position prefix, so
+the trailing book suffix is inert to their parsing (HR/K/OUTS/PITCHER_ER/
+BATTER_TB/BATTER_HITS) -- but NRFI's exact-string match (`"NRFI"`/
+`"YRFI"`), F5's exact-string match (`"HOME"`/`"AWAY"`, no prefix at all),
+and the innings-window settler's `rsplit("_", 1)` (kalshi_alert's
+`nrfi_ou`/`game_ml`/`f5_ml`, the game-level markets it trusts most --
+`mlb.analysis.kalshi_vs_books.LIQUID`) all need the suffix stripped back
+off first (`settle_bets._strip_ev_book_suffix()`) rather than touching
+their parsing, since that parsing also grades the real, live NRFI/F5/GAME
+systems' own bets. `game_total`/`game_rl` are carried in `odds_history`
+(`bettingpros_to_parquet.BP_TO_HISTORY`'s `system=""` entries) but have no
+settle_bets settler at all yet -- `_ev_bet_type()` returns `None` for
+both (`_EV_UNSETTLEABLE_MARKETS`), so they're logged nowhere rather than
+guessed at.
 
 **Deliberately NOT registered in `mlb_core.registry.SYSTEMS` /
 `CANONICAL_ORDER`.** `monitor_performance.py`'s `CANONICAL_ORDER` loop

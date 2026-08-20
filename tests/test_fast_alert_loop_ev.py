@@ -45,16 +45,42 @@ class TestEvBetType:
     def test_pitcher_er(self):
         assert fal._ev_bet_type("per_ou", "UNDER", 2.5, "novig") == "PITCHER_ER_UNDER_2.5_novig"
 
-    def test_unrecognised_market_returns_none(self):
-        # e.g. game_ml/nrfi_ou -- not in _EV_MARKET_PREFIX -- do not log the
-        # unsettleable rather than guess.
-        assert fal._ev_bet_type("game_ml", "HOME", None, "draftkings") is None
-
     def test_missing_line_returns_none(self):
         assert fal._ev_bet_type("k_ou", "OVER", float("nan"), "draftkings") is None
 
     def test_missing_book_falls_back_to_unknown_tag(self):
         assert fal._ev_bet_type("k_ou", "OVER", 7.5, None) == "K_OVER_7.5_unknown"
+
+    def test_unrecognised_market_returns_none(self):
+        assert fal._ev_bet_type("some_future_market", "OVER", 1.5, "draftkings") is None
+
+    # -- kalshi_alert's game-level markets (2026-08-20) --------------------
+
+    def test_nrfi_over_is_yrfi(self):
+        # odds_history's O/U convention: OVER 0.5 = a run scored = YRFI.
+        assert fal._ev_bet_type("nrfi_ou", "OVER", 0.5, "draftkings") == "YRFI_draftkings"
+
+    def test_nrfi_under_is_nrfi(self):
+        assert fal._ev_bet_type("nrfi_ou", "UNDER", 0.5, "fanduel") == "NRFI_fanduel"
+
+    def test_game_ml_home(self):
+        assert fal._ev_bet_type("game_ml", "HOME", None, "hardrock") == "GAME_HOME_hardrock"
+
+    def test_game_ml_away(self):
+        assert fal._ev_bet_type("game_ml", "AWAY", None, "betmgm") == "GAME_AWAY_betmgm"
+
+    def test_f5_ml_is_bare_side(self):
+        # F5's own bet_type has no prefix at all -- just "HOME"/"AWAY".
+        assert fal._ev_bet_type("f5_ml", "HOME", None, "caesars") == "HOME_caesars"
+        assert fal._ev_bet_type("f5_ml", "AWAY", None, "caesars") == "AWAY_caesars"
+
+    def test_game_total_unsettleable_returns_none(self):
+        # Carried in odds_history (bettingpros_to_parquet system="") but no
+        # settle_bets settler exists for it at all yet.
+        assert fal._ev_bet_type("game_total", "OVER", 8.5, "draftkings") is None
+
+    def test_game_rl_unsettleable_returns_none(self):
+        assert fal._ev_bet_type("game_rl", "HOME", -1.5, "draftkings") is None
 
 
 # ── _log_ev_bets ──────────────────────────────────────────────────────────────
@@ -108,8 +134,12 @@ class TestLogEvBets:
         assert logged == 2
 
     def test_unsettleable_market_skipped(self, tmp_path, monkeypatch):
+        # game_total is carried in odds_history but has no settle_bets
+        # settler at all (see fal._EV_UNSETTLEABLE_MARKETS) -- game_ml
+        # itself IS settleable (via settle_bets._settle_innings_window),
+        # see TestLogEvBets's game-level-market tests below.
         monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
-        posted = pd.DataFrame([_alert_row(market="game_ml", line=None)])
+        posted = pd.DataFrame([_alert_row(market="game_total", line=8.5)])
         assert fal._log_ev_bets(posted, "2026-08-19") == 0
 
     def test_no_player_name_falls_back_to_matchup(self, tmp_path, monkeypatch):

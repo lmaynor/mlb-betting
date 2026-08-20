@@ -13,6 +13,12 @@ deploy/setup_kalshi_capture.sh) and the soft-book trackers already run on
 their own schedules (CONTEXT.md s4/s8), so this only needs to run shortly
 AFTER both have landed for a given slot.
 
+2026-08-20: every alert actually posted is also logged into the `bets`
+table (system="EV", pooled with fast_alert_loop.py's own posted alerts --
+see that module's "EV bet tracking" section) so profitability settles
+nightly like any other system instead of only via kalshi_vs_books' own
+CLV-style resolve. See _log_ev_bets below.
+
 Recommended cadence (see deploy/setup_kalshi_alert_job.sh): 6x/day, ~10 min
 after each SAME-DAY Kalshi-capture + soft-book-snapshot pair (15:55, 18:55,
 20:25, 21:25, 21:55, 23:05 UTC -- the mlb-snapshot-* cadence in CONTEXT.md
@@ -121,6 +127,55 @@ def _alert_fields(new: pd.DataFrame, names: dict) -> list[dict]:
     return fields
 
 
+# -- EV bet tracking (profitability) ------------------------------------------
+#
+# Pools into the SAME system="EV" bets-table rows fast_alert_loop.py logs --
+# see that module's "EV bet tracking" section for why the two pagers share
+# one pool instead of a separate system="EV_KALSHI". This file's own rows
+# carry a different shape (ev_pct/p_true/cons_impl, not ev/consensus_fair/
+# decimal), so it has its own small adapter rather than reusing
+# fast_alert_loop._log_ev_bets directly -- but reuses _ev_bet_type (the
+# actual market -> bet_type mapping) and the shared DB path/stake constant.
+
+def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
+    from mlb_core.tracking import BetTracker
+    from mlb.runners.fast_alert_loop import _ev_bet_type, _EV_BET_DB, _EV_STAKE_UNIT
+
+    if not len(posted):
+        return 0
+    tracker = BetTracker(_EV_BET_DB, system="EV")
+    logged = 0
+    for _, r in posted.iterrows():
+        bet_type = _ev_bet_type(r.get("market"), r.get("selection"), r.get("line"), r.get("book"))
+        if bet_type is None:
+            continue
+        pid = r.get("player_id")
+        pname = names.get(int(pid)) if pd.notna(pid) else None
+        player = pname or f"{r.get('away_team')} @ {r.get('home_team')}"
+        n_books = r.get("n_books")
+        bet_id = tracker.log_bet(
+            game_date       = str(r.get("game_date") or run_date),
+            game_pk         = int(r["game_pk"]) if pd.notna(r.get("game_pk")) else None,
+            player          = player,
+            away_team       = r.get("away_team"),
+            home_team       = r.get("home_team"),
+            bet_type        = bet_type,
+            model_prob      = float(r["p_true"]) if pd.notna(r.get("p_true")) else None,
+            market_prob     = float(r["cons_impl"]) if pd.notna(r.get("cons_impl")) else None,
+            edge            = float(r["ev_pct"]) if pd.notna(r.get("ev_pct")) else None,
+            odds            = r.get("american"),
+            stake           = _EV_STAKE_UNIT,
+            kelly_triggered = True,
+            paper           = True,
+            book            = r.get("book"),
+            notes           = (f"soft-book +EV alert vs Kalshi mid ({int(n_books)} books)"
+                              if pd.notna(n_books) else ""),
+        )
+        if bet_id != -1:
+            logged += 1
+    return logged
+
+
 def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> None:
     from mlb_core.notify.discord import _post
 
@@ -215,6 +270,12 @@ def run(run_date: str | None = None) -> dict:
     names = {int(pid): pname for pid, pname in names_raw.items()} if names_raw else {}
 
     notify(posted, names, min_ev, min_books)
+    try:
+        _ev_logged = _log_ev_bets(posted, names, day)
+        log.info("EV: %d/%d posted alerts logged to bets table (system=EV)",
+                 _ev_logged, len(posted))
+    except Exception as e:  # noqa: BLE001 -- never let bet-logging break the pager itself
+        log.warning("EV bet logging failed: %s", e)
     if len(overflow):
         log.info("capped: %d further alerts not posted this run -- deferred for retry",
                  len(overflow))

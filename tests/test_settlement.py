@@ -20,6 +20,7 @@ from mlb.runners.settle_bets import (
     _settle_batter_props,
     _settle_pitcher_er,
     _settle_ev,
+    _strip_ev_book_suffix,
     _void_stale_nonfinal_bets,
 )
 
@@ -528,6 +529,91 @@ class TestSettleEv:
             results = _settle_ev(pending, {100: _boxscore()})
         assert results == []
         assert any("unrecognised bet_type" in m for m in caplog.messages)
+
+    # -- kalshi_alert's game-level markets (2026-08-20): NRFI/GAME/F5 use
+    # exact-string or rsplit-last-token bet_type parsing, unlike the prefix-
+    # tolerant markets above -- these need the book suffix stripped first.
+
+    def test_strip_ev_book_suffix(self):
+        assert _strip_ev_book_suffix("NRFI_draftkings", "draftkings") == "NRFI"
+        assert _strip_ev_book_suffix("GAME_HOME_hardrock", "hardrock") == "GAME_HOME"
+        assert _strip_ev_book_suffix("HOME_betmgm", "betmgm") == "HOME"
+        # book missing/mismatched -- leaves bet_type untouched rather than
+        # guessing wrong (falls through to "unrecognised", not silently
+        # mis-graded).
+        assert _strip_ev_book_suffix("NRFI_draftkings", None) == "NRFI_draftkings"
+
+    def test_dispatches_nrfi_yrfi_to_settle_nrfi(self):
+        pending = _make_pending([
+            {"id": 1, "bet_type": "YRFI_draftkings", "book": "draftkings"},
+        ])
+        cache = {100: _nrfi_game(1, 0)}  # away scores in inning 1 -> YRFI
+        results = _settle_ev(pending, cache)
+        assert results[0]["result"] == "win"
+
+    def test_dispatches_nrfi_nrfi_to_settle_nrfi(self):
+        pending = _make_pending([
+            {"id": 1, "bet_type": "NRFI_fanduel", "book": "fanduel"},
+        ])
+        cache = {100: _nrfi_game(0, 0)}
+        results = _settle_ev(pending, cache)
+        assert results[0]["result"] == "win"
+
+    def test_dispatches_game_ml_to_innings_window(self):
+        pending = _make_pending([
+            {"id": 1, "bet_type": "GAME_HOME_hardrock", "book": "hardrock"},
+        ])
+        # 9 full innings, home wins 3-1
+        innings = [(1, 0)] + [(0, 0)] * 7 + [(0, 2)]
+        cache = {100: _f5_game(innings)}
+        results = _settle_ev(pending, cache)
+        assert results[0]["result"] == "win"
+
+    def test_dispatches_f5_ml_bare_side_to_settle_f5(self):
+        pending = _make_pending([
+            {"id": 1, "bet_type": "AWAY_betmgm", "book": "betmgm"},
+        ])
+        innings = [(2, 0), (0, 0), (0, 0), (0, 0), (0, 0)]  # away leads after 5
+        cache = {100: _f5_game(innings)}
+        results = _settle_ev(pending, cache)
+        assert results[0]["result"] == "win"
+
+    def test_two_books_same_nrfi_game_settle_independently(self):
+        """Same regression shape as the K case above, for the exact-match
+        NRFI settler this time -- confirms stripping doesn't accidentally
+        collapse two distinct rows into one."""
+        pending = _make_pending([
+            {"id": 1, "bet_type": "NRFI_draftkings", "book": "draftkings"},
+            {"id": 2, "bet_type": "NRFI_fanduel", "book": "fanduel"},
+        ])
+        cache = {100: _nrfi_game(0, 0)}
+        results = _settle_ev(pending, cache)
+        assert len(results) == 2
+        assert all(r["result"] == "win" for r in results)
+
+    def test_mixed_batch_incl_game_level_markets(self):
+        """One settle run's EV pending set can span prop markets AND
+        game-level markets (kalshi_alert's nrfi_ou/game_ml/f5_ml) at once."""
+        pending = _make_pending([
+            {"id": 1, "player": "Gerrit Cole", "bet_type": "K_OVER_7.5_draftkings", "book": "draftkings"},
+            {"id": 2, "bet_type": "YRFI_hardrock", "book": "hardrock"},
+            {"id": 3, "bet_type": "GAME_AWAY_novig", "book": "novig"},
+        ])
+        cache = {
+            100: _boxscore(pitchers={"gerrit cole": {"strikeouts": 9, "outs": 21, "earned_runs": 2}}),
+        }
+        # id 1 is keyed to game_pk=100 (default); ids 2/3 need their own
+        # game_pk's cache entries with innings data.
+        pending.loc[pending["id"] == 2, "game_pk"] = 200
+        pending.loc[pending["id"] == 3, "game_pk"] = 300
+        cache[200] = _nrfi_game(1, 0)                                    # YRFI win
+        cache[300] = _f5_game([(2, 0)] + [(0, 0)] * 7 + [(0, 0)])         # away wins -> GAME_AWAY win
+        results = _settle_ev(pending, cache)
+        assert len(results) == 3
+        by_id = {r["id"]: r for r in results}
+        assert by_id[1]["result"] == "win"
+        assert by_id[2]["result"] == "win"
+        assert by_id[3]["result"] == "win"
 
 
 # ── Deduplication guard ───────────────────────────────────────────────────────
