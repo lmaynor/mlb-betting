@@ -138,21 +138,23 @@ whatever ran the suite -- produces no red test output at all; only
   `tests/conftest.py`'s documented rationale for why this repo keeps an ad
   hoc test venv alongside prod's pinned Python 3.11 requirements.txt).
 - `python3 -m compileall mlb mlb_core main.py` -- clean.
-- Did NOT run `deploy/deploy_service.sh` and did NOT deploy to Cloud Run --
-  the user asked to "commit and push," not deploy; these are live-Discord-
-  posting and live-settlement code paths, so treating a deploy as a
-  separate, explicitly-confirmed step felt like the right level of
-  caution given the size of this change. **Next session (or this user):
-  review the diff, then deploy.**
+- Did NOT run `deploy/deploy_service.sh` and did NOT deploy to Cloud Run
+  in THIS first pass -- the user's original message asked to "commit and
+  push," not deploy; these are live-Discord-posting and live-settlement
+  code paths, so treating a deploy as a separate, explicitly-confirmed
+  step felt like the right level of caution given the size of this
+  change. **Superseded same day**: the user's follow-up message
+  explicitly asked to merge + deploy -- see "Follow-up" section below for
+  that (and for how "did it actually deploy" got verified despite this
+  machine's HTTP requests to the service never actually reaching Cloud
+  Run at all).
 
 ## Loose threads
 
-- **Not deployed.** Everything above is on a branch, pushed, not merged.
-  `run_k.py`/`run_f5.py`'s fix in particular should go out promptly --
-  it's the exact bug the user reported.
-- **kalshi_alert.py** could get the identical `system="EV"` logging
-  treatment (or a distinct `system="EV_KALSHI"` if the two anchors'
-  results shouldn't be pooled) -- deliberately deferred, see above.
+- ~~Not deployed~~ -- **superseded, see the follow-up section below**:
+  merged to `main` and deployed same day (revision `mlb-betting-00289-6g8`).
+- ~~kalshi_alert.py deferred~~ -- **superseded**: wired in the same
+  follow-up, see below.
 - **capture_closing_lines.py** doesn't capture CLV for EV rows yet.
 - **The +9.2% ROI figure is one ad hoc pull, ~14 days, ~1500 decided
   bets.** Promising, not proof -- this project's own convention elsewhere
@@ -229,10 +231,70 @@ first, kalshi_alert independently finds the identical one, second logging
 call must hit the dedup key and log zero new rows). Full suite: 609
 passed (was 589 after the first pass; +20 new, 0 broken).
 
-**Merge + deploy**: [[fill in below once actually done]]
+**Merge + deploy**: merged (`--no-ff`) to `main` locally, 609/609 tests
+green on `main` post-merge, pushed. Ran `deploy/deploy_service.sh` (with
+`.venv_audit/bin` prepended to PATH so its bare `python3`/`pytest` calls
+resolve to a real environment -- the system `python3` has none of
+xgboost/sklearn/sqlalchemy/pytest installed, would fail the script's own
+test gate immediately otherwise; see "environment note" below). Build
+succeeded, tests passed inside the script too, deployed. New revision
+**`mlb-betting-00289-6g8`**, 100% traffic.
+
+**Verification hit a real environmental wall, worth recording**: every
+attempt to `curl` the live service from this machine -- the plain
+`*.run.app` URL, a `gcloud run services proxy` local tunnel, even the
+custom domain `api.beezy.fyi` -- returned an identical Google-branded
+"404 (Not Found)!!1" page. The giveaway: `curl -v`'s TLS certificate for
+the direct HTTPS attempt was issued by `ca.deloitte-ame-wps.goskope.com`
+(Netskope, Deloitte's corporate CASB/DLP proxy), not Google -- this
+machine's outbound HTTPS is being intercepted, and apparently blocked for
+this exact hostname pattern regardless of which domain fronts it,
+including through gcloud's own tunnel. **None of these curl attempts ever
+reached Cloud Run at all** -- confirmed by reading Cloud Logging
+(`gcloud logging read`, a `*.googleapis.com` control-plane call, unaffected
+by the interception) for the new revision: zero entries for any of my
+request timestamps. So don't trust a 404 from this machine against this
+service as meaning anything about the deploy -- verify via `gcloud`
+control-plane calls instead. What Cloud Logging DID show, real and
+credible:
+- Clean startup: gunicorn booted, "Default STARTUP TCP probe succeeded",
+  zero errors, for revision `mlb-betting-00289-6g8` specifically.
+- **Real production traffic already succeeding on it**: two organic 200s
+  within the first ~10 minutes (`GET https://api.beezy.fyi/api/public/
+  picks/today` from a `python-requests` client, `GET .../picks/recent`
+  from a `node` client -- the actual beezy.fyi frontend/other consumers,
+  not me).
+
+That's real, credible evidence the deploy is live and healthy. What it
+does NOT confirm: the specific NEW code paths from this session (EV
+alert logging, the Discord embed changes, the PITCHER_ER/F1H gate fix)
+haven't been exercised by a real scheduled run yet as of this writing --
+those are background-job behaviors (fast_alert_loop/kalshi_alert/settle/
+run), not something an HTTP health check would touch anyway, and I did
+NOT force-trigger any of them (posting to live Discord channels / staking
+real paper bets on demand felt like the wrong thing to do just to
+self-verify). They'll exercise naturally on each job's own next scheduled
+tick per CONTEXT.md s4/s9. If something looks off in `#daily-picks` or
+`#performance` after that, or `BetTracker(db, system="EV").summary()`
+comes back empty for today, come back to this revision first.
+
+**Environment note for future sessions**: this machine's plain `python3`/
+`pip3` (Homebrew, externally-managed) has NONE of the project's
+dependencies installed and refuses plain `pip install` (PEP 668). There's
+a pre-existing `.venv_audit/` in the repo root (from the 2026-08-16 audit
+session, per its own docstring in `tests/conftest.py`) with everything
+needed (pytest, xgboost, sklearn, sqlalchemy, pg8000, scipy) for Python
+3.14, since production's pinned versions (numpy==1.26.4 etc.) have no
+3.14 wheels. Prepend `.venv_audit/bin` to PATH when running tests or
+`deploy_service.sh` directly on this machine, e.g.:
+`PATH="$(pwd)/.venv_audit/bin:$PATH" bash deploy/deploy_service.sh`.
 
 ## Where things stand
 
-[[fill in once merge + deploy are actually verified -- do not mark this
-done from intent alone, see this repo's own "verification discipline"
-convention from the 2026-08-19 handoff]]
+**Merged to `main`, pushed, deployed.** Live on revision
+`mlb-betting-00289-6g8`, confirmed via Cloud Logging (not an HTTP smoke
+test -- see above). 609 Python tests passing. Nothing left pending from
+this session except the deliberately-scoped-out items already listed
+above (`capture_closing_lines.py` CLV for EV rows; the +9.2% ROI figure
+is still a one-off pull worth re-checking in a few weeks once real
+settlement accumulates through the new tracking).
