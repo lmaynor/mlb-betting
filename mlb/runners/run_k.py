@@ -1044,7 +1044,21 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             book             = bet.get("bookmaker"),
         )
-        if ret != -1:
+        if ret == -1:
+            continue
+        # Bug fix 2026-08-20: this used to append EVERY logged row here,
+        # regardless of kelly_triggered -- every other runner (HR/NRFI/F5/
+        # K/OUTS/BATTER_HITS/BATTER_TB/GAME) only appends to its
+        # Discord-bound rows when kelly_triggered is True. Since
+        # PITCHER_ER_LOG_ONLY forces kelly_triggered=False for every
+        # PITCHER_ER prediction today, that meant post_bets() below was
+        # receiving the FULL scored slate -- including negative-edge,
+        # zero-stake predictions -- and posting all of it to #daily-picks
+        # looking like real picks (user report: Cade Cavalli posted with
+        # negative edge on 2026-08-19). Every prediction is still logged to
+        # the DB above either way, per the "log every scored prediction"
+        # contract -- only the Discord-bound rows are gated.
+        if bet["kelly_triggered"]:
             er_logged += 1
             er_rows.append(bet)
     post_bets(er_rows, system="PITCHER_ER", run_date=run_date)

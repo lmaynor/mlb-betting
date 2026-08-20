@@ -13,19 +13,27 @@ covers today AND tomorrow (FAL_DAYS=2); next-day alerts are tagged
   1. LINEUP EVENTS: diff today's posted batting orders against the last-seen
      state (Alerts/{day}/lineup_state.json). A newly posted lineup or a
      scratch/substitution marks that game HOT -- those are exactly the moments
-     soft books lag.
+     soft books lag. (Feeds the per-alert hot-game badge/sort priority only --
+     as of 2026-08-20 no longer posted as its own Discord field; a bare list of
+     raw game_pks wasn't actionable on its own.)
   2. SNAPSHOT: bank a fresh (free) BettingPros snapshot into odds_history
      (mlb.runners.track_bettingpros, today only).
   3. SCAN: +EV outliers vs the Pinnacle-anchored consensus
      (mlb.analysis.outlier_scan) at the latest snapshot.
   4. NOTIFY: post only NEW alerts (never re-ping the same quote; dedup state in
-     Alerts/{day}/notified.parquet) to Discord as a structured embed -- one
-     field per alert, human market/book/team names (mlb_core.notify.discord
-     market_label/book_display), EV-tiered emoji, and the fair-price anchor
-     spelled out (vs Pinnacle / vs consensus) instead of packed into a single
-     cryptic text blob. Hot games and next-day openers are flagged. Alerts are
-     also appended to Alerts/{day}/log.parquet so the nightly odds_alert
-     resolve/scorecard pass covers them.
+     Alerts/{day}/notified.parquet) to Discord as a structured embed -- ONE
+     FIELD PER SPORTSBOOK (2026-08-20: double group-by -- book groups ordered
+     by that book's best EV, alerts within a group ordered by EV), human
+     market/team names (mlb_core.notify.discord market_label/book_display),
+     EV-tiered emoji, and the fair-price anchor spelled out (vs Pinnacle / vs
+     consensus) instead of packed into a single cryptic text blob. Hot games
+     and next-day openers are flagged inline. Alerts are also appended to
+     Alerts/{day}/log.parquet so the nightly odds_alert resolve/scorecard pass
+     covers them.
+  5. EV TRACKING: every alert actually posted this run is ALSO logged to the
+     `bets` table (system="EV", flat-stake) so profitability can be queried
+     the same way as any model system -- see _log_ev_bets below and
+     settle_bets._settle_ev.
 
 Config via env: FAL_MARKETS (hr_yn,outs_ou,btb_ou,bhits_ou,k_ou), FAL_MIN_EV
 (0.03), FAL_MIN_BOOKS (4), FAL_MAX_POSTS (10 per run), FAL_ANCHOR (pinnacle;
@@ -194,28 +202,51 @@ def _alert_parts(r: pd.Series, hot: set, today_str: str, anchor_book: str | None
     }
 
 
-def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '',
+def _grouped_fields(new: pd.DataFrame, hot: set, today_str: str, anchor_book: str | None,
+                    book_display, market_label, ev_alert_emoji, team_nickname: dict) -> list[dict]:
+    """Double group-by for the Discord embed: one field PER SPORTSBOOK
+    (book groups ordered by that book's own best EV, descending), each
+    field listing its alerts sorted by EV descending -- "in order of EV" is
+    preserved as the within-book sort, "grouped by sportsbook" is the
+    field-level split. Replaces the old one-field-per-alert layout, which
+    made cross-book scanning (e.g. "what's DraftKings got today") a matter
+    of reading every field's value text."""
+    rows = [_alert_parts(r, hot, today_str, anchor_book, book_display, market_label,
+                         ev_alert_emoji, team_nickname)
+            for _, r in new.iterrows()]
+
+    groups: dict[str, list[dict]] = {}
+    for p in rows:
+        groups.setdefault(p["book"] or "Unknown", []).append(p)
+
+    ordered_books = sorted(groups, key=lambda b: max(p["ev"] for p in groups[b]), reverse=True)
+
+    fields = []
+    for book in ordered_books:
+        book_rows = sorted(groups[book], key=lambda p: p["ev"], reverse=True)
+        lines = []
+        for p in book_rows:
+            fair_str = f"{p['fair']:.1%}" if p["fair"] is not None else "N/A"
+            lines.append(
+                f"{p['emoji']} {p['badge']}**{p['who']}** {p['what']}{p['matchup_tag']} "
+                f"@ **{p['american']}** -> EV **{p['ev']:+.1%}** (fair {fair_str}, {p['n_books']} bks)"
+            )
+        n = len(book_rows)
+        name = f"🏦 {book} -- {n} alert{'s' if n != 1 else ''}"[:256]
+        value = "\n".join(lines)[:1024]
+        fields.append({"name": name, "value": value, "inline": False})
+    return fields
+
+
+def notify(new: pd.DataFrame, hot: set, today_str: str = '',
            min_ev: float = 0.03, min_books: int = 4, anchor: str | None = None) -> None:
     from mlb_core.notify.discord import (
         _post, book_display, market_label, ev_alert_emoji, TEAM_NICKNAME,
     )
     url = _alert_webhook()
 
-    fields = []
-    if notes:
-        fields.append({"name": "📋 Lineup events",
-                       "value": "; ".join(notes[:6])[:1024], "inline": False})
-    for _, r in new.iterrows():
-        p = _alert_parts(r, hot, today_str, anchor, book_display, market_label,
-                         ev_alert_emoji, TEAM_NICKNAME)
-        fair_str = f"{p['fair']:.1%}" if p["fair"] is not None else "N/A"
-        name = f"{p['emoji']} {p['badge']}{p['who']}"[:256]
-        value = (
-            f"{p['what']}{p['matchup_tag']}\n"
-            f"**{p['book']} {p['american']}** -> EV **{p['ev']:+.1%}** "
-            f"vs {p['anchor_label']} fair **{fair_str}** ({p['n_books']} books)"
-        )[:1024]
-        fields.append({"name": name, "value": value, "inline": False})
+    fields = _grouped_fields(new, hot, today_str, anchor, book_display, market_label,
+                             ev_alert_emoji, TEAM_NICKNAME)
 
     if not url:
         log.warning("no Discord webhook -- printing alerts only")
@@ -236,6 +267,152 @@ def notify(new: pd.DataFrame, hot: set, notes: list, today_str: str = '',
                            f"anchor: {anchor_disp} | fast_alert_loop"},
     }
     _post(url, {"embeds": [embed]})
+
+
+# -- 5. EV bet tracking (profitability) ---------------------------------------
+#
+# Every alert this pager actually posts is ALSO logged to the same `bets`
+# table every model system uses, under system="EV" -- so "is this a
+# profitable avenue" can be answered with BetTracker(db, system="EV")
+# .summary() / settle_bets.py's nightly settlement, the same way it's
+# answered for HR/K/OUTS/etc., instead of only the CLV-style
+# lag-vs-informed proxy odds_alert.py already computes into
+# Alerts/{day}/resolved.parquet (which resolves against a LATER quote, not
+# a real settled outcome).
+#
+# Deliberately NOT registered in mlb_core.registry.SYSTEMS / CANONICAL_ORDER:
+# monitor_performance.py's CANONICAL_ORDER loop drives the live
+# suppression-gate + Discord performance-alert machinery, calibrated for
+# model systems (AUC, calibration, expected_hit_rate) -- none of which
+# apply to a book-vs-consensus outlier feed. Keeping EV out of that loop
+# means it can never trip a false suppression-gate alert for every OTHER
+# system. It settles via the normal nightly /settle job (added to
+# settle_bets.SYSTEM_MAP / ALL_SYSTEMS) and is queryable directly; it just
+# doesn't render in the cross-system Discord recap embed (yet -- see
+# CONTEXT.md).
+#
+# mlb.runners.kalshi_alert (the sibling pager, same soft-line strategy,
+# Kalshi mid instead of Pinnacle-consensus as the fair-price anchor) pools
+# its OWN posted alerts into this SAME system="EV" table (its own
+# _log_ev_bets, since its rows carry a different shape -- ev_pct/p_true/
+# cons_impl, not ev/consensus_fair/decimal -- but reuses _ev_bet_type and
+# _EV_BET_DB/_EV_STAKE_UNIT from here). Deliberately pooled, not kept in a
+# separate system="EV_KALSHI": when both pagers independently flag the
+# identical real-world quote (same market/game_pk/player/line/book -- they
+# scan overlapping prop markets), it's the SAME bet either way, and the
+# shared (system, game_date, game_pk, player, bet_type) dedup key correctly
+# collapses it to one row instead of double-counting it.
+
+_EV_BET_DB = "EV_Alerts/data/ev_bets.db"  # local/offline fallback only; prod uses DB_URL (Cloud SQL)
+_EV_STAKE_UNIT = float(os.environ.get("EV_STAKE_UNIT", "100"))
+
+# odds_history market code -> the underlying system's OWN bet_type
+# construction, exactly as settle_bets.py already grades it. Reusing this
+# means an EV alert on e.g. K_OVER_7.5 settles IDENTICALLY to a real K-system
+# bet on that same line -- same market, same selection, same line, just a
+# different source (soft-book-vs-consensus scan instead of the model).
+_EV_MARKET_PREFIX = {
+    "k_ou":     "K",
+    "outs_ou":  "OUTS",
+    "btb_ou":   "BATTER_TB",
+    "bhits_ou": "BATTER_HITS",
+    "per_ou":   "PITCHER_ER",
+}
+
+# Markets bettingpros_to_parquet.BP_TO_HISTORY carries into odds_history with
+# system="" (no production settler exists for them at all yet -- run_line and
+# total_runs are tracked for coverage/analysis but nothing grades them). Do
+# NOT log these under system="EV"; there is nothing to settle them against.
+# mlb.analysis.kalshi_vs_books.DEFAULT_MARKETS includes both (it scans every
+# LIQUID Kalshi market) -- fast_alert_loop itself never scans either.
+_EV_UNSETTLEABLE_MARKETS = {"game_total", "game_rl"}
+
+
+def _ev_bet_type(market: str, selection: str, line, book: str | None) -> str | None:
+    """(market, selection, line) -> a bet_type settle_bets.py already knows
+    how to grade, suffixed with "_{book}" so two different books flagging
+    the same prop don't collide on BetTracker's (system, game_date, game_pk,
+    player, bet_type) dedup key. Every settler parses bet_type by a
+    fixed-position prefix or split, so a trailing book suffix is inert to
+    THEIR parsing -- but NRFI's/F5's bare-string bet_types ("NRFI"/"YRFI",
+    "HOME"/"AWAY") and the innings-window settler's "GAME_{SIDE}" need the
+    suffix stripped back off before dispatch (settle_bets._settle_ev does
+    that; this function just needs to produce it consistently).
+    Returns None for a market with no settler (do not log the unsettleable)
+    -- either genuinely uncovered (_EV_UNSETTLEABLE_MARKETS) or unrecognised.
+    """
+    book_tag = (book or "unknown").lower()
+    sel = str(selection).upper()
+
+    if market == "hr_yn":
+        base = "HR"
+    elif market == "nrfi_ou":
+        # NRFI/YRFI's own bet_type is the bare word (settle_bets._settle_nrfi
+        # matches it exactly) -- there's no line, the side IS the whole bet.
+        # odds_history's O/U convention for this market: OVER 0.5 = a run
+        # scored = YRFI, UNDER 0.5 = no run = NRFI (bettingpros_to_parquet's
+        # "run_in_1st_inning" entry is kind="total", i.e. OVER/UNDER, not
+        # yes/no).
+        base = "YRFI" if sel == "OVER" else "NRFI"
+    elif market == "game_ml":
+        base = f"GAME_{sel}"   # matches settle_bets._settle_innings_window's "GAME_{SIDE}"
+    elif market == "f5_ml":
+        base = sel             # F5's own bet_type IS the bare side string "HOME"/"AWAY"
+    elif market in _EV_UNSETTLEABLE_MARKETS:
+        return None
+    else:
+        prefix = _EV_MARKET_PREFIX.get(market)
+        if prefix is None or pd.isna(line):
+            return None
+        base = f"{prefix}_{sel}_{float(line):g}"
+    return f"{base}_{book_tag}"
+
+
+def _log_ev_bets(posted: pd.DataFrame, run_date: str) -> int:
+    """Log every alert actually posted to Discord this run into the `bets`
+    table (system="EV") at a flat unit stake -- there's no model
+    probability to Kelly-size by here, the whole question is "would
+    striking this specific price have won," so a flat stake makes the ROI
+    directly comparable across alerts. kelly_triggered=True always: a
+    posted alert already cleared FAL_MIN_EV/FAL_MIN_BOOKS, so by
+    construction every row here IS the signal, not a logged-but-filtered
+    prediction (unlike the model systems' log-every-scored-row contract)."""
+    from mlb_core.tracking import BetTracker
+
+    if not len(posted):
+        return 0
+    tracker = BetTracker(_EV_BET_DB, system="EV")
+    logged = 0
+    for _, r in posted.iterrows():
+        bet_type = _ev_bet_type(r.get("market"), r.get("selection"), r.get("line"), r.get("book"))
+        if bet_type is None:
+            continue
+        pname = r.get("player_name")
+        player = pname if isinstance(pname, str) and pname else f"{r.get('away_team')} @ {r.get('home_team')}"
+        n_books = r.get("n_books")
+        decimal = r.get("decimal")
+        bet_id = tracker.log_bet(
+            game_date       = str(r.get("game_date") or run_date),
+            game_pk         = int(r["game_pk"]) if pd.notna(r.get("game_pk")) else None,
+            player          = player,
+            away_team       = r.get("away_team"),
+            home_team       = r.get("home_team"),
+            bet_type        = bet_type,
+            model_prob      = float(r["consensus_fair"]) if pd.notna(r.get("consensus_fair")) else None,
+            market_prob     = round(1.0 / decimal, 4) if pd.notna(decimal) and decimal else None,
+            edge            = float(r["ev"]) if pd.notna(r.get("ev")) else None,
+            odds            = r.get("american"),
+            stake           = _EV_STAKE_UNIT,
+            kelly_triggered = True,
+            paper           = True,
+            book            = r.get("book"),
+            notes           = (f"soft-book +EV alert vs "
+                               f"{'Pinnacle' if r.get('anchored') else 'consensus'} "
+                               f"({int(n_books)} books)") if pd.notna(n_books) else "",
+        )
+        if bet_id != -1:
+            logged += 1
+    return logged
 
 
 # -- main ---------------------------------------------------------------------
@@ -319,8 +496,14 @@ def run(run_date: str | None = None) -> dict:
                  .drop(columns=["_deferred", "_hot"])
         posted = new.head(max_posts)
         overflow = new.iloc[max_posts:]
-        notify(posted, hot, notes, today_str=day,
+        notify(posted, hot, today_str=day,
                min_ev=min_ev, min_books=min_books, anchor=anchor)
+        try:
+            _ev_logged = _log_ev_bets(posted, day)
+            log.info("EV: %d/%d posted alerts logged to bets table (system=EV)",
+                     _ev_logged, len(posted))
+        except Exception as e:  # noqa: BLE001 -- never let bet-logging break the pager itself
+            log.warning("EV bet logging failed: %s", e)
         if len(overflow):
             log.info("capped: %d further alerts not posted this run -- deferred for retry",
                      len(overflow))

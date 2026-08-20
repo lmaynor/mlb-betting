@@ -676,7 +676,17 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
                 book             = bet.get("bookmaker"),
                 notes            = bet.get("notes", ""),
             )
-            if ret != -1:
+            if ret == -1:
+                continue
+            # Bug fix 2026-08-20 (same class as PITCHER_ER in run_k.py, found
+            # while investigating a user report there): this appended EVERY
+            # logged row here regardless of kelly_triggered, unlike every
+            # other runner's Discord-bound rows. F1H's kelly_triggered is
+            # structurally always False while log_only (stake forced to 0.0
+            # above), so post_bets() below was receiving every scored F1H
+            # prediction -- including negative-edge ones -- and posting all
+            # of it to #daily-picks looking like real picks.
+            if bet["kelly_triggered"]:
                 logged += 1
                 sub_rows.append(bet)
         sub_logged[sys_key] = logged
