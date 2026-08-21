@@ -71,4 +71,9 @@ upsert_job "mlb-calibrate-batter-hits"  "mlb.training.calibrate_batter_hits_v1" 
 upsert_job "mlb-retrain-batter-tb"      "mlb.training.retrain_batter_tb_v1"    "4Gi" "2" "7200s"
 upsert_job "mlb-calibrate-batter-tb"    "mlb.training.calibrate_batter_tb_v1"  "2Gi" "1" "1800s"
 
+# SB (stolen base), added 2026-08-20. Job names match registry.py's SB entry
+# (retrain_jobs=["mlb-retrain-sb-v1"], calibrate_jobs=["mlb-calibrate-sb"]).
+upsert_job "mlb-retrain-sb-v1"          "mlb.training.retrain_sb_v1"           "4Gi" "2" "7200s"
+upsert_job "mlb-calibrate-sb"           "mlb.training.calibrate_sb_v1"         "2Gi" "1" "1800s"
+
 echo "Model jobs ready."

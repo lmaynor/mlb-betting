@@ -80,6 +80,14 @@ SCHEMAS: dict[str, dict] = {
         "no_all_nan": ["game_date"],
         "min_rows": 100,
     },
+    # Added 2026-08-20 for the new SB (stolen base) system. Target column is
+    # "stolen_bases" (real MLB Stats API boxscore counts -- statcast cannot
+    # see these events at all, see build_sb_features.py module docstring).
+    "sb_model_features": {
+        "required_cols": ["game_pk", "game_date", "stolen_bases", "batter"],
+        "no_all_nan": ["game_date"],
+        "min_rows": 100,
+    },
     "game_model_features": {
         "required_cols": [
             "game_pk", "game_date", "home_win",

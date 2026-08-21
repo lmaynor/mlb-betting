@@ -73,6 +73,10 @@ SYSTEM_CONFIG = {
         "gcs_meta":     "BATTER_HITS_System/models/model_meta_batter_hits_v1.json",
         "gcs_features": "BATTER_HITS_System/data/model_features.csv",
     },
+    "SB": {
+        "gcs_meta":     "SB_Pro_System/models/model_meta_sb_v1.json",
+        "gcs_features": "SB_Pro_System/data/model_features.csv",
+    },
     "BATTER_TB": {
         "gcs_meta":     "BATTER_TB_System/models/model_meta_batter_tb_v1.json",
         "gcs_features": "BATTER_TB_System/data/model_features.csv",

@@ -84,6 +84,13 @@ export const PICK_SYSTEMS: PickSystem[] = [
     description: 'BABIP, contact profile, platoon context, and pitcher hits-allowed shape.',
   },
   {
+    key: 'SB',
+    slug: 'sb',
+    name: 'Stolen Base Props',
+    shortName: 'SB',
+    description: 'On-base skill, base-running speed, lineup slot, opposing pitcher hold rate, and catcher arm strength/pop time for stolen-base props.',
+  },
+  {
     key: 'BATTER_K',
     slug: 'batter-k',
     name: 'Batter Strikeouts',

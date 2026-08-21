@@ -166,6 +166,101 @@ def confirmed_lineup_sides(game_pk: int) -> dict:
     return out
 
 
+def get_starting_catchers(game_pk: int) -> dict:
+    """Starting catcher MLBAM id per side for one game: {"away": id|None, "home": id|None}.
+
+    Added for the SB (stolen base) model -- catcher identity/arm strength is
+    a new feature dimension this codebase has never needed before. Reuses
+    _get_lineup_for_game()'s existing `position` field (already captured
+    from the MLB Stats API boxscore, just never filtered on) rather than
+    adding a new data source. Returns None for a side if that side's lineup
+    isn't posted yet, or has no player at position "C" (extremely rare, but
+    do not assume -- e.g. a team using a position player to catch)."""
+    df = _get_lineup_for_game(game_pk)
+    out = {"away": None, "home": None}
+    if df.empty or "position" not in df.columns:
+        return out
+    catchers = df[df["position"] == "C"]
+    for side in ("away", "home"):
+        sub = catchers[catchers["team_side"] == side]
+        if not sub.empty:
+            out[side] = int(sub.iloc[0]["player_id"])
+    return out
+
+
+_CATCHER_COLS = ["game_pk", "away_catcher_id", "home_catcher_id"]
+
+
+def catcher_backfill_gcs(gcs_master_key: str, game_pks: list,
+                          checkpoint_every: int = 1000) -> pd.DataFrame:
+    """Resumable, checkpointed backfill of starting-catcher identity per game.
+
+    Cheaper than re-deriving this from a full boxscore fetch (game_result.py):
+    _get_lineup_for_game() is a SINGLE HTTP call per game (vs. fetch_game_result's
+    3 calls), and this is the only thing needed here. Mirrors
+    mlb_core.data.scoring.scoring_backfill_gcs()'s checkpoint pattern exactly.
+    """
+    from mlb_core import storage as _st  # twin-aware master IO
+
+    if _st.exists(gcs_master_key):
+        existing = _st.read_csv(gcs_master_key, low_memory=False)
+        already_have = set(existing["game_pk"].astype(int).unique())
+    else:
+        existing = pd.DataFrame(columns=_CATCHER_COLS)
+        already_have = set()
+
+    todo = [g for g in game_pks if int(g) not in already_have]
+    skipped = len(game_pks) - len(todo)
+    print(f"Catcher backfill: {len(todo):,} games to fetch ({skipped:,} already covered)")
+
+    if not todo:
+        print("  Nothing to fetch -- master already complete")
+        return existing
+
+    accumulated = [existing] if not existing.empty else []
+    rows = []
+    for i, gpk in enumerate(todo):
+        catchers = get_starting_catchers(int(gpk))
+        rows.append({"game_pk": int(gpk),
+                     "away_catcher_id": catchers["away"],
+                     "home_catcher_id": catchers["home"]})
+        time.sleep(random.uniform(0.1, 0.2))
+
+        done = i + 1
+        is_checkpoint = (done % checkpoint_every == 0) or (done == len(todo))
+        if is_checkpoint and rows:
+            chunk = pd.DataFrame(rows)
+            accumulated.append(chunk)
+            combined = pd.concat(accumulated, ignore_index=True)
+            combined = combined.drop_duplicates(subset=["game_pk"], keep="last")
+            _st.write_csv(combined, gcs_master_key)
+            accumulated = [combined]
+            rows = []
+            n_both = combined[["away_catcher_id", "home_catcher_id"]].notna().all(axis=1).sum()
+            print(f"  CHECKPOINT {done}/{len(todo)} | master: {len(combined):,} games | "
+                  f"both catchers resolved: {n_both:,}")
+
+    final = accumulated[-1] if accumulated else existing
+    print(f"  Catcher master updated: {len(final):,} games")
+    return final
+
+
+def catcher_identity_nightly_gcs(gcs_master_key: str) -> None:
+    """Fetch yesterday's starting-catcher identity, append to the GCS master.
+    Intended to be called from /refresh-data alongside scoring_nightly_gcs()
+    and mlb_core.data.sb_boxscore.sb_nightly_gcs() (added 2026-08-20 for the
+    SB model). Reuses catcher_backfill_gcs()'s own already-covered-game skip
+    logic, so calling it with just yesterday's game_pks is a correct nightly
+    refresh, not a separate code path."""
+    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    games = _get_games_for_date(yesterday)
+    if not games:
+        print(f"catcher_identity_nightly_gcs: no games found for {yesterday}")
+        return
+    game_pks = [g["game_pk"] for g in games]
+    catcher_backfill_gcs(gcs_master_key, game_pks, checkpoint_every=len(game_pks))
+
+
 def _pull_lineup_date(date_str: str, verbose: bool = False) -> pd.DataFrame:
     games = _get_games_for_date(date_str)
     if not games:

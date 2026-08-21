@@ -31,6 +31,8 @@ import unicodedata
 
 import requests
 
+from mlb_core.odds.dk_scraper import TEAM_NAME_TO_ABBREV
+
 logger = logging.getLogger(__name__)
 
 _MLB_API = "https://statsapi.mlb.com/api/v1"
@@ -111,6 +113,7 @@ def fetch_game_result(game_pk: int) -> dict | None:
                 "walks": 1,
                 "strikeouts": 1,
                 "stolen_bases": 0,
+                "caught_stealing": 0,
                 "total_bases": 1,
             }
         }
@@ -154,7 +157,16 @@ def fetch_game_result(game_pk: int) -> dict | None:
     for side in ("away", "home"):
         team = boxscore.get("teams", {}).get(side, {})
         players = team.get("players", {})
-        starter_pitcher_id = team.get("pitchers", [None])[0]
+        # Bug found 2026-08-20 (crashed the SB historical backfill mid-run):
+        # team.get("pitchers", [None]) only falls back to [None] when the KEY
+        # is missing -- if the boxscore has "pitchers": [] (an empty list,
+        # confirmed to occur on at least one real historical game), .get()
+        # returns that empty list as-is and [0] raises IndexError. `or`
+        # catches both the missing-key AND empty-list cases.
+        _pitchers_list = team.get("pitchers") or [None]
+        starter_pitcher_id = _pitchers_list[0]
+        team_name = team.get("team", {}).get("name", "")
+        team_abbrev = TEAM_NAME_TO_ABBREV.get(team_name, team_name)
 
         for pid, p in players.items():
             name = _norm(p.get("person", {}).get("fullName", ""))
@@ -178,6 +190,7 @@ def fetch_game_result(game_pk: int) -> dict | None:
                 pitchers[name] = {
                     "starter":           is_starter_pitcher,
                     "mlbam_id":          mlbam_id,
+                    "team":              team_abbrev,
                     "strikeouts":        int(pit.get("strikeOuts", 0)),
                     "outs":              int(pit.get("outs", 0)),
                     "innings_pitched":   pit.get("inningsPitched", "0.0"),
@@ -207,6 +220,7 @@ def fetch_game_result(game_pk: int) -> dict | None:
                     "starter":          is_starter_batter,
                     "batting_order":    batting_order,
                     "mlbam_id":         mlbam_id,
+                    "team":             team_abbrev,
                     "at_bats":          int(bat.get("atBats", 0)),
                     "plate_appearances":int(bat.get("plateAppearances", 0)),
                     "hits":             int(bat.get("hits", 0)),
@@ -218,6 +232,7 @@ def fetch_game_result(game_pk: int) -> dict | None:
                     "walks":            int(bat.get("baseOnBalls", 0)),
                     "strikeouts":       int(bat.get("strikeOuts", 0)),
                     "stolen_bases":     int(bat.get("stolenBases", 0)),
+                    "caught_stealing":  int(bat.get("caughtStealing", 0)),
                     "total_bases":      total_bases,
                 }
 

@@ -142,6 +142,17 @@ SYSTEM_CONFIG = {
         "num_boost_round": 2000,
         "filter_col":    "batter_hits",
     },
+    "SB": {
+        "gcs_features":  "SB_Pro_System/data/model_features.csv",
+        "target":        "stolen_bases",
+        "objective":     "count:poisson",
+        "eval_metric":   "poisson-nloglik",
+        "metric_dir":    "min",
+        "gcs_output":    "SB_Pro_System/models/sb_tuned_params.json",
+        "early_stopping": 30,
+        "num_boost_round": 2000,
+        "filter_col":    "stolen_bases",
+    },
     "BATTER_TB": {
         "gcs_features":  "BATTER_TB_System/data/model_features.csv",
         "target":        "batter_total_bases",

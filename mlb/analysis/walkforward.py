@@ -41,6 +41,7 @@ WF_SYS = {
     "OUTS":        ("mlb.training.retrain_outs_v1",        "count"),
     "BATTER_HITS": ("mlb.training.retrain_batter_hits_v1", "count"),
     "BATTER_TB":   ("mlb.training.retrain_batter_tb_v1",   "count"),
+    "SB":          ("mlb.training.retrain_sb_v1",          "count"),
     "HR":          ("mlb.training.retrain_hr_v6",          "binary"),
     "GAME":        ("mlb.training.retrain_game_v1",        "binary"),
 }
@@ -62,7 +63,7 @@ def _resolve_contract(system: str):
     params = _get(mod, "XGB_PARAMS")
     target = _get(mod, "TARGET")
     feats = _get(mod, "K_FEATURES", "OUTS_FEATURES", "BATTER_HITS_FEATURES",
-                 "BATTER_TB_FEATURES", "GAME_FEATURES", "FEATURES")
+                 "BATTER_TB_FEATURES", "GAME_FEATURES", "SB_FEATURES", "FEATURES")
     exclude = set(_get(mod, "_NON_FEATURE_COLS", "NON_FEATURE_COLS", default=set()) or set())
     n_round = int(_get(mod, "NUM_BOOST_ROUND", default=2000))
     early = int(_get(mod, "EARLY_STOPPING_ROUNDS", "EARLY_STOPPING", default=50))

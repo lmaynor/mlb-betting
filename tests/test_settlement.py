@@ -318,13 +318,15 @@ class TestSettleK:
 # ── Batter props ──────────────────────────────────────────────────────────────
 
 class TestSettleBatterProps:
-    def _make_batters(self, name, starter=True, strikeouts=1, hits=1, total_bases=2):
+    def _make_batters(self, name, starter=True, strikeouts=1, hits=1, total_bases=2,
+                       stolen_bases=0):
         return {
             name: {
                 "starter": starter,
                 "strikeouts": strikeouts,
                 "hits": hits,
                 "total_bases": total_bases,
+                "stolen_bases": stolen_bases,
             }
         }
 
@@ -374,6 +376,48 @@ class TestSettleBatterProps:
         results = self._settle("BATTER_HITS_2PLUS_2.0", "Aaron Judge", batters)
         assert results[0]["result"] == "void"
         assert results[0]["profit"] == 0.0
+
+    # -- SB (stolen bases, added 2026-08-20) --------------------------------
+
+    def test_sb_over_win(self):
+        batters = self._make_batters("jazz chisholm jr", stolen_bases=1)
+        results = self._settle("SB_OVER_0.5", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "win"
+
+    def test_sb_over_loss(self):
+        batters = self._make_batters("jazz chisholm jr", stolen_bases=0)
+        results = self._settle("SB_OVER_0.5", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "loss"
+
+    def test_sb_under_win(self):
+        batters = self._make_batters("jazz chisholm jr", stolen_bases=0)
+        results = self._settle("SB_UNDER_0.5", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "win"
+
+    def test_sb_non_starter_void(self):
+        """Same DK starter rule as every other batter prop."""
+        batters = self._make_batters("jazz chisholm jr", starter=False, stolen_bases=2)
+        results = self._settle("SB_OVER_0.5", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "void"
+        assert results[0]["profit"] == 0.0
+
+    def test_sb_2plus_exact_hit_is_a_win_not_a_push(self):
+        """Same reasoning as BATTER_TB/BATTER_HITS's identical fix -- a
+        threshold bet has no complementary 'under N' side, so hitting
+        exactly N must be a WIN, not a push."""
+        batters = self._make_batters("jazz chisholm jr", stolen_bases=2)
+        results = self._settle("SB_2PLUS_2.0", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "win"
+
+    def test_sb_2plus_below_threshold_is_a_loss(self):
+        batters = self._make_batters("jazz chisholm jr", stolen_bases=1)
+        results = self._settle("SB_2PLUS_2.0", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "loss"
+
+    def test_sb_player_not_in_boxscore_voids(self):
+        batters = self._make_batters("someone else", stolen_bases=1)
+        results = self._settle("SB_OVER_0.5", "Jazz Chisholm Jr", batters)
+        assert results[0]["result"] == "void"
 
 
 # ── Stale non-final voids ─────────────────────────────────────────────────────
@@ -476,6 +520,14 @@ class TestSettleEv:
             {"id": 1, "player": "Aaron Judge", "bet_type": "BATTER_HITS_UNDER_0.5_caesars"},
         ])
         cache = {100: _boxscore(batters={"aaron judge": {"starter": True, "total_bases": 0, "hits": 0}})}
+        results = _settle_ev(pending, cache)
+        assert results[0]["result"] == "win"
+
+    def test_dispatches_sb_to_settle_batter_props(self):
+        pending = _make_pending([
+            {"id": 1, "player": "Jazz Chisholm Jr", "bet_type": "SB_OVER_0.5_draftkings"},
+        ])
+        cache = {100: _boxscore(batters={"jazz chisholm jr": {"starter": True, "stolen_bases": 1}})}
         results = _settle_ev(pending, cache)
         assert results[0]["result"] == "win"
 

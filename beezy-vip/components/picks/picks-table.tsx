@@ -13,7 +13,7 @@ const impliedLabel = (odds: number) => `imp ${(americanToImpliedProb(odds) * 100
 const PAGE_SIZE = 30
 const TABLE_GRID = '72px 72px 112px 128px minmax(310px, 1fr) 76px 72px 88px 72px 70px'
 const TABLE_MIN_WIDTH = '1120px'
-const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER'])
+const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER', 'SB'])
 
 function ResultPill({ result }: { result: string | null }) {
   const cfg: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -121,6 +121,7 @@ function pickDescription(bet: Bet, detail: string) {
   if (bet.system === 'HR') return 'Home run prop'
   if (bet.system === 'BATTER_TB') return detail || 'Total bases prop'
   if (bet.system === 'BATTER_HITS') return detail || 'Hits prop'
+  if (bet.system === 'SB') return detail || 'Stolen base prop'
   if (bet.system === 'BATTER_K') return detail || 'Batter strikeout prop'
   if (bet.system === 'K') return detail || 'Pitcher strikeout prop'
   if (bet.system === 'OUTS') return detail || 'Pitcher outs prop'
