@@ -163,6 +163,11 @@ _SB_RULES = [
     ("catcher_pop_2b_sba",    lambda v: v >= 2.00,  "slow-armed catcher (pop time {v:.2f}s to 2B)"),
     ("catcher_pop_2b_sba",    lambda v: v <= 1.90,  "elite catcher arm (pop time {v:.2f}s to 2B) -- suppressed"),
     ("pitcher_sb_allowed",    lambda v: v >= 15,    "pitcher allows steals easily ({v:.0f} SB allowed this season)"),
+    # pitcher_pickoffs: added 2026-08-21. Real 2024 B-Ref distribution
+    # (IP>=20, n=543) is heavily zero-inflated -- median 0, 75th pct 1,
+    # max 9 (Charlie Morton) -- so >=4 picks out a genuinely notable
+    # pickoff move, not a typical pitcher.
+    ("pitcher_pickoffs",      lambda v: v >= 4,     "known pickoff move ({v:.0f} pickoffs this season) -- suppressed"),
     ("p_throws_L",            lambda v: v == 1,     "facing a lefty -- real hold advantage vs 1B, suppressed"),
     ("ewma_batting_order",    lambda v: v <= 2.5,   "top-of-order spot ({v:.1f} avg batting order)"),
 ]

@@ -343,3 +343,51 @@ data before revisiting -- both backtest samples here (~330-340 bets,
 mostly 2024) are thin enough that a materially different real-money
 verdict after a full paper season wouldn't be shocking, just not something
 to bet ahead of.
+
+## Addendum -- 2026-08-21: pitcher_pickoffs feature, from external reference review
+
+User shared two external stolen-base modeling projects (an R/academic paper
+optimizing lead distance with mixed-effects models; a Python sprint-speed-
+vs-SB%-correlation study) plus a Medium writeup, and asked for anything
+useful to fold in. Full comparison given in-conversation; one item was
+concretely actionable and got built:
+
+**New feature: `pitcher_pickoffs`** (23rd SB feature). The R project used a
+pitcher "threat" stat built from raw pickoff-*attempt* rate (successes +
+failures) -- not available to us without parsing MLB Stats API play-by-play
+(a real architecture change, not done here). What *is* cheaply available:
+Baseball-Reference's `PO` column (successful pickoffs only, confirmed live
+in `pybaseball.pitching_stats_bref()` output) via the same B-Ref pull
+already providing `pitcher_sb_allowed`/`pitcher_cs_allowed`. Real 2024
+distribution (IP>=20, n=543): median 0, 75th pct 1, max 9 -- heavily
+zero-inflated, so this is a weaker, noisier proxy for pitcher deterrence
+than the R paper's true attempt-rate would be, not the same thing under a
+different name. Flagged as such rather than oversold.
+
+Implementation: added `"PO"` to `auxiliary_features._BREF_KEEP_COLS`,
+renamed to `pitcher_pickoffs` (same rename step as SB/CS), wired into
+`build_sb_features.py`'s existing bref join, added to `SB_FEATURES`, added
+the same stale-column NaN-reset in `run_sb.py`'s live path that
+`pitcher_sb_allowed`/`pitcher_cs_allowed` already needed (same bug class,
+same fix), and a `rationale.py` rule (`>=4` pickoffs -- picked from the
+real distribution above, not guessed). Force-refetched the B-Ref master
+for all years (2015-2026) so historical rows actually get the column
+(a normal incremental run would have skipped already-cached years and left
+them NaN forever).
+
+Retrain (23 features): OOS MAE 0.1149->0.1147, R^2 0.045 (no leakage
+suspects) -- essentially unchanged, as expected for a feature this sparse.
+Real gain-based feature importance from the trained booster: dominated by
+`sb_per_game_L50`/`sb_season` (60% combined), `sprint_speed_ft_sec` 3rd at
+6.7%; `pitcher_pickoffs` lands at 1.5%, on par with `pitcher_cs_allowed`
+(1.6%) and `catcher_exchange_2b_3b_sba` (1.3%) -- a real, non-trivial
+contribution despite the sparsity, not dead weight.
+
+Backtest re-run (same command, same window): 338 bets, ROI -1.19%/-1.08%
+(between the pre-tuning -3.05% and post-tuning -0.17% runs -- consistent
+with sample-selection noise, not a trend), **CLV -1.49%** (vs -1.63% both
+prior runs -- a small move in the right direction, but ~0.14pp on a
+~330-bet sample is noise-scale, nowhere near the +2.0% promotion bar).
+**Verdict unchanged: NO_EDGE, `LOG_ONLY=True` stays.** Kept the feature
+regardless -- real signal, better model, just not a betting edge by
+itself. 622 tests still passing, compileall clean.

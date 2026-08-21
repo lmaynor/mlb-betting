@@ -266,21 +266,26 @@ def _join_pitcher_and_catcher(candidates, sched, lineups):
             merged["p_throws_L"] = 1 if opp_pitcher_throws == "L" else 0
             # Reset to NaN before the lookup below -- `r` is the batter's
             # LATEST historical snapshot row, which still carries whatever
-            # pitcher_sb_allowed/cs_allowed were true for a PAST opponent.
-            # Without this reset, a failed bref match for TODAY's pitcher
-            # would silently leave that stale prior-opponent value in place
-            # instead of correctly showing "unknown" (found alongside the
-            # identical catcher_* staleness bug, live 2026-08-20).
+            # pitcher_sb_allowed/cs_allowed/pickoffs were true for a PAST
+            # opponent. Without this reset, a failed bref match for TODAY's
+            # pitcher would silently leave that stale prior-opponent value
+            # in place instead of correctly showing "unknown" (found
+            # alongside the identical catcher_* staleness bug, live
+            # 2026-08-20; pitcher_pickoffs added 2026-08-21, same reset
+            # applies to it for the same reason).
             merged["pitcher_sb_allowed"] = np.nan
             merged["pitcher_cs_allowed"] = np.nan
+            merged["pitcher_pickoffs"]   = np.nan
 
-            if not bref.empty and opp_pitcher_name and {"pitcher_sb_allowed", "pitcher_cs_allowed"} & set(bref.columns):
+            _bref_pitcher_cols = {"pitcher_sb_allowed", "pitcher_cs_allowed", "pitcher_pickoffs"}
+            if not bref.empty and opp_pitcher_name and _bref_pitcher_cols & set(bref.columns):
                 key = norm_statcast_name(opp_pitcher_name)
                 year = pd.Timestamp(r.get("game_date", date.today())).year
                 match = bref[(bref["name_norm"] == key) & (bref["year"] == year)]
                 if not match.empty:
                     merged["pitcher_sb_allowed"] = match.iloc[0].get("pitcher_sb_allowed")
                     merged["pitcher_cs_allowed"] = match.iloc[0].get("pitcher_cs_allowed")
+                    merged["pitcher_pickoffs"]   = match.iloc[0].get("pitcher_pickoffs")
 
             opp_side = "away" if is_batter_home else "home"
             merged["opp_catcher_id"] = catcher_by_side.get((game_pk, opp_side))

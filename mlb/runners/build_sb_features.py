@@ -396,13 +396,17 @@ def build_model_features(
         df["sprint_speed_ft_sec"] = np.nan
         logger.warning("  sprint_speed not available -- feature will be NaN at predict time")
 
-    # Opposing pitcher SB/CS-allowed -- season-level B-Ref counting stat,
-    # name-keyed (player_name on a batter's own rows is the PITCHER's name --
-    # see build_sb_batter_rolling's opp_info comment).
+    # Opposing pitcher SB/CS-allowed + own pickoff count -- season-level
+    # B-Ref counting stats, name-keyed (player_name on a batter's own rows
+    # is the PITCHER's name -- see build_sb_batter_rolling's opp_info
+    # comment). pitcher_pickoffs added 2026-08-21: successful pickoffs BY
+    # this pitcher, a pickoff-move-skill signal distinct from SB/CS-allowed
+    # (those are outcomes of attempts already made; pickoffs deter/end a
+    # runner's chance before an attempt happens at all).
     try:
         from mlb_core.data.auxiliary_features import load_fangraphs_pitching, norm_statcast_name
         bref = load_fangraphs_pitching()
-        bref_cols = [c for c in ["pitcher_sb_allowed", "pitcher_cs_allowed"] if c in bref.columns]
+        bref_cols = [c for c in ["pitcher_sb_allowed", "pitcher_cs_allowed", "pitcher_pickoffs"] if c in bref.columns]
         if not bref.empty and bref_cols and "player_name" in df.columns:
             df["_bref_key"]  = df["player_name"].apply(norm_statcast_name)
             df["_aux_year"]  = pd.to_datetime(df["game_date"]).dt.year
@@ -414,9 +418,9 @@ def build_model_features(
             df = df.merge(bref_slim, on=["_bref_key", "_aux_year"], how="left")
             df = df.drop(columns=["_bref_key", "_aux_year"], errors="ignore")
             nan_pct = df["pitcher_sb_allowed"].isna().mean()
-            logger.info(f"  pitcher SB/CS-allowed join -- NaN={nan_pct:.1%}")
+            logger.info(f"  pitcher SB/CS-allowed/pickoffs join -- NaN={nan_pct:.1%}")
     except Exception as e:
-        logger.warning("SB: pitcher bref SB/CS-allowed join failed (non-fatal): %s", e)
+        logger.warning("SB: pitcher bref SB/CS-allowed/pickoffs join failed (non-fatal): %s", e)
 
     # Opposing catcher -- the first join in this codebase bringing a THIRD
     # player-entity onto a row. opp_catcher_id resolved from is_home (the

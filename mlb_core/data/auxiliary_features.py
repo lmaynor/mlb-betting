@@ -404,6 +404,18 @@ _BREF_KEEP_COLS = [
     # consumer of this master (join_pitcher_aux's _BREF_COLS) references
     # them, so NRFI/K/F5/GAME are unaffected.
     "SB", "CS",
+    # PO: successful pickoffs BY this pitcher -- added for the SB model,
+    # 2026-08-21, prompted by an external reference project (an R paper
+    # modeling optimal stolen-base leads) using a pitcher "threat" stat
+    # built from raw pickoff-ATTEMPT rate. B-Ref/boxscores only expose
+    # successful pickoffs (rarer, noisier than attempts would be -- true
+    # attempt rate needs play-by-play parsing, not done here), but it's a
+    # real, cheap, additive signal distinct from pitcher_sb_allowed/
+    # pitcher_cs_allowed: this measures the pitcher's own pickoff-move
+    # skill/usage (deters attempts outright) rather than outcomes of
+    # attempts that were already made. Confirmed present in
+    # pybaseball.pitching_stats_bref() output before adding this.
+    "PO",
 ]
 
 
@@ -517,7 +529,13 @@ def _fetch_fangraphs_pitching(year: int) -> pd.DataFrame | None:
     # Rename raw B-Ref SB/CS (allowed, while this pitcher was on the mound)
     # to explicit names -- "SB"/"CS" alone reads as the pitcher's own
     # baserunning, which is nonsensical; this is defense, not offense.
-    df = df.rename(columns={"SB": "pitcher_sb_allowed", "CS": "pitcher_cs_allowed"})
+    # PO -> pitcher_pickoffs: this one IS the pitcher's own action (a pickoff
+    # move he executed), so no offense/defense ambiguity, but still renamed
+    # for consistency and to self-document the SB-model provenance.
+    df = df.rename(columns={
+        "SB": "pitcher_sb_allowed", "CS": "pitcher_cs_allowed",
+        "PO": "pitcher_pickoffs",
+    })
 
     fip_mean = df["FIP"].mean()
     so9_mean = df["SO9"].mean()
@@ -587,7 +605,10 @@ def load_fangraphs_pitching(years: list[int] | None = None) -> pd.DataFrame:
         DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, ERA+,
         pitcher_sb_allowed, pitcher_cs_allowed (added 2026-08-20 for the SB
         model -- stolen bases / caught stealing allowed while this pitcher
-        was on the mound, real Baseball-Reference counting stats).
+        was on the mound, real Baseball-Reference counting stats),
+        pitcher_pickoffs (added 2026-08-21, also for the SB model --
+        successful pickoffs BY this pitcher, a pickoff-move-skill signal
+        distinct from the two above).
         Empty DataFrame if master not found.
     """
     from mlb_core.storage import read_csv, exists

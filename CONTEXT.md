@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-20 20:58 CST_
+_Last updated: 2026-08-21 10:45 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -91,7 +91,7 @@ betting systems running daily in GCP:
 | **BATTER_TB** | E[batter total bases] NegBin count regressor (lambda; XBH/contact/platoon/pitcher features) | Batter TB O/U (best onshore book) | Live (paper) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
-| **SB** | E[stolen bases] NegBin count regressor (lambda; on-base/speed/pitcher/**catcher** features -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built + merged to main 2026-08-20, backtested NO_EDGE (ROI ~0 to -3%, CLV -1.63% both pre/post Optuna tuning), `LOG_ONLY=True`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
+| **SB** | E[stolen bases] NegBin count regressor (lambda; 23 features -- on-base/speed/pitcher/**catcher** -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built + merged to main 2026-08-20, backtested NO_EDGE across 3 rounds (baseline/Optuna-tuned/+pitcher_pickoffs feature, CLV -1.63% to -1.49% throughout), `LOG_ONLY=True`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
 
 Batter prop runners (`BATTER_HITS`, `BATTER_TB`) require confirmed lineup
 candidates and skip any SGO prop whose `event_id` does not match the feature
@@ -2803,6 +2803,19 @@ new default anyway (better fit efficiency, no downside); `LOG_ONLY=True`
 stays. Full breakdown in
 `handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md`.
 
+**23rd feature added 2026-08-21: `pitcher_pickoffs`** (successful pickoffs
+by the opposing pitcher, B-Ref `PO` column, real 2024 distribution median 0/
+75th-pct 1/max 9 -- sparse), prompted by reviewing two external stolen-base
+modeling projects the user shared. Real gain-based importance from the
+retrained booster: `pitcher_pickoffs` 1.5%, on par with `pitcher_cs_allowed`
+(1.6%) -- genuine signal, not dead weight, despite the sparsity.
+`sb_per_game_L50`+`sb_season` still dominate at 60% combined. Backtest
+re-run: 338 bets, ROI -1.19%/-1.08%, **CLV -1.49%** (vs -1.63% both prior
+rounds -- a small move the right way, but noise-scale on this sample size,
+nowhere near the +2.0% promotion bar). **Verdict still NO_EDGE.** Full
+breakdown (incl. why the R project's true pickoff-*attempt*-rate stat isn't
+cheaply available to us) in the handoff's 2026-08-21 addendum.
+
 **`walkforward.py`'s `_resolve_contract()` has a hardcoded tuple of
 `*_FEATURES` attribute names to look up on a system's `retrain_*.py` module
 -- adding a new system to `WF_SYS` without adding its `"{SYS}_FEATURES"`
@@ -3187,7 +3200,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-20 20:58 CST_
+_Last updated: 2026-08-21 10:45 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

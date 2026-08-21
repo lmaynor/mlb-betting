@@ -46,6 +46,8 @@ SB_FEATURES = [
     "p_throws_L",                # 1 if left-handed pitcher (real hold advantage vs 1B)
     "pitcher_sb_allowed",        # season-level B-Ref counting stat
     "pitcher_cs_allowed",
+    "pitcher_pickoffs",          # season-level B-Ref counting stat -- pickoff-move
+                                  # skill/usage, distinct from SB/CS-allowed outcomes
     # Opposing catcher -- first system in this codebase to need this at all
     "catcher_maxeff_arm_2b_3b_sba",
     "catcher_exchange_2b_3b_sba",
