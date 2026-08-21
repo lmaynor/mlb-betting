@@ -6,7 +6,7 @@ All joins are left joins: missing auxiliary data yields NaN rather than
 dropped rows.  Safe to call even if GCS files don't yet exist (each
 load call is wrapped in try/except and returns unchanged df on failure).
 
-Three entry points:
+Four entry points:
 
   join_pitcher_aux(df, ...)   -- pitcher-grain (one row per pitcher-game)
                                   NRFI, K
@@ -14,6 +14,13 @@ Three entry points:
                                   F5, GAME
   join_batter_aux(df, ...)    -- batter-grain (one row per batter-game)
                                   HR, BATTER_HITS, BATTER_TB
+  join_catcher_aux(df, ...)   -- batter-grain, OPPOSING catcher's own stats
+                                  SB only -- added 2026-08-20. This is the
+                                  first join in this codebase bringing a
+                                  THIRD player-entity (neither the batter
+                                  nor the pitcher) onto a row -- no existing
+                                  system needed catcher identity/skill at
+                                  all before the SB model.
 
 Sources attached per call:
 
@@ -47,6 +54,9 @@ _ST_COLS    = ["runs_chase", "runs_heart", "runs_shadow", "runs_waste"]
 # days_rest deliberately excluded -- many builders compute it from statcast already.
 _SCHED_COLS = ["travel_miles", "home_away_streak", "series_game_num"]
 _HOOKS_COLS = ["avg_starter_outs_L30", "pct_quick_hooks_L30", "pct_quality_starts_L30"]
+_POP_COLS   = ["maxeff_arm_2b_3b_sba", "exchange_2b_3b_sba",
+               "pop_2b_sba", "pop_2b_cs", "pop_2b_sb",
+               "pop_3b_sba", "pop_3b_cs", "pop_3b_sb"]
 
 
 def _safe_int(series: pd.Series) -> pd.Series:
@@ -328,5 +338,75 @@ def join_batter_aux(
                 logger.info("aux_joins: batter team_schedule joined (home + away)")
     except Exception as exc:
         logger.warning("aux_joins: batter team_schedule join failed (non-fatal): %s", exc)
+
+    return df
+
+
+# ---------------------------------------------------------------------------
+# 4. Catcher-grain join (SB only) -- the opposing catcher's own arm/pop-time
+# ---------------------------------------------------------------------------
+
+def join_catcher_aux(
+    df: pd.DataFrame,
+    opp_catcher_col: str = "opp_catcher_id",
+    game_date_col: str = "game_date",
+) -> pd.DataFrame:
+    """Attach the OPPOSING catcher's pop time / arm strength to a batter-game
+    DataFrame. Added for the SB model -- no existing system (HR, BATTER_HITS,
+    BATTER_TB) needed a third player-entity on the row, so this is new,
+    not a variant of join_batter_aux().
+
+    Caller must have already resolved `opp_catcher_col` (the opposing
+    team's starting catcher MLBAM id for that game) -- e.g. via
+    mlb_core.data.lineups.get_starting_catchers(game_pk) at build time.
+    This function only does the (player_id, year) -> stats join, exactly
+    like join_pitcher_aux()'s bref join.
+
+    Columns attached (see mlb_core.data.auxiliary_features.load_catcher_poptime):
+      catcher_maxeff_arm_2b_3b_sba, catcher_exchange_2b_3b_sba,
+      catcher_pop_2b_sba, catcher_pop_2b_cs, catcher_pop_2b_sb,
+      catcher_pop_3b_sba, catcher_pop_3b_cs, catcher_pop_3b_sb
+
+    Usage:
+        df = join_catcher_aux(df, opp_catcher_col="opp_catcher_id")
+    """
+    from mlb_core.data.auxiliary_features import load_catcher_poptime
+
+    if not opp_catcher_col or opp_catcher_col not in df.columns:
+        logger.debug("aux_joins: %s not present -- catcher join skipped", opp_catcher_col)
+        return df
+
+    year = _year_from(df, game_date_col)
+
+    try:
+        pop = load_catcher_poptime()
+        if pop.empty or "player_id" not in pop.columns:
+            logger.warning("aux_joins: catcher_poptime master empty/missing -- join skipped")
+            return df
+        pop_cols = [c for c in _POP_COLS if c in pop.columns]
+        if not pop_cols:
+            logger.warning("aux_joins: no expected catcher_poptime columns found -- join skipped")
+            return df
+
+        df = df.copy()
+        df["_aux_year"] = _safe_int(year)
+        pop_slim = (
+            pop[["player_id", "year"] + pop_cols]
+            .rename(columns={
+                "player_id": "_catcher_pid",
+                "year": "_aux_year",
+                **{c: f"catcher_{c}" for c in pop_cols},
+            })
+            .drop_duplicates(subset=["_catcher_pid", "_aux_year"])
+        )
+        pop_slim["_catcher_pid"] = _safe_int(pop_slim["_catcher_pid"])
+        pop_slim["_aux_year"] = _safe_int(pop_slim["_aux_year"])
+        df["_catcher_pid"] = _safe_int(df[opp_catcher_col])
+        df = df.merge(pop_slim, on=["_catcher_pid", "_aux_year"], how="left")
+        df = df.drop(columns=["_catcher_pid", "_aux_year"], errors="ignore")
+        nan_pct = df["catcher_pop_2b_sba"].isna().mean() if "catcher_pop_2b_sba" in df.columns else float("nan")
+        logger.info("aux_joins: catcher_poptime join -- catcher_pop_2b_sba NaN=%.1f%%", 100 * nan_pct)
+    except Exception as exc:
+        logger.warning("aux_joins: catcher_poptime join failed (non-fatal): %s", exc)
 
     return df

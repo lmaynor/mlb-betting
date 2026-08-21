@@ -6,7 +6,15 @@ export interface ModelSpec {
   color:       string
   description: string
   dataRange:   string
-  oosAUC:      number   // for K: stores MAE; for OUTS: 0 (proxy)
+  oosAUC:      number   // for K: stores MAE. Ignored when metricStatus is set below.
+  // Set when there is no real trained-and-evaluated metric to show, so the
+  // detail page can render an honest state instead of a raw oosAUC number:
+  //   'proxy'   -- not a separately trained model, e.g. OUTS (IP simulation
+  //                 derived from K's features)
+  //   'pending' -- brand-new system, no settled/backtested metric yet, e.g.
+  //                 SB at launch
+  // Omit entirely for a normal trained-and-evaluated system.
+  metricStatus?: 'proxy' | 'pending'
   features:    Array<{ name: string; description: string; importance: string }>
   edgeThreshold: number
   kellyFraction: number
@@ -120,10 +128,10 @@ export const MODEL_SPECS: ModelSpec[] = [
     name:        'Outs Props',
     version:     'v1',
     color:       '#FF6B35',
-    // oosAUC = 0 signals proxy model — no trained AUC. The detail page shows 'Proxy' when oosAUC === 0.
     description: 'Projects outs recorded by a starter via Normal IP simulation (proxy model derived from K system features). Not a separately trained model.',
     dataRange:   '2021–2025',
     oosAUC:      0,
+    metricStatus: 'proxy',
     edgeThreshold: 0.04,
     kellyFraction: 0.4,
     features: [
@@ -135,6 +143,36 @@ export const MODEL_SPECS: ModelSpec[] = [
       { name: 'Opponent OBP (L14)',      description: 'Opponent OBP over last 14 days',                        importance: 'Medium' },
       { name: 'Win Probability Context', description: 'Expected leverage — blowouts = shorter starts',         importance: 'Low' },
       { name: 'Home/Away Split',         description: 'IP/Start differential home vs. away',                   importance: 'Low' },
+    ],
+  },
+  {
+    system:      'SB',
+    slug:        'sb',
+    name:        'Stolen Base Props',
+    version:     'v1',
+    color:       '#d9cf5a',
+    // Brand new 2026-08-20, LOG_ONLY -- no settled bets yet, so there is no
+    // real backtested metric to show. metricStatus: 'pending' below renders
+    // an honest "not yet available" state on the detail page instead of a
+    // raw oosAUC number.
+    description: 'Predicts expected stolen bases per batter per game. NegBin count regression (XGBoost count:poisson) on on-base opportunity -- reaching via single/walk/HBP specifically, since a double or homer skips the steal chance entirely -- sprint speed, and recent attempt/success rate, adjusted for the opposing pitcher hold profile and lineup slot. The first beezy.fyi model to add opposing catcher defense (pop time and arm strength to second) as a feature, sourced from MLB Stats API boxscores since the Statcast public pitch-level feed carries no SB/CS events at all.',
+    dataRange:   '2023–2025',
+    oosAUC:      0,
+    metricStatus: 'pending',
+    edgeThreshold: 0.04,
+    kellyFraction: 0.25,
+    features: [
+      { name: 'On-Base Rate (L20)',      description: 'Reaching base via single/walk/HBP per PA, last 20 games -- the events that actually create a steal opportunity', importance: 'High' },
+      { name: 'Sprint Speed',            description: 'Statcast sprint speed (season) -- raw baserunning speed floor', importance: 'High' },
+      { name: 'SB Rate (L20)',           description: 'Rolling stolen bases per game, last 20 -- direct recent-rate signal', importance: 'High' },
+      { name: 'SB Attempt Rate (L20)',   description: '(SB+CS) attempts per game, last 20 -- how often this runner actually goes', importance: 'High' },
+      { name: 'SB Success % (L50)',      description: 'Stolen base success rate over the last 50 games', importance: 'Medium' },
+      { name: 'Batting Order Slot',      description: 'Recency-weighted lineup slot -- top-of-order hitters see more basestealing opportunities', importance: 'Medium' },
+      { name: 'Pitcher Handedness',      description: 'Opposing pitcher throws left-handed -- a real hold advantage facing first base', importance: 'Medium' },
+      { name: 'Pitcher SB Allowed',      description: 'Opposing pitcher stolen bases allowed, season-level', importance: 'Medium' },
+      { name: 'Catcher Pop Time',        description: 'Opposing catcher pop time to 2nd on steal attempts -- lower pop time suppresses both attempts and success', importance: 'High' },
+      { name: 'Catcher Arm Strength',    description: 'Opposing catcher max-effort arm strength to 2B/3B on steal attempts', importance: 'Medium' },
+      { name: 'Pitch Clock Regime',      description: '2023 pitch-clock / bigger-base / disengagement-limit rules -- steal rates rose leaguewide after this change', importance: 'Medium' },
     ],
   },
 ]

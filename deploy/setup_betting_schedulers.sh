@@ -31,7 +31,7 @@ SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
 echo "Cloud Run service URL: $SERVICE_URL"
 
 # Authoritative system list -- keep in sync with main.py DEFAULT_RUN_SYSTEMS.
-SYSTEMS_JSON='["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","GAME","1I"]'
+SYSTEMS_JSON='["HR","1IOU","F5","K","BATTER_HITS","BATTER_TB","SB","GAME","1I"]'
 
 _upsert_run_job() {
   local name="$1" cron="$2" run_type="$3" description="$4"

@@ -69,9 +69,9 @@ def _off_season_response():
                     "reason": "off-season (set MLB_FORCE_RUN=1 to override)"}), 202
 
 
-VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "1I"}
-DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
-DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "BATTER_TB", "GAME"]
+VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "SB", "1I"}
+DEFAULT_RUN_SYSTEMS = ["HR", "1IOU", "F5", "K", "BATTER_HITS", "BATTER_TB", "SB", "GAME", "1I"]
+DEFAULT_FEATURE_BUILD_SYSTEMS = ["HR", "1IOU", "K", "F5", "BATTER_HITS", "BATTER_TB", "SB", "GAME"]
 
 
 def _run_system(system: str, run_type: str, run_date: str) -> dict:
@@ -91,6 +91,8 @@ def _run_system(system: str, run_type: str, run_date: str) -> dict:
             from mlb.runners.run_game import run
         elif system == "BATTER_TB":
             from mlb.runners.run_batter_tb import run
+        elif system == "SB":
+            from mlb.runners.run_sb import run
         elif system == "1I":
             from mlb.runners.run_1i import run
         else:
@@ -180,6 +182,8 @@ def build_features_handler():
         from mlb.runners.build_batter_hits_features import run
     elif system == "BATTER_TB":
         from mlb.runners.build_batter_tb_features import run
+    elif system == "SB":
+        from mlb.runners.build_sb_features import run
     elif system == "GAME":
         from mlb.runners.build_game_features import run
     else:
@@ -224,6 +228,7 @@ def build_all_features_handler():
         "F5":          "mlb.runners.build_f5_features",
         "BATTER_HITS": "mlb.runners.build_batter_hits_features",
         "BATTER_TB":   "mlb.runners.build_batter_tb_features",
+        "SB":          "mlb.runners.build_sb_features",
         "GAME":        "mlb.runners.build_game_features",
     }
 
@@ -334,6 +339,8 @@ def refresh_data_handler():
         from mlb_core.config import GCS_BUCKET
         from mlb_core.data.scoring import scoring_nightly_gcs
         from mlb_core.data.statcast import statcast_nightly_gcs
+        from mlb_core.data.sb_boxscore import sb_nightly_gcs
+        from mlb_core.data.lineups import catcher_identity_nightly_gcs
         fetcher_results = {}
 
         for label, fn, args in [
@@ -347,8 +354,15 @@ def refresh_data_handler():
                 logger.error(f"refresh-data: {label} failed: {fe}")
                 fetcher_results[label] = {"status": "error", "error": str(fe)}
 
+        # sb_boxscore/catcher_identity added 2026-08-20 for the SB model --
+        # both are one-arg (gcs_master_key only, bucket resolved internally
+        # via mlb_core.storage), unlike scoring_nightly_gcs's (bucket, key)
+        # signature, so their args tuples are single-element -- fn(*args)
+        # still calls correctly either way.
         for label, fn, args in [
-            ("scoring",  scoring_nightly_gcs,  (GCS_BUCKET, "Scoring/scoring_master.csv")),
+            ("scoring",       scoring_nightly_gcs,          (GCS_BUCKET, "Scoring/scoring_master.csv")),
+            ("sb_boxscore",   sb_nightly_gcs,                ("Scoring/sb_boxscore_master.csv",)),
+            ("catcher_identity", catcher_identity_nightly_gcs, ("AuxData/catcher_identity_master.csv",)),
         ]:
             try:
                 fn(*args)
@@ -674,6 +688,7 @@ def reset_and_run():
     from mlb.runners.run_batter_hits import run as run_batter_hits
     from mlb.runners.run_game import run as run_game
     from mlb.runners.run_batter_tb import run as run_batter_tb
+    from mlb.runners.run_sb import run as run_sb
     from mlb.runners.run_1i import run as run_1i
     body     = request.get_json(silent=True) or {}
     run_date = body.get("date", datetime.now(_CT).date().isoformat())
@@ -688,7 +703,7 @@ def reset_and_run():
             deleted[sys] = r.rowcount
     logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
     results = {}
-    runner_map = {"HR": run_hr, "1IOU": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game, "BATTER_TB": run_batter_tb, "1I": run_1i}
+    runner_map = {"HR": run_hr, "1IOU": run_nrfi, "F5": run_f5, "K": run_k, "BATTER_HITS": run_batter_hits, "GAME": run_game, "BATTER_TB": run_batter_tb, "SB": run_sb, "1I": run_1i}
     for sys in systems:
         if sys in runner_map:
             try:
@@ -745,7 +760,7 @@ def dashboard():
     days = int(request.args.get("days", 7))
     bt = BetTracker(_require_db_url(), "HR")
 
-    systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
+    systems = ["HR", "1IOU", "F5", "K", "OUTS", "BATTER_HITS", "BATTER_TB", "SB", "GAME", "1I"]
     summary_rows = ""
     for sys in systems:
         with bt.engine.connect() as conn:
@@ -772,7 +787,7 @@ def dashboard():
     if system_filter:
         # Whitelist — never interpolate user input into SQL strings.
         _VALID_SYSTEMS_DASH = {"HR","1IOU","F5","K","OUTS","F3","F1H","F7","GAME","1I",
-                               "BATTER_K","BATTER_TB","BATTER_HITS","PITCHER_ER"}
+                               "BATTER_K","BATTER_TB","BATTER_HITS","SB","PITCHER_ER"}
         if system_filter.upper() not in _VALID_SYSTEMS_DASH:
             return jsonify({"error": f"Invalid system: {system_filter}"}), 400
         where_clause += " AND system = :system_filter"

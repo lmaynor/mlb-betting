@@ -40,12 +40,17 @@ DEVIG_METHOD = "shin"
 # ParlayAPI short market name (parlay_extract._market_short) -> (canonical, system).
 # Same canonical markets as bettingpros_to_parquet so the two sources coexist.
 PARLAY_TO_HISTORY = {
-    "home_runs":   ("hr_yn", "HR"),
-    "strikeouts":  ("k_ou", "K"),
-    "outs":        ("outs_ou", "OUTS"),
-    "hits":        ("bhits_ou", "BATTER_HITS"),
-    "total_bases": ("btb_ou", "BATTER_TB"),
-    "earned_runs": ("per_ou", "PITCHER_ER"),
+    "home_runs":    ("hr_yn", "HR"),
+    "strikeouts":   ("k_ou", "K"),
+    "outs":         ("outs_ou", "OUTS"),
+    "hits":         ("bhits_ou", "BATTER_HITS"),
+    "total_bases":  ("btb_ou", "BATTER_TB"),
+    "earned_runs":  ("per_ou", "PITCHER_ER"),
+    # "steals_ou" -- same market code BettingPros' own historical backfill
+    # already uses (mlb_core/odds/bettingpros.py market id 294) -- keeping
+    # them identical means a backtest sees one unified history regardless
+    # of which provider sourced a given date's rows.
+    "stolen_bases": ("steals_ou", "SB"),
 }
 
 # ParlayAPI/OddsAPI book key -> canonical (matches SGO/BettingPros naming where they overlap).

@@ -70,9 +70,20 @@ export default async function ModelDetailPage({ params }: Props) {
     if (pick.result === 'win') buckets[bucket].wins++
   }
 
-  // OOS metric display -- K uses MAE, OUTS is proxy
-  const metricLabel = spec.system === 'K' ? 'OOS MAE' : spec.system === 'OUTS' ? 'Model' : 'OOS AUC'
-  const metricValue = spec.system === 'K' ? spec.oosAUC.toFixed(3) : spec.system === 'OUTS' ? 'Proxy' : spec.oosAUC.toFixed(3)
+  // OOS metric display -- K uses MAE instead of AUC (a real metric-type
+  // difference tied to the model family). metricStatus covers systems with
+  // no real metric to show at all ('proxy': not separately trained, e.g.
+  // OUTS; 'pending': brand new, no backtested/settled metric yet, e.g. SB
+  // at launch) -- generic on the spec field, not another system-name branch,
+  // so the next new system gets graceful treatment for free.
+  const metricLabel =
+    spec.metricStatus === 'proxy'   ? 'Model' :
+    spec.metricStatus === 'pending' ? 'OOS Metric' :
+    spec.system === 'K'             ? 'OOS MAE' : 'OOS AUC'
+  const metricValue =
+    spec.metricStatus === 'proxy'   ? 'Proxy' :
+    spec.metricStatus === 'pending' ? 'Pending' :
+    spec.oosAUC.toFixed(3)
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>

@@ -108,6 +108,7 @@ img, video { max-width: 100%; height: auto; }
   --sys-batter-k:    #c08cf0;   /* lavender */
   --sys-batter-tb:   #a9d166;   /* lime */
   --sys-batter-hits: #4fc7bd;   /* teal */
+  --sys-sb:          #d9cf5a;   /* yellow */
 
   /* ── Radius — soft, restrained ─────────────────────────── */
   --radius-sm:   4px;

@@ -104,6 +104,7 @@ _BATTER_HITS_PREFIX = "batting_hits-"
 _BATTER_TB_PREFIX   = "batting_totalBases-"
 _BATTER_K_PREFIX    = "batting_strikeouts-"
 _PITCHER_ER_PREFIX  = "pitching_earnedRuns-"
+_STOLEN_BASES_PREFIX = "batting_stolenBases-"   # confirmed live 2026-08-20 (ParlayAPI player_stolen_bases)
 _NRFI_OVER_ID     = "points-all-1i-ou-over"
 _NRFI_UNDER_ID    = "points-all-1i-ou-under"
 _1I_3WAY_AWAY_ID  = "points-away-1i-ml3way-away"   # away leads after 1st
@@ -866,6 +867,85 @@ def extract_pitcher_er_odds(events: list) -> dict:
                                     "extract_pitcher_er_odds")
 
 
+def extract_stolen_base_odds(events: list) -> dict:
+    """Extract stolen-base O/U odds.
+
+    Deliberately NOT a call to _extract_player_ou_props() -- confirmed live
+    2026-08-20 (handoffs/scope_stolen_base_model_2026-08-20.md s1a) that
+    real onshore books split on shape for this specific market: DraftKings/
+    Fliff/bet365 quote genuine two-sided Over/Under, but Caesars/Novig quote
+    a one-sided "Yes" price only (parlay_adapter.py's _side_of() already
+    maps "Yes" -> "over", so these arrive here as an over-only "ou" entry
+    with no complementary "under" -- a real market-shape difference, not a
+    bug). _extract_player_ou_props() requires both sides and would silently
+    drop every Caesars/Novig-only player, throwing away real, bettable
+    prices exactly the way extract_hr_props() has to handle HR's yn-yes-only
+    books -- so this extractor keeps an over-only entry instead of skipping it.
+
+    Returns {player_name: {over_odds, under_odds, line, is_two_sided, ...}}.
+    under_odds/under_book/fair_under/open_under are None and is_two_sided
+    is False when only a one-sided price exists -- callers must devig
+    accordingly (devig_two_way when two-sided, devig_unilateral like HR
+    when not; see run_sb.py).
+    """
+    out: dict = {}
+    for event in events:
+        away, home = _event_teams(event)
+        event_id   = event.get("eventID")
+        odds       = event.get("odds") or {}
+        over_map:  dict = {}
+        under_map: dict = {}
+        for odd_id, entry in odds.items():
+            if not odd_id.startswith(_STOLEN_BASES_PREFIX):
+                continue
+            if entry.get("statID") != "batting_stolenBases":
+                continue
+            if entry.get("betTypeID") != "ou":
+                continue
+            player_id = entry.get("playerID") or entry.get("statEntityID")
+            if not player_id:
+                continue
+            side = entry.get("sideID")
+            if side == "over":
+                over_map[player_id] = entry
+            elif side == "under":
+                under_map[player_id] = entry
+
+        for player_id, over_entry in over_map.items():
+            under_entry = under_map.get(player_id)
+            canonical_line = _dk_line_float(over_entry)
+            over_odds, over_book = _best_book_odds_for_line(over_entry, canonical_line)
+            if over_odds is None:
+                continue
+            under_odds, under_book = (None, None)
+            if under_entry:
+                under_odds, under_book = _best_book_odds_for_line(under_entry, canonical_line)
+            name = _player_name(event, player_id)
+            if not name:
+                continue
+            book = over_book or under_book
+            out[name] = {
+                "over_odds":     over_odds,
+                "under_odds":    under_odds,
+                "line":          canonical_line,
+                "is_two_sided":  under_odds is not None,
+                "away_team":     away,
+                "home_team":     home,
+                "event_id":      event_id,
+                "bookmaker":     book,
+                "fair_over":     _safe_int(over_entry.get("fairOdds")),
+                "fair_under":    _safe_int(under_entry.get("fairOdds")) if under_entry else None,
+                "open_over":     _safe_int(over_entry.get("openBookOdds")),
+                "open_under":    _safe_int(under_entry.get("openBookOdds")) if under_entry else None,
+                "commence_time": (event.get("status") or {}).get("startsAt", ""),
+            }
+
+    n_one_sided = sum(1 for v in out.values() if not v["is_two_sided"])
+    logger.info(f"SGO extract_stolen_base_odds: {len(out)} players with onshore prices "
+                f"({n_one_sided} one-sided only)")
+    return out
+
+
 # ---------------------------------------------------------------------------
 # 2+/3+ threshold sub-markets (2026-08-19) -- one-sided "at least N" props,
 # sourced from parlay_adapter.py's alt_lines (every quoted point, not just
@@ -961,6 +1041,17 @@ def extract_batter_hits_alt_line_odds(events: list, n: int) -> dict:
     """'N+ hits'. Second-two-sided-line market: point=N-0.5 over side."""
     out = _extract_alt_line_odds(events, "batting_hits", n, lambda k: k - 0.5)
     logger.info(f"SGO extract_batter_hits_alt_line_odds({n}+): {len(out)} players with onshore prices")
+    return out
+
+
+def extract_stolen_base_alt_line_odds(events: list, n: int) -> dict:
+    """'N+ stolen bases' (n=2 -> "2+ SB"). Same second-two-sided-line shape as
+    OUTS/BATTER_TB/BATTER_HITS: point=N-0.5 over side. Confirmed live
+    2026-08-20 -- ParlayAPI's player_stolen_bases_alt market ("...Milestones
+    1 Or More", caesars/draftkings/fanduel) follows this convention, not K's
+    direct-N ladder shape."""
+    out = _extract_alt_line_odds(events, "batting_stolenBases", n, lambda k: k - 0.5)
+    logger.info(f"SGO extract_stolen_base_alt_line_odds({n}+): {len(out)} players with onshore prices")
     return out
 
 

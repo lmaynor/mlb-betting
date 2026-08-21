@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-20 11:48 CST_
+_Last updated: 2026-08-20 16:08 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -91,6 +91,7 @@ betting systems running daily in GCP:
 | **BATTER_TB** | E[batter total bases] NegBin count regressor (lambda; XBH/contact/platoon/pitcher features) | Batter TB O/U (best onshore book) | Live (paper) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
+| **SB** | E[stolen bases] NegBin count regressor (lambda; on-base/speed/pitcher/**catcher** features -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built 2026-08-20, backtested NO_EDGE (ROI -3.05%, CLV -1.63%, n=341, agree), `LOG_ONLY=True` -- uncommitted on `feat/stolen-base-model-2026-08-20`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
 
 Batter prop runners (`BATTER_HITS`, `BATTER_TB`) require confirmed lineup
 candidates and skip any SGO prop whose `event_id` does not match the feature
@@ -218,6 +219,14 @@ mlb-betting/
 │   ├── run_batter_hits.py        Score BATTER_HITS O/U via NegBin CDF. LOG_ONLY=True
 │   │                             until 200-bet gate cleared.
 │   ├── build_batter_hits_features.py  Nightly: build BATTER_HITS_System/data/model_features.csv.
+│   ├── run_sb.py                 Score SB (stolen base) O/U via NegBin CDF. LOG_ONLY=True
+│   │                             (new system, added 2026-08-20). Dual devig path (two-sided
+│   │                             + one-sided "Yes"-only, confirmed live -- see s8).
+│   ├── build_sb_features.py      Nightly: build SB_Pro_System/data/model_features.csv.
+│   │                             Target is NOT statcast-derived (statcast cannot see SB/CS
+│   │                             events at all, verified live) -- comes from
+│   │                             mlb_core.data.sb_boxscore's MLB Stats API boxscore backfill.
+│   │                             First builder needing a catcher join (join_catcher_aux).
 │   ├── run_game.py               Score GAME ML (HOME/AWAY moneyline) via GAME Pro v1.
 │   │                             LOG_ONLY=True until 200-bet gate cleared.
 │   ├── build_game_features.py    Nightly: build GAME_Pro_System/data/model_features.csv.
@@ -303,7 +312,7 @@ mlb-betting/
 │   │                             calibrator). SPECS dict = per-system market/feature_csv/id_col.
 │   ├── walkforward.py            Leakage-proof OOS: train on game_date<cutoff, score >=cutoff,
 │   │                             reusing each system's production training contract verbatim.
-│   │                             WF_SYS = K/OUTS/BATTER_HITS/BATTER_TB/HR/GAME -- the only
+│   │                             WF_SYS = K/OUTS/BATTER_HITS/BATTER_TB/HR/GAME/SB -- the only
 │   │                             systems with a single-booster contract (NRFI/F5/etc. need a
 │   │                             model BUILT, not tuned).
 │   ├── backtest_market.py        Join preds -> odds_history real lines, line-shop, settle,
@@ -374,9 +383,18 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   │                                       bat_tracking, batter_arsenal_stats)
 │   └── savant_{dataset}_master.csv        All years combined
 ├── Scoring/
-│   └── scoring_master.csv              Per-(game_pk,inning,half) runs.
-│                                       AUTHORITATIVE for run targets.
-│                                       Updated nightly by mlb-refresh-data.
+│   ├── scoring_master.csv              Per-(game_pk,inning,half) runs.
+│   │                                   AUTHORITATIVE for run targets.
+│   │                                   Updated nightly by mlb-refresh-data.
+│   └── sb_boxscore_master.csv          Per-(game_pk,batter) stolen_bases/caught_stealing,
+│                                       team, starter flag, batting_order -- from MLB Stats
+│                                       API boxscore (mlb_core.data.sb_boxscore), NOT
+│                                       statcast (which cannot see these events at all,
+│                                       verified live 2026-08-20). AUTHORITATIVE target
+│                                       for the SB model. Backfilled 2023-03-01+ (regular +
+│                                       postseason only) via scripts/backfill_sb_boxscore.py.
+│                                       Nightly refresh wired via sb_nightly_gcs(), called
+│                                       from /refresh-data alongside scoring_nightly_gcs().
 ├── Weather/
 │   └── weather_master.csv              Historical weather per game.
 │                                       Updated nightly by mlb-refresh-data.
@@ -448,6 +466,13 @@ gs://concrete-crow-445205-m4-mlb-data/
 │       ├── model_meta_batter_hits_v1.json  (includes nb_alpha for NegBin CDF)
 │       ├── lambda_calibrator_batter_hits_v1.pkl
 │       └── archive/
+├── SB_Pro_System/                      Added 2026-08-20 (stolen base model).
+│   ├── data/                           sb_batter_features.csv, model_features.csv
+│   └── models/
+│       ├── xgb_sb_v1.json
+│       ├── model_meta_sb_v1.json       (includes nb_alpha for NegBin CDF)
+│       ├── lambda_calibrator_sb_v1.pkl
+│       └── archive/
 ├── GAME_Pro_System/
 │   ├── data/                           starter_game_features.csv, bullpen_game_features.csv,
 │   │                                   team_offense_features.csv, model_features.csv
@@ -475,6 +500,20 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   ├── manager_hooks_master.csv        avg_starter_outs_L30, pct_quick_hooks_L30,
 │   │                                   pct_quality_starts_L30 per (team, game_pk).
 │   │                                   Built from statcast_master groupby pitcher-game.
+│   ├── catcher_poptime_master.csv      Added 2026-08-20 (SB model). maxeff_arm_2b_3b_sba,
+│   │                                   exchange_2b_3b_sba, pop_2b_sba/_cs/_sb + 3B variants,
+│   │                                   per (catcher MLBAM id via player_id, season).
+│   │                                   pybaseball.statcast_catcher_poptime() -- real,
+│   │                                   working function in an already-installed dependency;
+│   │                                   no new data source. Backfilled 2015-2026.
+│   ├── catcher_identity_master.csv     Added 2026-08-20 (SB model). away_catcher_id,
+│   │                                   home_catcher_id per game_pk -- starting catcher
+│   │                                   MLBAM id per side, from the boxscore's own
+│   │                                   position=="C" field (mlb_core.data.lineups
+│   │                                   catcher_backfill_gcs() / get_starting_catchers()).
+│   │                                   Backfilled 2023-03-01+ via
+│   │                                   scripts/backfill_catcher_identity.py. Nightly
+│   │                                   refresh via catcher_identity_nightly_gcs().
 │   └── {prefix}/data/last_build.json  Freshness sentinel per aux dataset.
 ├── {system_prefix}/
 │   └── data/last_build.json            Build sentinel per system. Written on success
@@ -760,6 +799,7 @@ mid AND a book-pack consensus to show, not one anchor).
 | GAME | `"GAME_{SIDE}"` | `"GAME_HOME"`, `"GAME_AWAY"` |
 | BATTER_TB | `"BATTER_TB_{SIDE}_{LINE}"` | `"BATTER_TB_OVER_1.5"`, `"BATTER_TB_UNDER_1.5"` |
 | BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
+| SB | `"SB_{SIDE}_{LINE}"` (+ `"SB_2PLUS_2.0"` threshold) | `"SB_OVER_0.5"`, `"SB_UNDER_0.5"` |
 | PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
 | EV | underlying system's own format + `"_{book}"` | `"K_OVER_7.5_draftkings"`, `"HR_hardrock"` |
 
@@ -869,6 +909,7 @@ result cached and shared across all systems in the same settle run.
 | GAME | all innings runs | home vs away; push on tie; void if < 5 innings (official) |
 | BATTER_TB | `batters[name].total_bases` | vs line O/U; void if not starter |
 | BATTER_HITS | `batters[name].hits` | vs line O/U; void if not starter |
+| SB | `batters[name].stolen_bases` | vs line O/U; void if not starter |
 | PITCHER_ER | `pitchers[name].earned_runs` | vs line O/U; void if not in boxscore |
 | EV | (delegates) | `_settle_ev` sniffs the `bet_type` prefix and calls whichever settler above matches -- see "EV bet tracking" |
 
@@ -885,7 +926,7 @@ Add new systems by extracting from SGO snapshot + reading from game_result dict.
 | Batter RBI | `batting_RBI-*-ou` | `batters[name].rbi` | Backlog |
 | Batter runs | `points-{PLAYER}-game-ou` | `batters[name].runs` | Backlog |
 | Batter strikeouts | `batting_strikeouts-*-ou` | `batters[name].strikeouts` | Backlog |
-| Stolen bases | `batting_stolenBases-*-ou` | `batters[name].stolen_bases` | Backlog |
+| Stolen bases | `batting_stolenBases-*-ou` | `batters[name].stolen_bases` | Built 2026-08-20 (SB system) -- extractor is `extract_stolen_base_odds()`, NOT a plain `_extract_player_ou_props()` call, see s15 gotcha |
 | Pitcher strikeouts | `pitching_strikeouts-*-ou` | `pitchers[name].strikeouts` | Live |
 | Pitcher outs | `pitching_outs-*-ou` | `pitchers[name].outs` | Live |
 | Pitcher earned runs | `pitching_earnedRuns-*-ou` | `pitchers[name].earned_runs` | Live (log-only) |
@@ -1267,10 +1308,18 @@ for 24+ hours on 2026-08-09/10 before being caught by `monitor_ops`; see
 `docs/solutions/integration-issues/odds-primary-cadence-mismatch.md`. Do not
 flip back to `sgo` without also cutting the cadence back to ~4x/day.
 - **ParlayAPI primary** for the markets it covers -- player props (HR, K, OUTS,
-  BATTER_HITS, BATTER_TB, PITCHER_ER) + game moneyline (h2h). Pulled via
-  `nba.odds.parlayapi.ParlayApiClient`, converted to SGO shape by
-  `mlb_core.odds.parlay_adapter` (so the 9 runners + `sgo.py` extractors are
-  UNCHANGED -- the snapshot keeps the SGO event/oddID/byBookmaker shape).
+  BATTER_HITS, BATTER_TB, PITCHER_ER, **SB** added 2026-08-20) + game moneyline
+  (h2h). Pulled via `nba.odds.parlayapi.ParlayApiClient`, converted to SGO
+  shape by `mlb_core.odds.parlay_adapter` (so the runners + `sgo.py`
+  extractors are UNCHANGED -- the snapshot keeps the SGO event/oddID/byBookmaker
+  shape). **SB's market (`player_stolen_bases`) was confirmed live 2026-08-20
+  via a direct probe of ParlayAPI's own `/props/markets` catalog endpoint and
+  a real event query** -- 11 catalog books, 5-6 responding on a real checked
+  game. Unlike every other ParlayAPI market this repo consumes, it genuinely
+  ships in two shapes across books (real two-sided Over/Under on some books,
+  a one-sided "Yes"-only price on others) -- `sgo.extract_stolen_base_odds()`
+  is a hand-written extractor for this reason, not the shared
+  `_extract_player_ou_props()` every other O/U prop uses.
 - **SGO fallback** only for inning markets ParlayAPI cannot express:
   NRFI/YRFI (`points-all-1i-ou-*`), 1st-inn 3-way, F5 (`points-all-1ix5-*`),
   F5-ML, F1H. One cheap `fetch_mlb_slate` call supplies these; the adapter
@@ -2584,6 +2633,29 @@ was 100% NaN because `g[g["pitch_number"] == 1]` always returned zero rows. Fix
 `g.groupby("at_bat_number", sort=False).head(1)` to approximate the first pitch
 per PA. Post-fix NaN rate is ~6% (matching ump feature NaN from game_pk join gaps).
 
+**Statcast's `events` column cannot see stolen base / caught stealing / pickoff
+plays AT ALL, regardless of `group_by` -- confirmed live 2026-08-20, not just a
+PA-level-collapse side effect.** Building the SB model, the working assumption
+was that `stolen_base_2b`/`caught_stealing_2b`/etc. were real Statcast event
+values that this repo's own PA-level dedup might be discarding. Live-fetched 4
+real days (2026-08-15..18, ~56 games) using this repo's exact production URL
+from `mlb_core/data/statcast.py` and found **zero** such values anywhere in
+`events` -- only genuine plate-appearance-ending outcomes ever appear. An A/B
+test varying `group_by` (name / none / name-event) produced byte-identical row
+counts across all three, ruling out `group_by` as the cause (contradicting a
+guess in an earlier version of the PA-level gotcha above). Something else in
+the fixed query parameters (`hfAB=`, `hfSit=`, etc.) restricts results to
+AB-terminal events only. **Any feature needing real SB/CS/pickoff data must
+come from a new source, not statcast_master** -- confirmed working
+alternative: MLB Stats API's `/api/v1.1/game/{game_pk}/feed/live` play-by-play
+carries these cleanly (`eventType: "caught_stealing_2b"`, pitcher resolved via
+`matchup.pitcher`, runner/catcher named in the free-text `description`). SB's
+`stolen_bases`/`caught_stealing` target instead comes from the MLB Stats API
+**boxscore** (already used for settlement, see `mlb_core/data/sb_boxscore.py`)
+-- simpler than play-by-play and sufficient for a per-game count target,
+though it can't give attempt-level context (inning, pitcher-at-the-time) the
+way play-by-play could for a future, more granular iteration.
+
 ### 15.5 Model artifacts and calibrators
 
 **Calibrators must be refit after any model output range change.** Isotonic
@@ -2700,6 +2772,28 @@ was weak regardless.
 AUC 0.5441, Brier 0.2451, 42 features, best_iteration=15. The low best_iter=15
 signals the model is regularizing heavily with current data volume -- a candidate
 for Optuna tuning once the 200-bet gate clears.
+
+**SB v1 first retrain + backtest metrics (2026-08-20):** 22 features,
+`count:poisson`, base rate 6.28% of batter-games have >=1 SB. Walk-forward CV
+stable across years (MAE 0.1144-0.1265, R² 0.045-0.047 -- comparable to
+OUTS v1's R²=0.042, low in absolute terms but normal for this model class).
+`nb_alpha` hit the top of its `[0.01, 0.50]` clip range -- SB is a rare,
+heavily zero-inflated count; worth revisiting the ceiling on a future retrain
+with more data. Rolling walk-forward backtest (`--start 2024-04-01 --end
+2026-08-19`, real historical odds, edge>=10%): 341 bets/19 windows, ROI
+-3.05% to -3.13%, CLV -1.63% -- **verdict NO_EDGE** (ROI and CLV agree, both
+negative, not the positive-ROI/negative-CLV soft-line-artifact shape). Same
+bucket as K/OUTS/BATTER_HITS. `LOG_ONLY=True` stays as shipped. Full
+breakdown in `handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md`.
+
+**`walkforward.py`'s `_resolve_contract()` has a hardcoded tuple of
+`*_FEATURES` attribute names to look up on a system's `retrain_*.py` module
+-- adding a new system to `WF_SYS` without adding its `"{SYS}_FEATURES"`
+string to that tuple fails with `"no *_FEATURES list and no exclusion set"`
+even though the module correctly exports the list.** Hit adding SB
+(2026-08-20); same trap will hit the next new system added to `WF_SYS` too.
+Check `_resolve_contract`'s `_get(mod, "K_FEATURES", "OUTS_FEATURES", ...)`
+call and add the new system's feature-list name every time `WF_SYS` grows.
 
 ### 15.6 Runners and scoring
 
@@ -2861,7 +2955,40 @@ blocks a second triggered bet.
 **F14 -- HR name matching: exact-only misses accent variants and suffixes.**
 `mlb/runners/run_hr.py`: added `difflib.get_close_matches` fuzzy fallback at cutoff=0.85.
 
+**SB's live candidate rows carry stale `catcher_*`/`pitcher_sb_allowed` columns
+from the batter's LAST game -- must be reset before re-joining today's real
+opponent, or a pandas merge produces silent `_x`/`_y` collisions instead of
+fresh values.** Found live 2026-08-20 testing `run_sb.py`'s
+`_build_today_feature_rows` against a real slate: each candidate row starts as
+the batter's latest historical snapshot from `model_features.csv`, which still
+has whatever `catcher_pop_2b_sba` etc. were true against a PAST opposing
+catcher. `join_catcher_aux()` is a pandas merge, so leaving those stale
+columns in place produced `catcher_pop_2b_sba_x`/`_y` instead of a clean
+overwrite. Fix: drop every `catcher_*` column before calling `join_catcher_aux()`
+again for today's real opponent. `pitcher_sb_allowed`/`pitcher_cs_allowed` have
+the same latent staleness but don't collide (they're set via plain dict-key
+assignment, matching `run_batter_hits.py`'s pitcher-join pattern) -- they were
+still explicitly reset to NaN before the lookup so a failed bref match
+correctly shows "unknown" instead of silently keeping a prior opponent's value.
+**Any new batter-prop runner that re-joins a THIRD player-entity (not just the
+batter + one opponent) at score time needs this same reset, not just the
+historical builder's version of the join.**
+
 ### 15.7 Settlement and boxscore
+
+**`game_result.py`'s `team.get("pitchers", [None])[0]` crashes with IndexError
+on a real (rare) boxscore where `"pitchers"` is present but an EMPTY list, not
+absent.** `.get(key, default)` only falls back to `default` when `key` itself
+is missing -- an empty list is a valid value that `.get()` returns as-is, and
+`[0]` on it raises. Found 2026-08-20 when this crashed the SB historical
+backfill mid-run on a real historical game_pk (not a synthetic edge case).
+Fixed to `(team.get("pitchers") or [None])[0]`, which catches both the
+missing-key and the empty-list case. **This function is shared by every
+settler** (`fetch_game_result()` is called once per game_pk and cached across
+all systems in a settle run) -- the same crash could in principle have hit a
+real nightly `/settle` run on any system, not just this backfill; it just
+happened to surface here first because the backfill touches ~4 years of real
+game_pks in one pass instead of one day's slate.
 
 **HR settlement uses MLB Stats API boxscore (not Statcast).** `_settle_hr`
 calls the MLB Stats API per game_pk. If the game is not Final, the bet is
@@ -3043,7 +3170,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-20 11:48 CST_PRIMARY/cadence coupling + kalshi IAM fix)
+_Last updated: 2026-08-20 16:08 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

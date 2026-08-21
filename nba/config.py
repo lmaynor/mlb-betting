@@ -138,6 +138,11 @@ PARLAY_PROP_MARKETS = {
         # pitcher props -- "player_outs" is the live outs-recorded key (verified
         # payload 2026-06-29); player_pitcher_outs/_pitching_outs are NOT returned.
         "player_strikeouts", "player_earned_runs", "player_outs",
+        # stolen bases -- verified live 2026-08-20 (real event probe, 11
+        # catalog books, 5-6 live per game; some books e.g. caesars/novig
+        # quote a one-sided "Yes" only rather than a real Over/Under -- see
+        # sgo.py's extract_stolen_base_odds() docstring).
+        "player_stolen_bases",
     ],
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]

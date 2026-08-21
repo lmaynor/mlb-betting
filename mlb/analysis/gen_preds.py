@@ -97,6 +97,14 @@ SPECS: dict[str, Spec] = {
         calibrator_key="BATTER_HITS_System/models/lambda_calibrator_batter_hits_v1.pkl",
         id_col="batter", label_col="batter_hits",
     ),
+    "SB": Spec(
+        market="steals_ou", kind="count",
+        feature_csv="SB_Pro_System/data/model_features.csv",
+        model_key="SB_Pro_System/models/xgb_sb_v1.json",
+        meta_key="SB_Pro_System/models/model_meta_sb_v1.json",
+        calibrator_key="SB_Pro_System/models/lambda_calibrator_sb_v1.pkl",
+        id_col="batter", label_col="stolen_bases",
+    ),
     "BATTER_TB": Spec(
         market="btb_ou", kind="count",
         feature_csv="BATTER_TB_System/data/model_features.csv",
@@ -118,7 +126,7 @@ SPECS: dict[str, Spec] = {
     # follow-up. Everything above is a single-booster load, covered here.
 }
 
-DEFAULT_NB_ALPHA = {"K": 0.0, "OUTS": 0.10, "BATTER_HITS": 0.10, "BATTER_TB": 0.15}
+DEFAULT_NB_ALPHA = {"K": 0.0, "OUTS": 0.10, "BATTER_HITS": 0.10, "BATTER_TB": 0.15, "SB": 0.20}
 
 
 # ── NegBin count -> P(over line) (canonical, matches run_batter_hits) ─────────

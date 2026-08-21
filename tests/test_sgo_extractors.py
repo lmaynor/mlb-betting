@@ -52,6 +52,16 @@ def build_test_event() -> dict:
                 "teamID":   "LOS_ANGELES_ANGELS_MLB",
                 "name":     "Mike Trout",
             },
+            "JAZZ_CHISHOLM_1_MLB": {
+                "playerID": "JAZZ_CHISHOLM_1_MLB",
+                "teamID":   "LOS_ANGELES_ANGELS_MLB",
+                "name":     "Jazz Chisholm Jr.",
+            },
+            "HELIOT_RAMOS_1_MLB": {
+                "playerID": "HELIOT_RAMOS_1_MLB",
+                "teamID":   "CLEVELAND_GUARDIANS_MLB",
+                "name":     "Heliot Ramos",
+            },
         },
         "odds": {
             # NRFI
@@ -176,6 +186,51 @@ def build_test_event() -> dict:
                     "draftkings": {"odds": "+115", "overUnder": "4.5", "available": True},
                 },
             },
+            # Stolen bases -- Chisholm: real two-sided O/U (DraftKings-style)
+            "batting_stolenBases-JAZZ_CHISHOLM_1_MLB-game-ou-over": {
+                "oddID":         "batting_stolenBases-JAZZ_CHISHOLM_1_MLB-game-ou-over",
+                "statID":        "batting_stolenBases",
+                "statEntityID":  "JAZZ_CHISHOLM_1_MLB",
+                "playerID":      "JAZZ_CHISHOLM_1_MLB",
+                "periodID":      "game",
+                "betTypeID":     "ou",
+                "sideID":        "over",
+                "fairOdds":      "+340",
+                "openBookOdds":  "+400",
+                "byBookmaker":   {
+                    "draftkings": {"odds": "+365", "overUnder": "0.5", "available": True},
+                },
+            },
+            "batting_stolenBases-JAZZ_CHISHOLM_1_MLB-game-ou-under": {
+                "oddID":         "batting_stolenBases-JAZZ_CHISHOLM_1_MLB-game-ou-under",
+                "statID":        "batting_stolenBases",
+                "statEntityID":  "JAZZ_CHISHOLM_1_MLB",
+                "playerID":      "JAZZ_CHISHOLM_1_MLB",
+                "periodID":      "game",
+                "betTypeID":     "ou",
+                "sideID":        "under",
+                "fairOdds":      "-420",
+                "openBookOdds":  "-500",
+                "byBookmaker":   {
+                    "draftkings": {"odds": "-775", "overUnder": "0.5", "available": True},
+                },
+            },
+            # Stolen bases -- Ramos: ONLY an "over" entry, no "under" anywhere
+            # (mirrors caesars/novig's real one-sided "Yes"-only shape,
+            # confirmed live 2026-08-20 -- see sgo.extract_stolen_base_odds).
+            "batting_stolenBases-HELIOT_RAMOS_1_MLB-game-ou-over": {
+                "oddID":         "batting_stolenBases-HELIOT_RAMOS_1_MLB-game-ou-over",
+                "statID":        "batting_stolenBases",
+                "statEntityID":  "HELIOT_RAMOS_1_MLB",
+                "playerID":      "HELIOT_RAMOS_1_MLB",
+                "periodID":      "game",
+                "betTypeID":     "ou",
+                "sideID":        "over",
+                "fairOdds":      "+1000",
+                "byBookmaker":   {
+                    "novig": {"odds": "+1150", "overUnder": "0.5", "available": True},
+                },
+            },
         },
     }
 
@@ -244,6 +299,32 @@ def test_extract_k_odds():
     print("  ✓ extract_k_odds")
 
 
+def test_extract_stolen_base_odds():
+    """Chisholm: real two-sided O/U. Ramos: one-sided "Yes"-only (no under
+    anywhere) -- must NOT be dropped, unlike every other _extract_player_ou_props
+    market. Confirmed live 2026-08-20 that real onshore books split this way."""
+    out = sgo.extract_stolen_base_odds([build_test_event()])
+    assert "Jazz Chisholm Jr." in out, f"missing Chisholm. keys: {list(out.keys())}"
+    assert "Heliot Ramos" in out, f"missing Ramos (one-sided-only). keys: {list(out.keys())}"
+
+    chisholm = out["Jazz Chisholm Jr."]
+    assert chisholm["over_odds"] == 365
+    assert chisholm["under_odds"] == -775
+    assert chisholm["line"] == 0.5
+    assert chisholm["is_two_sided"] is True
+    assert chisholm["fair_over"] == 340
+    assert chisholm["fair_under"] == -420
+    assert chisholm["bookmaker"] == "draftkings"
+
+    ramos = out["Heliot Ramos"]
+    assert ramos["over_odds"] == 1150
+    assert ramos["under_odds"] is None
+    assert ramos["is_two_sided"] is False
+    assert ramos["fair_under"] is None
+    assert ramos["bookmaker"] == "novig"
+    print("  ✓ extract_stolen_base_odds (two-sided + one-sided-only)")
+
+
 def test_normalize_name():
     assert sgo.normalize_name("Angel Martínez") == "angel martinez"
     assert sgo.normalize_name("José Ramírez") == "jose ramirez"
@@ -283,6 +364,7 @@ def test_handles_empty_events():
     assert sgo.extract_f5_odds([]) == {}
     assert sgo.extract_hr_props([]) == {}
     assert sgo.extract_k_odds([]) == {}
+    assert sgo.extract_stolen_base_odds([]) == {}
     print("  ✓ handles_empty_events")
 
 
@@ -293,7 +375,8 @@ def main():
     test_extract_f5_odds()
     test_extract_hr_props()
     test_extract_k_odds()
-    test_skips_when_dk_unavailable()
+    test_extract_stolen_base_odds()
+    test_uses_best_onshore_book_when_dk_absent()
     test_skips_when_dk_marked_unavailable()
     test_handles_empty_events()
     print("\nAll tests passed.")

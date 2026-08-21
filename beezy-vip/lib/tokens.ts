@@ -45,6 +45,9 @@ export const SYSTEM_COLOR: Record<string, string> = {
   BATTER_K:    '#c08cf0',   // lavender
   BATTER_TB:   '#a9d166',   // lime
   BATTER_HITS: '#4fc7bd',   // teal
+  SB:          '#d9cf5a',   // yellow -- new 2026-08-20, chosen to sit clear of
+                            // the green cluster (lime/mint/--signal) and the
+                            // red/orange cluster (coral/amber/gold/--loss)
   // Meta
   ALL:         '#c9c6cf',   // neutral silver
 }
@@ -78,14 +81,14 @@ export const SYSTEM_LABEL: Record<string, string> = {
   NRFI: 'NRFI', YRFI: 'YRFI', '1IOU': 'NRFI', '1I': '1st Inn',
   F5: 'F5', F3: 'F3', F7: 'F7', F1H: '1st Half', GAME: 'Game',
   HR: 'HR', K: 'K', OUTS: 'Outs',
-  BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K',
+  BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K', SB: 'Stolen Bases',
   PITCHER_ER: 'Earned Runs',
 }
 
 // Tighter variant for narrow table cells / chips.
 export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   ...SYSTEM_LABEL,
-  BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K',
+  BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K', SB: 'SB',
   PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME',
 }
 
@@ -247,6 +250,13 @@ export function pickLabel(bet: Bet): string {
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_HITS_OVER_', '').replace('BATTER_HITS_UNDER_', '')
     return `${player} (${team}) ${side} ${line} Hits`
+  }
+  if (sys === 'SB') {
+    const plus = plusLabel(bt)
+    if (plus) return `${player} (${team}) ${plus} Stolen Bases`
+    const side = bt.includes('_OVER_') ? 'Over' : 'Under'
+    const line = bt.replace('SB_OVER_', '').replace('SB_UNDER_', '')
+    return `${player} (${team}) ${side} ${line} Stolen Bases`
   }
 
   return bt

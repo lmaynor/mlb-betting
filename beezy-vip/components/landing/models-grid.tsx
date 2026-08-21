@@ -19,6 +19,7 @@ const META: Record<string, { name: string; desc: string; href: string }> = {
   BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                     href: '/picks/mlb/batter-k' },
   BATTER_TB:   { name: 'Total Bases',            desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                href: '/picks/mlb/batter-tb' },
   BATTER_HITS: { name: 'Hits Props',             desc: 'Contact rate, expected average, platoon split, and park context for hits props.',              href: '/picks/mlb/batter-hits' },
+  SB:          { name: 'Stolen Base Props',      desc: 'On-base rate, sprint speed, and attempt history vs. opposing pitcher hold and catcher pop time for stolen-base props.', href: '/picks/mlb/sb' },
   PITCHER_ER:  { name: 'Pitcher ER Props',       desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',            href: '/picks/mlb/pitcher-er' },
   '1I':        { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing for home, away, or draw outcomes.',                             href: '/picks/mlb/1i' },
 }

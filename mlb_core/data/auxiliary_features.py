@@ -23,6 +23,17 @@ Four sources, all free, all cached to GCS:
      GCS: AuxData/manager_hooks_master.csv
      Rebuilt from statcast_master on request.
 
+  5. Catcher Pop Time / Arm Strength (via pybaseball, per season) -- added
+     for the SB (stolen base) model, 2026-08-20.
+     maxeff_arm_2b_3b_sba, exchange_2b_3b_sba, pop_2b_sba, pop_2b_cs,
+     pop_2b_sb, pop_3b_sba, pop_3b_cs, pop_3b_sb
+     GCS: AuxData/catcher_poptime_{year}.csv / catcher_poptime_master.csv
+     Available: 2015+ (same Statcast rollout window as sprint_speed).
+     pybaseball.statcast_catcher_poptime() wraps
+     baseballsavant.mlb.com/leaderboard/poptime -- same "call pybaseball
+     directly" pattern as source 1 (B-Ref pitching), a real, working,
+     already-installed function verified live before this was written.
+
 Nightly entry point (called from /refresh-data Loop A):
   auxiliary_features_nightly_gcs()
 
@@ -30,12 +41,14 @@ Backfill entry points:
   fangraphs_backfill_gcs(start_year, end_year, force=False)
   swing_take_backfill_gcs(start_year, end_year, force=False)
   team_schedule_backfill_gcs(start_year, end_year, force=False)
+  catcher_poptime_backfill_gcs(start_year, end_year, force=False)
 
 Load helpers (for feature builders):
   load_fangraphs_pitching(years=None)  -> DataFrame keyed (name_norm, year)
   load_swing_take(years=None)          -> DataFrame keyed (player_id, year)
   load_team_schedule(years=None)       -> DataFrame keyed (team, game_pk)
   load_manager_hooks()                 -> DataFrame keyed (team, game_date)
+  load_catcher_poptime(years=None)     -> DataFrame keyed (player_id, year)
 
 Baseball Reference note:
   Uses pybaseball.pitching_stats_bref(season) -- B-Ref is not bot-protected
@@ -68,10 +81,12 @@ logger = logging.getLogger(__name__)
 _FANGRAPHS_START_YEAR = 2015
 _SWING_TAKE_START_YEAR = 2024   # leaderboard added 2024; pre-2024 returns empty
 _SCHEDULE_START_YEAR = 2021   # matches statcast_master window
+_POPTIME_START_YEAR = 2015     # same Statcast rollout window as sprint_speed
 
 _FANGRAPHS_MIN_IP = 20        # minimum IP filter for FanGraphs plate discipline
 _SWING_TAKE_MIN   = 50        # minimum pitches for Swing-Take leaderboard
 _HOOKS_LOOKBACK   = 30        # rolling window in games for manager hooks
+_POPTIME_MIN_2B_ATT = 5        # minimum 2B steal attempts for a catcher to qualify
 
 # MLB Stats API team ID <-> 3-letter abbreviation (stable across seasons)
 _TEAM_ID_TO_ABBREV: dict[int, str] = {
@@ -94,6 +109,7 @@ _FG_PREFIX    = "AuxData/fangraphs_pitching"
 _ST_PREFIX    = "AuxData/swing_take"
 _SCHED_PREFIX = "AuxData/team_schedule"
 _HOOKS_KEY    = "AuxData/manager_hooks_master.csv"
+_POP_PREFIX   = "AuxData/catcher_poptime"
 
 # Out-generating PA events in statcast -- used for outs_recorded proxy
 _OUT_EVENTS = frozenset({
@@ -381,6 +397,13 @@ _BREF_KEEP_COLS = [
     "year", "name_norm", "Name", "Tm",
     "IP", "ERA", "FIP", "WHIP", "SO9", "BB9", "HR9", "ERA+",
     "G", "GS", "W", "L", "SV",
+    # SB, CS: stolen bases / caught stealing ALLOWED while this pitcher was
+    # on the mound -- added for the SB model, 2026-08-20. Real B-Ref
+    # columns confirmed present in pybaseball.pitching_stats_bref() output
+    # (checked live before adding this). Purely additive: no existing
+    # consumer of this master (join_pitcher_aux's _BREF_COLS) references
+    # them, so NRFI/K/F5/GAME are unaffected.
+    "SB", "CS",
 ]
 
 
@@ -491,6 +514,11 @@ def _fetch_fangraphs_pitching(year: int) -> pd.DataFrame | None:
     extra = [c for c in df.columns if c not in _BREF_KEEP_COLS]
     df = df[keep + extra].copy()
 
+    # Rename raw B-Ref SB/CS (allowed, while this pitcher was on the mound)
+    # to explicit names -- "SB"/"CS" alone reads as the pitcher's own
+    # baserunning, which is nonsensical; this is defense, not offense.
+    df = df.rename(columns={"SB": "pitcher_sb_allowed", "CS": "pitcher_cs_allowed"})
+
     fip_mean = df["FIP"].mean()
     so9_mean = df["SO9"].mean()
     nan_fip  = int(df["FIP"].isna().sum())
@@ -556,7 +584,10 @@ def load_fangraphs_pitching(years: list[int] | None = None) -> pd.DataFrame:
         years: If provided, filter to these seasons only.
 
     Returns:
-        DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, ERA+.
+        DataFrame with name_norm, year, FIP, SO9, BB9, WHIP, ERA, ERA+,
+        pitcher_sb_allowed, pitcher_cs_allowed (added 2026-08-20 for the SB
+        model -- stolen bases / caught stealing allowed while this pitcher
+        was on the mound, real Baseball-Reference counting stats).
         Empty DataFrame if master not found.
     """
     from mlb_core.storage import read_csv, exists
@@ -726,6 +757,135 @@ def load_swing_take(years: list[int] | None = None) -> pd.DataFrame:
         df = df[df["year"].isin(years)].copy()
 
     logger.debug(f"auxiliary_features: loaded swing_take {len(df):,} rows")
+    return df
+
+
+# ===========================================================================
+# 5. Catcher Pop Time / Arm Strength (for the SB model)
+# ===========================================================================
+
+
+def _fetch_catcher_poptime(year: int) -> pd.DataFrame | None:
+    """Fetch catcher pop time / arm strength from Baseball Savant via pybaseball.
+
+    pybaseball.statcast_catcher_poptime(year) wraps
+    baseballsavant.mlb.com/leaderboard/poptime -- verified live 2026-08-20
+    (handoffs/scope_stolen_base_model_2026-08-20.md s1) to return real
+    columns: entity_name, entity_id (catcher MLBAM id), team_id, age,
+    maxeff_arm_2b_3b_sba (arm strength), exchange_2b_3b_sba (exchange time),
+    pop_2b_sba/_cs/_sb (pop time overall / on caught-stealing / on stolen
+    bases specifically), and the 3B-throw equivalents. Same
+    "call pybaseball directly" pattern as _fetch_fangraphs_pitching (source 1).
+
+    Renamed to match this module's other loaders: entity_id -> player_id,
+    entity_name -> name.
+    """
+    try:
+        import pybaseball
+    except ImportError:
+        logger.error(
+            "auxiliary_features: pybaseball not installed. "
+            "Run: pip install pybaseball==2.2.7"
+        )
+        return None
+
+    logger.info(f"auxiliary_features: pybaseball.statcast_catcher_poptime {year}")
+
+    try:
+        df = pybaseball.statcast_catcher_poptime(year, min_2b_att=_POPTIME_MIN_2B_ATT)
+    except Exception as e:
+        logger.warning(
+            f"auxiliary_features: statcast_catcher_poptime {year} failed: {e}"
+        )
+        return None
+
+    if df is None or (hasattr(df, "empty") and df.empty):
+        logger.info(f"auxiliary_features: catcher_poptime {year} returned empty "
+                    f"(pop time tracking may not extend this far back)")
+        return None
+
+    df = df.rename(columns={"entity_id": "player_id", "entity_name": "name"})
+
+    if "player_id" not in df.columns:
+        logger.warning(
+            f"auxiliary_features: catcher_poptime {year} -- no entity_id/player_id "
+            f"column found. Got: {list(df.columns)}. Check pybaseball version."
+        )
+        return None
+
+    if "year" not in df.columns:
+        df.insert(0, "year", year)
+
+    logger.info(
+        f"auxiliary_features: catcher_poptime {year} -- "
+        f"{len(df):,} catchers | "
+        f"pop_2b_sba mean={df['pop_2b_sba'].mean():.3f}" if "pop_2b_sba" in df.columns
+        else f"auxiliary_features: catcher_poptime {year} -- {len(df):,} catchers"
+    )
+    return df
+
+
+def catcher_poptime_backfill_gcs(
+    start_year: int | None = None,
+    end_year: int | None = None,
+    force: bool = False,
+) -> dict:
+    """Backfill catcher pop time / arm strength to GCS.
+
+    Args:
+        start_year: First season to fetch (default: 2015).
+        end_year:   Last season to fetch (default: current year).
+        force:      Re-fetch even if year file already cached in GCS.
+    """
+    start = start_year or _POPTIME_START_YEAR
+    end   = end_year   or date.today().year
+    return _backfill_generic(
+        _POP_PREFIX, start, end,
+        _fetch_catcher_poptime,
+        id_cols=["year", "player_id"],
+        force=force,
+    )
+
+
+def catcher_poptime_nightly_gcs() -> dict:
+    """Nightly refresh of current season catcher pop time."""
+    return _nightly_generic(
+        _POP_PREFIX, _POPTIME_START_YEAR,
+        _fetch_catcher_poptime,
+        id_cols=["year", "player_id"],
+        source_name="catcher_poptime",
+    )
+
+
+def load_catcher_poptime(years: list[int] | None = None) -> pd.DataFrame:
+    """Load catcher pop time / arm strength master from GCS/local.
+
+    Feature builders join on (player_id, year) where player_id is the
+    CATCHER's MLBAM id (resolve today's starting catcher first via
+    mlb_core.data.lineups.get_starting_catchers()).
+
+    Returns:
+        DataFrame with player_id, year, name, maxeff_arm_2b_3b_sba,
+        exchange_2b_3b_sba, pop_2b_sba, pop_2b_cs, pop_2b_sb,
+        pop_3b_sba, pop_3b_cs, pop_3b_sb. Empty DataFrame if master not found.
+    """
+    from mlb_core.storage import read_csv, exists
+
+    key = _gcs_master_key(_POP_PREFIX)
+    if not exists(key):
+        logger.warning(f"auxiliary_features: catcher_poptime master not found: {key}")
+        return pd.DataFrame()
+
+    try:
+        df = read_csv(key, low_memory=False)
+    except Exception as e:
+        logger.error(f"auxiliary_features: load catcher_poptime failed: {e}")
+        return pd.DataFrame()
+
+    if years is not None and "year" in df.columns:
+        df = df[df["year"].isin(years)].copy()
+
+    logger.debug(f"auxiliary_features: loaded catcher_poptime {len(df):,} rows")
     return df
 
 
@@ -1144,7 +1304,7 @@ def auxiliary_features_nightly_gcs() -> dict:
     """Run all nightly refreshes for auxiliary feature sources.
 
     Called by /refresh-data (Loop A, 08:00 UTC). In-season only (Mar-Nov).
-    Sources 1-3 re-fetch current season data from external APIs.
+    Sources 1-3 and 5 re-fetch current season data from external APIs.
     Source 4 (manager hooks) is recomputed from statcast_master, which
     /refresh-data has already updated before calling this function.
 
@@ -1165,6 +1325,7 @@ def auxiliary_features_nightly_gcs() -> dict:
         ("fangraphs_pitching", fangraphs_nightly_gcs),
         ("swing_take",         swing_take_nightly_gcs),
         ("team_schedule",      team_schedule_nightly_gcs),
+        ("catcher_poptime",    catcher_poptime_nightly_gcs),
     ]:
         try:
             results[source_name] = fn()

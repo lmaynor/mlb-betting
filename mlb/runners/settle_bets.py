@@ -12,6 +12,7 @@ Systems:
   HR             → Home run yes/no (MLB API boxscore, starter rule)
   K / OUTS       → Strikeout / outs recorded O/U (MLB API boxscore)
   BATTER_K/TB/HITS → Batter prop O/U (MLB API boxscore, starter rule)
+  SB             → Stolen bases O/U (MLB API boxscore, starter rule) -- added 2026-08-20
   PITCHER_ER     → Earned runs O/U (MLB API boxscore)
   EV             → fast_alert_loop's AND kalshi_alert's posted +EV alerts
                     (pooled); delegates to whichever settler above matches
@@ -394,15 +395,17 @@ def _settle_innings_window(pending: pd.DataFrame, game_cache: dict, system: str)
 
 
 def _settle_batter_props(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
-    """Settle BATTER_K, BATTER_TB, BATTER_HITS O/U bets via MLB API boxscore.
+    """Settle BATTER_K, BATTER_TB, BATTER_HITS, SB O/U bets via MLB API boxscore.
 
-    bet_type format: BATTER_K_OVER_1.5, BATTER_TB_UNDER_2.5, BATTER_HITS_OVER_0.5
+    bet_type format: BATTER_K_OVER_1.5, BATTER_TB_UNDER_2.5, BATTER_HITS_OVER_0.5,
+    SB_OVER_0.5 (added 2026-08-20; stolen_bases already parsed by game_result.py).
     DK rule: batter must be a starter -- non-starters void.
     """
     STAT_MAP = {
         "BATTER_K":    "strikeouts",
         "BATTER_TB":   "total_bases",
         "BATTER_HITS": "hits",
+        "SB":          "stolen_bases",
     }
     results = []
     for _, bet in pending.iterrows():
@@ -510,7 +513,7 @@ def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     is_outs = bt.str.startswith("OUTS_")
     is_k    = bt.str.startswith("K_")
     is_er   = bt.str.startswith("PITCHER_ER_")
-    is_prop = bt.str.startswith(("BATTER_TB_", "BATTER_HITS_", "BATTER_K_"))
+    is_prop = bt.str.startswith(("BATTER_TB_", "BATTER_HITS_", "BATTER_K_", "SB_"))
     # NRFI ("NRFI"/"YRFI"), GAME ("GAME_{SIDE}"), and F5 ("HOME"/"AWAY" bare)
     # -- kalshi_alert's game-level markets (nrfi_ou/game_ml/f5_ml). No other
     # prefix above collides with any of these.
@@ -678,12 +681,13 @@ def run(settle_date: str = None) -> dict:
         "BATTER_K":   _settle_batter_props,
         "BATTER_TB":  _settle_batter_props,
         "BATTER_HITS":_settle_batter_props,
+        "SB":         _settle_batter_props,   # stolen bases, added 2026-08-20
         "PITCHER_ER": _settle_pitcher_er,
         "EV":         _settle_ev,   # mlb.runners.fast_alert_loop's posted +EV alerts
     }
 
     # Group batter props so they are settled together (single pass over boxscore)
-    BATTER_PROP_SYSTEMS = {"BATTER_K", "BATTER_TB", "BATTER_HITS"}
+    BATTER_PROP_SYSTEMS = {"BATTER_K", "BATTER_TB", "BATTER_HITS", "SB"}
 
     all_outcomes: list[dict] = list(stale_void_outcomes)
     batter_prop_pending = pending_all[pending_all["system"].isin(BATTER_PROP_SYSTEMS)]
@@ -745,7 +749,7 @@ def run(settle_date: str = None) -> dict:
     ALL_SYSTEMS = [
         "HR", "1IOU", "1I", "F5", "K", "OUTS",
         "F3", "F1H", "F7", "GAME",
-        "BATTER_K", "BATTER_TB", "BATTER_HITS", "PITCHER_ER",
+        "BATTER_K", "BATTER_TB", "BATTER_HITS", "SB", "PITCHER_ER",
         "EV",   # mlb.runners.fast_alert_loop's posted +EV alerts (settled via
                 # _settle_ev above). Safe/additive here -- this list only feeds
                 # season_stats in this function's own return value. It is

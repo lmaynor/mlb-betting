@@ -44,7 +44,7 @@ class SystemConfig:
 
 
 # Canonical system order — used for ordered iteration, display, and digests.
-CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "PITCHER_ER", "F5", "F1H", "BATTER_HITS", "BATTER_TB", "GAME", "1I"]
+CANONICAL_ORDER = ["HR", "1IOU", "K", "OUTS", "PITCHER_ER", "F5", "F1H", "BATTER_HITS", "BATTER_TB", "SB", "GAME", "1I"]
 
 SYSTEMS: dict[str, SystemConfig] = {
 
@@ -227,6 +227,28 @@ SYSTEMS: dict[str, SystemConfig] = {
         tune_metric="poisson-nloglik",
         tune_metric_dir="min",
         tune_output="BATTER_TB_System/models/batter_tb_tuned_params.json",
+    ),
+
+    "SB": SystemConfig(
+        name="SB",
+        icon="🏃",
+        builder_module="mlb.runners.build_sb_features",
+        runner_module="mlb.runners.run_sb",
+        feature_csv="SB_Pro_System/data/model_features.csv",
+        model_artifact="SB_Pro_System/models/xgb_sb_v1.json",
+        build_sentinel="SB_Pro_System/data/last_build.json",
+        retrain_jobs=["mlb-retrain-sb-v1"],
+        calibrate_jobs=["mlb-calibrate-sb"],
+        expected_hit_rate=0.52,  # placeholder; update after 200 settled bets
+        log_only=True,  # new system, no settled bets yet -- run_sb.py's own
+                        # LOG_ONLY=True module flag is what actually enforces
+                        # stake=0 (see mlb_core/risk/gates.py's docstring: this
+                        # field is documentation, not itself gate logic).
+        tune_target="stolen_bases",
+        tune_objective="count:poisson",
+        tune_metric="poisson-nloglik",
+        tune_metric_dir="min",
+        tune_output="SB_Pro_System/models/sb_tuned_params.json",
     ),
 
     "GAME": SystemConfig(

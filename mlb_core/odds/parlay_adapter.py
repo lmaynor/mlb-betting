@@ -19,8 +19,9 @@ resolves every game's game_pk correctly. Merge keys on eventID (== game_pk), so
 same-matchup-on-consecutive-days does not collide.
 
 Coverage (ParlayAPI -> SGO oddID): player_home_runs (yes/no) -> HR; player_
-strikeouts/outs/hits/total_bases/earned_runs (ou) -> K/OUTS/HITS/TB/ER; h2h ->
-GAME ml. Books: every US book (denylist via sgo.OFFSHORE_BOOKS); offshore dropped.
+strikeouts/outs/hits/total_bases/earned_runs (ou) -> K/OUTS/HITS/TB/ER;
+player_stolen_bases (ou) -> SB (added 2026-08-20); h2h -> GAME ml. Books:
+every US book (denylist via sgo.OFFSHORE_BOOKS); offshore dropped.
 """
 
 from __future__ import annotations
@@ -47,6 +48,15 @@ PROP_MARKET_MAP = {
     "player_hits":         ("batting_hits", "batting_hits", "ou"),
     "player_total_bases":  ("batting_totalBases", "batting_totalBases", "ou"),
     "player_earned_runs":  ("pitching_earnedRuns", "pitching_earnedRuns", "ou"),
+    # Confirmed live 2026-08-20 (handoffs/scope_stolen_base_model_2026-08-20.md
+    # s1a): real market, 11 catalog books, 5-6 live on a checked game. "ou" is
+    # still the right kind here even though some books (caesars/novig) only
+    # ever send a one-sided "Yes" (mapped to "over" by _side_of() below) --
+    # the "ou" branch in _props_odds() already tolerates a book that only
+    # supplies one side per player; sgo.py's extract_stolen_base_odds() is
+    # the piece that had to change (it does NOT drop an over-only player the
+    # way every other _extract_player_ou_props() market does).
+    "player_stolen_bases": ("batting_stolenBases", "batting_stolenBases", "ou"),
 }
 
 # SGO-only inning-market oddID prefixes spliced from SGO during merge.

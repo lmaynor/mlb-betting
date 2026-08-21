@@ -38,6 +38,7 @@ CHAIN="$CHAIN && python3 -m mlb.runners.build_k_features"
 CHAIN="$CHAIN && python3 -m mlb.runners.build_f5_features"
 CHAIN="$CHAIN && python3 -m mlb.runners.build_batter_hits_features"
 CHAIN="$CHAIN && python3 -m mlb.runners.build_batter_tb_features"
+CHAIN="$CHAIN && python3 -m mlb.runners.build_sb_features"
 CHAIN="$CHAIN && python3 -m mlb.runners.build_game_features"
 
 action="create"

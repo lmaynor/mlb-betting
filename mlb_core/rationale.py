@@ -152,6 +152,21 @@ _GAME_RULES = [
     ("wind_out",                   lambda v: v == 1,     "wind blowing out"),
 ]
 
+# -- SB (stolen base) rules -----------------------------------------------
+_SB_RULES = [
+    ("sb_per_game_L20",       lambda v: v >= 0.4,   "averaging {v:.2f} SB/game L20"),
+    ("sb_attempt_rate_L20",   lambda v: v >= 0.5,   "high attempt rate ({v:.2f} SB+CS/game L20)"),
+    ("sb_success_pct_L50",    lambda v: v >= 0.80,  "efficient base-stealer ({v:.0%} success L50)"),
+    ("sprint_speed_ft_sec",   lambda v: v >= 28.5,  "elite sprint speed ({v:.1f} ft/sec)"),
+    ("times_on_base_L20",     lambda v: v >= 0.38,  "reaching base often ({v:.0%} L20)"),
+    ("single_rate_L20",       lambda v: v >= 0.22,  "high singles rate ({v:.0%} L20) -- sets up steal chances"),
+    ("catcher_pop_2b_sba",    lambda v: v >= 2.00,  "slow-armed catcher (pop time {v:.2f}s to 2B)"),
+    ("catcher_pop_2b_sba",    lambda v: v <= 1.90,  "elite catcher arm (pop time {v:.2f}s to 2B) -- suppressed"),
+    ("pitcher_sb_allowed",    lambda v: v >= 15,    "pitcher allows steals easily ({v:.0f} SB allowed this season)"),
+    ("p_throws_L",            lambda v: v == 1,     "facing a lefty -- real hold advantage vs 1B, suppressed"),
+    ("ewma_batting_order",    lambda v: v <= 2.5,   "top-of-order spot ({v:.1f} avg batting order)"),
+]
+
 _SYSTEM_RULES = {
     "HR":          _HR_RULES,
     "1IOU":        _NRFI_RULES,
@@ -161,6 +176,7 @@ _SYSTEM_RULES = {
     "OUTS":        _OUTS_RULES,
     "F5":          _F5_RULES,
     "BATTER_HITS": _BATTER_HITS_RULES,
+    "SB":          _SB_RULES,
     "GAME":        _GAME_RULES,
 }
 
