@@ -252,6 +252,28 @@ cost wasn't purely serial.
   unbiased before calibration; isotonic gives a small additional MAE
   improvement (0.1146 -> 0.1135).
 
+**Hyperparameter tuning** (`tune_hyperparams --system SB --n-trials 50`, run
+after the NO_EDGE verdict below at user request, per house precedent that
+tuning hasn't flipped K/OUTS/BATTER_HITS out of NO_EDGE either):
+- Had to `pip install optuna` into `.venv_audit` first -- not actually
+  installed despite the script assuming it is.
+- Best trial: `max_depth` 4->3, `learning_rate` 0.03->0.0896,
+  `min_child_weight` 20->5, `subsample` 0.8->0.654, `colsample_bytree`
+  0.8->0.969, `reg_alpha` 1.0->0.0657, `reg_lambda` 3.0->1.831, `gamma`
+  0.5->0.0056. Saved to GCS (`SB_Pro_System/models/sb_tuned_params.json`)
+  and promoted into `retrain_sb_v1.py`'s static `XGB_PARAMS` (the tuning
+  script's own "drop-in" convention) -- **note this promotion was required
+  for the params to actually reach the backtest**: `walkforward.py` reads a
+  retrain module's `XGB_PARAMS` as a static attribute, it never calls
+  `run()`, so the GCS pickup logic inside `run()` alone would have been
+  silently bypassed by the rolling backtest.
+- Retrain with tuned params: OOS MAE 0.1152->0.1149, R^2 0.0451->0.0456,
+  best_iteration 315->101 -- essentially unchanged predictive ceiling, just
+  a more efficient fit (fewer rounds for the same result). `nb_alpha` still
+  hit 0.50 (the zero-inflation finding is a property of the data, not the
+  untuned hyperparameters). Calibration moved similarly (calibrated MAE
+  0.1143 vs 0.1135, noise-level).
+
 **Backtest** (`walkforward --system SB --rolling --start 2024-04-01 --end
 2026-08-19 --min-books 2 --select consensus`, edge>=10%, real historical
 odds from `odds_history` market=`steals_ou`):
@@ -280,20 +302,44 @@ odds from `odds_history` market=`steals_ou`):
   "right side of history math wrong side of the bet" pattern, not a
   data/label issue.
 
-**Verdict: NO_EDGE.** Applying this repo's rule from
+**Verdict (pre-tuning): NO_EDGE.** Applying this repo's rule from
 `docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md` --
 CLV must agree with ROI for a result to count as real, not a soft-line
 artifact -- ROI (-3.05% to -3.13%) and CLV (-1.63%) **agree**, just not in
 the direction anyone wants: both say no edge, consistently, rather than
 the "positive ROI / negative CLV" mismatch that would flag a soft-line
-mirage. Effect size is small and the sample is underpowered to call this a
-*proven* negative edge (|z| < 1, 341 bets fragmented across 19
-non-contiguous windows) -- but there is no signal here to act on either
-way. This slots into the exact same bucket as K/OUTS/BATTER_HITS from the
-2026-07-23 profit review: no capturable model-vs-line edge on this prop.
-**Recommendation: leave `LOG_ONLY = True` as shipped. Do not graduate to
-live capital.** Let the 200-settled-bet paper gate accumulate real
-same-season data before revisiting -- the backtest sample here (341 bets,
-mostly 2024) is thin enough that a materially different real-money verdict
-after a full paper season wouldn't be shocking, just not something to bet
-ahead of.
+mirage. This slots into the exact same bucket as K/OUTS/BATTER_HITS from
+the 2026-07-23 profit review: no capturable model-vs-line edge on this
+prop.
+
+**Re-run after tuning, same command:** 328 bets across the same 19 windows
+(down from 341 -- the tuned model's marginally different lambdas move a
+handful of bets across the 10% edge threshold). ROI (consensus) -0.17%
+(z=-0.0), ROI (best) -0.10% (z=-0.0) -- both now statistically
+indistinguishable from breakeven, a real improvement over -3.05%/-3.13%.
+**But CLV is -1.63%, identical to the pre-tuning run to two decimal
+places**, and the larger/cleaner `n_books>=4` sub-sample (n=255, most of
+the pool) stayed solidly negative in both runs (-5.31% pre-tuning,
+-2.98% post-tuning). Per this repo's own rule, CLV is the go/no-go gate
+specifically *because* it's lower-variance than ROI (this repo's
+`mlb_core/risk/clv.py` docstring: "CLV converges far faster") -- a pooled
+ROI drifting toward zero on a ~4%-different bet set, while CLV holds
+exactly steady and negative, is the ROI number being noisy, not the edge
+picture actually changing. The one bucket that swung hardest --
+longshots, `dec>3.5`, n=9 -- flipped to ROI +59.44% alongside CLV
+*worsening* to -10.45%: textbook small-n soft-line-artifact shape, not
+signal.
+
+**Verdict (post-tuning): still NO_EDGE.** Tuning improved the model's raw
+fit efficiency (fewer boosting rounds for the same ceiling) and happened
+to land on a slightly friendlier historical bet sample, but did not move
+the CLV signal at all and did not create a real, tradeable edge.
+**Recommendation unchanged: leave `LOG_ONLY = True` as shipped. Do not
+graduate to live capital.** The tuned hyperparameters are still worth
+keeping as the new default (strictly better model fit, no downside), which
+is why they were promoted into `retrain_sb_v1.py` regardless of the
+verdict. Let the 200-settled-bet paper gate accumulate real same-season
+data before revisiting -- both backtest samples here (~330-340 bets,
+mostly 2024) are thin enough that a materially different real-money
+verdict after a full paper season wouldn't be shocking, just not something
+to bet ahead of.

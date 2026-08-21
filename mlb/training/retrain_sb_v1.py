@@ -42,17 +42,24 @@ logger = logging.getLogger(__name__)
 VERSION = "v1"
 TARGET  = "stolen_bases"
 
+# Optuna-tuned 2026-08-20 (E09, 50 trials, nested time-series CV) --
+# GCS_BUCKET/SB_Pro_System/models/sb_tuned_params.json, best_score=0.0008.
+# Promoted to the static default here so walkforward.py's rolling backtest
+# (which reads this module-level dict directly, not run()'s GCS pickup)
+# exercises the tuned params too. Pre-tuning values, for reference:
+# max_depth=4, learning_rate=0.03, subsample=0.8, colsample_bytree=0.8,
+# min_child_weight=20, reg_alpha=1.0, reg_lambda=3.0, gamma=0.5.
 XGB_PARAMS = {
     "objective":        "count:poisson",
     "eval_metric":      "poisson-nloglik",
-    "max_depth":        4,
-    "learning_rate":    0.03,
-    "subsample":        0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 20,
-    "reg_alpha":        1.0,
-    "reg_lambda":       3.0,
-    "gamma":            0.5,
+    "max_depth":        3,
+    "learning_rate":    0.08962530515077032,
+    "subsample":        0.6543593406804693,
+    "colsample_bytree": 0.9687941853341576,
+    "min_child_weight": 5,
+    "reg_alpha":        0.06571433972048624,
+    "reg_lambda":       1.8306495567702976,
+    "gamma":            0.005556621064822541,
     "seed":             42,
 }
 

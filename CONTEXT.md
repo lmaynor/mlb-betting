@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-20 16:08 CST_
+_Last updated: 2026-08-20 20:58 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -91,7 +91,7 @@ betting systems running daily in GCP:
 | **BATTER_TB** | E[batter total bases] NegBin count regressor (lambda; XBH/contact/platoon/pitcher features) | Batter TB O/U (best onshore book) | Live (paper) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
-| **SB** | E[stolen bases] NegBin count regressor (lambda; on-base/speed/pitcher/**catcher** features -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built 2026-08-20, backtested NO_EDGE (ROI -3.05%, CLV -1.63%, n=341, agree), `LOG_ONLY=True` -- uncommitted on `feat/stolen-base-model-2026-08-20`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
+| **SB** | E[stolen bases] NegBin count regressor (lambda; on-base/speed/pitcher/**catcher** features -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built + merged to main 2026-08-20, backtested NO_EDGE (ROI ~0 to -3%, CLV -1.63% both pre/post Optuna tuning), `LOG_ONLY=True`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
 
 Batter prop runners (`BATTER_HITS`, `BATTER_TB`) require confirmed lineup
 candidates and skip any SGO prop whose `event_id` does not match the feature
@@ -2783,8 +2783,25 @@ with more data. Rolling walk-forward backtest (`--start 2024-04-01 --end
 2026-08-19`, real historical odds, edge>=10%): 341 bets/19 windows, ROI
 -3.05% to -3.13%, CLV -1.63% -- **verdict NO_EDGE** (ROI and CLV agree, both
 negative, not the positive-ROI/negative-CLV soft-line-artifact shape). Same
-bucket as K/OUTS/BATTER_HITS. `LOG_ONLY=True` stays as shipped. Full
-breakdown in `handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md`.
+bucket as K/OUTS/BATTER_HITS.
+
+Optuna-tuned same day (`tune_hyperparams --system SB --n-trials 50`,
+optuna had to be pip-installed first): max_depth 4->3, learning_rate
+0.03->0.09, tighter regularization. Promoted into `retrain_sb_v1.py`'s
+static `XGB_PARAMS` (required for the backtest to see it at all --
+walkforward.py reads that module attribute directly, it never calls
+`run()`, so the GCS-tuned-params pickup inside `run()` alone would've been
+silently skipped). Retrain barely moved (MAE 0.1152->0.1149, R²
+0.045->0.046). Backtest re-run: 328 bets, ROI improved to -0.17%/-0.10%
+(z~=0.0, ~breakeven) but **CLV held at exactly -1.63%**, and the larger
+`n_books>=4` sub-sample stayed solidly negative both times (-5.31% ->
+-2.98%). Per CLV being the lower-variance/faster-converging signal (see
+`mlb_core/risk/clv.py` docstring), an unchanged negative CLV means this is
+still NO_EDGE -- the ROI drift toward breakeven is noise from a ~4%-
+different bet sample, not a real edge appearing. Tuned params kept as the
+new default anyway (better fit efficiency, no downside); `LOG_ONLY=True`
+stays. Full breakdown in
+`handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md`.
 
 **`walkforward.py`'s `_resolve_contract()` has a hardcoded tuple of
 `*_FEATURES` attribute names to look up on a system's `retrain_*.py` module
@@ -3170,7 +3187,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-20 16:08 CST_
+_Last updated: 2026-08-20 20:58 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
