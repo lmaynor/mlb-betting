@@ -62,7 +62,7 @@ _upsert_sched() {  # sched_name  cron  job_name  description
   local uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${job_name}:run"
   gcloud scheduler jobs describe "$name" --location="$REGION" --project="$PROJECT_ID" \
     >/dev/null 2>&1 && action=update
-  echo "${action^} $name ($cron) -> $job_name"
+  echo "${action} $name ($cron) -> $job_name"
   gcloud scheduler jobs "$action" http "$name" \
     --location="$REGION" --schedule="$cron" --time-zone="Etc/UTC" \
     --uri="$uri" --http-method=POST \

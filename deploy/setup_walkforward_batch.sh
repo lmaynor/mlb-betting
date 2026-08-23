@@ -44,7 +44,7 @@ if gcloud run jobs describe "$JOB" \
   action="update"
 fi
 
-echo "${action^} job: $JOB (image: $IMAGE)"
+echo "${action} job: $JOB (image: $IMAGE)"
 echo "  systems: $WF_SYSTEMS  range: $WF_START -> $WF_END  step: ${WF_STEP}mo"
 echo "  edge>=$WF_EDGE  select=$WF_SELECT  configs=$WF_CONFIGS"
 

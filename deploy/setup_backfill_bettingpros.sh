@@ -44,7 +44,7 @@ if gcloud run jobs describe "$JOB" \
   action="update"
 fi
 
-echo "${action^} job: $JOB (image: $IMAGE)"
+echo "${action} job: $JOB (image: $IMAGE)"
 echo "  range:   $BP_START -> $BP_END"
 echo "  markets: $BP_MARKETS  prefix: $BP_PREFIX  delay: $BP_DELAY"
 

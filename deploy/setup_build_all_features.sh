@@ -47,7 +47,7 @@ if gcloud run jobs describe "$JOB" \
   action="update"
 fi
 
-echo "${action^} job: $JOB (image: $IMAGE)"
+echo "${action} job: $JOB (image: $IMAGE)"
 echo "  chain: $CHAIN"
 
 # The chain contains no commas, so gcloud's comma-split yields exactly ["-c", "<chain>"].

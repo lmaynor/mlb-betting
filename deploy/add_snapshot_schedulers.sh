@@ -35,7 +35,7 @@ _upsert_job() {  # name cron body description
   local action=create
   gcloud scheduler jobs describe "$name" --location="$REGION" --project="$PROJECT_ID" \
     >/dev/null 2>&1 && action=update
-  echo "${action^} $name ($cron) body=$body"
+  echo "${action} $name ($cron) body=$body"
   gcloud scheduler jobs "$action" http "$name" \
     --location="$REGION" --schedule="$cron" \
     --uri="${SERVICE_URL}/snapshot-odds" \

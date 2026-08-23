@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-08-22 20:23 CST_
+_Last updated: 2026-08-22 20:55 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -91,7 +91,7 @@ betting systems running daily in GCP:
 | **BATTER_TB** | E[batter total bases] NegBin count regressor (lambda; XBH/contact/platoon/pitcher features) | Batter TB O/U (best onshore book) | Live (paper) |
 | **BATTER_HITS** | E[batter hits] NegBin count regressor (lambda; BABIP/contact/platoon/pitcher features) | Batter hits O/U (best onshore book) | Live (log-only, 200-bet gate) |
 | **PITCHER_ER** | P(earned runs > line) Gamma proxy via K model lambda | Pitcher ER O/U (best onshore book) | Live (log-only) |
-| **SB** | E[stolen bases] NegBin count regressor (lambda; 23 features -- on-base/speed/pitcher/**catcher** -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | Built + merged to main 2026-08-20, backtested NO_EDGE across 3 rounds (baseline/Optuna-tuned/+pitcher_pickoffs feature, CLV -1.63% to -1.49% throughout), `LOG_ONLY=True`, not deployed -- see handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
+| **SB** | E[stolen bases] NegBin count regressor (lambda; 23 features -- on-base/speed/pitcher/**catcher** -- first system needing catcher identity) | Stolen base O/U (`player_stolen_bases`, confirmed live on ParlayAPI 2026-08-20) | **Live (log-only)**, deployed 2026-08-22 (rev `mlb-betting-00290-bbl`). Backtested NO_EDGE across 3 rounds (baseline/Optuna-tuned/+pitcher_pickoffs feature, CLV -1.63% to -1.49% throughout) -- `LOG_ONLY=True` means it silently logs to the 200-bet paper gate, no Discord posts, by design. See handoffs/handoff_2026-08-20_sb_stolen_base_model_build.md |
 
 Batter prop runners (`BATTER_HITS`, `BATTER_TB`) require confirmed lineup
 candidates and skip any SGO prop whose `event_id` does not match the feature
@@ -3200,7 +3200,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-08-22 20:23 CST_
+_Last updated: 2026-08-22 20:55 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

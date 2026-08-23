@@ -391,3 +391,62 @@ prior runs -- a small move in the right direction, but ~0.14pp on a
 **Verdict unchanged: NO_EDGE, `LOG_ONLY=True` stays.** Kept the feature
 regardless -- real signal, better model, just not a betting edge by
 itself. 622 tests still passing, compileall clean.
+
+## Addendum -- 2026-08-22: deployed to production
+
+User asked why they hadn't seen Discord pings for SB yet. Answer was two
+things: (1) nothing had actually been deployed -- the live service was
+still on the pre-SB revision -- and (2) even once deployed, SB stays
+silent by design (`LOG_ONLY=True` forces `kelly_triggered=False`, which
+gates `post_bets()`). User asked to deploy everything anyway, to start the
+200-bet paper clock.
+
+**Deployed end-to-end, from this Mac rather than Cloud Shell** (contrary
+to RUNBOOKS.md's documented normal flow) -- `gcloud builds submit` runs
+on Cloud Build regardless of which machine invokes it, and this machine's
+gcloud auth already had the needed access (confirmed live before
+proceeding, not assumed):
+
+- `deploy/deploy_service.sh` -- new revision `mlb-betting-00290-bbl`, 100%
+  traffic, clean startup confirmed via Cloud Logging.
+- `deploy/setup_build_all_features.sh` -- updated the existing Job to
+  include `build_sb_features` in its chain, then triggered a real
+  execution (`gcloud run jobs execute ... --wait`) to verify end-to-end
+  rather than trust the config alone. Confirmed via direct log inspection:
+  SB produced 181,707 rows, right in line with the session's growth trend.
+  (Also noticed, unrelated: a non-fatal `schema violation: [GAME
+  _load_statcast] missing required columns: ['batter']` warning in this
+  same run -- pre-existing, not touched this session, not something SB
+  introduced -- worth a look separately.)
+- `deploy/setup_model_jobs.sh` -- created `mlb-retrain-sb-v1` and
+  `mlb-calibrate-sb` (idempotent update of all other existing jobs too,
+  same image, no behavior change for them).
+- `deploy/setup_betting_schedulers.sh` -- updated all 4 scoring
+  schedulers' request bodies to include `SB`. Verified the 2 that are
+  deliberately paused (`mlb-betting-afternoon`, `mlb-betting-pregame`,
+  paused for unrelated reasons from a past session) stayed paused after
+  the update -- checked before and after, not assumed.
+- Triggered a real scoring run (`gcloud scheduler jobs run
+  mlb-betting-evening`) and confirmed via Cloud Logging that SB actually
+  executed correctly in production: `log_only=True` respected, 23-feature
+  model loaded, 269 candidates assembled, catcher join worked (20.1%
+  NaN), odds lookup ran and correctly found zero stolen-base props on
+  tonight's SGO/ParlayAPI snapshot (a quiet-market night, not a bug --
+  gracefully logged as "no qualifying bets today" and moved on to GAME).
+- `mlb-retrain-weekly`/`mlb-calibrate-weekly` need no separate wiring --
+  confirmed their scheduler bodies are empty and `main.py`'s handlers read
+  `registry.py`'s per-system `retrain_jobs`/`calibrate_jobs` dynamically,
+  which already had SB's entries from earlier this session. Next Monday's
+  run picks the two new Jobs up automatically.
+
+**Real bug found and fixed along the way**: `${action^}` (bash 4+
+capitalize syntax) in 7 `deploy/*.sh` scripts fails with "bad
+substitution" under macOS's default bash 3.2 -- never caught before
+because these scripts had only ever been run from Cloud Shell's modern
+bash. Fixed by dropping the (purely cosmetic) capitalization rather than
+adding a new portability dependency. See
+`docs/solutions/runtime-errors/bash-caret-capitalize-macos-bash32.md`.
+
+**SB is now genuinely live**: deployed, scheduled, silently logging real
+predictions toward the 200-bet paper gate every scoring run. Still no
+Discord visibility -- that's the intended LOG_ONLY behavior, not a gap.

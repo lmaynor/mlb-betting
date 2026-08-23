@@ -31,7 +31,7 @@ upsert_job() {
     action="update"
   fi
 
-  echo "${action^} job: $job_name -> python -m $module"
+  echo "${action} job: $job_name -> python -m $module"
   gcloud run jobs "$action" "$job_name" \
     --image="$IMAGE" \
     --region="$REGION" \

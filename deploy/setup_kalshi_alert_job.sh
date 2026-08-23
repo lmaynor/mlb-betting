@@ -66,7 +66,7 @@ _upsert_sched() {  # sched_name  cron  description
   local name="$1" cron="$2" desc="$3" action=create
   gcloud scheduler jobs describe "$name" --location="$REGION" --project="$PROJECT_ID" \
     >/dev/null 2>&1 && action=update
-  echo "${action^} $name ($cron) -> $JOB_NAME"
+  echo "${action} $name ($cron) -> $JOB_NAME"
   gcloud scheduler jobs "$action" http "$name" \
     --location="$REGION" --schedule="$cron" --time-zone="Etc/UTC" \
     --uri="$URI" --http-method=POST \
