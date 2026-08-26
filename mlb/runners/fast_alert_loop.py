@@ -257,10 +257,6 @@ def notify(new: pd.DataFrame, hot: set, today_str: str = '',
     anchor_disp = book_display(anchor) if anchor else "consensus only"
     embed = {
         "title": f"📡 +EV Alerts -- {len(new)} new",
-        "description": (
-            f"Soft-book price lagging the sharp reference by >= {min_ev:.0%} -- "
-            f"a line worth striking before it corrects."
-        ),
         "color": 0xE3B261,
         "fields": fields[:25],
         "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "

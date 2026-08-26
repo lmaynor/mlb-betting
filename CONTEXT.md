@@ -738,6 +738,14 @@ Runners call `post_bets()` only -- bet signals for today's slate.
 `settle_bets.run()` via `post_all_systems_summary()` after settlement.
 This gives one clean daily embed covering all active systems.
 
+**`post_bets()`'s embed is grouped by sportsbook (2026-08-20 follow-up),
+same double group-by as the +EV alert pagers' embeds** (see `_grouped_bet_fields()`
+in `mlb_core/notify/discord.py`, a direct parallel of
+`fast_alert_loop._grouped_fields()`): one field per book (books ordered by
+that book's own best edge, descending), bets within a book ordered by edge.
+Applies uniformly to every system that calls `post_bets()` -- no
+per-system opt-in needed, it's the one shared function.
+
 **RULE: a log-only system's Discord-bound rows must be gated on
 `kelly_triggered`, same as a graduated system's.** `post_bets()` itself
 posts whatever list it's handed, unconditionally -- every caller is
@@ -873,10 +881,23 @@ never needs a feature_csv/model_artifact/build_sentinel it doesn't have.
 Consequences of this scope boundary:
 - EV settles via the normal nightly `/settle` job (`settle_bets.SYSTEM_MAP`
   + `ALL_SYSTEMS` both include it) and is fully queryable --
-  `BetTracker(db, system="EV").summary()` -- but does **not** render in the
-  cross-system Discord recap embed (`post_all_systems_summary()` only
-  walks `CANONICAL_ORDER`) and is **not** covered by `monitor_performance.py`
-  or `monitor_ops.py`.
+  `BetTracker(db, system="EV").summary()` -- and is **not** covered by
+  `monitor_performance.py` or `monitor_ops.py`.
+- **2026-08-20 follow-up: EV DOES render in the `#daily-recap` embed now**
+  (the user asked for it explicitly). `post_all_systems_summary()`
+  renders `CANONICAL_ORDER + _EXTRA_RECAP_SYSTEMS` (a small LOCAL list in
+  `mlb_core/notify/discord.py`, currently just `["EV"]`) -- a deliberately
+  separate list from the registry, so this stays a read-only display
+  addition and does NOT put EV back into `monitor_performance.py`'s
+  gate-driving loop (that file still only walks `CANONICAL_ORDER` itself,
+  untouched). EV's icon (`📡`) is a small local override
+  (`_EXTRA_RECAP_ICONS`) in the same spot, since it has no `SYSTEMS` entry
+  to read one from. Before this fix, the recap's TOP-LINE "Combined paper
+  P&L" total had already been silently including EV's contribution
+  (`post_all_systems_summary`'s `total_pnl`/`settled_count` sum over
+  every key in the passed-in `systems_stats` dict, not just
+  `CANONICAL_ORDER`) with no corresponding field shown -- this closes
+  that quiet discrepancy, it doesn't introduce a new one.
 - `capture_closing_lines.py` does not capture closing lines/CLV for EV rows
   either (not wired in this pass) -- `closing_odds`/`clv_pct` stay NULL.
 - A retrospective real-outcome settlement of ~14 days of already-posted

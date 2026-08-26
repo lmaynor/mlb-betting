@@ -48,6 +48,18 @@ _SYSTEM_COLORS = {
     "PITCHER_ER":  0x9B59B6,   # violet
 }
 
+# Systems shown in the cross-system Discord recap (post_all_systems_summary)
+# IN ADDITION TO mlb_core.registry.CANONICAL_ORDER -- deliberately a LOCAL
+# list here, not an addition to CANONICAL_ORDER itself. That registry list
+# also drives monitor_performance.py's live suppression-gate + Discord
+# performance-alert machinery, calibrated for model systems (AUC,
+# calibration, expected_hit_rate); EV (mlb.runners.fast_alert_loop /
+# kalshi_alert's pooled +EV alert tracking, see CONTEXT.md s5) has none of
+# that, so it stays out of the registry entirely while still being safe to
+# LIST here -- this recap is a read-only display, it doesn't gate anything.
+_EXTRA_RECAP_SYSTEMS = ["EV"]
+_EXTRA_RECAP_ICONS = {"EV": "📡"}   # matches the +EV alert embeds' own title emoji
+
 _DEFAULT_COLOR = 0x99AAB5  # grey
 
 # Abbrev -> sportsbook-canonical nickname
@@ -313,12 +325,69 @@ def _odds_str(odds: Optional[int]) -> str:
     return f"+{odds}" if odds > 0 else str(odds)
 
 
+def _bet_book(b: dict) -> str:
+    """Canonical display book for a bet dict, falling back to "Unknown"
+    (not "") so an unbooked/legacy row still groups predictably rather
+    than silently merging into an empty-string key."""
+    return book_display(b.get("book") or b.get("bookmaker") or "") or "Unknown"
+
+
+def _bet_line(b: dict, system: str) -> str:
+    """One bet's two-line summary within its book's grouped field."""
+    model_prob = b.get("model_prob")
+    edge       = b.get("edge")
+    odds       = b.get("odds")
+    stake      = _round_stake(b.get("stake"))
+
+    prob_str  = f"{model_prob:.1%}" if model_prob is not None else "N/A"
+    edge_str  = f"{edge:+.1%}"      if edge       is not None else "N/A"
+    stake_str = f"${stake:.0f}"     if stake is not None else "N/A"
+    emoji     = _edge_emoji(edge)
+    headline  = _format_bet_headline(b, system)
+    return (f"{emoji} **{headline}**\n"
+            f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}** | stake: **{stake_str}**")
+
+
+def _grouped_bet_fields(bets: list[dict], system: str) -> list[dict]:
+    """Double group-by (2026-08-20, matching the +EV alert pager's own
+    Discord embed -- fast_alert_loop._grouped_fields): one field PER
+    SPORTSBOOK, book groups ordered by that book's own best edge
+    (descending), bets within a book ordered by edge (descending).
+    Replaces the old one-field-per-bet layout, which made cross-book
+    scanning (e.g. "what's DraftKings got today") a matter of reading
+    every field's value text."""
+    groups: dict[str, list[dict]] = {}
+    for b in bets:
+        groups.setdefault(_bet_book(b), []).append(b)
+
+    def _best_edge(rows: list[dict]) -> float:
+        edges = [r.get("edge") for r in rows if r.get("edge") is not None]
+        return max(edges) if edges else float("-inf")
+
+    ordered_books = sorted(groups, key=lambda bk: _best_edge(groups[bk]), reverse=True)
+
+    fields = []
+    for bk in ordered_books:
+        rows = sorted(
+            groups[bk],
+            key=lambda r: r.get("edge") if r.get("edge") is not None else float("-inf"),
+            reverse=True,
+        )
+        n = len(rows)
+        name = f"🏦 {bk} -- {n} bet{'s' if n != 1 else ''}"[:256]
+        value = "\n".join(_bet_line(b, system) for b in rows)[:1024]
+        fields.append({"name": name, "value": value, "inline": False})
+    return fields
+
+
 def post_bets(
     bets: list[dict] | pd.DataFrame,
     system: str,
     run_date: str = None,
 ) -> None:
-    """Post today's bet signals to Discord (#daily-picks)."""
+    """Post today's bet signals to Discord (#daily-picks) -- one field per
+    sportsbook (2026-08-20: double group-by, see _grouped_bet_fields),
+    rather than one field per bet."""
     webhook_url = _get_webhook(system)
     if not webhook_url:
         return
@@ -338,27 +407,8 @@ def post_bets(
         })
         return
 
-    color = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
-
-    fields = []
-    for b in bets:
-        model_prob = b.get("model_prob")
-        edge       = b.get("edge")
-        odds       = b.get("odds")
-        stake      = _round_stake(b.get("stake"))
-
-        prob_str  = f"{model_prob:.1%}" if model_prob is not None else "N/A"
-        edge_str  = f"{edge:+.1%}"      if edge       is not None else "N/A"
-        stake_str = f"${stake:.0f}"     if stake is not None else "N/A"
-        emoji     = _edge_emoji(edge)
-        headline  = _format_bet_headline(b, system)
-        _book     = book_display(b.get("book") or b.get("bookmaker") or "")
-        book_tag  = f" · {_book}" if _book else ""
-        fields.append({
-            "name":   f"{emoji} {headline}",
-            "value":  f"prob: **{prob_str}** | edge: **{edge_str}** | odds: **{_odds_str(odds)}**{book_tag} | stake: **{stake_str}**",
-            "inline": False,
-        })
+    color  = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
+    fields = _grouped_bet_fields(bets, system)
 
     embed = {
         "title":       f"{system} Bets | {run_date}",
@@ -458,9 +508,9 @@ def post_all_systems_summary(
     pnl_emoji   = "📈" if total_pnl >= 0 else "📉"
 
     fields = []
-    for system in CANONICAL_ORDER:
+    for system in CANONICAL_ORDER + _EXTRA_RECAP_SYSTEMS:
         stats = systems_stats.get(system)
-        icon  = SYSTEMS[system].icon if system in SYSTEMS else "⚪"
+        icon  = _EXTRA_RECAP_ICONS.get(system) or (SYSTEMS[system].icon if system in SYSTEMS else "⚪")
         if not stats:
             fields.append({
                 "name":   f"{icon} {system}",

@@ -1,18 +1,27 @@
 # Handoff -- 2026-08-20 -- EV alert profitability tracking, Discord double group-by, PITCHER_ER/F1H Discord-posting bug fix
 
 Picked up from `handoffs/handoff_2026-08-19_dedup_hr_odds_and_threshold_submarkets.md`.
-User-driven session: four separate asks bundled into one message (logging/
-profitability of the +EV alert pager, a Discord embed cleanup, a Discord
-grouping request, and a reported bug), followed by a same-day follow-up
-("kalshi too" + merge + deploy). All resolved.
+User-driven session, three rounds of follow-up messages across the same
+day: (1) logging/profitability of the +EV alert pager + a Discord embed
+cleanup/grouping request + a reported bug, (2) "merge this to main and
+deploy it, kalshi too", (3) "include EV in the daily recap, apply the
+sportsbook grouping to the other systems' regular pings too, trim a
+sentence from the EV embed." All resolved.
 
-**UPDATE (same day, follow-up message):** kalshi_alert.py wired into the
-same `system="EV"` pool (was deliberately deferred in the first pass --
-see the now-superseded bullet below), branch merged to `main`, deployed.
-See "Follow-up: kalshi wiring + merge + deploy" near the end for exactly
-what changed and how the deploy was verified -- the rest of this handoff
-below is the FIRST pass's original writeup, left as-is for the reasoning
-trail rather than rewritten in place.
+**UPDATE (round 2):** kalshi_alert.py wired into the same `system="EV"`
+pool (was deliberately deferred in round 1 -- see the now-superseded
+bullet below), branch merged to `main`, deployed. See "Follow-up: kalshi
+wiring + merge + deploy" for exactly what changed and how the deploy was
+verified.
+
+**UPDATE (round 3):** EV now renders in the `#daily-recap` embed;
+`post_bets()` (every OTHER system's regular pick pings) picked up the
+same sportsbook double group-by the +EV pagers already had; trimmed one
+description sentence from the +EV embed. See "Follow-up #2" near the end.
+On its own branch, pushed, not yet merged/deployed as of this writing.
+
+The rest of this handoff below is round 1's original writeup, left as-is
+for the reasoning trail rather than rewritten in place.
 
 ## TL;DR
 
@@ -289,12 +298,63 @@ needed (pytest, xgboost, sklearn, sqlalchemy, pg8000, scipy) for Python
 `deploy_service.sh` directly on this machine, e.g.:
 `PATH="$(pwd)/.venv_audit/bin:$PATH" bash deploy/deploy_service.sh`.
 
+## Follow-up #2 (same day): EV in the recap, book-grouping for all systems, trim the EV embed copy
+
+User's next message, after the merge+deploy above: "Please include EV
+system as a system in the daily recap. Also include the sportsbook group
+by criteria for the regular Discord pings on other systems. Also for the
+EV alerts, take out the sentence that says soft book price lagging."
+Three small, independent Discord-formatting changes, all in
+`mlb_core/notify/discord.py` (plus one line in `fast_alert_loop.py`):
+
+1. **EV now renders in `#daily-recap`.** `post_all_systems_summary()`'s
+   render loop walks `CANONICAL_ORDER + _EXTRA_RECAP_SYSTEMS` (a new,
+   deliberately LOCAL list in `discord.py`, currently `["EV"]`) instead of
+   just `CANONICAL_ORDER` -- keeps the registry itself (and
+   `monitor_performance.py`'s gate loop that also reads it) completely
+   untouched, per the scope boundary from the first pass. Minor thing
+   found while doing this: the recap's top-line "Combined paper P&L"
+   total had ALREADY been silently including EV's contribution before
+   this fix (it sums over every key in the passed-in stats dict, not just
+   `CANONICAL_ORDER`) with no field shown for it -- this closes that quiet
+   mismatch rather than creating a new one.
+2. **`post_bets()` (the regular per-system #daily-picks pings -- HR, NRFI,
+   F5, K, OUTS, BATTER_TB, BATTER_HITS, GAME, PITCHER_ER) now uses the
+   same sportsbook double group-by** the +EV pagers' embeds already had:
+   one field per book (books ordered by their own best edge), bets within
+   a book ordered by edge. New `_grouped_bet_fields()` is a direct parallel
+   of `fast_alert_loop._grouped_fields()`. One shared function, so every
+   system that calls `post_bets()` picked this up automatically -- no
+   per-system changes needed.
+3. **Removed the "Soft-book price lagging..." sentence** from
+   `fast_alert_loop.notify()`'s embed entirely (dropped the `description`
+   key, not just blanked it) -- user said it wasn't adding anything.
+   Left `kalshi_alert.py`'s own (different) description sentence alone;
+   it wasn't mentioned and is a distinct piece of text.
+
+Tests: `tests/test_discord_notify_grouping.py` (new, 12 tests covering
+`_grouped_bet_fields`/`post_bets` and the recap's EV inclusion) + one
+more in `tests/test_fast_alert_loop_ev.py` (embed has no `description`
+key at all). Full suite: 635 passed (was 609). `compileall` clean.
+
+Committed on branch `feat/discord-recap-ev-and-book-grouping-2026-08-20`,
+pushed. **NOT merged to main, NOT deployed** -- this message only asked
+to "commit and push," mirroring the same two-step pattern as the first
+round (commit+push, then a separate explicit ask to merge+deploy).
+
 ## Where things stand
 
-**Merged to `main`, pushed, deployed.** Live on revision
-`mlb-betting-00289-6g8`, confirmed via Cloud Logging (not an HTTP smoke
-test -- see above). 609 Python tests passing. Nothing left pending from
-this session except the deliberately-scoped-out items already listed
-above (`capture_closing_lines.py` CLV for EV rows; the +9.2% ROI figure
-is still a one-off pull worth re-checking in a few weeks once real
-settlement accumulates through the new tracking).
+First round (**EV tracking + PITCHER_ER/F1H fix**): merged to `main`,
+deployed, live on revision `mlb-betting-00289-6g8`, confirmed via Cloud
+Logging (not an HTTP smoke test -- this machine's own requests to the
+service never reach Cloud Run at all, see above).
+
+Second round (**recap EV inclusion + book-grouping for post_bets() +
+trimmed EV embed copy**): on branch
+`feat/discord-recap-ev-and-book-grouping-2026-08-20`, pushed, NOT yet
+merged or deployed. 635 Python tests passing.
+
+Nothing left pending from either round except the deliberately-scoped-out
+items already listed above (`capture_closing_lines.py` CLV for EV rows;
+the +9.2% ROI figure is still a one-off pull worth re-checking in a few
+weeks once real settlement accumulates through the new tracking).

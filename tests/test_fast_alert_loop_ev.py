@@ -226,3 +226,23 @@ class TestGroupedFields:
         out = capsys.readouterr().out
         assert "Lineup events" not in out
         assert "DraftKings" in out and "FanDuel" in out
+
+    def test_no_soft_book_lagging_description(self, monkeypatch):
+        """2026-08-20 follow-up: the "Soft-book price lagging..." sentence
+        was removed from the embed entirely (user: "doesn't really help
+        anything") -- the embed carries no `description` key at all now."""
+        import mlb_core.notify.discord as discord_mod
+        monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://discord.test/webhook")
+        captured = {}
+
+        def _fake_post(url, payload):
+            captured["payload"] = payload
+            return True
+
+        monkeypatch.setattr(discord_mod, "_post", _fake_post)
+        rows = [_fal_alert(book="draftkings")]
+        fal.notify(pd.DataFrame(rows), set(), today_str="2026-08-19")
+
+        embed = captured["payload"]["embeds"][0]
+        assert "description" not in embed
+        assert "lagging" not in str(embed).lower()
