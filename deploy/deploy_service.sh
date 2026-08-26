@@ -49,9 +49,19 @@ gcloud run services update "$SERVICE" \
   --region="$REGION" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
+  --memory=4Gi --cpu=2 \
   --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,PARLAY_API_KEY=parlay-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
   --update-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-parlay}" \
   --project="$PROJECT_ID"
+# --memory=4Gi (was 2Gi): /refresh-data and /build-features were hitting the
+# 2Gi ceiling and getting OOM-killed (Cloud Run returns 503, Cloud Scheduler
+# records status code=14/UNAVAILABLE) -- confirmed via `gcloud logging read`
+# ("Memory limit of 2048 MiB exceeded with ... MiB used"), recurring on
+# mlb-refresh-data roughly every few days over the past month as statcast/
+# feature data has grown (see monitor_ops ops-alert diligence pass,
+# 2026-08-25/26). Explicit here (not just set once via `services update`)
+# so it survives being the source of truth on the next deploy, per this
+# repo's "config lives in the script, not tribal knowledge" convention.
 # NOTE: --update-env-vars (merge), not --set-env-vars (destructive replace of
 # the whole plain env-var map). ODDS_PRIMARY defaults to "parlay" -- "sgo"
 # combined with the 8x/day snapshot cadence caused a 24+ hour SGO outage on
