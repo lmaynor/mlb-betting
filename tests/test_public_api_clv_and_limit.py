@@ -15,18 +15,30 @@ convention as tests/test_admin_auth.py's dashboard tests.
 
 See docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md.
 """
-from datetime import date
-
 import pytest
 from sqlalchemy import text
 
 from mlb_core.tracking.bet_tracker import BetTracker
-from mlb.runners.public_api import get_today_picks, get_picks
+from mlb.runners.public_api import get_today_picks, get_picks, _ct_today
 
 
 @pytest.fixture
 def engine_with_one_settled_bet(tmp_path):
-    today = date.today().isoformat()
+    # Bug found 2026-08-25 (a real CI failure on `main`, not induced by this
+    # fix): this used bare date.today() -- the SYSTEM's local timezone --
+    # while get_today_picks() itself always filters on _ct_today() (US/
+    # Central, the timezone this whole product organizes the baseball day
+    # by). Those agree most of the day, but GitHub Actions runners default
+    # to UTC, which is AHEAD of Central -- for the ~5 hour window each
+    # evening (roughly 7pm-midnight Central) where UTC has already rolled
+    # to the next calendar day but Central hasn't, the fixture logged a bet
+    # dated "tomorrow" while the function queried for "today", so this
+    # returned 0 rows instead of 1. Deterministic, not flaky: it fails
+    # every time CI happens to run in that window, passes the rest of the
+    # day. Fixed by reusing the exact same _ct_today() the code under test
+    # uses, so this can never disagree with it regardless of the runner's
+    # own clock/timezone.
+    today = _ct_today()
     tracker = BetTracker(str(tmp_path / "test_public_api.db"), "HR")
     bet_id = tracker.log_bet(
         game_date=today, game_pk=12345, player="Test Player",
