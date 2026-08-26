@@ -536,7 +536,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 
 ## 4. The daily loops
 
-### Loop A: Data refresh (08:00 UTC -- `mlb-refresh-data`)
+### Loop A: Data refresh (14:00 UTC -- `mlb-refresh-data`)
 
 Fetches yesterday's weather (Open-Meteo archive), umpire scorecards
 (umpscorecards.com), inning-by-inning scoring (MLB Stats API), and
@@ -545,8 +545,8 @@ Feature builds only READ from GCS masters -- they never write them.
 Statcast was previously updated inside `build_hr_features.py`; moved to
 `/refresh-data` 2026-05-18 to decouple data refresh from feature builds.
 
-Scoring refresh runs at 08:00 UTC -- 2hr buffer after west coast games
-finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
+Scoring refresh runs at 14:00 UTC -- a healthy multi-hour buffer after west
+coast games finish (~midnight CT / 06:00 UTC). Adequate for regular season games.
 Also refreshes six Savant leaderboards for the current season via
 `savant_leaderboards_nightly_all_gcs()`. In-season: ~60s added to refresh time.
 Off-season (Dec-Feb): no-op, returns status="skipped".
@@ -561,15 +561,15 @@ with no scheduled refresh and no freshness alert (now added to
 2026-08-19_feature_data_pipeline_review.md finding 2.3. Same in-season-only
 guard as the Savant leaderboards.
 
-### Loop B: Feature builds (12:00 UTC)
+### Loop B: Feature builds (14:30 UTC)
 
 | Time | Job | Notes |
 |---|---|---|
-| 12:00 | `mlb-build-all-features` | Runs HR -> NRFI -> K -> F5 in dependency order |
+| 14:30 | `mlb-build-all-features` | Runs HR -> NRFI -> K -> F5 in dependency order |
 
 Dependency order enforced in code: F5 reads NRFI's `pitcher_start_features.csv`.
 HR and K are independent. Each system writes a build sentinel to GCS on success
-(`{system_prefix}/data/last_build.json`) -- checked by `monitor_ops` at 13:15 UTC.
+(`{system_prefix}/data/last_build.json`) -- checked by `monitor_ops` at 15:20 UTC.
 
 ### Loop C: Score + bet (16:00 and 22:00 UTC / 11am and 5pm CT)
 
@@ -585,14 +585,14 @@ credit pacing, and `ODDS_PRIMARY` cutover.
 Runners post bet signals to Discord only (`post_bets`). No per-runner
 performance summaries -- those come from the daily recap in `/settle`.
 
-### Loop D: Settle + monitor (09:00-13:15 UTC)
+### Loop D: Settle + monitor (09:00-15:20 UTC)
 
 ```
 09:00 UTC -> /settle       -> settle yesterday's bets + retry stale pending
                               posts daily recap embed (post_all_systems_summary)
 09:30 UTC -> /monitor      -> rolling perf check, Discord alert if degraded
                               Monday: weekly digest post
-12:50 UTC -> /monitor-ops  -> infra health check after feature builds complete
+15:20 UTC -> /monitor-ops  -> infra health check after feature builds complete
                               Silent on clean run.
 ```
 
@@ -1695,7 +1695,7 @@ Expected hit rates (baselines -- update after 200 bets per system):
 
 ## 12. Ops monitor
 
-`mlb/runners/monitor_ops.py` -- fires at 12:50 UTC daily via `mlb-monitor-ops`.
+`mlb/runners/monitor_ops.py` -- fires at 15:20 UTC daily via `mlb-monitor-ops`.
 
 Checks (all post-feature-build):
 - All Cloud Scheduler jobs: last run status code
@@ -2493,7 +2493,7 @@ F5. Dependency order enforced in `/build-all-features` code -- F5 always runs af
 **`/build-all-features` is a single point of failure.** If it errors midway,
 downstream systems silently use yesterday's feature CSVs. The build sentinels
 (`{system}/data/last_build.json`) catch this at two levels: `monitor_ops` at
-12:50 UTC alerts if any sentinel is stale or status=error, AND each runner
+15:20 UTC alerts if any sentinel is stale or status=error, AND each runner
 calls `check_build_sentinel()` from `mlb_core/storage.py` at run time --
 aborting with a Discord alert rather than scoring on stale features.
 
