@@ -41,6 +41,47 @@ nothing" blind spot). Fixed live via the `add-iam-policy-binding` command below
 and patched into `deploy/setup_kalshi_capture.sh` directly on the `kalshi`
 branch (2026-08-10).
 
+**Recurrence (2026-08-26): the sibling job got missed during the 2026-08-10
+fix itself.** `deploy/setup_kalshi_capture.sh` provisions TWO Cloud Run Jobs
+in the same script (`mlb-kalshi-capture` and `mlb-kalshi-capture-closing`,
+the latter for the 23:05 UTC closing-line snapshot only) and its
+`_upsert_job()` helper already applies the IAM-binding fix to whichever job
+it's called for. But the 2026-08-10 recurrence above was fixed with a
+one-off manual `add-iam-policy-binding` targeting `mlb-kalshi-capture` by
+name (not a full re-run of the script), so `mlb-kalshi-capture-closing`'s
+binding was never applied. Its scheduler entry (`mlb-kalshi-2305`) likely
+hadn't fired yet at the moment the 2026-08-10 fix was spot-checked, so its
+`status.code` was still `-1` ("never run") rather than `7` -- invisible to
+a quick look. Net effect: `mlb-kalshi-capture-closing` had an **empty IAM
+policy from creation (2026-07-23) through 2026-08-26 -- 34 days, zero
+successful executions ever** (`gcloud run jobs executions list` was
+completely empty, not just missing recent runs), silently confirmed by
+`monitor_ops`'s daily ops-alert firing at least once every single day for
+that entire window without anyone connecting it to this specific job (the
+Discord embed shows the bullet-list detail; the alert-posted log line
+monitor_ops itself emits only shows a failure *count*, so recognizing "it's
+always this one" from Cloud Logging alone takes an explicit
+`_check_schedulers()` re-run, not just reading log lines). Fixed the same
+way, verified this time by manually firing the scheduler
+(`gcloud scheduler jobs run mlb-kalshi-2305`) and confirming both a
+terminal `Completed: True` execution AND a real new object landing in
+`Odds/kalshi/raw/{date}/`, not just an absence of a 403.
+
+**Lesson reinforced: when a setup script provisions N jobs, verify the
+IAM binding on ALL N after any fix, not just the one whose alert you
+followed** -- ideally by re-running the whole `setup_*.sh` (idempotent by
+design) rather than a targeted `add-iam-policy-binding` on one resource.
+A quick repo-wide audit for this specific class (worth re-running whenever
+a new scheduled Cloud Run Job ships, or whenever triaging a monitor_ops
+alert that mentions PERMISSION_DENIED/code=7):
+
+    for job in $(gcloud scheduler jobs list --location=us-central1 \
+        --format="value(httpTarget.uri)" | grep -oP '(?<=/jobs/)[^:]+' | sort -u); do
+      gcloud run jobs get-iam-policy "$job" --region=us-central1 \
+        --format="value(bindings)" | grep -q scheduler-invoker \
+        && echo "OK    $job" || echo "MISSING  $job"
+    done
+
 ## Fix
 
     gcloud run jobs add-iam-policy-binding <job> --region=us-central1 \
