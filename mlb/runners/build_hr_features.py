@@ -738,7 +738,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
     from mlb_core.data import statcast_nightly, weather_nightly, lineup_nightly
 
     # ── 1. Nightly data refresh ──────────────────────────────────────────
-    # Statcast nightly refresh moved to /refresh-data (08:00 UTC).
+    # Statcast nightly refresh moved to /refresh-data (14:00 UTC).
     # Feature build only reads the master -- never writes it.
     if run_type in ("morning", "data") and not GCS_BUCKET:
         statcast_nightly(

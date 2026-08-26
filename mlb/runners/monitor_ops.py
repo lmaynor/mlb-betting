@@ -1,7 +1,7 @@
 """
 runners/monitor_ops.py — Infrastructure health monitor.
 
-Fires at 13:15 UTC daily (after all feature builds complete) via the
+Fires at 15:20 UTC daily (after all feature builds complete) via the
 mlb-monitor-ops Cloud Scheduler job. Posts to Discord ONLY when something
 is wrong — silent on a clean run.
 
