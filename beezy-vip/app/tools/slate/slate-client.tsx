@@ -7,7 +7,7 @@ import { ResultPill } from '@/components/ui/primitives'
 
 // ---- constants ---------------------------------------------------------------
 
-const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTER_HITS', 'SB', 'GAME']
+const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'PITCHER_ER', 'BATTER_TB', 'BATTER_HITS', 'BATTER_K', 'SB', 'GAME']
 // NOTE: deliberately NOT adding 'EV' here (unlike results-client.tsx and
 // clv-tracker) -- get_today_slate()'s SQL (mlb/runners/public_api.py) never
 // selects `book`, so SlatePick has no book field at all. PickDetail above
