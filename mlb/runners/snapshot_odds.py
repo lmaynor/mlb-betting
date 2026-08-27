@@ -76,7 +76,7 @@ def run(run_date: str = None, provider: str = None, out_prefix: str = DEFAULT_PR
 
     from mlb_core.config import GCS_BUCKET
     if not GCS_BUCKET:
-        return {"status": "error", "error": "GCS_BUCKET not set"}
+        return {"status": "error", "error": "GCS_BUCKET not set", "provider": provider}
 
     latest_key = f"{out_prefix}/latest.json"
     try:
@@ -86,11 +86,12 @@ def run(run_date: str = None, provider: str = None, out_prefix: str = DEFAULT_PR
             events, meta = _gather_sgo(target_date)
     except Exception as e:  # noqa: BLE001
         logger.error(f"snapshot: gather failed ({provider}): {e}")
-        return {"status": "error", "error": f"gather({provider}): {e}"}
+        return {"status": "error", "error": f"gather({provider}): {e}", "provider": provider}
 
     if not events:
         logger.warning("snapshot: 0 events — leaving latest.json unchanged")
-        return {"status": "error", "error": "no events returned", "events": 0, **meta}
+        return {"status": "error", "error": "no events returned", "events": 0,
+                "provider": provider, **meta}
 
     hhmm = started.strftime("%H%M")
     archive_key, latest_key, tmp_key = _keys(out_prefix, target_date, hhmm)
@@ -104,7 +105,8 @@ def run(run_date: str = None, provider: str = None, out_prefix: str = DEFAULT_PR
         if exists(tmp_key):
             delete(tmp_key)
     except Exception as e:  # noqa: BLE001
-        return {"status": "error", "error": f"write: {e}", "events": len(events), **meta}
+        return {"status": "error", "error": f"write: {e}", "events": len(events),
+                "provider": provider, **meta}
 
     logger.info(f"snapshot ok | {len(events)} events | {len(payload)/1024:.1f}KB | {provider}")
     return {"status": "ok", "events": len(events), "archive_key": archive_key,

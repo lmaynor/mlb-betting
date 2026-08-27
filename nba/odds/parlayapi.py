@@ -50,7 +50,27 @@ class ParlayApiClient:
                 self.credits_remaining = resp.headers.get("x-requests-remaining")
                 self.credits_last = resp.headers.get("x-requests-last")
                 if resp.status_code in (401, 403):
-                    logger.error("parlayapi auth error %s -- check PARLAY_API_KEY", resp.status_code)
+                    # ParlayAPI returns 403 for BOTH a bad/revoked key AND a
+                    # monthly-credit-cap exhaustion (distinct problems, distinct
+                    # fixes) -- the response body tells them apart. Logging every
+                    # 403 as "check PARLAY_API_KEY" sent troubleshooting down the
+                    # wrong path when the real cause was OUT_OF_USAGE_CREDITS
+                    # (found 2026-08-27: two never-retired accumulator scheduler
+                    # jobs were quietly burning the shared monthly credit pool
+                    # outside snapshot_odds.py's own tracked ledger).
+                    detail = {}
+                    try:
+                        body = resp.json() or {}
+                        detail = body.get("detail") if isinstance(body.get("detail"), dict) else body
+                    except ValueError:
+                        pass
+                    if detail.get("error") == "OUT_OF_USAGE_CREDITS":
+                        logger.error(
+                            "parlayapi OUT OF CREDITS: %s",
+                            detail.get("message", "monthly credit limit reached"),
+                        )
+                    else:
+                        logger.error("parlayapi auth error %s -- check PARLAY_API_KEY", resp.status_code)
                     return None
                 if resp.status_code == 404:
                     return None

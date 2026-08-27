@@ -276,6 +276,10 @@ def snapshot_odds_handler():
     out_prefix  = body.get("out_prefix", "Odds/sgo")
     day_offset  = int(body.get("day_offset", 0))    # 1 = tomorrow (late-night jobs)
     include_sgo = body.get("include_sgo")            # True on the 4 SGO runs, False on parlay-only
+    # Best-effort provider label for alerting, mirroring snapshot_odds.run()'s own
+    # fallback (body override, else live ODDS_PRIMARY env, default "parlay") -- used
+    # if the call crashes before returning a result dict with its own "provider" key.
+    requested_provider = (provider or os.environ.get("ODDS_PRIMARY", "parlay")).upper()
     try:
         from mlb.runners.snapshot_odds import run as snapshot_run
         result = snapshot_run(run_date=run_date, provider=provider, out_prefix=out_prefix,
@@ -285,7 +289,7 @@ def snapshot_odds_handler():
         logger.error(f"snapshot-odds failed:\n{tb}")
         try:
             from mlb_core.notify.discord import post_error
-            post_error("SGO", f"Snapshot crashed:\n```\n{tb[:1500]}\n```", run_date)
+            post_error(requested_provider, f"Snapshot crashed:\n```\n{tb[:1500]}\n```", run_date)
         except Exception as _de:  # noqa: BLE001
             logger.warning(f"discord notify failed (alert not delivered): {_de}")
         return jsonify({"status": "error", "error": str(e)}), 500
@@ -294,7 +298,12 @@ def snapshot_odds_handler():
     if result.get("status") == "error":
         try:
             from mlb_core.notify.discord import post_error
-            post_error("SGO", f"Snapshot returned error:\n```\n{result.get('error', '?')}\n```", run_date)
+            # Label with the provider that actually ran (falls back to the
+            # pre-call guess if the result dict didn't carry one) -- a "parlay"
+            # failure must not be reported as "SGO" just because the snapshot
+            # path/module names are legacy-SGO-shaped.
+            actual_provider = str(result.get("provider", requested_provider)).upper()
+            post_error(actual_provider, f"Snapshot returned error:\n```\n{result.get('error', '?')}\n```", run_date)
         except Exception as _de:  # noqa: BLE001
             logger.warning(f"discord notify failed (alert not delivered): {_de}")
     return jsonify(result), http_status
