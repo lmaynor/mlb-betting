@@ -49,6 +49,13 @@ export const SYSTEM_COLOR: Record<string, string> = {
                             // the green cluster (lime/mint/--signal) and the
                             // red/orange cluster (coral/amber/gold/--loss)
   // Meta
+  EV:          '#d97ee0',   // orchid -- new 2026-08-20 (fast_alert_loop +
+                            // kalshi_alert pooled +EV tracking, system="EV").
+                            // Sits in the one open gap left in the wheel
+                            // (between lavender/BATTER_K and magenta/HR) --
+                            // deliberately not a per-market hue since EV
+                            // isn't its own market, it pools alerts across
+                            // every market above.
   ALL:         '#c9c6cf',   // neutral silver
 }
 
@@ -82,7 +89,7 @@ export const SYSTEM_LABEL: Record<string, string> = {
   F5: 'F5', F3: 'F3', F7: 'F7', F1H: '1st Half', GAME: 'Game',
   HR: 'HR', K: 'K', OUTS: 'Outs',
   BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K', SB: 'Stolen Bases',
-  PITCHER_ER: 'Earned Runs',
+  PITCHER_ER: 'Earned Runs', EV: 'EV',
 }
 
 // Tighter variant for narrow table cells / chips.
@@ -171,16 +178,52 @@ function plusLabel(bt: string): string | null {
   return m ? `${m[1]}+` : null
 }
 
-// Human-readable pick label from a Bet row
-export function pickLabel(bet: Bet): string {
-  const bt     = bet.bet_type ?? ''
-  const sys    = bet.system
-  const away   = bet.away_team ?? ''
-  const home   = bet.home_team ?? ''
-  const player = bet.player ?? ''
-  // Prefer 3-letter abbrevs; fall back to whatever is shorter
-  const team   = away.length <= 3 ? away : home.length <= 3 ? home : away
+// Strip an EV row's trailing "_{book}" suffix using its own `book` column
+// (fast_alert_loop._ev_bet_type always appends the REAL book key, so this
+// matches settle_bets._strip_ev_book_suffix exactly instead of guessing
+// against a hardcoded book list).
+function stripEvBookSuffix(bt: string, book: string | null | undefined): string {
+  const tag = book ? `_${book.toLowerCase()}` : ''
+  return tag && bt.toLowerCase().endsWith(tag) ? bt.slice(0, bt.length - tag.length) : bt
+}
 
+// Classify a (book-suffix-stripped) EV bet_type back to the underlying
+// system that would grade it -- mirrors settle_bets._settle_ev's own
+// prefix classification exactly (that function is the source of truth:
+// it's what actually settles these rows), so a market this doesn't
+// recognize wouldn't settle server-side either. Returns null for anything
+// _settle_ev would fall through to its "unrecognised bet_type" warning for.
+function resolveEvSystem(bt: string): string | null {
+  const up = bt.toUpperCase()
+  if (up.startsWith('HR'))            return 'HR'
+  if (up.startsWith('OUTS_'))         return 'OUTS'
+  if (up.startsWith('K_'))            return 'K'
+  if (up.startsWith('PITCHER_ER_'))   return 'PITCHER_ER'
+  if (up.startsWith('BATTER_TB_'))    return 'BATTER_TB'
+  if (up.startsWith('BATTER_HITS_'))  return 'BATTER_HITS'
+  if (up.startsWith('BATTER_K_'))     return 'BATTER_K'
+  if (up.startsWith('SB_'))           return 'SB'
+  if (up.startsWith('NRFI') || up.startsWith('YRFI')) return 'NRFI'
+  if (up.startsWith('GAME_'))         return 'GAME'
+  if (up === 'HOME' || up === 'AWAY') return 'F5'
+  return null
+}
+
+// Recover the underlying system + native bet_type from a pooled +EV alert
+// row (system === "EV", added 2026-08-20 -- see CONTEXT.md s5 "EV bet
+// tracking"). Exported so components that branch on system for layout
+// (e.g. picks-table's prop-vs-game-line row shape) can resolve the real
+// market too, not just this file's own pickLabel().
+export function resolveEvUnderlying(bet: Bet): { system: string; bet_type: string } {
+  const bt = stripEvBookSuffix(bet.bet_type ?? '', bet.book)
+  return { system: resolveEvSystem(bt) ?? 'EV', bet_type: bt }
+}
+
+// The actual per-system label logic, factored out of pickLabel so an EV
+// row can be formatted through the exact same rules as a native bet on
+// its resolved underlying market (see resolveEvUnderlying above) instead
+// of duplicating every branch below a second time.
+function formatPick(sys: string, bt: string, player: string, team: string, away: string, home: string): string {
   // -- Game Lines -------------------------------------------------------
   if (sys === 'NRFI') {
     if (bt === 'NRFI')    return 'No Run 1st Inning'
@@ -260,4 +303,24 @@ export function pickLabel(bet: Bet): string {
   }
 
   return bt
+}
+
+// Human-readable pick label from a Bet row
+export function pickLabel(bet: Bet): string {
+  const away   = bet.away_team ?? ''
+  const home   = bet.home_team ?? ''
+  const player = bet.player ?? ''
+  // Prefer 3-letter abbrevs; fall back to whatever is shorter
+  const team   = away.length <= 3 ? away : home.length <= 3 ? home : away
+
+  // EV rows pool alerts across every market above under one tracking
+  // system -- format through the market they actually resolve to (see
+  // resolveEvUnderlying) so the label reads like a native pick instead of
+  // leaking the raw "{bet_type}_{book}" string (e.g. "K_OVER_7.5_draftkings").
+  if (bet.system === 'EV') {
+    const { system, bet_type } = resolveEvUnderlying(bet)
+    return formatPick(system, bet_type, player, team, away, home)
+  }
+
+  return formatPick(bet.system, bet.bet_type ?? '', player, team, away, home)
 }

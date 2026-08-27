@@ -109,6 +109,7 @@ img, video { max-width: 100%; height: auto; }
   --sys-batter-tb:   #a9d166;   /* lime */
   --sys-batter-hits: #4fc7bd;   /* teal */
   --sys-sb:          #d9cf5a;   /* yellow */
+  --sys-ev:          #d97ee0;   /* orchid — pooled +EV alert tracking */
 
   /* ── Radius — soft, restrained ─────────────────────────── */
   --radius-sm:   4px;

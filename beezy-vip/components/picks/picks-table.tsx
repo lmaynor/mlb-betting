@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { B, SYSTEM_PILL, pickLabel, systemLabel } from '@/lib/tokens'
+import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey } from '@/lib/dates'
@@ -14,6 +14,15 @@ const PAGE_SIZE = 30
 const TABLE_GRID = '72px 72px 112px 128px minmax(310px, 1fr) 76px 72px 88px 72px 70px'
 const TABLE_MIN_WIDTH = '1120px'
 const PROP_SYSTEMS = new Set(['HR', 'K', 'OUTS', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'PITCHER_ER', 'SB'])
+
+// An EV row's own `system` is always the pooled "EV" tag, not the market it
+// actually alerted on -- resolve to the real market before checking
+// PROP_SYSTEMS so a prop-market EV alert (e.g. an HR alert) still gets the
+// player-first row layout below instead of always falling back to the
+// game-line layout.
+function effectiveSystem(bet: Bet): string {
+  return bet.system === 'EV' ? resolveEvUnderlying(bet).system : bet.system
+}
 
 function ResultPill({ result }: { result: string | null }) {
   const cfg: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -133,7 +142,7 @@ function pickDescription(bet: Bet, detail: string) {
 function TableRow({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
-  const hasProp = PROP_SYSTEMS.has(bet.system)
+  const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
   const notes = splitNotes(bet.notes)
   const detail = pickDetail(label, bet.player)
   const description = pickDescription(bet, detail)
@@ -222,7 +231,7 @@ function TableRow({ bet }: { bet: Bet }) {
 function BetCard({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
-  const hasProp = PROP_SYSTEMS.has(bet.system)
+  const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
   const notes = splitNotes(bet.notes)
   const score = beezyscore(bet)
   const tierColor = TIER_COLOR[scoreTier(score)]

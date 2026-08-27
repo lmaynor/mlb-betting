@@ -10,7 +10,7 @@ import { ScoreBadge } from '@/components/ui/primitives'
 
 const GAME_SYSTEMS = new Set(['NRFI', 'F5'])
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
-const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K'])
+const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K', 'SB'])
 
 type FilterKey = 'all' | 'game' | 'pitcher' | 'player'
 
