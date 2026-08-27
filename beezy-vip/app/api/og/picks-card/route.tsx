@@ -17,6 +17,7 @@ const SYS: Record<string, { bg: string; accent: string }> = {
   BATTER_TB:   { bg: "#202813", accent: "#a9d166" },
   BATTER_HITS: { bg: "#122624", accent: "#4fc7bd" },
   PITCHER_ER:  { bg: "#291714", accent: "#ef7f6e" },
+  SB:          { bg: "#26240f", accent: "#d9cf5a" },
 };
 // short display name so the card never shows raw registry keys
 const SYS_NAME: Record<string, string> = {
@@ -37,15 +38,19 @@ const fmtPick = (bt: string, sys: string) => {
   if (bt === "YRFI") return "Run 1st";
   if (bt === "HOME") return sys === "F5" ? "F5 Home ML" : "Home ML";
   if (bt === "AWAY") return sys === "F5" ? "F5 Away ML" : "Away ML";
-  if (bt.startsWith("K_OVER"))     return `Over ${bt.split("_")[2]} Ks`;
-  if (bt.startsWith("K_UNDER"))    return `Under ${bt.split("_")[2]} Ks`;
-  if (bt.startsWith("OUTS_OVER"))  return `Over ${bt.split("_")[2]} Outs`;
-  if (bt.startsWith("OUTS_UNDER")) return `Under ${bt.split("_")[2]} Outs`;
-  // BATTER_TB_OVER_1.5 / BATTER_HITS_UNDER_0.5 / PITCHER_ER_OVER_2.5
-  const m = bt.match(/^(BATTER_TB|BATTER_HITS|PITCHER_ER|BATTER_K)_(OVER|UNDER)_([\d.]+)$/);
+  // K_OVER_7.5 / OUTS_UNDER_14.5 / BATTER_TB_OVER_1.5 / SB_UNDER_0.5 / ... and
+  // the one-sided 2+/3+ threshold sub-markets (K_2PLUS_2.0 etc, added
+  // 2026-08-19 -- side is "{N}PLUS" instead of "OVER"/"UNDER", same line
+  // repeated after it, so the line is dropped rather than printed twice).
+  const m = bt.match(/^(K|OUTS|BATTER_TB|BATTER_HITS|PITCHER_ER|BATTER_K|SB)_(OVER|UNDER|\d+PLUS)_([\d.]+)$/);
   if (m) {
-    const noun = m[1] === "BATTER_TB" ? "TB" : m[1] === "BATTER_HITS" ? "Hits"
-      : m[1] === "PITCHER_ER" ? "ER" : "Batter Ks";
+    const NOUN: Record<string, string> = {
+      K: "Ks", OUTS: "Outs", BATTER_TB: "TB", BATTER_HITS: "Hits",
+      PITCHER_ER: "ER", BATTER_K: "Batter Ks", SB: "SB",
+    };
+    const noun = NOUN[m[1]] ?? m[1];
+    const plus = m[2].match(/^(\d+)PLUS$/);
+    if (plus) return `${plus[1]}+ ${noun}`;
     return `${m[2] === "OVER" ? "Over" : "Under"} ${m[3]} ${noun}`;
   }
   if (bt.startsWith("GAME_")) return bt === "GAME_HOME" ? "Home ML" : "Away ML";
@@ -60,7 +65,11 @@ export async function GET() {
   const pd = await pr.json();
   const sd = await sr.json();
   const all: any[] = Array.isArray(pd) ? pd : pd.picks ?? [];
-  const top = all.filter(p => p.kelly_triggered).sort((a, b) => parseFloat(b.edge) - parseFloat(a.edge)).slice(0, 5);
+  // Card showcases model picks -- exclude pooled +EV alerts (system="EV", a
+  // cross-market soft-line/Kalshi scanner, not a model prediction; see
+  // lib/tokens.ts resolveEvUnderlying for the equivalent exclusion on the
+  // Daily Card).
+  const top = all.filter(p => p.kelly_triggered && p.system !== "EV").sort((a, b) => parseFloat(b.edge) - parseFloat(a.edge)).slice(0, 5);
   const ov = sd?.overall ?? {};
   const roi = ov.roi ?? null;
   const roiNum = roi !== null ? parseFloat(roi) : null;

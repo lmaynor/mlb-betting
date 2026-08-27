@@ -93,6 +93,11 @@ function enrich(bet: Bet): EnrichedBet {
 export default async function CheatSheetPage() {
   const raw = await apiGetTodayPicks().catch(() => [] as Bet[])
   const picks = raw
+    // The Daily Card showcases model picks -- exclude pooled +EV alerts
+    // (system="EV", a cross-market soft-line/Kalshi scanner, not a model
+    // prediction). They'd otherwise show up here with a book suffix baked
+    // into bet_type and no Beezy Score inputs of their own.
+    .filter(b => b.system !== 'EV')
     .map(enrich)
     .sort((a, b) => beezyscore(b) - beezyscore(a))
 
@@ -100,7 +105,7 @@ export default async function CheatSheetPage() {
   const yesterday = addDaysToDateKey(siteDateKey(), -1)
   const settledRaw = await apiGetRecentSettled(40).catch(() => [] as Bet[])
   const yesterdayPicks = settledRaw
-    .filter(b => b.game_date === yesterday)
+    .filter(b => b.game_date === yesterday && b.system !== 'EV')
     .map(enrich)
     .sort((a, b) => beezyscore(b) - beezyscore(a))
 

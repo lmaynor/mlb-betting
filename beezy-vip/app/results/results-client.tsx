@@ -23,7 +23,11 @@ const SYSTEM_GROUPS = {
   'Game Lines':      ['NRFI', 'F5'],
   'Innings Windows': ['F3', 'F1H', 'F7', 'GAME'],
   'Pitcher Props':   ['K', 'OUTS', 'PITCHER_ER'],
-  'Batter Props':    ['HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS'],
+  'Batter Props':    ['HR', 'BATTER_K', 'BATTER_TB', 'BATTER_HITS', 'SB'],
+  // Pooled +EV alert tracking (fast_alert_loop + kalshi_alert, system="EV")
+  // -- not a model, so it doesn't fit any market group above; own group so
+  // it's still filterable/chartable instead of only reachable via "ALL".
+  'Live Alerts':     ['EV'],
 } as const
 
 // Flat list for the filter chip row: ALL + each system

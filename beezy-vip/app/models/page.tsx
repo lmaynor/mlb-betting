@@ -32,6 +32,7 @@ const PIPELINE_MODELS = [
   { system: 'BATTER_TB', label: 'Total Bases', note: 'Batter total-base props with contact quality, matchup, lineup slot, and park.' },
   { system: 'BATTER_HITS', label: 'Hits', note: 'Hit props using contact rate, expected average, platoon split, and park/run context.' },
   { system: 'PITCHER_ER', label: 'Pitcher ER', note: 'Earned-runs props using starter quality, opponent run creation, weather, and leash.' },
+  { system: 'SB', label: 'Stolen Bases', note: 'Stolen-base props using on-base rate, sprint speed, and attempt history vs. opposing pitcher hold and catcher pop time.' },
 ]
 
 export default async function ModelsPage() {

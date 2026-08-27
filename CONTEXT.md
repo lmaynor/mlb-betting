@@ -1995,9 +1995,21 @@ truth for valid slug -> system mappings and powers the all-model grid at
 `/picks/mlb`, the filter bar, and per-system metadata. Invalid slugs return
 404 via `notFound()`. Do not create individual static page files per system.
 
-As of 2026-05-29, the public all-model route covers:
+As of 2026-08-27, the public all-model route covers:
 `NRFI`, `1I`, `F3`, `F5`, `F1H`, `F7`, `GAME`, `HR`, `BATTER_TB`,
-`BATTER_HITS`, `BATTER_K`, `K`, `OUTS`, and `PITCHER_ER`.
+`BATTER_HITS`, `BATTER_K`, `K`, `OUTS`, `PITCHER_ER`, and `SB` (added
+2026-08-20 alongside the SB model itself). **`EV`** (pooled +EV alert
+tracking, s5 "EV bet tracking") is deliberately NOT on this route -- same
+reasoning as it being excluded from `registry.CANONICAL_ORDER`: it isn't a
+model with its own training methodology, it's a cross-market tracking
+pool over alerts already priced by the systems above. It's still wired
+into the generic system taxonomy (`lib/tokens.ts` color/label/`pickLabel`,
+which resolves an EV row's `bet_type` back to its underlying market so it
+formats identically to a native pick) and shows up wherever real `bets`
+rows render regardless of system (Results page, main picks table, CLV
+tracker) -- just not as a browsable `/picks/mlb/ev` page. It's also
+excluded from the two curated public share surfaces (Daily Card / OG
+picks-card image) since those showcase model picks specifically.
 
 ### Charts
 

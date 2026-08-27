@@ -7,7 +7,17 @@ import { ResultPill } from '@/components/ui/primitives'
 
 // ---- constants ---------------------------------------------------------------
 
-const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTER_HITS', 'GAME']
+const ALL_FILTER_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTER_HITS', 'SB', 'GAME']
+// NOTE: deliberately NOT adding 'EV' here (unlike results-client.tsx and
+// clv-tracker) -- get_today_slate()'s SQL (mlb/runners/public_api.py) never
+// selects `book`, so SlatePick has no book field at all. PickDetail above
+// synthesizes a Bet-shaped object with book hardcoded to `null` for
+// pickLabel(), which needs the real book to strip an EV row's "_{book}"
+// suffix (see lib/tokens.ts resolveEvUnderlying) -- without it, an EV
+// pick here would render with the book fragment leaking into the line
+// (e.g. "7.5_draftkings") or failing the bare-string match entirely for
+// game-line markets (e.g. "HOME_draftkings" =/= "HOME"). Add `book` to
+// get_today_slate()'s SELECT + SlatePick's type first if this is wanted.
 
 // ---- helpers -----------------------------------------------------------------
 
