@@ -1346,8 +1346,14 @@ flip back to `sgo` without also cutting the cadence back to ~4x/day.
   F5-ML, F1H. One cheap `fetch_mlb_slate` call supplies these; the adapter
   splices them per game.
 - The same ParlayAPI pull also banks `OddsAccum/baseball_mlb/` artifacts
-  (credit unification) -- the standalone `parlay-accum-mlb-*` schedules are
-  retired (`deploy/setup_parlay_schedules.sh`). Forward `odds_history` feed comes
+  (credit unification) -- the standalone `parlay-accum-mlb-*` schedules
+  (created by `deploy/setup_parlay_schedules.sh`) were SUPPOSED to be
+  retired once this landed, but that claim was never actually verified: they
+  were found still `ENABLED` and silently burning the shared ParlayAPI
+  credit pool outside this ledger on 2026-08-27 (see
+  docs/solutions/integration-issues/parlayapi-credit-exhaustion-zombie-jobs-mislabeled-sgo.md).
+  Paused that day -- confirm `gcloud scheduler jobs list` shows them `PAUSED`
+  (not just this doc) before assuming they're actually inert. Forward `odds_history` feed comes
   from these via `mlb/analysis/parlayapi_to_history.py` (`source="parlayapi"`);
   historical comes from BettingPros. Cutover: shadow-run via `/snapshot-odds`
   with `{"provider":"parlay","out_prefix":"Odds/sgo/_shadow"}`, diff, then flip
