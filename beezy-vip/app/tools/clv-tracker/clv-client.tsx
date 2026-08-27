@@ -10,7 +10,7 @@ import { B, SYSTEM_COLOR } from '@/lib/tokens'
 
 // ---- constants ---------------------------------------------------------------
 
-const ALL_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'BATTER_TB', 'BATTER_HITS', 'SB', 'GAME', 'EV']
+const ALL_SYSTEMS = ['NRFI', 'HR', 'F5', 'K', 'OUTS', 'PITCHER_ER', 'BATTER_TB', 'BATTER_HITS', 'BATTER_K', 'SB', 'GAME', 'EV']
 const DATE_TABS   = [
   { label: '30D',    days: 30   },
   { label: '60D',    days: 60   },
