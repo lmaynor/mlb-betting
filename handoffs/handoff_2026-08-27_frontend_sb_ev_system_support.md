@@ -161,6 +161,20 @@ exclusion-from-browsable-route decision so a future session doesn't
   the SB pipeline-model card render as expected against real production
   data.
 
+## Addendum -- same day: PITCHER_ER/BATTER_K follow-up resolved
+
+The `task_df3e04aa` follow-up flagged above was started by the user in
+this same session shortly after the initial merge. Added `'PITCHER_ER'`
+and `'BATTER_K'` to both `slate-client.tsx`'s `ALL_FILTER_SYSTEMS` and
+`clv-client.tsx`'s `ALL_SYSTEMS` (the latter is the more consequential
+one -- it's the default allowlist for the CLV scatter's per-system
+series with no chip toggled, so those two systems' real CLV data was
+invisible by default, not just unreachable via a chip). Verified
+(`tsc --noEmit` clean, `jest` 40 passed/7 skipped unchanged, `eslint`
+clean on both files), merged to `main` locally (commit `e481c7b`, merge
+`555831d`), pushed. Same standing caveat applies: not live-verified
+(no local Clerk keys, browsing policy blocked the live site).
+
 ## Where things stand
 
 `main` has the merge commit (`a5c7961`, merging `a3f3f1a`), pushed
