@@ -14,6 +14,9 @@ Run with: pytest tests/test_tweet_drafter.py -v
 """
 import os
 from datetime import date, timedelta
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 os.environ.setdefault("SITE_API_KEY", "test-site-key")
 os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
@@ -106,3 +109,55 @@ def test_build_picks_prompt_includes_edge_and_link():
     prompt = td.build_picks_prompt(picks)
     assert prompt is not None
     assert td.BEEZY_SITE_URL + "/cheat-sheet" in prompt
+
+
+def _gemini_response(text, finish_reason="STOP", usage=None):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {
+        "candidates": [{
+            "content": {"parts": [{"text": text}]} if text is not None else {},
+            "finishReason": finish_reason,
+        }],
+        "usageMetadata": usage or {"totalTokenCount": 512},
+    }
+    return resp
+
+
+def test_generate_tweets_happy_path():
+    with patch("tweet_drafter.requests.post", return_value=_gemini_response(
+        '["Tweet one", "Tweet two", "Tweet three"]'
+    )):
+        tweets = td.generate_tweets("some prompt")
+    assert tweets == ["Tweet one", "Tweet two", "Tweet three"]
+
+
+def test_generate_tweets_strips_markdown_fences():
+    fenced = '```json\n["a", "b"]\n```'
+    with patch("tweet_drafter.requests.post", return_value=_gemini_response(fenced)):
+        tweets = td.generate_tweets("some prompt")
+    assert tweets == ["a", "b"]
+
+
+def test_generate_tweets_empty_text_raises_clear_error_not_json_decode_error():
+    """Regression for the 2026-09-02 live crash: newer Gemini generations
+    can spend the entire maxOutputTokens budget on internal "thinking"
+    tokens, returning empty visible text. This used to surface as a bare,
+    confusing json.decoder.JSONDecodeError three frames removed from the
+    real cause -- it must now raise a clear, diagnosable RuntimeError
+    instead, with finishReason/usageMetadata included."""
+    with patch("tweet_drafter.requests.post", return_value=_gemini_response(
+        "", finish_reason="MAX_TOKENS", usage={"totalTokenCount": 1536}
+    )):
+        with pytest.raises(RuntimeError, match="MAX_TOKENS"):
+            td.generate_tweets("some prompt")
+
+
+def test_generate_tweets_missing_parts_raises_clear_error():
+    """Defends the same failure mode when Gemini omits `parts` entirely
+    (not just an empty string within it)."""
+    with patch("tweet_drafter.requests.post", return_value=_gemini_response(
+        None, finish_reason="MAX_TOKENS"
+    )):
+        with pytest.raises(RuntimeError, match="no visible text"):
+            td.generate_tweets("some prompt")
