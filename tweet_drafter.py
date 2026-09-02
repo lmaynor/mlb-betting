@@ -212,7 +212,14 @@ def generate_tweets(user_prompt):
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"parts": [{"text": user_prompt}]}],
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 512},
+        # 512 was too tight: newer Gemini generations spend a variable chunk
+        # of the budget on internal "thinking" tokens before any visible
+        # text. Confirmed live 2026-09-02: the (longer) recap prompt burned
+        # the ENTIRE 512-token budget on thinking, leaving zero visible
+        # text and crashing json.loads("") with a confusing "Expecting
+        # value" error. Bumped for real headroom -- cost is negligible on
+        # the free tier either way.
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 1536},
     }
 
     resp = requests.post(
@@ -225,11 +232,25 @@ def generate_tweets(user_prompt):
         timeout=30,
     )
     resp.raise_for_status()
+    body = resp.json()
 
-    raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    candidate = body["candidates"][0]
+    parts = candidate.get("content", {}).get("parts") or []
+    raw = (parts[0].get("text") or "").strip() if parts else ""
+
+    if not raw:
+        # Surface WHY there was no visible text (usually finishReason=
+        # MAX_TOKENS with the whole budget spent on thinking) instead of a
+        # bare, confusing JSONDecodeError three frames down.
+        raise RuntimeError(
+            f"Gemini returned no visible text (finishReason="
+            f"{candidate.get('finishReason', 'unknown')}, usageMetadata="
+            f"{body.get('usageMetadata', {})}). Prompt was "
+            f"{len(user_prompt)} chars -- consider raising maxOutputTokens "
+            "further."
+        )
 
     # Strip any markdown fences Gemini sometimes adds
-    raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1]
     if raw.endswith("```"):
