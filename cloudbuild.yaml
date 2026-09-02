@@ -1,0 +1,34 @@
+# Cloud Build config for the mlb-betting image -- replaces the old plain
+# `gcloud builds submit --tag=$IMAGE` (see deploy/deploy_service.sh).
+#
+# Why this exists: every build used to start from a clean Cloud Build worker
+# with no Docker layer cache at all, and pip installs aren't byte-
+# reproducible (timestamps/.dist-info/bytecode), so every single deploy
+# re-uploaded a full ~1.5-2GB dependency layer to Artifact Registry as a
+# brand-new blob -- even when requirements.txt hadn't changed. 281 deploys
+# over ~4 months ballooned gcr.io to ~200GB (~$20/mo and growing). See
+# docs/solutions/conventions/cloud-build-layer-caching.md.
+#
+# Fix: pull the previous :latest image first and build with --cache-from,
+# so Docker reuses the prior dependency layer's digest instead of
+# re-running/re-uploading it whenever the Dockerfile/requirements.txt/
+# source it depends on haven't changed. DOCKER_BUILDKIT=0 forces the
+# classic builder, which supports --cache-from against a locally-pulled
+# image out of the box (no inline-cache build args needed on either side).
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    env:
+      - 'DOCKER_BUILDKIT=0'
+    args:
+      - '-c'
+      - |
+        docker pull ${_IMAGE}:latest || echo "no previous image to cache from (first build)"
+        docker build --cache-from ${_IMAGE}:latest -t ${_IMAGE}:latest .
+images:
+  - '${_IMAGE}:latest'
+substitutions:
+  _IMAGE: 'gcr.io/${PROJECT_ID}/mlb-betting'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s
