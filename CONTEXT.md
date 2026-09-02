@@ -1451,8 +1451,8 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-betting-pregame` | `35 23 * * *` | `/run` | 180s | `{"systems":[...full list...],"run_type":"pregame"}` |
 | `mlb-capture-closing` | `0 0 * * *` | `/capture-closing` | 300s | `{}` |
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
-| `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | TWEET_MODE=picks |
-| `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | TWEET_MODE=recap |
+| `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=picks) |
+| `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=recap) |
 
 ### Scoring paired to snapshots (2026-06-25)
 
@@ -3133,6 +3133,23 @@ system lists and icons from the registry via dict comprehensions. `main.py`
 still has hardcoded system lists (VALID_SYSTEMS, builders dict, etc.) --
 migration is deferred. When adding a new system, update both `registry.py`
 (required) AND `main.py` (until the migration is done).
+
+**`gcloud run jobs update --set-env-vars` REPLACES the entire env var list; use `--update-env-vars` to merge.**
+Found 2026-09-02: `mlb-tweet-recap` had no `TWEET_MODE` env var despite both
+CONTEXT.md and RUNBOOKS.md documenting `TWEET_MODE=recap` for it --
+`tweet_drafter.py` defaulted to `"picks"`, so the job silently ran the wrong
+code path (and still exited 0, since `picks` mode's early-return-on-empty
+made it look like a healthy no-op) every day for at least the prior 8+ days.
+Root cause: RUNBOOKS.md's own "one-shot Cloud Shell update" snippet used
+`--set-env-vars` for what was meant to be a partial update of two unrelated
+vars (`BEEZY_API_URL`/`BEEZY_SITE_URL`), silently dropping `TWEET_MODE`
+every time it ran. Same "full replace vs. merge" flag trap as
+`--set-cloudsql-instances`/`--add-cloudsql-instances` and
+`--set-secrets`/`--update-secrets` elsewhere in this doc. See
+`docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipes-existing.md`.
+Also note: the Cloud Scheduler HTTP target for a Job trigger carries no body
+at all in this repo's setup -- `TWEET_MODE` (like any Job env var) can ONLY
+come from the Job resource itself, never from the scheduler.
 
 **`gcloud scheduler jobs update http` uses `--attempt-deadline`, NOT `--deadline`.**
 `--deadline` is not a valid flag and gcloud will reject it:
