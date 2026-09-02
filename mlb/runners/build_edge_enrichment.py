@@ -331,6 +331,14 @@ def build(date: str) -> dict:
         logger.warning("statcast master unreadable: %s -- weather-only", exc)
         sc = None
     if sc is not None:
+        # Cosmetic enrichment only needs recent form (_recent()/_batter_block()/
+        # _pitcher_block() below are all short rolling windows) -- season/career
+        # numbers come from _season_realized()/_season_expected() via the MLB
+        # Stats API + a separate Savant master, not from sc at all. Without this,
+        # every player in today's picks gets a full multi-year linear scan
+        # (docs/audits/2026-08-16_cloud_efficiency_and_profitability_review.md B1.8).
+        cutoff = pd.Timestamp(date) - pd.Timedelta(days=120)
+        sc = sc[pd.to_datetime(sc["game_date"], errors="coerce") >= cutoff]
         sc["_pname"] = sc["player_name"].map(_norm)
 
     # --- status precompute (bounded network) --------------------------------
