@@ -1,5 +1,5 @@
 ---
-title: Typefully disabled v1 API-key access -- both tweet jobs' draft push always 403'd
+title: Typefully disabled v1 API-key access -- migrated to v2 (existing key works, payload needs platforms.x.enabled)
 module: tweet_drafter.py
 tags: [typefully, api-migration, tweet-drafter]
 problem_type: integration_error
@@ -11,35 +11,25 @@ date: 2026-09-02
 
 `push_to_typefully()` in `tweet_drafter.py` used the v1 endpoint
 (`POST /v1/drafts/` with `X-API-KEY` header). Typefully has disabled v1
-API-key access entirely -- every push now returns 403. Confirmed live via a
+API-key access entirely -- every push returned 403. Confirmed live via a
 real manual trigger of `mlb-tweet-recap` on 2026-09-02, after the
 `TWEET_MODE`/date-filter/token-budget bugs were already fixed and the job
 had real tweet drafts ready to push:
 
 ```
 Draft 1 FAILED (403): {"detail":"API v1 access via API keys is disabled. Please update your integration to API v2: https:/...
-Draft 2 FAILED (403): ...
-Draft 3 FAILED (403): ...
-Done.
-Container called exit(0).
 ```
 
 Each push failure is caught per-item and only logged, never raised -- so
 the job still exits 0. This affects `mlb-tweet-picks` identically (same
-shared function, same account-level Typefully restriction) even though it
-was not independently observed failing live this session -- the one real
-manual trigger of `mlb-tweet-picks` on 2026-09-02 hit the (legitimate)
-"No picks today" early return before ever reaching `push_to_typefully()`,
-so this specific 403 has only been directly observed on the recap job. Both
-jobs share one `typefully-api-key` secret and one code path, so there is no
-reason to expect picks to behave differently the next time it actually has
-picks to push (its next real scheduled run, 17:00 UTC).
-
-Per Typefully's own migration guide, v1 API-key access was scheduled to
-stop working entirely by "15th June 2026" -- meaning this has likely been
-silently broken since then, for BOTH jobs, for the better part of three
-months, independent of and in addition to the `TWEET_MODE`/date-filter/
-Gemini-token-budget bugs documented alongside this one.
+shared function, same account-level Typefully restriction), even though it
+was not independently observed failing live this session (its one real
+manual trigger hit the legitimate "No picks today" early return before
+reaching this code path). Per Typefully's own migration guide, v1
+API-key access was scheduled to stop working entirely by 15 June 2026 --
+meaning this was likely silently broken for both jobs for most of the past
+three months, independent of and in addition to the `TWEET_MODE`/date-
+filter/Gemini-token-budget bugs documented alongside this one.
 
 ## Root Cause
 
@@ -48,49 +38,52 @@ Typefully rebuilt their API from the ground up (v2): different base path
 different auth header (`Authorization: Bearer` instead of `X-API-KEY`),
 different payload shape (a `platforms.x.posts[]` structure instead of a
 flat `content` field), and a new concept -- a "social set" (the connected
-platform account a draft posts under) that must be looked up via
-`GET /v2/social-sets` and referenced by numeric id in the URL. v1 access
-via API keys was deprecated on a fixed timeline that has since passed.
+platform account a draft posts under) looked up via `GET /v2/social-sets`
+and referenced by numeric id in the URL.
 
 ## Fix
 
-Migrated `push_to_typefully()` and added `_get_social_set_id()` to call the
+Migrated `push_to_typefully()` + added `_get_social_set_id()` to call the
 v2 endpoints per Typefully's official docs
 (https://typefully.com/docs/api,
 https://support.typefully.com/en/articles/13133296-typefully-api-v1-v2-migration-guide).
 
-**This migration is UNVERIFIED against the real API.** Typefully's own
-docs state "API v1 keys cannot be used with API v2" -- the only
-`typefully-api-key` secret value available at the time of this fix is a v1
-key, so no live call against the v2 endpoints could be made or confirmed.
-The code is a faithful implementation of the documented v2 contract
-(request/response shapes quoted directly from Typefully's docs) with
-defensive, per-item error handling identical in spirit to the v1 version
-(one item's failure doesn't block the others, and never crashes the job),
-but it has not been exercised against a real, live v2-capable key.
+Two real, live surprises the docs didn't fully cover, found only by
+actually running it against the production account:
 
-**Action needed (cannot be completed by an agent):** log into the
-Typefully dashboard, generate a new v2 API key (Settings -> API), and
-rotate the `typefully-api-key` secret:
-```bash
-echo -n "NEW_V2_KEY" | gcloud secrets versions add typefully-api-key --data-file=-
-```
-Then re-run either tweet job manually and confirm a `Draft N pushed
-(https://typefully.com/?d=...)` line appears in the logs instead of a
-`FAILED` line, per RUNBOOKS.md s4's verification steps.
+1. **The existing v1-era API key works fine against v2.** Typefully's own
+   migration guide states "API v1 keys cannot be used with API v2" --
+   in practice, the SAME `typefully-api-key` secret value that 403'd
+   against the v1 endpoint authenticated successfully against both
+   `GET /v2/social-sets` and `POST /v2/social-sets/{id}/drafts` (a real
+   `Authorization: Bearer` request, not a guess). No key rotation was
+   needed. (It's possible the docs mean something narrower -- e.g. keys
+   created through a since-removed UI flow -- but for this account, the
+   existing key just works.)
+2. **`platforms.x.enabled: true` is a required field the docs' own
+   "minimal request body" example omits.** The first real POST returned a
+   clear `422`:
+   ```json
+   {"error": {"code": "VALIDATION_ERROR", "message": "Some fields are invalid.",
+     "details": [{"message": "Field required", "field": "platforms.x.enabled", "type": "missing"}]}}
+   ```
+   Added `"enabled": True` alongside `"posts"` in the `platforms.x` object.
+
+Both surprises were only findable by making real calls against the real
+account and reading the real error bodies -- this is why
+`generate_tweets()`/`push_to_typefully()` were hardened (in the companion
+commit) to surface `resp.text`/structured error details on failure instead
+of swallowing them into a generic exception. Confirmed end to end after
+the `enabled` fix: real drafts land in Typefully (`Draft N pushed
+(https://typefully.com/?d=...)`).
 
 ## Prevention
 
-Third-party API vendors sometimes hard-cut older auth/API versions on a
-fixed calendar date with no code-level warning beforehand -- there's no
-generic prevention for the sunset itself, but the failure being *silent*
-(caught, logged, job still exits 0) is avoidable. Consider: if
-`push_to_typefully()`'s per-item failure rate is 100% for a run, that's
-meaningfully different from "some transient failures" and arguably should
-make the job exit non-zero (or post a one-time Discord ops alert) rather
-than a routine exit 0 -- not changed in this pass, since the whole point of
-per-item soft-fail was "one bad draft shouldn't sink the other two," which
-is still the right call for a partial failure. A "100% of N failed" special
-case could thread that needle without reintroducing the "success on
-partial content" problem. Not implemented here -- flagging for a future
-pass if this class of external-API sunset recurs.
+Don't trust a vendor's own migration-guide example payload as complete --
+verify against a real account with a real call and read the actual error
+body before assuming a documented "minimal" request is truly minimal.
+Third-party vendors also sometimes state auth constraints ("v1 keys can't
+be used with v2") that don't hold for every account/key -- when a
+migration is required, try the existing credential against the new API
+first before assuming a rotation is necessary; it's a strictly cheaper
+first step and was correct here.

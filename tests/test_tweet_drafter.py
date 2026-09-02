@@ -214,7 +214,9 @@ def test_push_to_typefully_happy_path_v2():
     assert mock_post.call_count == 2
     first_call = mock_post.call_args_list[0]
     assert first_call.args[0] == "https://api.typefully.com/v2/social-sets/42/drafts"
-    assert first_call.kwargs["json"] == {"platforms": {"x": {"posts": [{"text": "tweet a"}]}}}
+    assert first_call.kwargs["json"] == {
+        "platforms": {"x": {"enabled": True, "posts": [{"text": "tweet a"}]}}
+    }
 
 
 def test_push_to_typefully_reports_failure_without_crashing():

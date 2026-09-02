@@ -6,10 +6,9 @@ generates tweet drafts via Gemini, pushes to Typefully as drafts.
 Secrets (Secret Manager):
   site-api-key         -- beezy Cloud Run API key (already exists)
   gemini-api-key       -- Gemini free tier key
-  typefully-api-key    -- Typefully API key. MUST be a v2 key (Settings ->
-                           API in the Typefully dashboard) -- v1 keys are
-                           rejected outright by the v2 endpoints this file
-                           now calls. See TYPEFULLY_URL comment below.
+  typefully-api-key    -- Typefully API key (the existing key works fine
+                           against the v2 API this file now calls -- see
+                           TYPEFULLY_URL comment below, no rotation needed)
 
 Schedule (recommended):
   Morning job (10:00 ET): picks tweet for today's slate
@@ -42,12 +41,12 @@ GEMINI_URL = (
 # Typefully disabled v1 API-key access entirely (confirmed live 2026-09-02:
 # every push returned 403 "API v1 access via API keys is disabled. Please
 # update your integration to API v2"). Migrated to v2 per Typefully's own
-# migration guide (https://support.typefully.com/en/articles/13133296) --
-# but this is UNVERIFIED against the real API: v1 keys cannot be used with
-# v2 at all, and the only key available at migration time (`typefully-api-
-# key` in Secret Manager) is a v1 key. Needs a real v2 key generated from
-# the Typefully dashboard before this can be confirmed working end to end.
-# See docs/solutions/integration-issues/typefully-api-v1-sunset.md.
+# migration guide (https://support.typefully.com/en/articles/13133296).
+# The EXISTING `typefully-api-key` secret authenticates fine against v2
+# despite Typefully's docs saying "v1 keys cannot be used with v2" (no new
+# key needed in practice) -- confirmed live via a real GET /social-sets +
+# POST /drafts round-trip. See
+# docs/solutions/integration-issues/typefully-api-v1-sunset.md.
 TYPEFULLY_URL = "https://api.typefully.com/v2/social-sets"
 
 MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
@@ -308,7 +307,10 @@ def push_to_typefully(tweets, label):
     url = f"{TYPEFULLY_URL}/{social_set_id}/drafts"
     pushed = []
     for i, tweet in enumerate(tweets, 1):
-        payload = {"platforms": {"x": {"posts": [{"text": tweet}]}}}
+        # "enabled" is required -- confirmed live 2026-09-02: Typefully's
+        # own docs example omits it, but the real API 422s without it
+        # ("Field required", field "platforms.x.enabled").
+        payload = {"platforms": {"x": {"enabled": True, "posts": [{"text": tweet}]}}}
         resp = requests.post(url, headers=_typefully_headers(), json=payload, timeout=10)
 
         if resp.status_code == 201:
