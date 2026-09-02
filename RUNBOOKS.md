@@ -572,14 +572,16 @@ Free tier requires key from a project with NO billing account linked.
 Get from aistudio.google.com -- create fresh project, no billing.
 
 Typefully: Free tier = 15 scheduled tweets/month (~3-4/week).
-Key in Secret Manager as `typefully-api-key` -- **must be a v2 key** (Settings
--> API in the Typefully dashboard). Typefully disabled v1 API-key access
-entirely (confirmed live 2026-09-02, every push 403'd with "API v1 access
-via API keys is disabled"); the code was migrated to v2 the same day but
-is unverified pending a real v2 key -- see
+Key in Secret Manager as `typefully-api-key`. Typefully disabled v1
+API-key access entirely (confirmed live 2026-09-02, every push 403'd with
+"API v1 access via API keys is disabled"); migrated to v2 the same day and
+confirmed working end to end with the SAME key (no rotation needed,
+despite Typefully's own docs saying v1 keys can't be used with v2) -- see
 docs/solutions/integration-issues/typefully-api-v1-sunset.md.
 Drafts endpoint: POST `https://api.typefully.com/v2/social-sets/{social_set_id}/drafts`
-(`social_set_id` resolved at runtime via `GET /v2/social-sets`).
+(`social_set_id` resolved at runtime via `GET /v2/social-sets`). Payload
+needs `platforms.x.enabled: true` -- Typefully's own migration-guide
+example omits it, but the real API 422s without it.
 Delete unused variants after choosing -- all 3 count against the 15/month limit.
 
 Secrets on both jobs:
