@@ -26,9 +26,14 @@ BEEZY_API_KEY = os.environ["SITE_API_KEY"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 TYPEFULLY_API_KEY = os.environ["TYPEFULLY_API_KEY"]
 
+# gemini-2.0-flash was retired by Google (confirmed live 2026-09-01: 404 on
+# generateContent, had been silently failing mlb-tweet-picks/mlb-tweet-recap
+# for days). Using the generic "-latest" alias instead of a dated model id
+# so this doesn't recur -- verified against the live /v1beta/models listing
+# that this alias currently exists and supports generateContent.
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/"
-    "models/gemini-2.0-flash:generateContent"
+    "models/gemini-flash-latest:generateContent"
 )
 
 TYPEFULLY_URL = "https://api.typefully.com/v1/drafts/"
