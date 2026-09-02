@@ -123,14 +123,21 @@ def _check_schedulers() -> list[str]:
 def _check_odds_history_freshness() -> list[str]:
     """The intraday odds tracker must have banked YESTERDAY's k_ou partition.
     (Its failure mode is silent: schedulers denied or job broken -> the
-    survival/alert/alt-line chain quietly starves.)"""
+    survival/alert/alt-line chain quietly starves.)
+
+    Checks for ANY file under the partition directory, not a hardcoded
+    part-0.parquet -- write_partition's append=True path now writes each
+    intraday snapshot as its own part-{uuid}.parquet (see
+    docs/solutions/logic-errors/odds-history-append-write-amplification.md),
+    so a healthy, actively-banking partition may never contain a literal
+    part-0.parquet at all."""
     from datetime import date, timedelta
+    from mlb.analysis.odds_history import partition_dir
+    from mlb_core.storage import list_keys
     yday = (date.today() - timedelta(days=1)).isoformat()
     if date.today().month in (12, 1, 2):  # off-season
         return []
-    key = f"Odds/history/market=k_ou/date={yday}/part-0.parquet"
-    age = _gcs_age_hours(key)
-    if age is None:
+    if not list_keys(partition_dir("k_ou", yday)):
         return [f"odds_history: no k_ou partition for {yday} -- BettingPros tracker not banking"]
     return []
 

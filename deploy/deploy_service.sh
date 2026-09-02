@@ -41,8 +41,15 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "==> 1. Build"
-gcloud builds submit --tag="$IMAGE" --project="$PROJECT_ID"
+echo "==> 1. Build (Docker layer cache via cloudbuild.yaml -- see"
+echo "    docs/solutions/conventions/cloud-build-layer-caching.md. Plain"
+echo "    'gcloud builds submit --tag' had no cache at all: every deploy"
+echo "    re-uploaded a full ~1.5-2GB dependency layer from scratch even"
+echo "    when requirements.txt hadn't changed, which is how gcr.io ended"
+echo "    up at ~200GB/281 images by 2026-09-01.)"
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions="_IMAGE=gcr.io/${PROJECT_ID}/${SERVICE}" \
+  --project="$PROJECT_ID" .
 
 echo "==> 2. Deploy (preserves --add-cloudsql-instances)"
 gcloud run services update "$SERVICE" \

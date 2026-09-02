@@ -177,3 +177,69 @@ def test_write_partition_dedups(tmp_path, monkeypatch):
     n = oh.write_partition(df, "k_ou", "2024-06-01")
     assert n == 1
     assert oh.read_history("k_ou").iloc[0]["american"] == -115   # last wins
+
+
+def _bhits_row(snapshot_ts, ingested_at, american):
+    return {"market": "bhits_ou", "game_pk": 9, "selection": "OVER", "line": 1.5,
+            "book": "fanduel", "snapshot_ts": snapshot_ts, "source": "bettingpros",
+            "american": american, "game_date": "2024-07-01", "ingested_at": ingested_at}
+
+
+def test_write_partition_append_does_not_read_existing_data(tmp_path, monkeypatch):
+    """The perf fix (docs/solutions/logic-errors/
+    odds-history-append-write-amplification.md): append=True used to read +
+    concat + rewrite the WHOLE existing partition on every call -- fine for
+    a few writes/day, but ruinous at fast_alert_loop's */15 cadence (4-8 min/
+    run, almost entirely this one step). It must now write only the
+    incoming batch as its own new file, with zero reads of prior data."""
+    pytest.importorskip("pyarrow")
+    monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    monkeypatch.setenv("MLB_BASE_DATA", str(tmp_path))
+    from mlb_core import storage
+
+    oh.write_partition(pd.DataFrame([_bhits_row("2024-07-01 15:00:00", "t1", -110)]),
+                       "bhits_ou", "2024-07-01", append=True)
+
+    read_calls = []
+    real_read = storage.read_bytes
+    monkeypatch.setattr(storage, "read_bytes",
+                        lambda key: (read_calls.append(key), real_read(key))[1])
+
+    n = oh.write_partition(pd.DataFrame([_bhits_row("2024-07-01 15:15:00", "t2", -105)]),
+                           "bhits_ou", "2024-07-01", append=True)
+
+    assert n == 1, "should report rows written THIS call, not the partition total"
+    assert read_calls == [], (
+        "append=True read existing data -- the write-amplification regression is back"
+    )
+
+    # Both snapshots must still be visible via read_history (accumulated as
+    # separate files, merged at read time -- nothing lost).
+    back = oh.read_history("bhits_ou")
+    assert len(back) == 2
+    assert set(back["snapshot_ts"]) == {"2024-07-01 15:00:00", "2024-07-01 15:15:00"}
+
+
+def test_write_partition_overwrite_clears_stale_append_files(tmp_path, monkeypatch):
+    """append=False is the deliberate 'replace corrupt rows' maintenance
+    path -- it must actually remove prior append=True files too, or a
+    'clean rewrite' would silently leave stale data for read_history() to
+    merge back in."""
+    pytest.importorskip("pyarrow")
+    monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    monkeypatch.setenv("MLB_BASE_DATA", str(tmp_path))
+
+    oh.write_partition(pd.DataFrame([_bhits_row("2024-07-01 15:00:00", "t1", -110)]),
+                       "bhits_ou", "2024-07-01", append=True)
+    oh.write_partition(pd.DataFrame([_bhits_row("2024-07-01 15:15:00", "t2", -105)]),
+                       "bhits_ou", "2024-07-01", append=True)
+    assert len(oh.read_history("bhits_ou")) == 2
+
+    fixed = pd.DataFrame([_bhits_row("2024-07-01 16:00:00", "t3", -120)])
+    oh.write_partition(fixed, "bhits_ou", "2024-07-01", append=False)
+
+    back = oh.read_history("bhits_ou")
+    assert len(back) == 1, "append=False must clear prior append files, not just add its own"
+    assert back.iloc[0]["snapshot_ts"] == "2024-07-01 16:00:00"

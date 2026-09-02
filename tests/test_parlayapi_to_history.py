@@ -103,16 +103,26 @@ def test_convert_does_not_clobber_a_concurrent_writers_rows(monkeypatch, tmp_pat
     oh.write_partition(other_writer_row, "hr_yn", DATE, append=True)
 
     res = P.convert(since=DATE, until=DATE, ingested_at="2026-06-29T00:00:00Z")
-    # write_partition returns the partition's post-merge row COUNT, not a
-    # delta -- 5 = hr_yn's 2 parlayapi rows merged with the 1 pre-seeded
-    # bettingpros row (3), plus bhits_ou's untouched 2 parlayapi rows.
-    assert res["rows"] == 5
+    # write_partition's append=True path no longer reads/merges the existing
+    # partition at write time (perf fix -- see
+    # docs/solutions/logic-errors/odds-history-append-write-amplification.md):
+    # it returns rows WRITTEN by this call only, same as test_convert_writes_
+    # partitions' un-seeded 4 (2 hr_yn + 2 bhits_ou parlayapi rows) -- the
+    # pre-seeded bettingpros row above was a SEPARATE write_partition call
+    # and correctly doesn't count here.
+    assert res["rows"] == 4
 
     back = oh.read_history("hr_yn")
-    assert (back["source"] == "bettingpros").sum() == 1, (
-        "the other writer's row was clobbered -- convert() is not merging "
-        "into the shared partition (finding C4.4 regression)"
+    # The no-clobber guarantee (finding C4.4) now lives entirely in
+    # read_history() merging all of a partition's files -- assert it there
+    # directly: all 3 distinct rows (2 parlayapi + the pre-seeded
+    # bettingpros one) must survive, none lost, none duplicated.
+    assert len(back) == 3, (
+        "the other writer's row was clobbered (or duplicated) -- "
+        "read_history() is not merging every file in the shared partition "
+        "directory (finding C4.4 regression)"
     )
+    assert (back["source"] == "bettingpros").sum() == 1
     # hr_yn's own 2 parlayapi rows (OVER+UNDER); bhits_ou's other 2 parlayapi
     # rows live in a separate partition, not read by read_history("hr_yn").
     assert (back["source"] == "parlayapi").sum() == 2
