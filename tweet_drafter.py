@@ -145,32 +145,49 @@ def build_recap_prompt(settled, stats):
     if not settled:
         return None
 
-    today_settled = [
+    # NOTE: this used to filter on `game_date == str(date.today())`, which
+    # can never match -- /settle always settles YESTERDAY's slate (runs
+    # 09:00 UTC, this job runs 10:00 UTC, so date.today() has already rolled
+    # past every bet's game_date by the time this runs). Produced zero rows
+    # every single day. See
+    # docs/solutions/logic-errors/tweet-recap-date-filter-never-matches.md.
+    # get_recent_settled() orders `ORDER BY game_date DESC, ...` (see
+    # mlb/runners/public_api.py get_recent_settled), so the max game_date
+    # present IS the most recently completed, fully-settled slate -- that's
+    # what "today's results" actually means for a 5am-ET recap job.
+    recap_date = max(p.get("game_date") for p in settled if p.get("game_date"))
+
+    recap_settled = [
         p for p in settled
-        if p.get("game_date") == str(date.today())
+        if p.get("game_date") == recap_date
         and p.get("result") in ("win", "loss", "push")
     ]
 
-    if not today_settled:
+    if not recap_settled:
         return None
 
-    wins = [p for p in today_settled if p["result"] == "win"]
-    losses = [p for p in today_settled if p["result"] == "loss"]
-    total_profit = sum(float(p.get("profit", 0)) for p in today_settled)
+    wins = [p for p in recap_settled if p["result"] == "win"]
+    losses = [p for p in recap_settled if p["result"] == "loss"]
+    total_profit = sum(float(p.get("profit", 0)) for p in recap_settled)
     record = f"{len(wins)}-{len(losses)}"
 
     overall = stats.get("overall", {})
     season_roi = overall.get("roi", "N/A")
     total_bets = overall.get("total_bets", "N/A")
 
+    try:
+        recap_date_label = datetime.strptime(recap_date, "%Y-%m-%d").strftime("%b %d")
+    except (ValueError, TypeError):
+        recap_date_label = recap_date  # fall back to the raw string rather than crash
+
     prompt = (
-        f"Today's beezy results ({date.today().strftime('%b %d')}):\n"
+        f"beezy results for {recap_date_label}:\n"
         f"  Record: {record}\n"
         f"  P&L: {total_profit:+.2f}u\n"
         f"  Season: {total_bets} bets, {season_roi}% ROI\n\n"
     )
 
-    for p in today_settled[:3]:
+    for p in recap_settled[:3]:
         icon = "✓" if p["result"] == "win" else "✗"
         prompt += (
             f"  {icon} {p.get('system')} | {p.get('game')} | "

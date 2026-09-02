@@ -553,6 +553,11 @@ To refresh: see "Refresh player headshots" in §3 above.
 
 ### Cloud Run jobs
 
+Provisioning (both jobs + both schedules, idempotent):
+`PROJECT_ID=concrete-crow-445205-m4 bash ./deploy/setup_tweet_jobs.sh`
+(added 2026-09-02 -- previously these were hand-created with no checked-in
+script at all, see docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipes-existing.md).
+
 | Job | Schedule | TWEET_MODE | What it does |
 |---|---|---|---|
 | `mlb-tweet-picks` | 17:00 UTC (noon ET) | picks | Games card to Discord + tweet draft to Typefully |
@@ -580,6 +585,17 @@ Secrets on both jobs:
 Env vars on both jobs:
 - `BEEZY_API_URL=https://api.beezy.fyi`
 - `BEEZY_SITE_URL=https://beezy.fyi`
+
+**`TWEET_MODE` is a real per-job env var baked into each Job resource --
+it is NOT passed by the scheduler.** Both `mlb-tweet-picks-schedule` and
+`mlb-tweet-recap-schedule` call `.../jobs/{name}:run` with no HTTP body at
+all (verified via `gcloud scheduler jobs describe ... --format="yaml(httpTarget)"`,
+2026-09-02) -- the "TWEET_MODE" column in the table above documents INTENT,
+not a mechanism. Set it explicitly on each job:
+`gcloud run jobs update mlb-tweet-recap --region=us-central1 --update-env-vars=TWEET_MODE=recap`
+(picks doesn't strictly need it set since `tweet_drafter.py` defaults to
+`"picks"`, but relying on the default silently is exactly how this job broke
+-- see docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipes-existing.md).
 
 Scheduler jobs (already created):
 - `mlb-tweet-picks-schedule` -- `0 17 * * *`
@@ -646,11 +662,16 @@ gcloud run services update mlb-betting \
 
 gcloud builds submit --tag "$IMAGE" --project "$PROJECT_ID"
 
+# NOTE: --update-env-vars merges; --set-env-vars REPLACES the entire env
+# list and will silently wipe TWEET_MODE (see
+# docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipes-existing.md).
+# Prefer deploy/setup_tweet_jobs.sh over this snippet where possible -- it's
+# the source-controlled, idempotent version of the same provisioning.
 for JOB in mlb-tweet-picks mlb-tweet-recap; do
   gcloud run jobs update "$JOB" \
     --region "$REGION" \
     --image "$IMAGE" \
-    --set-env-vars BEEZY_API_URL=https://api.beezy.fyi,BEEZY_SITE_URL=https://beezy.fyi
+    --update-env-vars BEEZY_API_URL=https://api.beezy.fyi,BEEZY_SITE_URL=https://beezy.fyi
 done
 
 curl -i https://api.beezy.fyi/healthz
