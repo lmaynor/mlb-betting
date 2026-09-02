@@ -1276,21 +1276,14 @@ secretmanager.secretAccessor.
   Scheduler attempt-deadline=1800s (max allowed); job execution timeout=3600s set on the job.
   This is the only build job actually in the daily loop -- see E9/B2.4 note below.)
 
-**Orphaned Cloud Run Jobs (confirmed to exist in GCP, hand-created, no setup script,
-not part of any daily loop -- do not treat these as live):**
-- `mlb-build-batter-hits-features` -- last executed 2026-06-24, never provisioned by a
-  script. BATTER_HITS feature builds happen via `mlb-build-all-features` (above) or the
-  in-process `/build-features` Flask route, not this job. Confirmed 2026-08-17 (E9/B2.4).
-- `mlb-build-game-features` -- last executed 2026-05-25, same story: orphaned, no
-  provisioning script, superseded by `mlb-build-all-features`. Confirmed 2026-08-17.
-  Both predate the 2026-06-24 pillarize restructure's module-path rename and, since
-  nothing has updated their container command since, would very likely fail with
-  `ModuleNotFoundError` if ever hand-triggered today (the same failure mode
-  `mlb-build-all-features` itself hit before `setup_build_all_features.sh` was written --
-  see that script's header comment). Safe to delete
-  (`gcloud run jobs delete mlb-build-batter-hits-features` /
-  `mlb-build-game-features`) whenever convenient; not required for correctness, they're
-  just unused and a source of confusion if anyone assumes they're the nightly path.
+**Orphaned Cloud Run Jobs:** `mlb-build-batter-hits-features` and `mlb-build-game-features`
+(both predated the 2026-06-24 pillarize restructure, superseded by `mlb-build-all-features`,
+confirmed 2026-08-17 via E9/B2.4) were deleted 2026-09-01 during a GCP cost/efficiency
+review, along with two never-scheduled NBA jobs (`parlay-accum-nba-game-lines`,
+`parlay-accum-nba-props` -- zero executions ever, no scheduler pointed at either). If
+either MLB job's functionality is ever needed standalone again, re-provision via a real
+script rather than hand-creating -- see `deploy/setup_build_all_features.sh` for the
+pattern.
 
 **Cloud Run Jobs (one-off, not scheduled -- not part of the count below):**
 - `mlb-bakeoff` (the model bake-off tuning exercise: `mlb.analysis.model_bakeoff` +
