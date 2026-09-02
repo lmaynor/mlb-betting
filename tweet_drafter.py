@@ -6,7 +6,10 @@ generates tweet drafts via Gemini, pushes to Typefully as drafts.
 Secrets (Secret Manager):
   site-api-key         -- beezy Cloud Run API key (already exists)
   gemini-api-key       -- Gemini free tier key
-  typefully-api-key    -- Typefully API key
+  typefully-api-key    -- Typefully API key. MUST be a v2 key (Settings ->
+                           API in the Typefully dashboard) -- v1 keys are
+                           rejected outright by the v2 endpoints this file
+                           now calls. See TYPEFULLY_URL comment below.
 
 Schedule (recommended):
   Morning job (10:00 ET): picks tweet for today's slate
@@ -36,7 +39,16 @@ GEMINI_URL = (
     "models/gemini-flash-latest:generateContent"
 )
 
-TYPEFULLY_URL = "https://api.typefully.com/v1/drafts/"
+# Typefully disabled v1 API-key access entirely (confirmed live 2026-09-02:
+# every push returned 403 "API v1 access via API keys is disabled. Please
+# update your integration to API v2"). Migrated to v2 per Typefully's own
+# migration guide (https://support.typefully.com/en/articles/13133296) --
+# but this is UNVERIFIED against the real API: v1 keys cannot be used with
+# v2 at all, and the only key available at migration time (`typefully-api-
+# key` in Secret Manager) is a v1 key. Needs a real v2 key generated from
+# the Typefully dashboard before this can be confirmed working end to end.
+# See docs/solutions/integration-issues/typefully-api-v1-sunset.md.
+TYPEFULLY_URL = "https://api.typefully.com/v2/social-sets"
 
 MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
 
@@ -262,22 +274,48 @@ def generate_tweets(user_prompt):
 
 # ── Push to Typefully ─────────────────────────────────────────────────────────
 
-def push_to_typefully(tweets, label):
-    """Push each tweet as a separate draft in Typefully."""
-    headers = {
-        "X-API-KEY": TYPEFULLY_API_KEY,
+def _typefully_headers():
+    return {
+        "Authorization": f"Bearer {TYPEFULLY_API_KEY}",
         "Content-Type": "application/json",
     }
 
+
+def _get_social_set_id():
+    """v2 groups connected platform accounts into "social sets"; drafts
+    post under one. This account has a single connected X handle
+    (@beezy_fyi) -- match on username, falling back to the first result if
+    that ever misses (e.g. a rename)."""
+    resp = requests.get(TYPEFULLY_URL, headers=_typefully_headers(), timeout=10)
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    if not results:
+        raise RuntimeError("Typefully v2: GET /social-sets returned no results")
+    for r in results:
+        if r.get("username") == "beezy_fyi":
+            return r["id"]
+    return results[0]["id"]
+
+
+def push_to_typefully(tweets, label):
+    """Push each tweet as a separate draft in Typefully (API v2 -- see the
+    TYPEFULLY_URL comment above for why)."""
+    try:
+        social_set_id = _get_social_set_id()
+    except Exception as e:
+        return [f"  Typefully social-set lookup FAILED: {e}"]
+
+    url = f"{TYPEFULLY_URL}/{social_set_id}/drafts"
     pushed = []
     for i, tweet in enumerate(tweets, 1):
-        payload = {"content": tweet, "threadify": False}
-        resp = requests.post(TYPEFULLY_URL, headers=headers, json=payload, timeout=10)
+        payload = {"platforms": {"x": {"posts": [{"text": tweet}]}}}
+        resp = requests.post(url, headers=_typefully_headers(), json=payload, timeout=10)
 
-        if resp.status_code in (200, 201):
-            pushed.append(f"  Draft {i} pushed: {tweet[:60]}...")
+        if resp.status_code == 201:
+            draft = resp.json()
+            pushed.append(f"  Draft {i} pushed ({draft.get('private_url', 'no url')}): {tweet[:60]}...")
         else:
-            pushed.append(f"  Draft {i} FAILED ({resp.status_code}): {resp.text[:100]}")
+            pushed.append(f"  Draft {i} FAILED ({resp.status_code}): {resp.text[:200]}")
 
     return pushed
 

@@ -161,3 +161,75 @@ def test_generate_tweets_missing_parts_raises_clear_error():
     )):
         with pytest.raises(RuntimeError, match="no visible text"):
             td.generate_tweets("some prompt")
+
+
+def _social_sets_response(results):
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {"results": results}
+    return resp
+
+
+def _draft_response(status_code, body=None, text=""):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = body or {}
+    resp.text = text
+    return resp
+
+
+def test_get_social_set_id_matches_beezy_fyi_username():
+    sets = _social_sets_response([
+        {"id": 111, "username": "someone_else"},
+        {"id": 222, "username": "beezy_fyi"},
+    ])
+    with patch("tweet_drafter.requests.get", return_value=sets):
+        assert td._get_social_set_id() == 222
+
+
+def test_get_social_set_id_falls_back_to_first_result():
+    sets = _social_sets_response([{"id": 333, "username": "someone_else"}])
+    with patch("tweet_drafter.requests.get", return_value=sets):
+        assert td._get_social_set_id() == 333
+
+
+def test_get_social_set_id_no_results_raises():
+    with patch("tweet_drafter.requests.get", return_value=_social_sets_response([])):
+        with pytest.raises(RuntimeError, match="no results"):
+            td._get_social_set_id()
+
+
+def test_push_to_typefully_happy_path_v2():
+    sets = _social_sets_response([{"id": 42, "username": "beezy_fyi"}])
+    created = _draft_response(201, {"id": 1, "private_url": "https://typefully.com/?d=1"})
+    with patch("tweet_drafter.requests.get", return_value=sets), \
+         patch("tweet_drafter.requests.post", return_value=created) as mock_post:
+        result = td.push_to_typefully(["tweet a", "tweet b"], "picks")
+
+    assert len(result) == 2
+    assert all("pushed" in line for line in result)
+    assert "https://typefully.com/?d=1" in result[0]
+    # posted to the v2 social-set-scoped drafts URL, not the old v1 one,
+    # once per tweet
+    assert mock_post.call_count == 2
+    first_call = mock_post.call_args_list[0]
+    assert first_call.args[0] == "https://api.typefully.com/v2/social-sets/42/drafts"
+    assert first_call.kwargs["json"] == {"platforms": {"x": {"posts": [{"text": "tweet a"}]}}}
+
+
+def test_push_to_typefully_reports_failure_without_crashing():
+    sets = _social_sets_response([{"id": 42, "username": "beezy_fyi"}])
+    forbidden = _draft_response(403, text='{"detail":"API v1 access via API keys is disabled"}')
+    with patch("tweet_drafter.requests.get", return_value=sets), \
+         patch("tweet_drafter.requests.post", return_value=forbidden):
+        result = td.push_to_typefully(["tweet a"], "picks")
+
+    assert len(result) == 1
+    assert "FAILED (403)" in result[0]
+
+
+def test_push_to_typefully_social_set_lookup_failure_does_not_crash():
+    with patch("tweet_drafter.requests.get", side_effect=RuntimeError("boom")):
+        result = td.push_to_typefully(["tweet a"], "picks")
+    assert len(result) == 1
+    assert "social-set lookup FAILED" in result[0]
