@@ -1,15 +1,17 @@
-# Handoff -- 2026-09-02 -- mlb-tweet-recap: wrong mode, dead date filter, tight token budget
+# Handoff -- 2026-09-02 -- mlb-tweet-recap: 4 stacked bugs, all fixed and verified live
 
 Picked up from a spawned follow-up task (`task_f6f0284c`, from the 2026-09-01
 GCP cost review session) flagging that `mlb-tweet-recap` had no `TWEET_MODE`
 env var and had likely never posted a real recap tweet. The task's own
 suggested fix was "set the env var, verify with a manual trigger, check for
-another silent skip" -- that verification surfaced two more real bugs, all
-three now fixed, deployed, and confirmed live.
+another silent skip" -- that verification surfaced three MORE real, fully
+independent bugs. **All four are now fixed, deployed, and confirmed live**:
+a real manual trigger generated 3 real tweet drafts from real settled-bet
+data and all 3 landed in Typefully with real URLs.
 
 ## TL;DR
 
-Three independent, stacked bugs, each of which alone would have kept
+Four independent, stacked bugs, each of which alone would have kept
 `mlb-tweet-recap` from ever posting a real recap tweet:
 
 1. **`TWEET_MODE` env var missing on the Job** -- defaulted to `"picks"`,
@@ -28,10 +30,17 @@ Three independent, stacked bugs, each of which alone would have kept
    text. This is the exact risk yesterday's Gemini model migration
    (`0eee983`) flagged as observed-but-assumed-harmless -- it wasn't, for
    this specific (longer) prompt shape.
+4. **Typefully disabled v1 API-key access entirely** -- found immediately
+   after fixing 1-3, once the job finally had real tweets to push: every
+   Typefully draft push 403'd ("API v1 access via API keys is disabled").
+   Affects `mlb-tweet-picks` too (shared code, shared key), independent of
+   and in addition to bugs 1-3. Migrated to v2; two more real surprises
+   found only by actually calling the live API (see below).
 
-All three fixed, deployed, and the job now runs to completion and pushes
-real drafts to Typefully (verified via a clean-exit manual trigger post-fix
--- see Verification below).
+All four fixed, deployed, and confirmed via a final real manual trigger:
+3 real tweet drafts generated from real settled-bet data, all 3 pushed to
+Typefully successfully (`https://typefully.com/?d=10589568&a=308369`,
+`...d=10589569...`, `...d=10589570...`).
 
 ## Root causes, in the order they were found
 
@@ -102,49 +111,74 @@ raises a clear `RuntimeError` with the real `finishReason` +
 `usageMetadata`, instead of a bare `JSONDecodeError` three frames removed
 from the actual cause.
 
+### 4. Typefully v1 API disabled by the vendor
+
+Once bugs 1-3 were fixed, a real trigger finally generated 3 real tweet
+drafts from real data and every Typefully push 403'd: "API v1 access via
+API keys is disabled. Please update your integration to API v2." Per
+Typefully's own migration guide, v1 API-key access was scheduled to stop
+entirely by 15 June 2026 -- this had likely been silently broken for BOTH
+tweet jobs for ~3 months, independent of bugs 1-3.
+
+Migrated `push_to_typefully()` + added `_get_social_set_id()` to Typefully's
+v2 API (new base path, `Authorization: Bearer` header, `platforms.x.posts[]`
+payload). Two real surprises the vendor's own docs didn't fully cover,
+found only by actually calling the live API with the real production
+account:
+- **The existing v1-era key authenticates fine against v2** -- despite
+  Typefully's docs stating "v1 keys cannot be used with v2." No key
+  rotation was needed in practice.
+- **`platforms.x.enabled: true` is required** -- the vendor's own "minimal
+  request body" example omits it. The real API returned a clean 422
+  (`"Field required", field "platforms.x.enabled"`) that pinpointed the fix
+  immediately -- this is exactly why `push_to_typefully()`'s error handling
+  was hardened to surface the real response body instead of swallowing it.
+
+Full writeup: `docs/solutions/integration-issues/typefully-api-v1-sunset.md`.
+
 ## What was done (all live/deployed)
 
-1. Code fixes, two commits, each on its own branch merged to `main`,
-   pushed:
-   - `fix/tweet-recap-mode-and-date-filter-2026-09-02` (bugs 1+2's code/doc
-     side): `tweet_drafter.py` date-filter fix, `RUNBOOKS.md`
-     `--set-env-vars` -> `--update-env-vars` + clarified TWEET_MODE
-     ownership, `CONTEXT.md` s9 table correction + new s15.9 gotcha,
-     `deploy/setup_tweet_jobs.sh` (new, idempotent provisioning for both
-     tweet jobs -- neither had one before), two new `docs/solutions/`
-     writeups, `tests/test_tweet_drafter.py` (new, 7 tests).
-   - `fix/tweet-drafter-gemini-max-tokens-2026-09-02` (bug 3): the
-     `maxOutputTokens` bump + `generate_tweets()` hardening, 4 more tests
-     in the same test file.
-2. **Live infra**, applied via the new `deploy/setup_tweet_jobs.sh`
-   (idempotent -- safe to re-run):
-   - `mlb-tweet-recap` now has `TWEET_MODE=recap` baked into the Job.
-   - `mlb-tweet-picks` explicitly has `TWEET_MODE=picks` too (previously
-     relying on the code default -- exactly how this broke).
-   - `scheduler-invoker` re-confirmed with `run.invoker` on both jobs
-     (idempotent grant; was already correct).
-   - Both scheduler jobs (`mlb-tweet-picks-schedule`,
-     `mlb-tweet-recap-schedule`) re-upserted with the same cron/target,
-     now with an explicit `--attempt-deadline=320s`.
-3. **Two full build+deploy cycles** (image rebuild via
-   `gcloud builds submit --config=cloudbuild.yaml` -- ~1 min each thanks
-   to the 2026-09-01 layer-caching fix -- then `gcloud run services
-   update`/`update-traffic`, then re-running `setup_tweet_jobs.sh` to move
-   both jobs onto the new image): revision `mlb-betting-00296-k78` (bugs
-   1+2), then `mlb-betting-00297-z7m` (bug 3, current).
-4. **648 tests passing** (was 637 at session start; +11 new in
-   `tests/test_tweet_drafter.py`, the first coverage this file has ever
-   had). The 3 date-filter tests were verified via `git stash` to actually
-   fail against the pre-fix code (not tautological), and the 2 empty/
-   truncated-text tests reproduce the exact live failure shapes seen
-   during manual verification.
+4 commits, 4 branches, each merged to `main` and pushed:
+- `fix/tweet-recap-mode-and-date-filter-2026-09-02` (bugs 1+2): date-filter
+  fix, RUNBOOKS.md `--set-env-vars` -> `--update-env-vars` + clarified
+  TWEET_MODE ownership, CONTEXT.md s9 correction + new s15.9 gotcha,
+  `deploy/setup_tweet_jobs.sh` (new -- first-ever provisioning script for
+  these 2 jobs), 2 new `docs/solutions/` writeups, `tests/test_tweet_drafter.py`
+  (new, 7 tests).
+- `fix/tweet-drafter-gemini-max-tokens-2026-09-02` (bug 3): maxOutputTokens
+  bump + `generate_tweets()` hardening, 4 more tests.
+- `fix/typefully-api-v2-migration-2026-09-02` (bug 4, first pass): v1->v2
+  migration, 1 doc writeup, 6 more tests.
+- `fix/typefully-enabled-field-2026-09-02` (bug 4, second pass): the
+  `platforms.x.enabled` fix found via the real 422, doc corrections.
+
+**Live infra**, applied via `deploy/setup_tweet_jobs.sh` (idempotent, safe
+to re-run) after each of 4 build+deploy cycles:
+- `mlb-tweet-recap` now has `TWEET_MODE=recap` baked into the Job.
+- `mlb-tweet-picks` explicitly has `TWEET_MODE=picks` too (previously
+  relying on the code default -- exactly how this broke).
+- `scheduler-invoker` re-confirmed with `run.invoker` on both jobs.
+- Both scheduler jobs re-upserted with an explicit `--attempt-deadline=320s`.
+
+4 full build+deploy cycles (`gcloud builds submit --config=cloudbuild.yaml`,
+~1 min each thanks to the 2026-09-01 layer-caching fix, then
+`gcloud run services update`/`update-traffic`, then `setup_tweet_jobs.sh`):
+revisions `mlb-betting-00296-k78` -> `...00297-z7m` -> `...00298-kjh` ->
+`...00299-q5z` (current).
+
+**654 tests passing** (was 637 at session start; +17 new in
+`tests/test_tweet_drafter.py`, the first coverage this file has ever had).
+The 3 date-filter tests were verified via `git stash` to actually fail
+against the pre-fix code (not tautological); the Gemini/Typefully tests
+reproduce the exact live failure shapes seen during manual verification.
 
 ## Verification
 
 Bootstrapped per CLAUDE.md (read CONTEXT.md in full, checked the latest
 `handoffs/` file) before touching anything, then verified every claim
 against real production state rather than trusting the spawned task's
-"presumably" language:
+"presumably" language -- and kept verifying after each fix instead of
+declaring victory early, which is exactly how bugs 3 and 4 were found.
 
 - `gcloud run jobs describe mlb-tweet-recap` (before fix): env list
   identical to `mlb-tweet-picks`, no `TWEET_MODE` on either.
@@ -155,33 +189,44 @@ against real production state rather than trusting the spawned task's
 - `gcloud logging read` on 2026-09-01's actual `/settle` run: confirmed
   `settle_date=2026-08-31` when run on 2026-09-01, proving the date-filter
   bug independently of any code reading.
-- After deploying fixes 1+2 and re-running `setup_tweet_jobs.sh`: real
-  manual trigger (`gcloud run jobs execute mlb-tweet-recap --wait`) logged
-  `mode=recap date=2026-09-02` and, critically, did **not** skip -- it
-  proceeded to "Generating tweets via Gemini..." (proof the date filter
-  now matches real data) before hitting bug 3.
-- After deploying fix 3 and re-running `setup_tweet_jobs.sh` again: a
-  second real manual trigger is the final verification for this session
-  -- see the note appended below once its outcome is known.
-- 648/648 local tests pass (`.venv_audit`, the same ad hoc Python 3.14 venv
+- Real manual trigger after fixing bugs 1+2: logged `mode=recap
+  date=2026-09-02`, did not skip, reached "Generating tweets via Gemini..."
+  -- then crashed on bug 3.
+- Two real manual triggers hit bug 3's two failure shapes exactly as
+  diagnosed (empty text, then truncated text on the auto-retry).
+- Real manual trigger after fixing bug 3: 3 real tweet drafts generated
+  correctly labeled "Aug 31" (today's `/settle` hadn't run yet at trigger
+  time, so Aug 31 genuinely was the most recent settled slate) with a real
+  record (6-4, +8.93u) and real season stats (18,715 bets, -0.92% ROI) --
+  then every Typefully push 403'd, surfacing bug 4.
+- Real manual trigger after the v1->v2 migration: auth succeeded (no
+  401/403), but every draft POST returned a real 422 pinpointing the
+  missing `enabled` field.
+- **Final real manual trigger, after all four fixes**: 3 real drafts
+  generated, all 3 pushed successfully with real Typefully draft URLs.
+  Clean exit 0.
+- 654/654 local tests pass (`.venv_audit`, the same ad hoc Python 3.14 venv
   used by prior sessions since this laptop's system Python can't build the
   production `pyarrow==17.0.0` pin).
 
 ## Open items for a future session
 
+- `mlb-tweet-picks` itself was not independently re-verified pushing a real
+  Typefully draft this session (its one manual trigger hit the legitimate
+  "No picks today" early return before reaching that code path) -- it
+  shares the exact same `push_to_typefully()` code and Typefully account,
+  so there's no reason to expect it to behave differently, but worth a
+  glance at Cloud Logging or the Typefully dashboard after its next real
+  scheduled run (17:00 UTC) to confirm.
 - No dedicated Discord/ops alert distinguishes "tweet job ran but Gemini/
   Typefully failed" from a genuine clean skip -- both currently just show
-  as a Cloud Run Job failure (bug 3's crash) or a quiet exit 0 (a real "no
-  settled bets" day, which IS legitimate on off-days). Worth a lightweight
-  alert if `mlb-tweet-recap`/`mlb-tweet-picks` fails outright (not just a
-  clean skip) -- currently nothing pages on this.
-- `mlb-tweet-picks`'s own recent execution history (checked in passing,
-  not deeply investigated this session) showed what may be several failed
-  attempts from 2026-08-29 through 2026-09-01 before yesterday's Gemini
-  fix, then a successful manual verification trigger this morning
-  (2026-09-02T05:18 UTC) -- consistent with yesterday's own handoff notes,
-  not re-litigated here.
-- Typefully's free tier is 15 scheduled tweets/month; this session's
-  verification triggers pushed real drafts (see below) -- worth a glance
-  at the Typefully dashboard to delete unused variants so they don't
-  silently eat the monthly cap before real picks/recap drafts need it.
+  as a Cloud Run Job failure or a quiet exit 0 (a real "no settled bets"
+  day, which IS legitimate on off-days). Flagged as a prevention idea in
+  `docs/solutions/integration-issues/typefully-api-v1-sunset.md`, not
+  implemented this session.
+- Typefully's free tier is 15 scheduled tweets/month, reset 2026-09-01;
+  this session's verification used 3 of them (the one round of 3 that
+  actually succeeded) on real test drafts (real settled-bet data, but
+  drafts, not published tweets) -- worth deleting those 3 from the
+  Typefully dashboard after reviewing them so they don't eat into real
+  picks/recap quota later this month.
