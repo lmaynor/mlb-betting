@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 from mlb_core.rationale import build_rationale
 from mlb_core.odds.utils import devig_two_way
 from mlb_core.risk.threshold_bets import score_threshold_bet
+from mlb_core.risk.ou_bets import score_ou_bet
 
 _IP_STD      = 1.5
 _OUTS_MC_SIMS = 10_000
@@ -342,7 +343,7 @@ def _outs_ou_probs(dist: dict, line: float) -> tuple[float, float]:
 
 def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     from mlb_core.odds import sgo
-    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
+    from mlb_core.odds import american_to_implied_prob
 
     booster, features, feature_means = _load_model(cfg)
     calibrator = _load_calibrator(cfg)
@@ -428,7 +429,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                          for n, info in outs_3plus_by_name.items()}
 
     results = []
-    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
+    from mlb_core.risk.exposure import prefetch_exposure
     from mlb_core.tracking.bet_tracker import _make_engine
     _exposure_engine = _make_engine("unused")
     _exposure_game_pks = list(feat_df["game_pk"].dropna().astype(int).unique())
@@ -447,7 +448,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
     _bankroll_outs, _prefetched_stakes_outs = prefetch_exposure(_exposure_engine, _exposure_game_pks, run_date, system="OUTS")
     _pending_stakes_outs: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
-    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed_k    = _is_suppressed("K")
     _gate_suppressed_outs = _is_suppressed("OUTS")
     if _gate_suppressed_k:
@@ -543,20 +543,27 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 mkt_under = american_to_implied_prob(under_odds)
                 total = mkt_over + mkt_under
                 if total and total > 0:
-                    fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
-                    if pd.isna(fair_over) or pd.isna(fair_under):
+                    _trow, _bankroll_k = score_ou_bet(
+                        p_over=p_over, p_under=p_under,
+                        over_odds=over_odds, under_odds=under_odds,
+                        system="K",
+                        game_pk=int(row["game_pk"]),
+                        bankroll=_bankroll_k,
+                        prefetched_stakes=_prefetched_stakes_k,
+                        pending_stakes=_pending_stakes_k,
+                        cfg=cfg,
+                        gate_suppressed=_gate_suppressed_k,
+                        is_live=sgo.is_live_event(k_info.get("commence_time")),
+                        cap_units_default=2.0,
+                    )
+                    if _trow is None:
                         continue
-                    edge_over  = p_over  - fair_over
-                    edge_under = p_under - fair_under
-                    if edge_over >= edge_under:
-                        side, edge, fair, odds, model_prob = (
-                            "OVER", edge_over, fair_over, over_odds, p_over)
-                    else:
-                        side, edge, fair, odds, model_prob = (
-                            "UNDER", edge_under, fair_under, under_odds, p_under)
-                    model_prob, _cal = _cal_apply("K", model_prob)
-                    edge = model_prob - fair
-                    _edge_capped = _cal and edge > _EDGE_CAP
+                    side            = _trow["side"]
+                    edge            = _trow["edge"]
+                    fair            = _trow["market_prob"]
+                    odds            = _trow["odds"]
+                    model_prob      = _trow["model_prob"]
+                    kelly_triggered = _trow["kelly_triggered"]
                     logger.info(
                         f"K pred | {row['_pitcher_name']} | lam={row['lambda_k']:.2f} "
                         f"raw_lam={row.get('raw_lambda_k', row['lambda_k']):.2f} "
@@ -564,18 +571,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         f"proj={probs['mean']:.2f} line={line} {side} | "
                         f"model={model_prob:.3f} fair={fair:.3f} edge={edge:+.3f}"
                     )
-                    _bankroll_k, _cap = apply_cap(_bankroll_k, int(row["game_pk"]), _prefetched_stakes_k, _pending_stakes_k, cap_units=cfg.get("cap_units", 2.0))
-                    _stake = min(kelly_stake(
-                        model_prob, odds, bankroll=_bankroll_k,
-                        fraction=cfg["kelly_fraction"],
-                        min_pct=cfg["min_kelly_pct"],
-                        max_pct=cfg["max_kelly_pct"],
-                    ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_k and not _edge_capped and not sgo.is_live_event(k_info.get("commence_time"))
-                    if kelly_triggered and _stake > 0:
-                        _pending_stakes_k[int(row["game_pk"])] = (
-                            _pending_stakes_k.get(int(row["game_pk"]), 0.0) + _stake
-                        )
                     results.append({
                         "player":          row["_pitcher_name"],
                         "team":            team,
@@ -588,12 +583,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "lambda_k":        round(float(row["lambda_k"]), 3),
                         "proxy_lambda_k":  round(float(probs["proxy_lambda_k"]), 3) if probs.get("proxy_lambda_k") is not None else None,
                         "proj_k":          round(probs["mean"], 3),
-                        "model_prob":      round(model_prob, 4),
-                        "market_prob":     round(fair, 4),
-                        "edge":            round(edge, 4),
-                        "kelly_pct":       round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4),
+                        "model_prob":      model_prob,
+                        "market_prob":     fair,
+                        "edge":            edge,
+                        "kelly_pct":       _trow["kelly_pct"],
                         "odds":            odds,
-                        "stake":           round(_stake, 4) if kelly_triggered else 0.0,
+                        "stake":           _trow["stake"],
                         "kelly_triggered": kelly_triggered,
                         "market":          "K",
                         "bookmaker":       k_info.get("bookmaker"),
@@ -727,20 +722,27 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                 mkt_under = american_to_implied_prob(under_odds)
                 total = mkt_over + mkt_under
                 if total and total > 0:
-                    fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
-                    if pd.isna(fair_over) or pd.isna(fair_under):
+                    _trow, _bankroll_outs = score_ou_bet(
+                        p_over=p_over, p_under=p_under,
+                        over_odds=over_odds, under_odds=under_odds,
+                        system="OUTS",
+                        game_pk=int(row["game_pk"]),
+                        bankroll=_bankroll_outs,
+                        prefetched_stakes=_prefetched_stakes_outs,
+                        pending_stakes=_pending_stakes_outs,
+                        cfg=cfg,
+                        gate_suppressed=_gate_suppressed_outs,
+                        is_live=sgo.is_live_event(outs_info.get("commence_time")),
+                        cap_units_default=2.0,
+                    )
+                    if _trow is None:
                         continue
-                    edge_over  = p_over  - fair_over
-                    edge_under = p_under - fair_under
-                    if edge_over >= edge_under:
-                        side, edge, fair, odds, model_prob = (
-                            "OVER", edge_over, fair_over, over_odds, p_over)
-                    else:
-                        side, edge, fair, odds, model_prob = (
-                            "UNDER", edge_under, fair_under, under_odds, p_under)
-                    model_prob, _cal = _cal_apply("OUTS", model_prob)
-                    edge = model_prob - fair
-                    _edge_capped = _cal and edge > _EDGE_CAP
+                    side            = _trow["side"]
+                    edge            = _trow["edge"]
+                    fair            = _trow["market_prob"]
+                    odds            = _trow["odds"]
+                    model_prob      = _trow["model_prob"]
+                    kelly_triggered = _trow["kelly_triggered"]
                     logger.info(
                         "OUTS pred | %s | raw_lam=%s lam=%s in_range=%s "
                         "proj_outs=%.2f line=%.1f %s | model=%.3f fair=%.3f edge=%+.3f",
@@ -753,18 +755,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         side,
                         model_prob, fair, edge,
                     )
-                    _bankroll_outs, _cap = apply_cap(_bankroll_outs, int(row["game_pk"]), _prefetched_stakes_outs, _pending_stakes_outs, cap_units=cfg.get("cap_units", 2.0))
-                    _stake = min(kelly_stake(
-                        model_prob, odds, bankroll=_bankroll_outs,
-                        fraction=cfg["kelly_fraction"],
-                        min_pct=cfg["min_kelly_pct"],
-                        max_pct=cfg["max_kelly_pct"],
-                    ), _cap)
-                    kelly_triggered = edge >= cfg["min_edge"] and _stake > 0 and not _gate_suppressed_outs and not _edge_capped and not sgo.is_live_event(outs_info.get("commence_time"))
-                    if kelly_triggered and _stake > 0:
-                        _pending_stakes_outs[int(row["game_pk"])] = (
-                            _pending_stakes_outs.get(int(row["game_pk"]), 0.0) + _stake
-                        )
                     results.append({
                         "player":          row["_pitcher_name"],
                         "team":            team,
@@ -778,12 +768,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
                         "outs_calibrator_in_range": _outs_cal_in_range,
                         "lambda_k":        round(float(row["lambda_k"]), 3),
                         "proj_k":          round(dist["mean_outs"] / 3, 3),
-                        "model_prob":      round(model_prob, 4),
-                        "market_prob":     round(fair, 4),
-                        "edge":            round(edge, 4),
-                        "kelly_pct":       round(kpct(model_prob, odds, cfg["kelly_fraction"]), 4),
+                        "model_prob":      model_prob,
+                        "market_prob":     fair,
+                        "edge":            edge,
+                        "kelly_pct":       _trow["kelly_pct"],
                         "odds":            odds,
-                        "stake":           round(_stake, 4) if kelly_triggered else 0.0,
+                        "stake":           _trow["stake"],
                         "kelly_triggered": kelly_triggered,
                         "market":          "OUTS",
                         "bookmaker":       outs_info.get("bookmaker"),

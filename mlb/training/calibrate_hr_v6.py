@@ -2,7 +2,7 @@
 training/calibrate_hr_v6.py -- Fit isotonic calibrator for HR Pro v6.
 
 HR model: binary:logistic predicting P(batter hits HR in game).
-Calibration mirrors calibrate_nrfi_v17.py / calibrate_f5_v5.py:
+Calibration mirrors calibrate_f5_v5.py:
   1. Load model_features.csv from GCS
   2. Score all rows with the existing booster
   3. 80/20 time-based OOS split

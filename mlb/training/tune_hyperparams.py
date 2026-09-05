@@ -123,7 +123,11 @@ SYSTEM_CONFIG = {
     },
     "HR": {
         "gcs_features":  "HR_Pro/data/model_features.csv",
-        "target":        "hr_flag",
+        # Fixed 2026-09-04: was "hr_flag", which doesn't exist -- retrain_hr_v6.py's
+        # real TARGET is "hr" (same bug class as the F5 home_win/home_wins_f5 fix,
+        # finding C3.5 -- this one wasn't caught because it's HR, not F5/GAME, and
+        # test_tune_hyperparams_targets.py only asserted those two systems).
+        "target":        "hr",
         "objective":     "binary:logistic",
         "eval_metric":   "auc",
         "metric_dir":    "max",

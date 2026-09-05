@@ -8,7 +8,7 @@ from pathlib import Path
 from mlb_core.config import (
     BASE_DATA, STATCAST_MASTER, WEATHER_MASTER,
     LINEUPS_MASTER, UMPIRES_MASTER,
-    SEASON_START_MONTH, SEASON_END_MONTH, TIMEZONE,
+    SEASON_START_MONTH, SEASON_END_MONTH, TIMEZONE, SEASON_RANGES,
     DEFAULT_STATCAST_CACHE, DEFAULT_WEATHER_CACHE, DEFAULT_LINEUP_CACHE,
 )
 
@@ -22,15 +22,13 @@ cfg = {
     "season_start":       2019,
     "season_start_month": SEASON_START_MONTH,
     "season_end_month":   SEASON_END_MONTH,
+    # NRFI's own historical-odds backtest range needs 2019-2020, which
+    # predates SEASON_RANGES' common 2021-2026 window -- extend rather than
+    # duplicate it (see mlb_core/config.py).
     "mlb_season_ranges": {
         2019: ("2019-03-28", "2019-09-29"),
         2020: ("2020-07-23", "2020-09-27"),
-        2021: ("2021-04-01", "2021-10-03"),
-        2022: ("2022-04-07", "2022-10-05"),
-        2023: ("2023-03-30", "2023-10-01"),
-        2024: ("2024-03-20", "2024-09-29"),
-        2025: ("2025-03-18", "2025-09-28"),
-        2026: ("2026-03-26", "2026-10-04"),
+        **SEASON_RANGES,
     },
 
     # Shared data (read from Baseball_Data lake)

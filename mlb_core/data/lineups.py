@@ -382,12 +382,9 @@ def lineup_rebuild_master(cache_dir: Path, master_path: Path,
     n_games = master["game_pk"].nunique()
     print(f"  {len(master):,} lineup rows | {n_games:,} games | {skipped} empty days skipped")
 
-# MLB Stats API team IDs for all 30 franchises
-_MLB_TEAM_IDS = [
-    108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
-    118, 119, 120, 121, 133, 134, 135, 136, 137, 138,
-    139, 140, 141, 142, 143, 144, 145, 146, 147, 158,
-]
+# MLB Stats API team IDs for all 30 franchises. Consolidated 2026-09-04 into
+# mlb_core.data.team_ids (was a 4th independently-hardcoded copy).
+from mlb_core.data.team_ids import MLB_TEAM_IDS as _MLB_TEAM_IDS
 
 # rosterType=injured is unreliable -- MLB's API ignores it and returns the
 # active roster (every entry status.code="A"). The 40-man roster is the only

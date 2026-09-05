@@ -273,23 +273,33 @@ def stat(key: str) -> dict | None:
 
 def write_build_sentinel(system: str, result: dict) -> None:
     """Write a build sentinel JSON to GCS after a successful feature build.
-    Key must match the build_sentinel path in mlb_core/registry.py exactly.
+
+    Key is read straight from mlb_core.registry.SYSTEMS[system].build_sentinel
+    -- the single source of truth for where each system's sentinel lives
+    (some systems share a sentinel with the builder they piggyback on, e.g.
+    OUTS/PITCHER_ER -> K's, F1H -> F5's). Fixed 2026-09-04: this used to keep
+    its own hand-maintained system-name -> GCS-prefix dict, which had already
+    drifted out of sync with the registry (no entry at all for OUTS/
+    PITCHER_ER/F1H/SB, falling back to a guessed f"{system}_Pro_System" that's
+    wrong for the first three). No real caller was hitting the broken
+    fallback -- every build_*_features.py passes a system name that was
+    already in the old dict -- but reading the registry directly removes the
+    second, divergence-prone copy rather than just patching the dict.
     """
     import json
+    import logging
     from datetime import datetime, timezone
+    from mlb_core.registry import SYSTEMS
 
-    system_to_prefix = {
-        "HR":          "HR_Pro",
-        "NRFI":        "NRFI_Pro_System",
-        "1IOU":        "NRFI_Pro_System",
-        "K":           "K_Pro_System",
-        "F5":          "F5_Pro_System",
-        "BATTER_HITS": "BATTER_HITS_System",   # registry: BATTER_HITS_System/data/last_build.json
-        "BATTER_TB":   "BATTER_TB_System",
-        "GAME":        "GAME_Pro_System",
-    }
-    prefix = system_to_prefix.get(system.upper(), f"{system}_Pro_System")
-    key = f"{prefix}/data/last_build.json"
+    cfg = SYSTEMS.get(system.upper())
+    if cfg is not None:
+        key = cfg.build_sentinel
+    else:
+        logging.getLogger(__name__).warning(
+            f"write_build_sentinel: {system!r} not in registry.SYSTEMS -- "
+            f"guessing GCS key"
+        )
+        key = f"{system.upper()}_Pro_System/data/last_build.json"
     payload = {
         "system":    system.upper(),
         "status":    result.get("status", "ok"),

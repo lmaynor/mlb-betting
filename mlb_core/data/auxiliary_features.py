@@ -88,17 +88,14 @@ _SWING_TAKE_MIN   = 50        # minimum pitches for Swing-Take leaderboard
 _HOOKS_LOOKBACK   = 30        # rolling window in games for manager hooks
 _POPTIME_MIN_2B_ATT = 5        # minimum 2B steal attempts for a catcher to qualify
 
-# MLB Stats API team ID <-> 3-letter abbreviation (stable across seasons)
-_TEAM_ID_TO_ABBREV: dict[int, str] = {
-    108: "LAA", 109: "ARI", 110: "BAL", 111: "BOS", 112: "CHC",
-    113: "CIN", 114: "CLE", 115: "COL", 116: "DET", 117: "HOU",
-    118: "KC",  119: "LAD", 120: "WSH", 121: "NYM", 133: "OAK",
-    134: "PIT", 135: "SD",  136: "SEA", 137: "SF",  138: "STL",
-    139: "TB",  140: "TEX", 141: "TOR", 142: "MIN", 143: "PHI",
-    144: "ATL", 145: "CWS", 146: "MIA", 147: "NYY", 158: "MIL",
-}
-_ABBREV_TO_TEAM_ID: dict[str, int] = {v: k for k, v in _TEAM_ID_TO_ABBREV.items()}
-_MLB_TEAM_IDS: list[int] = list(_TEAM_ID_TO_ABBREV.keys())
+# MLB Stats API team ID <-> 3-letter abbreviation (stable across seasons).
+# Consolidated 2026-09-04 into mlb_core.data.team_ids (was hardcoded here
+# independently of the near-identical copies in id_resolver.py/lineups.py).
+from mlb_core.data.team_ids import (
+    TEAM_ID_TO_ABBREV as _TEAM_ID_TO_ABBREV,
+    ABBREV_TO_TEAM_ID as _ABBREV_TO_TEAM_ID,
+    MLB_TEAM_IDS as _MLB_TEAM_IDS,
+)
 
 _BACKFILL_SLEEP_MIN = 8.0    # seconds between backfill calls (min)
 _BACKFILL_SLEEP_MAX = 14.0   # seconds between backfill calls (max)

@@ -1,21 +1,24 @@
 """
 training/calibrate_batter_tb_v1.py - Fit lambda calibrator for BATTER_TB v1.
+
+The load/score/fit mechanics are shared with calibrate_k_v1.py/
+calibrate_sb_v1.py/calibrate_batter_hits_v1.py via _calibrate_common.py.
+
+NOTE: unlike the other three, this script has never logged split/OOS
+diagnostics, never applied a gap-threshold or "calibrator degrades" warning,
+and its result dict has always been missing "oos_from"/"oos_mean_actual_tb"
+(2 fewer keys than K/SB/BATTER_HITS's calibrator result shape). That is
+real, pre-existing drift -- preserved here via `verbose=False`, not fixed.
+See _calibrate_common.py's docstring.
 """
 from __future__ import annotations
 
 import json
 import logging
-import pickle
 import sys
-import tempfile
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-import xgboost as xgb
-from sklearn.isotonic import IsotonicRegression
 
 from mlb.systems.BATTER_TB_System.config_batter_tb import BATTER_TB_FEATURES
+from mlb.training import _calibrate_common as common
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s -- %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,59 +33,19 @@ GCS_CALIBRATOR = "BATTER_TB_System/models/lambda_calibrator_batter_tb_v1.pkl"
 
 
 def _load_data():
-    from mlb_core.storage import exists, read_csv
-
-    if not exists(GCS_MODEL_FEATURES):
-        return None, f"{GCS_MODEL_FEATURES} not found in GCS"
-    df = read_csv(GCS_MODEL_FEATURES, low_memory=False)
-    if df.empty:
-        return None, "model_features.csv is empty"
-    if TARGET not in df.columns:
-        return None, f"target column {TARGET!r} missing"
-    df["game_date"] = pd.to_datetime(df["game_date"])
-    df = df.sort_values("game_date").dropna(subset=[TARGET]).copy()
-    df[TARGET] = pd.to_numeric(df[TARGET], errors="coerce")
-    df = df.dropna(subset=[TARGET])
-    logger.info(
-        "loaded %s rows | %s -> %s | mean TB=%.3f",
-        f"{len(df):,}",
-        df["game_date"].min().date(),
-        df["game_date"].max().date(),
-        df[TARGET].mean(),
-    )
-    return df, None
+    return common.load_lambda_data(GCS_MODEL_FEATURES, TARGET, metric_label="TB", logger=logger)
 
 
 def _load_booster():
-    from mlb_core.storage import download_model, read_bytes
-
-    try:
-        meta = json.loads(read_bytes(GCS_META))
-    except Exception as e:
-        return None, None, None, f"meta load: {e}"
-    features = meta.get("features") or BATTER_TB_FEATURES
-    booster = xgb.Booster()
-    with tempfile.TemporaryDirectory() as tmpdir:
-        local = download_model(GCS_BOOSTER, Path(tmpdir) / "booster.json")
-        booster.load_model(str(local))
-    booster.best_ntree_limit = meta.get("best_iteration", 0)
-    return booster, features, meta.get("feature_means", {}) or {}, None
+    return common.load_booster(GCS_META, GCS_BOOSTER, BATTER_TB_FEATURES, logger=None)
 
 
 def _score_lambda(booster, features, feature_means, df):
-    X = df.reindex(columns=features).apply(pd.to_numeric, errors="coerce")
-    for col in features:
-        mean = feature_means.get(col)
-        if mean is not None:
-            X[col] = X[col].fillna(float(mean))
-    dm = xgb.DMatrix(X.astype(float), feature_names=features)
-    ntree = getattr(booster, "best_ntree_limit", 0)
-    return booster.predict(dm, iteration_range=(0, ntree)) if ntree else booster.predict(dm)
+    return common.score_lambda(booster, features, feature_means, df)
 
 
 def run() -> dict:
     from mlb_core.config import GCS_BUCKET
-    from mlb_core.storage import write_bytes
 
     if not GCS_BUCKET:
         return {"status": "error", "error": "MLB_GCS_BUCKET not set"}
@@ -94,37 +57,36 @@ def run() -> dict:
         return {"status": "error", "error": err}
 
     df["lambda_tb"] = _score_lambda(booster, features, feature_means, df)
-    split_idx = int(len(df) * TRAIN_TEST_SPLIT)
-    if len(df) - split_idx < 50:
-        return {"status": "error", "error": f"OOS split too small ({len(df) - split_idx}) - need >= 50"}
 
-    train_df = df.iloc[:split_idx].copy()
-    oos = df.iloc[split_idx:].copy()
-    iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(train_df["lambda_tb"].values, train_df[TARGET].values)
-    cal = iso.predict(oos["lambda_tb"].values)
+    iso, result, err = common.fit_and_evaluate_calibrator(
+        df, TARGET, "lambda_tb",
+        train_test_split=TRAIN_TEST_SPLIT, min_oos=50,
+        verbose=False, logger=logger,
+    )
+    if err:
+        # NOTE: the "too small" message text/wording is normalized here to
+        # match the other three calibrate scripts (shared _calibrate_common
+        # code) -- this script's original wording differed cosmetically
+        # ("(N) - need >= 50" vs "(N rows) -- need >= 50"). Never surfaced
+        # anywhere but this Cloud Run Job's own error log; not part of any
+        # GCS key, meta.json field, or model artifact.
+        return {"status": "error", "error": err}
 
-    raw_mae = float(np.mean(np.abs(oos["lambda_tb"].values - oos[TARGET].values)))
-    cal_mae = float(np.mean(np.abs(cal - oos[TARGET].values)))
-    raw_bias = float(oos["lambda_tb"].mean() - oos[TARGET].mean())
-    cal_bias = float(cal.mean() - oos[TARGET].mean())
-
-    try:
-        write_bytes(pickle.dumps(iso, protocol=4), GCS_CALIBRATOR)
-    except Exception as e:
-        return {"status": "error", "error": f"calibrator upload: {e}"}
+    err = common.write_calibrator(iso, GCS_CALIBRATOR, logger=None)
+    if err:
+        return err
 
     return {
         "status": "ok",
         "version": VERSION,
-        "train_rows": split_idx,
-        "oos_rows": len(oos),
-        "raw_mae": round(raw_mae, 4),
-        "calibrated_mae": round(cal_mae, 4),
-        "raw_bias": round(raw_bias, 4),
-        "calibrated_bias": round(cal_bias, 4),
-        "raw_mean_lambda": round(float(oos["lambda_tb"].mean()), 4),
-        "calibrated_mean": round(float(cal.mean()), 4),
+        "train_rows": result["train_rows"],
+        "oos_rows": result["oos_rows"],
+        "raw_mae": result["raw_mae"],
+        "calibrated_mae": result["calibrated_mae"],
+        "raw_bias": result["raw_bias"],
+        "calibrated_bias": result["calibrated_bias"],
+        "raw_mean_lambda": result["raw_mean_lambda"],
+        "calibrated_mean": result["calibrated_mean"],
         "gcs_calibrator": GCS_CALIBRATOR,
     }
 

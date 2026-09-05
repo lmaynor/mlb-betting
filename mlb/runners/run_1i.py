@@ -358,7 +358,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             max_pct=cfg["max_kelly_pct"],
         )
         stake = min(raw_stake, _cap)
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped)
+
+        # Fixed 2026-09-04: 1I had no live-odds suppression at all, unlike
+        # HR/K/OUTS/SB/BATTER_TB/BATTER_HITS -- a late/delayed run could
+        # stake against an in-play price using the pregame-only model.
+        _is_live = sgo.is_live_event(odds_info.get("commence_time"))
+        if _is_live:
+            logger.warning(
+                "1I: LIVE/in-play odds for %s @ %s (start=%s) -- pre-game "
+                "model assumes the 1st inning hasn't started; suppressing bet",
+                row["away_team"], row["home_team"], odds_info.get("commence_time"),
+            )
+        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped) and (not _is_live)
         if kelly_triggered and stake > 0:
             gp = int(row["game_pk"])
             _pending[gp] = _pending.get(gp, 0.0) + stake

@@ -14,6 +14,7 @@ from pathlib import Path
 from mlb_core.config import (
     BASE_DATA, STATCAST_MASTER, WEATHER_MASTER,
     LINEUPS_MASTER, SEASON_START_MONTH, SEASON_END_MONTH, TIMEZONE,
+    SEASON_RANGES,
     DEFAULT_STATCAST_CACHE, DEFAULT_WEATHER_CACHE, DEFAULT_LINEUP_CACHE,
 )
 
@@ -68,12 +69,9 @@ cfg = {
     "season_start":       2023,
     "season_start_month": SEASON_START_MONTH,
     "season_end_month":   SEASON_END_MONTH,
-    "mlb_season_ranges": {
-        2023: ("2023-03-30", "2023-10-01"),
-        2024: ("2024-03-20", "2024-09-29"),
-        2025: ("2025-03-18", "2025-09-28"),
-        2026: ("2026-03-26", "2026-10-04"),
-    },
+    # SB has no usable data before 2023 (catcher-identity backfill start
+    # date) -- subset SEASON_RANGES rather than duplicate part of it.
+    "mlb_season_ranges": {y: v for y, v in SEASON_RANGES.items() if y >= 2023},
 
     # Shared data (lake)
     "statcast_master":    str(STATCAST_MASTER),

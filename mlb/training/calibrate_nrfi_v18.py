@@ -1,9 +1,11 @@
 """
 training/calibrate_nrfi_v18.py -- Fit and upload isotonic calibrator for NRFI v18.
 
-Mirrors calibrate_nrfi_v17.py but scores rows with the v18 sub-model ensemble
-(pitcher + lineup + context sub-models stacked via logistic regression) before
-fitting the isotonic regression on the resulting game-level YRFI probabilities.
+Scores rows with the v18 sub-model ensemble (pitcher + lineup + context
+sub-models stacked via logistic regression) before fitting the isotonic
+regression on the resulting game-level YRFI probabilities. (The superseded
+v17 script this used to say it "mirrors" was removed 2026-09-04 -- dead in
+production since the v18 migration, per CONTEXT.md.)
 
 Run after retrain_nrfi_v18.py:
   gcloud run jobs execute mlb-retrain-nrfi-v18 --region=us-central1
@@ -118,7 +120,7 @@ def _score_half_rows_ensemble(sub_boosters, meta, df: pd.DataFrame) -> np.ndarra
 
 
 def _build_game_level(df: pd.DataFrame, p_half: np.ndarray) -> pd.DataFrame:
-    """Combine half-inning probs to game-level YRFI. Mirrors calibrate_nrfi_v17.py."""
+    """Combine half-inning probs to game-level YRFI."""
     df = df.copy()
     df["p_half"] = p_half
     pivot = df.pivot_table(

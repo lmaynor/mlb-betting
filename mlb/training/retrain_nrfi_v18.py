@@ -16,8 +16,12 @@ Architecture:
   Stacker: LogisticRegression(coef, intercept) serialized in model_meta_v18.json
 
 Training procedure (no test leakage):
-  1. Same 70/10/20 time split as v17 (train/val/test).
-  2. Train A, B, C on the 70% train slice with val for early stopping.
+  1. Same time split as v17: last 30% held out as test; the first 70% is
+     further split 7/8 train (61.25% of total) : 1/8 val (8.75% of total).
+     (Fixed 2026-09-04: this and the log line in run() below used to say
+     "70/10/20", which doesn't match the actual test_idx/val_idx math --
+     see the accurate breakdown in the split comment inside run().)
+  2. Train A, B, C on the 61.25% train slice with val for early stopping.
   3. Get A, B, C predictions on the 10% val set (OOS for sub-models).
   4. Fit logistic stacker on those val predictions.
   5. Evaluate stacked model on untouched 20% test set.
@@ -204,6 +208,92 @@ def _predict(booster: xgb.Booster, X: pd.DataFrame, features: list[str],
     return booster.predict(dm)
 
 
+def _leakage_check(df: pd.DataFrame, features: list, oos: dict,
+                   threshold: float = 0.01) -> list[str]:
+    """Warn if zeroing any single feature improves OOS AUC by > threshold.
+
+    Ported from retrain_nrfi_v17._leakage_check (originally retrain_k_v1,
+    T09 2026-05-19). Added to v18 2026-09-04 -- the v17->v18 ensemble rewrite
+    dropped this guard entirely (every sibling retrain script -- K, SB, GAME,
+    BATTER_HITS, and v17 itself -- has one; v18, the current production
+    model, did not). Run once per sub-model (pitcher/lineup/context), each
+    with its own features/booster/OOS split.
+
+    A feature whose removal improves AUC by > 0.01 may carry target
+    information or be a proxy for the outcome variable.
+
+    Warning only — does not abort the retrain.
+    Skip with env var NRFI_SKIP_LEAKAGE_CHECK=1 for fast reruns.
+
+    Only checks features with > 50% non-NaN coverage to avoid false
+    positives from sparse columns (e.g. umpire features early in season).
+    """
+    import os
+    if os.getenv("NRFI_SKIP_LEAKAGE_CHECK") == "1":
+        logger.info("leakage check skipped (NRFI_SKIP_LEAKAGE_CHECK=1)")
+        return []
+
+    from sklearn.metrics import roc_auc_score as _auc
+
+    # Use the same 70/30 OOS split as the main eval (test_idx, not val_idx --
+    # matches v17's split_idx = n*TRAIN_TEST_SPLIT exactly).
+    split_idx    = int(len(df) * TRAIN_TEST_SPLIT)
+    df_tr        = df.iloc[:split_idx].copy()
+    df_te        = df.iloc[split_idx:].copy()
+    if len(df_te) < 50:
+        logger.info("leakage check: OOS split too small — skipping")
+        return []
+
+    best_iter    = oos["best_iteration"]
+    baseline_auc = oos["auc_oos"]
+    y_tr = df_tr[TARGET].astype(int)
+    y_te = df_te[TARGET].astype(int)
+    suspicious = []
+
+    logger.info(f"leakage check | baseline AUC={baseline_auc:.4f} | "
+                f"threshold={threshold:.3f} | checking {len(features)} features")
+
+    for feat in features:
+        coverage = df_tr[feat].notna().mean() if feat in df_tr.columns else 0.0
+        if coverage < 0.5:
+            continue
+
+        df_tr_z = df_tr.copy(); df_tr_z[feat] = 0.0
+        df_te_z = df_te.copy(); df_te_z[feat] = 0.0
+
+        dtrain_z = xgb.DMatrix(
+            df_tr_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_tr, feature_names=features)
+        dtest_z  = xgb.DMatrix(
+            df_te_z[features].apply(pd.to_numeric, errors="coerce"),
+            label=y_te, feature_names=features)
+
+        b     = xgb.train(XGB_PARAMS, dtrain_z,
+                          num_boost_round=best_iter, verbose_eval=False)
+        preds = b.predict(dtest_z)
+        try:
+            auc_z = float(_auc(y_te, preds))
+        except Exception:
+            continue
+        improvement = auc_z - baseline_auc  # positive = zeroing improved AUC = suspect
+
+        if improvement > threshold:
+            suspicious.append(feat)
+            logger.warning(
+                f"  LEAKAGE SUSPECT: {feat!r} | "
+                f"AUC baseline={baseline_auc:.4f} zeroed={auc_z:.4f} "
+                f"(improvement={improvement:+.4f} > {threshold:.3f})"
+            )
+
+    if not suspicious:
+        logger.info("  leakage check passed — no suspicious features")
+    else:
+        logger.warning(
+            f"  leakage check: {len(suspicious)} suspicious feature(s): {suspicious}"
+        )
+    return suspicious
+
+
 def _apply_stacker(sub_preds: list[np.ndarray], coef: list[float],
                    intercept: float) -> np.ndarray:
     meta_X = np.column_stack(sub_preds)
@@ -237,7 +327,7 @@ def run() -> dict:
     test_from     = df["game_date"].iloc[test_idx].strftime("%Y-%m-%d")
 
     logger.info(
-        f"split (70/10/20) | train={val_idx} (thru {train_through}) | "
+        f"split (61.25/8.75/30) | train={val_idx} (thru {train_through}) | "
         f"val={test_idx - val_idx} (thru {val_through}) | "
         f"test={n - test_idx} (from {test_from})"
     )
@@ -313,6 +403,11 @@ def run() -> dict:
 
         auc_te = float(roc_auc_score(y_te, test_preds[name]))
         logger.info(f"  [{name}] test AUC={auc_te:.4f}")
+
+        leakage_suspects = _leakage_check(
+            df, features, {"best_iteration": best_iter, "auc_oos": auc_te}
+        )
+        sub_info[name]["leakage_suspects"] = leakage_suspects
 
     # 4. Fit logistic stacker on val-set OOS predictions (no test leakage)
     meta_X_val  = np.column_stack([val_preds[n] for n in SUB_MODEL_ORDER])

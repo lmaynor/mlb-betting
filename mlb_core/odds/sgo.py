@@ -616,58 +616,18 @@ def extract_k_odds(events: list[dict]) -> dict:
     Returns {pitcher_name: {over_odds, under_odds, line,
                               away_team, home_team, event_id, bookmaker,
                               fair_over, fair_under, open_over, open_under}}
+
+    Fixed 2026-09-04: used to hand-roll its own over/under two-pass and pick
+    odds via _best_book_odds_int() (best price across ALL lines, not just
+    this market's line) -- the same cross-line odds-mixing bug already found
+    and fixed for batter props (BATTER_HITS/BATTER_TB/PITCHER_ER, all of
+    which use _extract_player_ou_props()'s line-matched
+    _best_book_odds_for_line()) on 2026-06-30. Now delegates to that same
+    shared, line-safe helper instead of a second, unsafe copy of the same
+    two-pass logic.
     """
-    out: dict = {}
-    for event in events:
-        away, home = _event_teams(event)
-        event_id   = event.get("eventID")
-        odds       = event.get("odds") or {}
-
-        over_map:  dict = {}
-        under_map: dict = {}
-        for odd_id, entry in odds.items():
-            if not odd_id.startswith(_K_PREFIX):
-                continue
-            if entry.get("statID") != "pitching_strikeouts":
-                continue
-            if entry.get("betTypeID") != "ou":
-                continue
-            player_id = entry.get("playerID") or entry.get("statEntityID")
-            if not player_id:
-                continue
-            side = entry.get("sideID")
-            if side == "over":
-                over_map[player_id] = (odd_id, entry)
-            elif side == "under":
-                under_map[player_id] = (odd_id, entry)
-
-        for player_id, (over_oid, over_entry) in over_map.items():
-            under_pair = under_map.get(player_id)
-            if not under_pair:
-                continue
-            _, under_entry = under_pair
-            over_odds, _over_book   = _best_book_odds_int(over_entry)
-            under_odds, _under_book = _best_book_odds_int(under_entry)
-            if over_odds is None or under_odds is None:
-                continue
-            name = _player_name(event, player_id)
-            if not name:
-                continue
-            out[name] = {
-                "over_odds":  over_odds,
-                "under_odds": under_odds,
-                "line":       _dk_line_float(over_entry),
-                "away_team":  away,
-                "home_team":  home,
-                "event_id":   event_id,
-                "bookmaker":  _over_book,
-                "fair_over":  _safe_int(over_entry.get("fairOdds")),
-                "fair_under": _safe_int(under_entry.get("fairOdds")),
-                "open_over":  _safe_int(over_entry.get("openBookOdds")),
-                "open_under": _safe_int(under_entry.get("openBookOdds")),
-            }
-    logger.info(f"SGO extract_k_odds: {len(out)} pitchers with onshore prices")
-    return out
+    return _extract_player_ou_props(events, _K_PREFIX, "pitching_strikeouts",
+                                    "extract_k_odds")
 
 
 def extract_outs_odds(events: list[dict]) -> dict:
@@ -676,73 +636,16 @@ def extract_outs_odds(events: list[dict]) -> dict:
     Market ID pattern: pitching_outs-{PITCHER_MLB}-game-ou-over/under
     Confirmed in live payload (2026-05-13).
 
-    Returns:
-        {
-          pitcher_name: {
-            "over_odds":  int,
-            "under_odds": int,
-            "line":       float,   # e.g. 14.5 outs = ~4.8 IP
-            "away_team":  str,
-            "home_team":  str,
-            "event_id":   str,
-            "bookmaker":  "draftkings",
-            "fair_over":  int,
-            "fair_under": int,
-          },
-          ...
-        }
+    Returns {pitcher_name: {over_odds, under_odds, line, away_team,
+                              home_team, event_id, bookmaker, fair_over,
+                              fair_under, open_over, open_under}}
 
-    Same structure as extract_k_odds — just a different stat prefix.
+    Fixed 2026-09-04: same fix as extract_k_odds() above -- was hand-rolling
+    the identical unsafe two-pass extraction; now delegates to the shared,
+    line-matched _extract_player_ou_props() helper.
     """
-    out: dict = {}
-    for event in events:
-        away, home = _event_teams(event)
-        event_id   = event.get("eventID")
-        odds       = event.get("odds") or {}
-
-        over_map:  dict = {}
-        under_map: dict = {}
-        for odd_id, entry in odds.items():
-            if not odd_id.startswith(_OUTS_PREFIX):
-                continue
-            if entry.get("statID") != "pitching_outs":
-                continue
-            if entry.get("betTypeID") != "ou":
-                continue
-            player_id = entry.get("playerID") or entry.get("statEntityID")
-            if not player_id:
-                continue
-            side = entry.get("sideID")
-            if side == "over":
-                over_map[player_id] = (odd_id, entry)
-            elif side == "under":
-                under_map[player_id] = (odd_id, entry)
-
-        for player_id, (over_oid, over_entry) in over_map.items():
-            under_pair = under_map.get(player_id)
-            if not under_pair:
-                continue
-            _, under_entry = under_pair
-            over_odds, _over_book   = _best_book_odds_int(over_entry)
-            under_odds, _under_book = _best_book_odds_int(under_entry)
-            if over_odds is None or under_odds is None:
-                continue
-            name = _player_name(event, player_id)
-            if not name:
-                continue
-            out[name] = {
-                "over_odds":  over_odds,
-                "under_odds": under_odds,
-                "line":       _dk_line_float(over_entry),
-                "away_team":  away,
-                "home_team":  home,
-                "event_id":   event_id,
-                "bookmaker":  _over_book,
-                "fair_over":  _safe_int(over_entry.get("fairOdds")),
-                "fair_under": _safe_int(under_entry.get("fairOdds")),
-            }
-    logger.info(f"SGO extract_outs_odds: {len(out)} pitchers with onshore prices")
-    return out
+    return _extract_player_ou_props(events, _OUTS_PREFIX, "pitching_outs",
+                                    "extract_outs_odds")
 
 
 def _safe_int(raw) -> Optional[int]:
