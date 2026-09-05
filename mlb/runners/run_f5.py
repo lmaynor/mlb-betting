@@ -101,7 +101,7 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
     from mlb_core.config import GCS_BUCKET
     from mlb_core.storage import read_csv
     from mlb_core.data.lineups import get_today_schedule
-    from mlb_core.odds import american_to_implied_prob, remove_vig
+    from mlb_core.odds import american_to_implied_prob
     from mlb_core.odds.utils import devig_two_way
 
     sched = get_today_schedule(run_date)
@@ -162,11 +162,13 @@ def _build_today_feature_rows(cfg: dict, run_date: str,
             row["_away_odds"] = odds_info["away_odds"]
             row["_event_id"]  = odds_info.get("event_id")
             row["bookmaker"]  = odds_info.get("bookmaker")
+            row["_commence_time"] = odds_info.get("commence_time")
         else:
             row["_home_odds"] = None
             row["_away_odds"] = None
             row["_event_id"]  = None
             row["bookmaker"]  = None
+            row["_commence_time"] = None
         rows.append(row)
 
     if not rows:
@@ -208,7 +210,7 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
         model_prob, market_prob, edge, kelly_pct, odds, stake
     """
     from mlb_core.odds import sgo
-    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct, remove_vig
+    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
     from mlb_core.odds.utils import devig_two_way
     from mlb_core.odds.dk_scraper import resolve_team
 
@@ -370,7 +372,18 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             min_pct=cfg["min_kelly_pct"],
             max_pct=cfg["max_kelly_pct"],
         ), _cap)
-        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed and not _edge_capped
+        # Fixed 2026-09-04: F5 had no live-odds suppression at all, unlike
+        # HR/K/OUTS/SB/BATTER_TB/BATTER_HITS -- a late/delayed run could
+        # stake against an in-play price using the pregame-only model.
+        _is_live = sgo.is_live_event(row.get("_commence_time"))
+        if _is_live:
+            logger.warning(
+                "F5: LIVE/in-play odds for %s @ %s (start=%s) -- pre-game "
+                "model assumes the first 5 innings haven't started; "
+                "suppressing bet",
+                row["away_team"], row["home_team"], row.get("_commence_time"),
+            )
+        kelly_triggered = edge >= cfg["min_edge"] and stake > 0 and not _gate_suppressed and not _edge_capped and not _is_live
         if kelly_triggered and stake > 0:
             _pending_stakes[int(row["game_pk"])] = (
                 _pending_stakes.get(int(row["game_pk"]), 0.0) + stake
@@ -453,7 +466,7 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                                cfg: dict, run_date: str) -> dict:
     from mlb_core.odds import sgo
     from mlb_core.odds.sgo import extract_f1h_ml_odds, extract_game_ml_odds
-    from mlb_core.odds.utils import american_to_implied_prob, devig_two_way, remove_vig
+    from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
     from mlb_core.odds.dk_scraper import resolve_team
     from mlb_core.odds.utils import kelly_stake, kelly_pct as kpct
     from mlb_core.risk.exposure import prefetch_exposure, apply_cap
@@ -567,7 +580,21 @@ def _score_innings_submarkets(predictions_df, scalars: dict,
                 max_pct=cfg["max_kelly_pct"],
             ), cap)
             stake = 0.0 if log_only else would_be
-            kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and not _edge_capped
+
+            # Fixed 2026-09-04: F1H had no live-odds suppression at all,
+            # unlike HR/K/OUTS/SB/BATTER_TB/BATTER_HITS -- a late/delayed run
+            # could stake against an in-play price using the pregame-only
+            # scalar proxy off F5's model.
+            _is_live = sgo.is_live_event(odds_info.get("commence_time"))
+            if _is_live:
+                logger.warning(
+                    "F1H: LIVE/in-play odds for %s @ %s (start=%s) -- "
+                    "pre-game model assumes innings 1-4 haven't started; "
+                    "suppressing bet",
+                    odds_info["away_team"], odds_info["home_team"],
+                    odds_info.get("commence_time"),
+                )
+            kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and not _edge_capped and not _is_live
             if kelly_triggered:
                 pending[game_pk] = pending.get(game_pk, 0.0) + stake
             # Defensive (log_only currently forces stake=0.0 above for every

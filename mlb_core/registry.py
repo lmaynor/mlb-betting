@@ -59,7 +59,10 @@ SYSTEMS: dict[str, SystemConfig] = {
         retrain_jobs=["mlb-retrain-hr-v6"],
         calibrate_jobs=["mlb-calibrate-hr"],
         expected_hit_rate=0.07,
-        tune_target="hr_flag",
+        # Fixed 2026-09-04: was "hr_flag", which doesn't exist in HR's feature
+        # CSV -- retrain_hr_v6.py's real TARGET is "hr". Kept in sync with the
+        # identical fix in tune_hyperparams.py's SYSTEM_CONFIG["HR"]["target"].
+        tune_target="hr",
         tune_objective="binary:logistic",
         tune_metric="auc",
         tune_metric_dir="max",
