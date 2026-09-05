@@ -27,6 +27,7 @@ import pandas as pd
 import xgboost as xgb
 
 from mlb_core.risk.threshold_bets import score_threshold_bet
+from mlb_core.risk.ou_bets import score_ou_bet
 
 logger = logging.getLogger(__name__)
 
@@ -290,8 +291,7 @@ def _fetch_today_weather(sched):
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
-    from mlb_core.odds import american_to_implied_prob, kelly_stake, kelly_pct as kpct
-    from mlb_core.odds.utils import remove_vig
+    from mlb_core.odds import american_to_implied_prob
     from mlb_core.odds import sgo as _sgo
     from mlb_core.odds.sgo import extract_batter_hits_odds
 
@@ -398,14 +398,13 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             return name_to_idx[matches[0]]
         return None
 
-    from mlb_core.risk.exposure import prefetch_exposure, apply_cap
+    from mlb_core.risk.exposure import prefetch_exposure
     from mlb_core.tracking.bet_tracker import _make_engine
     _engine     = _make_engine("unused")
     _game_pks   = list(feat_df["game_pk"].dropna().astype(int).unique())
     _bankroll, _prefetched = prefetch_exposure(_engine, _game_pks, run_date, system="BATTER_HITS")
     _pending: dict[int, float] = {}
     from mlb_core.risk.gates import is_suppressed as _is_suppressed
-    from mlb_core.risk.calibration import apply as _cal_apply, EDGE_CAP as _EDGE_CAP
     _gate_suppressed = _is_suppressed("BATTER_HITS")
     if _gate_suppressed:
         logger.warning("BATTER_HITS gate active -- logging only, no staked bets this run")
@@ -451,26 +450,42 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
 
         # Devig both sides of the O/U. Shin (not proportional) -- corrects the
         # favorite-longshot bias and matches the odds_history ingest devig.
-        from mlb_core.odds.utils import devig_two_way
         mkt_over  = american_to_implied_prob(odds_info["over_odds"])
         mkt_under = american_to_implied_prob(odds_info["under_odds"])
         if not (mkt_over + mkt_under):
             continue
-        fair_over, fair_under = devig_two_way(mkt_over, mkt_under, method="shin")
-        if pd.isna(fair_over) or pd.isna(fair_under):
+
+        _is_live = _sgo.is_live_event(odds_info.get("commence_time"))
+        if _is_live:
+            logger.warning(
+                "BATTER_HITS: LIVE/in-play odds for %s (start=%s) -- pre-game count "
+                "model assumes a full game of PAs left; suppressing bet",
+                player_name, odds_info.get("commence_time"),
+            )
+
+        trow, _bankroll = score_ou_bet(
+            p_over=p_over, p_under=p_under,
+            over_odds=odds_info["over_odds"], under_odds=odds_info["under_odds"],
+            system="BATTER_HITS",
+            game_pk=int(row["game_pk"]),
+            bankroll=_bankroll,
+            prefetched_stakes=_prefetched,
+            pending_stakes=_pending,
+            cfg=cfg,
+            gate_suppressed=_gate_suppressed,
+            is_live=_is_live,
+            log_only=LOG_ONLY,
+            cap_units_default=10.0,
+            round_stake=False,
+        )
+        if trow is None:
             continue
-
-        edge_over  = p_over  - fair_over
-        edge_under = p_under - fair_under
-
-        if edge_over >= edge_under:
-            side, edge, fair, odds, model_prob = "OVER",  edge_over,  fair_over,  odds_info["over_odds"],  p_over
-        else:
-            side, edge, fair, odds, model_prob = "UNDER", edge_under, fair_under, odds_info["under_odds"], p_under
-
-        model_prob, _cal = _cal_apply("BATTER_HITS", model_prob)
-        edge = model_prob - fair
-        _edge_capped = _cal and edge > _EDGE_CAP
+        side            = trow["side"]
+        edge            = trow["edge"]
+        fair            = trow["market_prob"]
+        odds            = trow["odds"]
+        model_prob      = trow["model_prob"]
+        kelly_triggered = trow["kelly_triggered"]
 
         logger.info(
             "BATTER_HITS pred | %s | raw_lam=%.3f lam=%.3f in_range=%s "
@@ -484,33 +499,6 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             model_prob, fair, edge,
         )
 
-        k_pct_val = kpct(model_prob, odds, cfg["kelly_fraction"])
-        _bankroll, _cap = apply_cap(
-            _bankroll, int(row["game_pk"]),
-            _prefetched, _pending,
-            cap_units=cfg.get("cap_units", 10.0),
-        )
-        raw_stake = kelly_stake(
-            model_prob, odds,
-            bankroll=_bankroll,
-            fraction=cfg["kelly_fraction"],
-            min_pct=cfg["min_kelly_pct"],
-            max_pct=cfg["max_kelly_pct"],
-        )
-        stake = min(raw_stake, _cap)
-
-        _is_live = _sgo.is_live_event(odds_info.get("commence_time"))
-        if _is_live:
-            logger.warning(
-                "BATTER_HITS: LIVE/in-play odds for %s (start=%s) -- pre-game count "
-                "model assumes a full game of PAs left; suppressing bet",
-                player_name, odds_info.get("commence_time"),
-            )
-        kelly_triggered = (edge >= cfg["min_edge"]) and (stake > 0) and (not LOG_ONLY) and (not _gate_suppressed) and (not _edge_capped) and (not _is_live)
-        if kelly_triggered and stake > 0:
-            gp = int(row.get("game_pk", 0))
-            _pending[gp] = _pending.get(gp, 0.0) + stake
-
         results.append({
             "player":          player_name,
             "game_pk":         int(row.get("game_pk", 0)),
@@ -521,12 +509,12 @@ def _build_predictions(cfg: dict, run_date: str) -> pd.DataFrame:
             "bet_type":        f"BATTER_HITS_{side}_{line}",
             "raw_lambda_hits": round(float(row.get("raw_lambda_hits", mu)), 4),
             "lambda_hits":     round(mu, 4),
-            "model_prob":      round(model_prob, 4),
-            "market_prob":     round(fair, 4),
-            "edge":            round(edge, 4),
-            "kelly_pct":       round(k_pct_val, 4),
+            "model_prob":      model_prob,
+            "market_prob":     fair,
+            "edge":            edge,
+            "kelly_pct":       trow["kelly_pct"],
             "odds":            odds,
-            "stake":           stake if kelly_triggered else 0.0,
+            "stake":           trow["stake"],
             "kelly_triggered": kelly_triggered,
             "bookmaker":       odds_info.get("bookmaker"),
         })
