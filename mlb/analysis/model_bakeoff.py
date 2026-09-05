@@ -49,8 +49,8 @@ import pandas as pd
 
 from mlb.analysis import walkforward as wf
 from mlb.analysis import backtest_market as bt
-from mlb.analysis import bakeoff_tuning
 from mlb.analysis import bakeoff_persist
+from mlb.analysis import _bakeoff_common as _bc
 
 warnings.filterwarnings("ignore")
 
@@ -73,42 +73,20 @@ MARKET_AUC = {"K": 0.520, "OUTS": 0.546, "BATTER_HITS": 0.643, "BATTER_TB": 0.66
 # ── training / prediction (kind-aware) ─────────────────────────────────────────
 
 def _means(tr, feats):
-    return {f: float(pd.to_numeric(tr[f], errors="coerce").mean()) for f in feats}
+    return _bc._means(tr, feats)
 
 
 def _xgb(tr, ho, feats, c_variant):
     """Train an XGB variant via the production path; predict tr AND ho.
     Works for count:poisson and binary:logistic alike (objective from c.params)."""
-    import xgboost as xgb
-    booster, best = wf._train_pre_cutoff(tr, feats, c_variant)
-    means = _means(tr, feats)
-
-    def _pred(frame):
-        X = frame[feats].apply(pd.to_numeric, errors="coerce")
-        for f in feats:
-            X[f] = X[f].fillna(means[f])
-        return booster.predict(xgb.DMatrix(X.astype(float), feature_names=feats),
-                               iteration_range=(0, best))
-    return _pred(ho), _pred(tr)
+    return _bc._xgb(tr, ho, feats, c_variant)
 
 
 def _sk(tr, ho, feats, build, scale):
     """Median-impute (+ optional scale), fit an sklearn estimator, predict tr & ho.
     Returns proba[:,1] for classifiers, value for regressors."""
-    from sklearn.impute import SimpleImputer
-    Xtr = tr[feats].apply(pd.to_numeric, errors="coerce")
-    Xho = ho[feats].apply(pd.to_numeric, errors="coerce")
-    imp = SimpleImputer(strategy="median")
-    Xtr_i, Xho_i = imp.fit_transform(Xtr), imp.transform(Xho)
-    if scale:
-        from sklearn.preprocessing import StandardScaler
-        sc = StandardScaler()
-        Xtr_i, Xho_i = sc.fit_transform(Xtr_i), sc.transform(Xho_i)
     est, is_clf = build()
-    est.fit(Xtr_i, tr["__y__"].values)
-    if is_clf:
-        return est.predict_proba(Xho_i)[:, 1], est.predict_proba(Xtr_i)[:, 1]
-    return np.clip(est.predict(Xho_i), 0.0, None), np.clip(est.predict(Xtr_i), 0.0, None)
+    return _bc._sk_fit_predict(tr, ho, feats, tr["__y__"].values, est, is_clf, scale)
 
 
 def _predict(model, tr, ho, feats, c):
@@ -173,17 +151,10 @@ def _predict(model, tr, ho, feats, c):
 def _calibrate_binary(model, tr, ho, feats, c):
     """Leakage-clean isotonic for binary: fit on last 1/8 of train (model trained on
     first 7/8), apply to holdout."""
-    from sklearn.isotonic import IsotonicRegression
-    tr = tr.sort_values("game_date")
-    nfit = int(len(tr) * 7 / 8)
-    tr_fit, tr_cal = tr.iloc[:nfit], tr.iloc[nfit:]
-    if len(tr_cal) < 50:
-        return _predict(model, tr, ho, feats, c)[0]
-    cal_prob, _ = _predict(model, tr_fit, tr_cal, feats, c)
-    iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(cal_prob, tr_cal["__y__"].values)
-    raw_ho, _ = _predict(model, tr_fit, ho, feats, c)
-    return iso.predict(raw_ho)
+    return _bc._calibrate_core(
+        model, tr, ho, feats, c,
+        predict_ho_fn=lambda m, a, b, f, cc: _predict(m, a, b, f, cc)[0],
+        label_fn=lambda frame: frame["__y__"].values)
 
 
 def _nb_alpha(mu_tr, y_tr):
@@ -239,23 +210,20 @@ def _bet_stats(res):
     cand = res.get("candidates") if isinstance(res, dict) else None
     if cand is None or not len(cand):
         return row
-    row["n_bets"] = int(len(cand))
-    row["roi_best"] = round(cand["roi"].mean() * 100, 2)
-    clv = cand["clv_pct"].dropna()
-    row["clv_n"] = int(len(clv))
-    row["clv"] = round(clv.mean(), 2) if len(clv) else np.nan
-    lo = cand[cand["edge"] <= bt.LOW_EDGE_MAX]
-    row["lo_n"] = int(len(lo))
-    locl = lo["clv_pct"].dropna()
-    row["lo_clv"] = round(locl.mean(), 2) if len(locl) else np.nan
     # codified go/no-go (docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md)
-    v = bt.verdict(cand)
-    row["verdict"] = v["verdict"]
-    row["verdict_reason"] = v["reason"]
-    row["clv_tstat"] = v["clv_tstat"]
-    row["ladder_monotonic"] = v["ladder_monotonic"]
-    row["hi_n"] = v["hi_n"]        # C4.3: top ("10%+") edge-bucket CLV sample size
-    row["hi_clv"] = v["hi_clv"]    # C4.3: top edge-bucket mean CLV -- winner's-curse check
+    s = _bc._candidate_stats(cand)
+    row["n_bets"] = s["n_bets"]
+    row["roi_best"] = s["roi_best"]
+    row["clv_n"] = s["clv_n"]
+    row["clv"] = s["clv"]
+    row["lo_n"] = s["lo_n"]
+    row["lo_clv"] = s["lo_clv"]
+    row["verdict"] = s["verdict"]
+    row["verdict_reason"] = s["verdict_reason"]
+    row["clv_tstat"] = s["clv_tstat"]
+    row["ladder_monotonic"] = s["ladder_monotonic"]
+    row["hi_n"] = s["hi_n"]        # C4.3: top ("10%+") edge-bucket CLV sample size
+    row["hi_clv"] = s["hi_clv"]    # C4.3: top edge-bucket mean CLV -- winner's-curse check
     return row
 
 
@@ -279,21 +247,9 @@ def run_system(system, cutoff, until, models, min_books, max_spread, calibrate,
                + (f" | base={tr['__y__'].mean():.3f}" if kind == "binary" else ""))
 
     if "xgb_optuna" in models:
-        loaded = bakeoff_persist.load_tuning(load_tuned_from, system) if load_tuned_from else None
-        if loaded:
-            tuned_params, tune_meta = loaded
-            logger.info(f"[{system}][tune] loaded prior tuned params from {load_tuned_from} "
-                       f"(status={tune_meta.get('status')})")
-        else:
-            if load_tuned_from:
-                logger.warning(f"[{system}][tune] no tuned params at {load_tuned_from} "
-                              f"-- searching fresh instead")
-            tuned_params, tune_meta = bakeoff_tuning.tune_system_walkforward(
-                system, cutoff, n_trials=tune_trials, n_folds=tune_folds,
-                prep=(spec, c, df, feats))
-        c = {**c, "tuned_params": tuned_params}
-        if persist_prefix:
-            bakeoff_persist.write_tuning(persist_prefix, system, tuned_params, tune_meta)
+        c = _bc._resolve_tuned_params(system, cutoff, c, (spec, c, df, feats),
+                                      tune_trials, tune_folds, load_tuned_from,
+                                      persist_prefix, logger)
 
     y_ho = ho[target].astype(float).values
     rows = []
@@ -421,15 +377,7 @@ def main(argv=None) -> int:
         # keep every gate/tuning param identical to the original run -- a resumed run
         # must stay internally consistent, never mix differently-tuned/gated systems
         # into one scorecard.
-        args.cutoff = run_meta.get("cutoff", args.cutoff)
-        args.until = run_meta.get("until", args.until)
-        args.min_books = run_meta.get("min_books", args.min_books)
-        args.max_spread = run_meta.get("max_spread", args.max_spread)
-        args.calibrate = run_meta.get("calibrate", args.calibrate)
-        args.tune = run_meta.get("tune", args.tune)
-        args.tune_trials = run_meta.get("tune_trials", args.tune_trials)
-        args.tune_folds = run_meta.get("tune_folds", args.tune_folds)
-        args.load_tuned_from = run_meta.get("load_tuned_from", args.load_tuned_from)
+        args = _bc._restore_args_from_run_meta(args, run_meta)
         logger.info(f"[resume] {persist_prefix} -- already completed: "
                    f"{sorted(already_done) or 'none'}; cutoff={args.cutoff} "
                    f"tune={args.tune}(trials={args.tune_trials}) "
@@ -437,12 +385,7 @@ def main(argv=None) -> int:
     elif args.persist:
         run_id = bakeoff_persist.make_run_id(args.cutoff)
         persist_prefix = bakeoff_persist.run_prefix(run_id, args.run_root)
-        run_meta = bakeoff_persist.new_run_meta(
-            run_id, persist_prefix, args.cutoff, args.until, systems,
-            tune=args.tune, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
-            min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
-            load_tuned_from=args.load_tuned_from)
-        bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+        run_meta = _bc._write_new_run_meta(run_id, persist_prefix, args, systems)
     if persist_prefix:
         logger.info(f"persisting to {persist_prefix}")
 

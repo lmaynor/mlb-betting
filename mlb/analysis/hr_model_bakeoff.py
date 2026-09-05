@@ -53,8 +53,8 @@ import pandas as pd
 
 from mlb.analysis import walkforward as wf
 from mlb.analysis import backtest_market as bt
-from mlb.analysis import bakeoff_tuning
 from mlb.analysis import bakeoff_persist
+from mlb.analysis import _bakeoff_common as _bc
 
 warnings.filterwarnings("ignore")
 
@@ -74,38 +74,25 @@ ALL_MODELS = ["xgb_prod", "xhr_poisson", "xgb_reg", "xgb_tuned", "logistic", "hi
 # ── model trainers: each returns holdout probabilities (np.ndarray) ────────────
 
 def _means(tr: pd.DataFrame, feats: list) -> dict:
-    return {f: float(pd.to_numeric(tr[f], errors="coerce").mean()) for f in feats}
+    return _bc._means(tr, feats)
 
 
 def _xgb_predict(tr, ho, feats, c_variant):
     """Train an XGB variant via the production training path (val-tail early stop +
-    scale_pos_weight for rare positives + full retrain), then score holdout."""
-    import xgboost as xgb
-    booster, best = wf._train_pre_cutoff(tr, feats, c_variant)
-    means = _means(tr, feats)
-    Xh = ho[feats].apply(pd.to_numeric, errors="coerce")
-    for f in feats:
-        Xh[f] = Xh[f].fillna(means[f])
-    return booster.predict(xgb.DMatrix(Xh.astype(float), feature_names=feats),
-                           iteration_range=(0, best))
+    scale_pos_weight for rare positives + full retrain), then score holdout.
+
+    NOTE: differs from model_bakeoff._xgb, which also returns train-set predictions
+    (used there to fit an NB dispersion alpha for count-kind systems) -- HR is
+    binary-only and never needs that, so this only scores the holdout slice
+    (predict_train=False)."""
+    return _bc._xgb(tr, ho, feats, c_variant, predict_train=False)
 
 
 def _sk_predict(tr, ho, feats, build_estimator):
     """Median-impute + (optional) scale, fit an sklearn estimator, return P(HR)."""
-    from sklearn.impute import SimpleImputer
-    Xtr = tr[feats].apply(pd.to_numeric, errors="coerce")
-    Xho = ho[feats].apply(pd.to_numeric, errors="coerce")
-    imp = SimpleImputer(strategy="median")
-    Xtr_i = imp.fit_transform(Xtr)
-    Xho_i = imp.transform(Xho)
-    ytr = tr["hr"].astype(int).values
     est, needs_scale = build_estimator()
-    if needs_scale:
-        from sklearn.preprocessing import StandardScaler
-        sc = StandardScaler()
-        Xtr_i, Xho_i = sc.fit_transform(Xtr_i), sc.transform(Xho_i)
-    est.fit(Xtr_i, ytr)
-    return est.predict_proba(Xho_i)[:, 1]
+    return _bc._sk_fit_predict(tr, ho, feats, tr["hr"].astype(int).values, est, True,
+                               needs_scale, predict_train=False)
 
 
 def _xhr_poisson_predict(tr, ho, feats, c) -> np.ndarray:
@@ -190,17 +177,10 @@ def _predict(model: str, tr, ho, feats, c) -> np.ndarray:
 def _calibrate(model: str, tr, ho, feats, c):
     """Leakage-clean isotonic: fit on the last 1/8 of the train slice (model trained
     on the first 7/8), then apply to holdout. Returns holdout probabilities."""
-    from sklearn.isotonic import IsotonicRegression
-    tr = tr.sort_values("game_date")
-    nfit = int(len(tr) * 7 / 8)
-    tr_fit, tr_cal = tr.iloc[:nfit], tr.iloc[nfit:]
-    if len(tr_cal) < 50:
-        return _predict(model, tr, ho, feats, c)  # too thin to calibrate
-    cal_prob = _predict(model, tr_fit, tr_cal, feats, c)
-    iso = IsotonicRegression(out_of_bounds="clip")
-    iso.fit(cal_prob, tr_cal["hr"].astype(int).values)
-    raw_ho = _predict(model, tr_fit, ho, feats, c)  # same tr_fit model for consistency
-    return iso.predict(raw_ho)
+    return _bc._calibrate_core(
+        model, tr, ho, feats, c,
+        predict_ho_fn=lambda m, a, b, f, cc: _predict(m, a, b, f, cc),
+        label_fn=lambda frame: frame["hr"].astype(int).values)
 
 
 # ── preds frame in gen_preds schema (so backtest_market.backtest consumes it) ──
@@ -238,18 +218,17 @@ def _scorecard_row(model, prob, ho, res):
         pass
     cand = res.get("candidates") if isinstance(res, dict) else None
     if cand is not None and len(cand):
-        row["n_bets"] = int(len(cand))
-        row["roi_best%"] = round(cand["roi"].mean() * 100, 2)
-        row["roi_cons%"] = round(cand["roi_cons"].mean() * 100, 2)
-        clv = cand["clv_pct"].dropna()
-        row["clv_n"] = int(len(clv))
-        row["clv%"] = round(clv.mean(), 2) if len(clv) else np.nan
-        lo = cand[cand["edge"] <= bt.LOW_EDGE_MAX]
-        row["lo_n"] = int(len(lo))
-        if len(lo):
-            row["lo_roi%"] = round(lo["roi"].mean() * 100, 2)
-            locl = lo["clv_pct"].dropna()
-            row["lo_clv%"] = round(locl.mean(), 2) if len(locl) else np.nan
+        # codified go/no-go (docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md)
+        s = _bc._candidate_stats(cand)
+        row["n_bets"] = s["n_bets"]
+        row["roi_best%"] = s["roi_best"]
+        row["roi_cons%"] = s["roi_cons"]
+        row["clv_n"] = s["clv_n"]
+        row["clv%"] = s["clv"]
+        row["lo_n"] = s["lo_n"]
+        if s["lo_n"]:
+            row["lo_roi%"] = s["lo_roi"]
+            row["lo_clv%"] = s["lo_clv"]
         # LEVER A: split YES (homered = OVER/YES) vs NO (UNDER/NO) -- is the NO
         # favorite side the whole loss? (83% of live HR bets are NO.)
         sel = cand["selection"].str.upper()
@@ -260,14 +239,12 @@ def _scorecard_row(model, prob, ho, res):
                 row[f"{tag}_roi%"] = round(g["roi"].mean() * 100, 2)
                 gc = g["clv_pct"].dropna()
                 row[f"{tag}_clv%"] = round(gc.mean(), 2) if len(gc) else np.nan
-        # codified go/no-go (docs/solutions/logic-errors/backtest-roi-vs-clv-soft-line-artifact.md)
-        v = bt.verdict(cand)
-        row["verdict"] = v["verdict"]
-        row["verdict_reason"] = v["reason"]
-        row["clv_tstat"] = v["clv_tstat"]
-        row["ladder_monotonic"] = v["ladder_monotonic"]
-        row["hi_n"] = v["hi_n"]        # C4.3: top edge-bucket CLV sample size
-        row["hi_clv%"] = v["hi_clv"]   # C4.3: top edge-bucket mean CLV -- winner's-curse check
+        row["verdict"] = s["verdict"]
+        row["verdict_reason"] = s["verdict_reason"]
+        row["clv_tstat"] = s["clv_tstat"]
+        row["ladder_monotonic"] = s["ladder_monotonic"]
+        row["hi_n"] = s["hi_n"]        # C4.3: top edge-bucket CLV sample size
+        row["hi_clv%"] = s["hi_clv"]   # C4.3: top edge-bucket mean CLV -- winner's-curse check
     return row
 
 
@@ -288,20 +265,9 @@ def run(cutoff: str, until: str | None, models: list, min_books: int,
                f"(market AUC bar = {MARKET_AUC_REF})")
 
     if "xgb_optuna" in models:
-        loaded = bakeoff_persist.load_tuning(load_tuned_from, "HR") if load_tuned_from else None
-        if loaded:
-            tuned_params, tune_meta = loaded
-            logger.info(f"[HR][tune] loaded prior tuned params from {load_tuned_from} "
-                       f"(status={tune_meta.get('status')})")
-        else:
-            if load_tuned_from:
-                logger.warning(f"[HR][tune] no tuned params at {load_tuned_from} "
-                              f"-- searching fresh instead")
-            tuned_params, tune_meta = bakeoff_tuning.tune_system_walkforward(
-                "HR", cutoff, n_trials=tune_trials, n_folds=tune_folds, prep=(spec, c, df, feats))
-        c = {**c, "tuned_params": tuned_params}
-        if persist_prefix:
-            bakeoff_persist.write_tuning(persist_prefix, "HR", tuned_params, tune_meta)
+        c = _bc._resolve_tuned_params("HR", cutoff, c, (spec, c, df, feats),
+                                      tune_trials, tune_folds, load_tuned_from,
+                                      persist_prefix, logger)
 
     rows, best_cand, best_key = [], None, (-1e9, None)
     for m in models:
@@ -409,37 +375,19 @@ def main(argv=None) -> int:
             logger.info(f"[resume] nothing persisted yet at {persist_prefix} "
                        f"({type(e).__name__}) -- --create-if-missing set, "
                        f"starting fresh with this exact id")
-            run_meta = bakeoff_persist.new_run_meta(
-                args.resume, persist_prefix, args.cutoff, args.until, ["HR"],
-                tune=args.tune, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
-                min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
-                load_tuned_from=args.load_tuned_from)
-            bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+            run_meta = _bc._write_new_run_meta(args.resume, persist_prefix, args, ["HR"])
         if "HR" in (run_meta.get("systems_completed") or []):
             logger.info(f"[HR] already completed in {persist_prefix} -- nothing to do.")
             return 0
         # keep every gate/tuning param identical to the original run.
-        args.cutoff = run_meta.get("cutoff", args.cutoff)
-        args.until = run_meta.get("until", args.until)
-        args.min_books = run_meta.get("min_books", args.min_books)
-        args.max_spread = run_meta.get("max_spread", args.max_spread)
-        args.calibrate = run_meta.get("calibrate", args.calibrate)
-        args.tune = run_meta.get("tune", args.tune)
-        args.tune_trials = run_meta.get("tune_trials", args.tune_trials)
-        args.tune_folds = run_meta.get("tune_folds", args.tune_folds)
-        args.load_tuned_from = run_meta.get("load_tuned_from", args.load_tuned_from)
+        args = _bc._restore_args_from_run_meta(args, run_meta)
         logger.info(f"[resume] {persist_prefix} -- HR not yet completed; running "
                    f"cutoff={args.cutoff} tune={args.tune}(trials={args.tune_trials}) "
                    f"min_books={args.min_books} max_spread={args.max_spread}")
     elif args.persist:
         run_id = bakeoff_persist.make_run_id(args.cutoff)
         persist_prefix = bakeoff_persist.run_prefix(run_id, args.run_root)
-        run_meta = bakeoff_persist.new_run_meta(
-            run_id, persist_prefix, args.cutoff, args.until, ["HR"],
-            tune=args.tune, tune_trials=args.tune_trials, tune_folds=args.tune_folds,
-            min_books=args.min_books, max_spread=args.max_spread, calibrate=args.calibrate,
-            load_tuned_from=args.load_tuned_from)
-        bakeoff_persist.write_run_meta(persist_prefix, run_meta)
+        run_meta = _bc._write_new_run_meta(run_id, persist_prefix, args, ["HR"])
     if persist_prefix:
         logger.info(f"persisting to {persist_prefix}")
 
