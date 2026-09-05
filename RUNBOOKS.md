@@ -308,11 +308,8 @@ BATTER_HITS, and BATTER_TB.
 # Always run calibrate immediately after retrain
 
 # NRFI: runner uses v18 models (xgb_pitcher_v18.json etc.) -- retrain via mlb-retrain-nrfi-v18.
-# If the job doesn't exist yet, create it once (copy image from v17 job):
-#   IMAGE=$(gcloud run jobs describe mlb-retrain-nrfi-v17 --region=us-central1 --format='value(spec.template.spec.containers[0].image)')
-#   gcloud run jobs create mlb-retrain-nrfi-v18 --image $IMAGE \
-#     --args="-m,mlb.training.retrain_nrfi_v18" --region=us-central1 --task-timeout=7200s \
-#     --set-env-vars="$(gcloud run jobs describe mlb-retrain-nrfi-v17 --region=us-central1 --format='value(spec.template.spec.containers[0].env)')"
+# (2026-09-04: the superseded mlb-retrain-nrfi-v17 job + its source script were
+# deleted -- v18 has been the live job for a while, this bootstrap note is moot.)
 gcloud run jobs execute mlb-retrain-nrfi-v18  --region=us-central1
 gcloud run jobs execute mlb-calibrate-nrfi    --region=us-central1
 

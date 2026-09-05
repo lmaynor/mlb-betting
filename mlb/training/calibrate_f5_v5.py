@@ -2,7 +2,7 @@
 training/calibrate_f5_v5.py -- Fit isotonic calibrator for F5 Pro v5.
 
 F5 model: binary:logistic predicting P(home wins F5).
-Calibration mirrors calibrate_nrfi_v17.py exactly:
+Calibration steps:
   1. Load model_features.csv from GCS
   2. Score all rows with the existing booster
   3. 80/20 time-based OOS split (matches retrain split)
