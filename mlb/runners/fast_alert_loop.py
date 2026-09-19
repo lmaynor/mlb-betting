@@ -31,9 +31,9 @@ covers today AND tomorrow (FAL_DAYS=2); next-day alerts are tagged
      Alerts/{day}/log.parquet so the nightly odds_alert resolve/scorecard pass
      covers them.
   5. EV TRACKING: every alert actually posted this run is ALSO logged to the
-     `bets` table (system="EV", flat-stake) so profitability can be queried
-     the same way as any model system -- see _log_ev_bets below and
-     settle_bets._settle_ev.
+     `bets` table (system="EV", flat-stake + an informational kelly_pct) so
+     profitability can be queried the same way as any model system -- see
+     _log_ev_bets below and settle_bets._settle_ev.
 
 Config via env: FAL_MARKETS (hr_yn,outs_ou,btb_ou,bhits_ou,k_ou), FAL_MIN_EV
 (0.03), FAL_MIN_BOOKS (4), FAL_MAX_POSTS (10 per run), FAL_ANCHOR (pinnacle;
@@ -301,6 +301,14 @@ def notify(new: pd.DataFrame, hot: set, today_str: str = '',
 
 _EV_BET_DB = "EV_Alerts/data/ev_bets.db"  # local/offline fallback only; prod uses DB_URL (Cloud SQL)
 _EV_STAKE_UNIT = float(os.environ.get("EV_STAKE_UNIT", "100"))
+# kelly_pct is informational only for EV rows -- stake stays the flat
+# _EV_STAKE_UNIT above (preserves ROI%-comparability across alerts, the
+# original design intent). Added 2026-09-18 so a $-bankroll view can be
+# computed on top (mlb/analysis/ev_kelly_bankroll.py) without touching the
+# real stake/profit history. 0.25 matches the platform's modal kelly_fraction
+# (NRFI/F5/K/GAME/SB/BATTER_HITS/BATTER_TB all use it; only HR differs at 0.50
+# for its longshot odds).
+_EV_KELLY_FRACTION = float(os.environ.get("EV_KELLY_FRACTION", "0.25"))
 
 # odds_history market code -> the underlying system's OWN bet_type
 # construction, exactly as settle_bets.py already grades it. Reusing this
@@ -366,13 +374,21 @@ def _ev_bet_type(market: str, selection: str, line, book: str | None) -> str | N
 
 def _log_ev_bets(posted: pd.DataFrame, run_date: str) -> int:
     """Log every alert actually posted to Discord this run into the `bets`
-    table (system="EV") at a flat unit stake -- there's no model
-    probability to Kelly-size by here, the whole question is "would
-    striking this specific price have won," so a flat stake makes the ROI
-    directly comparable across alerts. kelly_triggered=True always: a
-    posted alert already cleared FAL_MIN_EV/FAL_MIN_BOOKS, so by
-    construction every row here IS the signal, not a logged-but-filtered
-    prediction (unlike the model systems' log-every-scored-row contract)."""
+    table (system="EV") at a flat unit stake -- the whole question this
+    tracking answers is "would striking this specific price have won," so a
+    flat stake makes the ROI directly comparable across alerts regardless of
+    edge size. kelly_triggered=True always: a posted alert already cleared
+    FAL_MIN_EV/FAL_MIN_BOOKS, so by construction every row here IS the
+    signal, not a logged-but-filtered prediction (unlike the model systems'
+    log-every-scored-row contract).
+
+    kelly_pct (added 2026-09-18) IS computed here -- consensus_fair (model_prob)
+    and the traded american odds are both already on hand, same two inputs
+    every model system's own kelly_pct() call uses -- but it is purely
+    informational: it does not change `stake` above. See
+    mlb/analysis/ev_kelly_bankroll.py for the $-bankroll view built on top of
+    it."""
+    from mlb_core.odds.utils import kelly_pct as _kpct
     from mlb_core.tracking import BetTracker
 
     if not len(posted):
@@ -387,6 +403,8 @@ def _log_ev_bets(posted: pd.DataFrame, run_date: str) -> int:
         player = pname if isinstance(pname, str) and pname else f"{r.get('away_team')} @ {r.get('home_team')}"
         n_books = r.get("n_books")
         decimal = r.get("decimal")
+        model_prob = float(r["consensus_fair"]) if pd.notna(r.get("consensus_fair")) else None
+        odds = r.get("american")
         bet_id = tracker.log_bet(
             game_date       = str(r.get("game_date") or run_date),
             game_pk         = int(r["game_pk"]) if pd.notna(r.get("game_pk")) else None,
@@ -394,10 +412,11 @@ def _log_ev_bets(posted: pd.DataFrame, run_date: str) -> int:
             away_team       = r.get("away_team"),
             home_team       = r.get("home_team"),
             bet_type        = bet_type,
-            model_prob      = float(r["consensus_fair"]) if pd.notna(r.get("consensus_fair")) else None,
+            model_prob      = model_prob,
             market_prob     = round(1.0 / decimal, 4) if pd.notna(decimal) and decimal else None,
             edge            = float(r["ev"]) if pd.notna(r.get("ev")) else None,
-            odds            = r.get("american"),
+            kelly_pct       = round(_kpct(model_prob, odds, _EV_KELLY_FRACTION), 4),
+            odds            = odds,
             stake           = _EV_STAKE_UNIT,
             kelly_triggered = True,
             paper           = True,

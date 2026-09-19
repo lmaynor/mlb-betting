@@ -55,6 +55,28 @@ class TestKalshiLogEvBets:
         assert row["edge"] == pytest.approx(0.045)
         assert row["kelly_triggered"] == True  # noqa: E712
         assert row["stake"] == fal._EV_STAKE_UNIT
+        assert row["kelly_pct"] is not None and row["kelly_pct"] == row["kelly_pct"]  # not NaN
+
+    def test_kelly_pct_matches_shared_kelly_pct_function(self, tmp_path, monkeypatch):
+        """2026-09-18: kelly_pct is computed via the same
+        mlb_core.odds.utils.kelly_pct() every model system uses, off p_true
+        (model_prob) + the traded american odds -- purely informational,
+        stake stays flat. Assert against that function's own output rather
+        than a hand-computed number."""
+        from mlb_core.odds.utils import kelly_pct as kpct
+
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([_kalshi_row(p_true=0.40, american=200)])
+        ka._log_ev_bets(posted, {700003: "Hunter Goodman"}, "2026-08-19")
+
+        from mlb_core.tracking.bet_tracker import BetTracker
+        tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
+        row = tracker.all_bets().iloc[0]
+
+        expected = round(kpct(0.40, 200, fal._EV_KELLY_FRACTION), 4)
+        assert expected > 0, "fixture should be a real positive-edge case"
+        assert row["kelly_pct"] == pytest.approx(expected)
+        assert row["stake"] == fal._EV_STAKE_UNIT, "kelly_pct must not change the flat stake"
 
     def test_empty_posted_logs_nothing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))

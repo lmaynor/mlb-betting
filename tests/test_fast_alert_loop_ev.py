@@ -9,6 +9,10 @@ changes:
      old one-field-per-alert layout, and the removal of the separate
      "Lineup events" field.
 
+Plus the 2026-09-18 addition: _log_ev_bets() now also computes kelly_pct via
+the same mlb_core.odds.utils.kelly_pct() every model system uses (stake
+itself stays flat -- see TestLogEvBetsKellyPct below).
+
 See tests/test_settlement.py's TestSettleEv for the settlement side (the
 bet_type convention this file produces is graded there).
 """
@@ -115,6 +119,7 @@ class TestLogEvBets:
         assert (df["kelly_triggered"] == True).all()  # noqa: E712
         assert (df["stake"] == fal._EV_STAKE_UNIT).all()
         assert (df["odds"] == 120).all()
+        assert df["kelly_pct"].notna().all()
 
     def test_empty_posted_logs_nothing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
@@ -151,6 +156,62 @@ class TestLogEvBets:
         tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
         df = tracker.all_bets()
         assert df.iloc[0]["player"] == "NYY @ BOS"
+
+
+# ── kelly_pct (2026-09-18) ────────────────────────────────────────────────────
+#
+# stake stays flat (_EV_STAKE_UNIT) -- kelly_pct is purely informational, but
+# it must be computed via the SAME kelly_pct() every model system uses, off
+# the SAME model_prob/odds already stored on the row, not a reinvented
+# formula. Tests assert the wiring matches that function's own output
+# directly rather than hand-computing/hardcoding a number.
+
+class TestLogEvBetsKellyPct:
+    def test_kelly_pct_matches_shared_kelly_pct_function(self, tmp_path, monkeypatch):
+        from mlb_core.odds.utils import kelly_pct as kpct
+
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([_alert_row(consensus_fair=0.55, american=150)])
+        fal._log_ev_bets(posted, "2026-08-19")
+
+        from mlb_core.tracking.bet_tracker import BetTracker
+        tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
+        row = tracker.all_bets().iloc[0]
+
+        expected = round(kpct(0.55, 150, fal._EV_KELLY_FRACTION), 4)
+        assert expected > 0, "fixture should be a real positive-edge case"
+        assert row["kelly_pct"] == pytest.approx(expected)
+
+    def test_negative_edge_gives_zero_not_negative(self, tmp_path, monkeypatch):
+        """consensus_fair below the traded price's own vig-inclusive implied
+        prob is a real losing price to lay -- kelly_pct() itself floors this
+        at 0.0 (never a negative stake fraction); confirm that fail-safe
+        survives the wiring, since this fixture's ev/decimal fields (used by
+        other tests) are not necessarily self-consistent with consensus_fair
+        + american for a Kelly derivation."""
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([_alert_row(consensus_fair=0.10, american=-500)])
+        fal._log_ev_bets(posted, "2026-08-19")
+
+        from mlb_core.tracking.bet_tracker import BetTracker
+        tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
+        assert tracker.all_bets().iloc[0]["kelly_pct"] == 0.0
+
+    def test_stake_unaffected_by_kelly_pct(self, tmp_path, monkeypatch):
+        """The whole point of keeping this informational: two alerts with
+        very different edges must still log the identical flat stake."""
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([
+            _alert_row(game_pk=1, consensus_fair=0.55, american=150),
+            _alert_row(game_pk=2, consensus_fair=0.20, american=150),
+        ])
+        fal._log_ev_bets(posted, "2026-08-19")
+
+        from mlb_core.tracking.bet_tracker import BetTracker
+        tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
+        df = tracker.all_bets()
+        assert (df["stake"] == fal._EV_STAKE_UNIT).all()
+        assert df["kelly_pct"].nunique() == 2, "different edges should still yield different kelly_pct"
 
 
 # ── Discord embed: double group-by + Lineup events removal ──────────────────

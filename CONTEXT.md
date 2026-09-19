@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-09-04 22:22 CST_
+_Last updated: 2026-09-18 (CT)_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -830,11 +830,20 @@ outcome (its own docstring calls real ROI settlement "a follow-up"). Every
 alert `fast_alert_loop.notify()` **and** `kalshi_alert.notify()` actually
 post is now ALSO logged into the same `bets` table every model system
 uses, under one pooled `system="EV"`, at a flat stake (env
-`EV_STAKE_UNIT`, default 100 -- there's no model probability to
-Kelly-size by here, so a flat unit makes ROI directly comparable across
-alerts). `kelly_triggered` is always `True`: a posted alert already
-cleared its pager's own EV/books threshold, so by construction every
-logged row IS the signal.
+`EV_STAKE_UNIT`, default 100 -- kept flat deliberately so ROI stays
+directly comparable across alerts of very different edge sizes, not
+because a real probability is unavailable). `kelly_triggered` is always
+`True`: a posted alert already cleared its pager's own EV/books
+threshold, so by construction every logged row IS the signal.
+
+**`kelly_pct` added 2026-09-18** (both pagers' `_log_ev_bets()`): computed
+via the same `mlb_core.odds.utils.kelly_pct()` every model system already
+uses, off the same `model_prob` (`consensus_fair`/`p_true`) + traded
+`american` odds already stored on the row -- purely informational, it does
+NOT change `stake` above. `mlb/analysis/ev_kelly_bankroll.py` builds a
+$-bankroll view on top of it (rescales each bet's real graded profit/stake
+ratio to a `kelly_pct * bankroll` size, non-compounding) without touching
+the real `stake`/`profit` history.
 
 **The two pagers pool into ONE system, not `system="EV"` +
 `system="EV_KALSHI"`.** They scan overlapping markets (both cover
@@ -906,9 +915,27 @@ Consequences of this scope boundary:
   `backtest_market.OFFSHORE`) showed +9.2% ROI / 54.2% hit rate across
   ~1500 decided bets, positive in every market (hr_yn/k_ou/outs_ou/
   btb_ou/bhits_ou) -- promising, but a one-off ad hoc analysis, not yet a
-  standing figure this tracking will keep current automatically. Re-check
-  via `BetTracker(db, system="EV").summary()` after a few more weeks of
-  real settlement before drawing a firm conclusion.
+  standing figure this tracking will keep current automatically. **That
+  caveat turned out to be load-bearing**: see the 2026-09-18 entry directly
+  below -- this retrospective figure was never actually backed by durable
+  `bets` rows.
+
+**2026-09-18: `mlb-fast-alert` / `mlb-kalshi-alert` had no `MLB_DB_URL` /
+Cloud SQL wiring from launch (2026-08-20) until this date.** Every "N/N
+posted alerts logged to bets table" log line was real and the bet_ids were
+real, but `bet_tracker._make_engine()`'s DB_URL-empty fallback wrote them to
+an ephemeral sqlite file inside each job's own container -- gone the instant
+it exited. A direct query against production confirmed **zero** `system='EV'`
+rows existed at any point before the fix. This is almost certainly why the
+"~1500 decided bets" retrospective figure two paragraphs up carried its own
+"not yet a standing figure" hedge -- it was very likely computed from the
+independently-durable `Alerts/{day}/*.parquet` GCS trail directly (or a
+one-off correctly-configured local run), never from the production table.
+Fixed in `deploy/setup_fast_alert.sh` / `deploy/setup_kalshi_alert_job.sh`
+(added `MLB_DB_URL` + `--set-cloudsql-instances`); historical alerts
+recovered via `scripts/backfill_ev_history.py` off that same GCS trail. Full
+writeup: docs/solutions/runtime-errors/ev-alert-jobs-missing-db-wiring.md
+and s15.9.
 
 ### Settlement sources
 
@@ -3171,6 +3198,32 @@ Run this from Cloud Shell. Verify with
 job execution timeout -- the Run API call returns a LongRunningOperation immediately (async),
 so the scheduler only needs ~60s to get the HTTP 200 back. The job itself runs to completion
 independently under the 3600s task timeout set on the Cloud Run Job itself.
+
+**A Cloud Run Job's own provisioning-script comment claiming a scope limit
+("GCS only, no DB") goes stale the moment a later feature adds a new side
+effect to that code path -- and nothing catches it.** `mlb-fast-alert` and
+`mlb-kalshi-alert` were both provisioned with `--set-secrets`/no
+`--set-cloudsql-instances` and a header comment saying "GCS only (no DB)" --
+true when written, false from 2026-08-20 onward once EV bet tracking
+(`_log_ev_bets()` -> `BetTracker.log_bet()`) was added to both. Because
+`mlb_core.config.DB_URL` (`os.environ.get("MLB_DB_URL", "")`) defaults to
+empty, and `bet_tracker._make_engine()` silently falls back to an ephemeral
+local sqlite file when that's empty, both jobs ran "successfully" every
+single scheduled execution for a month -- real log lines, real bet_ids,
+zero exceptions -- while every one of those rows evaporated the instant the
+container exited. Caught 2026-09-18 only by directly querying the production
+`bets` table and finding zero `system='EV'` rows despite the logs' own
+"N/N posted alerts logged to bets table" message. Fixed in
+`deploy/setup_fast_alert.sh` / `deploy/setup_kalshi_alert_job.sh` (added
+`MLB_DB_URL` + `--set-cloudsql-instances`, matching
+`deploy/setup_fit_calibrators.sh`'s pattern); historical alerts recovered
+from the independently-durable GCS parquet trail via
+`scripts/backfill_ev_history.py`. Full writeup:
+docs/solutions/runtime-errors/ev-alert-jobs-missing-db-wiring.md. **Any time
+a runner gains a new DB write, external API call, or required secret, check
+every Cloud Run Job that executes it for matching provisioning-script
+wiring -- "running successfully" and "actually persisting its output" are
+different claims.**
 
 ### 15.10 Frontend (Tailwind v4, Clerk v7, Next.js)
 

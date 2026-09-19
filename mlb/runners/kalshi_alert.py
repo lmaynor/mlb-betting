@@ -135,11 +135,20 @@ def _alert_fields(new: pd.DataFrame, names: dict) -> list[dict]:
 # carry a different shape (ev_pct/p_true/cons_impl, not ev/consensus_fair/
 # decimal), so it has its own small adapter rather than reusing
 # fast_alert_loop._log_ev_bets directly -- but reuses _ev_bet_type (the
-# actual market -> bet_type mapping) and the shared DB path/stake constant.
+# actual market -> bet_type mapping) and the shared DB path/stake/kelly-
+# fraction constants.
 
 def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
+    """See fast_alert_loop._log_ev_bets's docstring for the flat-stake
+    rationale and the 2026-09-18 kelly_pct addition -- identical here:
+    p_true (model_prob) + the traded american odds are both already on hand,
+    so kelly_pct is computed the same way, purely informational, stake stays
+    flat."""
+    from mlb_core.odds.utils import kelly_pct as _kpct
     from mlb_core.tracking import BetTracker
-    from mlb.runners.fast_alert_loop import _ev_bet_type, _EV_BET_DB, _EV_STAKE_UNIT
+    from mlb.runners.fast_alert_loop import (
+        _ev_bet_type, _EV_BET_DB, _EV_STAKE_UNIT, _EV_KELLY_FRACTION,
+    )
 
     if not len(posted):
         return 0
@@ -153,6 +162,8 @@ def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
         pname = names.get(int(pid)) if pd.notna(pid) else None
         player = pname or f"{r.get('away_team')} @ {r.get('home_team')}"
         n_books = r.get("n_books")
+        model_prob = float(r["p_true"]) if pd.notna(r.get("p_true")) else None
+        odds = r.get("american")
         bet_id = tracker.log_bet(
             game_date       = str(r.get("game_date") or run_date),
             game_pk         = int(r["game_pk"]) if pd.notna(r.get("game_pk")) else None,
@@ -160,10 +171,11 @@ def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
             away_team       = r.get("away_team"),
             home_team       = r.get("home_team"),
             bet_type        = bet_type,
-            model_prob      = float(r["p_true"]) if pd.notna(r.get("p_true")) else None,
+            model_prob      = model_prob,
             market_prob     = float(r["cons_impl"]) if pd.notna(r.get("cons_impl")) else None,
             edge            = float(r["ev_pct"]) if pd.notna(r.get("ev_pct")) else None,
-            odds            = r.get("american"),
+            kelly_pct       = round(_kpct(model_prob, odds, _EV_KELLY_FRACTION), 4),
+            odds            = odds,
             stake           = _EV_STAKE_UNIT,
             kelly_triggered = True,
             paper           = True,
