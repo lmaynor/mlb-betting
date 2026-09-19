@@ -113,6 +113,127 @@ class TestKalshiTruth:
 
 
 # --------------------------------------------------------------------------- #
+# _kalshi_book_fair() / _kalshi_ev() -- the mirror direction: is KALSHI's own
+# contract +EV vs the real book pack's devigged consensus?
+# --------------------------------------------------------------------------- #
+
+class TestKalshiBookFair:
+    def test_medians_devigged_fair_prob_across_books(self):
+        books = pd.DataFrame([
+            _row(book="draftkings", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.60),
+            _row(book="fanduel", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.64),
+            _row(book="betmgm", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.62),
+            _row(book="caesars", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.62),
+        ])
+        books["_pid"] = -1
+        books["_line"] = -99.0
+        out = V._kalshi_book_fair(books, min_books=4)
+        assert len(out) == 1
+        assert out.iloc[0]["book_fair"] == 0.62
+        assert out.iloc[0]["n_books"] == 4
+
+    def test_drops_groups_under_min_books(self):
+        books = pd.DataFrame([
+            _row(book="draftkings", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.60),
+            _row(book="fanduel", market="game_ml", game_pk=1, selection="HOME",
+                 fair_prob=0.64),
+        ])
+        books["_pid"] = -1
+        books["_line"] = -99.0
+        out = V._kalshi_book_fair(books, min_books=4)
+        assert len(out) == 0
+
+
+def _kalshi_ask_row(selection, ask, **kw):
+    """A kalshi quote row as it's actually stored: implied_prob=ask, decimal=1/ask."""
+    return _row(book="kalshi", source="kalshi", selection=selection,
+                implied_prob=ask, decimal=round(1.0 / ask, 4), fair_prob=None, **kw)
+
+
+class TestKalshiEv:
+    def test_positive_ev_when_kalshi_ask_below_book_fair(self):
+        # Books think HOME is worth 0.62; Kalshi will sell it for 0.55 -- a real
+        # discount, so buying Kalshi's contract should show positive EV.
+        k = pd.DataFrame([_kalshi_ask_row("HOME", 0.55, market="game_ml", game_pk=1)])
+        k["_pid"] = -1
+        k["_line"] = -99.0
+        cons = pd.DataFrame([{"market": "game_ml", "game_pk": 1, "_pid": -1,
+                              "_line": -99.0, "selection": "HOME",
+                              "book_fair": 0.62, "n_books": 5}])
+        out = V._kalshi_ev(k, cons)
+        assert len(out) == 1
+        row = out.iloc[0]
+        assert row["edge"] == round(0.62 - 0.55, 4)
+        assert row["ev_pct"] == round(0.62 * (1.0 / 0.55) - 1.0, 4)
+        assert row["ev_pct"] > 0
+
+    def test_negative_ev_when_kalshi_ask_above_book_fair(self):
+        # Kalshi wants 0.70 for something the books think is worth 0.62 -- a bad buy.
+        k = pd.DataFrame([_kalshi_ask_row("HOME", 0.70, market="game_ml", game_pk=1)])
+        k["_pid"] = -1
+        k["_line"] = -99.0
+        cons = pd.DataFrame([{"market": "game_ml", "game_pk": 1, "_pid": -1,
+                              "_line": -99.0, "selection": "HOME",
+                              "book_fair": 0.62, "n_books": 5}])
+        out = V._kalshi_ev(k, cons)
+        assert out.iloc[0]["ev_pct"] < 0
+
+    def test_no_match_when_consensus_has_no_matching_group(self):
+        k = pd.DataFrame([_kalshi_ask_row("HOME", 0.55, market="game_ml", game_pk=1)])
+        k["_pid"] = -1
+        k["_line"] = -99.0
+        cons = pd.DataFrame([{"market": "game_ml", "game_pk": 2, "_pid": -1,
+                              "_line": -99.0, "selection": "HOME",
+                              "book_fair": 0.62, "n_books": 5}])
+        out = V._kalshi_ev(k, cons)
+        assert len(out) == 0
+
+
+# --------------------------------------------------------------------------- #
+# _kalshi_won() / _tstat() -- realized-outcome settlement for validate_kalshi_side
+# --------------------------------------------------------------------------- #
+
+class TestKalshiWon:
+    def test_game_ml_home_selection_wins_when_home_won(self):
+        assert V._kalshi_won("game_ml", "HOME", 1.0) == 1.0
+
+    def test_game_ml_home_selection_loses_when_away_won(self):
+        assert V._kalshi_won("game_ml", "HOME", 0.0) == 0.0
+
+    def test_game_ml_away_selection_wins_when_away_won(self):
+        assert V._kalshi_won("game_ml", "AWAY", 0.0) == 1.0
+
+    def test_nrfi_ou_yrfi_selection_wins_when_run_scored(self):
+        assert V._kalshi_won("nrfi_ou", "YRFI", 1.0) == 1.0
+
+    def test_nrfi_ou_nrfi_selection_wins_when_no_run(self):
+        assert V._kalshi_won("nrfi_ou", "NRFI", 0.0) == 1.0
+
+    def test_unknown_market_returns_none(self):
+        assert V._kalshi_won("game_total", "OVER", 8.0) is None
+
+    def test_nan_realized_returns_none(self):
+        assert V._kalshi_won("game_ml", "HOME", float("nan")) is None
+
+
+class TestTstat:
+    def test_none_with_fewer_than_two_values(self):
+        assert V._tstat(pd.Series([0.5])) is None
+
+    def test_none_when_zero_variance(self):
+        assert V._tstat(pd.Series([0.1, 0.1, 0.1])) is None
+
+    def test_positive_tstat_for_consistently_positive_roi(self):
+        t = V._tstat(pd.Series([0.1, 0.12, 0.09, 0.11, 0.10]))
+        assert t is not None and t > 0
+
+
+# --------------------------------------------------------------------------- #
 # classify() -- verdict heuristic
 # --------------------------------------------------------------------------- #
 
