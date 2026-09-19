@@ -12,8 +12,10 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -e .
+        run: |
+          pip install -e .
+          pip install pytest==9.1.1
       - name: Syntax check
-        run: python3 -m compileall -q mlb_core/ runners/ main.py
+        run: python3 -m compileall -q mlb_core/ mlb/ nba/ main.py
       - name: Test
         run: pytest tests/ -v
