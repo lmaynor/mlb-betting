@@ -59,6 +59,75 @@ class TestPrep:
         assert out.iloc[0]["_pid"] == -1
         assert out.iloc[0]["_line"] == -99.0
 
+    def test_nrfi_book_side_yes_no_normalized_to_yrfi_nrfi(self):
+        """2026-09-19: real-book ingestion frames nrfi_ou as a plain YES/NO
+        proposition; Kalshi (and everything else in this repo) uses NRFI/YRFI.
+        Without normalizing the book side, `selection` never matches between
+        the two sources -- confirmed this silently produced ZERO joined rows
+        for nrfi_ou in both scan() and scan_kalshi_side(), not "no divergence"."""
+        df = pd.DataFrame([
+            _row(market="nrfi_ou", book="draftkings", selection="YES", line=None),
+            _row(market="nrfi_ou", book="draftkings", selection="NO", line=None),
+        ])
+        out = V._prep(df)
+        assert sorted(out["selection"]) == ["NRFI", "YRFI"]
+
+    def test_nrfi_kalshi_side_selection_untouched(self):
+        df = pd.DataFrame([
+            _row(market="nrfi_ou", book="kalshi", source="kalshi",
+                 selection="YRFI", line=None),
+        ])
+        out = V._prep(df)
+        assert out.iloc[0]["selection"] == "YRFI"
+
+    def test_non_nrfi_market_selection_untouched(self):
+        """The normalization must not leak into other markets that happen to
+        use YES/NO (e.g. hr_yn's binary props)."""
+        df = pd.DataFrame([_row(market="hr_yn", book="draftkings", selection="YES")])
+        out = V._prep(df)
+        assert out.iloc[0]["selection"] == "YES"
+
+    def test_extreme_kalshi_price_dropped_on_liquid_market(self):
+        """2026-09-19: a Kalshi price this extreme on a LIQUID (game-level)
+        market is essentially always a stale/thin historical print, not a real
+        price -- confirmed via two independent real examples that manufactured
+        25-900%+ fake EV before this guard existed."""
+        df = pd.DataFrame([
+            _row(market="game_ml", book="kalshi", source="kalshi",
+                 selection="HOME", implied_prob=0.02, game_pk=1),
+        ])
+        out = V._prep(df)
+        assert len(out) == 0
+
+    def test_extreme_kalshi_price_kept_on_non_liquid_market(self):
+        """Props are documented repo-wide as thin/soft evidence already -- a
+        genuinely extreme long-shot price is plausible there, so it's not
+        filtered (unlike LIQUID game-level markets)."""
+        df = pd.DataFrame([
+            _row(market="hr_yn", book="kalshi", source="kalshi",
+                 selection="OVER", implied_prob=0.02, game_pk=1),
+        ])
+        out = V._prep(df)
+        assert len(out) == 1
+
+    def test_extreme_book_price_never_dropped(self):
+        """The sanity filter targets Kalshi's own thin historical prints --
+        a real book's genuinely extreme quote must survive untouched."""
+        df = pd.DataFrame([
+            _row(market="game_ml", book="draftkings", selection="HOME",
+                 implied_prob=0.02, game_pk=1),
+        ])
+        out = V._prep(df)
+        assert len(out) == 1
+
+    def test_kalshi_price_within_sane_range_kept(self):
+        df = pd.DataFrame([
+            _row(market="game_ml", book="kalshi", source="kalshi",
+                 selection="HOME", implied_prob=0.40, game_pk=1),
+        ])
+        out = V._prep(df)
+        assert len(out) == 1
+
 
 # --------------------------------------------------------------------------- #
 # _kalshi_truth() -- normalize complementary pairs; passthrough for run line

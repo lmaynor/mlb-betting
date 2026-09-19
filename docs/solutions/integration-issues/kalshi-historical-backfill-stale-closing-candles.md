@@ -61,18 +61,23 @@ to be.
 
 ## Fix
 
-No code fix applied -- this is a data-quality characteristic of the historical backfill
-to work around, not a bug to patch. When backtesting `scan_kalshi_side()` (or anything
-else built on Kalshi historical data for these markets):
-- Prefer `--since 2026-08-10` (after the 2026-07-24..08-09 live-capture gap) over
-  including the 2026-05-17..07-22 closing-candle-backfill window, unless the analysis
-  can otherwise account for stale/thin prints.
-- Don't trust a single extreme (near-0 or near-1) Kalshi implied_prob at face value on
-  a game-level moneyline without corroborating it (there is no liquidity/size signal in
-  odds_history to lean on).
+Two layers, applied same day:
+- **Guard added**: `kalshi_vs_books._KALSHI_SANE_RANGE = (0.03, 0.97)`, applied in
+  `_prep()` to Kalshi rows on LIQUID (game-level) markets only -- rejects an
+  implausible Kalshi price before it ever reaches an EV computation, the same
+  precautionary pattern as `hr_softline.py`'s `MAX_AMERICAN`. This does NOT fully
+  launder the underlying data-quality issue (a stale print at, say, 0.10 instead of
+  0.02 would sail right through and still be wrong) -- it only catches the most
+  extreme, most damaging cases.
+- **Still the real mitigation**: prefer `--since 2026-08-10` (after the
+  2026-07-24..08-09 live-capture gap) over including the 2026-05-17..07-22
+  closing-candle-backfill window for anything backtesting Kalshi historical data on
+  these markets -- the sane-range guard alone does not make the pre-08-10 window
+  trustworthy, it just caps how badly it can lie.
 - If a bet-sizing / live-execution use of Kalshi's own price is ever built (this repo
   does not currently place orders anywhere), it would need REAL order-book depth at
-  decision time, not a value out of odds_history.
+  decision time, not a value out of odds_history -- no size/liquidity signal survives
+  into this store regardless of the guard above.
 
 ## Related
 
@@ -82,4 +87,8 @@ else built on Kalshi historical data for these markets):
 - `docs/solutions/integration-issues/bettingpros-per-book-line-collapse.md` -- same
   shape of finding (a stable, large "edge" that was actually an ingest/data artifact),
   different root cause.
+- `docs/solutions/integration-issues/kalshi-nrfi-selection-label-mismatch.md` -- the
+  companion finding from the same investigation: fixing THAT join is what exposed this
+  exact stale-price pattern recurring on nrfi_ou too (a fake +879% ROI before both
+  fixes landed together).
 - `mlb/analysis/kalshi_vs_books.py` module docstring, "THE MIRROR" section.

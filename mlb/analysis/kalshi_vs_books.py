@@ -33,16 +33,31 @@ quotes vs real outcomes for the markets with a known ground-truth source
 (currently game_ml, nrfi_ou -- see _REALIZED_SOURCE). This is a market-
 structure question, not a trading action: it does not place any order.
 
-First-pass backtest (2026-09-19, game_ml+nrfi_ou): over Kalshi's full history
-(2026-05-17..today) this looked strongly -EV (ROI -32.8%, t=-4.56, n=970) --
-but that's dominated by stale/thin prints in the 2026-05-17..07-22 CLOSING-
-CANDLE historical backfill (see docs/solutions/integration-issues/
-kalshi-historical-backfill-stale-closing-candles.md); on the clean live
-forward-capture window alone (--since 2026-08-10, n=441) it's ROI -8.2%,
-t=-0.645 -- NOT statistically significant, i.e. no proven edge either way yet.
+First-pass backtest (2026-09-19, game_ml+nrfi_ou, clean window --since
+2026-08-10): **ROI -2.6%, t-stat -0.237, n=518 (game_ml -2.4%/-0.187/n=434;
+nrfi_ou -3.6%/-0.299/n=84) -- NOT statistically significant, i.e. no proven
+edge either way yet.** Two real bugs found+fixed en route to that number,
+both worth knowing before trusting any Kalshi-vs-books number in this repo
+(either direction):
+  1. Kalshi's own implied_prob can be a stale/thin historical print (e.g.
+     game_ml HOME=0.02 for a side real books had as a 55-64% favorite;
+     nrfi_ou NRFI=0.01) with no liquidity signal available to catch it --
+     see docs/solutions/integration-issues/
+     kalshi-historical-backfill-stale-closing-candles.md. Now guarded by
+     _KALSHI_SANE_RANGE (rejects Kalshi prices outside [0.03, 0.97] on
+     LIQUID markets before they ever reach an EV computation) -- unfiltered,
+     this manufactured a fake -32.8% ROI on the full history and a fake
+     +879% ROI on nrfi_ou alone once bug #2 below was fixed.
+  2. nrfi_ou's real-book rows are labeled YES/NO (a plain proposition) while
+     Kalshi's are NRFI/YRFI -- these never matched on `selection` at all, so
+     nrfi_ou silently produced ZERO joined rows in this scanner (either
+     direction) until _NRFI_SELECTION_MAP normalized the book side. See
+     docs/solutions/integration-issues/kalshi-nrfi-selection-label-mismatch.md.
 Always bound --since to 2026-08-10+ for this market until more live history
-accumulates; the pre-08-10 window will manufacture a fake, much-worse-looking
-"edge" than what real intraday data shows.
+accumulates; the pre-08-10 window still manufactures a much-worse-looking
+fake "edge" via bug #1 even with the fix in place, since it's a data-quality
+issue in that specific historical source, not something the sanity range can
+fully launder.
 
 Run (Cloud Shell; needs GCS):
   export MLB_GCS_BUCKET=concrete-crow-445205-m4-mlb-data
@@ -90,12 +105,42 @@ PLAYER_MARKETS = {"hr_yn", "k_ou", "outs_ou", "btb_ou", "bhits_ou"}
 _JOIN = ["market", "game_pk", "_pid", "_line", "selection"]
 _PAIR = ["market", "game_pk", "_pid", "_line"]           # a two-sided quote
 
+# nrfi_ou: real-book ingestion (BettingPros/ParlayAPI) frames this as a plain
+# YES/NO proposition ("will a run score in the 1st"), no numeric line -- but
+# Kalshi's own ingestion, and every other live bet/settlement in this repo
+# (CONTEXT.md's bet_type table: "NRFI"/"YRFI"), use the named convention.
+# Confirmed 2026-09-19: without this, `selection` never matches between the
+# two sources for nrfi_ou, so it silently produced ZERO joined rows in BOTH
+# scan() and scan_kalshi_side() the whole time -- not "an efficient market
+# with no divergence," a real join failure hiding behind an empty result that
+# looked plausible for a market this repo already documents as tight/liquid.
+_NRFI_SELECTION_MAP = {"YES": "YRFI", "NO": "NRFI"}
+
+# Kalshi's own implied_prob outside this band on a LIQUID (game-level) market is
+# essentially never real -- confirmed 2026-09-19 via two independent examples
+# (game_ml HOME=0.02 for a side real books had as a 55-64% favorite; nrfi_ou
+# NRFI=0.01, i.e. "1% chance of a scoreless 1st"), both traced to stale/thin
+# prints in the historical closing-candle backfill (no bid/ask SIZE data
+# survives into odds_history to tell a real liquid print from an old resting
+# order). Left unfiltered, these manufacture 25-900%+ fake EV. Same
+# precautionary pattern as hr_softline.py's MAX_AMERICAN. Props are NOT
+# filtered here -- already documented repo-wide as thin/soft evidence, where a
+# genuinely extreme long-shot price is far more plausible than on a game line.
+_KALSHI_SANE_RANGE = (0.03, 0.97)
+
 
 def _prep(df: pd.DataFrame) -> pd.DataFrame:
     """Latest snapshot per (quote, book); NaN-safe join keys."""
     df = df[df["implied_prob"].notna()].copy()
     df["_pid"] = df["player_id"].fillna(-1)
     df["_line"] = df["line"].fillna(-99.0)
+    is_book_nrfi = (df["market"] == "nrfi_ou") & (df["book"] != "kalshi")
+    orig = df.loc[is_book_nrfi, "selection"]
+    df.loc[is_book_nrfi, "selection"] = (
+        orig.str.upper().map(_NRFI_SELECTION_MAP).fillna(orig))
+    lo, hi = _KALSHI_SANE_RANGE
+    is_kalshi_liquid = (df["book"] == "kalshi") & (df["market"].isin(LIQUID))
+    df = df[~is_kalshi_liquid | df["implied_prob"].between(lo, hi)]
     df = df.sort_values("snapshot_ts")
     keys = ["market", "game_pk", "_pid", "_line", "selection", "book"]
     return df.drop_duplicates(subset=keys, keep="last")
