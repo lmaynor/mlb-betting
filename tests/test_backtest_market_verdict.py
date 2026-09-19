@@ -111,3 +111,15 @@ def test_hi_clv_and_hi_n_always_present_in_output():
     empty_out = bt.verdict(pd.DataFrame())
     assert "hi_n" in empty_out and "hi_clv" in empty_out
     assert empty_out["hi_n"] == 0
+
+
+def test_tstat_none_when_zero_variance():
+    """2026-09-18: float64 rounding on near-identical values (e.g. three 0.1s)
+    can leave scipy's sem a tiny non-zero epsilon instead of exactly 0.0, which
+    a bare `sem > 0` guard would let through -- producing a meaningless ~1e16
+    t-stat instead of the correct None for a genuinely flat/zero-variance
+    sample. This could otherwise let a system's ROI/CLV bucket clear verdict()'s
+    significance bar on a data artifact, not a real signal. Found while adding
+    the same _tstat pattern to kalshi_vs_books.py; this is the pre-existing copy
+    backtest_market.py's own docstring calls a mirror of hr_softline.py::_tstat."""
+    assert bt._tstat(pd.Series([0.1, 0.1, 0.1])) is None

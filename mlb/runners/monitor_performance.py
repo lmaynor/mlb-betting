@@ -93,7 +93,10 @@ def _clv_stats(df: pd.DataFrame) -> dict:
     n    = len(vals)
     mean = float(np.mean(vals))
     sem  = float(scipy_stats.sem(vals)) if n > 1 else 0.0
-    tstat = round(mean / sem, 3) if sem > 0 else None
+    # sem>1e-9 (not sem>0): float64 rounding on near-identical values can leave
+    # sem a tiny non-zero epsilon instead of exactly 0, which would otherwise
+    # blow up into a meaningless ~1e16 t-stat instead of the correct None.
+    tstat = round(mean / sem, 3) if sem > 1e-9 else None
     return {
         "clv_n":    n,
         "mean_clv": round(mean, 4),

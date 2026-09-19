@@ -169,6 +169,19 @@ def _realized_hr():
             if pd.notna(gi) and pd.notna(bi) and pd.notna(hi)}
 
 
+def _tstat(vals) -> float | None:
+    """t-stat of the mean. sem>1e-9 (not sem>0) guards against float64 rounding
+    noise on near-identical values producing a near-zero-but-not-exactly-zero
+    sem, which would otherwise blow up into a meaningless ~1e16 t-stat instead
+    of the "no real variance, no signal" None a truly flat sample should report."""
+    from scipy import stats as scipy_stats
+    vals = vals.dropna()
+    if len(vals) < 2:
+        return None
+    sem = float(scipy_stats.sem(vals))
+    return round(float(vals.mean()) / sem, 3) if sem > 1e-9 else None
+
+
 def validate(allq: pd.DataFrame) -> None:
     """Settle the flagged soft +EV quotes vs the REAL HR outcome -- the go/no-go.
     A soft-line edge is only real if these flagged bets actually PROFIT."""
@@ -187,14 +200,6 @@ def validate(allq: pd.DataFrame) -> None:
     yes = q["selection"].str.upper().isin(["OVER", "YES"])
     q["won"] = ((q["hr"] >= 1) == yes).astype(int)
     q["roi"] = q["won"].mul(q["dec"] - 1.0).where(q["won"] == 1, -1.0)
-
-    def _tstat(vals):
-        from scipy import stats as scipy_stats
-        vals = vals.dropna()
-        if len(vals) < 2:
-            return None
-        sem = float(scipy_stats.sem(vals))
-        return round(float(vals.mean()) / sem, 3) if sem > 0 else None
 
     t = _tstat(q["roi"])
     print("\n=== REALIZED validation: flagged soft +EV quotes settled vs actual HR ===")

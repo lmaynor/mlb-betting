@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from mlb.runners.monitor_performance import (
-    _rolling_stats, _gate_condition_met, _check_alerts,
+    _rolling_stats, _gate_condition_met, _check_alerts, _clv_stats,
     MIN_GATE_N, GATE_ROI_MIN,
 )
 
@@ -109,3 +109,16 @@ def test_alert_falls_back_to_market_auc_when_model_auc_unavailable():
     stats = {"n": 25, "roi": 0.0, "hit_rate": 0.55, "auc": 0.40, "auc_model": None}
     alerts = _check_alerts("SOME_SYSTEM", stats)
     assert any("AUC over last" in a for a in alerts)
+
+
+def test_clv_tstat_none_when_zero_variance():
+    """2026-09-18: float64 rounding on near-identical clv_pct values (e.g.
+    three 0.1s) can leave scipy's sem a tiny non-zero epsilon instead of
+    exactly 0.0, which a bare `sem > 0` guard would let through -- producing a
+    meaningless ~1e16 t-stat instead of the correct None for a genuinely flat/
+    zero-variance sample. Same latent bug as backtest_market.py's/
+    hr_softline.py's own _tstat copies, live here in the daily performance
+    monitor's real CLV significance check (T08/T17)."""
+    df = pd.DataFrame({"clv_pct": [0.1, 0.1, 0.1]})
+    out = _clv_stats(df)
+    assert out["clv_tstat"] is None

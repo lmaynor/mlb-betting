@@ -299,13 +299,16 @@ def _bucket_table(df: pd.DataFrame) -> pd.DataFrame:
 
 def _tstat(vals: pd.Series) -> float | None:
     """Mean/SEM t-stat. Mirrors hr_softline.py::_tstat. None if <2 points or sem==0
-    (too thin / zero-variance to call significant either way)."""
+    (too thin / zero-variance to call significant either way). sem>1e-9 (not
+    sem>0) guards against float64 rounding noise on near-identical values
+    producing a near-zero-but-not-exactly-zero sem, which would otherwise blow
+    up into a meaningless ~1e16 t-stat instead of None."""
     from scipy import stats as scipy_stats
     vals = vals.dropna()
     if len(vals) < 2:
         return None
     sem = float(scipy_stats.sem(vals))
-    return round(float(vals.mean()) / sem, 3) if sem > 0 else None
+    return round(float(vals.mean()) / sem, 3) if sem > 1e-9 else None
 
 
 def verdict(cand: pd.DataFrame, low_edge_max: float = LOW_EDGE_MAX,
