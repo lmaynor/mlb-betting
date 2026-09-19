@@ -13,8 +13,14 @@
 # find until both feeds land. Deliberately skips the two next-day-opener
 # capture times (01:25/03:25 UTC): 20+ hours out, nothing to strike yet.
 #
-# Read-only against odds_history + Alerts/{day}/kalshi_*.parquet state --
-# same GCS-only, no-DB, no-external-API profile as mlb-fast-alert.
+# Read-only against odds_history + Alerts/{day}/kalshi_*.parquet state, no
+# external API of its own -- same profile as mlb-fast-alert. Also logs every
+# posted alert into the bets table (system="EV", pooled with mlb-fast-alert's
+# own) for profitability tracking, so it needs Cloud SQL access
+# (--set-cloudsql-instances + MLB_DB_URL secret) same as mlb-fit-calibrators.
+# Fixed 2026-09-18: this job (and mlb-fast-alert) never had that wiring -- see
+# setup_fast_alert.sh's comment and
+# docs/solutions/runtime-errors/ev-alert-jobs-missing-db-wiring.md.
 #
 # Prereq: image rebuilt with mlb/runners/kalshi_alert.py (./deploy/deploy_service.sh).
 #
@@ -29,6 +35,7 @@ JOB_NAME="mlb-kalshi-alert"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
+INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 
 echo "=== Kalshi +EV alert job setup ==="
 gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
@@ -37,11 +44,18 @@ gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
 ENVV="^@^GCP_PROJECT=${PROJECT_ID}@GCP_REGION=${REGION}@KALSHI_ALERT_MIN_EV=0.03@KALSHI_ALERT_MIN_BOOKS=4@KALSHI_ALERT_SOFT_ONLY=1@KALSHI_ALERT_MAX_POSTS=10"
 JOB_FLAGS=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
-  # DISCORD_WEBHOOK_ALERTS routes to the dedicated #soft-line-alerts channel
-  # once that secret exists (see setup_fast_alert.sh's identical mapping);
-  # falls back to DISCORD_WEBHOOK_URL (#daily-picks) via _alert_webhook() in
-  # code if discord-webhook-alerts doesn't exist yet.
-  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest"
+  # DISCORD_WEBHOOK_ALERTS would route to a dedicated #soft-line-alerts
+  # channel once that secret exists -- it does NOT yet (confirmed 2026-09-18:
+  # `gcloud secrets describe discord-webhook-alerts` -> NOT_FOUND), so it is
+  # deliberately left off --set-secrets below -- see setup_fast_alert.sh's
+  # identical note (a nonexistent secret here fails the ENTIRE `gcloud run
+  # jobs update` call, which is what blocked the MLB_DB_URL fix below until
+  # this was found). _alert_webhook() in-code already falls back to
+  # DISCORD_WEBHOOK_URL (#daily-picks) when unset, so this is a no-op
+  # behavior change. Add it back to both scripts once the secret is
+  # actually created.
+  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,MLB_DB_URL=mlb-db-url:latest"
+  --set-cloudsql-instances="$INSTANCE"
   --set-env-vars="$ENVV"
   --command="python3" --args="-m,mlb.runners.kalshi_alert"
   --memory=1Gi --cpu=1 --task-timeout=600 --max-retries=0 --quiet
