@@ -490,6 +490,26 @@ class TestSettleEv:
         assert len(results) == 1
         assert results[0]["result"] == "win"
 
+    def test_null_game_pk_is_voided_not_crashed(self):
+        """Regression: an alert whose game was never matched (game_pk NULL) hit
+        int(NaN) inside _settle_k and aborted the whole settle run (it crashed the
+        2026-10-03 EV remediation job after 7,580 rows were already inserted).
+        Such a bet can never be graded -> void; the rest must still settle."""
+        pending = _make_pending([
+            {"id": 1, "player": "Gerrit Cole", "bet_type": "K_OVER_7.5_draftkings"},
+            {"id": 2, "player": "Nobody", "bet_type": "K_OVER_5.5_fanduel", "game_pk": None},
+            {"id": 3, "player": "Nobody", "bet_type": "HR_hardrock", "game_pk": float("nan")},
+        ])
+        cache = {100: _boxscore(pitchers={"gerrit cole": {"strikeouts": 9, "outs": 21, "earned_runs": 2}})}
+        by_id = {r["id"]: r for r in _settle_ev(pending, cache)}
+        assert by_id[1]["result"] == "win"
+        assert by_id[2] == {"id": 2, "result": "void", "profit": 0.0}
+        assert by_id[3] == {"id": 3, "result": "void", "profit": 0.0}
+
+    def test_all_null_game_pk_returns_only_voids(self):
+        pending = _make_pending([{"id": 7, "player": "X", "bet_type": "K_OVER_7.5_x", "game_pk": None}])
+        assert _settle_ev(pending, {}) == [{"id": 7, "result": "void", "profit": 0.0}]
+
     def test_dispatches_outs_to_settle_k(self):
         pending = _make_pending([
             {"id": 1, "player": "Gerrit Cole", "bet_type": "OUTS_UNDER_17.5_fanduel"},
