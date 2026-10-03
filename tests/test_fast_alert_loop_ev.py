@@ -67,6 +67,38 @@ class TestEvBetType:
     def test_nrfi_under_is_nrfi(self):
         assert fal._ev_bet_type("nrfi_ou", "UNDER", 0.5, "fanduel") == "NRFI_fanduel"
 
+    @pytest.mark.parametrize("sel,expected", [
+        ("YES", "YRFI_draftkings"),    # real book label (BettingPros kind="yesno")
+        ("NO", "NRFI_draftkings"),
+        ("YRFI", "YRFI_draftkings"),   # kalshi_vs_books._prep normalizes YES/NO -> these
+        ("NRFI", "NRFI_draftkings"),
+        ("yrfi", "YRFI_draftkings"),
+    ])
+    def test_nrfi_real_book_and_normalized_labels(self, sel, expected):
+        """Regression: only OVER was recognised as YRFI, so every YES/YRFI
+        alert was logged as NRFI -- the exact opposite bet -- once
+        kalshi_vs_books started joining nrfi_ou rows (2026-09-19)."""
+        assert fal._ev_bet_type("nrfi_ou", sel, None, "draftkings") == expected
+
+    def test_nrfi_unknown_selection_returns_none(self):
+        assert fal._ev_bet_type("nrfi_ou", "DRAW", None, "draftkings") is None
+
+    # -- hr_yn: settle_bets._settle_hr grades every "HR*" bet as "1+ HR wins" --
+
+    def test_hr_yes_is_loggable(self):
+        assert fal._ev_bet_type("hr_yn", "YES", 0.5, "draftkings") == "HR_draftkings"
+        assert fal._ev_bet_type("hr_yn", "OVER", float("nan"), "draftkings") == "HR_draftkings"
+
+    def test_hr_under_is_not_loggable(self):
+        """Regression: UNDER 0.5 HR ("no HR", ~13% of real posted hr_yn alerts)
+        was logged as HR_{book} and graded as '1+ HR wins' -- inverted."""
+        assert fal._ev_bet_type("hr_yn", "UNDER", 0.5, "draftkings") is None
+        assert fal._ev_bet_type("hr_yn", "NO", 0.5, "draftkings") is None
+
+    def test_hr_alt_line_is_not_loggable(self):
+        # Over 1.5 HR (2+ HR) is a different bet than the "1+ HR" HR settler grades.
+        assert fal._ev_bet_type("hr_yn", "OVER", 1.5, "draftkings") is None
+
     def test_game_ml_home(self):
         assert fal._ev_bet_type("game_ml", "HOME", None, "hardrock") == "GAME_HOME_hardrock"
 
@@ -149,6 +181,7 @@ class TestLogEvBets:
 
     def test_no_player_name_falls_back_to_matchup(self, tmp_path, monkeypatch):
         monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {})  # lookup also fails
         posted = pd.DataFrame([_alert_row(player_name=None, market="hr_yn", line=0.5)])
         fal._log_ev_bets(posted, "2026-08-19")
 
@@ -156,6 +189,23 @@ class TestLogEvBets:
         tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
         df = tracker.all_bets()
         assert df.iloc[0]["player"] == "NYY @ BOS"
+
+    def test_missing_player_name_is_re_resolved_from_player_id(self, tmp_path, monkeypatch):
+        """A blank name logs player='AWAY @ HOME', which every settler voids
+        (it looks players up by name). Re-resolve from player_id first."""
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {700001: "Real Name"})
+        posted = pd.DataFrame([_alert_row(player_name="", market="hr_yn", line=0.5)])
+        fal._log_ev_bets(posted, "2026-08-19")
+
+        from mlb_core.tracking.bet_tracker import BetTracker
+        tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
+        assert tracker.all_bets().iloc[0]["player"] == "Real Name"
+
+    def test_hr_under_alert_is_skipped_not_logged_inverted(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([_alert_row(market="hr_yn", selection="UNDER", line=0.5)])
+        assert fal._log_ev_bets(posted, "2026-08-19") == 0
 
 
 # ── kelly_pct (2026-09-18) ────────────────────────────────────────────────────

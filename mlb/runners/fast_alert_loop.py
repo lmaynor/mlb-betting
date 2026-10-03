@@ -349,15 +349,29 @@ def _ev_bet_type(market: str, selection: str, line, book: str | None) -> str | N
     sel = str(selection).upper()
 
     if market == "hr_yn":
+        # settle_bets._settle_hr grades EVERY "HR*" bet_type as "1+ HR wins",
+        # with no side/line awareness. So only a quote that IS "1+ HR" (OVER/
+        # YES at line 0.5) may map to it; "Under 0.5 HR" (no HR) or an alt
+        # line like "Over 1.5" would be graded as the opposite/wrong bet
+        # (confirmed in production: ~13% of posted hr_yn alerts are UNDER 0.5).
+        # No settler exists for those yet -> don't log what can't be graded.
+        if sel not in ("OVER", "YES") or (pd.notna(line) and float(line) > 0.5):
+            return None
         base = "HR"
     elif market == "nrfi_ou":
         # NRFI/YRFI's own bet_type is the bare word (settle_bets._settle_nrfi
         # matches it exactly) -- there's no line, the side IS the whole bet.
-        # odds_history's O/U convention for this market: OVER 0.5 = a run
-        # scored = YRFI, UNDER 0.5 = no run = NRFI (bettingpros_to_parquet's
-        # "run_in_1st_inning" entry is kind="total", i.e. OVER/UNDER, not
-        # yes/no).
-        base = "YRFI" if sel == "OVER" else "NRFI"
+        # Real book rows are YES/NO ("run in the 1st inning?" -- BettingPros'
+        # run_in_1st_inning is kind="yesno", mlb_core/odds/bettingpros.py);
+        # kalshi_vs_books._prep normalizes those to YRFI/NRFI, and some
+        # sources use OVER/UNDER 0.5. A run scored (YES/OVER/YRFI) = YRFI.
+        # Anything else is unknown -> None rather than guessing a side.
+        if sel in ("YES", "OVER", "YRFI"):
+            base = "YRFI"
+        elif sel in ("NO", "UNDER", "NRFI"):
+            base = "NRFI"
+        else:
+            return None
     elif market == "game_ml":
         base = f"GAME_{sel}"   # matches settle_bets._settle_innings_window's "GAME_{SIDE}"
     elif market == "f5_ml":
@@ -395,11 +409,20 @@ def _log_ev_bets(posted: pd.DataFrame, run_date: str) -> int:
         return 0
     tracker = BetTracker(_EV_BET_DB, system="EV")
     logged = 0
+    # Settlers look a player bet up BY NAME in the boxscore; a row logged with
+    # the "AWAY @ HOME" fallback can only ever void. Re-resolve any missing
+    # name from player_id (a transient MLB-API failure at post time, or a
+    # log.parquet row rewritten by odds_alert.py, leaves it blank).
+    need = posted.loc[~posted["player_name"].map(lambda x: isinstance(x, str) and bool(x)), "player_id"] \
+        if {"player_name", "player_id"} <= set(posted.columns) else pd.Series(dtype=float)
+    fallback_names = resolve_player_names(need.dropna().unique()) if len(need.dropna()) else {}
     for _, r in posted.iterrows():
         bet_type = _ev_bet_type(r.get("market"), r.get("selection"), r.get("line"), r.get("book"))
         if bet_type is None:
             continue
         pname = r.get("player_name")
+        if not (isinstance(pname, str) and pname) and pd.notna(r.get("player_id")):
+            pname = fallback_names.get(int(r["player_id"]))
         player = pname if isinstance(pname, str) and pname else f"{r.get('away_team')} @ {r.get('home_team')}"
         n_books = r.get("n_books")
         decimal = r.get("decimal")

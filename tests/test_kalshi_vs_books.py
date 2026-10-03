@@ -218,6 +218,22 @@ class TestKalshiBookFair:
         assert len(out) == 0
 
 
+    def test_n_books_counts_only_books_with_a_devigged_fair_prob(self):
+        """One-sided / un-devigged quotes carry fair_prob=NaN. n_books must not
+        count them, or a 1-real + 3-NaN group clears a min_books=4 gate."""
+        books = pd.DataFrame([
+            _row(book="draftkings", market="game_ml", game_pk=1, selection="HOME", fair_prob=0.60),
+            _row(book="fanduel", market="game_ml", game_pk=1, selection="HOME", fair_prob=None),
+            _row(book="betmgm", market="game_ml", game_pk=1, selection="HOME", fair_prob=None),
+            _row(book="caesars", market="game_ml", game_pk=1, selection="HOME", fair_prob=None),
+        ])
+        books["_pid"] = -1
+        books["_line"] = -99.0
+        assert len(V._kalshi_book_fair(books, min_books=4)) == 0
+        out = V._kalshi_book_fair(books, min_books=1)
+        assert out.iloc[0]["n_books"] == 1
+
+
 def _kalshi_ask_row(selection, ask, **kw):
     """A kalshi quote row as it's actually stored: implied_prob=ask, decimal=1/ask."""
     return _row(book="kalshi", source="kalshi", selection=selection,
@@ -343,3 +359,42 @@ class TestClassify:
         df = pd.DataFrame([_scanned_row(n_books=1, k_dev=0.5, bk_dev=-0.5)])
         out = V.classify(df, min_books=4, kdev_max=0.04, stale_gap=0.15)
         assert out.iloc[0]["verdict"] == "thin_pack"
+
+
+# --------------------------------------------------------------------------- #
+# _realized_outcomes() -- ground truth for validate_kalshi_side
+# --------------------------------------------------------------------------- #
+
+class TestRealizedOutcomes:
+    def _patch_csv(self, monkeypatch, df):
+        monkeypatch.setattr("mlb_core.storage.read_bytes", lambda key: df.to_csv(index=False).encode())
+
+    def test_nrfi_yrfi_is_game_level_max_over_both_starter_rows(self, monkeypatch):
+        """Regression: NRFI model_features.csv has one row PER STARTER and
+        `yrfi` is that pitcher's own 1st-inning result. dict(zip(...)) kept
+        whichever row came last, labeling a game NRFI whenever only the OTHER
+        half scored. Game-level YRFI = either half scored."""
+        df = pd.DataFrame([
+            {"game_pk": 1, "yrfi": 1}, {"game_pk": 1, "yrfi": 0},   # one half scored, scoring row first
+            {"game_pk": 2, "yrfi": 0}, {"game_pk": 2, "yrfi": 1},   # scoring row last
+            {"game_pk": 3, "yrfi": 0}, {"game_pk": 3, "yrfi": 0},   # genuinely NRFI
+        ])
+        self._patch_csv(monkeypatch, df)
+        assert V._realized_outcomes("nrfi_ou") == {1: 1.0, 2: 1.0, 3: 0.0}
+
+    def test_game_ml_label_unchanged(self, monkeypatch):
+        df = pd.DataFrame([{"game_pk": 1, "home_win": 1}, {"game_pk": 2, "home_win": 0}])
+        self._patch_csv(monkeypatch, df)
+        assert V._realized_outcomes("game_ml") == {1: 1.0, 2: 0.0}
+
+    def test_market_without_source_returns_empty(self):
+        assert V._realized_outcomes("hr_yn") == {}
+
+
+def test_cli_help_builds_without_error():
+    """Regression: a bare '%' in an argparse help string raised ValueError at
+    parser-build time on py3.14 (and on --help for every version)."""
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as e:
+        V.main(["--help"])
+    assert e.value.code == 0

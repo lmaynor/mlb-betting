@@ -404,9 +404,16 @@ def run() -> dict:
         auc_te = float(roc_auc_score(y_te, test_preds[name]))
         logger.info(f"  [{name}] test AUC={auc_te:.4f}")
 
-        leakage_suspects = _leakage_check(
-            df, features, {"best_iteration": best_iter, "auc_oos": auc_te}
-        )
+        # Diagnostic only (warns, never gates the model) -- an unexpected
+        # exception here must not abort the weekly production retrain before
+        # any artifact is written.
+        try:
+            leakage_suspects = _leakage_check(
+                df, features, {"best_iteration": best_iter, "auc_oos": auc_te}
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"  [{name}] leakage check failed (non-fatal, skipped): {e}")
+            leakage_suspects = []
         sub_info[name]["leakage_suspects"] = leakage_suspects
 
     # 4. Fit logistic stacker on val-set OOS predictions (no test leakage)

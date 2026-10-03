@@ -33,6 +33,15 @@ quotes vs real outcomes for the markets with a known ground-truth source
 (currently game_ml, nrfi_ou -- see _REALIZED_SOURCE). This is a market-
 structure question, not a trading action: it does not place any order.
 
+CORRECTION (2026-10-02 audit): the nrfi_ou figures below used a wrong ground-
+truth label (_realized_outcomes took one STARTER's half-inning `yrfi` as the
+game-level result; ~18% of flagged nrfi_ou quotes were mislabeled, always in
+the NRFI direction). Re-run on the larger 2026-10-02 window, n=646: shipped
+label ROI -3.7% (nrfi_ou -7.7%) -> corrected ROI -0.1% (nrfi_ou +16.7%,
+t=1.43, n=96; game_ml -3.0%, t=-0.26, n=550). Still NOT significant either
+way; the conclusion "leans negative" no longer holds. Fixed in
+_realized_outcomes (groupby game_pk max).
+
 First-pass backtest (2026-09-19, game_ml+nrfi_ou, clean window --since
 2026-08-10): **ROI -2.6%, t-stat -0.237, n=518 (game_ml -2.4%/-0.187/n=434;
 nrfi_ou -3.6%/-0.299/n=84) -- NOT statistically significant, i.e. no proven
@@ -222,8 +231,11 @@ def _kalshi_book_fair(books: pd.DataFrame, min_books: int = 4) -> pd.DataFrame:
     vig-loaded median, fine as a rough corroboration check but not a real
     fair-value anchor -- using it as truth would make every book's own vig look
     like free Kalshi edge). Drops groups under min_books (thin/untrustworthy)."""
+    # n_books must count books that actually contributed a devigged fair_prob
+    # ("count" skips NaN; "size" counted one-sided/un-devigged rows too, so a
+    # 1-real + 3-NaN group passed a min_books=4 gate).
     cons = (books.groupby(_JOIN)["fair_prob"]
-            .agg(book_fair="median", n_books="size").reset_index())
+            .agg(book_fair="median", n_books="count").reset_index())
     return cons[cons["n_books"] >= min_books]
 
 
@@ -312,6 +324,13 @@ def _realized_outcomes(market: str) -> dict:
     feature_csv, label_col = src
     df = pd.read_csv(io.BytesIO(storage.read_bytes(feature_csv)),
                      usecols=["game_pk", label_col]).dropna()
+    # NRFI's model_features.csv is one row PER STARTER (two per game) and its
+    # `yrfi` is that pitcher's own 1st-inning runs allowed, not the game-level
+    # outcome. A plain dict(zip(...)) keeps whichever row is last -> ~20% of
+    # games mislabeled NRFI when only the other half scored. Game-level YRFI =
+    # either half scored = max. (Harmless for game_ml: home_win is constant
+    # within a game.)
+    df = df.groupby("game_pk", as_index=False)[label_col].max()
     return {int(g): float(v) for g, v in zip(df["game_pk"], df[label_col])}
 
 
@@ -416,7 +435,7 @@ def main(argv=None) -> int:
     p.add_argument("--until", default=None)
     p.add_argument("--closing", action="store_true", help="compare closing snapshots only")
     p.add_argument("--min-ev", type=float, default=0.03, help="min ev_pct to show (default 0.03)")
-    p.add_argument("--soft-only", action="store_true", help="only soft books (vig>=8%)")
+    p.add_argument("--soft-only", action="store_true", help="only soft books (vig>=8%%)")
     p.add_argument("--liquid-only", action="store_true",
                    help="only markets with trustworthy Kalshi mids (nrfi/game/total/runline)")
     p.add_argument("--kdev-max", type=float, default=0.04,
