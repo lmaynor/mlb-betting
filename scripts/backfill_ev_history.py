@@ -124,11 +124,17 @@ def _posted_subset(log_df, notified_df):
 # -- recovery: fast_alert_loop --------------------------------------------------
 
 def recover_fast_alert(days: list[str]) -> pd.DataFrame:
-    from mlb.runners.fast_alert_loop import _ev_bet_type, _EV_KELLY_FRACTION
+    from mlb.runners.fast_alert_loop import _ev_bet_type, _EV_KELLY_FRACTION, resolve_player_names
     from mlb_core.odds.utils import kelly_pct as kpct
 
-    rows = []
-    skipped_not_real_book = 0
+    # log.parquet is NOT a reliable source of player_name: odds_alert.py also
+    # appends (unnamed) scan rows to the same file and its keep="last" dedup can
+    # overwrite the named fast_alert_loop row. Measured on the real GCS trail:
+    # ~53% of recoverable rows had no name -> player="AWAY @ HOME" -> every
+    # settler voids it (and unnamed rows in one game collide on the dedup key).
+    # player_id IS always present, so re-resolve names from it, exactly as
+    # recover_kalshi() does.
+    day_frames = []
     for day in days:
         posted = _posted_subset(
             _read_parquet_safe(f"Alerts/{day}/log.parquet"),
@@ -136,6 +142,18 @@ def recover_fast_alert(days: list[str]) -> pd.DataFrame:
         )
         if posted is None or posted.empty:
             continue
+        posted = posted.copy()
+        posted["_day"] = day
+        day_frames.append(posted)
+    if not day_frames:
+        return pd.DataFrame()
+    combined = pd.concat(day_frames, ignore_index=True)
+    names = (resolve_player_names(combined["player_id"].dropna().unique())
+             if "player_id" in combined.columns else {})
+
+    rows = []
+    skipped_not_real_book = 0
+    for day, posted in combined.groupby("_day", sort=True):
         for _, r in posted.iterrows():
             if str(r.get("book", "")).lower() in _NOT_REAL_BOOKS:
                 skipped_not_real_book += 1
@@ -147,6 +165,8 @@ def recover_fast_alert(days: list[str]) -> pd.DataFrame:
             odds = r.get("american")
             decimal = r.get("decimal")
             pname = r.get("player_name")
+            if not (isinstance(pname, str) and pname) and pd.notna(r.get("player_id")):
+                pname = names.get(int(r["player_id"]))
             player = pname if isinstance(pname, str) and pname else f"{r.get('away_team')} @ {r.get('home_team')}"
             n_books = r.get("n_books")
             rows.append(dict(

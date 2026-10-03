@@ -1253,7 +1253,7 @@ def model_health_handler():
         mu  = sum(clvs) / n
         var = sum((x - mu) ** 2 for x in clvs) / (n - 1)
         se  = math.sqrt(var / n)
-        return round(mu, 4), round(mu / se, 3) if se > 0 else 0.0
+        return round(mu, 4), round(mu / se, 3) if se > 1e-9 else 0.0
 
     def _health_verdict(n, auc_model, cal_err, roi,
                         mean_clv=None, clv_tstat=None, clv_n=0):
@@ -1492,7 +1492,7 @@ def edge_analysis_handler():
         mu  = sum(clvs) / n
         var = sum((x - mu) ** 2 for x in clvs) / (n - 1)
         se  = math.sqrt(var / n)
-        return round(mu, 4), (round(mu / se, 3) if se > 0 else 0.0)
+        return round(mu, 4), (round(mu / se, 3) if se > 1e-9 else 0.0)
 
     def _bucket_stats(rows):
         n = len(rows)

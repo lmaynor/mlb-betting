@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-09-18 (CT)_
+_Last updated: 2026-10-03 12:49 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -936,6 +936,19 @@ Fixed in `deploy/setup_fast_alert.sh` / `deploy/setup_kalshi_alert_job.sh`
 recovered via `scripts/backfill_ev_history.py` off that same GCS trail. Full
 writeup: docs/solutions/runtime-errors/ev-alert-jobs-missing-db-wiring.md
 and s15.9.
+
+**2026-10-02 audit: the 2026-09-18 recovery figures (+0.26% flat / -0.88%
+Kelly, 6,090 rows, ~41% void) are NOT reliable.** `_ev_bet_type` ignored
+side/line for `hr_yn` (an "Under 0.5 HR" alert was graded as "1+ HR wins" --
+the inverted bet; ~$11k flat-stake distortion on 129 real alerts, and the
+actual cause of the "model_prob ~0.99 at -2000..-2800" Kelly blowup), mapped
+`nrfi_ou` assuming OVER/UNDER when real books are YES/NO, and the backfill took
+player names from `log.parquet` (~53% unnamed -> `"AWAY @ HOME"` -> void). All
+fixed in code; rows already in `bets` still need a remediation pass (delete the
+backfilled/mis-graded system='EV' rows and re-run the fixed
+`scripts/backfill_ev_history.py`). `_ev_bet_type` now returns None (not logged)
+for anything the HR settler can't grade. See
+docs/solutions/logic-errors/ev-bet-type-ignores-side-and-line-misgrades.md.
 
 ### Settlement sources
 
@@ -3302,7 +3315,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-09-04 22:22 CST_
+_Last updated: 2026-10-03 12:49 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

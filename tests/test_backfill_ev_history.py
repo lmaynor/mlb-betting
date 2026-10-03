@@ -84,6 +84,14 @@ class TestPostedSubset:
 _QUOTE_COLS = ["market", "game_pk", "player_id", "line", "selection", "book"]
 
 
+@pytest.fixture(autouse=True)
+def _no_network_name_lookup(monkeypatch):
+    """recover_fast_alert/recover_kalshi re-resolve names via the MLB Stats API
+    -- never hit the network from a unit test."""
+    import mlb.runners.fast_alert_loop as fal
+    monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {})
+
+
 def _fake_reader(files: dict):
     """files: {gcs_key: DataFrame} -- returns None for any key not present,
     matching _read_parquet_safe's real behavior for a missing GCS object."""
@@ -159,3 +167,40 @@ class TestOffshoreBookExcluded:
         df = recover_kalshi(["2026-08-12"])
         assert len(df) == 1
         assert df.iloc[0]["book"] == "fliff"
+
+
+class TestPlayerNameRecovery:
+    """log.parquet is not a reliable name source: odds_alert.py appends unnamed
+    scan rows to the same file and its keep='last' dedup can overwrite the named
+    fast_alert_loop row. On real GCS data ~53% of recoverable rows had no name,
+    so they were logged as player='AWAY @ HOME' and every settler voided them."""
+
+    def test_unnamed_log_row_gets_name_from_player_id(self, monkeypatch):
+        import mlb.runners.fast_alert_loop as fal
+        monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {1: "Real Pitcher"})
+        log_df = pd.DataFrame([_quote(player_id=1, away_team="NYY", home_team="BOS")])  # no player_name col
+        monkeypatch.setattr(bfh, "_read_parquet_safe", _fake_reader({
+            "Alerts/2026-08-12/log.parquet": log_df,
+            "Alerts/2026-08-12/notified.parquet": log_df[_QUOTE_COLS],
+        }))
+        df = recover_fast_alert(["2026-08-12"])
+        assert df.iloc[0]["player"] == "Real Pitcher"
+
+    def test_existing_name_is_kept(self, monkeypatch):
+        import mlb.runners.fast_alert_loop as fal
+        monkeypatch.setattr(fal, "resolve_player_names", lambda ids: {1: "Lookup Name"})
+        log_df = pd.DataFrame([_quote(player_id=1, player_name="Logged Name")])
+        monkeypatch.setattr(bfh, "_read_parquet_safe", _fake_reader({
+            "Alerts/2026-08-12/log.parquet": log_df,
+            "Alerts/2026-08-12/notified.parquet": log_df[_QUOTE_COLS],
+        }))
+        assert recover_fast_alert(["2026-08-12"]).iloc[0]["player"] == "Logged Name"
+
+    def test_hr_under_alert_not_recovered(self, monkeypatch):
+        """Same inverted-grading bug as the live path (_ev_bet_type)."""
+        log_df = pd.DataFrame([_quote(market="hr_yn", selection="UNDER", line=0.5, player_id=1)])
+        monkeypatch.setattr(bfh, "_read_parquet_safe", _fake_reader({
+            "Alerts/2026-08-12/log.parquet": log_df,
+            "Alerts/2026-08-12/notified.parquet": log_df[_QUOTE_COLS],
+        }))
+        assert len(recover_fast_alert(["2026-08-12"])) == 0
