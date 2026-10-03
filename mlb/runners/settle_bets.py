@@ -503,6 +503,22 @@ def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     trailing book suffix is inert to their parsing; NRFI/F5/GAME need it
     stripped first -- see _strip_ev_book_suffix.
     """
+    # An alert whose game the scanner could not match (game_pk NULL) can never be
+    # graded -- and every per-market settler below does int(bet["game_pk"]),
+    # which would raise on NaN and abort the WHOLE settle run. Void it (this
+    # repo's convention for unsettleable bets: void, never delete/leave pending,
+    # which would also trip monitor_ops' "pending > 3 days" alert).
+    no_game = pd.to_numeric(pending["game_pk"], errors="coerce").isna()
+    unmatched: list[dict] = []
+    if no_game.any():
+        logger.warning("settle EV: voiding %d bet(s) with no game_pk (game never matched)",
+                       int(no_game.sum()))
+        unmatched = [{"id": int(i), "result": "void", "profit": 0.0}
+                     for i in pending.loc[no_game, "id"]]
+        pending = pending[~no_game]
+    if pending.empty:
+        return unmatched
+
     bt = pending["bet_type"].fillna("").str.upper()
     # HR's own bet_type is the bare constant "HR" (no line/side to encode),
     # but an EV row's is "HR_{book}" (fast_alert_loop._ev_bet_type always
@@ -528,7 +544,7 @@ def _settle_ev(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
         sub["bet_type"] = [_strip_ev_book_suffix(b, bk) for b, bk in zip(sub["bet_type"], books)]
         return sub
 
-    results: list[dict] = []
+    results: list[dict] = list(unmatched)
     if is_hr.any():
         results.extend(_settle_hr(pending[is_hr], game_cache))
     if (is_k | is_outs).any():

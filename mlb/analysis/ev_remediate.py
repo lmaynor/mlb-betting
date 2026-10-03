@@ -15,6 +15,9 @@ see deploy/setup_ev_remediate_job.sh). Two modes:
 
     --stats   READ-ONLY. Persistence check ("do live EV rows actually land in
               Postgres?") + a profile of what's there. Writes nothing.
+    --settle  Grade the still-pending system='EV' rows (real settlers; null-game_pk
+              rows are voided) and print the stats + report. No delete, no rebuild --
+              for finishing a run whose grading step failed after the rebuild.
     --apply   1) CREATE TABLE <backup> AS SELECT ... WHERE system='EV' (skipped if
                  it already exists -- a re-run never overwrites the backup)
               2) DELETE FROM bets WHERE system='EV'
@@ -139,6 +142,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--stats", action="store_true", help="read-only persistence check + profile")
+    g.add_argument("--settle", action="store_true", help="grade pending EV rows + report (no delete/rebuild)")
     g.add_argument("--apply", action="store_true", help="backup, delete, rebuild, grade, report")
     p.add_argument("--backup-table", default=DEFAULT_BACKUP)
     p.add_argument("--bankroll", type=float, default=1000.0)
@@ -152,6 +156,15 @@ def main(argv=None) -> int:
     if args.stats:
         for k, v in stats(engine).items():
             log.info("STATS %s = %s", k, v)
+        return 0
+
+    if args.settle:
+        import scripts.backfill_ev_history as bf
+        log.info("SETTLE %s", bf.settle_recovered())
+        for k, v in stats(engine).items():
+            log.info("AFTER %s = %s", k, v)
+        for k, v in report(engine, args.bankroll, args.max_pct).items():
+            log.info("REPORT %s = %s", k, v)
         return 0
 
     log.info("APPLY step 1/4: stats BEFORE")
