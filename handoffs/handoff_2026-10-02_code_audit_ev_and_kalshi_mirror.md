@@ -65,3 +65,28 @@ Doc: docs/solutions/logic-errors/ev-bet-type-ignores-side-and-line-misgrades.md;
 - Stale references to deleted nrfi v17 scripts in CONTEXT.md and a live v17 fallback in run_nrfi.py.
 - odds_alert.py and fast_alert_loop.py both write Alerts/{day}/log.parquet with keep="last"
   dedup -- a design hazard (root cause of #3).
+
+
+## OUTCOME (2026-10-03) -- deployed, remediated, merged
+- Merged to main (26f4190, 4745f63). Service deployed (rev mlb-betting-00303-h4m); mlb-fast-alert /
+  mlb-kalshi-alert re-pointed at the new image (wiring intact; healthy executions since).
+- **Persistence: CONFIRMED.** Live EV rows do land in Postgres (7,274 rows before cleanup, new rows every
+  day through 10-03). The old "N/N logged" line was telling the truth post-09-18.
+- **Remediation** via one-off Cloud Run Job `mlb-ev-remediate` (`mlb/analysis/ev_remediate.py`; modes
+  --stats / --settle / --apply; provisioned by deploy/setup_ev_remediate_job.sh). Backup table
+  `bets_ev_backup_20261003` holds the 7,274 ORIGINAL rows (undo = INSERT back). Then deleted system='EV',
+  rebuilt 7,583 rows from the GCS alert trail with the fixed code, graded with the real settlers.
+  - unnamed ("AWAY @ HOME") rows: 2,318 -> 0.  void rate: 37% -> 8% (605/7,583; 11 are null-game_pk voids).
+  - All rows now carry kelly_pct; HR rows 512 -> 352 (HR Under / alt-line alerts no longer logged).
+  - A SECOND bug surfaced and was fixed: _settle_ev did int(NaN) on null-game_pk rows (crashed the
+    first grading run; would have crashed nightly settle on any such pending row) -> now void.
+- **NEW real numbers (replace the 09-18 ones):** 7,546 graded (3,487 W / 3,454 L / 605 void, 37 pending),
+  hit 50.2%. Flat $100: staked $754,600 (void stake included in denominator), P&L +$57,028, ROI +7.56%.
+  Kelly @ $1,000 bankroll, 5%/bet cap: +$13,304, ROI +11.91%, ending $14,304.
+  CAVEATS before believing this: (a) paper P&L at the flagged price at flag time -- no slippage, limits,
+  or line-already-moved; quote-survival (mlb.analysis.quote_survival) is the right reality check;
+  (b) the same prop flagged at 2-3 books counts as 2-3 correlated bets, inflating n and any t-stat;
+  (c) some flagged books (novig, prophetx, fliff, partycasino, ...) may not be bettable for the user;
+  (d) not yet broken down per market / de-duplicated per prop. Treat as "promising, unverified".
+- Remaining: delete the one-off job when done (gcloud run jobs delete mlb-ev-remediate); the backup table
+  can be dropped once satisfied; per-market + de-duplicated breakdown not yet done.

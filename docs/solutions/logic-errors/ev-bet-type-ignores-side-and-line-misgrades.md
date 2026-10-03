@@ -66,5 +66,8 @@ backfill. The suite passed 715/715 while all of the above was wrong.
   REAL data (what selections/lines does the scanner actually emit?) before trusting it.
 - A table with a per-entity grain (starter, batter) is not a per-game label table.
   Check the grain before `dict(zip(game_pk, label))`.
-- Data already written to `bets` under the old mapping is wrong and needs a
-  remediation pass (see the 2026-10-02 audit handoff).
+- Data already written to `bets` under the old mapping was wrong; remediated 2026-10-03 via
+  `mlb/analysis/ev_remediate.py` (backup table `bets_ev_backup_20261003`). A one-off prod data fix
+  belongs in a Cloud Run Job with a read-only `--stats` default, a never-overwritten backup, and a
+  `--settle` re-entry mode -- the first run crashed in grading AFTER inserting, so re-entry mattered.
+- `_settle_ev` must never `int()` a NULL game_pk (void it) -- one such row aborts the whole settle run.

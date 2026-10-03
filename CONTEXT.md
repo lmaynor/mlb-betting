@@ -944,9 +944,10 @@ the inverted bet; ~$11k flat-stake distortion on 129 real alerts, and the
 actual cause of the "model_prob ~0.99 at -2000..-2800" Kelly blowup), mapped
 `nrfi_ou` assuming OVER/UNDER when real books are YES/NO, and the backfill took
 player names from `log.parquet` (~53% unnamed -> `"AWAY @ HOME"` -> void). All
-fixed in code; rows already in `bets` still need a remediation pass (delete the
-backfilled/mis-graded system='EV' rows and re-run the fixed
-`scripts/backfill_ev_history.py`). `_ev_bet_type` now returns None (not logged)
+fixed and DEPLOYED, and the system='EV' rows were rebuilt on 2026-10-03 (Cloud Run Job
+`mlb-ev-remediate`, `mlb/analysis/ev_remediate.py`; original rows kept in table
+`bets_ev_backup_20261003`): 7,546 graded, flat +7.56% ROI, Kelly +11.91% -- paper,
+correlated across books, unverified for execution; see the 2026-10-02 handoff OUTCOME. `_ev_bet_type` now returns None (not logged)
 for anything the HR settler can't grade. See
 docs/solutions/logic-errors/ev-bet-type-ignores-side-and-line-misgrades.md.
 
