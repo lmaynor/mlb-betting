@@ -25,6 +25,15 @@ Built and running (branch feat/multisport-ev-sweep):
 - Credit use: ~76/cycle with 15 games; run capped at 9,000 credits. Account showed ~19.3k remaining (the 100k plan
   was not yet applied when checked).
 
+ARCHITECTURE NOTE (found live 2026-10-04): Kalshi's CDN blocks SOME Cloud Run egress IPs persistently (HTML 403,
+any User-Agent; one execution got 200s, the next 403s). So the cloud job ALWAYS publishes `consensus.json`
+(ParlayAPI only, no Kalshi needed) and joins to Kalshi opportunistically; the LOCAL executor joins that consensus
+to Kalshi (laptop reaches Kalshi), writes a gz evidence CSV per pass (`local_*.csv.gz`), queues new flagged
+candidates in `alerts_pending.json`, and the cloud job posts them (it already holds the Discord webhook, so no
+secret leaves Cloud Run). The local executor lives only as long as the session that started it.
+First live cycle (07:07 UTC): 14 events, 3,395 Kalshi legs, 220 matched to a book consensus, books/match
+{1:110, 2:68, 3:32, 4:9, 5:1}; 0 flagged; ~70 ParlayAPI credits/cycle.
+
 Known limits / what to watch: (1) ParlayAPI prop coverage is thin early in the day -- at ~2am Sunday only 1
 real sportsbook per prop; the per-cycle `books_per_match_hist` log shows whether coverage reaches the 3-book
 minimum near kickoff. (2) one-sided alternate ladders are not used. (3) lag history is not kept yet, so every
