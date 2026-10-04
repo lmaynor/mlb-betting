@@ -196,3 +196,19 @@ def test_alert_embed_and_webhook_never_uses_member_channel(monkeypatch):
     assert sw.webhook_url() == ""
     monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://example.invalid/ops")
     assert sw.webhook_url().endswith("/ops")
+
+
+def test_kalshi_blocked_is_raised_before_any_parlay_spend():
+    class DeadKalshi:
+        def get_series(self, s):
+            raise RuntimeError("HTTP 403 could not be satisfied")
+        def get_markets(self, s):
+            raise RuntimeError("HTTP 403")
+
+    class PC:                                   # must never be touched when Kalshi is blocked
+        credits_remaining = "1"
+        def get_slate(self, *a, **k):
+            raise AssertionError("ParlayAPI credit spent while Kalshi was blocked")
+
+    with pytest.raises(sw.KalshiBlocked):
+        sw.run_cycle(PC(), DeadKalshi(), props_config(env={}), 0, 40.0, {})

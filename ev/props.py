@@ -33,7 +33,7 @@ STAT_KEYS = {
     "rush_yds": {"player_rush_yds", "player_rush_yards", "player_rushing_yards"},
     "rec_yds": {"player_reception_yds", "player_rec_yds", "player_receiving_yards"},
     "receptions": {"player_receptions"},
-    "pass_tds": {"player_pass_tds", "player_passing_touchdowns"},
+    "pass_tds": {"player_pass_tds", "player_passing_touchdowns", "player_passing_tds"},
     "anytime_td": {"player_anytime_td", "player_anytime_touchdown_scorer"},
 }
 _KEY_TO_STAT = {k: s for s, ks in STAT_KEYS.items() for k in ks}

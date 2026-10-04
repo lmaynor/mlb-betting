@@ -127,7 +127,10 @@ class KalshiClient:
                     time.sleep(self._backoff(attempt))
                     continue
                 raise
-            retryable = r.status_code == 429 or (idempotent and r.status_code in (500, 502, 503, 504))
+            # Kalshi's CDN intermittently 403s a shared Cloud Run egress IP with an HTML "request could not be
+            # satisfied" page (seen 2026-10-04; the same call succeeds minutes later). Safe to retry for GET only.
+            cdn_block = (idempotent and r.status_code == 403 and "could not be satisfied" in (r.text or "")[:2000])
+            retryable = r.status_code == 429 or cdn_block or (idempotent and r.status_code in (500, 502, 503, 504))
             if retryable and attempt < self.max_retries:
                 time.sleep(self._backoff(attempt, r.headers.get("Retry-After")))
                 continue

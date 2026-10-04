@@ -157,16 +157,23 @@ def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fe
 
 
 # ----------------------------------------------------------------------------- IO
+class KalshiBlocked(RuntimeError):
+    """Kalshi's CDN refused every series from this egress IP (Cloud Run IPs are blocked per-IP, 2026-10-04)."""
+
+
 def fetch_kalshi_legs(client: KalshiClient):
-    """-> ({game_key: [(PropLeg, market_dict)]}, fee_multiplier, {reason: n})."""
+    """-> ({game_key: [(PropLeg, market_dict)]}, fee_multiplier, {reason: n}). Raises KalshiBlocked if
+    every series fetch failed (checked BEFORE any ParlayAPI credit is spent)."""
     legs, fails, mult = {}, {}, 1.0
+    errors = 0
     for series in PROP_SERIES:
         try:
             ser = client.get_series(series) or {}
             mult = float((ser.get("series") or ser).get("fee_multiplier", 1.0) or 1.0)
             markets = client.get_markets(series)
         except Exception as e:                                                      # noqa: BLE001
-            log.error("kalshi fetch %s failed: %r", series, e)
+            log.error("kalshi fetch %s failed: %r", series, str(e)[:160])
+            errors += 1
             continue
         for mk in markets:
             leg = map_prop_market(mk)
@@ -174,6 +181,8 @@ def fetch_kalshi_legs(client: KalshiClient):
                 fails[leg.reason] = fails.get(leg.reason, 0) + 1
                 continue
             legs.setdefault(leg.game_key, []).append((leg, mk))
+    if errors == len(PROP_SERIES):
+        raise KalshiBlocked("all Kalshi series fetches failed from this egress IP")
     return legs, mult, fails
 
 
@@ -228,6 +237,7 @@ def run_cycle(pc, kc: KalshiClient, cfg, cycle: int, horizon_h: float, state: di
     now = datetime.now(timezone.utc)
     day = now.astimezone(_ET).date().isoformat()
     hhmmss = now.strftime("%H%M%S")
+    legs, mult, kfails = fetch_kalshi_legs(kc)          # FIRST: if blocked, no ParlayAPI credit is spent
     slate = pc.get_slate(SPORT, markets=["h2h"]) or []
     start_cutoff = now + timedelta(minutes=cfg.close_buffer_min)
     upcoming = []
@@ -250,14 +260,23 @@ def run_cycle(pc, kc: KalshiClient, cfg, cycle: int, horizon_h: float, state: di
                 _write(json.dumps(props).encode(), f"{PREFIX}/raw/{day}/{ev['id']}_{hhmmss}.json")
             except Exception as e:                                                      # noqa: BLE001
                 log.warning("raw write failed: %r", e)
-    legs, mult, kfails = fetch_kalshi_legs(kc)
     rows, stats = compute_rows(parlay_events, legs, now, cfg, mult)
     flagged = [r for r in rows if r["flag"]]
-    notified = state.setdefault(day, set())
+    if day not in state:                                   # survives task restarts (egress-IP retries)
+        try:
+            raw = _read(f"{PREFIX}/{day}/notified.json")
+            state[day] = set(json.loads(raw)) if raw else set()
+        except Exception:                                                                # noqa: BLE001
+            state[day] = set()
+    notified = state[day]
     new = [r for r in flagged if f"{r['ticker']}|{r['side']}" not in notified]
     if new:
         if post_discord(f"NFL props sweep: {len(new)} new candidate(s)", alert_embed(new)):
             notified.update(f"{r['ticker']}|{r['side']}" for r in new)
+            try:
+                _write(json.dumps(sorted(notified)).encode(), f"{PREFIX}/{day}/notified.json")
+            except Exception as e:                                                       # noqa: BLE001
+                log.warning("notified write failed: %r", e)
     bpm = stats.pop("books_per_match")
     summary = {"cycle": cycle, "ts": now.isoformat(), "events_pulled": len(parlay_events),
                "slate_events": len(slate), "rows": len(rows), "flagged": len(flagged), "new_alerts": len(new),
@@ -284,12 +303,23 @@ def main(argv=None) -> int:
     pc, kc, cfg = ParlayApiClient(), KalshiClient(PUBLIC_DATA_ENV, None, None), props_config()
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     state: dict = {}
-    first_rem, cycle = None, 0
-    post_discord("NFL props SHADOW sweep started (unvalidated signals; alerts go to this admin channel only).")
+    first_rem, cycle, blocked = None, 0, 0
     while True:
         try:
-            s = run_cycle(pc, kc, cfg, cycle, a.horizon_hours, state)
+            run_cycle(pc, kc, cfg, cycle, a.horizon_hours, state)
             first_rem = first_rem or (int(pc.credits_remaining) if pc.credits_remaining else None)
+            if cycle == 0 or blocked:
+                post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin "
+                             "channel only).")
+            blocked = 0
+        except KalshiBlocked:
+            blocked += 1
+            log.error("Kalshi unreachable from this egress IP (%s/3)", blocked)
+            if blocked >= 3:
+                log.error("exiting 75 so Cloud Run retries the task on a fresh instance/IP")
+                return 75
+            time.sleep(20)
+            continue
         except Exception:                                                                # noqa: BLE001
             log.exception("cycle %s failed", cycle)
         cycle += 1
