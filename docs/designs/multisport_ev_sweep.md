@@ -86,7 +86,7 @@ Differences from the MLB executor that matter:
 | Use | Assumption | ~credits/mo |
 |---|---|---|
 | Game lines h2h+spreads+totals, 3 sports | 3 credits/poll/sport, 10-min poll, ~10 active h/day | 16k |
-| Alt spreads/totals (needed for ladder mapping, s3) | per-event, 30-min poll, ~6 h/day | 22k |
+| ~~Alt spreads/totals~~ | PROBED 2026-10-04: ParlayAPI has NO alternate game-line markets (s3.1) | 0 |
 | MLB (existing guard ceiling 19.5k; postseason then offseason) | | 20k |
 | Props v2 + single-event refreshes before a decision | | 30k |
 | Reserve | | ~12k |
@@ -111,9 +111,21 @@ fee_multiplier 1 (MLB's KXMLBGAME was 0.5 -- the runner must keep reading it PER
 | `*TOTAL` | STRIKE LADDER: "Over N.5 points/goals scored" | book total over N.5 | one side per market. |
 
 Hard problems, each with a fail-closed rule:
-1. **Ladders vs a single book line.** Books quote one main line (plus alts); Kalshi lists a dozen
-   strikes. v1 evaluates ONLY strikes where >= n_min books quote that exact line (main + alt lines).
+1. **Ladders vs a single book line.** Books quote ONE main line per game; Kalshi lists a dozen
+   strikes. PROBED 2026-10-04 (job, 37 credits): ParlayAPI has no alternate game-line markets --
+   `alternate_spreads`/`alternate_totals` return HTTP 200 with an empty body (and are still charged);
+   the free global catalog (87 keys) lists only `spreads`, `totals` plus player-prop `*_alternate`.
+   So v1 evaluates ONLY the strikes where >= n_min books quote that exact main line; books often differ
+   by a half point, so spread/total coverage will be sparse and MONEYLINE is the real v1 core.
    No interpolation across lines in v1 (NFL key numbers 3/7 and NBA/NHL totals are not smooth).
+
+   Measured ParlayAPI coverage (region us, 2026-10-04): NFL 30 events, 14 books (bet365, betmgm,
+   betonline, betrivers, bovada, caesars, draftkings, fanatics, fanduel, fliff, hardrock, parx,
+   pinnacle, prophetx); NHL 12 events, 6 books (bovada, draftkings, fanduel, fliff, pinnacle,
+   prophetx); NBA 23 events (preseason) but only 1-3 books per game (pinnacle, fliff, prophetx, ...).
+   n_min_books=4 therefore rejects NBA preseason and is borderline for NHL; the shadow histogram
+   will show it. Sport keys confirmed: americanfootball_nfl, icehockey_nhl, basketball_nba. Cost:
+   h2h = 1 credit/sport/poll, spreads+totals = 2, whole slate (so ~3 per sport per poll).
 2. **Team code splitting.** Tickers concatenate codes with no delimiter (BUFLAR, TBDAL, UTADEN,
    LAVGK = LA+VGK). Titles are city-only ("Los Angeles wins" is ambiguous in all three leagues). Use a
    per-league code table; if two splits are valid or the code is unknown -> REJ_AMBIGUOUS. Never
@@ -191,9 +203,10 @@ NFL/NHL: to be chosen, unverified) is added as a disagreement alarm, as in MLB d
   first, then totals/spreads at quoted strikes, then NBA once the regular season starts.
 
 ## 7. Open questions
-1. ParlayAPI: sport keys for NFL/NHL, credit cost and shape of alt-spread/alt-total markets, which
-   books appear per sport, and rate limits at the 100k tier (needs the key from Secret Manager; run
-   from Cloud Run).
+1. ~~ParlayAPI coverage probe~~ -- DONE 2026-10-04 (s3.1). Findings: keys confirmed; no alt game
+   lines; NFL deep (14 books), NHL thin (6), NBA preseason very thin. **The account still reports
+   ~19.3k credits remaining, i.e. the 100k upgrade is NOT applied yet** -- apply it before the sweep
+   runs (MLB's 19.5k pace ceiling alone consumes the old pool). Rate limits at the 100k tier unknown.
 2. ~~Kalshi rulebooks per series~~ -- READ and enforced (s3.3). Remaining: each reference BOOK's own
    rules (NHL totals shootout treatment; NFL tie handling at DK/FD/etc.) -- needs the books' rulebooks.
 3. Do you want Sink A (Discord +EV alerts at sportsbook prices for the three sports) in v1? It shares
