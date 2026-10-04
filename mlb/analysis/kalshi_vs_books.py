@@ -33,6 +33,21 @@ quotes vs real outcomes for the markets with a known ground-truth source
 (currently game_ml, nrfi_ou -- see _REALIZED_SOURCE). This is a market-
 structure question, not a trading action: it does not place any order.
 
+CORRECTION (2026-10-03, game_rl join): Kalshi's run-line contract is "TEAM wins by MORE THAN N"
+(selection=TEAM, line=+N) while a sportsbook's AWAY +1.5 is the COMPLEMENT of "HOME wins by more
+than 1.5". The raw (selection, line) join matched unlike bets (mirror median EV +112% on real
+data). Fixed via _add_join_keys/_JK/_match_books -- see docs/solutions/integration-issues/
+kalshi-run-line-semantics-mismatch.md. Historical-window output is still not time-aligned (below).
+
+CORRECTION (2026-10-03, snapshot alignment): scan()/scan_kalshi_side() paired each source's
+LATEST snapshot independently, so an in-play Kalshi price could meet a pre-game book price, and the
+synthetic 'consensus' row counted as a real book. Now: _drop_inplay (pre-game snapshots only),
+_gap_filter (--max-gap-min, default 60) and _real_books. Extreme (>30% EV) rows fell 26.8% -> 0.3%
+(game_ml). ALL earlier Kalshi-vs-books figures below are contaminated; the aligned re-run
+(--since 2026-08-10, game_ml+nrfi_ou, n=73 flagged, gross +3.5% t=0.26, NET of fee +1.5% t=0.12)
+is in docs/solutions/logic-errors/kalshi-scanner-latest-snapshot-misalignment.md.
+validate_kalshi_side now also reports ROI NET of Kalshi's taker fee and for the executor's gate.
+
 CORRECTION (2026-10-02 audit): the nrfi_ou figures below used a wrong ground-
 truth label (_realized_outcomes took one STARTER's half-inning `yrfi` as the
 game-level result; ~18% of flagged nrfi_ou quotes were mislabeled, always in
@@ -87,6 +102,7 @@ import numpy as np
 import pandas as pd
 
 from mlb.analysis import book_vig, odds_history as oh
+from mlb_core.odds import kalshi
 
 
 def _player_names(date: str) -> dict:
@@ -113,6 +129,12 @@ NO_NORM = {"game_rl"}
 PLAYER_MARKETS = {"hr_yn", "k_ou", "outs_ou", "btb_ou", "bhits_ou"}
 _JOIN = ["market", "game_pk", "_pid", "_line", "selection"]
 _PAIR = ["market", "game_pk", "_pid", "_line"]           # a two-sided quote
+# Join identity actually used to match Kalshi to books. Equals _JOIN for every market except the
+# run line, where a book's (selection, line) is NOT the proposition Kalshi quotes (see
+# _add_join_keys). `_jsel`/`_jline` name the proposition priced; `_no` marks a book quote that is
+# the COMPLEMENT of it. Display columns (`selection`, `line`) always stay the quote's own.
+_JK = ["market", "game_pk", "_pid", "_jline", "_jsel"]
+_OPP = {"HOME": "AWAY", "AWAY": "HOME"}
 
 # nrfi_ou: real-book ingestion (BettingPros/ParlayAPI) frames this as a plain
 # YES/NO proposition ("will a run score in the 1st"), no numeric line -- but
@@ -138,6 +160,58 @@ _NRFI_SELECTION_MAP = {"YES": "YRFI", "NO": "NRFI"}
 _KALSHI_SANE_RANGE = (0.03, 0.97)
 
 
+def _ensure_jk(df: pd.DataFrame) -> pd.DataFrame:
+    """Frames built by hand (tests, older callers) may lack the join-key columns: default them to
+    the quote's own (selection, line) with no complement flag -- identical to the pre-fix join."""
+    if len(df) == 0 and "_jsel" not in df.columns:
+        return df.assign(_jsel=pd.Series(dtype="object"), _jline=pd.Series(dtype="float64"),
+                         _no=pd.Series(dtype="bool"))
+    out = df
+    if "_jsel" not in out.columns:
+        out = out.assign(_jsel=out["selection"])
+    if "_jline" not in out.columns:
+        out = out.assign(_jline=out["_line"])
+    if "_no" not in out.columns:
+        out = out.assign(_no=False)
+    return out
+
+
+def _add_join_keys(df: pd.DataFrame) -> pd.DataFrame:
+    """Attach (_jsel, _jline, _no): which proposition each quote prices.
+
+    RUN LINE (game_rl) -- the two sources use different conventions, found 2026-10-03:
+      * Kalshi (KXMLBSPREAD) quotes "TEAM wins by MORE THAN N": selection=TEAM, line=+N (N=1.5,
+        2.5, ...). That is exactly a sportsbook's "TEAM -N" cover.
+      * A sportsbook quotes the standard line per side: HOME -1.5 and AWAY +1.5 (and alts).
+        "AWAY +1.5" is NOT Kalshi's "AWAY wins by more than 1.5" -- it is the COMPLEMENT of
+        "HOME wins by more than 1.5".
+    Joining on raw (selection, line) matched Kalshi's AWAY/+1.5 (~0.24) to the book's AWAY/+1.5
+    (~0.53) -- different bets -- while Kalshi's HOME/+1.5 never met the book's equivalent HOME/-1.5.
+    Canonical proposition = "T wins by more than N":
+        book line < 0  (S lays N)   -> (S, N), the same bet
+        book line > 0  (S gets N)   -> (opp(S), N), as the COMPLEMENT (_no=True)
+    Whole-number lines (push possible) are a different proposition entirely and cannot be matched,
+    so those book rows are dropped. Every other market maps to itself.
+    """
+    df = df.reset_index(drop=True)
+    df["_jsel"] = df["selection"]
+    df["_jline"] = df["_line"]
+    df["_no"] = False
+    rl_book = (df["market"] == "game_rl") & (df["book"] != "kalshi")
+    if rl_book.any():
+        line = pd.to_numeric(df["line"], errors="coerce")
+        sel = df["selection"].astype(str).str.upper()
+        usable = rl_book & line.notna() & ((line.abs() % 1.0).round(6) == 0.5) & sel.isin(list(_OPP))
+        neg, pos = usable & (line < 0), usable & (line > 0)
+        df.loc[neg, "_jline"] = line[neg].abs()
+        df.loc[neg, "_jsel"] = sel[neg]
+        df.loc[pos, "_jline"] = line[pos]
+        df.loc[pos, "_jsel"] = sel[pos].map(_OPP)
+        df.loc[pos, "_no"] = True
+        df = df[~rl_book | usable].reset_index(drop=True)
+    return df
+
+
 def _prep(df: pd.DataFrame) -> pd.DataFrame:
     """Latest snapshot per (quote, book); NaN-safe join keys."""
     df = df[df["implied_prob"].notna()].copy()
@@ -152,7 +226,7 @@ def _prep(df: pd.DataFrame) -> pd.DataFrame:
     df = df[~is_kalshi_liquid | df["implied_prob"].between(lo, hi)]
     df = df.sort_values("snapshot_ts")
     keys = ["market", "game_pk", "_pid", "_line", "selection", "book"]
-    return df.drop_duplicates(subset=keys, keep="last")
+    return _add_join_keys(df.drop_duplicates(subset=keys, keep="last"))
 
 
 def _kalshi_truth(k: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
@@ -160,19 +234,99 @@ def _kalshi_truth(k: pd.DataFrame, normalize: bool = True) -> pd.DataFrame:
     quote's sides to sum to 1 (removes the half-spread double-count). For non-
     complementary markets (normalize=False, e.g. run line) the raw mid already
     IS the probability of that side, so use it directly."""
-    k = k.copy()
+    k = _ensure_jk(k).copy()
     if normalize:
         pair_sum = k.groupby(_PAIR)["fair_prob"].transform("sum")
         n_sides = k.groupby(_PAIR)["selection"].transform("size")
         k["p_true"] = k["fair_prob"].where(n_sides < 2, k["fair_prob"] / pair_sum)
     else:
         k["p_true"] = k["fair_prob"]
-    return k[_JOIN + ["p_true", "fair_prob", "snapshot_ts"]].rename(
+    return k[_JK + ["p_true", "fair_prob", "snapshot_ts"]].rename(
         columns={"fair_prob": "k_mid", "snapshot_ts": "k_ts"})
 
 
+def _match_books(k: pd.DataFrame, books: pd.DataFrame, mkt: str) -> pd.DataFrame:
+    """Pure core of scan(): join each book quote to the Kalshi quote for the SAME proposition and
+    compute the EV of betting that book quote against Kalshi's no-vig mid.
+
+    A book quote flagged `_no` (run line: the complement of Kalshi's proposition) is a bet on
+    NOT-X, so its true probability is 1 - Kalshi's mid, not the mid itself.
+    """
+    k, books = _ensure_jk(k), _ensure_jk(books)
+    truth = _kalshi_truth(k, normalize=(mkt not in NO_NORM))
+    # per-selection book consensus: how many books, and their median implied.
+    # Lets us tell "one book is off (real edge)" from "Kalshi is the lone
+    # outlier vs the whole book pack (suspect mid)". Grouped by _no so a quote and its
+    # complement never share a median.
+    cons = (books.groupby(_JK + ["_no"])["implied_prob"]
+            .agg(cons_impl="median", n_books="size").reset_index())
+    m = (books.merge(truth, on=_JK, how="inner", suffixes=("", "_k"))
+              .merge(cons, on=_JK + ["_no"], how="left"))
+    if not len(m):
+        return m
+    m = m.copy()
+    flip = m["_no"].astype(bool)
+    m.loc[flip, "p_true"] = 1.0 - m.loc[flip, "p_true"]
+    m.loc[flip, "k_mid"] = 1.0 - m.loc[flip, "k_mid"]
+    m["ev_pct"] = (m["p_true"] * m["decimal"] - 1.0).round(4)
+    m["edge"] = (m["p_true"] - m["implied_prob"]).round(4)
+    m["cons_impl"] = m["cons_impl"].round(4)
+    m["k_dev"] = (m["p_true"] - m["cons_impl"]).round(4)   # +/- = Kalshi vs book pack
+    m["bk_dev"] = (m["implied_prob"] - m["cons_impl"]).round(4)  # book vs pack (neg=cheap)
+    m["kalshi_fee"] = (0.07 * m["p_true"] * (1 - m["p_true"])).round(4)
+    return m
+
+
+# Synthetic rows that are NOT real, bettable books: 'consensus' is an aggregate the ingestion adds,
+# 'open' is the opening-line tag. Counting them as books double-counts the pack in n_books/median
+# and, in scan(), offered a synthetic aggregate as a bettable quote.
+_NON_BOOKS = {"consensus", "open"}
+DEFAULT_MAX_GAP_MIN = 60.0
+
+
+def _real_books(d: pd.DataFrame) -> pd.DataFrame:
+    return d[(d["book"] != "kalshi") & ~d["book"].str.lower().isin(_NON_BOOKS)]
+
+
+def _drop_inplay(odds: pd.DataFrame) -> pd.DataFrame:
+    """Drop every snapshot taken at/after first pitch BEFORE 'latest per quote' is chosen.
+
+    Both sources keep capturing after the game starts. Taking each source's *latest* snapshot
+    independently could pair a Kalshi IN-PLAY price (e.g. 0.96 once a team leads big) with the
+    books' last PRE-GAME price -- manufacturing huge fake edges in every market. First pitch comes
+    from the Kalshi event_id (event ticker, Eastern HHMM); games with no Kalshi row have nothing to
+    join anyway and are left alone.
+    """
+    if "event_id" not in odds.columns or not len(odds):
+        return odds
+    k = odds[(odds["book"] == "kalshi") & odds["event_id"].notna() & odds["game_pk"].notna()]
+    if not len(k):
+        return odds
+    starts = {}
+    for gpk, ev in k.groupby("game_pk")["event_id"].first().items():
+        st = kalshi.event_start_utc(str(ev))
+        if st is not None:
+            starts[int(gpk)] = pd.Timestamp(st).tz_convert("UTC").tz_localize(None)
+    if not starts:
+        return odds
+    start = odds["game_pk"].map(lambda g: starts.get(int(g)) if pd.notna(g) else None)
+    ts = pd.to_datetime(odds["snapshot_ts"], errors="coerce")
+    keep = start.isna() | (ts < pd.to_datetime(start))
+    return odds[keep]
+
+
+def _gap_filter(m: pd.DataFrame, a_col: str, b_col: str, max_gap_min) -> pd.DataFrame:
+    """Keep matched rows whose two source snapshots are within `max_gap_min` of each other
+    (None disables). A match across hours compares prices from different market states."""
+    if max_gap_min is None or not len(m) or a_col not in m.columns or b_col not in m.columns:
+        return m
+    gap = (pd.to_datetime(m[a_col], errors="coerce") - pd.to_datetime(m[b_col], errors="coerce")
+           ).abs().dt.total_seconds() / 60.0
+    return m[gap <= max_gap_min]
+
+
 def scan(markets, date=None, since=None, until=None, closing=False,
-         min_ev=0.0) -> pd.DataFrame:
+         min_ev=0.0, max_gap_min=DEFAULT_MAX_GAP_MIN) -> pd.DataFrame:
     frames, cov = [], []
     for mkt in markets:
         odds = oh.read_history(mkt, since=since or date, until=until or date)
@@ -181,33 +335,23 @@ def scan(markets, date=None, since=None, until=None, closing=False,
         odds = oh.dedupe_by_source(odds)
         if closing and "is_closing" in odds.columns:
             odds = odds[odds["is_closing"] == True]  # noqa: E712
+        elif not closing:
+            odds = _drop_inplay(odds)
         if not len(odds):
             continue
         d = _prep(odds)
         if mkt in PLAYER_MARKETS:            # keep only resolved players
             d = d[d["_pid"] != -1]
         k = d[d["book"] == "kalshi"]
-        books = d[d["book"] != "kalshi"]
+        books = _real_books(d)
         cov.append({"market": mkt, "kalshi_sel": len(k), "book_rows": len(books),
                     "books": ",".join(sorted(books["book"].unique()))})
         if not len(k) or not len(books):
             continue
-        truth = _kalshi_truth(k, normalize=(mkt not in NO_NORM))
-        # per-selection book consensus: how many books, and their median implied.
-        # Lets us tell "one book is off (real edge)" from "Kalshi is the lone
-        # outlier vs the whole book pack (suspect mid)".
-        cons = (books.groupby(_JOIN)["implied_prob"]
-                .agg(cons_impl="median", n_books="size").reset_index())
-        m = (books.merge(truth, on=_JOIN, how="inner", suffixes=("", "_k"))
-                  .merge(cons, on=_JOIN, how="left"))
+        m = _match_books(k, books, mkt)
+        m = _gap_filter(m, "k_ts", "snapshot_ts", None if closing else max_gap_min)
         if not len(m):
             continue
-        m["ev_pct"] = (m["p_true"] * m["decimal"] - 1.0).round(4)
-        m["edge"] = (m["p_true"] - m["implied_prob"]).round(4)
-        m["cons_impl"] = m["cons_impl"].round(4)
-        m["k_dev"] = (m["p_true"] - m["cons_impl"]).round(4)   # +/- = Kalshi vs book pack
-        m["bk_dev"] = (m["implied_prob"] - m["cons_impl"]).round(4)  # book vs pack (neg=cheap)
-        m["kalshi_fee"] = (0.07 * m["p_true"] * (1 - m["p_true"])).round(4)
         m["vig"] = [book_vig.get_vig(mkt, b) for b in m["book"]]
         m["soft"] = m["vig"] >= 0.08
         m["game"] = m["away_team"].astype(str) + "@" + m["home_team"].astype(str)
@@ -234,8 +378,13 @@ def _kalshi_book_fair(books: pd.DataFrame, min_books: int = 4) -> pd.DataFrame:
     # n_books must count books that actually contributed a devigged fair_prob
     # ("count" skips NaN; "size" counted one-sided/un-devigged rows too, so a
     # 1-real + 3-NaN group passed a min_books=4 gate).
-    cons = (books.groupby(_JOIN)["fair_prob"]
-            .agg(book_fair="median", n_books="count").reset_index())
+    books = _ensure_jk(books)
+    # A complement quote (run line AWAY +1.5) devigs to P(AWAY covers +1.5) = 1 - P(HOME wins by
+    # >1.5); flip it so every book votes on the SAME proposition Kalshi's contract settles on.
+    books = books.assign(_fair=books["fair_prob"].where(~books["_no"].astype(bool), 1.0 - books["fair_prob"]))
+    cons = (books.groupby(_JK)
+            .agg(book_fair=("_fair", "median"), n_books=("_fair", "count"),
+                 cons_ts=("snapshot_ts", "max")).reset_index())
     return cons[cons["n_books"] >= min_books]
 
 
@@ -251,7 +400,7 @@ def _kalshi_ev(k: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
 
     Kalshi's own taker fee is NOT netted in here (same convention as scan()'s
     kalshi_fee column) -- back it out before sizing anything real."""
-    m = k.merge(cons, on=_JOIN, how="inner")
+    m = _ensure_jk(k).merge(_ensure_jk(cons), on=_JK, how="inner")
     if not len(m):
         return m
     m = m.copy()
@@ -262,7 +411,7 @@ def _kalshi_ev(k: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
 
 
 def scan_kalshi_side(markets, date=None, since=None, until=None, closing=False,
-                      min_ev=0.0, min_books=4) -> pd.DataFrame:
+                      min_ev=0.0, min_books=4, max_gap_min=DEFAULT_MAX_GAP_MIN) -> pd.DataFrame:
     """Mirror of scan(): scan() treats a sportsbook as bettable and Kalshi's mid
     as the truth anchor; this treats KALSHI as bettable and the real books'
     devigged consensus as the truth anchor -- see _kalshi_book_fair/_kalshi_ev
@@ -276,17 +425,20 @@ def scan_kalshi_side(markets, date=None, since=None, until=None, closing=False,
         odds = oh.dedupe_by_source(odds)
         if closing and "is_closing" in odds.columns:
             odds = odds[odds["is_closing"] == True]  # noqa: E712
+        elif not closing:
+            odds = _drop_inplay(odds)
         if not len(odds):
             continue
         d = _prep(odds)
         if mkt in PLAYER_MARKETS:
             d = d[d["_pid"] != -1]
         k = d[d["book"] == "kalshi"]
-        books = d[d["book"] != "kalshi"]
+        books = _real_books(d)
         cov.append({"market": mkt, "kalshi_sel": len(k), "book_rows": len(books)})
         if not len(k) or not len(books):
             continue
         m = _kalshi_ev(k, _kalshi_book_fair(books, min_books))
+        m = _gap_filter(m, "snapshot_ts", "cons_ts", None if closing else max_gap_min)
         if not len(m):
             continue
         m["game"] = m["away_team"].astype(str) + "@" + m["home_team"].astype(str)
@@ -361,7 +513,37 @@ def _tstat(vals) -> float | None:
     return round(float(vals.mean()) / sem, 3) if sem > 1e-9 else None
 
 
-def validate_kalshi_side(df: pd.DataFrame) -> None:
+# Kalshi series per canonical market, for the fee multiplier (read live: it is per-SERIES and not 1.0 --
+# KXMLBGAME is 0.5; see docs/designs/kalshi_auto_execution.md).
+_FEE_SERIES = {"game_ml": "KXMLBGAME", "nrfi_ou": "KXMLBRFI", "game_total": "KXMLBTOTAL",
+               "game_rl": "KXMLBSPREAD"}
+
+
+def _series_fee_multipliers(markets) -> dict:
+    """{market: taker fee multiplier} from the live series objects; 1.0 (conservative) if unavailable."""
+    out = {}
+    for m in markets:
+        mult = 1.0
+        series = _FEE_SERIES.get(m)
+        data = kalshi.get(f"/series/{series}") if series else None
+        try:
+            v = float(((data or {}).get("series") or {}).get("fee_multiplier"))
+            if v > 0:
+                mult = v
+        except (TypeError, ValueError):
+            pass
+        out[m] = mult
+    return out
+
+
+def kalshi_taker_fee_per_contract(ask, mult: float = 1.0):
+    """Kalshi taker fee per contract: M * 0.07 * P * (1-P) (centicent rounding ignored at the
+    per-contract level; fine for an ROI estimate)."""
+    return mult * 0.07 * ask * (1.0 - ask)
+
+
+def validate_kalshi_side(df: pd.DataFrame, fee_mult: dict | None = None,
+                         ev_gate: tuple = (0.03, 0.10), haircut: float = 0.005) -> None:
     """Settle flagged Kalshi-side +EV quotes (from scan_kalshi_side) vs REAL
     outcomes -- the go/no-go. A Kalshi-side edge is only real if buying these
     flagged contracts actually profits, same bar hr_softline.validate() uses
@@ -386,6 +568,18 @@ def validate_kalshi_side(df: pd.DataFrame) -> None:
     matched = matched[matched["won"].notna()]
     matched["roi"] = matched["won"].mul(matched["decimal"] - 1.0).where(matched["won"] == 1, -1.0)
 
+    # NET of Kalshi's taker fee: cost per contract c = ask + fee; a win pays $1.
+    fee_mult = fee_mult if fee_mult is not None else _series_fee_multipliers(matched["market"].unique())
+    ask = matched["implied_prob"].astype(float)
+    mult = matched["market"].map(lambda m: fee_mult.get(m, 1.0))
+    cost = ask + kalshi_taker_fee_per_contract(ask, mult)
+    matched["cost"] = cost
+    matched["roi_net"] = (1.0 - cost) / cost
+    matched.loc[matched["won"] != 1, "roi_net"] = -1.0
+    # the executor's own gate: shrunk fair prob (book_fair - haircut) vs all-in cost, EV in [lo, hi]
+    matched["ev_net"] = (matched["book_fair"] - haircut) / cost - 1.0
+    gated = matched[(matched["ev_net"] >= ev_gate[0]) & (matched["ev_net"] <= ev_gate[1])]
+
     t = _tstat(matched["roi"])
     print("\n=== REALIZED validation: flagged Kalshi-side +EV quotes settled vs actual outcomes ===")
     print(f"  n={len(matched)} (skipped {len(q) - len(matched)}: no ground truth yet for "
@@ -399,6 +593,21 @@ def validate_kalshi_side(df: pd.DataFrame) -> None:
     by["hit"] = (by["hit"] * 100).round(1)
     by["roi"] = (by["roi"] * 100).round(1)
     print(by.sort_values("roi", ascending=False).to_string())
+    def _line(tag, d, col):
+        if not len(d):
+            print(f"  {tag}: n=0"); return
+        tt = _tstat(d[col])
+        print(f"  {tag}: n={len(d)} hit%={d['won'].mean()*100:.1f} ROI={d[col].mean()*100:+.1f}% "
+              f"t-stat={tt}")
+    print(f"\n  --- NET of Kalshi taker fee (multipliers {fee_mult}) ---")
+    _line("all flagged, net ", matched, "roi_net")
+    _line(f"executor gate (net EV {ev_gate[0]:.0%}-{ev_gate[1]:.0%} after {haircut:.1%} haircut), net", gated, "roi_net")
+    if len(gated):
+        byg = gated.groupby("market").agg(n=("won", "size"), hit=("won", "mean"), roi_net=("roi_net", "mean"),
+                                          tstat=("roi_net", _tstat))
+        byg["hit"] = (byg["hit"] * 100).round(1)
+        byg["roi_net"] = (byg["roi_net"] * 100).round(1)
+        print(byg.to_string())
     print("  REAL edge => ROI > 0 AND t-stat significant (|t|>=2) on decent n. ROI<=0 or\n"
           "  |t|<2 => not yet distinguishable from noise. This assumes execution at the\n"
           "  historical ask with no slippage/size limit -- Kalshi's own book depth isn't\n"
@@ -448,6 +657,9 @@ def main(argv=None) -> int:
                    help="show every verdict (default: only credible 'check' rows)")
     p.add_argument("--validate", action="store_true",
                    help="--side kalshi only: settle flagged quotes vs real outcomes (go/no-go)")
+    p.add_argument("--max-gap-min", type=float, default=DEFAULT_MAX_GAP_MIN,
+                   help="drop matches whose Kalshi and book snapshots are further apart than this "
+                        "(minutes; default 60). Ignored with --closing.")
     p.add_argument("--top", type=int, default=40)
     args = p.parse_args(argv)
 
@@ -460,7 +672,7 @@ def main(argv=None) -> int:
     if args.side == "kalshi":
         df = scan_kalshi_side(markets, date=date, since=args.since, until=args.until,
                               closing=args.closing, min_ev=args.min_ev,
-                              min_books=args.min_books)
+                              min_books=args.min_books, max_gap_min=args.max_gap_min)
         if not len(df):
             print("\nno +EV Kalshi-side divergences (or no overlapping kalshi+book quotes in window).")
             return 0
@@ -480,7 +692,7 @@ def main(argv=None) -> int:
         return 0
 
     df = scan(markets, date=date, since=args.since, until=args.until,
-              closing=args.closing, min_ev=args.min_ev)
+              closing=args.closing, min_ev=args.min_ev, max_gap_min=args.max_gap_min)
     if not len(df):
         print("\nno +EV divergences (or no overlapping kalshi+book quotes in window).")
         return 0

@@ -110,6 +110,28 @@ def parse_event_ticker(event_ticker: str):
     return game_date, away, home
 
 
+def event_start_utc(event_ticker: str):
+    """First pitch (tz-aware UTC datetime) from the event ticker tail <YY><MON><DD><HHMM> -- the
+    HHMM is EASTERN time (confirmed against the market rules text, e.g. '8:30 PM EDT').
+    Returns None if the ticker does not parse."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    tail = event_ticker.split("-", 1)[1] if event_ticker and "-" in event_ticker else ""
+    m = _EVENT_RE.match(tail)
+    if not m:
+        return None
+    yy, mon, dd, hhmm, _teams, _dh = m.groups()
+    mm = _MONTHS.get(mon)
+    if not mm:
+        return None
+    try:
+        local = datetime(2000 + int(yy), int(mm), int(dd), int(hhmm[:2]), int(hhmm[2:]),
+                         tzinfo=ZoneInfo("America/New_York"))
+    except ValueError:
+        return None
+    return local.astimezone(timezone.utc)
+
+
 def market_outcome(market: dict) -> str:
     """The team/side a team-ML or spread market's YES refers to, from the
     market ticker's last segment: 'KXMLBGAME-...-ATL' -> 'ATL',
