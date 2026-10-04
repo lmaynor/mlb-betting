@@ -40,7 +40,8 @@ from mlb.execution.kalshi.venue import KalshiVenue, OrderIntent, PaperVenue
 
 log = logging.getLogger("ev.props_exec")
 _ET = ZoneInfo("America/New_York")
-LATEST_KEY = "EVSweep/nfl_props/latest.json"
+PREFIX = "EVSweep/nfl_props"
+LATEST_KEY = f"{PREFIX}/latest.json"
 DEFAULT_DB = os.path.expanduser("~/.kalshi_exec/ledger_nfl_props.sqlite")
 _PREFILTER_SLACK = 0.02
 
@@ -75,15 +76,74 @@ def leg_from_row(r: dict) -> ExecLeg:
         exchange_index=ex, group=f"{r['game_key']}|{r['player_norm']}|{r['stat']}")
 
 
-def load_latest() -> dict | None:
-    bucket = os.environ.get("MLB_GCS_BUCKET") or "concrete-crow-445205-m4-mlb-data"
+def _bucket() -> str:
+    return os.environ.get("MLB_GCS_BUCKET") or "concrete-crow-445205-m4-mlb-data"
+
+
+def gcs_cat(key: str) -> bytes | None:
     try:
-        out = subprocess.run(["gcloud", "storage", "cat", f"gs://{bucket}/{LATEST_KEY}"],
-                             capture_output=True, text=True, timeout=60, check=True).stdout
-        return json.loads(out)
-    except (subprocess.SubprocessError, json.JSONDecodeError) as e:
-        log.warning("could not load %s: %r", LATEST_KEY, e)
+        return subprocess.run(["gcloud", "storage", "cat", f"gs://{_bucket()}/{key}"], capture_output=True,
+                              timeout=90, check=True).stdout
+    except subprocess.SubprocessError:
         return None
+
+
+def gcs_put(key: str, data: bytes) -> bool:
+    try:
+        subprocess.run(["gcloud", "storage", "cp", "-", f"gs://{_bucket()}/{key}"], input=data,
+                       capture_output=True, timeout=90, check=True)
+        return True
+    except subprocess.SubprocessError as e:
+        log.warning("gcs put %s failed: %r", key, e)
+        return False
+
+
+def load_latest() -> dict | None:
+    raw = gcs_cat(LATEST_KEY)
+    try:
+        return json.loads(raw) if raw else None
+    except json.JSONDecodeError:
+        return None
+
+
+def build_latest_local(kc: KalshiClient, cfg) -> dict | None:
+    """Join the cloud's published book consensus to Kalshi from THIS machine (Kalshi's CDN blocks some Cloud Run
+    egress IPs; the laptop reaches it reliably). -> {'ts', 'rows', 'stats'} or None if no consensus yet."""
+    from ev.sweep_nfl_props import fetch_kalshi_legs, rows_from_snapshot
+    raw = gcs_cat(f"{PREFIX}/consensus.json")
+    if not raw:
+        return None
+    snap = json.loads(raw)
+    legs, mult, _ = fetch_kalshi_legs(kc)
+    now = datetime.now(timezone.utc)
+    rows, stats = rows_from_snapshot(snap["events"], legs, now, cfg, mult)
+    return {"ts": snap["ts"], "rows": rows, "stats": {k: v for k, v in stats.items() if k != "books_per_match"},
+            "books_hist": dict(Counter(stats["books_per_match"]))}
+
+
+def publish_local(latest: dict, day: str) -> int:
+    """Evidence + alerts: (1) gz CSV of every comparable row this pass (Kalshi quote vs consensus time series);
+    (2) flagged candidates not yet notified -> alerts_pending.json (the cloud job holds the Discord webhook and
+    posts them). Returns the number queued."""
+    import gzip
+    import io
+
+    import pandas as pd
+    rows = latest["rows"]
+    if rows:
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+            gz.write(pd.DataFrame(rows).to_csv(index=False).encode())
+        gcs_put(f"{PREFIX}/{day}/local_{datetime.now(timezone.utc):%H%M%S}.csv.gz", buf.getvalue())
+    flagged = [r for r in rows if r.get("flag")]
+    if not flagged:
+        return 0
+    raw = gcs_cat(f"{PREFIX}/{day}/notified.json")
+    done = set(json.loads(raw)) if raw else set()
+    new = [r for r in flagged if f"{r['ticker']}|{r['side']}" not in done]
+    if new:
+        gcs_put(f"{PREFIX}/alerts_pending.json", json.dumps(new, default=str).encode())
+    return len(new)
 
 
 def _prefilter(r: dict) -> bool:
@@ -243,9 +303,16 @@ def main(argv=None) -> int:
         demo_risk = RiskGate(cfg, ledger, "demo")
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     while True:
-        latest = load_latest()
+        try:
+            latest = build_latest_local(data_client, cfg)
+        except Exception:                                                            # noqa: BLE001
+            log.exception("local join failed; retrying next cycle")
+            latest = None
         if latest:
             try:
+                queued = publish_local(latest, et_day(datetime.now(timezone.utc)))
+                log.info("JOIN rows=%s flagged=%s queued_alerts=%s books_hist=%s", len(latest["rows"]),
+                         sum(1 for r in latest["rows"] if r.get("flag")), queued, latest.get("books_hist"))
                 s = run_pass(latest=latest, cfg=cfg, data_client=data_client, paper=paper, ledger=ledger, risk=risk,
                              demo_venue=demo_venue, demo_risk=demo_risk)
                 log.info("PASS considered=%s hist=%s executed=%s", s["considered"], s["hist"], len(s["executed"]))

@@ -103,11 +103,11 @@ def classify(row: dict, cfg) -> tuple[bool, str, str | None]:
     return True, "FLAG", side
 
 
-def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
-    """parlay_events: [{'event': slate_event, 'props': single-event odds obj}] ->
-    (rows, stats). One row per Kalshi prop market that has a book consensus at the same point."""
-    rows, stats = [], {"events": 0, "kalshi_legs_seen": 0, "matched": 0, "unmatched_no_book": 0,
-                       "team_mismatch": 0, "unmapped_keys": {}, "books_per_match": []}
+def consensus_snapshot(parlay_events: list):
+    """Book side only (no Kalshi needed): -> (snapshot, stats). snapshot = JSON-safe list, one entry per
+    book event with every (player, stat, point) consensus. This is what the cloud job publishes, so the join to
+    Kalshi can happen anywhere Kalshi is reachable (Cloud Run egress IPs are blocked by Kalshi's CDN)."""
+    snap, stats = [], {"events": 0, "unmapped_keys": {}}
     for pe in parlay_events:
         eg = event_game(pe["event"])
         if eg is None:
@@ -118,30 +118,44 @@ def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fe
         quotes, meta = parse_event_props(pe["props"])
         for k, v in meta["unmapped_keys"].items():
             stats["unmapped_keys"][k] = stats["unmapped_keys"].get(k, 0) + v
-        cons = build_consensus(quotes)
+        points = [{"player_norm": pn, "stat": st, "point": pt, "p_over": c.p_over, "n_books": c.n_books,
+                   "disp": c.disp, "books": list(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
+                   "team_hints": list(c.team_hints)} for (pn, st, pt), c in build_consensus(quotes).items()]
+        snap.append({"game_key": gk, "commence": start.isoformat(), "points": points})
+    return snap, stats
+
+
+def rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
+    """Join a consensus snapshot to Kalshi prop markets. One row per Kalshi market that has a book consensus at
+    the same point; (rows, stats)."""
+    rows, stats = [], {"kalshi_legs_seen": 0, "matched": 0, "unmatched_no_book": 0, "team_mismatch": 0,
+                       "books_per_match": []}
+    for ev in snap:
+        gk, start = ev["game_key"], datetime.fromisoformat(ev["commence"])
+        idx = {(p["player_norm"], p["stat"], p["point"]): p for p in ev["points"]}
         mins = (start - now).total_seconds() / 60.0
         for leg, mk in legs_by_game.get(gk, []):
             stats["kalshi_legs_seen"] += 1
-            c = cons.get((leg.player_norm, leg.stat, leg.strike))
+            c = idx.get((leg.player_norm, leg.stat, leg.strike))
             if c is None:
                 stats["unmatched_no_book"] += 1
                 continue
-            if c.team_hints and leg.team not in c.team_hints:
+            if c["team_hints"] and leg.team not in c["team_hints"]:
                 stats["team_mismatch"] += 1
                 continue
             stats["matched"] += 1
-            stats["books_per_match"].append(c.n_books)
+            stats["books_per_match"].append(c["n_books"])
             ya, na = _f(mk.get("yes_ask_dollars")), _f(mk.get("no_ask_dollars"))
             yb = _f(mk.get("yes_bid_dollars"))
             spread = round(ya - yb, 4) if ya is not None and yb is not None else None
-            h = cfg.h0 + cfg.h_disp * c.disp
-            ey, ny = side_eval(c.p_over, ya, fee_mult, cfg, h), side_eval(1.0 - c.p_over, na, fee_mult, cfg, h)
+            h = cfg.h0 + cfg.h_disp * c["disp"]
+            ey, ny = side_eval(c["p_over"], ya, fee_mult, cfg, h), side_eval(1.0 - c["p_over"], na, fee_mult, cfg, h)
             row = {
                 "ts": now.isoformat(), "ticker": leg.ticker, "game_key": gk, "stat": leg.stat,
                 "player": leg.player, "player_norm": leg.player_norm, "team": leg.team, "strike": leg.strike,
                 "commence": start.isoformat(), "mins_to_kick": round(mins, 1),
-                "p_over": round(c.p_over, 5), "n_books": c.n_books, "disp": round(c.disp, 5),
-                "books": ",".join(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
+                "p_over": round(c["p_over"], 5), "n_books": c["n_books"], "disp": round(c["disp"], 5),
+                "books": ",".join(c["books"]), "n_onesided": c["n_onesided"], "n_dfs": c["n_dfs"],
                 "ask_yes": ya, "ask_no": na, "bid_yes": yb, "spread": spread,
                 "ask_yes_size": _f(mk.get("yes_ask_size_fp")), "oi": _f(mk.get("open_interest_fp")),
                 "vol24": _f(mk.get("volume_24h_fp")),
@@ -154,6 +168,13 @@ def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fe
             row.update(flag=flag, reason=reason, side=side)
             rows.append(row)
     return rows, stats
+
+
+def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
+    """parlay_events: [{'event': slate_event, 'props': single-event odds obj}] -> (rows, stats)."""
+    snap, s1 = consensus_snapshot(parlay_events)
+    rows, s2 = rows_from_snapshot(snap, legs_by_game, now, cfg, fee_mult)
+    return rows, {**s1, **s2}
 
 
 # ----------------------------------------------------------------------------- IO
@@ -233,11 +254,55 @@ def _read(key: str):
     return read_bytes(key) if exists(key) else None
 
 
-def run_cycle(pc, kc: KalshiClient, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
+def notified_set(state: dict, day: str) -> set:
+    if day not in state:
+        try:
+            raw = _read(f"{PREFIX}/{day}/notified.json")
+            state[day] = set(json.loads(raw)) if raw else set()
+        except Exception:                                                                # noqa: BLE001
+            state[day] = set()
+    return state[day]
+
+
+def post_new(rows: list, state: dict, day: str) -> int:
+    """Post rows not yet notified today (dedup persisted in GCS so task restarts never re-alert)."""
+    notified = notified_set(state, day)
+    new = [r for r in rows if f"{r['ticker']}|{r['side']}" not in notified]
+    if not new:
+        return 0
+    ok = True
+    for i in range(0, len(new), 20):
+        batch = new[i:i + 20]
+        if post_discord(f"NFL props sweep: {len(batch)} new candidate(s)", alert_embed(batch)):
+            notified.update(f"{r['ticker']}|{r['side']}" for r in batch)
+        else:
+            ok = False
+    try:
+        _write(json.dumps(sorted(notified)).encode(), f"{PREFIX}/{day}/notified.json")
+    except Exception as e:                                                               # noqa: BLE001
+        log.warning("notified write failed: %r", e)
+    return len(new) if ok else 0
+
+
+def process_pending_alerts(state: dict) -> int:
+    """Candidates flagged by the LOCAL executor (which can reach Kalshi) are posted from here, because this
+    job already holds the Discord webhook -- no webhook secret ever leaves Cloud Run."""
+    raw = _read(f"{PREFIX}/alerts_pending.json")
+    if not raw:
+        return 0
+    rows = json.loads(raw)
+    if not rows:
+        return 0
+    day = datetime.now(timezone.utc).astimezone(_ET).date().isoformat()
+    n = post_new(rows, state, day)
+    _write(b"[]", f"{PREFIX}/alerts_pending.json")
+    return n
+
+
+def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
     now = datetime.now(timezone.utc)
     day = now.astimezone(_ET).date().isoformat()
     hhmmss = now.strftime("%H%M%S")
-    legs, mult, kfails = fetch_kalshi_legs(kc)          # FIRST: if blocked, no ParlayAPI credit is spent
     slate = pc.get_slate(SPORT, markets=["h2h"]) or []
     start_cutoff = now + timedelta(minutes=cfg.close_buffer_min)
     upcoming = []
@@ -260,34 +325,30 @@ def run_cycle(pc, kc: KalshiClient, cfg, cycle: int, horizon_h: float, state: di
                 _write(json.dumps(props).encode(), f"{PREFIX}/raw/{day}/{ev['id']}_{hhmmss}.json")
             except Exception as e:                                                      # noqa: BLE001
                 log.warning("raw write failed: %r", e)
-    rows, stats = compute_rows(parlay_events, legs, now, cfg, mult)
+    snap, sstats = consensus_snapshot(parlay_events)
+    # Book consensus is ALWAYS published: the join to Kalshi can then happen anywhere Kalshi is reachable.
+    _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "events": snap}).encode(), f"{PREFIX}/consensus.json")
+    n_pts = [len([p for p in e["points"] if p["n_books"] >= cfg.n_min_books]) for e in snap]
+    rows, jstats, kfails, kalshi_ok = [], {}, {}, True
+    try:
+        legs, mult, kfails = fetch_kalshi_legs(kc)
+        rows, jstats = rows_from_snapshot(snap, legs, now, cfg, mult)
+    except KalshiBlocked:
+        kalshi_ok = False                                  # expected on blocked egress IPs; local executor joins
     flagged = [r for r in rows if r["flag"]]
-    if day not in state:                                   # survives task restarts (egress-IP retries)
-        try:
-            raw = _read(f"{PREFIX}/{day}/notified.json")
-            state[day] = set(json.loads(raw)) if raw else set()
-        except Exception:                                                                # noqa: BLE001
-            state[day] = set()
-    notified = state[day]
-    new = [r for r in flagged if f"{r['ticker']}|{r['side']}" not in notified]
-    if new:
-        if post_discord(f"NFL props sweep: {len(new)} new candidate(s)", alert_embed(new)):
-            notified.update(f"{r['ticker']}|{r['side']}" for r in new)
-            try:
-                _write(json.dumps(sorted(notified)).encode(), f"{PREFIX}/{day}/notified.json")
-            except Exception as e:                                                       # noqa: BLE001
-                log.warning("notified write failed: %r", e)
-    bpm = stats.pop("books_per_match")
+    new = post_new(flagged, state, day) if flagged else 0
+    bpm = jstats.pop("books_per_match", [])
     summary = {"cycle": cycle, "ts": now.isoformat(), "events_pulled": len(parlay_events),
-               "slate_events": len(slate), "rows": len(rows), "flagged": len(flagged), "new_alerts": len(new),
-               "credits_remaining": pc.credits_remaining, "books_per_match_hist":
-               {str(n): bpm.count(n) for n in sorted(set(bpm))}, "kalshi_map_fails": kfails, **stats}
+               "slate_events": len(slate), "kalshi_reachable": kalshi_ok, "points_ge_min_books": sum(n_pts),
+               "rows": len(rows), "flagged": len(flagged), "new_alerts": new,
+               "credits_remaining": pc.credits_remaining,
+               "books_per_match_hist": {str(n): bpm.count(n) for n in sorted(set(bpm))},
+               "kalshi_map_fails": kfails, **sstats, **jstats}
     log.info("CYCLE %s", json.dumps(summary, default=str))
     if rows:
-        df = pd.DataFrame(rows)
-        _write(df.to_csv(index=False).encode(), f"{PREFIX}/{day}/cycle_{hhmmss}.csv")
-    _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "summary": summary, "rows": rows},
-                      default=str).encode(), f"{PREFIX}/latest.json")
+        _write(pd.DataFrame(rows).to_csv(index=False).encode(), f"{PREFIX}/{day}/cycle_{hhmmss}.csv")
+        _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "summary": summary, "rows": rows},
+                          default=str).encode(), f"{PREFIX}/latest.json")
     return summary
 
 
@@ -301,38 +362,33 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     from nba.odds.parlayapi import ParlayApiClient
     pc, kc, cfg = ParlayApiClient(), KalshiClient(PUBLIC_DATA_ENV, None, None), props_config()
+    kc.max_retries = 1                       # a blocked egress IP stays blocked; do not burn minutes retrying
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     state: dict = {}
-    first_rem, cycle, blocked = None, 0, 0
+    first_rem, cycle, next_cycle = None, 0, 0.0
+    post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin channel only).")
     while True:
+        if time.time() >= next_cycle:
+            try:
+                run_cycle(pc, kc, cfg, cycle, a.horizon_hours, state)
+                first_rem = first_rem or (int(pc.credits_remaining) if pc.credits_remaining else None)
+            except Exception:                                                            # noqa: BLE001
+                log.exception("cycle %s failed", cycle)
+            cycle += 1
+            next_cycle = time.time() + a.loop_minutes * 60
+            if first_rem and pc.credits_remaining and first_rem - int(pc.credits_remaining) >= a.max_credits:
+                log.error("credit budget for this run exhausted (%s spent); stopping", a.max_credits)
+                post_discord("NFL props sweep stopped: run credit budget exhausted.")
+                return 0
+        if a.loop_minutes <= 0 or (until and datetime.now(timezone.utc) >= until):
+            return 0
         try:
-            run_cycle(pc, kc, cfg, cycle, a.horizon_hours, state)
-            first_rem = first_rem or (int(pc.credits_remaining) if pc.credits_remaining else None)
-            if cycle == 0 or blocked:
-                post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin "
-                             "channel only).")
-            blocked = 0
-        except KalshiBlocked:
-            blocked += 1
-            log.error("Kalshi unreachable from this egress IP (%s/3)", blocked)
-            if blocked >= 3:
-                log.error("exiting 75 so Cloud Run retries the task on a fresh instance/IP")
-                return 75
-            time.sleep(20)
-            continue
+            n = process_pending_alerts(state)
+            if n:
+                log.info("posted %s pending alert(s) from the local executor", n)
         except Exception:                                                                # noqa: BLE001
-            log.exception("cycle %s failed", cycle)
-        cycle += 1
-        if a.loop_minutes <= 0:
-            break
-        if until and datetime.now(timezone.utc) >= until:
-            break
-        if first_rem and pc.credits_remaining and first_rem - int(pc.credits_remaining) >= a.max_credits:
-            log.error("credit budget for this run exhausted (%s spent); stopping", a.max_credits)
-            post_discord("NFL props sweep stopped: run credit budget exhausted.")
-            break
-        time.sleep(a.loop_minutes * 60)
-    return 0
+            log.exception("pending-alert processing failed")
+        time.sleep(60)
 
 
 if __name__ == "__main__":

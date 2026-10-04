@@ -1,7 +1,7 @@
 """ev.props / ev.kalshi_props / ev.sweep_nfl_props. Fixtures are REAL payloads captured 2026-10-04."""
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -198,17 +198,59 @@ def test_alert_embed_and_webhook_never_uses_member_channel(monkeypatch):
     assert sw.webhook_url().endswith("/ops")
 
 
-def test_kalshi_blocked_is_raised_before_any_parlay_spend():
+def _fake_pc(events):
+    class PC:
+        credits_remaining = "19000"
+        def get_slate(self, sport, markets=None):
+            return [e["event"] for e in events]
+        def get_event_props(self, sport, eid, markets):
+            return next(e["props"] for e in events if e["event"]["id"] == eid)
+    return PC()
+
+
+def test_blocked_kalshi_still_publishes_the_book_consensus(monkeypatch):
+    """Cloud Run egress IPs are blocked by Kalshi's CDN: the cloud job must still publish consensus.json so a
+    machine that can reach Kalshi does the join."""
+    leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
+    events = _parlay_events(leg)
+    events[0]["event"]["commence_time"] = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+
     class DeadKalshi:
         def get_series(self, s):
             raise RuntimeError("HTTP 403 could not be satisfied")
         def get_markets(self, s):
             raise RuntimeError("HTTP 403")
 
-    class PC:                                   # must never be touched when Kalshi is blocked
-        credits_remaining = "1"
-        def get_slate(self, *a, **k):
-            raise AssertionError("ParlayAPI credit spent while Kalshi was blocked")
+    written = {}
+    monkeypatch.setattr(sw, "_write", lambda data, key: written.__setitem__(key, data))
+    monkeypatch.setattr(sw, "_read", lambda key: None)
+    out = sw.run_cycle(_fake_pc(events), DeadKalshi(), props_config(env={}), 0, 40.0, {})
+    assert out["kalshi_reachable"] is False and out["rows"] == 0 and out["events_pulled"] == 1
+    snap = json.loads(written["EVSweep/nfl_props/consensus.json"])
+    assert snap["events"][0]["points"] and snap["events"][0]["points"][0]["n_books"] == 3
+    # the published snapshot, joined later, equals the direct join
+    cfg = props_config(env={})
+    rows, _ = sw.rows_from_snapshot(snap["events"], {leg.game_key: [(leg, mk)]}, datetime.now(timezone.utc), cfg, 1.0)
+    assert len(rows) == 1 and rows[0]["n_books"] == 3
 
-    with pytest.raises(sw.KalshiBlocked):
-        sw.run_cycle(PC(), DeadKalshi(), props_config(env={}), 0, 40.0, {})
+
+def test_post_new_dedups_and_persists_and_pending_alerts_flow(monkeypatch):
+    cfg = props_config(env={})
+    leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
+    r = sw.compute_rows(_parlay_events(leg), {leg.game_key: [(leg, mk)]}, NOW, cfg, 1.0)[0][0]
+    posts, store = [], {}
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append(text) or True)
+    monkeypatch.setattr(sw, "_write", lambda data, key: store.__setitem__(key, data))
+    monkeypatch.setattr(sw, "_read", lambda key: store.get(key))
+    state = {}
+    assert sw.post_new([r], state, "2026-10-04") == 1 and len(posts) == 1
+    assert sw.post_new([r], state, "2026-10-04") == 0 and len(posts) == 1          # deduped
+    assert f"{r['ticker']}|{r['side']}" in json.loads(store["EVSweep/nfl_props/2026-10-04/notified.json"])
+    # a restarted task (empty in-memory state) still does not re-alert
+    assert sw.post_new([r], {}, "2026-10-04") == 0
+    # pending alerts written by the local executor are posted from here and the file is cleared
+    r2 = dict(r, ticker=r["ticker"] + "X")
+    store["EVSweep/nfl_props/alerts_pending.json"] = json.dumps([r2]).encode()
+    day = datetime.now(timezone.utc).astimezone(sw._ET).date().isoformat()
+    assert sw.process_pending_alerts({}) == 1 and len(posts) == 2
+    assert store["EVSweep/nfl_props/alerts_pending.json"] == b"[]"
