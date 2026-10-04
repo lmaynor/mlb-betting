@@ -29,6 +29,23 @@ Owner decisions captured 2026-10-04:
 4. Season state: NFL regular season; NHL just opening; NBA is in PRESEASON (Kalshi lists preseason
    games; books are thin on them). Adapters carry an `in_season` flag; preseason is logged, never traded.
 
+5. **Owner thesis (2026-10-04): player props are the soft lines; moneyline and spread are sharp.**
+   Consistent with the MLB result (game-level Kalshi-vs-books: n=73, t=0.12) and with where the paper
+   EV alerts earned (props). v1 is therefore PROPS-FIRST; game lines are kept as a diagnostic/sanity
+   stream (and the mapper is built) but are not the trading target.
+6. **Kalshi NFL props are deep and tight (probed live 2026-10-04, Sunday slate):** receiving yards 1,327
+   open markets / 15 events, all two-sided, median spread $0.02, max open interest ~37k contracts;
+   rushing yds 784 (spread $0.01), receptions 1,132, passing yds 271, passing TDs 125, first TD 401.
+   NBA props: none listed (preseason). NHL props (goalscorer, points): thin -- 5-7c spreads, OI mostly
+   zero. ParlayAPI's free catalog lists the matching NFL markets (player_pass_yds, _rush_yds,
+   _reception_yds, _receptions, _pass_tds, _anytime_td, _1st_td) INCLUDING `*_alternate` ladders for
+   yards/receptions -- so, unlike game lines, every Kalshi "N+" strike can be compared to a book line.
+   Caveats that cut against the thesis: a 1-2c spread means active Kalshi market makers (not obviously
+   soft); and the book reference for props is a thinner, noisier truth than for game lines (fewer books,
+   bigger dispersion, mostly one-sided alternate prices needing an assumed vig) -- exactly where the
+   repo's winner's-curse finding says big apparent edges are mostly reference error. The shadow
+   histogram, not the thesis, decides.
+
 Therefore the sweep has two sinks fed by one candidate stream (s2):
 - Sink A (cheap, proven shape): Discord +EV alerts at SPORTSBOOK prices (generalizing
   fast_alert_loop). No Kalshi dependency; this is where the only positive paper evidence lives.
@@ -151,8 +168,14 @@ Hard problems, each with a fail-closed rule:
 5. **Doubleheader analog:** none expected; if an event ticker carries a suffix beyond the code
    pattern -> REJ_AMBIGUOUS.
 
-v1 market allowlist: `*GAME` moneyline first; `*SPREAD`/`*TOTAL` only at book-quoted strikes after
-(a) rules read and (b) a Kalshi-vs-own-grader agreement check. Player props: v2.
+v1 market allowlist (REVISED 2026-10-04, props-first): NFL player props -- receiving/rushing/passing
+yards, receptions, passing TDs, then first/anytime TD. Player-prop mapping needs (a) player identity
+resolution Kalshi title/ticker -> ParlayAPI player name (fail closed on ambiguity; same name collisions
+exist, e.g. two Max Muncys in MLB), (b) the ladder rule "N+ strike == book over (N-0.5)" with the book's
+OWN under as the complement where two-sided, (c) the Kalshi rules read live: "active but never takes a
+snap -> settles to the fair market price before game start" (a void; books also void DNPs), and (d) a
+per-prop-series grader agreement check. NHL props: shadow-log only (thin). NBA props: when listed.
+Game lines (`*GAME`/`*SPREAD`/`*TOTAL`, mapper already built + tested): diagnostic stream only.
 
 ---
 
@@ -199,8 +222,11 @@ NFL/NHL: to be chosen, unverified) is added as a disagreement alarm, as in MLB d
 - Correlation: same-game ML + spread + total are one bet for risk purposes (shared per-game cap).
 - NFL concentration: ~16 games in a few windows per week -> daily caps bind; positions cluster.
 - Legal/eligibility: confirm your account may trade sports contracts where you are (MLB doc s9.1).
-- Scope creep: three sports x three markets x two sinks. Order of build: NHL/NFL moneyline shadow
-  first, then totals/spreads at quoted strikes, then NBA once the regular season starts.
+- Scope creep: three sports x many markets x two sinks. REVISED order of build (props-first): NFL
+  props shadow sweep first (the only place Kalshi depth + book coverage + ladders all exist today),
+  then NHL props shadow-log, NBA props when Kalshi lists them, game lines as a diagnostic.
+- Prop settlement/voids: DNP / inactive handling differs by book and by Kalshi; the executor must treat
+  Kalshi's own settlement as truth and alarm on any disagreement with the book rule.
 
 ## 7. Open questions
 1. ~~ParlayAPI coverage probe~~ -- DONE 2026-10-04 (s3.1). Findings: keys confirmed; no alt game
