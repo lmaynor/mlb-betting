@@ -6,6 +6,30 @@ calibrated in shadow mode, not a measured result. Extends (does not replace)
 docs/designs/kalshi_auto_execution.md, whose MLB executor (mlb/execution/kalshi/, demo-verified, 99
 tests, currently UNCOMMITTED) is the code this builds on.
 
+## IMPLEMENTATION STATUS (2026-10-04) -- NFL props shadow sweep is LIVE; nothing trades real money
+
+Built and running (branch feat/multisport-ev-sweep):
+- `ev/props.py` + `ev/kalshi_props.py` + `ev/sweep_nfl_props.py` + `ev/props_exec.py` (+ `ev/kalshi_map.py` for
+  game lines, built but not the trading target). 60 tests. All 3,639 live Kalshi NFL prop markets map.
+- Sweep = Cloud Run job `ev-nfl-props-sweep` (image gcr.io/.../mlb-betting-ev:shadow, built separately; the
+  production service is untouched). Every ~15 min: ParlayAPI slate + per-event props (5 credits/event), per-book
+  2-way devig, median consensus, join to every open Kalshi NFL prop at the same point, evidence CSV
+  `EVSweep/nfl_props/{ET day}/cycle_*.csv`, raw payloads `EVSweep/nfl_props/raw/`, `latest.json` for the executor.
+- Discord: new candidates post to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin-only). NEVER the member
+  channels (these signals are unvalidated). Currently the ops channel.
+- Executor `python -m ev.props_exec run --demo-orders`: reuses the MLB gates/Kelly/risk/ledger. SHADOW = paper fills
+  against fresh PRODUCTION Kalshi books on a $1,000 notional bankroll (the evidence ledger, graded on Kalshi's own
+  settled result via `... pnl`). DEMO = identical IOC order to the Kalshi demo exchange. PROBED: demo NFL-prop books
+  are ~empty (receiving yds 29 of 1,000 two-sided; passing/rushing 0), so demo orders will mostly NO_FILL --
+  mechanics only. One position per (game, player, stat) per day.
+- Credit use: ~76/cycle with 15 games; run capped at 9,000 credits. Account showed ~19.3k remaining (the 100k plan
+  was not yet applied when checked).
+
+Known limits / what to watch: (1) ParlayAPI prop coverage is thin early in the day -- at ~2am Sunday only 1
+real sportsbook per prop; the per-cycle `books_per_match_hist` log shows whether coverage reaches the 3-book
+minimum near kickoff. (2) one-sided alternate ladders are not used. (3) lag history is not kept yet, so every
+plan sizes at the persistent-tier Kelly fraction (0.10). (4) FIRST/ANYTD TD props not built.
+
 Owner decisions captured 2026-10-04:
 - Leagues: pro only -- NFL, NBA, NHL. (NCAAF/NCAAB are a config addition later, not v1.)
 - Odds: ParlayAPI upgraded to 100k credits/month ($20). BettingPros + SGO are cross-checks, not the
