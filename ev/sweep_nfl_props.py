@@ -120,7 +120,7 @@ def consensus_snapshot(parlay_events: list):
             stats["unmapped_keys"][k] = stats["unmapped_keys"].get(k, 0) + v
         points = [{"player_norm": pn, "stat": st, "point": pt, "p_over": c.p_over, "n_books": c.n_books,
                    "disp": c.disp, "books": list(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
-                   "team_hints": list(c.team_hints)} for (pn, st, pt), c in build_consensus(quotes).items()]
+                   "team_hints": list(c.team_hints), "book_fair": dict(c.book_fair)} for (pn, st, pt), c in build_consensus(quotes).items()]
         snap.append({"game_key": gk, "commence": start.isoformat(), "points": points})
     return snap, stats
 

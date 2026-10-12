@@ -125,6 +125,7 @@ class PropConsensus:
     n_onesided: int
     n_dfs: int
     team_hints: tuple = ()  # distinct team codes any book attached to this player's quote ('IND')
+    book_fair: tuple = ()   # ((book, fair P(over)), ...) -- lets a venue be left OUT of its own reference price
 
 
 def _mad(x) -> float:
@@ -158,5 +159,6 @@ def build_consensus(quotes: list[Quote], devig_method: str = "proportional") -> 
         vals = list(per_book.values())
         out[key] = PropConsensus(
             p_over=float(np.median(vals)), n_books=len(vals), disp=_mad(vals), books=tuple(sorted(per_book)),
-            n_onesided=len(onesided - set(per_book)), n_dfs=n_dfs, team_hints=tuple(sorted(hints)))
+            n_onesided=len(onesided - set(per_book)), n_dfs=n_dfs, team_hints=tuple(sorted(hints)),
+            book_fair=tuple(sorted(per_book.items())))
     return out

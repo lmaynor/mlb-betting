@@ -68,8 +68,25 @@ def load_novig_legs(nc: NovigClient, now: datetime) -> dict:
     return out
 
 
+def leave_out(point: dict, exclude=frozenset({"novig"})) -> dict | None:
+    """Consensus WITHOUT the traded venue. ParlayAPI lists Novig itself as a book (full ladders), so the plain
+    consensus is partly Novig's own price -- circular for an edge-vs-consensus test. Needs the per-book fair prices
+    (snapshot `book_fair`); an older snapshot without them is skipped, never guessed."""
+    bf = point.get("book_fair")
+    if not bf:
+        return None
+    vals = [v for b, v in bf.items() if b not in exclude]
+    if not vals:
+        return None
+    med = sorted(vals)[len(vals) // 2] if len(vals) % 2 else (sorted(vals)[len(vals) // 2 - 1] + sorted(vals)[len(vals) // 2]) / 2
+    mad = sorted(abs(v - med) for v in vals)
+    mad = mad[len(mad) // 2] if len(mad) % 2 else (mad[len(mad) // 2 - 1] + mad[len(mad) // 2]) / 2
+    return dict(point, p_over=med, n_books=len(vals), disp=mad)
+
+
 def candidates(snap: list, legs: dict, cfg, now: datetime) -> list:
-    """Consensus points with >= n_min books that have a Novig market at the same line and are not near kick."""
+    """Leave-Novig-out consensus points with >= n_min books that have a Novig market at the same line and are not
+    near kick."""
     out = []
     for ev in snap:
         start = datetime.fromisoformat(ev["commence"])
@@ -77,7 +94,8 @@ def candidates(snap: list, legs: dict, cfg, now: datetime) -> list:
         if mins < cfg.close_buffer_min:
             continue
         for p in ev["points"]:
-            if p["n_books"] < cfg.n_min_books or p["disp"] > cfg.disp_max:
+            p = leave_out(p)
+            if p is None or p["n_books"] < cfg.n_min_books or p["disp"] > cfg.disp_max:
                 continue
             leg = legs.get((ev["game_key"], p["stat"], p["player_norm"], p["point"]))
             if leg is not None:

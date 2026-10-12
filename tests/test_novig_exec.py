@@ -30,7 +30,8 @@ class FakeNC:
 
 def point(p_over=0.55, n=4, disp=0.01):
     return {"player_norm": LEG.player_norm, "stat": LEG.stat, "point": LEG.strike, "p_over": p_over, "n_books": n,
-            "disp": disp, "books": ["a", "b", "c", "d"], "n_onesided": 0, "n_dfs": 0, "team_hints": []}
+            "disp": disp, "books": ["a", "b", "c", "d"], "n_onesided": 0, "n_dfs": 0, "team_hints": [],
+            "book_fair": {"a": p_over, "b": p_over, "c": p_over, "d": p_over}}
 
 
 def run(tmp_path, nc, p=None, clock_off=0.5):
@@ -84,8 +85,32 @@ def test_group_held_prevents_second_position_and_no_edge_is_rejected(tmp_path):
 def test_candidates_filters_thin_dispersed_and_near_kick():
     cfg = props_config(env={})
     legs = {(LEG.game_key, LEG.stat, LEG.player_norm, LEG.strike): LEG}
-    snap = [{"game_key": LEG.game_key, "commence": LEG.start_utc.isoformat(), "points": [point(), point(n=1), point(disp=0.2)]}]
+    thin, wide = point(), point()
+    thin["book_fair"] = {"a": 0.55}                                                  # 1 independent book
+    wide["book_fair"] = {"a": 0.30, "b": 0.55, "c": 0.80}                            # dispersed (MAD 0.25)
+    snap = [{"game_key": LEG.game_key, "commence": LEG.start_utc.isoformat(), "points": [point(), thin, wide]}]
     now = LEG.start_utc - timedelta(hours=3)
     assert len(nx.candidates(snap, legs, cfg, now)) == 1
     assert nx.candidates(snap, legs, cfg, LEG.start_utc - timedelta(minutes=5)) == []
     assert nx.candidates(snap, {}, cfg, now) == []
+
+
+def test_leave_out_removes_novig_from_its_own_reference():
+    p = {"book_fair": {"novig": 0.40, "a": 0.50, "b": 0.52, "c": 0.54}, "p_over": 0.51, "n_books": 4, "disp": 0.02}
+    q = nx.leave_out(p)
+    assert q["n_books"] == 3 and q["p_over"] == pytest.approx(0.52) and "novig" not in str(q["book_fair"].keys() - {"novig"})
+    # a point whose only quote is Novig has NO independent reference
+    assert nx.leave_out({"book_fair": {"novig": 0.5}, "p_over": 0.5, "n_books": 1, "disp": 0}) is None
+    # a snapshot without per-book fair prices is skipped, never guessed
+    assert nx.leave_out({"p_over": 0.5, "n_books": 4, "disp": 0}) is None
+
+
+def test_candidates_use_the_leave_novig_out_consensus():
+    cfg = props_config(env={})
+    legs = {(LEG.game_key, LEG.stat, LEG.player_norm, LEG.strike): LEG}
+    pt = point(); pt["book_fair"] = {"novig": 0.5, "a": 0.55, "b": 0.55}            # only 2 independent books
+    snap = [{"game_key": LEG.game_key, "commence": LEG.start_utc.isoformat(), "points": [pt]}]
+    assert nx.candidates(snap, legs, cfg, LEG.start_utc - timedelta(hours=3)) == []   # n_min_books=3 not met without novig
+    pt["book_fair"]["c"] = 0.55
+    out = nx.candidates(snap, legs, cfg, LEG.start_utc - timedelta(hours=3))
+    assert len(out) == 1 and out[0][1]["n_books"] == 3 and out[0][1]["p_over"] == pytest.approx(0.55)
