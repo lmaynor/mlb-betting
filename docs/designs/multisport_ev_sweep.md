@@ -6,6 +6,30 @@ calibrated in shadow mode, not a measured result. Extends (does not replace)
 docs/designs/kalshi_auto_execution.md, whose MLB executor (mlb/execution/kalshi/, demo-verified, 99
 tests, currently UNCOMMITTED) is the code this builds on.
 
+## NOVIG (added 2026-10-12) -- second venue, shadow only so far
+
+Novig (docs.novig.com) HAS a real trading API: NOVIG-V3 signed requests (Ed25519), management key (account/funding)
+vs per-subaccount trading key, paper sandbox https://api.paper.novig.com ($10,000 play money, separate marketIds but the
+same catalog), IOC/FOK/GTC/GTT/post-only, WebSocket, and a PUBLIC unsigned read-only catalog (/v3/public/*, served from
+production; rate-limited -- pace ~0.7s). Built: `ev/novig/{signing,client,map,exec}.py` (signer passes all 30 official
+vectors; production refused in code; POSTs never retried because Novig has NO idempotency -- "a replayed place always
+places again"; reconcile via list_orders before any retry).
+Facts: fee = c*P(1-P)*N*1c on the TAKER only, c=0.03 for game/prop markets and **charged only while live** (pre-game
+free), 0.06 ALWAYS on futures; a winning contract pays 1 cent (qty is in cent-contracts); price grid is 0.001-0.050 /
+0.055-0.945 (0.005 steps) / 0.950-0.999 with GAPS; resting orders are voided at game start; voids settle FMV/push.
+Prod NFL: 3,409 open markets (receiving yds 459, receptions 230, rushing 188, passing 93, TDs 167, + spreads/totals/
+futures); props are TWO-SIDED Over/Under with the line in the outcome name, and Novig lists LADDERS of strikes per player.
+FINDINGS (public data, 2026-10-12, one MNF game): (1) all 452 Kalshi prop markets have a Novig market at the same line;
+(2) NO riskless cross-venue gap: 0 of 828 directional pairs positive after Kalshi's fee (best ~-0.2%); the venues track
+each other (median over-price gap 0.5c) -- both are efficient exchanges; (3) vs the sportsbook consensus Novig's zero
+pre-game fee is worth ~+2.5 points of net EV over Kalshi but the median stays negative; (4) **ParlayAPI lists Novig as
+a book** (full ladders), so the plain consensus contains Novig's own price: the Novig executor uses a leave-Novig-out
+consensus (snapshot `book_fair`); with it, 41 candidates: best-side EV median -1.2%, p90 +1.8%, max +4.2%, and the few
+>=+2% sit in 18-40c-wide books (rejected by the spread gate); the 4 tight books show no edge.
+Shadow wiring: `python -m ev.props_exec run --novig` (ledger mode `novig`, paper fills against PUBLIC Novig books, Over=yes/
+Under=no, 100 Novig contracts = one $1 unit, taker multiplier 0). Paper ORDERS on api.paper.novig.com need the owner to
+create a paper management key (never pasted in chat); not built until then.
+
 ## IMPLEMENTATION STATUS (2026-10-04) -- NFL props shadow sweep is LIVE; nothing trades real money
 
 Built and running (branch feat/multisport-ev-sweep):
