@@ -235,9 +235,10 @@ def alert_embed(rows: list) -> list:
             side = r["side"]
             ask = r[f"ask_{side}"]
             fair = r["p_over"] if side == "yes" else 1 - r["p_over"]
-            lines.append(f"**{r['player']}** {r['stat']} {int(r['strike'] + 0.5)}+  BUY {side.upper()} @ {ask:.2f} | "
+            venue = f"[{r['venue'].upper()}] " if r.get("venue") else ""
+            lines.append(f"{venue}**{r['player']}** {r['stat']} {int(r['strike'] + 0.5)}+  BUY {side.upper()} @ {ask:.2f} | "
                          f"fair {fair:.2f} | net EV {r['ev_' + side] * 100:+.1f}% | {r['n_books']} bk | "
-                         f"spr {r['spread']} | OI {int(r['oi'] or 0)}")
+                         f"spr {r['spread']} | OI {int(r['oi'] or 0)}" + (" | ZERO pre-game fee" if r.get("venue") == "novig" else ""))
         fields.append({"name": gk.replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
     return [{"title": f"NFL props: {len(rows)} Kalshi candidate(s) (SHADOW / unvalidated)",
              "description": "Net of Kalshi fee and shrinkage. Paper-tracked on a $1,000 notional bankroll; "

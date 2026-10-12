@@ -118,10 +118,10 @@ def build_latest_local(kc: KalshiClient, cfg) -> dict | None:
     now = datetime.now(timezone.utc)
     rows, stats = rows_from_snapshot(snap["events"], legs, now, cfg, mult)
     return {"ts": snap["ts"], "rows": rows, "stats": {k: v for k, v in stats.items() if k != "books_per_match"},
-            "books_hist": dict(Counter(stats["books_per_match"]))}
+            "books_hist": dict(Counter(stats["books_per_match"])), "snap": snap["events"]}
 
 
-def publish_local(latest: dict, day: str) -> int:
+def publish_local(latest: dict, day: str, extra_alerts: list | None = None) -> int:
     """Evidence + alerts: (1) gz CSV of every comparable row this pass (Kalshi quote vs consensus time series);
     (2) flagged candidates not yet notified -> alerts_pending.json (the cloud job holds the Discord webhook and
     posts them). Returns the number queued."""
@@ -135,7 +135,7 @@ def publish_local(latest: dict, day: str) -> int:
         with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
             gz.write(pd.DataFrame(rows).to_csv(index=False).encode())
         gcs_put(f"{PREFIX}/{day}/local_{datetime.now(timezone.utc):%H%M%S}.csv.gz", buf.getvalue())
-    flagged = [r for r in rows if r.get("flag")]
+    flagged = [r for r in rows if r.get("flag")] + list(extra_alerts or [])
     if not flagged:
         return 0
     raw = gcs_cat(f"{PREFIX}/{day}/notified.json")
@@ -267,6 +267,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("--demo-orders", action="store_true")
+    r.add_argument("--novig", action="store_true", help="also run Novig as a second SHADOW venue (public books, paper fills)")
     r.add_argument("--env-file", default=None)
     r.add_argument("--db", default=DEFAULT_DB)
     r.add_argument("--loop-seconds", type=int, default=0)
@@ -282,7 +283,10 @@ def main(argv=None) -> int:
     data_client = KalshiClient(PUBLIC_DATA_ENV, None, None)
 
     if a.cmd == "pnl":
-        print(json.dumps(grade(ledger, data_client), indent=1))
+        print("kalshi shadow:", json.dumps(grade(ledger, data_client), indent=1))
+        from ev.novig import exec as nx
+        from ev.novig.client import NovigClient
+        print("novig shadow:", json.dumps(nx.grade(ledger, NovigClient("public-data")), indent=1))
         return 0
     if a.cmd == "status":
         day = et_day(datetime.now(timezone.utc))
@@ -302,6 +306,12 @@ def main(argv=None) -> int:
         demo_venue = KalshiVenue(load_demo_client(a.env_file))
         demo_risk = RiskGate(cfg, ledger, "demo")
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
+    nc = nrisk = novig_legs = None
+    legs_loaded = 0.0
+    if a.novig:
+        from ev.novig.client import NovigClient
+        nc = NovigClient("public-data")
+        nrisk = RiskGate(cfg, ledger, "novig")
     while True:
         try:
             latest = build_latest_local(data_client, cfg)
@@ -310,7 +320,22 @@ def main(argv=None) -> int:
             latest = None
         if latest:
             try:
-                queued = publish_local(latest, et_day(datetime.now(timezone.utc)))
+                novig_alerts = []
+                if nc is not None:
+                    try:
+                        from ev.novig import exec as nx
+                        if novig_legs is None or time.time() - legs_loaded > 600:
+                            novig_legs, legs_loaded = nx.load_novig_legs(nc, datetime.now(timezone.utc)), time.time()
+                        cands = nx.candidates(latest["snap"], novig_legs, cfg, datetime.now(timezone.utc))
+                        ns = nx.run_pass(snap_ts=latest["ts"], cands=cands, cfg=cfg, nc=nc, ledger=ledger, risk=nrisk)
+                        novig_alerts = ns["alerts"]
+                        log.info("NOVIG legs=%s candidates=%s hist=%s executed=%s", len(novig_legs), ns["considered"],
+                                 ns["hist"], len(ns["executed"]))
+                        for e in ns["executed"]:
+                            log.info("  NOVIG %s", e)
+                    except Exception:                                                # noqa: BLE001
+                        log.exception("novig pass failed; continuing with Kalshi")
+                queued = publish_local(latest, et_day(datetime.now(timezone.utc)), novig_alerts)
                 log.info("JOIN rows=%s flagged=%s queued_alerts=%s books_hist=%s", len(latest["rows"]),
                          sum(1 for r in latest["rows"] if r.get("flag")), queued, latest.get("books_hist"))
                 s = run_pass(latest=latest, cfg=cfg, data_client=data_client, paper=paper, ledger=ledger, risk=risk,

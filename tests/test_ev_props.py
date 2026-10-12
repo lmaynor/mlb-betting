@@ -214,6 +214,9 @@ def test_blocked_kalshi_still_publishes_the_book_consensus(monkeypatch):
     leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
     events = _parlay_events(leg)
     events[0]["event"]["commence_time"] = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    import dataclasses
+    gk, _ = sw.event_game(events[0]["event"])                    # keep the leg's game on the (relative) event date
+    leg = dataclasses.replace(leg, game_key=gk)
 
     class DeadKalshi:
         def get_series(self, s):
@@ -230,7 +233,7 @@ def test_blocked_kalshi_still_publishes_the_book_consensus(monkeypatch):
     assert snap["events"][0]["points"] and snap["events"][0]["points"][0]["n_books"] == 3
     # the published snapshot, joined later, equals the direct join
     cfg = props_config(env={})
-    rows, _ = sw.rows_from_snapshot(snap["events"], {leg.game_key: [(leg, mk)]}, datetime.now(timezone.utc), cfg, 1.0)
+    rows, _ = sw.rows_from_snapshot(snap["events"], {gk: [(leg, mk)]}, datetime.now(timezone.utc), cfg, 1.0)
     assert len(rows) == 1 and rows[0]["n_books"] == 3
 
 
