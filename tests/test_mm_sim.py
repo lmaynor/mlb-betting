@@ -60,3 +60,17 @@ def test_analysis_maker_pnl_signs():
     # maker sold YES at 0.6, market settled YES: loses 0.4/contract; maker bought YES at 0.6: wins 0.4
     assert df["maker_pnl"].tolist() == pytest.approx([-4.0, 4.0])
     assert df["mtk"].iloc[0] > 0 and df["maker_cap"].tolist() == pytest.approx([4.0, 6.0])
+
+
+def test_markout_window_uses_the_right_time_units():
+    import mm_markout as mk
+    ts = pd.to_datetime(["2026-10-04 12:00:00", "2026-10-04 12:01:30", "2026-10-04 12:02:00", "2026-10-04 12:30:00"], utc=True)
+    df = pd.DataFrame({"ticker": "T", "game": "g", "created_time": ts, "p": [0.50, 0.55, 0.57, 0.90],
+                       "n": [10.0, 10.0, 10.0, 10.0], "taker_side": ["yes", "yes", "yes", "yes"]})
+    out = mk.markout(df, delay_min=1.0, win_min=5.0)
+    # trade 0 at 12:00: window [12:01, 12:06] contains trades at 12:01:30 and 12:02:00 -> ref = (0.55+0.57)/2 = 0.56;
+    # maker SOLD yes at 0.50 and the price rose to 0.56 -> markout 0.50-0.56 = -0.06 (adverse)
+    first = out.iloc[0]
+    assert first["ref"] == pytest.approx(0.56) and first["mo"] == pytest.approx(-0.06)
+    assert len(out) == 1 or out["created_time"].iloc[0] == ts[0]
+    # the 12:30 trade is outside every other trade's 5-minute window -> never used as a reference for trade 0

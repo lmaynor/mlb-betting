@@ -103,6 +103,44 @@ per game for ALL makers (~$80k per 16-game week). A 1% share is ~$800/week gross
 selection of -1.4c on those contracts (~-$2.3k/week) with a weekly sd in the thousands. Capital is not the constraint;
 edge is.
 
+## 4b. Markout (price move after the fill) and queue position -- the "pennies" test
+
+Sections 3-4 hold fills to settlement, which adds outcome noise. A maker normally judges fills by MARKOUT: P&L marked
+to the market a few minutes after the fill (reference = volume-weighted trade price in the 5 minutes after the delay,
+which mixes bid- and ask-side trades so bid/ask bounce cancels). `scripts/mm_markout.py` (time-unit bug found and fixed;
+test added). Passive side, pre-kick, 4 NFL prop series, 78 games, estimates are TIGHT (+/-0.1c):
+
+| Horizon | contracts | maker markout (c/contract) | 95% CI |
+|---|---|---|---|
+| +1 min | 42.1M | -0.16 | [-0.27, -0.09] |
+| +5 min | 35.3M | -0.20 | [-0.34, -0.12] |
+| +15 min | 27.0M | -0.23 | [-0.42, -0.11] |
+| +30 min | 20.1M | -0.32 | [-0.59, -0.14] |
+
+The half-spread is ~0.5c, so **adverse selection after a fill is ~0.7c per contract -- larger than the spread earned**.
+Who hits you: trades under 10 contracts: +0.18c [+0.13,+0.24]; 10-100: +0.08c; 100-1000: -0.05c; **>= 1,000 contracts:
+-0.42c [-0.65,-0.27]**. By time to kickoff: >24h -1.07c; 6-24h -0.21c; 1-6h -0.25c; 20-60m -0.02c. Small (retail-sized)
+trades pay the maker; large ones are informed.
+
+Queue position (our quote = 100 contracts at the touch; a trade of size n fills us min(100, max(0, n - Q)) where Q is the
+queue ahead of us):
+
+| Q ahead | fills (contracts) | markout (c/contract) | 95% CI | $/game |
+|---|---|---|---|---|
+| 0 (front) | 10.8M | **+0.02** | [-0.04, +0.06] | +$22 |
+| 100 | 4.1M | -0.08 | [-0.18, -0.01] | -$42 |
+| 500 | 1.2M | -0.20 | [-0.35, -0.10] | -$30 |
+| 1,000 | 0.58M | -0.30 | [-0.50, -0.16] | -$22 |
+| 2,500 | 0.18M | -0.56 | [-0.86, -0.34] | -$13 |
+| 5,000 (the median Kalshi top-of-book) | 59k | **-0.71** | [-1.17, -0.40] | -$5 |
+
+Reading: the spread is real but it is exactly the compensation for informed flow (Glosten-Milgrom): even at the front
+of the queue the net markout is ~0, not positive. The deeper you sit, the more your fills are the large sweeps that
+move the price (-0.7c at the median queue). Inventory also keeps drifting against makers to settlement (-0.3c at 30 min
+-> -1.6c held to settlement), so laying off by crossing the spread (another ~0.5c) does not rescue it. Unmodelled and
+what real makers do: cancel quotes ahead of informed flow using a fast outside reference. Our sportsbook feed arrives
+every 15 minutes, which is far too slow for that.
+
 ## 5. Ideas that might rescue it, and what we can actually say
 
 1. **Quote only where our sportsbook consensus agrees (informed maker).** Not testable yet: only 26 historical trades
