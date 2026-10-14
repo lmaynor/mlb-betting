@@ -30,6 +30,18 @@ Shadow wiring: `python -m ev.props_exec run --novig` (ledger mode `novig`, paper
 Under=no, 100 Novig contracts = one $1 unit, taker multiplier 0). Paper ORDERS on api.paper.novig.com need the owner to
 create a paper management key (never pasted in chat); not built until then.
 
+## NOVIG PAPER ACCOUNT LIVE (2026-10-13)
+
+Management key (Ed25519) filed at ~/.novig/paper_mgmt.pem (0600), ids in ~/.novig/paper.env; `python -m ev.novig.setup
+{echo,balance,open-subaccount,fund,status}` (generates the trading key LOCALLY, registers only the public half; production
+still refused in code). Subaccount `ev-props` opened and funded with $1,000 of the $10,000 play money. VERIFIED on a real
+paper order (IOC buy Over, 200 cent-contracts): filled at exactly the ask derived as 1 - (best bid on the OTHER outcome)
+(0.53); cost = qty x price x 1c = $1.06 with NO fee pre-game; position recorded; fills endpoint shows taker=true; the order
+status read immediately after was still PENDING (rely on fills/private stream, not the first status read). PAPER BOOKS ARE
+SYNTHETIC: every market carries exactly 84,240 contracts per side at a uniform ~5c spread (vs ~1-2c on production), so paper
+validates plumbing, NOT edge -- decisions must still be made on PRODUCTION public books. Paper also lists more markets (5,131
+NFL) than production (3,409); ids differ, descriptions match (~3,000 overlap).
+
 ## IMPLEMENTATION STATUS (2026-10-04) -- NFL props shadow sweep is LIVE; nothing trades real money
 
 Built and running (branch feat/multisport-ev-sweep):
