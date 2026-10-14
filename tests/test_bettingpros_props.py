@@ -119,7 +119,9 @@ def _fake_api(calls):
                                 "season_type": "REG", "status": "closed"}]}
         if path == "offers":
             page = params["page"]
-            return {"offers": [_offer(player=f"P{page}", over_books={10: [_line(-110)]})],
+            o = _offer(player=f"P{page}", over_books={10: [_line(-110)]})
+            o["player_id"] = 100 + page
+            return {"offers": [o],
                     "_pagination": {"total_pages": 2}}
         raise AssertionError(path)
     return api_get
