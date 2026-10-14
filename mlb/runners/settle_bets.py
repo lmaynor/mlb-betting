@@ -202,10 +202,21 @@ def _settle_f5(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     return results
 
 
+def _is_hr_no(bet_type) -> bool:
+    """True for the "no HR" side ("HR_NO" / "HR_NO_{book}", fast_alert_loop.
+    _ev_bet_type). Token match on purpose, NOT startswith("HR_NO"): a plain
+    1+ HR EV row is "HR_{book}", and a book like "novig" would otherwise
+    collide ("HR_NOVIG".startswith("HR_NO")) and be graded as the opposite bet."""
+    parts = str(bet_type or "").upper().split("_")
+    return len(parts) >= 2 and parts[0] == "HR" and parts[1] == "NO"
+
+
 def _settle_hr(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     """Settle HR yes/no bets via MLB API boxscore.
 
-    DK rule: player must start. Non-starters -> void.
+    DK rule: player must start. Non-starters -> void. "HR_NO*" bet_types
+    (Under 0.5 / No HR, EV rows only) win when the starter hit 0 HR; every
+    other HR bet_type is the 1+ HR side.
     """
     results = []
     for _, bet in pending.iterrows():
@@ -238,7 +249,8 @@ def _settle_hr(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
             logger.info(f"settle HR: {bet['player']} did not start game_pk={gpk} -- voiding")
             continue
 
-        result = "win" if player_data["home_runs"] > 0 else "loss"
+        hit_hr = player_data["home_runs"] > 0
+        result = ("loss" if hit_hr else "win") if _is_hr_no(bet["bet_type"]) else ("win" if hit_hr else "loss")
         results.append({
             "id":     int(bet["id"]),
             "result": result,

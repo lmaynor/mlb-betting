@@ -26,6 +26,15 @@ Output per (market, book): n events, median survival minutes, % surviving
 high survival + high book_moved are the ones worth striking; high
 consensus_moved books are leaders you should NOT bet against.
 
+EXCHANGES (--include-exchanges). By default novig/prophetx are ordinary books in
+the reference pack (and kalshi/pinnacle are excluded entirely, bt.OFFSHORE). With
+the flag, novig/prophetx/kalshi become CANDIDATE books -- their own survival is
+measured -- while every row's consensus is computed from the non-exchange pack
+only. An exchange's quote therefore never helps set its own reference price
+(the leave-self-out rule, see 3cb6043), and exchanges don't move other books'
+reference either. Note this changes the pack vs the default run, so compare
+exchange rows to each other, not to a default-mode run.
+
 Run (Cloud Shell):
   export MLB_GCS_BUCKET=concrete-crow-445205-m4-mlb-data
   PYTHONPATH=. python3 -m mlb.analysis.quote_survival --markets hr_yn,k_ou,outs_ou --since 2026-06-25
@@ -45,21 +54,35 @@ from mlb.analysis import backtest_market as bt
 log = logging.getLogger(__name__)
 
 _NON_BOOK = bt.OFFSHORE | {"open", "consensus"}
+# Exchanges whose own quote survival is worth measuring (see module docstring).
+EXCHANGE_BOOKS = {"novig", "prophetx", "kalshi"}
 _KEY = ["game_pk", "player_id", "line", "selection"]
 
 
-def _prep(odds: pd.DataFrame, min_books: int) -> pd.DataFrame:
-    """Attach per-snapshot consensus_fair / n_books / ev to every quote row."""
-    odds = odds[~odds["book"].str.lower().isin(_NON_BOOK)]
+def _prep(odds: pd.DataFrame, min_books: int, include_exchanges: bool = False) -> pd.DataFrame:
+    """Attach per-snapshot consensus_fair / n_books / ev to every quote row.
+
+    include_exchanges: keep EXCHANGE_BOOKS as candidate rows, but build the
+    consensus / n_books from the non-exchange books only."""
+    non_book = (_NON_BOOK - EXCHANGE_BOOKS) if include_exchanges else _NON_BOOK
+    odds = odds[~odds["book"].str.lower().isin(non_book)]
     odds = odds[odds["decimal"].notna() & odds["fair_prob"].notna()].copy()
     if not len(odds):
         return odds
     odds["snapshot_dt"] = pd.to_datetime(odds["snapshot_ts"], errors="coerce")
     odds = odds[odds["snapshot_dt"].notna()]
     grp = _KEY + ["snapshot_ts"]
+    # Reference pack: everything, or (include_exchanges) only the non-exchange books.
+    # Masked to NaN rather than filtered so exchange rows stay as candidates; median()
+    # and nunique() skip NaN.
+    in_pack = (~odds["book"].str.lower().isin(EXCHANGE_BOOKS)) if include_exchanges \
+        else pd.Series(True, index=odds.index)
+    odds["_ref_fair"] = odds["fair_prob"].where(in_pack)
+    odds["_ref_book"] = odds["book"].where(in_pack)
     g = odds.groupby(grp, dropna=False)
-    odds["consensus_fair"] = g["fair_prob"].transform("median")
-    odds["n_books"] = g["book"].transform("nunique")
+    odds["consensus_fair"] = g["_ref_fair"].transform("median")
+    odds["n_books"] = g["_ref_book"].transform("nunique")
+    odds = odds.drop(columns=["_ref_fair", "_ref_book"])
     odds = odds[odds["n_books"] >= min_books].copy()
     odds["impl"] = 1.0 / odds["decimal"]
     odds["ev"] = odds["consensus_fair"] * odds["decimal"] - 1.0
@@ -68,7 +91,7 @@ def _prep(odds: pd.DataFrame, min_books: int) -> pd.DataFrame:
 
 def events_for_market(market: str, since=None, until=None,
                       min_ev: float = 0.03, exit_ev: float | None = None,
-                      min_books: int = 4) -> pd.DataFrame:
+                      min_books: int = 4, include_exchanges: bool = False) -> pd.DataFrame:
     """One row per outlier event. Columns: book, game_date, selection, line,
     open_ts, close_ts, survival_min, censored, open_ev, mover."""
     if exit_ev is None:
@@ -77,7 +100,7 @@ def events_for_market(market: str, since=None, until=None,
     if odds is None or not len(odds):
         return pd.DataFrame()
     odds = oh.dedupe_by_source(odds)
-    odds = _prep(odds, min_books=min_books)
+    odds = _prep(odds, min_books=min_books, include_exchanges=include_exchanges)
     if not len(odds):
         return pd.DataFrame()
 
@@ -148,6 +171,9 @@ def main(argv=None) -> int:
     p.add_argument("--exit-ev", type=float, default=None,
                    help="event closes when ev drops below this (default min_ev/2)")
     p.add_argument("--min-books", type=int, default=4)
+    p.add_argument("--include-exchanges", action="store_true",
+                   help="also measure novig/prophetx/kalshi quote survival; the consensus then "
+                        "uses the non-exchange books only (an exchange never prices itself)")
     p.add_argument("--dump-events", default=None, help="optional CSV path for raw events")
     args = p.parse_args(argv)
     markets = [m.strip() for m in args.markets.split(",") if m.strip()]
@@ -156,7 +182,8 @@ def main(argv=None) -> int:
     for m in markets:
         ev = events_for_market(m, since=args.since, until=args.until,
                                min_ev=args.min_ev, exit_ev=args.exit_ev,
-                               min_books=args.min_books)
+                               min_books=args.min_books,
+                               include_exchanges=args.include_exchanges)
         if len(ev):
             frames.append(ev)
         else:

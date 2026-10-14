@@ -89,11 +89,20 @@ class TestEvBetType:
         assert fal._ev_bet_type("hr_yn", "YES", 0.5, "draftkings") == "HR_draftkings"
         assert fal._ev_bet_type("hr_yn", "OVER", float("nan"), "draftkings") == "HR_draftkings"
 
-    def test_hr_under_is_not_loggable(self):
-        """Regression: UNDER 0.5 HR ("no HR", ~13% of real posted hr_yn alerts)
-        was logged as HR_{book} and graded as '1+ HR wins' -- inverted."""
-        assert fal._ev_bet_type("hr_yn", "UNDER", 0.5, "draftkings") is None
-        assert fal._ev_bet_type("hr_yn", "NO", 0.5, "draftkings") is None
+    def test_hr_under_maps_to_the_no_side(self):
+        """UNDER/NO 0.5 HR ("no HR") is its own bet_type so the settler can grade
+        it as the OPPOSITE of "1+ HR" (it was once logged as HR_{book} and graded
+        inverted -- 2026-10-02 audit)."""
+        assert fal._ev_bet_type("hr_yn", "UNDER", 0.5, "draftkings") == "HR_NO_draftkings"
+        assert fal._ev_bet_type("hr_yn", "NO", 0.5, "novig") == "HR_NO_novig"
+        assert fal._ev_bet_type("hr_yn", "UNDER", float("nan"), "kalshi") == "HR_NO_kalshi"
+
+    def test_hr_unknown_selection_returns_none(self):
+        assert fal._ev_bet_type("hr_yn", "DRAW", 0.5, "draftkings") is None
+
+    def test_hr_under_alt_line_is_not_loggable(self):
+        # Under 1.5 = "0-1 HR", not the "no HR" bet the settler grades.
+        assert fal._ev_bet_type("hr_yn", "UNDER", 1.5, "draftkings") is None
 
     def test_hr_alt_line_is_not_loggable(self):
         # Over 1.5 HR (2+ HR) is a different bet than the "1+ HR" HR settler grades.
@@ -202,9 +211,17 @@ class TestLogEvBets:
         tracker = BetTracker(str(tmp_path / "ev_bets.db"), system="EV")
         assert tracker.all_bets().iloc[0]["player"] == "Real Name"
 
-    def test_hr_under_alert_is_skipped_not_logged_inverted(self, tmp_path, monkeypatch):
+    def test_hr_under_alert_is_logged_as_no_side(self, tmp_path, monkeypatch):
         monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
         posted = pd.DataFrame([_alert_row(market="hr_yn", selection="UNDER", line=0.5)])
+        assert fal._log_ev_bets(posted, "2026-08-19") == 1
+        from mlb_core.tracking.bet_tracker import BetTracker
+        row = BetTracker(str(tmp_path / "ev_bets.db"), system="EV").all_bets().iloc[0]
+        assert row["bet_type"].startswith("HR_NO_")
+
+    def test_hr_under_alt_line_alert_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(fal, "_EV_BET_DB", str(tmp_path / "ev_bets.db"))
+        posted = pd.DataFrame([_alert_row(market="hr_yn", selection="UNDER", line=1.5)])
         assert fal._log_ev_bets(posted, "2026-08-19") == 0
 
 

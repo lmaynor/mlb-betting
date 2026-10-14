@@ -196,11 +196,15 @@ class TestPlayerNameRecovery:
         }))
         assert recover_fast_alert(["2026-08-12"]).iloc[0]["player"] == "Logged Name"
 
-    def test_hr_under_alert_not_recovered(self, monkeypatch):
-        """Same inverted-grading bug as the live path (_ev_bet_type)."""
+    def test_hr_under_alert_recovered_as_the_no_side(self, monkeypatch):
+        """Same bug class as the live path (_ev_bet_type): an Under 0.5 HR alert must
+        never be recovered as the 1+ HR bet. It is recovered as HR_NO_{book}, which
+        settle_bets._settle_hr grades as the opposite of "1+ HR"."""
         log_df = pd.DataFrame([_quote(market="hr_yn", selection="UNDER", line=0.5, player_id=1)])
         monkeypatch.setattr(bfh, "_read_parquet_safe", _fake_reader({
             "Alerts/2026-08-12/log.parquet": log_df,
             "Alerts/2026-08-12/notified.parquet": log_df[_QUOTE_COLS],
         }))
-        assert len(recover_fast_alert(["2026-08-12"])) == 0
+        out = recover_fast_alert(["2026-08-12"])
+        assert len(out) == 1
+        assert out.iloc[0]["bet_type"].startswith("HR_NO_")

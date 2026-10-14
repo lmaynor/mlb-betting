@@ -71,3 +71,13 @@ backfill. The suite passed 715/715 while all of the above was wrong.
   belongs in a Cloud Run Job with a read-only `--stats` default, a never-overwritten backup, and a
   `--settle` re-entry mode -- the first run crashed in grading AFTER inserting, so re-entry mattered.
 - `_settle_ev` must never `int()` a NULL game_pk (void it) -- one such row aborts the whole settle run.
+
+## Follow-up: the "No HR" side is now loggable (HR_NO)
+
+Returning `None` for Under 0.5 HR was the safe stopgap; the proper fix is a settler that
+knows the side. `_ev_bet_type` maps UNDER/NO at line <= 0.5 to `HR_NO_{book}` and
+`settle_bets._settle_hr` grades it as the opposite of "1+ HR" through `_is_hr_no()`.
+**Gotcha:** match the `NO` TOKEN (`bet_type.split("_")[1]`), never `startswith("HR_NO")` --
+the book suffix is appended, so a plain 1+ HR row on book `novig` is `HR_NOVIG` and would be
+graded inverted. The same token check is mirrored in `beezy-vip/lib/tokens.ts`. Lines above
+0.5 still return `None` (Under 1.5 is "0-1 HR", not what either branch grades).
