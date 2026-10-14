@@ -71,6 +71,7 @@ The repo name (`lmaynor/mlb-betting`) is legacy and not worth renaming; the
 17. [Pointers to other docs](#17-pointers-to-other-docs)
 18. [When to update this file](#18-when-to-update-this-file)
 19. [NBA (data-only, pre-modeling)](#19-nba-data-only-pre-modeling)
+20. [NFL (nflverse data mirror)](#20-nfl-nflverse-data-mirror)
 
 ---
 
@@ -3910,3 +3911,28 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
+
+---
+
+## 20. NFL (nflverse data mirror)
+
+Data-ingest-first, like NBA (s19). **No NFL model or betting runner.** Live NFL props/odds are the separate shadow
+sweep in `ev/` (s15.11, `docs/designs/multisport_ev_sweep.md`); `nfl/` is its historical / outcomes / identity
+backbone. Full detail in `nfl/README.md`.
+
+- **Source:** nflverse parquet assets on GitHub releases of `nflverse/nflverse-data` (no auth, no quota). URL shapes
+  from the `nflreadpy` loaders, columns from `nflreadr`'s dictionaries. nflfastR/nflseedR are R model/simulation code
+  and are not part of this stack.
+- **Code:** `nfl/config.py` (dataset registry: core / detail / extra groups, season floors, dictionary-verified
+  `required` columns), `nfl/data/{nflverse,ingest,read,keys}.py`. Only deps are `requests` + `pyarrow`, already in the image.
+- **Data lake:** `NFL/nflverse/{dataset}/{dataset}_{season}.parquet` (or `{dataset}.parquet` for single-file
+  datasets), mirrored **byte-for-byte**; `NFL/_manifest.json` (sha256/rows per key); `NFL/last_refresh.json` sentinel.
+- **Ingest:** `python -m nfl.data.ingest --mode backfill|refresh [--datasets ..] [--seasons ..] [--dry-run|--probe]`.
+  Validates each file, refuses bad/shrunk (<80% rows) files and keeps the old copy, skips frozen seasons and unchanged
+  sha256. A 404 on the newest season is expected (participation lags until the season ends); any other 404 is a
+  failure. Nightly Cloud Run Job `nfl-refresh-data` via `deploy/setup_nfl_refresh.sh` (13:30 UTC; NOT wired into
+  `monitor_ops`).
+- **Joins:** `nfl.data.keys.add_game_keys()` produces the `ev/` `game_key`; nflverse codes differ from Kalshi's only at
+  `JAX/JAC` and `LA/LAR` (plus `OAK/SD/STL` relocations). A test pins the codes and format to `ev/`.
+- **GOTCHA:** the local-mode default `MLB_BASE_DATA` is a Windows path -- set it (or `GCS_BUCKET`) before any non-test run.
+- **Status:** code merged; nothing has been downloaded or deployed from this repo yet (see the 2026-10-14 handoff).
