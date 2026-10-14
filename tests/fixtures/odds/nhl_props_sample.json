@@ -1,0 +1,473 @@
+{
+ "id": "04fa31d1580d3a7f42b88b338102c4e7",
+ "sport_key": "icehockey_nhl",
+ "commence_time": "2026-10-14T23:30:00Z",
+ "home_team": "Washington Capitals",
+ "away_team": "Montreal Canadiens",
+ "bookmakers": [
+  {
+   "key": "fanduel",
+   "markets": [
+    {
+     "key": "player_points",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": 340,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Tuch",
+       "price": -160,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Chris Kreider",
+       "price": 100,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield",
+       "price": -220,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Dylan Strome",
+       "price": -150,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Jakob Chychrun",
+       "price": -172,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Jordan Kyrou",
+       "price": 104,
+       "point": 0.0
+      },
+      {
+       "name": "Yes",
+       "description": "Juraj Slafkovsky",
+       "price": 350,
+       "point": 0.0
+      }
+     ]
+    },
+    {
+     "key": "player_goals",
+     "outcomes": [
+      {
+       "name": "Over Washington Capitals",
+       "description": "Washington Capitals",
+       "price": -114,
+       "point": 6.5
+      },
+      {
+       "name": "Under Washington Capitals",
+       "description": "Washington Capitals",
+       "price": -106,
+       "point": 6.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "underdog",
+   "markets": [
+    {
+     "key": "player_goals",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Adam Engstrom",
+       "price": 1410,
+       "point": 0.5
+      },
+      {
+       "name": "Over Alex Newhook",
+       "description": "Alex Newhook",
+       "price": 351,
+       "point": 0.5
+      },
+      {
+       "name": "Under Alex Newhook",
+       "description": "Alex Newhook",
+       "price": -500,
+       "point": 0.5
+      },
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 196,
+       "point": 0.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -250,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": 1140,
+       "point": 1.5
+      },
+      {
+       "name": "Over Alex Tuch",
+       "description": "Alex Tuch",
+       "price": 201,
+       "point": 0.5
+      },
+      {
+       "name": "Under Alex Tuch",
+       "description": "Alex Tuch",
+       "price": -257,
+       "point": 0.5
+      }
+     ]
+    },
+    {
+     "key": "player_points",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": -173,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": 360,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Tuch",
+       "price": -182,
+       "point": 0.5
+      },
+      {
+       "name": "Over Alex Tuch",
+       "description": "Alex Tuch",
+       "price": 331,
+       "point": 1.5
+      },
+      {
+       "name": "Under Alex Tuch",
+       "description": "Alex Tuch",
+       "price": -667,
+       "point": 1.5
+      },
+      {
+       "name": "Over Aliaksei Protas",
+       "description": "Aliaksei Protas",
+       "price": 146,
+       "point": 0.5
+      },
+      {
+       "name": "Under Aliaksei Protas",
+       "description": "Aliaksei Protas",
+       "price": -182,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Aliaksei Protas",
+       "price": 693,
+       "point": 1.5
+      }
+     ]
+    },
+    {
+     "key": "player_shots_on_goal",
+     "outcomes": [
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -455,
+       "point": 1.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 228,
+       "point": 1.5
+      },
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -130,
+       "point": 2.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 107,
+       "point": 2.5
+      },
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 150,
+       "point": 3.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -257,
+       "point": 3.5
+      },
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 327,
+       "point": 4.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -667,
+       "point": 4.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "bovada",
+   "markets": [
+    {
+     "key": "player_goals",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Alex Newhook (MTL)",
+       "price": 4000
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin (WSH)",
+       "price": 1500
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Tuch (WSH)",
+       "price": 1400
+      },
+      {
+       "name": "Yes",
+       "description": "Alexandre Texier (MTL)",
+       "price": 6500
+      },
+      {
+       "name": "Yes",
+       "description": "Aliaksei Protas (WSH)",
+       "price": 3500
+      },
+      {
+       "name": "Yes",
+       "description": "Anthony Beauvillier (WSH)",
+       "price": 7000
+      },
+      {
+       "name": "Yes",
+       "description": "Chris Kreider (MTL)",
+       "price": 2200
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": 850
+      }
+     ]
+    },
+    {
+     "key": "player_points",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Alex Tuch (WSH)",
+       "price": -159,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alexander Ovechkin (WSH)",
+       "price": -150,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alexander Ovechkin (WSH)",
+       "price": 340,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Chris Kreider (MTL)",
+       "price": 550,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Dylan Strome (WSH)",
+       "price": -157,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Jakob Chychrun (WSH)",
+       "price": -162,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Jakob Chychrun (WSH)",
+       "price": 320,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Tom Wilson (WSH)",
+       "price": -148,
+       "point": 0.5
+      }
+     ]
+    },
+    {
+     "key": "player_shots_on_goal",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Chris Kreider (MTL)",
+       "price": 230,
+       "point": 2.5
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": -800,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": -235,
+       "point": 2.5
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": 108,
+       "point": 3.5
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": 235,
+       "point": 4.5
+      },
+      {
+       "name": "Yes",
+       "description": "Cole Caufield (MTL)",
+       "price": 460,
+       "point": 5.5
+      },
+      {
+       "name": "Yes",
+       "description": "Juraj Slafkovsky (MTL)",
+       "price": -280,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Juraj Slafkovsky (MTL)",
+       "price": 270,
+       "point": 3.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "novig",
+   "markets": [
+    {
+     "key": "player_goals",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Adam Engstrom",
+       "price": 1718,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Newhook",
+       "price": 376,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Newhook",
+       "price": 3900,
+       "point": 1.5
+      },
+      {
+       "name": "Over Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": 208,
+       "point": 0.5
+      },
+      {
+       "name": "Under Alex Ovechkin",
+       "description": "Alex Ovechkin",
+       "price": -365,
+       "point": 0.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": 1567,
+       "point": 1.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": 8233,
+       "point": 2.5
+      },
+      {
+       "name": "Yes",
+       "description": "Alex Tuch",
+       "price": 194,
+       "point": 0.5
+      }
+     ]
+    },
+    {
+     "key": "player_shots_on_goal",
+     "outcomes": [
+      {
+       "name": "Yes",
+       "description": "Alex Ovechkin",
+       "price": -150,
+       "point": 2.5
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

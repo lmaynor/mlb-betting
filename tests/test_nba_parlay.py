@@ -79,10 +79,11 @@ def test_accumulate_props_flow(monkeypatch):
     monkeypatch.setattr(accumulator.storage, "write_csv",
                         lambda df, key: written.__setitem__(key, df))
 
-    res = accumulator.accumulate_props("basketball_nba", client=FakeClient())
+    res = accumulator.accumulate_props("basketball_nba", client=FakeClient(), guard=False)
     assert res["events_priced"] == 1
-    assert res["best_book_rows"] == 1
-    assert res["prop_rows"] == 2
+    # the accumulator now keeps ONE-SIDED quotes (NHL "Yes" props): dk assists is a third row / second best-book line
+    assert res["best_book_rows"] == 2
+    assert res["prop_rows"] == 3
     # raw + csv + latest all written
     assert any(k.endswith("latest.json") for k in written)
     assert any("/raw/" in k and k.endswith(".json") for k in written)
