@@ -5,7 +5,9 @@ Reuses the Kalshi executor's gates / Kelly sizing / risk gate / ledger / PaperVe
 book in Kalshi's shape:  Over == 'yes', Under == 'no'; one Kalshi-style contract == 100 Novig contracts ($1 of payout),
 so book sizes are divided by 100 and an order's contracts are multiplied by 100 when it would be sent. The taker
 multiplier is 0 (pre-game fee is free on WHEN_LIVE markets), and the grid is Novig's three-band price grid.
-Ledger mode 'novig' (separate caps/kill switch from 'shadow' Kalshi). Never places a real or paper-exchange order.
+Ledger mode 'novig' (separate caps/kill switch from 'shadow' Kalshi). run_pass never places an order by itself; with
+an ev.novig.paper_orders.NovigPaperVenue passed in, each PLAN (decided on the PRODUCTION book) is ALSO sent as a signed
+IOC order to the Novig PAPER sandbox, recorded in ledger mode 'novig_paper' with its own kill switch.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from mlb.execution.kalshi.venue import OrderIntent, PaperVenue
 
 log = logging.getLogger("ev.novig.exec")
 MODE = "novig"
+PAPER_MODE = "novig_paper"
 NOVIG_RANGES = (PriceRange(0.001, 0.050, 0.001), PriceRange(0.055, 0.945, 0.005), PriceRange(0.950, 0.999, 0.001))
 UNIT = 100                                   # Novig contracts per Kalshi-style $1 contract
 
@@ -105,13 +108,42 @@ def candidates(snap: list, legs: dict, cfg, now: datetime) -> list:
     return out
 
 
-def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, clock=None, pace_s: float = 0.7) -> dict:
+def _paper_attempt(venue, paper_risk, ledger, day, leg, xl, d) -> dict | None:
+    """Mirror a PLAN onto the Novig paper sandbox (at most one POST per intent -- Novig has no idempotency)."""
+    pid = "p-" + d.intent_id
+    if ledger.has_intent(pid):
+        return None                                                   # already sent (or reconciled) -- never resend
+    ack = venue.submit(OrderIntent(pid, leg.market_id, d.side, d.plan.contracts, d.plan.limit_price, NOVIG_RANGES,
+                                   None, fee_multiplier=0.0), leg)
+    if ack.status == "NO_MARKET":
+        log.info("PAPER skip %s: %s", leg.description, ack.error)
+        return {"description": leg.description, "status": ack.status}
+    if ack.status in ("ERROR", "UNKNOWN"):
+        paper_risk.note_submit_error()
+    else:
+        paper_risk.note_submit_ok()
+    pmarket = (ack.raw or {}).get("paper_market_id") or leg.market_id
+    ledger.record_order(day=day, mode=PAPER_MODE, intent_id=pid, client_order_id=ack.client_order_id,
+                        order_id=ack.order_id, ticker=pmarket, game_pk=xl.game_pk, side=d.side,
+                        contracts=d.plan.contracts, limit_price=d.plan.limit_price, status=ack.status,
+                        fill_count=ack.fill_count, filled_cost=ack.filled_cost, fee=ack.fee, raw=ack.raw)
+    for f in ack.fills:
+        ledger.record_fill(fill_id=f.fill_id, order_id=f.order_id, ticker=pmarket, side=f.side, count=f.count,
+                           price=f.price, fee=f.fee, ts=f.ts, mode=PAPER_MODE)
+    log.info("PAPER %s %s x%s @<=%s -> %s %s", leg.description, d.side, d.plan.contracts, d.plan.limit_price,
+             ack.status, ack.error or "")
+    return {"description": leg.description, "side": d.side, "status": ack.status, "units": ack.fill_count,
+            "cost": ack.filled_cost}
+
+
+def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, clock=None, pace_s: float = 0.7,
+             paper_venue=None, paper_risk=None) -> dict:
     clock = clock or (lambda: datetime.now(timezone.utc))
     ncfg = novig_config(cfg)
     day = clock().astimezone(__import__("zoneinfo").ZoneInfo("America/New_York")).date().isoformat()
     cons_ts = datetime.fromisoformat(snap_ts)
     hist: dict = {}
-    executed, alerts = [], []
+    executed, alerts, paper_sent = [], [], []
     fresh: dict = {}
 
     def book_fn(ticker):                       # PaperVenue fetches a FRESH snapshot at fill time
@@ -160,6 +192,15 @@ def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, c
                                    price=f.price, fee=f.fee, ts=f.ts, mode=MODE)
             if ack.fill_count > 0:
                 ledger.kv_set(f"grp:{day}:{group}", d.intent_id)
+            if paper_venue is not None and paper_risk is not None and not paper_risk.killed:
+                try:
+                    r = _paper_attempt(paper_venue, paper_risk, ledger, day, leg, xl, d)
+                except Exception as e:                                               # noqa: BLE001
+                    paper_risk.note_submit_error()
+                    log.warning("paper attempt raised: %r", e)
+                    r = None
+                if r is not None:
+                    paper_sent.append(r)
         ledger.record_decision(day=day, mode=MODE, outcome=d.outcome, reason=d.reason, intent_id=d.intent_id,
                                ticker=leg.market_id, series="NOVIGPROP", market=xl.market, game_pk=xl.game_pk,
                                side=d.side, p_cons=d.p_cons, p_hat=d.p_hat, n_books=d.n_books, ask=d.ask,
@@ -178,14 +219,15 @@ def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, c
                              "ev": d.plan.ev, "units": d.plan.contracts, "filled": ack.fill_count if ack else 0,
                              "cost": ack.filled_cost if ack else 0, "outcome": d.outcome})
     return {"day": day, "considered": len(cands), "hist": hist, "executed": executed, "alerts": alerts,
-            "killed": risk.killed}
+            "killed": risk.killed, "paper_orders": paper_sent}
 
 
-def grade(ledger, nc: NovigClient) -> dict:
-    """Paper P&L on Novig's own settled outcome statuses (Winner/Loser). Unsettled/void/FMV markets stay 'open'."""
+def grade(ledger, nc: NovigClient, mode: str = MODE) -> dict:
+    """Paper P&L on Novig's own settled outcome statuses (Winner/Loser). Unsettled/void/FMV markets stay 'open'.
+    mode=PAPER_MODE grades the sandbox orders (their `ticker` is the PAPER marketId, so pass a paper client)."""
     with ledger._lock:
         rows = [tuple(r) for r in ledger._c.execute(
-            "SELECT ticker, side, fill_count, filled_cost FROM orders WHERE mode=? AND fill_count>0", (MODE,))]
+            "SELECT ticker, side, fill_count, filled_cost FROM orders WHERE mode=? AND fill_count>0", (mode,))]
     tot = {"orders": len(rows), "settled": 0, "open": 0, "wins": 0, "staked": 0.0, "pnl": 0.0}
     for mid, side, n, cost in rows:
         try:

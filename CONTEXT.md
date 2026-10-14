@@ -3361,6 +3361,23 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   not NFL -- treat NFL Sink A as unvalidated evidence.
 - Market-making on Kalshi NFL props is -EV (docs/analysis/market_making_2026-10-12.md); `mm_*` columns in
   `scripts/novig_kalshi_scan.py` measure the QUOTED hedged opportunity only, not realised P&L.
+- **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
+  Kalshi blocks its egress IP (`kalshi_ok=False`, the legs are empty), and that is exactly when the laptop does the
+  Kalshi join. `props_exec.build_latest_local` now computes it too (never fatal) and `publish_local` writes
+  `EVSweep/nfl_props/{day}/local_pooled_{HHMMSS}.csv.gz` beside `local_*.csv.gz`.
+- **Novig PAPER orders (`props_exec run --novig --novig-paper-orders`).** Each Novig PLAN -- decided on the PRODUCTION
+  public book -- is also sent as a signed IOC order to api.paper.novig.com (`ev/novig/paper_orders.py`, ledger mode
+  `novig_paper`). It validates PLUMBING (signing, outcome mapping, units, fill reconciliation), never edge: paper books
+  are synthetic (84,240/side, ~5c spread), so a production-priced limit often will not fill there. Facts that bite:
+  paper and production have DIFFERENT market/outcome ids, matched on `(game_key, stat, player_norm, strike)` (1954 of
+  1960 live legs, 2026-10-13; unmatched -> `NO_MARKET`, nothing sent); qty is in cent-contracts (1 Kalshi-style $1 unit
+  = 100); the fills payload has NO price (`price = cost / (qty/100)`); the first order-status read is still PENDING so
+  FILLS are the truth; Novig has NO idempotency, so a POST is sent at most once per intent (deterministic UUID
+  clientId, `has_intent` guard, and after any ambiguous failure reconcile via fills by clientId -- never resend;
+  unreconcilable -> `UNKNOWN`). The trading key's scope excludes `GET /account/balance` (403), so use `positions`.
+  `RiskGate`'s kill switch is ONE ledger-wide key: a plain `RiskGate("novig_paper")` tripping on a paper-API outage
+  would halt every venue in that ledger, so the sandbox mirror uses `PaperRiskGate` (own key). `props_exec pnl`
+  grades sandbox orders on the PAPER catalog's own settled statuses.
 
 ---
 
