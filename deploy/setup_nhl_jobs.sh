@@ -5,7 +5,7 @@
 #                                                    play-by-play, then the roster/team crosswalks
 #   nhl-backfill       python -m nhl.data.backfill   one-off multi-season pull (resume-safe via the raw cache)
 #
-# Reuses the mlb-betting image, service account and MLB_GCS_BUCKET secret (no DB, no API keys: the NHL web API
+# Reuses the mlb-betting service account and MLB_GCS_BUCKET secret (no DB, no API keys: the NHL web API
 # is unauthenticated). Idempotent: create-or-update for every resource.
 #
 # WHY three modes: the NHL API rate-limits per IP, so a backfill and the nightly refresh (or any roster pull) must
@@ -20,8 +20,7 @@
 # NOT named odds-bank-*: that prefix is reserved for credit-spending ParlayAPI jobs so
 # `gcloud scheduler jobs list | grep odds-bank` stays the one place to look. NHL jobs spend no credits.
 #
-# Prereq: the image must contain nhl/ -- build it from a CLEAN checkout of main (see deploy/RUNBOOK notes in
-# nhl/README.md); a job runs whatever is in the image it was last updated with.
+# Prereq: the feeds image (see IMAGE below) must exist and contain nhl/ -- built from a CLEAN checkout of main.
 #
 # Usage:
 #   PROJECT_ID=concrete-crow-445205-m4 MODE=jobs ./deploy/setup_nhl_jobs.sh
@@ -35,7 +34,12 @@ REGION="us-central1"
 SERVICE_NAME="mlb-betting"
 REFRESH_JOB="nhl-refresh-data"
 BACKFILL_JOB="nhl-backfill"
-IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+# SEPARATE image repo, not mlb-betting:latest. A Cloud Run Job stores the tag and resolves it to a digest at each
+# EXECUTION (verified 2026-10-14: mlb-build-all-features lists :latest but its executions run @sha256:...), so pushing
+# a new mlb-betting:latest silently changes what every existing scheduled job runs next. Build this image with
+#   gcloud builds submit --config=cloudbuild.yaml --substitutions=_IMAGE=gcr.io/$PROJECT_ID/mlb-betting-feeds .
+# from a CLEAN checkout of main (same precedent as the mlb-betting-ev:shadow image).
+IMAGE="${IMAGE:-gcr.io/${PROJECT_ID}/mlb-betting-feeds}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 # 12:30 UTC daily: west-coast games end ~05:00 UTC, so 7.5h of buffer; offset from nba-refresh-data (13:00).

@@ -94,10 +94,16 @@ PROJECT_ID=concrete-crow-445205-m4 MODE=scheduler ./deploy/setup_nhl_jobs.sh   #
 PROJECT_ID=concrete-crow-445205-m4 MODE=pause     ./deploy/setup_nhl_jobs.sh   # pause the nightly (before a re-backfill)
 ```
 
-A job runs whatever is in the image it was last updated with, so build the image from a CLEAN checkout of
-`main`: `deploy/deploy_service.sh` commits and pushes `CONTEXT.md` and the current branch, so do not run it from a
-working tree with other people's uncommitted work. Building a new `:latest` does not change the live service or any
-existing job (each is pinned to the digest it was last deployed with).
+The jobs run a SEPARATE image, `gcr.io/<project>/mlb-betting-feeds`. A Cloud Run Job stores the `:latest` tag and
+resolves it to a digest at **each execution** (verified: `mlb-betting`'s existing jobs list `:latest` but their
+executions run `@sha256:...`), so pushing a new `mlb-betting:latest` silently changes what every existing scheduled
+job runs next. Build the feeds image from a CLEAN checkout of `main` (`deploy/deploy_service.sh` also commits and
+pushes `CONTEXT.md` and the current branch, so never run it from a tree with other people's uncommitted work):
+
+```bash
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_IMAGE=gcr.io/concrete-crow-445205-m4/mlb-betting-feeds --project=concrete-crow-445205-m4 .
+```
 
 NHL jobs spend no ParlayAPI credits and are deliberately NOT named `odds-bank-*`.
 
