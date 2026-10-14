@@ -42,6 +42,13 @@ SYNTHETIC: every market carries exactly 84,240 contracts per side at a uniform ~
 validates plumbing, NOT edge -- decisions must still be made on PRODUCTION public books. Paper also lists more markets (5,131
 NFL) than production (3,409); ids differ, descriptions match (~3,000 overlap).
 
+Novig PAPER ORDERS BUILT (2026-10-14): `python -m ev.props_exec run --novig --novig-paper-orders` mirrors each Novig PLAN
+(decided on PRODUCTION public books) as a signed IOC order on the paper sandbox via `ev/novig/paper_orders.py`
+(`NovigPaperVenue`, ledger mode `novig_paper`, own `PaperRiskGate`). Verified read-only against the live accounts: the
+trading key preflights (`positions`), 1954 of 1960 production legs match a paper market on (game, stat, player, strike),
+and the recorded 10-13 fill gives the real shapes (fills carry cost but no price). The first LIVE order from this path
+has not been sent; unit tests use fakes. Expect many NO_FILL on paper (production-priced limit vs a ~5c synthetic spread).
+
 ## IMPLEMENTATION STATUS (2026-10-04) -- NFL props shadow sweep is LIVE; nothing trades real money
 
 Built and running (branch feat/multisport-ev-sweep):

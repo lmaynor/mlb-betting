@@ -134,3 +134,66 @@ def test_grade_uses_kalshi_settled_result(tmp_path):
         def get_market(self, t):
             return {"result": ""}
     assert px.grade(ledger, C2())["open"] == 1
+
+
+# ---- Gap A: pooled-consensus evidence must be collected by the LOCAL join too (Kalshi blocks Cloud Run IPs) ----------
+def _patch_local_join(monkeypatch, pooled_fn):
+    import ev.sweep_nfl_props as sw
+    consensus = json.dumps({"ts": T0.isoformat(), "cycle": 1, "events": [{"game_key": "nfl:2026-10-04:IND@WAS"}]})
+    monkeypatch.setattr(px, "gcs_cat", lambda key: consensus.encode())
+    monkeypatch.setattr(sw, "fetch_kalshi_legs", lambda kc: ({"nfl:2026-10-04:IND@WAS": []}, 0.5, {}))
+    monkeypatch.setattr(sw, "rows_from_snapshot", lambda snap, legs, now, cfg, mult: ([row()], {"books_per_match": [3, 3]}))
+    monkeypatch.setattr(sw, "pooled_rows_from_snapshot", pooled_fn)
+
+
+def test_local_join_also_computes_pooled_evidence_with_the_kalshi_fee_multiplier(monkeypatch):
+    seen = {}
+
+    def pooled(snap, legs, now, cfg, mult):
+        seen.update(mult=mult, n_games=len(snap), legs=list(legs))
+        return [{"ticker": "KX-1", "pool_p_over": 0.6}], {"pool_legs": 1, "pool_recovered": 1}
+    _patch_local_join(monkeypatch, pooled)
+    latest = px.build_latest_local(object(), props_config(env={}))
+    assert latest["pooled"] == [{"ticker": "KX-1", "pool_p_over": 0.6}]
+    assert latest["pool_stats"] == {"pool_legs": 1, "pool_recovered": 1}
+    assert seen == {"mult": 0.5, "n_games": 1, "legs": ["nfl:2026-10-04:IND@WAS"]}
+    assert latest["rows"] and latest["books_hist"] == {3: 2}                   # the existing join is unchanged
+
+
+def test_pooled_failure_never_breaks_the_local_join(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("pool exploded")
+    _patch_local_join(monkeypatch, boom)
+    latest = px.build_latest_local(object(), props_config(env={}))
+    assert latest["pooled"] == [] and latest["pool_stats"] == {} and len(latest["rows"]) == 1
+
+
+def test_publish_local_writes_a_pooled_gz_next_to_the_main_evidence(monkeypatch):
+    puts = []
+    monkeypatch.setattr(px, "gcs_put", lambda key, data: puts.append((key, data)) or True)
+    monkeypatch.setattr(px, "gcs_cat", lambda key: None)
+    px.publish_local({"rows": [row()], "pooled": [{"ticker": "KX-1", "pool_p_over": 0.6}]}, "2026-10-04")
+    keys = sorted(k.split("/")[-1].rsplit("_", 1)[0] for k, _ in puts)
+    assert keys == ["local", "local_pooled"]
+    import gzip
+    pooled = next(d for k, d in puts if "local_pooled_" in k)
+    assert b"pool_p_over" in gzip.decompress(pooled) and all(k.endswith(".csv.gz") for k, _ in puts)
+
+
+def test_publish_local_skips_pooled_when_there_is_none_and_still_writes_it_without_main_rows(monkeypatch):
+    puts = []
+    monkeypatch.setattr(px, "gcs_put", lambda key, data: puts.append(key) or True)
+    monkeypatch.setattr(px, "gcs_cat", lambda key: None)
+    px.publish_local({"rows": [row()], "pooled": []}, "2026-10-04")
+    assert len(puts) == 1 and "local_pooled" not in puts[0]
+    puts.clear()
+    px.publish_local({"rows": [], "pooled": [{"ticker": "KX-1"}]}, "2026-10-04")   # pooled evidence is independent of main rows
+    assert len(puts) == 1 and "local_pooled_" in puts[0]
+
+
+# ---- Gap B CLI guard ---------------------------------------------------------------------------------------------
+def test_novig_paper_orders_requires_novig(capsys):
+    with pytest.raises(SystemExit) as e:
+        px.main(["run", "--novig-paper-orders"])
+    assert e.value.code == 2 and "requires --novig" in capsys.readouterr().err
+

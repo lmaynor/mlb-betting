@@ -9,7 +9,10 @@ risk caps and kill switch as the MLB executor (mlb.execution.kalshi.*), and:
           demo NFL-prop books are essentially empty (<3% two-sided), so expect NO_FILL there -- it exercises
           mechanics only. Production Kalshi is refused in code (client.ProductionNotEnabled).
 
-  python -m ev.props_exec run  [--demo-orders] [--loop-seconds 120] [--until ISO]
+  python -m ev.props_exec run  [--demo-orders] [--novig [--novig-paper-orders]] [--loop-seconds 120] [--until ISO]
+  --novig-paper-orders mirrors each Novig PLAN (decided on the PRODUCTION public book) as a signed IOC order on the
+  Novig PAPER sandbox with the trading key in ~/.novig/paper.env -- plumbing validation, never edge (paper books
+  are synthetic). Requires --novig; production Novig is refused in code.
   python -m ev.props_exec pnl            # grade shadow fills on Kalshi's own settled result
   python -m ev.props_exec status
 One position per (game, player, stat) per day: strikes on the same player/stat are the same underlying bet.
@@ -117,8 +120,17 @@ def build_latest_local(kc: KalshiClient, cfg) -> dict | None:
     legs, mult, _ = fetch_kalshi_legs(kc)
     now = datetime.now(timezone.utc)
     rows, stats = rows_from_snapshot(snap["events"], legs, now, cfg, mult)
+    # Pooled (adjacent-half-point) consensus is EVIDENCE ONLY, and the cloud sweep skips it whenever Kalshi blocks its
+    # egress IP (kalshi_ok=False) -- this local join is then the only place it can be collected. Never fatal.
+    pooled, pstats = [], {}
+    try:
+        from ev.sweep_nfl_props import pooled_rows_from_snapshot
+        pooled, pstats = pooled_rows_from_snapshot(snap["events"], legs, now, cfg, mult)
+    except Exception:                                                                # noqa: BLE001
+        log.exception("local pooled-consensus evidence failed; continuing without it")
     return {"ts": snap["ts"], "rows": rows, "stats": {k: v for k, v in stats.items() if k != "books_per_match"},
-            "books_hist": dict(Counter(stats["books_per_match"])), "snap": snap["events"]}
+            "books_hist": dict(Counter(stats["books_per_match"])), "snap": snap["events"],
+            "pooled": pooled, "pool_stats": pstats}
 
 
 def publish_local(latest: dict, day: str, extra_alerts: list | None = None) -> int:
@@ -129,12 +141,18 @@ def publish_local(latest: dict, day: str, extra_alerts: list | None = None) -> i
     import io
 
     import pandas as pd
-    rows = latest["rows"]
-    if rows:
+
+    def _put_gz(rows_, name):
         buf = io.BytesIO()
         with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
-            gz.write(pd.DataFrame(rows).to_csv(index=False).encode())
-        gcs_put(f"{PREFIX}/{day}/local_{datetime.now(timezone.utc):%H%M%S}.csv.gz", buf.getvalue())
+            gz.write(pd.DataFrame(rows_).to_csv(index=False).encode())
+        gcs_put(f"{PREFIX}/{day}/{name}_{datetime.now(timezone.utc):%H%M%S}.csv.gz", buf.getvalue())
+
+    rows = latest["rows"]
+    if rows:
+        _put_gz(rows, "local")
+    if latest.get("pooled"):
+        _put_gz(latest["pooled"], "local_pooled")
     flagged = [r for r in rows if r.get("flag")] + list(extra_alerts or [])
     if not flagged:
         return 0
@@ -262,12 +280,30 @@ def grade(ledger: Ledger, client: KalshiClient, mode: str = "shadow") -> dict:
     return tot
 
 
+def load_novig_paper_venue(env_file: str | None = None):
+    """Paper-sandbox venue from the trading key in ~/.novig/paper.env. Preflights with a signed GET (positions) so a
+    bad key/scope fails at startup, not mid-pass. Exits with a clear message instead of a traceback."""
+    from ev.novig import setup as nsetup
+    from ev.novig.client import NovigAPIError
+    from ev.novig.paper_orders import NovigPaperVenue
+    client = nsetup.trading_client(nsetup.read_env(env_file))
+    try:
+        client.positions()
+    except NovigAPIError as e:
+        raise SystemExit(f"Novig paper trading key preflight failed: {e}")
+    return NovigPaperVenue(client)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="NFL props executor (shadow + demo)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("--demo-orders", action="store_true")
     r.add_argument("--novig", action="store_true", help="also run Novig as a second SHADOW venue (public books, paper fills)")
+    r.add_argument("--novig-paper-orders", action="store_true",
+                   help="with --novig: also send each Novig PLAN as a signed IOC order to the Novig PAPER sandbox "
+                        "(trading key from --novig-env-file / ~/.novig/paper.env); plumbing validation only")
+    r.add_argument("--novig-env-file", default=None, help="Novig paper env file (default ~/.novig/paper.env)")
     r.add_argument("--env-file", default=None)
     r.add_argument("--db", default=DEFAULT_DB)
     r.add_argument("--loop-seconds", type=int, default=0)
@@ -276,6 +312,8 @@ def main(argv=None) -> int:
         p = sub.add_parser(name)
         p.add_argument("--db", default=DEFAULT_DB)
     a = ap.parse_args(argv)
+    if a.cmd == "run" and a.novig_paper_orders and not a.novig:
+        ap.error("--novig-paper-orders requires --novig (decisions are made on the production Novig book)")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = props_config()
     os.makedirs(os.path.dirname(a.db), exist_ok=True)
@@ -287,13 +325,15 @@ def main(argv=None) -> int:
         from ev.novig import exec as nx
         from ev.novig.client import NovigClient
         print("novig shadow:", json.dumps(nx.grade(ledger, NovigClient("public-data")), indent=1))
+        # sandbox orders carry PAPER market ids, graded on the paper catalog's own settled statuses (unsigned GET)
+        print("novig paper orders:", json.dumps(nx.grade(ledger, NovigClient("paper"), mode=nx.PAPER_MODE), indent=1))
         return 0
     if a.cmd == "status":
         day = et_day(datetime.now(timezone.utc))
         g = RiskGate(cfg, ledger, "shadow")
         print(f"killed={g.killed} reason={g.kill_reason} | notional bankroll ${cfg.bankroll:.0f} caps: per_bet "
               f"${cfg.per_bet_cap:.0f} per_game ${cfg.per_game_cap:.0f} daily ${cfg.daily_deploy_cap:.0f}")
-        for m in ("shadow", "demo"):
+        for m in ("shadow", "demo", "novig", "novig_paper"):
             print(f"{m}: orders={ledger.orders_today(day, m)} deployed=${ledger.deployed_today(day, m):.2f} "
                   f"hist={ledger.histogram(day, m)}")
         return 0
@@ -307,11 +347,15 @@ def main(argv=None) -> int:
         demo_risk = RiskGate(cfg, ledger, "demo")
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     nc = nrisk = novig_legs = None
+    paper_venue = paper_risk = paper_legs = None
     legs_loaded = 0.0
     if a.novig:
         from ev.novig.client import NovigClient
         nc = NovigClient("public-data")
         nrisk = RiskGate(cfg, ledger, "novig")
+    if a.novig_paper_orders:
+        from ev.novig.paper_orders import PaperRiskGate
+        paper_venue, paper_risk = load_novig_paper_venue(a.novig_env_file), PaperRiskGate(cfg, ledger, "novig_paper")
     while True:
         try:
             latest = build_latest_local(data_client, cfg)
@@ -324,20 +368,32 @@ def main(argv=None) -> int:
                 if nc is not None:
                     try:
                         from ev.novig import exec as nx
-                        if novig_legs is None or time.time() - legs_loaded > 600:
+                        refresh = novig_legs is None or time.time() - legs_loaded > 600
+                        if refresh:
                             novig_legs, legs_loaded = nx.load_novig_legs(nc, datetime.now(timezone.utc)), time.time()
+                        if paper_venue is not None and (refresh or paper_legs is None):
+                            # paper catalog refreshed on the production legs' cadence; a failure keeps the previous
+                            # map (unmatched legs just come back NO_MARKET) and must not stop the shadow pass
+                            try:
+                                paper_legs = nx.load_novig_legs(paper_venue.client, datetime.now(timezone.utc))
+                                paper_venue.set_legs(paper_legs)
+                            except Exception:                                        # noqa: BLE001
+                                log.exception("paper catalog load failed; keeping the previous map")
+                                paper_legs = paper_legs or {}
                         cands = nx.candidates(latest["snap"], novig_legs, cfg, datetime.now(timezone.utc))
-                        ns = nx.run_pass(snap_ts=latest["ts"], cands=cands, cfg=cfg, nc=nc, ledger=ledger, risk=nrisk)
+                        ns = nx.run_pass(snap_ts=latest["ts"], cands=cands, cfg=cfg, nc=nc, ledger=ledger, risk=nrisk,
+                                         paper_venue=paper_venue, paper_risk=paper_risk)
                         novig_alerts = ns["alerts"]
-                        log.info("NOVIG legs=%s candidates=%s hist=%s executed=%s", len(novig_legs), ns["considered"],
-                                 ns["hist"], len(ns["executed"]))
+                        log.info("NOVIG legs=%s candidates=%s hist=%s executed=%s paper_orders=%s", len(novig_legs),
+                                 ns["considered"], ns["hist"], len(ns["executed"]), ns["paper_orders"])
                         for e in ns["executed"]:
                             log.info("  NOVIG %s", e)
                     except Exception:                                                # noqa: BLE001
                         log.exception("novig pass failed; continuing with Kalshi")
                 queued = publish_local(latest, et_day(datetime.now(timezone.utc)), novig_alerts)
-                log.info("JOIN rows=%s flagged=%s queued_alerts=%s books_hist=%s", len(latest["rows"]),
-                         sum(1 for r in latest["rows"] if r.get("flag")), queued, latest.get("books_hist"))
+                log.info("JOIN rows=%s flagged=%s queued_alerts=%s books_hist=%s pooled_rows=%s pool_stats=%s",
+                         len(latest["rows"]), sum(1 for r in latest["rows"] if r.get("flag")), queued,
+                         latest.get("books_hist"), len(latest.get("pooled") or []), latest.get("pool_stats"))
                 s = run_pass(latest=latest, cfg=cfg, data_client=data_client, paper=paper, ledger=ledger, risk=risk,
                              demo_venue=demo_venue, demo_risk=demo_risk)
                 log.info("PASS considered=%s hist=%s executed=%s", s["considered"], s["hist"], len(s["executed"]))
