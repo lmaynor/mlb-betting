@@ -204,7 +204,7 @@ def _season_expected(pid: int):
 def _today_picks(engine, date: str):
     from sqlalchemy import text
     q = text("SELECT player, game_pk, bet_type FROM bets "
-             "WHERE game_date = :d AND kelly_triggered = true AND player IS NOT NULL")
+             "WHERE game_date = :d AND sport = 'mlb' AND kelly_triggered = true AND player IS NOT NULL")
     with engine.connect() as c:
         return [(r[0], int(r[1]), r[2]) for r in c.execute(q, {"d": date}).fetchall()]
 
@@ -318,7 +318,9 @@ def build(date: str) -> dict:
         return {"date": date, "players": {}, "generated_at": _now_iso()}
 
     from sqlalchemy import create_engine
+    from mlb_core.tracking.bet_tracker import ensure_sport_column
     engine = create_engine(DB_URL)
+    ensure_sport_column(engine)      # _today_picks filters sport='mlb'; the column may not exist on the first run after deploy
     picks = _today_picks(engine, date)
     typed = [(p, gp, bt, *_classify(bt)) for (p, gp, bt) in picks]
     typed = [t for t in typed if t[3]]   # keep only batter/pitcher picks

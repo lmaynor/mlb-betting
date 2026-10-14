@@ -85,7 +85,9 @@ def refresh_players(client, abbrevs=None, retry_pause: float = 20.0) -> dict:
 def covered_teams(rows) -> set:
     """Team abbrevs that have at least one player in the crosswalk. A resolution is only trustworthy for an event
     whose BOTH teams are covered: with a team's roster missing, a same-named player on it simply is not a candidate,
-    so 'Jack Hughes' resolves 'exactly' to the other one (seen live 2026-10-14 when Vancouver's roster 429'd)."""
+    so the name resolves 'exactly' to the player on the team that WAS loaded. (Hazard, not an observed mis-merge: on
+    2026-10-14 four rosters -- TBL, TOR, UTA, VAN -- failed with 429 on one run and lookups still returned results; the
+    current NHL/NBA crosswalks contain no same-name pairs, but MLB does, e.g. two Max Muncys.)"""
     return {(r.get("team") if isinstance(r, dict) else getattr(r, "team", None)) for r in rows} - {None}
 
 

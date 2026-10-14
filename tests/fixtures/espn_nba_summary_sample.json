@@ -1,0 +1,469 @@
+{
+ "header": {
+  "competitions": [
+   {
+    "status": {
+     "type": {
+      "id": "3",
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "Final",
+      "detail": "Final",
+      "shortDetail": "Final"
+     }
+    },
+    "competitors": [
+     {
+      "homeAway": "home",
+      "team": {
+       "abbreviation": "TOR",
+       "id": "28"
+      }
+     },
+     {
+      "homeAway": "away",
+      "team": {
+       "abbreviation": "NY",
+       "id": "18"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "players": [
+   {
+    "team": {
+     "abbreviation": "NY",
+     "id": "18"
+    },
+    "statistics": [
+     {
+      "names": [
+       "MIN",
+       "PTS",
+       "FG",
+       "3PT",
+       "FT",
+       "REB",
+       "AST",
+       "TO",
+       "STL",
+       "BLK",
+       "OREB",
+       "DREB",
+       "PF",
+       "+/-"
+      ],
+      "keys": [
+       "minutes",
+       "points",
+       "fieldGoalsMade-fieldGoalsAttempted",
+       "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+       "freeThrowsMade-freeThrowsAttempted",
+       "rebounds",
+       "assists",
+       "turnovers",
+       "steals",
+       "blocks",
+       "offensiveRebounds",
+       "defensiveRebounds",
+       "fouls",
+       "plusMinus"
+      ],
+      "athletes": [
+       {
+        "active": true,
+        "athlete": {
+         "id": "5289900",
+         "uid": "s:40~l:46~a:5289900",
+         "guid": "1fd0177f-7428-3e94-bdc6-c790a41ea483",
+         "displayName": "Mohamed Diawara",
+         "shortName": "M. Diawara",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/5289900/mohamed-diawara",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/5289900.png",
+          "alt": "Mohamed Diawara"
+         },
+         "jersey": "51",
+         "position": {
+          "name": "Forward",
+          "displayName": "Forward",
+          "abbreviation": "F"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "29",
+         "13",
+         "5-10",
+         "3-7",
+         "0-0",
+         "3",
+         "1",
+         "0",
+         "1",
+         "0",
+         "0",
+         "3",
+         "5",
+         "-28"
+        ]
+       },
+       {
+        "active": true,
+        "athlete": {
+         "id": "4432808",
+         "uid": "s:40~l:46~a:4432808",
+         "guid": "78395694-832b-3357-8773-a07cc3ce782f",
+         "displayName": "James Wiseman",
+         "shortName": "J. Wiseman",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/4432808/james-wiseman",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/4432808.png",
+          "alt": "James Wiseman"
+         },
+         "jersey": "35",
+         "position": {
+          "name": "Center",
+          "displayName": "Center",
+          "abbreviation": "C"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "24",
+         "18",
+         "7-8",
+         "0-0",
+         "4-4",
+         "10",
+         "0",
+         "3",
+         "0",
+         "0",
+         "4",
+         "6",
+         "0",
+         "-17"
+        ]
+       },
+       {
+        "active": false,
+        "athlete": {
+         "id": "4065670",
+         "uid": "s:40~l:46~a:4065670",
+         "guid": "58b07122-067e-1153-355b-9bb5309d7624",
+         "displayName": "Bruce Brown",
+         "shortName": "B. Brown",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/4065670/bruce-brown",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/4065670.png",
+          "alt": "Bruce Brown"
+         },
+         "jersey": "1",
+         "position": {
+          "name": "Guard",
+          "displayName": "Guard",
+          "abbreviation": "G"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "18",
+         "5",
+         "2-4",
+         "1-2",
+         "0-0",
+         "4",
+         "2",
+         "2",
+         "0",
+         "0",
+         "1",
+         "3",
+         "4",
+         "-24"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "TOR",
+     "id": "28"
+    },
+    "statistics": [
+     {
+      "names": [
+       "MIN",
+       "PTS",
+       "FG",
+       "3PT",
+       "FT",
+       "REB",
+       "AST",
+       "TO",
+       "STL",
+       "BLK",
+       "OREB",
+       "DREB",
+       "PF",
+       "+/-"
+      ],
+      "keys": [
+       "minutes",
+       "points",
+       "fieldGoalsMade-fieldGoalsAttempted",
+       "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+       "freeThrowsMade-freeThrowsAttempted",
+       "rebounds",
+       "assists",
+       "turnovers",
+       "steals",
+       "blocks",
+       "offensiveRebounds",
+       "defensiveRebounds",
+       "fouls",
+       "plusMinus"
+      ],
+      "athletes": [
+       {
+        "active": false,
+        "athlete": {
+         "id": "6450",
+         "uid": "s:40~l:46~a:6450",
+         "guid": "87ff907c-c68c-a82d-1215-37e05d0c62ef",
+         "displayName": "Kawhi Leonard",
+         "shortName": "K. Leonard",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/6450/kawhi-leonard",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/6450.png",
+          "alt": "Kawhi Leonard"
+         },
+         "jersey": "2",
+         "position": {
+          "name": "Forward",
+          "displayName": "Forward",
+          "abbreviation": "F"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "17",
+         "21",
+         "6-12",
+         "4-8",
+         "5-7",
+         "5",
+         "0",
+         "0",
+         "2",
+         "0",
+         "1",
+         "4",
+         "2",
+         "+28"
+        ]
+       },
+       {
+        "active": false,
+        "athlete": {
+         "id": "4395625",
+         "uid": "s:40~l:46~a:4395625",
+         "guid": "92d6ee44-1fcc-f058-5b21-9c8dc7d2efde",
+         "displayName": "RJ Barrett",
+         "shortName": "R. Barrett",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/4395625/rj-barrett",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/4395625.png",
+          "alt": "RJ Barrett"
+         },
+         "jersey": "9",
+         "position": {
+          "name": "Forward",
+          "displayName": "Forward",
+          "abbreviation": "F"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "23",
+         "17",
+         "6-12",
+         "1-4",
+         "4-5",
+         "4",
+         "3",
+         "0",
+         "0",
+         "0",
+         "2",
+         "2",
+         "4",
+         "+20"
+        ]
+       },
+       {
+        "active": false,
+        "athlete": {
+         "id": "4433134",
+         "uid": "s:40~l:46~a:4433134",
+         "guid": "dd0bb1da-07b1-3d6b-b4b7-11a9e7b70d46",
+         "displayName": "Scottie Barnes",
+         "shortName": "S. Barnes",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/4433134/scottie-barnes",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/4433134.png",
+          "alt": "Scottie Barnes"
+         },
+         "jersey": "4",
+         "position": {
+          "name": "Forward",
+          "displayName": "Forward",
+          "abbreviation": "F"
+         }
+        },
+        "starter": true,
+        "didNotPlay": false,
+        "reason": "COACH'S DECISION",
+        "ejected": false,
+        "stats": [
+         "22",
+         "19",
+         "8-10",
+         "0-1",
+         "3-3",
+         "6",
+         "4",
+         "2",
+         "2",
+         "1",
+         "0",
+         "6",
+         "0",
+         "+29"
+        ]
+       },
+       {
+        "active": false,
+        "athlete": {
+         "id": "4431893",
+         "uid": "s:40~l:46~a:4431893",
+         "guid": "01774ea4-5065-3601-82f6-fb090589c5eb",
+         "displayName": "Jamison Battle",
+         "shortName": "J. Battle",
+         "links": [
+          {
+           "rel": [
+            "playercard",
+            "desktop",
+            "athlete"
+           ],
+           "href": "https://www.espn.com/nba/player/_/id/4431893/jamison-battle",
+           "text": "Player Card"
+          }
+         ],
+         "headshot": {
+          "href": "https://a.espncdn.com/i/headshots/nba/players/full/4431893.png",
+          "alt": "Jamison Battle"
+         },
+         "jersey": "77",
+         "position": {
+          "name": "Forward",
+          "displayName": "Forward",
+          "abbreviation": "F"
+         }
+        },
+        "starter": false,
+        "didNotPlay": true,
+        "reason": "DID NOT DRESS",
+        "ejected": false,
+        "stats": []
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

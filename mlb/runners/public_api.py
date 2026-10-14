@@ -17,6 +17,13 @@ def _ct_today() -> str:
 logger = logging.getLogger(__name__)
 
 
+def _sport(sport) -> str:
+    """Validated sport key for the bets table ('mlb' default). Raises ValueError on anything unknown, which the
+    Flask routes turn into a 400 -- an unqualified call keeps returning MLB exactly as before 2026-10-14."""
+    from mlb_core.tracking.bet_tracker import norm_sport
+    return norm_sport(sport)
+
+
 def _require_api_key(request_headers: dict, site_api_key: str) -> bool:
     """Return True if the X-API-Key header matches the configured key."""
     # HTTP/2 lowercases headers -- check both forms
@@ -24,15 +31,16 @@ def _require_api_key(request_headers: dict, site_api_key: str) -> bool:
     return key.strip() == site_api_key
 
 
-def get_today_picks(engine, include_all: bool = False):
+def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
     """Today's picks. include_all=True returns EVERY scored prediction
     (kelly_triggered false rows have stake 0) -- The Edge cockpit uses this
     so every player with a model probability is browsable, not just the
     qualified card."""
     gate = "" if include_all else "AND kelly_triggered = true "
+    sport = _sport(sport)
     with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT id, system, game_date, game_pk, bet_type, player, "
+            "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, "
             # Added 2026-08-17 (finding C6.6): the historical fix that added
@@ -41,15 +49,15 @@ def get_today_picks(engine, include_all: bool = False):
             # function -- the endpoint backing The Edge cockpit itself.
             "closing_odds, clv_pct, morning_odds, line_move_pct "
             "FROM bets "
-            f"WHERE game_date = :_today {gate}"
+            f"WHERE sport = :_sport AND game_date = :_today {gate}"
             "ORDER BY system, created_at DESC"
-        ), {"_today": _ct_today()}).mappings().all()
+        ), {"_today": _ct_today(), "_sport": sport}).mappings().all()
     return [dict(r) for r in rows]
 
 
-def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None):
-    conditions = ["kelly_triggered = true"]
-    params = {}
+def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None, sport="mlb"):
+    conditions = ["kelly_triggered = true", "sport = :_sport"]
+    params = {"_sport": _sport(sport)}
 
     if system:
         conditions.append("system = :system")
@@ -93,7 +101,7 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
     params["offset"] = int(offset)
 
     sql = text(
-        "SELECT id, system, game_date, game_pk, bet_type, player, "
+        "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
         "away_team, home_team, odds, stake, model_prob, market_prob, "
         "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
         "closing_odds, clv_pct, morning_odds, line_move_pct "
@@ -106,22 +114,23 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
     return [dict(r) for r in rows]
 
 
-def get_recent_settled(engine, limit=20):
+def get_recent_settled(engine, limit=20, sport="mlb"):
+    sport = _sport(sport)
     with engine.connect() as conn:
         rows = conn.execute(text(
-            "SELECT id, system, game_date, game_pk, bet_type, player, "
+            "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
             "closing_odds, clv_pct, morning_odds, line_move_pct "
             "FROM bets "
-            "WHERE result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
+            "WHERE sport = :_sport AND result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
             "ORDER BY game_date DESC, created_at DESC "
             "LIMIT :limit"
-        ), {"limit": int(limit)}).mappings().all()
+        ), {"limit": int(limit), "_sport": sport}).mappings().all()
     return [dict(r) for r in rows]
 
 
-def get_pnl_sparkline(engine, days=30, system=None):
+def get_pnl_sparkline(engine, days=30, system=None, sport="mlb"):
     """Daily cumulative P&L for the last N days, kelly_triggered=true only.
     Optionally scoped to a single system (e.g. "NRFI"); when omitted, covers
     all systems. Returns list of {date, daily_pnl, cum_pnl} dicts sorted
@@ -134,8 +143,9 @@ def get_pnl_sparkline(engine, days=30, system=None):
         "kelly_triggered = true",
         "stake > 0",
         "game_date >= :cutoff",
+        "sport = :_sport",
     ]
-    params: dict = {"cutoff": cutoff}
+    params: dict = {"cutoff": cutoff, "_sport": _sport(sport)}
     if system and str(system).strip():
         conditions.append("system = :system")
         params["system"] = str(system).strip().upper()
@@ -160,7 +170,7 @@ def get_pnl_sparkline(engine, days=30, system=None):
     return out
 
 
-def get_clv_data(engine, days=90, systems=None):
+def get_clv_data(engine, days=90, systems=None, sport="mlb"):
     """
     Returns settled, kelly-triggered bets with closing line data for CLV scatter tool.
     model_edge_pct: edge column (decimal) * 100 -> percentage like 8.2
@@ -178,8 +188,9 @@ def get_clv_data(engine, days=90, systems=None):
         "closing_odds IS NOT NULL",
         "clv_pct IS NOT NULL",
         "game_date >= :cutoff",
+        "sport = :_sport",
     ]
-    params: dict = {"cutoff": cutoff}
+    params: dict = {"cutoff": cutoff, "_sport": _sport(sport)}
 
     if systems:
         sys_list = [s.strip().upper() for s in str(systems).split(",") if s.strip()]
@@ -232,7 +243,7 @@ def get_today_slate(engine):
             "ROUND((COALESCE(edge, 0) * 100)::numeric, 2) AS edge_pct, "
             "odds, result, notes, player, away_team, home_team "
             "FROM bets "
-            "WHERE game_date = :today AND kelly_triggered = true "
+            "WHERE sport = 'mlb' AND game_date = :today AND kelly_triggered = true "
             "ORDER BY system, edge DESC NULLS LAST"
         ), {"today": run_date}).mappings().all()
 
@@ -300,7 +311,8 @@ def get_today_slate(engine):
     }
 
 
-def get_summary_stats(engine):
+def get_summary_stats(engine, sport="mlb"):
+    sport = _sport(sport)
     with engine.connect() as conn:
         by_system = conn.execute(text(
             "SELECT system, "
@@ -313,9 +325,9 @@ def get_summary_stats(engine):
             "ROUND((SUM(profit) / NULLIF(SUM(stake), 0) * 100)::numeric, 2) AS roi, "
             "ROUND(SUM(profit)::numeric, 2) AS total_pnl, "
             "ROUND((AVG(model_prob - market_prob) * 100)::numeric, 2) AS avg_edge "
-            "FROM bets WHERE result IS NOT NULL AND result != 'void' "
+            "FROM bets WHERE sport = :_sport AND result IS NOT NULL AND result != 'void' "
             "GROUP BY system ORDER BY roi DESC"
-        )).mappings().all()
+        ), {"_sport": sport}).mappings().all()
 
         overall = conn.execute(text(
             "SELECT COUNT(*) AS total_bets, "
@@ -323,8 +335,8 @@ def get_summary_stats(engine):
             "  NULLIF(COUNT(*) FILTER (WHERE result IN ('win','loss')), 0) * 100, 1) AS win_rate, "
             "ROUND((SUM(profit) / NULLIF(SUM(stake), 0) * 100)::numeric, 2) AS roi, "
             "ROUND((AVG(model_prob - market_prob) * 100)::numeric, 2) AS avg_edge "
-            "FROM bets WHERE result IS NOT NULL AND result != 'void'"
-        )).mappings().first()
+            "FROM bets WHERE sport = :_sport AND result IS NOT NULL AND result != 'void'"
+        ), {"_sport": sport}).mappings().first()
 
     return {
         "overall":  dict(overall) if overall else {},
@@ -374,7 +386,7 @@ def _ev_mlb_rows(engine, min_ev, limit, days):
             "SELECT id, game_date, game_pk, player, away_team, home_team, bet_type, "
             "model_prob, market_prob, edge, kelly_pct, odds, stake, book, result, profit, "
             "notes, created_at "
-            "FROM bets WHERE system = 'EV' AND game_date >= :since AND edge >= :min_ev "
+            "FROM bets WHERE system = 'EV' AND sport = 'mlb' AND game_date >= :since AND edge >= :min_ev "
             "ORDER BY game_date DESC, edge DESC LIMIT :limit"
         ), {"since": since, "min_ev": float(min_ev), "limit": int(limit)}).mappings().all()
     out = []
@@ -448,6 +460,53 @@ def _nfl_feed(min_ev, limit):
             "summary": snap.get("summary") or {}, "validated": False}
 
 
+_PROPS_STALE_MINUTES = 120
+
+
+def _props_feed(sport, min_ev, limit):
+    """NHL/NBA soft-line alerts (ev/sweep_props_alerts.py -> EVSweep/{sport}_props/latest.json). Sportsbook quotes that
+    beat the consensus of the OTHER books; evidence only, never validated. Rows whose game has started are dropped
+    (the quote is dead) and the payload carries status + freshness, same contract as _nfl_feed."""
+    from mlb_core import storage as _st
+    empty = {"rows": [], "count": 0, "status": "unavailable", "as_of": None, "age_minutes": None,
+             "stale": True, "summary": {}, "validated": False}
+    try:
+        snap = _json.loads(_st.read_bytes(f"EVSweep/{sport}_props/latest.json"))
+    except Exception:  # noqa: BLE001 -- sweep has not produced output yet
+        return empty
+    now = _datetime.now(_timezone.utc)
+    ts = snap.get("ts")
+    age = None
+    try:
+        age = (now - _datetime.fromisoformat(str(ts))).total_seconds() / 60.0
+    except Exception:  # noqa: BLE001
+        pass
+    rows = []
+    for r in snap.get("rows") or []:
+        try:
+            commence = _datetime.fromisoformat(str(r.get("commence")))
+        except Exception:  # noqa: BLE001
+            continue
+        mins_now = (commence - now).total_seconds() / 60.0
+        ev = _f(r.get("ev"))
+        if mins_now <= 0 or ev is None or (not r.get("flag") and ev < min_ev):
+            continue
+        rows.append({
+            "sport": sport, "venue": "book", "book": r.get("book"), "game_key": r.get("game_key"),
+            "stat": r.get("stat"), "player": r.get("player"), "player_id": r.get("player_id"),
+            "strike": _f(r.get("point")), "side": r.get("side"), "american": r.get("american"),
+            "net_ev": round(ev, 4), "fair_prob": _f(r.get("p_fair")), "n_books": r.get("n_books"),
+            "disp": _f(r.get("disp")), "commence": r.get("commence"), "mins_to_kick": round(mins_now, 1),
+            "flag": bool(r.get("flag")), "reason": r.get("reason"),
+        })
+    rows.sort(key=lambda x: (not x["flag"], -x["net_ev"]))
+    rows = rows[: int(limit)]
+    stale = age is None or age > _PROPS_STALE_MINUTES
+    return {"rows": rows, "count": len(rows), "status": "idle" if stale else "shadow_live", "as_of": ts,
+            "age_minutes": None if age is None else round(age, 1), "stale": stale,
+            "summary": snap.get("summary") or {}, "validated": False}
+
+
 def get_ev_scanner_feed(engine, sport="all", min_ev=0.02, limit=100, days=2):
     """+EV terminal feed. MLB: tracked system='EV' rows (real graded history, flat stake at the flagged
     price). NFL: latest shadow sweep rows (Kalshi ask vs book consensus), flagged unvalidated."""
@@ -455,12 +514,15 @@ def get_ev_scanner_feed(engine, sport="all", min_ev=0.02, limit=100, days=2):
     min_ev = float(min_ev)
     limit = max(1, min(int(limit), 200))
     out = {"sport": sport, "min_ev": min_ev, "as_of": _datetime.now(_timezone.utc).isoformat(),
-           "mlb": {"rows": [], "count": 0}, "nfl": None}
+           "mlb": {"rows": [], "count": 0}, "nfl": None, "nhl": None, "nba": None}
     if sport in ("all", "mlb"):
         mlb = _ev_mlb_rows(engine, min_ev, limit, days)
         out["mlb"] = {"rows": mlb, "count": len(mlb)}
     if sport in ("all", "nfl"):
         out["nfl"] = _nfl_feed(min_ev, limit)
+    for sp in ("nhl", "nba"):
+        if sport in ("all", sp):
+            out[sp] = _props_feed(sp, min_ev, limit)
     return out
 
 
@@ -468,7 +530,7 @@ def _roi(profit, stake):
     return round(profit / stake * 100.0, 2) if stake else None
 
 
-def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0, cap=0.05):
+def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0, cap=0.05, sport="mlb"):
     """Institutional views over settled bets.
 
     system scopes edge_buckets + book_leaderboard (None = every system). bankroll_curve and ev_headline
@@ -479,8 +541,9 @@ def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0
     bankroll = float(bankroll)
     kelly_mult = max(0.0, float(kelly_mult))
     cap = max(0.0, float(cap))
-    cond = "kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push')"
-    params = {}
+    sport = _sport(sport)
+    cond = "kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push') AND sport = :_sport"
+    params = {"_sport": sport}
     if system and str(system).strip():
         cond += " AND system = :system"
         params["system"] = str(system).strip().upper()
@@ -489,10 +552,10 @@ def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0
            f"WHERE {cond} ORDER BY game_date, id")
     ev_sql = ("SELECT id, system, game_date, game_pk, bet_type, player, odds, stake, model_prob, "
               "market_prob, edge, kelly_pct, result, profit, book, clv_pct FROM bets "
-              "WHERE system IN ('EV') AND stake > 0 AND result IN ('win','loss','push') "
+              "WHERE system IN ('EV') AND sport = :_sport AND stake > 0 AND result IN ('win','loss','push') "
               "ORDER BY game_date, id")
     model_sql = ("SELECT game_date, COALESCE(SUM(profit), 0) AS pnl FROM bets WHERE system <> 'EV' "
-                 "AND kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push') "
+                 "AND sport = :_sport AND kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push') "
                  "GROUP BY game_date ORDER BY game_date")
     counts_sql = ("SELECT COUNT(*) AS logged, "
                   "COUNT(*) FILTER (WHERE result = 'win') AS wins, "
@@ -501,12 +564,13 @@ def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0
                   "COUNT(*) FILTER (WHERE result = 'void') AS voids, "
                   "COUNT(*) FILTER (WHERE result IS NULL) AS pending, "
                   "MIN(game_date) AS first_date, MAX(game_date) AS last_date "
-                  "FROM bets WHERE system = 'EV'")
+                  "FROM bets WHERE system = 'EV' AND sport = :_sport")
     with engine.connect() as conn:
         rows = [dict(r) for r in conn.execute(text(sql), params).mappings().all()]
-        ev_rows = [dict(r) for r in conn.execute(text(ev_sql)).mappings().all()]
-        model_days = [dict(r) for r in conn.execute(text(model_sql)).mappings().all()]
-        counts = dict(conn.execute(text(counts_sql)).mappings().first() or {})
+        sp = {"_sport": sport}
+        ev_rows = [dict(r) for r in conn.execute(text(ev_sql), sp).mappings().all()]
+        model_days = [dict(r) for r in conn.execute(text(model_sql), sp).mappings().all()]
+        counts = dict(conn.execute(text(counts_sql), sp).mappings().first() or {})
 
     # a) edge buckets ---------------------------------------------------------
     buckets = []

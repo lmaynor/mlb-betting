@@ -74,7 +74,7 @@ def _load_season_bets(season: str) -> pd.DataFrame:
         df = pd.read_sql(
             text("""
                 SELECT * FROM bets
-                WHERE game_date LIKE :y
+                WHERE game_date LIKE :y AND sport = 'mlb'
                 ORDER BY game_date ASC, id ASC
             """),
             conn, params={"y": f"{season}%"},

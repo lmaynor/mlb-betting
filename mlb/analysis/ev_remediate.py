@@ -66,7 +66,7 @@ def stats(engine) -> dict:
     is `rows_since_wiring_fix`: >0 means live pager rows really land in Postgres."""
     with engine.connect() as conn:
         df = pd.read_sql(text("SELECT id, game_date, bet_type, player, result, kelly_pct, "
-                              "created_at FROM bets WHERE system='EV'"), conn)
+                              "created_at FROM bets WHERE system='EV' AND sport='mlb'"), conn)
     out = {"total_rows": len(df)}
     if df.empty:
         return out
@@ -89,17 +89,17 @@ def backup_and_delete(engine, backup_table: str = DEFAULT_BACKUP) -> dict:
     created only if absent so a re-run can never overwrite the original rows."""
     backup_table = _safe_ident(backup_table)
     with engine.begin() as conn:
-        n_before = int(conn.execute(text("SELECT count(*) FROM bets WHERE system='EV'")).scalar() or 0)
+        n_before = int(conn.execute(text("SELECT count(*) FROM bets WHERE system='EV' AND sport='mlb'")).scalar() or 0)
         created = False
         if not _table_exists(conn, backup_table):
-            conn.execute(text(f"CREATE TABLE {backup_table} AS SELECT * FROM bets WHERE system='EV'"))
+            conn.execute(text(f"CREATE TABLE {backup_table} AS SELECT * FROM bets WHERE system='EV' AND sport='mlb'"))
             created = True
         n_backup = int(conn.execute(text(f"SELECT count(*) FROM {backup_table}")).scalar() or 0)
         if created and n_backup != n_before:
             raise RuntimeError(f"backup row count {n_backup} != source {n_before}; refusing to delete")
         if n_before and n_backup == 0:
             raise RuntimeError("backup table is empty; refusing to delete")
-        res = conn.execute(text("DELETE FROM bets WHERE system='EV'"))
+        res = conn.execute(text("DELETE FROM bets WHERE system='EV' AND sport='mlb'"))
     return {"rows_before": n_before, "backup_table": backup_table,
             "backup_created_now": created, "backup_rows": n_backup, "deleted": res.rowcount}
 
@@ -132,7 +132,7 @@ def report(engine, bankroll: float = 1000.0, max_pct: float = 0.05) -> dict:
     r = kelly_bankroll_report(df, bankroll=bankroll, max_pct=max_pct)
     r.pop("detail", None)
     with engine.connect() as conn:
-        by = pd.read_sql(text("SELECT result, count(*) AS n FROM bets WHERE system='EV' "
+        by = pd.read_sql(text("SELECT result, count(*) AS n FROM bets WHERE system='EV' AND sport='mlb' "
                               "GROUP BY result"), conn)
     r["by_result"] = {str(k): int(v) for k, v in zip(by["result"].fillna("pending"), by["n"])}
     return r

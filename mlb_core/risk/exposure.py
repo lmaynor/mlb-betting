@@ -34,7 +34,7 @@ def current_bankroll(engine, starting: float = STARTING_BANKROLL) -> float:
     try:
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT COALESCE(SUM(profit), 0) FROM bets WHERE result IS NOT NULL")
+                text("SELECT COALESCE(SUM(profit), 0) FROM bets WHERE result IS NOT NULL AND sport = 'mlb'")
             ).fetchone()
         pnl = float(row[0]) if row else 0.0
         return max(starting + pnl, starting * 0.10)  # floor at 10% of starting
@@ -52,6 +52,7 @@ def open_stake_for_game(engine, game_pk: int, game_date: str) -> float:
                     SELECT COALESCE(SUM(stake), 0) FROM bets
                     WHERE game_pk = :gpk
                       AND game_date = :gd
+                      AND sport = 'mlb'
                       AND result IS NULL
                       AND kelly_triggered = TRUE
                 """),
@@ -125,6 +126,7 @@ def prefetch_exposure(
                 FROM bets
                 WHERE game_pk IN ({placeholders})
                   AND game_date = :gd
+                  AND sport = 'mlb'
                   AND result IS NULL
                   AND kelly_triggered = TRUE
                   {('AND system = :sys' if system else '')}

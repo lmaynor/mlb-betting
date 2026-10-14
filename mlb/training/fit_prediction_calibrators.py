@@ -80,7 +80,7 @@ def run() -> dict:
     with engine.connect() as conn:
         df = pd.read_sql(text(
             "SELECT system, model_prob, result FROM bets "
-            "WHERE result IN ('win','loss') AND model_prob IS NOT NULL"
+            "WHERE result IN ('win','loss') AND model_prob IS NOT NULL AND sport = 'mlb'"
         ), conn)
     logger.info("loaded %s settled predictions across %s systems",
                 f"{len(df):,}", df["system"].nunique())

@@ -645,7 +645,7 @@ def run(settle_date: str = None) -> dict:
         engine = _make_engine(db_path="unused")
         with engine.connect() as conn:
             pending_all = pd.read_sql(
-                text("SELECT * FROM bets WHERE result IS NULL AND game_date <= :d"),
+                text("SELECT * FROM bets WHERE result IS NULL AND game_date <= :d AND sport = 'mlb'"),
                 conn, params={"d": settle_date},
             )
     except Exception as e:
@@ -770,7 +770,7 @@ def run(settle_date: str = None) -> dict:
     # Build season stats for Discord recap
     with engine.connect() as conn:
         season_bets = pd.read_sql(
-            text("SELECT * FROM bets WHERE game_date LIKE :y"),
+            text("SELECT * FROM bets WHERE game_date LIKE :y AND sport = 'mlb'"),
             conn, params={"y": f"{settle_date[:4]}%"},
         )
 
