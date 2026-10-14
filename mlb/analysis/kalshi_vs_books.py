@@ -388,7 +388,7 @@ def _kalshi_book_fair(books: pd.DataFrame, min_books: int = 4) -> pd.DataFrame:
     return cons[cons["n_books"] >= min_books]
 
 
-def _kalshi_ev(k: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
+def _kalshi_ev(k: pd.DataFrame, cons: pd.DataFrame, fee_mult: float = 1.0) -> pd.DataFrame:
     """Mirror of scan()'s EV math, opposite direction: is buying KALSHI's own
     contract (at its own ask -- executable via its order book/API, something no
     sportsbook offers us) +EV vs the real book pack's devigged consensus (`cons`,
@@ -398,24 +398,39 @@ def _kalshi_ev(k: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
         ev_pct = book_fair * kalshi_decimal - 1     # EV of buying Kalshi's own ask
         edge   = book_fair - kalshi_implied_prob    # +ve = Kalshi looks cheap
 
-    Kalshi's own taker fee is NOT netted in here (same convention as scan()'s
-    kalshi_fee column) -- back it out before sizing anything real."""
+    `ev_pct` / `edge` are GROSS of Kalshi's taker fee (same convention as scan()'s
+    kalshi_fee column) -- unchanged, so existing thresholds and backtests keep
+    their meaning. Two ADDITIVE columns carry the fee-aware view:
+
+        kalshi_fee = fee_mult * 0.07 * ask * (1 - ask)      # $ per contract
+        net_ev_pct = book_fair / (ask + kalshi_fee) - 1     # EV per $ actually paid
+
+    `fee_mult` is the series' taker multiplier (per SERIES, not 1.0: KXMLBGAME is
+    0.5 -- see _series_fee_multipliers). The 1.0 default is the conservative
+    general schedule; pass the real one before sizing anything real."""
     m = _ensure_jk(k).merge(_ensure_jk(cons), on=_JK, how="inner")
     if not len(m):
         return m
     m = m.copy()
     m["ev_pct"] = (m["book_fair"] * m["decimal"] - 1.0).round(4)
     m["edge"] = (m["book_fair"] - m["implied_prob"]).round(4)
+    m["kalshi_fee"] = kalshi_taker_fee_per_contract(m["implied_prob"], fee_mult).round(4)
+    m["net_ev_pct"] = (m["book_fair"] / (m["implied_prob"] + m["kalshi_fee"]) - 1.0).round(4)
     m["book_fair"] = m["book_fair"].round(4)
     return m
 
 
 def scan_kalshi_side(markets, date=None, since=None, until=None, closing=False,
-                      min_ev=0.0, min_books=4, max_gap_min=DEFAULT_MAX_GAP_MIN) -> pd.DataFrame:
+                      min_ev=0.0, min_books=4, max_gap_min=DEFAULT_MAX_GAP_MIN,
+                      fee_mult: dict | None = None, min_net_ev: float | None = None) -> pd.DataFrame:
     """Mirror of scan(): scan() treats a sportsbook as bettable and Kalshi's mid
     as the truth anchor; this treats KALSHI as bettable and the real books'
     devigged consensus as the truth anchor -- see _kalshi_book_fair/_kalshi_ev
     for the actual math. Trust the liquid markets (LIQUID) most; prop mids are thin.
+
+    `fee_mult` ({market: taker multiplier}, e.g. from _series_fee_multipliers) feeds the
+    additive kalshi_fee / net_ev_pct columns (1.0 for a market not in it); `min_ev` still
+    filters the GROSS ev_pct, `min_net_ev` (optional) additionally filters net_ev_pct.
     """
     frames, cov = [], []
     for mkt in markets:
@@ -437,7 +452,7 @@ def scan_kalshi_side(markets, date=None, since=None, until=None, closing=False,
         cov.append({"market": mkt, "kalshi_sel": len(k), "book_rows": len(books)})
         if not len(k) or not len(books):
             continue
-        m = _kalshi_ev(k, _kalshi_book_fair(books, min_books))
+        m = _kalshi_ev(k, _kalshi_book_fair(books, min_books), (fee_mult or {}).get(mkt, 1.0))
         m = _gap_filter(m, "snapshot_ts", "cons_ts", None if closing else max_gap_min)
         if not len(m):
             continue
@@ -451,6 +466,8 @@ def scan_kalshi_side(markets, date=None, since=None, until=None, closing=False,
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
     out = out[out["ev_pct"] >= min_ev]
+    if min_net_ev is not None:
+        out = out[out["net_ev_pct"] >= min_net_ev]
     return out.sort_values("ev_pct", ascending=False).reset_index(drop=True)
 
 

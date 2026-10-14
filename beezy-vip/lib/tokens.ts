@@ -274,7 +274,12 @@ function formatPick(sys: string, bt: string, player: string, team: string, away:
   }
 
   // -- Batter Props -----------------------------------------------------
-  if (sys === 'HR') return `${player} (${team}) to Hit a Home Run`
+  if (sys === 'HR') {
+    // "HR_NO" (EV rows only): the Under 0.5 / No-HR side. Token match, not
+    // startsWith('HR_NO') -- a 1+ HR row on book "novig" is "HR_novig".
+    if (bt.split('_')[1]?.toUpperCase() === 'NO') return `${player} (${team}) to Not Hit a Home Run`
+    return `${player} (${team}) to Hit a Home Run`
+  }
   if (sys === 'BATTER_K') {
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_K_OVER_', '').replace('BATTER_K_UNDER_', '')

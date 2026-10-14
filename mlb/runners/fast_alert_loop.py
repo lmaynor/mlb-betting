@@ -349,15 +349,19 @@ def _ev_bet_type(market: str, selection: str, line, book: str | None) -> str | N
     sel = str(selection).upper()
 
     if market == "hr_yn":
-        # settle_bets._settle_hr grades EVERY "HR*" bet_type as "1+ HR wins",
-        # with no side/line awareness. So only a quote that IS "1+ HR" (OVER/
-        # YES at line 0.5) may map to it; "Under 0.5 HR" (no HR) or an alt
-        # line like "Over 1.5" would be graded as the opposite/wrong bet
-        # (confirmed in production: ~13% of posted hr_yn alerts are UNDER 0.5).
-        # No settler exists for those yet -> don't log what can't be graded.
-        if sel not in ("OVER", "YES") or (pd.notna(line) and float(line) > 0.5):
+        # settle_bets._settle_hr grades "HR*" by SIDE: a bare "HR_{book}" is
+        # "1+ HR wins" and "HR_NO_{book}" is "no HR wins" (the Under 0.5 / No
+        # side). Only the two base lines map: anything quoted above 0.5 (e.g.
+        # "Over 1.5" = 2+ HR, "Under 1.5" = 0-1 HR) is a different bet than
+        # either settler branch grades -> not logged.
+        if pd.notna(line) and float(line) > 0.5:
             return None
-        base = "HR"
+        if sel in ("OVER", "YES"):
+            base = "HR"
+        elif sel in ("UNDER", "NO"):
+            base = "HR_NO"
+        else:
+            return None
     elif market == "nrfi_ou":
         # NRFI/YRFI's own bet_type is the bare word (settle_bets._settle_nrfi
         # matches it exactly) -- there's no line, the side IS the whole bet.

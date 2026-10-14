@@ -339,6 +339,9 @@ mlb-betting/
 │   ├── book_vig.py, quote_survival.py
 │   │                             Empirical per-(market,book) vig fit + stale-quote survival
 │   │                             analysis; posted weekly to Discord by mlb-weekly-survival.
+│   │                             quote_survival --include-exchanges measures novig/prophetx/kalshi
+│   │                             survival against the NON-exchange pack only (an exchange never
+│   │                             prices itself); default mode unchanged.
 │   └── alt_line_scan.py, diagnose_bettingpros_ou.py, model_vs_market.py, odds_freshness.py,
 │       outlier_scan.py, verify_odds_history.py, nrfi_market.py, gen_nrfi_preds.py, ...
 │                                 Assorted diagnostics/scanners (alt-line pricing, BettingPros
@@ -809,7 +812,7 @@ mid AND a book-pack consensus to show, not one anchor).
 | BATTER_HITS | `"BATTER_HITS_{SIDE}_{LINE}"` | `"BATTER_HITS_OVER_0.5"`, `"BATTER_HITS_UNDER_0.5"` |
 | SB | `"SB_{SIDE}_{LINE}"` (+ `"SB_2PLUS_2.0"` threshold) | `"SB_OVER_0.5"`, `"SB_UNDER_0.5"` |
 | PITCHER_ER | `"PITCHER_ER_{SIDE}_{LINE}"` | `"PITCHER_ER_OVER_2.5"`, `"PITCHER_ER_UNDER_2.5"` |
-| EV | underlying system's own format + `"_{book}"` | `"K_OVER_7.5_draftkings"`, `"HR_hardrock"` |
+| EV | underlying system's own format + `"_{book}"` | `"K_OVER_7.5_draftkings"`, `"HR_hardrock"`, `"HR_NO_hardrock"` (no-HR side) |
 
 2+/3+ threshold sub-markets (2026-08-19, K/OUTS/BATTER_TB/BATTER_HITS only --
 see s5 "2+/3+ threshold sub-markets" below): `"{SYSTEM}_{N}PLUS_{N}.0"`, e.g.
@@ -947,9 +950,21 @@ player names from `log.parquet` (~53% unnamed -> `"AWAY @ HOME"` -> void). All
 fixed and DEPLOYED, and the system='EV' rows were rebuilt on 2026-10-03 (Cloud Run Job
 `mlb-ev-remediate`, `mlb/analysis/ev_remediate.py`; original rows kept in table
 `bets_ev_backup_20261003`): 7,546 graded, flat +7.56% ROI, Kelly +11.91% -- paper,
-correlated across books, unverified for execution; see the 2026-10-02 handoff OUTCOME. `_ev_bet_type` now returns None (not logged)
+correlated across books, unverified for execution; see the 2026-10-02 handoff OUTCOME. `_ev_bet_type` returns None (not logged)
 for anything the HR settler can't grade. See
 docs/solutions/logic-errors/ev-bet-type-ignores-side-and-line-misgrades.md.
+
+**HR "No" side (Under 0.5 / No HR) is gradable and logged as `HR_NO_{book}`**
+(added after the 2026-10-03 remediation, which had parked it as `None`).
+`settle_bets._settle_hr` grades `HR_NO*` as the OPPOSITE of "1+ HR" (starter with
+0 HR wins, with >=1 loses, non-starter/absent voids) via `_is_hr_no()`, a TOKEN
+match on the second `_`-segment -- NOT `startswith("HR_NO")`, which would also match
+a 1+ HR row on book `novig` (`HR_NOVIG`) and invert it. Lines above 0.5 (Over 1.5,
+Under 1.5) still return `None`. `beezy-vip/lib/tokens.ts` renders it as "to Not Hit a
+Home Run". Rows the 10-03 remediation skipped are NOT back-filled automatically --
+re-running `mlb-ev-remediate` would rebuild them from the GCS alert trail. Note the
+`consensus_fair` on an Under row is the Under side's probability (~0.99 at -2000), so
+`kelly_pct`/edge are for the side actually bought.
 
 ### Settlement sources
 
@@ -964,7 +979,7 @@ result cached and shared across all systems in the same settle run.
 | 1I_HOME | `innings[0].away_runs / home_runs` | home>0 AND away==0 |
 | 1I_DRAW | `innings[0].away_runs / home_runs` | away==0 AND home==0 |
 | F5 | `innings[0:5]` sum per side | compare home vs away; tie=push |
-| HR | `batters[name].home_runs` | starter + HR > 0 = win; not starter = void |
+| HR | `batters[name].home_runs` | starter + HR > 0 = win; not starter = void. `HR_NO*` (EV only): starter + 0 HR = win, HR > 0 = loss, not starter = void |
 | K | `pitchers[name].strikeouts` | vs line O/U |
 | OUTS | `pitchers[name].outs` | vs line O/U |
 | F1H | `innings[0:4]` runs | home vs away; push on tie; void if < 4 innings |

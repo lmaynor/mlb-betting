@@ -206,3 +206,57 @@ class TestAltLineScan:
                                                           "game_date": []}))
         out = als.scan_system("K", "2026-07-06", min_ev=0.02)
         assert len(out) == 0
+
+
+class TestQuoteSurvivalExchanges:
+    """--include-exchanges: exchange rows become candidates but never set a reference."""
+
+    def _frames(self, ts_list, lag_impl_by_ts, exch_book="novig"):
+        rows = []
+        for ts, lag in zip(ts_list, lag_impl_by_ts):
+            for book in ("draftkings", "betmgm", "caesars", "fanduel"):
+                rows.append(_quote(book, "OVER", 0.50, ts=ts, fair=0.50))
+            rows.append(_quote(exch_book, "OVER", lag, ts=ts, fair=lag))
+        return pd.DataFrame(rows)
+
+    def _run(self, df, monkeypatch, **kw):
+        monkeypatch.setattr(qs.oh, "read_history", lambda *a, **k: df)
+        monkeypatch.setattr(qs.oh, "dedupe_by_source", lambda d, **k: d)
+        return qs.events_for_market("k_ou", min_ev=0.03, min_books=4, **kw)
+
+    def test_default_keeps_novig_in_pack_and_drops_kalshi(self, monkeypatch):
+        # 4 books + a lagging novig: default mode counts novig as a 5th pack book
+        # (existing behaviour), so a lagging NOVIG quote can open an event.
+        df = self._frames(["2026-07-01 15:00:00", "2026-07-01 16:00:00"], [0.44, 0.50])
+        ev = self._run(df, monkeypatch)
+        assert set(ev["book"]) == {"novig"}
+        # kalshi is OFFSHORE: invisible without the flag
+        dfk = self._frames(["2026-07-01 15:00:00", "2026-07-01 16:00:00"], [0.44, 0.50], exch_book="kalshi")
+        assert len(self._run(dfk, monkeypatch)) == 0
+
+    def test_flag_measures_kalshi_against_the_non_exchange_pack(self, monkeypatch):
+        df = self._frames(["2026-07-01 15:00:00", "2026-07-01 16:00:00"], [0.44, 0.50], exch_book="kalshi")
+        ev = self._run(df, monkeypatch, include_exchanges=True)
+        assert len(ev) == 1
+        e = ev.iloc[0]
+        assert e["book"] == "kalshi"
+        assert e["survival_min"] == pytest.approx(60.0)
+        assert e["mover"] == "book_moved"
+
+    def test_exchange_quote_does_not_move_its_own_reference(self):
+        # pack = 4 books at 0.50; the exchange quotes 0.44 -> consensus must stay 0.50,
+        # not be dragged to the median of 5 quotes that includes the exchange itself.
+        rows = [_quote(b, "OVER", 0.50, ts="2026-07-01 15:00:00", fair=0.50)
+                for b in ("draftkings", "betmgm", "caesars", "fanduel")]
+        rows.append(_quote("novig", "OVER", 0.30, ts="2026-07-01 15:00:00", fair=0.30))
+        out = qs._prep(pd.DataFrame(rows), min_books=4, include_exchanges=True)
+        assert (out["consensus_fair"] == 0.50).all()
+        assert (out["n_books"] == 4).all()
+        assert set(out["book"]) == {"draftkings", "betmgm", "caesars", "fanduel", "novig"}
+
+    def test_flag_requires_min_books_from_the_non_exchange_pack(self):
+        # 3 sportsbooks + 2 exchanges = 5 quotes, but only 3 reference books -> dropped
+        rows = [_quote(b, "OVER", 0.50, ts="2026-07-01 15:00:00", fair=0.50)
+                for b in ("draftkings", "betmgm", "caesars", "novig", "kalshi")]
+        assert len(qs._prep(pd.DataFrame(rows), min_books=4, include_exchanges=True)) == 0
+        assert len(qs._prep(pd.DataFrame(rows), min_books=4, include_exchanges=False)) == 4  # kalshi offshore

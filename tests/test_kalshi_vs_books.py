@@ -268,6 +268,37 @@ class TestKalshiEv:
         out = V._kalshi_ev(k, cons)
         assert out.iloc[0]["ev_pct"] < 0
 
+    def _one(self, ask=0.55, fair=0.62, **kw):
+        k = pd.DataFrame([_kalshi_ask_row("HOME", ask, market="game_ml", game_pk=1)])
+        k["_pid"] = -1
+        k["_line"] = -99.0
+        cons = pd.DataFrame([{"market": "game_ml", "game_pk": 1, "_pid": -1,
+                              "_line": -99.0, "selection": "HOME",
+                              "book_fair": fair, "n_books": 5}])
+        return V._kalshi_ev(k, cons, **kw).iloc[0]
+
+    def test_net_ev_nets_the_quadratic_taker_fee(self):
+        row = self._one(0.55, 0.62)
+        fee = round(0.07 * 0.55 * 0.45, 4)
+        assert row["kalshi_fee"] == fee
+        assert row["net_ev_pct"] == round(0.62 / (0.55 + fee) - 1.0, 4)
+        assert row["net_ev_pct"] < row["ev_pct"]
+
+    def test_fee_multiplier_scales_fee_but_never_gross_ev(self):
+        full, half = self._one(fee_mult=1.0), self._one(fee_mult=0.5)
+        assert half["kalshi_fee"] == round(0.5 * 0.07 * 0.55 * 0.45, 4)
+        assert half["net_ev_pct"] > full["net_ev_pct"]
+        # gross columns keep their pre-existing meaning regardless of fee_mult
+        assert half["ev_pct"] == full["ev_pct"]
+        assert half["edge"] == full["edge"]
+
+    def test_thin_gross_edge_can_be_negative_net(self):
+        # 1c gross edge at a 50c ask: the ~1.75c taker fee more than eats it.
+        row = self._one(0.50, 0.51)
+        assert row["ev_pct"] > 0
+        assert row["net_ev_pct"] < 0
+
+
     def test_no_match_when_consensus_has_no_matching_group(self):
         k = pd.DataFrame([_kalshi_ask_row("HOME", 0.55, market="game_ml", game_pk=1)])
         k["_pid"] = -1
@@ -277,6 +308,36 @@ class TestKalshiEv:
                               "book_fair": 0.62, "n_books": 5}])
         out = V._kalshi_ev(k, cons)
         assert len(out) == 0
+
+
+
+class TestScanKalshiSideNetEv:
+    """scan_kalshi_side keeps min_ev on the GROSS ev_pct (unchanged contract);
+    min_net_ev / fee_mult are the additive, fee-aware controls."""
+
+    def _patch(self, monkeypatch):
+        rows = [_row(book=b, market="game_ml", game_pk=1, selection="HOME", fair_prob=0.62,
+                     implied_prob=0.62, decimal=round(1 / 0.62, 4))
+                for b in ("draftkings", "fanduel", "betmgm", "caesars")]
+        rows.append(_kalshi_ask_row("HOME", 0.55, market="game_ml", game_pk=1))
+        monkeypatch.setattr(V.oh, "read_history", lambda *a, **k: pd.DataFrame(rows))
+        monkeypatch.setattr(V.oh, "dedupe_by_source", lambda d: d)
+
+    def test_net_columns_present_and_gross_filter_unchanged(self, monkeypatch):
+        self._patch(monkeypatch)
+        out = V.scan_kalshi_side(["game_ml"], date="2026-07-23", min_ev=0.10)
+        assert len(out) == 1
+        assert out.iloc[0]["net_ev_pct"] < out.iloc[0]["ev_pct"]
+        assert out.iloc[0]["ev_pct"] == round(0.62 / 0.55 - 1.0, 4)
+
+    def test_min_net_ev_drops_what_the_fee_erases(self, monkeypatch):
+        self._patch(monkeypatch)
+        # gross ~12.7%, net ~9.3% at multiplier 1.0 -> a 10% net floor drops it
+        assert len(V.scan_kalshi_side(["game_ml"], date="2026-07-23", min_net_ev=0.10)) == 0
+        # KXMLBGAME's real 0.5 multiplier halves the fee -> net ~11.0% -> it survives
+        out = V.scan_kalshi_side(["game_ml"], date="2026-07-23", min_net_ev=0.10,
+                                 fee_mult={"game_ml": 0.5})
+        assert len(out) == 1
 
 
 # --------------------------------------------------------------------------- #

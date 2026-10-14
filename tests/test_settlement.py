@@ -225,6 +225,48 @@ class TestSettleHr:
         assert results[0]["profit"] == 50.0  # 10 * 500/100
 
 
+class TestSettleHrNoSide:
+    """EV rows on the "No HR" / Under 0.5 side ("HR_NO_{book}") grade as the
+    opposite of the 1+ HR bet. Pinned against the bug where every "HR*"
+    bet_type was graded as "1+ HR wins" (inverting the Under side)."""
+
+    def _settle(self, bet_type, batters, odds=-2000, stake=100.0):
+        pending = _make_pending([{"id": 1, "player": "Aaron Judge", "bet_type": bet_type,
+                                  "odds": odds, "stake": stake}])
+        return _settle_hr(pending, {100: _boxscore(batters=batters)})
+
+    def test_no_hr_starter_wins(self):
+        r = self._settle("HR_NO_hardrock", {"aaron judge": {"starter": True, "home_runs": 0}}, odds=-2000)
+        assert r[0]["result"] == "win"
+        assert r[0]["profit"] == 5.0  # risk 100 at -2000 to win 5
+
+    def test_no_hr_starter_who_homered_loses(self):
+        r = self._settle("HR_NO_hardrock", {"aaron judge": {"starter": True, "home_runs": 1}})
+        assert r[0]["result"] == "loss"
+
+    def test_no_hr_non_starter_voids(self):
+        r = self._settle("HR_NO_hardrock", {"aaron judge": {"starter": False, "home_runs": 0}})
+        assert r[0]["result"] == "void"
+        assert r[0]["profit"] == 0.0
+
+    def test_no_hr_absent_from_final_boxscore_voids(self):
+        assert self._settle("HR_NO_hardrock", {})[0]["result"] == "void"
+
+    def test_yes_side_on_book_starting_with_no_is_not_inverted(self):
+        """Regression guard: startswith("HR_NO") would match "HR_NOVIG"."""
+        r = self._settle("HR_novig", {"aaron judge": {"starter": True, "home_runs": 1}}, odds=500)
+        assert r[0]["result"] == "win"
+
+    def test_ev_dispatch_routes_no_side_to_hr_settler(self):
+        pending = _make_pending([
+            {"id": 1, "player": "Aaron Judge", "bet_type": "HR_NO_fanduel", "odds": -1000, "stake": 100.0},
+            {"id": 2, "player": "Aaron Judge", "bet_type": "HR_fanduel", "odds": 500, "stake": 100.0},
+        ])
+        cache = {100: _boxscore(batters={"aaron judge": {"starter": True, "home_runs": 0}})}
+        by_id = {r["id"]: r["result"] for r in _settle_ev(pending, cache)}
+        assert by_id == {1: "win", 2: "loss"}
+
+
 # ── K / OUTS ─────────────────────────────────────────────────────────────────
 
 class TestSettleK:

@@ -110,6 +110,16 @@ describe('pickLabel resolves pooled EV alert rows to their underlying market', (
     expect(label).toBe('Gerrit Cole (NYY) to Hit a Home Run')
   })
 
+  test('EV row on the No-HR side (Under 0.5) is labelled as the opposite bet', () => {
+    const label = pickLabel(makeBet({ system: 'EV', bet_type: 'HR_NO_hardrock', book: 'hardrock' }))
+    expect(label).toBe('Gerrit Cole (NYY) to Not Hit a Home Run')
+  })
+
+  test('EV 1+ HR row on a book starting with "no" is NOT mistaken for the No side', () => {
+    const label = pickLabel(makeBet({ system: 'EV', bet_type: 'HR_novig', book: 'novig' }))
+    expect(label).toBe('Gerrit Cole (NYY) to Hit a Home Run')
+  })
+
   test('EV row on a bare-string F5 game-line alert (no player -- away/home only)', () => {
     const label = pickLabel(makeBet({
       system: 'EV', bet_type: 'HOME_betmgm', book: 'betmgm',
