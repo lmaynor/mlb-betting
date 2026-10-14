@@ -1,6 +1,6 @@
 """ParlayAPI -> GCS odds accumulator (POC).
 
-Banks live odds snapshots forward (there is no historical-props API). Sport-
+Banks live odds snapshots forward (ParlayAPI's historical prop archive is only ~7 days deep -- see nba/odds/parlay_historical.py). Sport-
 agnostic: basketball_nba (Oct-Jun), icehockey_nhl (Oct-Jun), baseball_mlb.
 
 CREDIT GUARD (2026-10-14): every run is metered through nba.odds.credit_ledger -- a per-sport monthly
