@@ -43,7 +43,8 @@ def _refresh_reference(ref_client=None) -> dict:
 
     Runs AFTER game ingest so a throttled roster pull can never block box scores. A non-empty
     `failed_teams` is a PARTIAL crosswalk, not a success: with one roster missing, a namesake on
-    another team can resolve 'exactly' to the wrong player (seen live: "Jack Hughes").
+    another team could resolve 'exactly' to the wrong player (a hazard guarded against in
+    players.py; the current crosswalks contain no same-name pairs, so this is precautionary).
     Never raises -- failures come back as `reference_error` / `failed_teams`.
     """
     out = {}

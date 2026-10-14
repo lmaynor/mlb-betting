@@ -82,7 +82,32 @@ MLB_BASE_DATA=/tmp/nhl python3 -m nhl.data.backfill --seasons 2026 --limit 20
 
 **Run one NHL job at a time** (the API throttles per IP; a backfill and a roster pull overlapping caused 429s).
 
+## Deploying (Cloud Run Jobs)
+
+`deploy/setup_nhl_jobs.sh` provisions `nhl-refresh-data` (nightly, 12:30 UTC) and `nhl-backfill`. It is
+idempotent and has modes so the backfill and the nightly refresh never overlap (the API throttles per IP):
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4 MODE=jobs      ./deploy/setup_nhl_jobs.sh   # create/update both Jobs
+gcloud run jobs execute nhl-backfill --region=us-central1 --project=concrete-crow-445205-m4 --async
+PROJECT_ID=concrete-crow-445205-m4 MODE=scheduler ./deploy/setup_nhl_jobs.sh   # AFTER the backfill finished
+PROJECT_ID=concrete-crow-445205-m4 MODE=pause     ./deploy/setup_nhl_jobs.sh   # pause the nightly (before a re-backfill)
+```
+
+The jobs run a SEPARATE image, `gcr.io/<project>/mlb-betting-feeds`. A Cloud Run Job stores the `:latest` tag and
+resolves it to a digest at **each execution** (verified: `mlb-betting`'s existing jobs list `:latest` but their
+executions run `@sha256:...`), so pushing a new `mlb-betting:latest` silently changes what every existing scheduled
+job runs next. Build the feeds image from a CLEAN checkout of `main` (`deploy/deploy_service.sh` also commits and
+pushes `CONTEXT.md` and the current branch, so never run it from a tree with other people's uncommitted work):
+
+```bash
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_IMAGE=gcr.io/concrete-crow-445205-m4/mlb-betting-feeds --project=concrete-crow-445205-m4 .
+```
+
+NHL jobs spend no ParlayAPI credits and are deliberately NOT named `odds-bank-*`.
+
 ## Not done yet
 
-No Cloud Run Job / Scheduler for the refresh or backfill, no `monitor_ops` wiring, and no backfill has been run.
-Until a job is provisioned this package ships dormant: merging it changes nothing in production.
+No `monitor_ops` wiring (the sentinel `NHL/last_refresh.json` is the health signal for now: `status` is `ok`,
+`skipped` on no-game days, or `partial` -- which also exits 1 so the job shows failed).
