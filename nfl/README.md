@@ -72,8 +72,21 @@ games = load("schedules")          # strict=True: a requested-but-unmirrored sea
 `nfl.data.keys.add_game_keys(schedules)` adds the `game_key` (`nfl:{date}:{AWAY}@{HOME}`) that `ev/` uses, translating
 nflverse team codes to the Kalshi/ParlayAPI codes (`JAX->JAC`, `LA->LAR`; `OAK/SD/STL` relocations).
 
+## Prop systems (shadow, no betting)
+
+`nfl/features/`, `nfl/models/` and `nfl/props/` hold the feature builder, per-stat models, walk-forward evaluator, fail-closed
+player resolver, second prop grader and the banked market-lines tables. See CONTEXT.md s20 for the design notes, the
+UNVERIFIED book-rule assumptions and the (currently null) evidence status. Nothing here writes to GCS or the bets table.
+
+```bash
+GCS_BUCKET=... python -m nfl.models.walkforward --stats rec_yds --seasons 2021-2026 --features-cache f.parquet
+GCS_BUCKET=... python scripts/nfl_banked_lines.py --out ./.nfl_lines_out
+GCS_BUCKET=... python scripts/nfl_model_vs_market.py --lines ./.nfl_lines_out/props_open_close.parquet --features-cache f.parquet
+```
+
 ## Not built yet (natural next steps)
 
-- Player-name -> `gsis_id` resolver (from `players`) for the props sweep; fail closed on ambiguity.
-- A second grader for settled NFL props from `player_stats` (the open item in `docs/designs/multisport_ev_sweep.md`).
+- A shadow scorer/runner on live consensus lines (features for upcoming games exist: `include_upcoming=True`; market-
+  dependent columns must be overwritten with live lines) and a scheduled retrain.
+- Reading the books' and Kalshi's anytime-TD and DNP rule text to settle the grader's UNVERIFIED assumptions.
 - Freshness check in `monitor_ops`.
