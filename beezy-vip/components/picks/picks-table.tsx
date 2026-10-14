@@ -152,7 +152,7 @@ function TableRow({ bet }: { bet: Bet }) {
       display: 'grid',
       gridTemplateColumns: TABLE_GRID,
       alignItems: 'center',
-      borderBottom: '1px solid #201f22',
+      borderBottom: '1px solid #151822',
       minWidth: TABLE_MIN_WIDTH,
     }}>
       <div className="mono" style={{ padding: '11px 10px', fontSize: '11px', color: 'var(--fog)' }}>

@@ -1,0 +1,88 @@
+# NHL data package
+
+Data-collection-first hockey expansion, mirroring `nba/`: additive, reuses `mlb_core.storage`, all data
+under the `NHL/` prefix of the shared bucket. **There is no NHL model, odds feed, or betting runner here** --
+this is box-score / play-by-play / shots ingest plus the team and player name crosswalks that later odds joins need.
+
+## Source: the official NHL web API
+
+`https://api-web.nhle.com/v1`, no auth. Undocumented but stable and widely used; it rate-limits per IP, so the
+client throttles (`NHL_REQUEST_DELAY`, 0.25s), retries 5xx/network errors with backoff, and honours `Retry-After`
+on 429. SportsBlaze (the NBA source) has **no** NHL box scores.
+
+| Endpoint | Used for |
+|---|---|
+| `schedule/{date}` | one WEEK of games from that date + `nextStartDate` (the season walk is ~1 call/week) |
+| `gamecenter/{id}/boxscore` | per-player box stats, goalie splits, team SOG, final state |
+| `gamecenter/{id}/play-by-play` | every event: shots with x/y + strength, goals, `rosterSpots` (full names) |
+| `roster/{team}/current`, `standings/now` | the players / teams crosswalks |
+
+## Layout
+
+```
+nhl/
+  config.py          shared vocabulary: API_BASE, FINAL_STATES, GAME_TYPES, *_MASTER keys, MASTER_KEYS, TEAMS table
+  data/
+    settings.py      re-exports the shared names from config + the ingest's own constants (WALK_*, SHOT_EVENTS, ...)
+    nhl_api.py       NhlClient for the ingest: schedule week / boxscore / pbp
+    client.py        NhlClient for the crosswalks: roster / standings / schedule / landing
+    flatten.py       box + pbp -> game / team / skater / goalie / shot rows
+    ingest.py        schedule walk, raw cache, fetch+flatten a batch, write masters
+    masters.py       upsert(key, rows) -- merge + dedupe + write; an unreadable master RAISES
+    refresh.py       nightly: re-fetch the trailing 2 days, then the crosswalk refresh
+    backfill.py      resumable multi-season pull
+    players.py       NHL/players_master.csv   (player_id <-> full name <-> headshot), uses mlb_core.data.player_names
+    teams.py         NHL/teams_master.csv     (abbrev <-> team id <-> Kalshi code <-> logos)
+```
+
+## GCS (`NHL/`)
+
+```
+raw/boxscores/{game_id}.json         FINAL games only (a live payload would freeze partial stats)
+raw/pbp/{game_id}.json.gz            ~135KB/game gzipped
+games_master.csv                     one row / game        key game_id
+team_boxscores_master.csv            one row / (game, team)
+skater_boxscores_master.csv          one row / (game, skater)
+goalie_boxscores_master.csv          one row / (game, goalie)
+shots/shots_{season}.csv             one row / shot attempt (sog/miss/block/goal), per season so the nightly
+                                     rewrite touches ~85k rows, not every season
+players_master.csv  teams_master.csv last_refresh.json
+```
+
+## Gotchas (all verified on live data)
+
+- **Box-score names are abbreviated** ("A. Johansson" -- DET dressed two). Join on the integer `player_id`; full
+  names come from pbp `rosterSpots`.
+- **Shootout scores:** the official score credits the shootout winner +1 goal. `*_goals_ex_so` and
+  `*_p1/p2/p3/ot` are recomputed from goal events (None, not 0, when there is no pbp). Kalshi counts the shootout
+  goal; most books do not.
+- **`blocked-shot` events are owned by the SHOOTING team**; the blocker is `blocking_player_id`.
+- **`situationCode`** = away goalie, away skaters, home skaters, home goalie (a 0 goalie digit = empty net).
+  `skaters_for/against/empty_net` are decoded relative to the shooting team.
+- **Shot geometry:** `dist_ft`/`angle_deg` point at the goal the shooting team ATTACKS (the home team defends
+  `homeTeamDefendingSide`); behind-the-net shots are mirrored in front (approximation).
+- **A partial roster crosswalk is not a success.** With one team's roster missing, a namesake on another team can
+  resolve "exactly" to the wrong player. `refresh` therefore reports `partial` (and exits 1) when
+  `failed_teams` is non-empty, and runs the crosswalk AFTER game ingest so a throttle can never block box scores.
+- The nightly refresh re-fetches the trailing 2 days on purpose: scorekeepers correct stats a day or two later and the
+  upsert keeps the latest copy.
+
+## Running
+
+```bash
+# Nightly refresh (what a Cloud Run Job would run):
+GCS_BUCKET=concrete-crow-445205-m4-mlb-data python3 -m nhl.data.refresh
+
+# Backfill (2 API calls/game, ~3,000 calls/season):
+GCS_BUCKET=concrete-crow-445205-m4-mlb-data python3 -m nhl.data.backfill --seasons 2019-2026
+
+# Local smoke test (no bucket -> writes under MLB_BASE_DATA):
+MLB_BASE_DATA=/tmp/nhl python3 -m nhl.data.backfill --seasons 2026 --limit 20
+```
+
+**Run one NHL job at a time** (the API throttles per IP; a backfill and a roster pull overlapping caused 429s).
+
+## Not done yet
+
+No Cloud Run Job / Scheduler for the refresh or backfill, no `monitor_ops` wiring, and no backfill has been run.
+Until a job is provisioned this package ships dormant: merging it changes nothing in production.

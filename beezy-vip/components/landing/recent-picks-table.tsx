@@ -107,7 +107,7 @@ export async function RecentPicksTable() {
               const isPositive = (bet.profit ?? 0) >= 0
               const pill = SYSTEM_PILL[bet.system] ?? SYSTEM_PILL.ALL
               return (
-                <div key={bet.id} style={{ display: 'grid', gridTemplateColumns: COL, gap: '12px', alignItems: 'center', padding: '13px 16px', borderBottom: i < rows.length - 1 ? '1px solid #201f22' : undefined }}>
+                <div key={bet.id} style={{ display: 'grid', gridTemplateColumns: COL, gap: '12px', alignItems: 'center', padding: '13px 16px', borderBottom: i < rows.length - 1 ? '1px solid #151822' : undefined }}>
                   <ScoreMark score={row.score} tier={row.tier} />
                   <ResultPill result={bet.result} />
                   <div style={{ minWidth: 0 }}>
@@ -142,7 +142,7 @@ export async function RecentPicksTable() {
                 const pill = SYSTEM_PILL[bet.system] ?? SYSTEM_PILL.ALL
                 const isPositive = (bet.profit ?? 0) >= 0
                 return (
-                  <div key={bet.id} style={{ padding: '14px 16px', borderBottom: i < rows.length - 1 ? '1px solid #201f22' : undefined }}>
+                  <div key={bet.id} style={{ padding: '14px 16px', borderBottom: i < rows.length - 1 ? '1px solid #151822' : undefined }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
                       <ScoreMark score={row.score} tier={row.tier} />
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>

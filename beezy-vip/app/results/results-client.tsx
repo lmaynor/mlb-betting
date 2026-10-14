@@ -187,14 +187,13 @@ const EdgeTooltip = ({ active, payload, label }: any) => {
 }
 
 function exportCSV(bets: Bet[]) {
-  const headers = ['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge Range', 'Stake', 'Book', 'Result', 'P&L (units)']
-  const edgeBin = (e: number) => e >= 0.10 ? '10%+' : e >= 0.05 ? '5-10%' : e >= 0 ? '0-5%' : '<0%'
+  const headers = ['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Stake', 'Book', 'Result', 'P&L (units)']
   const rows = bets.map(b => {
     const game = b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`
     const pnl  = b.profit != null ? (parseFloat(String(b.profit)) / 10).toFixed(2) : ''
     return [
       b.game_date, b.system, game, pickLabel(b),
-      b.odds ?? '', b.edge != null ? edgeBin(b.edge) : '',
+      b.odds ?? '', b.edge != null ? `${(b.edge * 100).toFixed(1)}%` : '',
       b.stake != null && b.stake > 0 ? b.stake.toFixed(0) : '',
       (b as any).book ?? '', b.result ?? 'pending', pnl,
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
@@ -361,21 +360,21 @@ export function ResultsClient({
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <ComposedChart data={pnlRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'monospace' }}
+              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false} axisLine={false} tickFormatter={fmtDate}
                 interval={Math.floor(pnlRows.length / 6)} />
-              <YAxis tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'monospace' }}
+              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false} axisLine={false}
                 tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}u`} width={52} />
               <Tooltip content={<PnLTooltip />} />
-              <ReferenceLine y={0} stroke="#323035" strokeDasharray="3 3" />
+              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
               <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
               <Area dataKey="dd_bot" fill="#ec6a6a26" stroke="none" legendType="none" />
               {chartSystems.map(s => (
-                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#b5b2bc'}
+                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#9ca3af'}
                   strokeWidth={1} dot={false} connectNulls strokeOpacity={0.6} />
               ))}
-              <Line type="monotone" dataKey="ALL" stroke="#eeeef0" strokeWidth={2.5} dot={false} connectNulls />
+              <Line type="monotone" dataKey="ALL" stroke="#f3f4f6" strokeWidth={2.5} dot={false} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -398,16 +397,16 @@ export function ResultsClient({
           </div>
           <ResponsiveContainer width="100%" height={140}>
             <LineChart data={edgeRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'monospace' }}
+              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false} axisLine={false} tickFormatter={fmtDate}
                 interval={Math.floor(edgeRows.length / 6)} />
-              <YAxis tick={{ fill: '#8a8893', fontSize: 10, fontFamily: 'monospace' }}
+              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false} axisLine={false}
                 tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} width={44} />
               <Tooltip content={<EdgeTooltip />} />
-              <ReferenceLine y={0} stroke="#323035" strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="edge" stroke="#71d083" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="roi"  stroke="#70b8ff" strokeWidth={1.5} dot={false} />
+              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
+              <Line type="monotone" dataKey="edge" stroke="#57f287" strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="roi"  stroke="#38bdf8" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

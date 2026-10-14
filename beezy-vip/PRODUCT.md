@@ -4,7 +4,7 @@
 product
 
 ## Product Purpose
-A data product for sports bettors who want ML-backed MLB picks. Ten XGBoost models score games daily across markets (NRFI, HR, F5, K, OUTS, GAME, BATTER_TB, BATTER_HITS, and others). Every pick is transparent: model probability, market implied probability, edge, Kelly stake, and rationale are all shown. Settlement runs nightly; wins, losses, pushes, and voids are public. Nothing is hidden.
+A data product for sports bettors who want ML-backed MLB picks. Ten XGBoost models and a live +EV scanner score games daily across markets (NRFI, HR, F5, K, OUTS, GAME, BATTER_TB, BATTER_HITS, and others). Every pick is transparent: model probability, market implied probability, edge, Kelly stake, and rationale are all shown. Settlement runs nightly; wins, losses, pushes, and voids are public. Nothing is hidden.
 
 ## Target Users
 - Sports bettors (recreational to semi-serious) who are frustrated with gut-feel tout services
@@ -28,24 +28,19 @@ Analytical · Credible · Sharp
 - Precision over warmth. "53.4% model probability" not "strong lean."
 
 ## Current Design Language
-Dark terminal aesthetic (replaced the retro "Dell 1996" look 2026-06-28):
-- Near-black neutral surface ladder: carbon #04040b (canvas) -> graphite #121113
-  (cards/nav) -> obsidian #1a191b -> slate #232225 (inputs); hairline borders
-  basalt #2b292d / iron #323035
-- Text ladder: fog #8a8893 (muted) -> silver #b5b2bc -> ash #eeeef0 (body) ->
-  chalk #f3f2f5 (headings)
-- Brand: Signal Green #71d083 (primary CTA / WIN / live indicators); loss red
-  #ec6a6a; warn amber #e3b261 (line alerts); link blue #70b8ff
-- Per-system color taxonomy (Discord-style) in lib/tokens.ts SYSTEM_COLOR;
-  system colors drive pills, chart lines, and detail accents
-- Typography: Red Hat trio (font-text sans, font-mono for all data/numbers,
-  times for prose captions); tabular-nums everywhere numbers align
-- Tokens live in app/globals.css :root + lib/tokens.ts. RULE: CSS var() does
-  NOT work inside SVG attributes (recharts/inline SVG) or Satori OG routes --
-  use literal hex there
+Terminal design system v2 (2026-10-14), per the v2 overhaul spec. Dark fintech:
+- Canvas #090a0f, card #11131a, elevated #171a24, hairlines #1e2230 / #151822
+- Brand emerald #57F287 (CTA, WIN, +EV); lean amber #facc15; loss #ef4444; info #38bdf8
+- Text: #f3f4f6 body, #9ca3af secondary, #7d8596 muted (kept above AA on the canvas)
+- Typography: Inter for UI, JetBrains Mono for every odd, probability, EV%, stake, timestamp;
+  tabular-nums wherever numbers align
+- Geometry: 6px badges, 10px cards, 14px containers, 1px hairline borders
+- Per-system hues in lib/tokens.ts SYSTEM_COLOR (+ NFL stat keys); book identity in BOOK_META
+- Tokens live in app/globals.css :root + lib/tokens.ts; legacy variable names are aliases.
+  RULE: CSS var() does NOT work inside SVG attributes (recharts/inline SVG) or Satori OG routes -- use literal hex there
 
 ## Anti-References
-- **SaaS cream/beige landing page** — warm-tinted bg, rounded cards, Inter everywhere, hero metrics grid. The AI default. Never.
+- **SaaS cream/beige landing page** — warm-tinted bg, hero metrics grid. The AI default. Never. (Inter is now the house face by owner decision 2026-10-14; the rest of this anti-pattern still applies.)
 - **Sports media (ESPN, The Athletic)** — photo-heavy, team-color splashes, editorial hero images. This is a data product, not content.
 - **DraftKings / FanDuel** — promo-code energy, "$100 bonus" CTAs, aggressive green. Beezy earns trust through transparency, not promotion.
 - **Bloomberg Terminal clone** — raw data dump with no visual hierarchy or information design. Data must be navigable.

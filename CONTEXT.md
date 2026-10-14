@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-13 22:36 CST_
+_Last updated: 2026-10-14 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -360,12 +360,15 @@ mlb-betting/
 │   │                             Kalshi join -> evidence CSVs), props_exec.py / novig/ (shadow executors),
 │   │                             props_config.py. GCS output EVSweep/nfl_props/{ET day}/: cycle_*.csv (every
 │   │                             comparable row), book_outliers_*.csv (Sink A), pooled_*.csv (exact vs pooled).
+│                             props_exec --refresh-consensus = opt-in per-game consensus refresh (s15.11).
 ├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
 │                                 bettingpros_api.py = local CLI for the HR/multi-market
 │                                 odds scrape (Cloud Run Job is mlb-backfill-bettingpros).
 │                                 novig_kalshi_scan.py = read-only Novig-vs-Kalshi NFL prop scan: taker+taker
 │                                 arbs plus hedged maker/taker margins (mm_*; shadow test #1 of
 │                                 docs/analysis/market_making_2026-10-12.md s9; gross of Kalshi maker fee).
+│                                 bettingpros_multisport_probe.py = read-only NFL/NBA/NHL BettingPros per-book
+│                                 prop coverage probe (findings: docs/analysis/bettingpros_multisport_probe_2026-10-14.md).
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
 │   ├── SGO_DEPLOY_NOTES.md
@@ -1828,7 +1831,10 @@ tweet drafts aligned to `beezy.fyi` / `@beezy_fyi`.
 ```
 beezy-vip/
 ├── app/                          Next.js App Router pages
-│   ├── page.tsx                  Landing page
+│   ├── page.tsx                  Landing page (hero + daily command center)
+│   ├── ev/                       +EV terminal (page.tsx server, ev-client.tsx)
+│   ├── sports/[sport]/           Sport hubs (mlb/nfl/nba/nhl)
+│   ├── analytics/                Deep-dive analytics
 │   ├── picks/                    Pick browser pages
 │   ├── results/                  Results history
 │   ├── models/                   Model methodology
@@ -1892,6 +1898,8 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
 | `GET /api/public/stats/sparkline` | 300s | Daily cumulative P&L last 30 days |
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
+| `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow NFL sweep block read from `EVSweep/nfl_props/latest.json` (carries `status`/`age_minutes`/`stale`/`validated:false`; started games dropped) |
+| `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
 that call these are marked `export const dynamic = 'force-dynamic'` to
@@ -1965,69 +1973,46 @@ This route ONLY manages `learn_articles` -- it never touches the `bets` table.
 
 ### Design system
 
-**Dell 1996 catalog aesthetic** (fully implemented 2026-06-10). Every terminal-palette
-color (`#10b981`, `#ef4444`, `#3b82f6`, `#f59e0b`, `#71717a`) has been replaced
-site-wide. OG image routes (`/api/og/`) and `legal/` pages intentionally excluded.
+**Terminal design system v2** (2026-10-14; supersedes both the Dell 1996 look and the
+2026-06-28 Red Hat terminal). Dark fintech palette, Inter + JetBrains Mono, hairline
+borders, 6/10/14px radii. Tokens live in `app/globals.css` `:root` and `lib/tokens.ts`.
+The legacy variable NAMES (`--carbon`, `--graphite`, `--basalt`, `--signal`, ...) were kept
+and re-pointed at the new values, so existing components needed no rewrite -- change a
+colour by editing the value, not by renaming.
 
-#### Colors
-
-| Role | Value | Notes |
+| Role | Value | Var |
 |---|---|---|
-| Page background | `#0a0a0c` | CSS var `--bg` |
-| Surface | `#111114` | CSS var `--surface` |
-| Hard border | `#000` | Page frame, card edges |
-| Inner border | `#1f1f24` | CSS var `--border`; between surface elements |
-| Win / positive | `#b3bd95` | Sage -- Dell Latitude Notebooks tint |
-| Loss / negative | `#d77a7a` | Salmon -- Dell OptiPlex GX tint |
-| Info / sky | `#9ab6c8` | Sky -- Dellware catalog tint |
-| Periwinkle | `#8c9ae0` | PowerEdge Servers |
-| Peach | `#e6915d` | Dimension / OptiPlex Gs |
-| Lime | `#c0d4a7` | Edge/model signal (OptiPlex G Series) |
-| Steel | `#a5b8c0` | Neutral active state (Dimension XPS Pro) |
-| Muted text | `#888890` | WCAG AA 5.0:1 on dark bg |
-| Links | `#9999ff` | Classic hyperlink blue (7.25:1 on dark bg) |
-| CTA yellow | `#fcc20f` | Dell "BUY a DELL" sticker yellow |
-| Hero panel | `#0e1f0d` | Dark green; low-key, not alarming |
+| Canvas | `#090a0f` | `--carbon` / `--bg` |
+| Card surface | `#11131a` | `--graphite` / `--surface` |
+| Elevated / hover | `#171a24` | `--obsidian` / `--surface-elevated` |
+| Hairlines | `#1e2230` outer, `#151822` inner | `--basalt` / `--border-subtle` |
+| Brand / WIN / +EV | `#57F287` | `--signal` / `--brand` |
+| Lean | `#facc15` | `--warn` / `--lean` |
+| Loss | `#ef4444` | `--loss` |
+| Text | `#f3f4f6` / `#9ca3af` / `#7d8596` (muted, kept AA) | `--ash` / `--silver` / `--fog` |
 
-System pill assignment: NRFI = sage, HR = salmon, F5 = sky, K = periwinkle,
-OUTS = peach, BATTER_TB = sky, BATTER_HITS = sky, GAME = steel.
+Typography: `--font-inter` (UI) + `--font-mono` (JetBrains Mono; all odds, probabilities,
+EV%, stakes, timestamps). `--font-text`/`--font-display` alias Inter. Legacy class names
+`.dell-display`, `.dell-heading`, `.times`, `.mono` are retained but map to Inter/JetBrains.
+`CARD_STYLE`, `BOOK_META`/`bookDisplay()`, `TIER_META` are exported from `lib/tokens.ts` /
+`lib/beezy-score.ts`. RULE unchanged: `var()` does not work in SVG attributes (recharts) or
+Satori OG routes -- use literal hex there.
 
-#### Typography
+#### Information architecture (2026-10-14)
 
-CSS classes defined in `app/globals.css`:
-- `.dell-display` -- Arial Black, 900 weight, uppercase. H1 headlines, logo.
-- `.dell-heading` -- Arial, 700 weight, uppercase, tracked. Section labels, eyebrows, badges.
-- `.times` -- Georgia (primary), Times New Roman (fallback), serif. Body copy, descriptions.
-  Georgia is a universally available system font -- no web font load needed. Reliable on Vercel edge.
-- `.mono` -- JetBrains Mono, loaded via `next/font/google`. Data, numbers, odds, tickers.
-
-Google Fonts loaded in `app/layout.tsx`: Inter (CSS var `--font-inter`) and
-JetBrains Mono (CSS var `--font-mono`). No serif loaded via Google Fonts --
-Georgia is the system fallback for `.times` everywhere including OG image routes.
-
-#### Layout rules
-
-- `borderRadius: 0` everywhere. No rounded corners.
-- All borders `1px solid` (never `0.5px solid`).
-- Page frame: `8px solid #000` on `.page-frame` class.
-- No drop shadows. No gradients. No emissive glows.
-- Hard borders only for depth.
-
-#### Nav
-
-Sticky top nav (`components/layout/nav.tsx`):
-- Logo area: `flex: 1`. Contains 28x28px dashed placeholder box + "BEEZY.FYI" text.
-  Replace the `<div>` placeholder with `<img>` when the final mark is ready.
-- Nav links: natural width, visually centered by the two `flex: 1` flanking sections.
-- Right section: `flex: 1, justifyContent: 'flex-end'`. X icon + auth + Discord sticker.
-- Mobile: `.nav-desktop` hidden; `.mobile-only` shows auth + X + Discord compact.
-
-#### Tokens file
-
-Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or `pickLabel`
-locally in components. Import from `@/lib/tokens` instead. `B` is `'1px solid #000'`
-(hard frame border). `B_INNER` is the inner surface border. When adding a new system,
-update `lib/tokens.ts` for Dell tint colors/labels and `lib/pick-systems.ts` for routing.
+- **Nav** (`components/layout/nav.tsx`): tier 1 = Home, +EV Terminal, Picks Blotter, Analytics,
+  Results, Tools + bankroll pill (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) + auth +
+  "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating there is untouched). Tier 2 =
+  sport ribbon from `lib/sports.ts`. Bottom nav: Home | +EV | Sports | Analytics | Results.
+- **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
+  `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
+  NFL rows are SHADOW: no stake sizing, no score, idle/stale banner -- the sweep's own contract
+  says its signals are unvalidated and never member-facing.
+- **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
+  (mlb live, nfl shadow, nba data_only, nhl planned). Update that file when a pillar's real
+  status changes -- do not write aspirational copy there.
+- **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
+  per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
 
 ### Vercel deployment
 
@@ -3379,6 +3364,27 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   `RiskGate`'s kill switch is ONE ledger-wide key: a plain `RiskGate("novig_paper")` tripping on a paper-API outage
   would halt every venue in that ledger, so the sandbox mirror uses `PaperRiskGate` (own key). `props_exec pnl`
   grades sandbox orders on the PAPER catalog's own settled statuses.
+- **On-demand per-game consensus refresh (`props_exec run --refresh-consensus`, 2026-10-14, PR #39).** The executor
+  used to REJECT a candidate once the cloud sweep's consensus was older than `cons_max_age_min` (25 min for props); the
+  sweep only republishes every ~15 min. `ev.sweep_nfl_props.refresh_single_event_consensus(pc, sport, event_id,
+  comm_iso, gk)` is one ParlayAPI event pull (5 credits = `len(PARLAY_MARKETS)`) returning a snapshot entry stamped
+  with the FETCH time. `props_exec.ConsRefresher` calls it for a candidate whose consensus is older than
+  `--refresh-after-min` (5), BEFORE the order-book fetch (the book has a 2s freshness gate). **OFF by default** -- it
+  spends the shared ParlayAPI pool (capped per process by `--refresh-max-credits`, default 300; needs `PARLAY_API_KEY`
+  on the machine running props_exec). Fail-closed: a failed/exhausted refresh leaves the age gate to reject
+  (`REJ_CONS_STALE`); a fresh view that no longer prices the proposition rejects `REJ_CONS_THIN` -- the old number is
+  never reused. Ledger decisions carry `inputs.cons_refreshed`. `consensus.json` entries now include `event_id`
+  (older snapshots fall back to one slate call). MLB's executor has no equivalent yet (design doc s3 S3 still open there).
+- **BettingPros as a free multi-sport prop feed (probe 2026-10-14; docs/analysis/bettingpros_multisport_probe_2026-10-14.md).**
+  `mlb_core.odds.bettingpros` fetchers take `sport=` (default MLB). Resolve market ids from the live `/v3/markets`
+  catalog by slug (`category=player-props`, `period=game`), not hardcoded ids; skip the `most-*` specials. NFL is deep
+  (11-14 books/prop, median 5-11 two-sided at the modal line) but main lines split across half-points, so exact-point
+  consensus starves exactly as on ParlayAPI; NHL skater props usable; NBA was preseason (FanDuel only) -- re-probe.
+  **Pinnacle is in `/v3/books` but NEVER quotes in the feed** (0% on props and NFL game lines; verified on raw
+  selections) -- it is not usable as a sharp anchor from BettingPros. Novig/ProphetX/Kalshi do quote (Kalshi must be
+  excluded from any consensus; DFS books like PrizePicks/Underdog are mixed in and are not two-sided prices).
+  `BOOK_ID_TO_NAME` is a trimmed US-book map that DROPS the Novig/ProphetX/Kalshi/Pinnacle ids, so a real ingest needs
+  a new book map. No BettingPros->`Quote` adapter exists yet.
 - **Settled-tape studies need a selection-safe sample.** The Kalshi tapes were fetched by FINAL volume (3,000-4,000
   cutoffs), which is outcome-dependent (a YES-resolving longshot trades ~3.5x more in-game), so the raw tape overstates
   the longshot YES rate (12.9% -> 36.3% across final-volume quintiles at a flat ~11% price). Keep only markets whose
@@ -3389,7 +3395,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-13 22:36 CST_
+_Last updated: 2026-10-14 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

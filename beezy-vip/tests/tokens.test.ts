@@ -139,3 +139,93 @@ describe('pickLabel resolves pooled EV alert rows to their underlying market', (
       .toEqual({ system: 'OUTS', bet_type: 'OUTS_UNDER_14.5' })
   })
 })
+
+// -- v2 overhaul: EV suffix stripping, score tiers, sport registry, EV math --------
+import { beezyscore, scoreTier, TIER_META } from '../lib/beezy-score'
+import { BOOK_META, bookDisplay, CARD_STYLE } from '../lib/tokens'
+import { SPORT_PILLARS, SPORT_LIST } from '../lib/sports'
+import { americanToDecimal, fairAmerican, fullKelly, kellySizing } from '../lib/ev-math'
+
+describe('pickLabel on system="EV" rows strips the trailing book tag', () => {
+  test('K over', () => {
+    expect(pickLabel(makeBet({ system: 'EV', bet_type: 'K_OVER_6.5_draftkings', book: 'draftkings' })))
+      .toBe('Gerrit Cole (NYY) Over 6.5 Strikeouts')
+  })
+  test('HR No on an exchange', () => {
+    expect(pickLabel(makeBet({ system: 'EV', bet_type: 'HR_NO_novig', book: 'novig' })))
+      .toBe('Gerrit Cole (NYY) to Not Hit a Home Run')
+  })
+  test('HR yes is not mistaken for HR No on book "novig"', () => {
+    expect(pickLabel(makeBet({ system: 'EV', bet_type: 'HR_novig', book: 'novig' })))
+      .toBe('Gerrit Cole (NYY) to Hit a Home Run')
+  })
+  test('NRFI', () => {
+    expect(pickLabel(makeBet({ system: 'EV', bet_type: 'NRFI_caesars', book: 'caesars' }))).toBe('No Run 1st Inning')
+  })
+  test('SB over', () => {
+    expect(pickLabel(makeBet({ system: 'EV', bet_type: 'SB_OVER_0.5_betmgm', book: 'betmgm' })))
+      .toBe('Gerrit Cole (NYY) Over 0.5 Stolen Bases')
+  })
+})
+
+describe('beezyscore / scoreTier', () => {
+  test('returns an integer in 0-100 and a valid tier for fraction-valued and percent-valued edges', () => {
+    for (const edge of [0.02, 0.08, 0.3, 8, 25, null]) {
+      const s = beezyscore(makeBet({ edge, model_prob: 0.6, market_prob: 0.5 }))
+      expect(Number.isInteger(s)).toBe(true)
+      expect(s).toBeGreaterThanOrEqual(0)
+      expect(s).toBeLessThanOrEqual(100)
+      expect(['strong', 'lean', 'watch']).toContain(scoreTier(s))
+    }
+  })
+  test('0.08 and 8 (same edge, different units) score identically', () => {
+    expect(beezyscore(makeBet({ edge: 0.08 }))).toBe(beezyscore(makeBet({ edge: 8 })))
+  })
+  test('tier boundaries and metadata', () => {
+    expect(scoreTier(65)).toBe('strong')
+    expect(scoreTier(64)).toBe('lean')
+    expect(scoreTier(39)).toBe('watch')
+    expect(TIER_META.strong.color).toBe('#57F287')
+  })
+})
+
+describe('sport registry and tokens', () => {
+  test('SPORT_PILLARS has the four pillars and only MLB is live', () => {
+    expect(Object.keys(SPORT_PILLARS).sort()).toEqual(['mlb', 'nba', 'nfl', 'nhl'])
+    expect(SPORT_LIST.filter(p => p.status === 'live').map(p => p.slug)).toEqual(['mlb'])
+    expect(SPORT_PILLARS.nfl.status).toBe('shadow')
+  })
+  test('BOOK_META marks exchanges and bookDisplay falls back for unknown books', () => {
+    expect(BOOK_META.kalshi.isExchange).toBe(true)
+    expect(BOOK_META.novig.isExchange).toBe(true)
+    expect(BOOK_META.draftkings.isExchange).toBeUndefined()
+    expect(bookDisplay('somenewbook').label).toBe('Somenewbook')
+    expect(bookDisplay(null).label).toBe('--')
+  })
+  test('CARD_STYLE uses the v2 geometry', () => {
+    expect(CARD_STYLE.borderRadius).toBe('10px')
+    expect(CARD_STYLE.border).toBe('1px solid #1e2230')
+  })
+})
+
+describe('ev-math', () => {
+  test('americanToDecimal', () => {
+    expect(americanToDecimal(100)).toBe(2)
+    expect(americanToDecimal(-200)).toBeCloseTo(1.5)
+  })
+  test('fullKelly is 0 with no edge and positive with edge', () => {
+    expect(fullKelly(0.5, 2)).toBe(0)
+    expect(fullKelly(0.55, 2)).toBeCloseTo(0.1)
+  })
+  test('kellySizing: quarter Kelly, capped at 5% of bankroll', () => {
+    expect(kellySizing(1000, 0.55, 2).dollars).toBeCloseTo(25)       // 0.1 * 0.25 * 1000
+    expect(kellySizing(1000, 0.9, 2).dollars).toBeCloseTo(50)        // capped at 5%
+    expect(kellySizing(1000, null, 2).dollars).toBe(0)
+    expect(kellySizing(0, 0.55, 2).dollars).toBe(0)
+  })
+  test('fairAmerican', () => {
+    expect(fairAmerican(0.478)).toBe('+109')
+    expect(fairAmerican(0.6)).toBe('-150')
+    expect(fairAmerican(null)).toBe('--')
+  })
+})

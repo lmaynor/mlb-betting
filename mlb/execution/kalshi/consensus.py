@@ -11,8 +11,8 @@ Also holds the history needed for the lag signature: the consensus ~lookback ago
 own banked mid ~lookback ago (odds_history carries both).
 
 KNOWN LIMIT: consensus freshness is bounded by the odds_history snapshot cadence (8 ParlayAPI
-snapshots/day). The single-event refresh in design doc s3 S3 is NOT built; the age gate
-(`cons_max_age_min`) rejects stale consensus instead of refreshing it.
+snapshots/day). The single-event refresh in design doc s3 S3 is NOT built for MLB (it IS for NFL props:
+ev.props_exec --refresh-consensus); the age gate (`cons_max_age_min`) rejects stale consensus.
 """
 
 from __future__ import annotations
