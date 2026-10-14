@@ -10,6 +10,11 @@
  *    components/ui/sport-assets.tsx, which hides a broken image instead of showing the broken-image icon).
  *  - NBA ids here are ESPN's, NOT NBA personIds (the official NBA JSON endpoints are blocked from our infra).
  *
+ *  - MLB headshots use MLB's own `silo` variant, the transparent cutout (the older `headshot/67` URL is a JPEG WITH a
+ *    background, which is why a local rembg pipeline used to exist). Verified 2026-10-14: real photos for all 1,272 mapped
+ *    players, median 16KB, CORS `*`:
+ *      MLB  img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:silo:current.png/w_213,q_auto:best/v1/people/{mlbamId}/headshot/silo/current
+ *
  * Name -> id lookups need the ~40KB player maps, so they live in lib/sport-assets.server.ts (server components only).
  * Rows that already carry a resolved `player_id` (the +EV props feed does) can use headshotUrlById() directly.
  * MLB keeps its own pipeline (public/headshots/player_map.json, /logos/{abbr}.png) -- unchanged.
@@ -20,6 +25,8 @@
 import teams from './sport-teams.json'
 
 export type AssetSport = 'nhl' | 'nba'
+/** Headshots also cover MLB (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets). */
+export type HeadshotSport = AssetSport | 'mlb'
 
 interface TeamRow { abbr: string; name: string; alias: string[] }
 const TABLE = teams as unknown as Record<AssetSport, TeamRow[]>
@@ -64,12 +71,14 @@ export function teamLogoUrl(sport: AssetSport, team: string | null | undefined, 
 }
 
 /** Headshot URL from a league player id (NHL playerId / ESPN athlete id), or null for a missing/invalid id. */
-export function headshotUrlById(sport: AssetSport, id: number | string | null | undefined): string | null {
+export function headshotUrlById(sport: HeadshotSport, id: number | string | null | undefined): string | null {
   const n = typeof id === 'string' ? Number(id) : id
   if (n == null || !Number.isInteger(n) || n <= 0) return null
-  return sport === 'nhl'
-    ? `https://assets.nhle.com/mugs/nhl/latest/${n}.png`
-    : `https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${n}.png&w=200&h=146`
+  if (sport === 'nhl') return `https://assets.nhle.com/mugs/nhl/latest/${n}.png`
+  if (sport === 'mlb') {
+    return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:silo:current.png/w_213,q_auto:best/v1/people/${n}/headshot/silo/current`
+  }
+  return `https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${n}.png&w=200&h=146`
 }
 
 /** Same slug algorithm as scripts/build_sport_assets.py::_slug (accent-fold, lowercase, '_' separated). */

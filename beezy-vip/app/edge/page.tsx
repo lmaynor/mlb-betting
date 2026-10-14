@@ -1,13 +1,11 @@
 export const dynamic = 'force-dynamic'
 
-import fs from 'fs'
-import path from 'path'
 import type { Metadata } from 'next'
 import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { EdgeClient, type EdgePick } from './edge-client'
-import playerMap from '@/public/headshots/player_map.json'
+import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
   title: 'The Edge - Beezy.FYI',
@@ -26,31 +24,9 @@ const TEAM_SLUG: Record<string, string> = {
   TOR: 'tor', WSH: 'wsh',
 }
 
-const PLAYER_MAP = playerMap as Record<string, number>
-const PUBLIC_DIR = path.join(process.cwd(), 'public')
-
 function logoUrl(abbrev: string | null): string | null {
   const slug = TEAM_SLUG[(abbrev ?? '').toUpperCase()] ?? null
   return slug ? `/logos/${slug}.png` : null
-}
-
-function playerSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_').replace(/[^\p{L}\p{N}_]/gu, '')
-}
-function playerSlugAscii(name: string): string {
-  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-}
-function headshotUrl(name: string | null): string | null {
-  if (!name) return null
-  const key = playerSlug(name)
-  const keyAscii = playerSlugAscii(name)
-  for (const k of [key, keyAscii]) {
-    if (fs.existsSync(path.join(PUBLIC_DIR, 'headshots', `${k}.png`))) return `/headshots/${k}.png`
-  }
-  const id = PLAYER_MAP[key] ?? PLAYER_MAP[keyAscii]
-  if (!id) return null
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${id}/headshot/67/current`
 }
 
 // edge stored as fraction (0.08) on some rows, already-pct on others -- normalize to pct
@@ -86,7 +62,7 @@ export default async function EdgePage() {
   // id via the headshot player_map); game markets by game_pk. Best EV wins.
   const GAME_ALERT_MARKETS = new Set(['nrfi_ou', 'game_ml', 'f5_ml'])
   function alertFor(bet: Bet): EdgeAlert | null {
-    const pid = bet.player ? (PLAYER_MAP[playerSlug(bet.player)] ?? PLAYER_MAP[playerSlugAscii(bet.player)]) : null
+    const pid = bet.player ? playerIdByName('mlb', bet.player) : null
     let best: EdgeAlert | null = null
     for (const a of alerts) {
       if (a.game_pk !== bet.game_pk || a.ev == null) continue
@@ -102,7 +78,7 @@ export default async function EdgePage() {
     const en = players[normName(bet.player)]
     return {
       ...bet,
-      headshotUrl: headshotUrl(bet.player),
+      headshotUrl: headshotUrlByName('mlb', bet.player),
       alert: alertFor(bet),
       awayLogoUrl: logoUrl(bet.away_team),
       homeLogoUrl: logoUrl(bet.home_team),

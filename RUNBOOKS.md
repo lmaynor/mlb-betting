@@ -458,16 +458,17 @@ python -m mlb.training.tune_hyperparams --system F5   --n-trials 50
 python -m mlb.training.tune_hyperparams --system HR   --n-trials 50
 ```
 
-### Refresh player headshots (full reconciliation)
+### Refresh the MLB player map (headshots are hotlinked -- no image processing)
 
 ```bash
 cd ~/mlb-betting && git pull
-pip install "rembg[cpu]" -q
-python3 scripts/process_headshots.py --refresh-map --all
-git add beezy-vip/public/headshots/*.png beezy-vip/public/headshots/player_map.json
-git commit -m "headshots: refresh player map and process missing"
+python3 scripts/refresh_mlb_player_map.py --dry-run          # see what would be added
+python3 scripts/refresh_mlb_player_map.py --check-photos     # merge + flag new ids with no photo yet
+git add beezy-vip/public/headshots/player_map.json
+git commit -m "headshots: refresh MLB player map"
 git push
 ```
+Headshots themselves come from MLB's CDN `silo` variant (transparent). NHL/NBA maps: `python scripts/build_sport_assets.py --players`.
 
 ### Commit CONTEXT.md / RUNBOOKS.md
 
@@ -543,10 +544,10 @@ Downloaded from cdn.ssref.net. Abbrevs: ari, atl, bal, bos, chc, cws, cin,
 cle, col, det, hou, kc, laa, lad, mia, mil, min, nym, nyy, oak, phi, pit,
 sd, sf, sea, stl, tb, tex, tor, wsh.
 
-Player headshots: `beezy-vip/public/headshots/{slug}.png` (1240+ files, bg-removed).
+Player headshots are hotlinked from MLB's CDN (`silo`, transparent); only `player_map.json` and the OG-card `{mlbamId}.jpg` files live in the repo.
 Keys are normalized slugs (see CONTEXT.md §13 Headshot system).
 `player_map.json` maps slug -> MLBAM integer ID (1272 entries, full 2026 roster).
-To refresh: see "Refresh player headshots" in §3 above.
+To refresh: see "Refresh the MLB player map" in §3 above.
 
 ### Cloud Run jobs
 

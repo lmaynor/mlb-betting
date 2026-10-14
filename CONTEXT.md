@@ -2173,38 +2173,25 @@ Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
 
 ### Headshot system
 
-Player headshots live in `beezy-vip/public/headshots/`.
+**MLB headshots are hotlinked (2026-10-14)** from MLB's CDN `silo` variant -- a TRANSPARENT cutout -- so there is no local
+background-removal step and no per-player files:
+`https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:silo:current.png/w_213,q_auto:best/v1/people/{mlbamId}/headshot/silo/current`
+(213x213 PNG, median 16KB, CORS `*`, 15-minute cache). Verified for all 1,272 mapped players (real photo, not the generic
+placeholder) and visually cleaner than the rembg output it replaced (no gray fringing). The older `headshot/67` URL is a JPEG
+WITH a background -- do not use it. Implementation: `beezy-vip/lib/sport-assets.ts` (`headshotUrlById('mlb', id)`, client-safe) and
+`lib/sport-assets.server.ts` (`playerIdByName` / `headshotUrlByName`, server components only). The same lib serves NHL and NBA (s21).
 
 **player_map.json** (`beezy-vip/public/headshots/player_map.json`):
-- Maps `slug` -> MLB MLBAM integer ID
-- 1272 entries as of 2026-05-25 (full 2026 active roster + historical players)
-- Keys are normalized slugs (same algorithm as `playerSlug()` above) -- no dots,
-  apostrophes, or raw hyphens in any key
-- Updated from MLB Stats API via `python scripts/process_headshots.py --refresh-map`
-- `--refresh-map` merges active season roster without dropping existing entries
-  (retains IL/minors/retired players that may still appear in picks)
+- Maps `slug` -> MLB MLBAM integer ID; 1,272 entries (full active roster + historical players that may still appear in picks)
+- Keys are normalized slugs: lowercase, spaces and hyphens -> `_`, everything but letters/digits/`_` stripped, ACCENTS KEPT
+  (`randy_vásquez`). The frontend tries the accented slug, then the two ASCII forms.
+- Refresh: `python scripts/refresh_mlb_player_map.py [--dry-run] [--check-photos]` merges this season's active roster from the MLB
+  Stats API without dropping entries (TLS verified). `--check-photos` flags NEW ids that only have the generic placeholder.
 
-**Headshot files:** `{slug}.png`, transparent background (rembg-processed).
-
-**Background removal tool:** `rembg[cpu]` (ONNX Runtime, ~50MB).
-Do NOT use `backgroundremover` -- it pulls PyTorch + CUDA + moviepy (~5GB).
-Install: `pip install "rembg[cpu]"`.
-
-**Scripts:**
-- `scripts/process_headshots.py` -- download + rembg-process headshots
-  - No args: today's picks only
-  - `player_name ...`: specific players
-  - `--all`: all missing (no existing PNG)
-  - `--refresh-map` / `--sync`: re-sync player_map from MLB API first, then process missing
-- `scripts/fetch_missing_headshots.sh` -- Cloud Shell bulk download, hardcoded list
-  of known missing players with their MLBAM IDs
-
-See RUNBOOKS.md for the full reconciliation flow.
-
-**Lookup in page.tsx:**
-`headshotUrl()` tries accented slug first (`randy_vásquez`), then NFD-normalized
-ASCII fallback (`randy_vasquez`), then MLB CDN via MLBAM ID. Local bg-removed PNG
-always wins over CDN.
+**Still local:** `beezy-vip/public/headshots/{mlbamId}.jpg` (1,315 files, ~23MB) are used ONLY by the OG image route
+`app/api/og/props-card/route.tsx` (`/headshots/{id}.jpg`). Moving the OG route to the CDN needs its own visual check; it was not part
+of the move. The 1,272 rembg `{slug}.png` files, `scripts/process_headshots.py`, `scripts/fetch_missing_headshots.sh` and the
+manual `rembg` install step were removed (git history keeps them; the repo's pack size is unchanged).
 
 **Max Muncy duplicate:** Two players named Max Muncy (IDs 571970 and 691777).
 player_map keeps the first one encountered. Both will appear in player picks
@@ -3982,7 +3969,6 @@ runs in production until its deploy step is done; the code is merged-or-in-PR, t
   headshots are HOTLINKED transparent cutouts (NHL mugs by playerId; NBA ESPN combiner). `lib/sport-assets.ts` (client-safe, id-based),
   `lib/sport-assets.server.ts` (name maps, server only), `components/ui/sport-assets.tsx`. Regenerate with
   `python scripts/build_sport_assets.py --all` (it refuses to write a partial map). `lib/sport-teams.json` is generated from
-  `nhl.config.TEAMS` / `nba.teams.TEAMS`; a test fails on drift. MLB headshots still use the local rembg PNGs; MLB's CDN `headshot/silo`
-  variant is a transparent cutout (100% coverage on all 1,272 mapped players) and is the planned replacement.
+  `nhl.config.TEAMS` / `nba.teams.TEAMS`; a test fails on drift. MLB headshots now use the same lib (`headshotUrlById('mlb', id)`, MLB CDN `silo`; see s13 Headshot system).
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).
