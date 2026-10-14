@@ -84,6 +84,8 @@ def book_kind(book_id: int) -> str:
     return "book"
 
 
+DEDUP_KEY = ["market_id", "event_id", "player_id", "line", "side", "book_id", "is_open"]
+
 COLUMNS = ["date", "sport", "market", "market_id", "event_id", "scheduled", "season_type", "event_status", "away",
            "home", "player_id", "player", "team", "position", "line", "side", "book_id", "book", "book_kind", "odds",
            "is_main", "is_best", "is_open", "updated"]
@@ -237,7 +239,13 @@ def read_props(sport: str, market: str, start: str | None = None, end: str | Non
     dates = [d for d in dates if (not start or d >= start) and (not end or d <= end)]
     frames = [storage.read_parquet(day_key(prefix, market, d)) for d in dates]
     frames = [f for f in frames if len(f)]
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=COLUMNS)
+    if not frames:
+        return pd.DataFrame(columns=COLUMNS)
+    df = pd.concat(frames, ignore_index=True)
+    # The API's `date` is a local-day window over UTC-stamped events, so one event can appear under two adjacent date
+    # partitions (observed: NHL 2026-10-13 returned events scheduled 2026-10-14 UTC). Keep one row per quote; the later
+    # partition wins because it was fetched nearer the close.
+    return df.drop_duplicates(subset=DEDUP_KEY, keep="last").reset_index(drop=True)
 
 
 # ----------------------------------------------------------------------------------------------------------------

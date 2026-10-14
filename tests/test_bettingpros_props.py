@@ -159,3 +159,15 @@ def test_crawl_error_does_not_mark_done_and_counts(local_store, monkeypatch):
     stats = runner.crawl("NHL", "2025-12-10", "2025-12-10", wanted=["sog"], prefix=bpp.default_prefix("NHL"),
                          delay=0, market_sleep=0, date_sleep=0, max_dates=0, newest_first=True, sess=object())
     assert stats["errors"] == 1 and bpp.done_dates(bpp.default_prefix("NHL"), "shots") == set()
+
+
+def test_read_props_dedups_event_seen_under_two_date_partitions(local_store):
+    prefix = bpp.default_prefix("NHL")
+    rows = bpp.build_prop_rows("NHL", "shots", 321, "2025-12-10", [_offer(over_books={10: [_line(-192)]})], EV)
+    later = bpp.build_prop_rows("NHL", "shots", 321, "2025-12-11", [_offer(over_books={10: [_line(-200)]})], EV)
+    bpp.write_day(prefix, "shots", "2025-12-10", rows)
+    bpp.write_day(prefix, "shots", "2025-12-11", later)
+    df = bpp.read_props("NHL", "shots")
+    fd_over = df[(df.book_id == 10) & (df.side == "over") & (~df.is_open)]
+    assert len(fd_over) == 1 and int(fd_over.odds.iloc[0]) == -200      # later partition wins
+    assert len(df) == len(df.drop_duplicates(subset=bpp.DEDUP_KEY))
