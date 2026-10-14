@@ -28,6 +28,7 @@ COPY mlb_core/      ./mlb_core/
 COPY nba/           ./nba/
 # mlb/ pillar: runners/, training/, systems/{HR_Pro, NRFI_Pro_System, ...}
 COPY mlb/           ./mlb/
+COPY ev/            ./ev/
 # One-off ops script reused by mlb.analysis.ev_remediate (Cloud Run Job
 # mlb-ev-remediate). Only this file -- the rest of scripts/ is local/ops tooling.
 COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py

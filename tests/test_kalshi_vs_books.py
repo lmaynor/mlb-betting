@@ -391,6 +391,233 @@ class TestRealizedOutcomes:
         assert V._realized_outcomes("hr_yn") == {}
 
 
+# --------------------------------------------------------------------------- #
+# game_rl (run line) join -- 2026-10-03 regression.
+#
+# Kalshi quotes "TEAM wins by MORE THAN N" (selection=TEAM, line=+N). A sportsbook quotes
+# HOME -1.5 / AWAY +1.5 per side. The old join keyed on raw (selection, line), so Kalshi's
+# AWAY/+1.5 ("away wins by >1.5", ~0.235) met the book's AWAY/+1.5 ("away covers +1.5", ~0.534)
+# -- different bets -- and Kalshi's HOME/+1.5 never met the book's equivalent HOME/-1.5.
+# Numbers below are the real SD@MIL (game_pk 849830) rows from odds_history, 2026-10-03.
+# --------------------------------------------------------------------------- #
+
+def _rl_book(book, selection, line, fair, american):
+    dec = round(1 + (american / 100 if american > 0 else 100 / -american), 4)
+    return _row(market="game_rl", book=book, selection=selection, line=line, fair_prob=fair,
+                american=american, decimal=dec, implied_prob=round(1 / dec, 4), game_pk=849830)
+
+
+def _rl_kalshi(selection, line, mid, ask):
+    return _row(market="game_rl", book="kalshi", source="kalshi", selection=selection, line=line,
+                fair_prob=mid, implied_prob=ask, decimal=round(1 / ask, 4), american=0, game_pk=849830)
+
+
+class TestRunLineJoin:
+    def _frame(self):
+        rows = []
+        for b in ("draftkings", "fanduel", "betmgm", "caesars"):
+            rows += [_rl_book(b, "HOME", -1.5, 0.466, 105),     # home covers -1.5  == Kalshi "HOME wins by >1.5"
+                     _rl_book(b, "AWAY", 1.5, 0.534, -125)]     # away covers +1.5  == NOT(HOME wins by >1.5)
+        rows += [_rl_kalshi("HOME", 1.5, 0.455, 0.46), _rl_kalshi("AWAY", 1.5, 0.235, 0.24)]
+        return V._prep(pd.DataFrame(rows))
+
+    def test_prep_maps_each_quote_to_the_proposition_it_prices(self):
+        d = self._frame()
+        dk = d[d["book"] == "draftkings"].set_index("selection")
+        assert (dk.loc["HOME", "_jsel"], dk.loc["HOME", "_jline"], dk.loc["HOME", "_no"]) == ("HOME", 1.5, False)
+        # AWAY +1.5 is the COMPLEMENT of HOME winning by more than 1.5
+        assert (dk.loc["AWAY", "_jsel"], dk.loc["AWAY", "_jline"], dk.loc["AWAY", "_no"]) == ("HOME", 1.5, True)
+        assert dk.loc["AWAY", "line"] == 1.5                    # display line untouched (the book's own +1.5)
+        assert "AWAY" in set(d[d["book"] == "draftkings"]["selection"])   # display selection untouched
+        ka = d[d["book"] == "kalshi"].set_index("selection")
+        assert (ka.loc["AWAY", "_jsel"], ka.loc["AWAY", "_jline"], bool(ka.loc["AWAY", "_no"])) == ("AWAY", 1.5, False)
+
+    def test_alt_lines_map_both_directions(self):
+        rows = [_rl_book("b", "AWAY", -1.5, 0.24, 300), _rl_book("b", "HOME", 1.5, 0.76, -400),
+                _rl_book("b", "HOME", -2.5, 0.35, 190)]
+        d = V._prep(pd.DataFrame(rows)).set_index(["selection", "line"])
+        assert (d.loc[("AWAY", -1.5), "_jsel"], d.loc[("AWAY", -1.5), "_no"]) == ("AWAY", False)
+        assert (d.loc[("HOME", 1.5), "_jsel"], d.loc[("HOME", 1.5), "_no"]) == ("AWAY", True)   # opp, complement
+        assert (d.loc[("HOME", -2.5), "_jline"], d.loc[("HOME", -2.5), "_no"]) == (2.5, False)
+
+    def test_whole_number_and_missing_run_lines_are_dropped_not_guessed(self):
+        rows = [_rl_book("b", "HOME", -1.0, 0.5, 100), _rl_book("b", "AWAY", None, 0.5, 100),
+                _rl_book("b", "HOME", -1.5, 0.47, 105)]
+        d = V._prep(pd.DataFrame(rows))
+        assert len(d) == 1 and d.iloc[0]["line"] == -1.5
+
+    def test_book_cover_joins_the_same_proposition_not_the_look_alike(self):
+        """THE regression: the book's AWAY +1.5 (0.534) must be matched to Kalshi's HOME-by->1.5
+        mid (0.455) as a complement -> true prob 0.545 -- never to Kalshi's AWAY-by->1.5 (0.235)."""
+        d = self._frame()
+        m = V._match_books(d[d["book"] == "kalshi"], d[d["book"] != "kalshi"], "game_rl")
+        away = m[(m["selection"] == "AWAY") & (m["book"] == "draftkings")]
+        assert len(away) == 1                                   # one join, not two look-alikes
+        assert abs(away.iloc[0]["p_true"] - 0.545) < 1e-9       # 1 - 0.455, NOT 0.235
+        assert abs(away.iloc[0]["ev_pct"] - round(0.545 * 1.8 - 1, 4)) < 1e-3
+        home = m[(m["selection"] == "HOME") & (m["book"] == "draftkings")]
+        assert len(home) == 1 and abs(home.iloc[0]["p_true"] - 0.455) < 1e-9
+        assert len(m) == 8                                      # 4 books x 2 quotes; nothing joined to AWAY-by->1.5
+
+    def test_complement_quotes_never_pollute_each_others_consensus(self):
+        d = self._frame()
+        m = V._match_books(d[d["book"] == "kalshi"], d[d["book"] != "kalshi"], "game_rl")
+        # a HOME -1.5 quote's consensus is over HOME -1.5 quotes only (implied ~0.488), not mixed
+        # with the complementary AWAY +1.5 quotes (implied ~0.556)
+        home = m[m["selection"] == "HOME"].iloc[0]
+        away = m[m["selection"] == "AWAY"].iloc[0]
+        assert abs(home["cons_impl"] - 0.4878) < 1e-3 and abs(away["cons_impl"] - 0.5556) < 1e-3
+
+    def test_alt_line_away_wins_by_more_than_matches_kalshi_away_contract(self):
+        rows = [_rl_book("b", "AWAY", -1.5, 0.24, 300)] + [_rl_kalshi("AWAY", 1.5, 0.235, 0.24)]
+        d = V._prep(pd.DataFrame(rows))
+        m = V._match_books(d[d["book"] == "kalshi"], d[d["book"] != "kalshi"], "game_rl")
+        assert len(m) == 1 and abs(m.iloc[0]["p_true"] - 0.235) < 1e-9 and not m.iloc[0]["_no"]
+
+    def test_non_run_line_markets_are_untouched_by_the_new_keys(self):
+        rows = [_row(market="game_ml", book="draftkings", selection="HOME", line=None),
+                _row(market="game_total", book="draftkings", selection="OVER", line=8.5)]
+        d = V._prep(pd.DataFrame(rows))
+        assert (d["_jsel"] == d["selection"]).all() and not d["_no"].any()
+        assert d.set_index("market").loc["game_total", "_jline"] == 8.5
+
+    def test_mirror_book_fair_flips_complement_quotes_onto_one_proposition(self):
+        d = self._frame()
+        cons = V._kalshi_book_fair(d[d["book"] != "kalshi"], min_books=4)
+        # HOME -1.5 (fair 0.466) x4 and AWAY +1.5 flipped (1-0.534 = 0.466) x4 vote on one key
+        assert len(cons) == 1
+        row = cons.iloc[0]
+        assert row["_jsel"] == "HOME" and row["_jline"] == 1.5 and row["n_books"] == 8
+        assert abs(row["book_fair"] - 0.466) < 1e-9
+
+    def test_mirror_no_longer_matches_kalshi_away_contract_to_the_away_cover(self):
+        """Old behavior: Kalshi AWAY/1.5 (ask 0.24) joined book AWAY/+1.5 (fair 0.534) -> a fake
+        +122% 'edge'. There is no book quote for 'away wins by >1.5' here, so there is NO match."""
+        d = self._frame()
+        cons = V._kalshi_book_fair(d[d["book"] != "kalshi"], min_books=4)
+        ev = V._kalshi_ev(d[d["book"] == "kalshi"], cons)
+        assert list(ev["selection"]) == ["HOME"]                # only the genuine HOME/1.5 match
+        assert abs(ev.iloc[0]["book_fair"] - 0.466) < 1e-9
+        assert (ev["ev_pct"] < 0.1).all()                       # no manufactured triple-digit EV
+
+
+# --------------------------------------------------------------------------- #
+# Time alignment + synthetic rows (2026-10-03). Both sources keep capturing after first pitch, and
+# 'latest snapshot per quote' was chosen per source independently, so a Kalshi IN-PLAY price could be
+# paired with the books' last PRE-GAME price. 'consensus' (a synthetic aggregate row) was also
+# treated as a real, bettable book.
+# --------------------------------------------------------------------------- #
+
+# SD@MIL 2026-10-03, first pitch 8:30pm EDT == 2026-10-04 00:30 UTC
+_EV = "KXMLBGAME-26OCT032030SDMIL"
+
+
+class TestPregameAlignment:
+    def _odds(self):
+        rows = [
+            _row(market="game_ml", game_pk=1, book="draftkings", selection="HOME", snapshot_ts="2026-10-03 23:32:33",
+                 implied_prob=0.60, fair_prob=0.62),
+            # Kalshi: a normal pre-game print, then an IN-PLAY print after first pitch (team leads big)
+            _row(market="game_ml", game_pk=1, book="kalshi", source="kalshi", selection="HOME", event_id=_EV,
+                 snapshot_ts="2026-10-03 23:07:45", implied_prob=0.55, fair_prob=0.545),
+            _row(market="game_ml", game_pk=1, book="kalshi", source="kalshi", selection="HOME", event_id=_EV,
+                 snapshot_ts="2026-10-04 02:10:00", implied_prob=0.96, fair_prob=0.955),
+        ]
+        return pd.DataFrame(rows)
+
+    def test_inplay_snapshots_dropped_before_latest_is_chosen(self):
+        kept = V._drop_inplay(self._odds())
+        assert sorted(kept["snapshot_ts"]) == ["2026-10-03 23:07:45", "2026-10-03 23:32:33"]
+        d = V._prep(kept)
+        k = d[d["book"] == "kalshi"]
+        assert len(k) == 1 and k.iloc[0]["implied_prob"] == 0.55     # the PRE-GAME print, not 0.96
+
+    def test_without_the_filter_the_old_pairing_is_the_inplay_price(self):
+        """Documents the bug: unfiltered, 'latest' is the in-play 0.96."""
+        d = V._prep(self._odds())
+        assert d[d["book"] == "kalshi"].iloc[0]["implied_prob"] == 0.96
+
+    def test_first_pitch_is_eastern_time_from_event_ticker(self):
+        from mlb_core.odds import kalshi as K
+        st = K.event_start_utc(_EV)
+        assert (st.year, st.month, st.day, st.hour, st.minute) == (2026, 10, 4, 0, 30)
+        assert K.event_start_utc("garbage") is None and K.event_start_utc("") is None
+
+    def test_game_without_kalshi_event_is_left_alone(self):
+        odds = self._odds()
+        odds = odds[odds["book"] != "kalshi"]
+        assert len(V._drop_inplay(odds)) == len(odds)
+
+    def test_other_games_unaffected_by_one_games_start(self):
+        odds = self._odds()
+        other = _row(market="game_ml", game_pk=2, book="draftkings", selection="HOME",
+                     snapshot_ts="2026-10-04 03:00:00", implied_prob=0.5)       # different game, no Kalshi row
+        both = pd.concat([odds, pd.DataFrame([other])], ignore_index=True)
+        kept = V._drop_inplay(both)
+        assert (kept["game_pk"] == 2).sum() == 1 and ((kept["game_pk"] == 1) & (kept["snapshot_ts"] > "2026-10-04")).sum() == 0
+
+    def test_gap_filter_drops_far_apart_pairs_and_none_disables(self):
+        m = pd.DataFrame({"k_ts": ["2026-10-03 23:07:00", "2026-10-03 18:00:00"],
+                          "snapshot_ts": ["2026-10-03 23:32:00", "2026-10-03 23:32:00"]})
+        assert len(V._gap_filter(m, "k_ts", "snapshot_ts", 60)) == 1       # 25 min kept, 5.5 h dropped
+        assert len(V._gap_filter(m, "k_ts", "snapshot_ts", None)) == 2
+        assert len(V._gap_filter(pd.DataFrame(), "k_ts", "snapshot_ts", 60)) == 0
+
+    def test_real_books_excludes_kalshi_consensus_and_open(self):
+        df = pd.DataFrame([_row(book=b) for b in ("draftkings", "consensus", "open", "kalshi", "fanduel")])
+        assert sorted(V._real_books(df)["book"]) == ["draftkings", "fanduel"]
+
+    def test_consensus_row_no_longer_inflates_book_fair_or_n_books(self):
+        rows = [_row(book=b, market="game_ml", game_pk=1, selection="HOME", fair_prob=f)
+                for b, f in (("draftkings", 0.60), ("fanduel", 0.62), ("betmgm", 0.64), ("caesars", 0.62),
+                             ("consensus", 0.99))]
+        books = V._real_books(pd.DataFrame(rows))
+        books["_pid"], books["_line"] = -1, -99.0
+        out = V._kalshi_book_fair(books, min_books=4)
+        assert out.iloc[0]["n_books"] == 4 and abs(out.iloc[0]["book_fair"] - 0.62) < 1e-9
+        assert "cons_ts" in out.columns
+
+    def test_mirror_cons_ts_is_the_latest_contributing_snapshot(self):
+        rows = [_row(book=b, market="game_ml", game_pk=1, selection="HOME", fair_prob=0.6, snapshot_ts=t)
+                for b, t in (("a", "2026-10-03 21:00:00"), ("b", "2026-10-03 23:00:00"),
+                             ("c", "2026-10-03 22:00:00"), ("d", "2026-10-03 22:30:00"))]
+        books = pd.DataFrame(rows)
+        books["_pid"], books["_line"] = -1, -99.0
+        assert V._kalshi_book_fair(books, min_books=4).iloc[0]["cons_ts"] == "2026-10-03 23:00:00"
+
+
+class TestNetOfFee:
+    def test_fee_per_contract_matches_schedule(self):
+        # 0.07 * 0.5 * 0.5 = 0.0175 at M=1; M=0.5 halves it
+        assert abs(V.kalshi_taker_fee_per_contract(0.5, 1.0) - 0.0175) < 1e-12
+        assert abs(V.kalshi_taker_fee_per_contract(0.5, 0.5) - 0.00875) < 1e-12
+
+    def test_validate_reports_net_roi_below_gross(self, monkeypatch, capsys):
+        monkeypatch.setattr(V, "_realized_outcomes", lambda m: {1: 1.0, 2: 0.0, 3: 1.0, 4: 1.0})
+        df = pd.DataFrame([
+            {"market": "game_ml", "game_pk": g, "selection": "HOME", "implied_prob": 0.40,
+             "decimal": 2.5, "book_fair": 0.46, "ev_pct": 0.15, "line": None} for g in (1, 2, 3, 4)])
+        V.validate_kalshi_side(df, fee_mult={"game_ml": 0.5})
+        out = capsys.readouterr().out
+        assert "NET of Kalshi taker fee" in out and "all flagged, net" in out and "executor gate" in out
+        # gross ROI: 3 wins x +1.5 and 1 loss -> (4.5 - 1)/4 = +87.5%
+        assert "ROI=+87.5%" in out
+        # net: cost = 0.40 + 0.5*0.07*0.4*0.6 = 0.4084; win roi = 1.4486, loss -1 -> mean (3*1.4486-1)/4
+        net = (3 * (1 - 0.4084) / 0.4084 - 1) / 4 * 100
+        assert f"ROI={net:+.1f}%" in out and net < 87.5
+
+    def test_gate_subset_excludes_edges_outside_the_ev_band(self, monkeypatch, capsys):
+        monkeypatch.setattr(V, "_realized_outcomes", lambda m: {1: 1.0, 2: 1.0})
+        df = pd.DataFrame([   # g1: tiny edge (below gate), g2: in-band edge
+            {"market": "game_ml", "game_pk": 1, "selection": "HOME", "implied_prob": 0.40, "decimal": 2.5,
+             "book_fair": 0.41, "ev_pct": 0.02, "line": None},
+            {"market": "game_ml", "game_pk": 2, "selection": "HOME", "implied_prob": 0.40, "decimal": 2.5,
+             "book_fair": 0.45, "ev_pct": 0.12, "line": None}])
+        V.validate_kalshi_side(df, fee_mult={"game_ml": 1.0})
+        out = capsys.readouterr().out
+        assert "after 0.5% haircut), net: n=1" in out
+
+
 def test_cli_help_builds_without_error():
     """Regression: a bare '%' in an argparse help string raised ValueError at
     parser-build time on py3.14 (and on --help for every version)."""

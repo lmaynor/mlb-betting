@@ -186,3 +186,41 @@ class TestProbToAmerican:
 
     def test_none_input_is_none(self):
         assert K.prob_to_american(None) is None
+
+
+def test_cdn_403_html_block_is_retried_for_get_but_not_post(monkeypatch):
+    """Kalshi's CDN intermittently 403s a shared egress IP with an HTML page; retry GETs only."""
+    import pytest
+    from mlb.execution.kalshi.client import KalshiAPIError, KalshiClient, PUBLIC_DATA_ENV
+    import mlb.execution.kalshi.client as kc
+    monkeypatch.setattr(kc.time, "sleep", lambda *_: None)
+
+    class R:
+        def __init__(self, status, text="", js=None):
+            self.status_code, self.text, self.headers = status, text, {}
+            self.content = b"x" if js is not None or text else b""
+            self._js = js
+        def json(self):
+            return self._js
+
+    class S:
+        def __init__(self, seq):
+            self.seq, self.headers, self.calls = list(seq), {}, 0
+        def request(self, *a, **k):
+            self.calls += 1
+            return self.seq.pop(0)
+
+    block = R(403, "<HTML><TITLE>ERROR: The request could not be satisfied</TITLE></HTML>")
+    s = S([block, block, R(200, js={"markets": []})])
+    c = KalshiClient(PUBLIC_DATA_ENV, None, None, session=s)
+    assert c.request("GET", "/markets", auth=False) == {"markets": []} and s.calls == 3
+    s2 = S([block, R(200, js={})])
+    c2 = KalshiClient(PUBLIC_DATA_ENV, None, None, session=s2)
+    with pytest.raises(KalshiAPIError):
+        c2.request("POST", "/portfolio/orders", body={"x": 1}, auth=False)
+    assert s2.calls == 1
+    # a plain JSON 403 (a real auth error) is NOT retried
+    s3 = S([R(403, '{"error":"forbidden"}'), R(200, js={})])
+    with pytest.raises(KalshiAPIError):
+        KalshiClient(PUBLIC_DATA_ENV, None, None, session=s3).request("GET", "/x", auth=False)
+    assert s3.calls == 1
