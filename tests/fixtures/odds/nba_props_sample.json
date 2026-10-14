@@ -1,0 +1,828 @@
+[
+ {
+  "id": "ev-bos-lal",
+  "sport_key": "basketball_nba",
+  "commence_time": "2025-12-17T00:30:00Z",
+  "home_team": "Boston Celtics",
+  "away_team": "Los Angeles Lakers",
+  "bookmakers": [
+   {
+    "key": "draftkings",
+    "title": "draftkings",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Over Boston Celtics",
+        "description": "Boston Celtics",
+        "price": -114,
+        "point": 110.5
+       },
+       {
+        "name": "Under Boston Celtics",
+        "description": "Boston Celtics",
+        "price": -106,
+        "point": 110.5
+       }
+      ]
+     },
+     {
+      "key": "player_rebounds",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       }
+      ]
+     },
+     {
+      "key": "player_assists",
+      "outcomes": [
+       {
+        "name": "Over Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       },
+       {
+        "name": "Under Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "player_threes",
+      "outcomes": [
+       {
+        "name": "Over LeBron James",
+        "description": "LeBron James",
+        "price": -110,
+        "point": 1.5
+       },
+       {
+        "name": "Under LeBron James",
+        "description": "LeBron James",
+        "price": -110,
+        "point": 1.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_rebounds_assists",
+      "outcomes": [
+       {
+        "name": "Over Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -190,
+        "point": 28.5
+       },
+       {
+        "name": "Under Austin Reaves",
+        "description": "Austin Reaves",
+        "price": 150,
+        "point": 28.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "fanduel",
+    "title": "fanduel",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       }
+      ]
+     },
+     {
+      "key": "player_rebounds",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       }
+      ]
+     },
+     {
+      "key": "player_assists",
+      "outcomes": [
+       {
+        "name": "Over Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       },
+       {
+        "name": "Under Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "player_threes",
+      "outcomes": [
+       {
+        "name": "Over LeBron James",
+        "description": "LeBron James",
+        "price": -112,
+        "point": 1.5
+       },
+       {
+        "name": "Under LeBron James",
+        "description": "LeBron James",
+        "price": -108,
+        "point": 1.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_rebounds_assists",
+      "outcomes": [
+       {
+        "name": "Over Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -150,
+        "point": 28.5
+       },
+       {
+        "name": "Under Austin Reaves",
+        "description": "Austin Reaves",
+        "price": 125,
+        "point": 28.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "betmgm",
+    "title": "betmgm",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       }
+      ]
+     },
+     {
+      "key": "player_rebounds",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       }
+      ]
+     },
+     {
+      "key": "player_assists",
+      "outcomes": [
+       {
+        "name": "Over Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       },
+       {
+        "name": "Under Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_rebounds_assists",
+      "outcomes": [
+       {
+        "name": "Over Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -110,
+        "point": 28.5
+       },
+       {
+        "name": "Under Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -110,
+        "point": 28.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "caesars",
+    "title": "caesars",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -108,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -112,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       }
+      ]
+     },
+     {
+      "key": "player_rebounds",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 5.5
+       }
+      ]
+     },
+     {
+      "key": "player_assists",
+      "outcomes": [
+       {
+        "name": "Over Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       },
+       {
+        "name": "Under Jaylen Brown",
+        "description": "Jaylen Brown",
+        "price": -110,
+        "point": 2.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_rebounds_assists",
+      "outcomes": [
+       {
+        "name": "Over Austin Reaves",
+        "description": "Austin Reaves",
+        "price": 120,
+        "point": 28.5
+       },
+       {
+        "name": "Under Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -150,
+        "point": 28.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "bet365",
+    "title": "bet365",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": 105,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -125,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_rebounds_assists",
+      "outcomes": [
+       {
+        "name": "Over Austin Reaves",
+        "description": "Austin Reaves",
+        "price": 165,
+        "point": 28.5
+       },
+       {
+        "name": "Under Austin Reaves",
+        "description": "Austin Reaves",
+        "price": -210,
+        "point": 28.5
+       }
+      ]
+     },
+     {
+      "key": "player_points_alternate",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": 250,
+        "point": 24.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "bovada",
+    "title": "bovada",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Over Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Under Zzyzx Unknown",
+        "description": "Zzyzx Unknown",
+        "price": -110,
+        "point": 10.5
+       },
+       {
+        "name": "Over Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Under Rookie Guy",
+        "description": "Rookie Guy",
+        "price": -110,
+        "point": 8.5
+       },
+       {
+        "name": "Over Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       },
+       {
+        "name": "Under Mo Williams",
+        "description": "Mo Williams",
+        "price": -110,
+        "point": 6.5
+       }
+      ]
+     },
+     {
+      "key": "player_assists",
+      "outcomes": [
+       {
+        "name": "Over Jaylen Brown (BOS)",
+        "description": "Jaylen Brown (BOS)",
+        "price": -110,
+        "point": 2.5
+       },
+       {
+        "name": "Under Jaylen Brown (BOS)",
+        "description": "Jaylen Brown (BOS)",
+        "price": -110,
+        "point": 2.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "underdog",
+    "title": "underdog",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -112,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jayson Tatum",
+        "description": "Jayson Tatum",
+        "price": -112,
+        "point": 15.5
+       },
+       {
+        "name": "Over Boston Celtics",
+        "description": "Boston Celtics",
+        "price": -112,
+        "point": 110.5
+       },
+       {
+        "name": "Under Boston Celtics",
+        "description": "Boston Celtics",
+        "price": -112,
+        "point": 110.5
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ev-phx-den",
+  "sport_key": "basketball_nba",
+  "commence_time": "2025-12-17T02:00:00Z",
+  "home_team": "Phoenix Suns",
+  "away_team": "Denver Nuggets",
+  "bookmakers": [
+   {
+    "key": "draftkings",
+    "title": "draftkings",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Devin Booker",
+        "description": "Devin Booker",
+        "price": -110,
+        "point": 25.5
+       },
+       {
+        "name": "Under Devin Booker",
+        "description": "Devin Booker",
+        "price": -110,
+        "point": 25.5
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "ev-nyk-mia",
+  "sport_key": "basketball_nba",
+  "commence_time": "2025-12-17T00:00:00Z",
+  "home_team": "Miami Heat",
+  "away_team": "New York Knicks",
+  "bookmakers": [
+   {
+    "key": "draftkings",
+    "title": "draftkings",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "fanduel",
+    "title": "fanduel",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "betmgm",
+    "title": "betmgm",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -110,
+        "point": 15.5
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "key": "bet365",
+    "title": "bet365",
+    "markets": [
+     {
+      "key": "player_points",
+      "outcomes": [
+       {
+        "name": "Over Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": 105,
+        "point": 15.5
+       },
+       {
+        "name": "Under Jalen Brunson",
+        "description": "Jalen Brunson",
+        "price": -125,
+        "point": 15.5
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]
