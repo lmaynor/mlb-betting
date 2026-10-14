@@ -45,7 +45,7 @@ class ExecConfig:
 
     # --- freshness ---
     book_max_age_s: float = 2.0     # Kalshi order book
-    cons_max_age_min: float = 15.0  # book-pack consensus; refresh (ParlayAPI) NOT built yet
+    cons_max_age_min: float = 15.0  # book-pack consensus; NFL props can refresh per game (ev.props_exec --refresh-consensus), MLB cannot yet
     close_buffer_min: float = 10.0  # no new orders this close to first pitch
 
     # --- shrinkage: p_hat = p_B - (h0 + h_age*max(0, age-age0) + h_disp*disp) ---

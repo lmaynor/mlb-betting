@@ -140,16 +140,16 @@ def api_get(sess, path: str, params: dict) -> dict:
     raise RuntimeError(f"giving up after retries: {url} params={params}")
 
 
-def fetch_markets(sess) -> dict:
-    """Return {market_id: short_label} for MLB markets (discovery/debug)."""
-    data = api_get(sess, "markets", {"sport": "MLB"})
+def fetch_markets(sess, sport: str = "MLB") -> dict:
+    """Return {market_id: short_label} for a sport's markets (discovery/debug)."""
+    data = api_get(sess, "markets", {"sport": sport})
     return {m.get("id"): (m.get("meta") or {}).get("short_label", "")
             for m in (data.get("markets") or [])}
 
 
-def fetch_events(sess, target_date: str) -> dict:
+def fetch_events(sess, target_date: str, sport: str = "MLB") -> dict:
     """{event_id: {away, home, matchup}} -- offers join here for team info."""
-    data = api_get(sess, "events", {"sport": "MLB", "date": target_date})
+    data = api_get(sess, "events", {"sport": sport, "date": target_date})
     out: dict = {}
     for e in data.get("events") or []:
         eid = e.get("id")
@@ -169,14 +169,14 @@ def fetch_events(sess, target_date: str) -> dict:
     return out
 
 
-def fetch_offers(sess, market_id: int, event_ids: list) -> list:
+def fetch_offers(sess, market_id: int, event_ids: list, sport: str = "MLB") -> list:
     if not event_ids:
         return []
     offers: list = []
     page = 1
     while True:
         data = api_get(sess, "offers", {
-            "sport": "MLB",
+            "sport": sport,
             "market_id": market_id,
             "event_id": ":".join(str(e) for e in event_ids),
             "location": "ALL",

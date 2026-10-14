@@ -15,6 +15,11 @@ risk caps and kill switch as the MLB executor (mlb.execution.kalshi.*), and:
   are synthetic). Requires --novig; production Novig is refused in code.
   python -m ev.props_exec pnl            # grade shadow fills on Kalshi's own settled result
   python -m ev.props_exec status
+  --refresh-consensus  re-pull a candidate's book consensus for just that game (one ParlayAPI event pull, 5 credits)
+  when it is older than --refresh-after-min, right before the order book is fetched and sized. Opt-in: spends the
+  shared ParlayAPI credit pool, capped per process by --refresh-max-credits; needs PARLAY_API_KEY and an egress IP
+  ParlayAPI accepts. When the refresh cannot happen (budget, API error, unknown game) the stale consensus is left to
+  the age gate (REJ_CONS_STALE) -- it is never silently treated as fresh.
 One position per (game, player, stat) per day: strikes on the same player/stat are the same underlying bet.
 """
 
@@ -169,12 +174,87 @@ def _prefilter(r: dict) -> bool:
     return any(e is not None and e == e and e > -_PREFILTER_SLACK for e in evs)
 
 
+class ConsRefresher:
+    """Per-game on-demand consensus refresh for the executor, with a credit budget and a per-game cache.
+
+    fresh(gk, now) -> snapshot entry (with 'ts') or None. A cached entry is reused until it is `after_min` old, so one
+    pull serves every candidate in that game across passes. event ids come from the consensus snapshot (`event_id`,
+    published by newer sweeps); older snapshots fall back to one slate call (1 credit, cached 10 min)."""
+
+    def __init__(self, pc, *, after_min: float, max_credits: int, sport: str | None = None):
+        from ev.sweep_nfl_props import PARLAY_MARKETS, SPORT
+        self.pc, self.after_min, self.max_credits = pc, after_min, max_credits
+        self.sport = sport or SPORT
+        self.cost = len(PARLAY_MARKETS)
+        self.spent = 0
+        self.refreshes = 0
+        self._meta: dict = {}                    # gk -> (event_id, commence_iso)
+        self._cache: dict = {}                   # gk -> (entry, fetched_at datetime)
+        self._slate: tuple | None = None         # (fetched_at, {gk: (event_id, commence_iso)})
+
+    def update_events(self, snap_events: list) -> None:
+        for e in snap_events or []:
+            if e.get("event_id"):
+                self._meta[e["game_key"]] = (e["event_id"], e["commence"])
+
+    def _from_slate(self, gk: str, now: datetime):
+        from ev.sweep_nfl_props import event_game
+        if self._slate is None or (now - self._slate[0]).total_seconds() > 600:
+            if self.spent + 1 > self.max_credits:
+                return None
+            slate = self.pc.get_slate(self.sport, markets=["h2h"]) or []
+            self.spent += 1
+            m = {}
+            for ev in slate:
+                eg = event_game(ev)
+                if eg is not None and ev.get("id"):
+                    m[eg[0]] = (ev["id"], eg[1].isoformat())
+            self._slate = (now, m)
+        return self._slate[1].get(gk)
+
+    def fresh(self, gk: str, now: datetime):
+        hit = self._cache.get(gk)
+        if hit is not None and (now - hit[1]).total_seconds() / 60.0 < self.after_min:
+            return hit[0]
+        meta = self._meta.get(gk) or self._from_slate(gk, now)
+        if meta is None or self.spent + self.cost > self.max_credits:
+            if meta is not None:
+                log.warning("consensus refresh budget exhausted (%s/%s credits); %s keeps its stale consensus",
+                            self.spent, self.max_credits, gk)
+            return None
+        from ev.sweep_nfl_props import refresh_single_event_consensus
+        self.spent += self.cost
+        try:
+            entry = refresh_single_event_consensus(self.pc, self.sport, meta[0], meta[1], gk, now)
+        except Exception:                                                            # noqa: BLE001
+            log.exception("single-event consensus refresh failed for %s", gk)
+            return None
+        if entry is None:
+            return None
+        self.refreshes += 1
+        self._cache[gk] = (entry, now)
+        return entry
+
+
+def refreshed_cons(row: dict, entry: dict):
+    """-> (ConsPoint | None, ts) for this row's (player, stat, strike) in a freshly pulled game entry. None = the fresh
+    book view no longer prices this proposition, which the gate rejects (REJ_CONS_THIN) instead of reusing the old one."""
+    ts = datetime.fromisoformat(entry["ts"])
+    for p in entry["points"]:
+        if p["player_norm"] == row["player_norm"] and p["stat"] == row["stat"] and p["point"] == float(row["strike"]):
+            if p["team_hints"] and row.get("team") not in p["team_hints"]:
+                return None, ts
+            return ConsPoint(p=float(p["p_over"]), n_books=int(p["n_books"]), disp=float(p["disp"]), ts=ts, prev_p=None), ts
+    return None, ts
+
+
 def run_pass(*, latest: dict, cfg, data_client, paper: PaperVenue, ledger: Ledger, risk: RiskGate,
-             demo_venue=None, demo_risk: RiskGate | None = None, clock=None) -> dict:
+             demo_venue=None, demo_risk: RiskGate | None = None, clock=None, refresher: ConsRefresher | None = None) -> dict:
     clock = clock or (lambda: datetime.now(timezone.utc))
     day = et_day(clock())
     hist: Counter = Counter()
     executed = []
+    n_refreshed = 0
     cons_ts = datetime.fromisoformat(latest["ts"])
     rows = [r for r in latest.get("rows", []) if _prefilter(r)]
     rows.sort(key=lambda r: -max(x for x in (r.get("ev_yes"), r.get("ev_no")) if x is not None and x == x))
@@ -188,6 +268,14 @@ def run_pass(*, latest: dict, cfg, data_client, paper: PaperVenue, ledger: Ledge
             continue
         cons = ConsPoint(p=float(r["p_over"]), n_books=int(r["n_books"]), disp=float(r["disp"]),
                          ts=cons_ts, prev_p=None)
+        was_refreshed = False
+        # Refresh BEFORE the order-book fetch: the book has a ~2s freshness gate, the consensus pull takes longer.
+        if refresher is not None and (clock() - cons_ts).total_seconds() / 60.0 > refresher.after_min:
+            entry = refresher.fresh(leg.game_pk, clock())
+            if entry is not None:
+                cons, _ = refreshed_cons(r, entry)
+                was_refreshed = True
+                n_refreshed += 1
         try:
             book = data_client.get_orderbook(leg.ticker)
         except Exception as e:                                                       # noqa: BLE001
@@ -228,7 +316,7 @@ def run_pass(*, latest: dict, cfg, data_client, paper: PaperVenue, ledger: Ledge
             series="KXNFLPROP", market=leg.market, game_pk=leg.game_pk, side=d.side, p_cons=d.p_cons,
             p_hat=d.p_hat, n_books=d.n_books, ask=d.ask, ev=d.plan.ev if d.plan else None,
             contracts=d.plan.contracts if d.plan else None, limit_price=d.plan.limit_price if d.plan else None,
-            lag_class=d.lag_class, inputs=dict(d.inputs, player=r["player"], stat=r["stat"]))
+            lag_class=d.lag_class, inputs=dict(d.inputs, player=r["player"], stat=r["stat"], cons_refreshed=was_refreshed))
         hist[d.outcome] += 1
         if d.plan is not None and d.outcome in ("EXECUTED", "PARTIAL", "NO_FILL"):
             executed.append({"player": r["player"], "stat": r["stat"], "strike": r["strike"], "side": d.side,
@@ -236,7 +324,8 @@ def run_pass(*, latest: dict, cfg, data_client, paper: PaperVenue, ledger: Ledge
                              "filled": ack.fill_count if ack else 0.0, "cost": ack.filled_cost if ack else 0.0,
                              "outcome": d.outcome, "ticker": leg.ticker})
     return {"day": day, "considered": len(rows), "hist": dict(hist), "executed": executed,
-            "killed": risk.killed}
+            "killed": risk.killed, "cons_refreshed": n_refreshed,
+            "refresh_credits": refresher.spent if refresher is not None else 0}
 
 
 def _demo_attempt(demo_venue, demo_risk, ledger, day, leg, d, mult) -> None:
@@ -304,6 +393,11 @@ def main(argv=None) -> int:
                    help="with --novig: also send each Novig PLAN as a signed IOC order to the Novig PAPER sandbox "
                         "(trading key from --novig-env-file / ~/.novig/paper.env); plumbing validation only")
     r.add_argument("--novig-env-file", default=None, help="Novig paper env file (default ~/.novig/paper.env)")
+    r.add_argument("--refresh-consensus", action="store_true",
+                   help="re-pull a stale candidate's book consensus for that one game (5 ParlayAPI credits) before sizing")
+    r.add_argument("--refresh-after-min", type=float, default=5.0,
+                   help="refresh when the consensus is older than this (cons_max_age_min still hard-rejects)")
+    r.add_argument("--refresh-max-credits", type=int, default=300, help="ParlayAPI credit cap for refreshes, per process")
     r.add_argument("--env-file", default=None)
     r.add_argument("--db", default=DEFAULT_DB)
     r.add_argument("--loop-seconds", type=int, default=0)
@@ -349,6 +443,13 @@ def main(argv=None) -> int:
     nc = nrisk = novig_legs = None
     paper_venue = paper_risk = paper_legs = None
     legs_loaded = 0.0
+    refresher = None
+    if a.refresh_consensus:
+        from nba.odds.parlayapi import ParlayApiClient
+        try:
+            refresher = ConsRefresher(ParlayApiClient(), after_min=a.refresh_after_min, max_credits=a.refresh_max_credits)
+        except ValueError as e:
+            raise SystemExit(f"--refresh-consensus: {e}")
     if a.novig:
         from ev.novig.client import NovigClient
         nc = NovigClient("public-data")
@@ -394,9 +495,12 @@ def main(argv=None) -> int:
                 log.info("JOIN rows=%s flagged=%s queued_alerts=%s books_hist=%s pooled_rows=%s pool_stats=%s",
                          len(latest["rows"]), sum(1 for r in latest["rows"] if r.get("flag")), queued,
                          latest.get("books_hist"), len(latest.get("pooled") or []), latest.get("pool_stats"))
+                if refresher is not None:
+                    refresher.update_events(latest.get("snap"))
                 s = run_pass(latest=latest, cfg=cfg, data_client=data_client, paper=paper, ledger=ledger, risk=risk,
-                             demo_venue=demo_venue, demo_risk=demo_risk)
-                log.info("PASS considered=%s hist=%s executed=%s", s["considered"], s["hist"], len(s["executed"]))
+                             demo_venue=demo_venue, demo_risk=demo_risk, refresher=refresher)
+                log.info("PASS considered=%s hist=%s executed=%s cons_refreshed=%s refresh_credits=%s", s["considered"],
+                         s["hist"], len(s["executed"]), s["cons_refreshed"], s["refresh_credits"])
                 for e in s["executed"]:
                     log.info("  %s", e)
             except Exception:                                                        # noqa: BLE001

@@ -109,6 +109,19 @@ def classify(row: dict, cfg) -> tuple[bool, str, str | None]:
     return True, "FLAG", side
 
 
+def _snapshot_entry(gk: str, start: datetime, props: dict, event_id=None):
+    """One book event -> (snapshot entry, unmapped_keys). The entry shape is what consensus.json publishes and
+    what rows_from_snapshot / the executor consume; `event_id` (ParlayAPI's id) lets a consumer re-pull just this game."""
+    quotes, meta = parse_event_props(props)
+    points = [{"player_norm": pn, "stat": st, "point": pt, "p_over": c.p_over, "n_books": c.n_books,
+               "disp": c.disp, "books": list(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
+               "team_hints": list(c.team_hints), "book_fair": dict(c.book_fair)} for (pn, st, pt), c in build_consensus(quotes).items()]
+    curves = [{"player_norm": pn, "stat": st, "pts": [[b, pt, round(f, 5)] for b, pt, f in ents]}
+              for (pn, st), ents in book_points(quotes).items() if st in POOL_MAX_GAP and len(ents) >= 2]
+    return ({"game_key": gk, "commence": start.isoformat(), "event_id": event_id, "points": points, "curves": curves},
+            meta["unmapped_keys"])
+
+
 def consensus_snapshot(parlay_events: list):
     """Book side only (no Kalshi needed): -> (snapshot, stats). snapshot = JSON-safe list, one entry per
     book event with every (player, stat, point) consensus. This is what the cloud job publishes, so the join to
@@ -121,16 +134,25 @@ def consensus_snapshot(parlay_events: list):
             continue
         gk, start = eg
         stats["events"] += 1
-        quotes, meta = parse_event_props(pe["props"])
-        for k, v in meta["unmapped_keys"].items():
+        entry, unmapped = _snapshot_entry(gk, start, pe["props"], pe["event"].get("id"))
+        for k, v in unmapped.items():
             stats["unmapped_keys"][k] = stats["unmapped_keys"].get(k, 0) + v
-        points = [{"player_norm": pn, "stat": st, "point": pt, "p_over": c.p_over, "n_books": c.n_books,
-                   "disp": c.disp, "books": list(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
-                   "team_hints": list(c.team_hints), "book_fair": dict(c.book_fair)} for (pn, st, pt), c in build_consensus(quotes).items()]
-        curves = [{"player_norm": pn, "stat": st, "pts": [[b, pt, round(f, 5)] for b, pt, f in ents]}
-                  for (pn, st), ents in book_points(quotes).items() if st in POOL_MAX_GAP and len(ents) >= 2]
-        snap.append({"game_key": gk, "commence": start.isoformat(), "points": points, "curves": curves})
+        snap.append(entry)
     return snap, stats
+
+
+def refresh_single_event_consensus(pc, sport: str, event_id: str, comm_iso: str, gk: str, now: datetime | None = None):
+    """On-demand consensus for ONE game: a single ParlayAPI event pull (len(PARLAY_MARKETS) = 5 credits) instead of
+    waiting for the next full-slate cycle. -> a snapshot entry (same shape as consensus_snapshot's, plus 'ts' = the
+    fetch time, which is the consensus's true age anchor) or None when the pull returned nothing (API error / out of
+    credits / game gone) -- the caller must then NOT treat any older consensus as fresh."""
+    props = pc.get_event_props(sport, event_id, PARLAY_MARKETS)
+    if not props:
+        return None
+    start = datetime.fromisoformat(comm_iso.replace("Z", "+00:00"))
+    entry, _ = _snapshot_entry(gk, start, props, event_id)
+    entry["ts"] = (now or datetime.now(timezone.utc)).isoformat()
+    return entry
 
 
 def rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
