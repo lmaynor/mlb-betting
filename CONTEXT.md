@@ -3970,5 +3970,12 @@ runs in production until its deploy step is done; the code is merged-or-in-PR, t
   `lib/sport-assets.server.ts` (name maps, server only), `components/ui/sport-assets.tsx`. Regenerate with
   `python scripts/build_sport_assets.py --all` (it refuses to write a partial map). `lib/sport-teams.json` is generated from
   `nhl.config.TEAMS` / `nba.teams.TEAMS`; a test fails on drift. MLB headshots now use the same lib (`headshotUrlById('mlb', id)`, MLB CDN `silo`; see s13 Headshot system).
+- **Historical prop odds (2026-10-14; docs/analysis/bettingpros_multisport_backfill_2026-10-14.md):** two sources.
+  (1) BettingPros slow crawl -- `mlb.runners.backfill_bettingpros_props` over `mlb_core/odds/bettingpros_props.py` (long format, ALL books incl.
+  Novig/ProphetX, `book_kind` classification, no Pinnacle), Cloud Run Jobs `bp-backfill-{nfl,nhl,nba}` via `deploy/setup_backfill_bettingpros_props.sh`
+  (dedicated image `mlb-betting-bp-crawl`), output `Odds/bettingpros_{sport}/{market}/{date}.parquet`, newest first, resume-exact; depth NFL 2021+,
+  NBA 2021-12+, NHL 2022-11+. (2) ParlayAPI `/v1/historical/.../closing-odds` -- Pinnacle/Novig prop closes but only `historical_hours` deep (Starter =
+  7 days, rolling): `nba/odds/parlay_historical.py` (10 credits per call, metered), raw to `OddsAccum/{sport}/historical/`; re-run weekly. This
+  corrects the earlier "no historical-props API at any tier" (it is true beyond the tier window).
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).

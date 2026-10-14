@@ -37,8 +37,9 @@ Ported from nba-parlay-generator `odds_ingestion.py`, refit sync + GCS.
   The Odds API client (`theoddsapi.py`) kept as an alternate.
 - **Accumulator** (`nba/odds/accumulator.py`, Job via `deploy/setup_parlay_accumulator.sh`):
   sport-agnostic; snapshots live props/game-lines to `OddsAccum/{sport}/{date}/`.
-  This is how prop history is built -- **no historical-props API exists at any tier**
-  (confirmed 2026-06-15), so we bank it forward (MLB now; NBA from Oct).
+  This is how prop history is built. (Correction 2026-10-14: ParlayAPI DOES have a rolling
+  historical prop-close archive, but only `historical_hours` deep -- 7 days on our Starter tier -- so older
+  history comes from BettingPros (`mlb_core/odds/bettingpros_props.py`) and the rest is banked forward.)
 - NOTE: gambling-category APIs are blocked on the office LAN -- live calls only from Cloud Run.
 
 ### 2. Features (DEFERRED)
