@@ -3378,6 +3378,11 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   `RiskGate`'s kill switch is ONE ledger-wide key: a plain `RiskGate("novig_paper")` tripping on a paper-API outage
   would halt every venue in that ledger, so the sandbox mirror uses `PaperRiskGate` (own key). `props_exec pnl`
   grades sandbox orders on the PAPER catalog's own settled statuses.
+- **Settled-tape studies need a selection-safe sample.** The Kalshi tapes were fetched by FINAL volume (3,000-4,000
+  cutoffs), which is outcome-dependent (a YES-resolving longshot trades ~3.5x more in-game), so the raw tape overstates
+  the longshot YES rate (12.9% -> 36.3% across final-volume quintiles at a flat ~11% price). Keep only markets whose
+  PRE-kick volume alone clears the series cutoff (`scripts/mm_longshot.py::selection_safe`). Verdict of the longshot-fade
+  study (docs/analysis/longshot_bias_2026-10-14.md): buying NO on cheap rungs lost money (reverse bias), not +EV.
 
 ---
 
