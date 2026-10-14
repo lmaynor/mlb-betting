@@ -10,7 +10,7 @@ session's pieces. **Nothing below is deployed.** Code is merged or in PR; no Clo
 | #42 (this session) | Odds banking: per-sport credit ledger, guarded accumulator, NHL/NBA extractor shapes, `deploy/setup_odds_banking.sh` | merged (merge commit 25eb293) |
 | #41 (NHL session) | `nhl-refresh-data` / `nhl-backfill` job scripts | their PR |
 | this branch (`feat/nhl-nba-infra`) | `bets.sport` + scoping, NHL/NBA alerts + grader, NBA crosswalk, team logos/headshots, docs | open as PR B |
-| follow-up | MLB headshots -> MLB CDN `silo` (transparent), delete ~110 MB of rembg PNGs + `process_headshots.py` | after B merges (agreed) |
+| `feat/mlb-headshots-silo` | MLB headshots -> MLB CDN `silo` (transparent); deletes ~110 MB of rembg PNGs + `process_headshots.py`; adds `refresh_mlb_player_map.py` | open as the follow-up PR |
 
 ## What was verified (and how)
 - Live: NHL/NBA ParlayAPI payload shapes, `/v1/markets` catalog, credit headers; NHL official API; ESPN rosters/scoreboard/summary;

@@ -7,7 +7,8 @@ import fs from 'fs'
 import path from 'path'
 import teams from '../lib/sport-teams.json'
 import { fold, headshotUrlById, playerSlug, teamCode, teamLogoUrl, type AssetSport } from '../lib/sport-assets'
-import { headshotUrlByName } from '../lib/sport-assets.server'
+import { headshotUrlByName, playerIdByName } from '../lib/sport-assets.server'
+import mlbMap from '../public/headshots/player_map.json'
 
 const PUBLIC = path.join(__dirname, '..', 'public')
 const exists = (url: string) => fs.existsSync(path.join(PUBLIC, url))
@@ -102,5 +103,42 @@ describe('headshots', () => {
     expect(headshotUrlByName('nhl', 'Nobody McFake')).toBeNull()
     expect(headshotUrlByName('nhl', '')).toBeNull()
     expect(headshotUrlByName('nba', null)).toBeNull()
+  })
+})
+
+describe('MLB headshots (MLB CDN silo variant)', () => {
+  it('builds the transparent silo URL, not the JPEG-with-background headshot/67', () => {
+    const u = headshotUrlById('mlb', 592450)!
+    expect(u).toContain('img.mlbstatic.com')
+    expect(u).toContain('/headshot/silo/current')
+    expect(u).not.toContain('/headshot/67/')
+    expect(u).toContain('/people/592450/')
+  })
+
+  it('resolves names the way the pages used to (accent, hyphen, plain)', () => {
+    expect(playerIdByName('mlb', 'Aaron Judge')).toBe((mlbMap as Record<string, number>)['aaron_judge'])
+    expect(playerIdByName('mlb', 'Ha-Seong Kim')).toBe((mlbMap as Record<string, number>)['ha_seong_kim'])
+    expect(playerIdByName('mlb', 'Randy Vásquez')).toBe((mlbMap as Record<string, number>)['randy_vásquez'])
+    expect(headshotUrlByName('mlb', 'Aaron Judge')).toContain('/people/592450/')
+    expect(playerIdByName('mlb', 'Nobody McFake')).toBeNull()
+    expect(playerIdByName('mlb', null)).toBeNull()
+  })
+
+  it('NO REGRESSION: every player in the shipped map still resolves to the same id', () => {
+    const map = mlbMap as Record<string, number>
+    const bad: string[] = []
+    const unreconstructable: string[] = []
+    for (const [key, id] of Object.entries(map)) {
+      // A display name is rebuilt from the key by '_' -> ' '. A key with a doubled/leading/trailing '_' (a quirk of how the
+      // roster spelled the name, e.g. "hao_yu__lee") cannot be rebuilt that way, so it is checked by its own key instead.
+      if (/__|^_|_$/.test(key)) { unreconstructable.push(key); if (playerIdByName('mlb', key) !== id) bad.push(key); continue }
+      if (playerIdByName('mlb', key.replace(/_/g, ' ')) !== id) bad.push(key)
+    }
+    expect(bad).toEqual([])
+    expect(unreconstructable.length).toBeLessThan(5)      // a handful of quirky keys, never a systematic gap
+  })
+
+  it('a team hint is ignored for MLB (the map has no team keys)', () => {
+    expect(playerIdByName('mlb', 'Aaron Judge', 'NYY')).toBe(playerIdByName('mlb', 'Aaron Judge'))
   })
 })
