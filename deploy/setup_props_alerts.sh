@@ -75,6 +75,11 @@ for row in "${ROWS[@]}"; do
     SFLAGS=(--location="$REGION" --schedule="$C" --time-zone="Etc/UTC" --uri="$URI" --http-method=POST
             --oauth-service-account-email="$SCHED_SA" --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
             --attempt-deadline=320s --project="$PROJECT_ID")
+    # scheduler-invoker must hold run.invoker ON THE JOB, or every scheduler firing is PERMISSION_DENIED (status code 7)
+    # and the job silently never runs. Missed on 11 jobs provisioned 2026-10-14 (docs/solutions/runtime-errors/
+    # scheduler-invoker-needs-run-invoker-per-job.md). Idempotent.
+    gcloud run jobs add-iam-policy-binding "$JOB" --region="$REGION" --project="$PROJECT_ID" \
+      --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
     if gcloud scheduler jobs describe "$SJOB" --location="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
       gcloud scheduler jobs update http "$SJOB" "${SFLAGS[@]}"
     else

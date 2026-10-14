@@ -105,6 +105,11 @@ if [ "$MODE" = "scheduler" ] || [ "$MODE" = "all" ]; then
     --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
     --attempt-deadline=320s
   )
+  # scheduler-invoker must hold run.invoker ON THE JOB, or every scheduler firing is PERMISSION_DENIED (status code 7)
+  # and the job silently never runs. Missed on 11 jobs provisioned 2026-10-14 (docs/solutions/runtime-errors/
+  # scheduler-invoker-needs-run-invoker-per-job.md). Idempotent.
+  gcloud run jobs add-iam-policy-binding "$REFRESH_JOB" --region="$REGION" --project="$PROJECT_ID" \
+    --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
   if gcloud scheduler jobs describe "$REFRESH_JOB" --location="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     echo "Scheduler $REFRESH_JOB exists -- updating..."
     gcloud scheduler jobs update http "$REFRESH_JOB" "${SCHED_FLAGS[@]}"
