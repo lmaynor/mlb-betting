@@ -1,7 +1,26 @@
 # Handoff -- 2026-10-14 -- NHL / NBA infrastructure (odds banking, bets.sport, alerts, assets)
 
 Three sessions worked in parallel (this one, an NHL data-feed session, a frontend session). This handoff covers the infrastructure
-session's pieces. **Nothing below is deployed.** Code is merged or in PR; no Cloud Run Job, scheduler, image or DB change was made.
+session's pieces.
+
+## DEPLOYED 2026-10-14 (PRs #33-#44, from a clean checkout of main at 76a9955)
+- **Service `mlb-betting`: revision `mlb-betting-00308-tas`**, image `mlb-betting@sha256:c7db5fe5...` (built from clean main, not the shared
+  tree). Rolled out as a NO-TRAFFIC canary first, compared to the live revision on production data (MLB endpoints identical apart from the
+  new `sport` field), then promoted to 100%. Previous revision for rollback: `mlb-betting-00304-75w`
+  (`gcloud run services update-traffic mlb-betting --to-revisions=mlb-betting-00304-75w=100`; the column/indexes are additive so rollback is safe).
+  The EV-terminal routes (`/api/public/analytics/deep-dive`, `/api/public/ev/feed`, from #37) were NOT in production before this; they were 404 on 00304.
+- **DB:** `bets.sport` added (`TEXT NOT NULL DEFAULT 'mlb'`); verified in production: 38,035 rows, all `mlb`, 0 NULL; indexes
+  `idx_bets_dedup_v3`, `idx_bets_dedup_v4`, `idx_bets_sport_date` present.
+- **Every job on `mlb-betting:latest`** (MLB loops, fast/kalshi alert, build-all-features, nba/nfl refresh) resolves the new image at its NEXT execution.
+  `mlb-fast-alert` was executed once on it: clean.
+- **New jobs:** `nfl-refresh-data` (13:30 UTC; first backfill run: 128 files, 227 MiB, status ok); `props-alerts-{nhl,nba}` (17:35 + 22:35 UTC),
+  `props-grade-{nhl,nba}` (12:30 / 12:40 UTC), `nba-espn-players` (11:00 UTC; first run wrote 629 players). All on the `mlb-betting-feeds` image, rebuilt from
+  main. Each was executed once: the alerts sweep correctly "skipped: no latest_props.json pointer yet" and the graders returned `no_evidence`.
+- **Frontend:** Vercel production deploy of 76a9955 succeeded; new logos serve (200), the old rembg PNGs are gone (404).
+- **Odds banking jobs (from #42, provisioned by the NHL session) are PAUSED on purpose** (the user paused them); the props-alerts sweep has nothing to read until
+  banking is resumed. Resuming is the user's decision (shared credit pool).
+- **NOT done:** `DROP INDEX idx_bets_dedup_v3` (wait until every job has run on the new image, e.g. after one full daily cycle). `nhl-backfill` is
+  still running on the old digest (NHL session).
 
 ## PRs
 | PR | Contents | State |

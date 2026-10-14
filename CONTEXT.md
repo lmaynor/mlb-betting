@@ -3942,8 +3942,9 @@ backbone. Full detail in `nfl/README.md`.
 
 ## 21. Multi-sport infrastructure (NHL / NBA) -- 2026-10-14
 
-Built on branches/PRs (see `handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md` for state and deploy order). **Nothing here
-runs in production until its deploy step is done; the code is merged-or-in-PR, the jobs are not provisioned.**
+Merged as PRs #38/#41/#42/#43/#44 and **DEPLOYED 2026-10-14** (service revision `mlb-betting-00308-tas`; state, rollback and the one
+remaining step -- dropping `idx_bets_dedup_v3` -- in `handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md`). The `odds-bank-*` schedulers
+are PAUSED by the user's decision, so the alerts sweep idles until banking is resumed.
 
 - **Odds banking (PR #42, merged):** `nba/odds/{credit_ledger,accumulator,parlay_extract}.py`. ParlayAPI has no historical props,
   so NHL/NBA props + game lines are banked forward to `OddsAccum/{sport}/` (raw JSON is the durable training data). EVERY run is
