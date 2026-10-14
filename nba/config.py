@@ -131,7 +131,17 @@ PARLAY_REGION = "us"
 # `outs` arrives under TWO keys (player_pitcher_outs / player_pitching_outs), both
 # collapsed to the short name 'outs' in parlay_extract._market_short.
 PARLAY_PROP_MARKETS = {
-    "basketball_nba": ["player_points", "player_rebounds", "player_assists"],
+    # NBA/NHL "core" sets verified against the live ParlayAPI /v1/markets catalog 2026-10-14. Each market
+    # costs 1 credit per (event x market) whether or not any book returns it, so this list is a budget
+    # decision, not just a wishlist. Alternate ladders (`*_alternate`) are deliberately NOT here -- they are
+    # one-sided prices and ~double the cost; add them via PARLAY_PROP_MARKETS_ALT once the credit plan allows.
+    "basketball_nba": ["player_points", "player_rebounds", "player_assists", "player_threes",
+                       "player_points_rebounds_assists"],
+    # NHL: goalscorer ("player_goals" also carries TEAM-total junk rows -- filtered in parlay_extract),
+    # shots on goal, points/assists, goalie saves (not posted until goalies confirm -- often empty early in the
+    # day, but still charged), power-play points, blocked shots.
+    "icehockey_nhl": ["player_goals", "player_shots_on_goal", "player_points", "player_assists",
+                      "player_total_saves"],
     "baseball_mlb": [
         # batter props (home_runs is a yes/no market: outcomes "Yes"/"No" @ 0.5)
         "player_hits", "player_total_bases", "player_home_runs",
@@ -147,6 +157,27 @@ PARLAY_PROP_MARKETS = {
 }
 PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
 
+# Optional second tier, enabled with `--tier full` on the accumulator (more credits per event).
+PARLAY_PROP_MARKETS_ALT = {
+    "basketball_nba": ["player_steals", "player_blocks", "player_turnovers", "player_points_alternate",
+                       "player_rebounds_alternate", "player_assists_alternate", "player_threes_alternate"],
+    "icehockey_nhl": ["player_power_play_points", "player_blocked_shots", "player_hits"],
+}
+
+# DFS / pick'em apps quote ~-112/-112 on every line: they carry the NUMBER, not a price. They are kept in the
+# raw payload (training data) but excluded from best-book CSVs and from any fair-probability or alert logic.
+DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
+
+# -- Per-sport monthly ParlayAPI credit budgets (the shared pool is ONE plan; see nba/odds/credit_ledger.py) --
+# Defaults assume the 20k/mo plan that is live as of 2026-10-14 (15.2k left that day, MLB postseason + the NFL
+# sweep still spending). Override per sport with ODDS_BANK_BUDGET_<SPORTKEY> once the 100k plan is applied.
+ODDS_BANK_DEFAULT_BUDGET = {
+    "icehockey_nhl": 3000,
+    "basketball_nba": 3000,
+}
+# Never spend the shared pool below this many remaining credits (read from x-requests-remaining).
+PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "2500"))
+
 # accumulated-odds lake (sport-namespaced; multi-sport)
 ODDSACCUM_PREFIX = "OddsAccum"
 
@@ -161,6 +192,12 @@ def oddsaccum_csv_key(sport: str, date: str, kind: str, hhmm: str) -> str:
 
 def oddsaccum_latest_key(sport: str) -> str:
     return f"{ODDSACCUM_PREFIX}/{sport}/latest.json"
+
+
+def oddsaccum_latest_kind_key(sport: str, kind: str) -> str:
+    """Per-kind pointer. latest.json is shared by props AND game_lines runs, so whichever ran last wins -- a consumer
+    that wants the newest PROPS snapshot (the alerts sweep) must not read it."""
+    return f"{ODDSACCUM_PREFIX}/{sport}/latest_{kind}.json"
 
 
 GAMES_MASTER = f"{NBA_PREFIX}/games_master.csv"
