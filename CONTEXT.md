@@ -3936,7 +3936,29 @@ backbone. Full detail in `nfl/README.md`.
 - **Joins:** `nfl.data.keys.add_game_keys()` produces the `ev/` `game_key`; nflverse codes differ from Kalshi's only at
   `JAX/JAC` and `LA/LAR` (plus `OAK/SD/STL` relocations). A test pins the codes and format to `ev/`.
 - **GOTCHA:** the local-mode default `MLB_BASE_DATA` is a Windows path -- set it (or `GCS_BUCKET`) before any non-test run.
-- **Status:** code merged; nothing has been downloaded or deployed from this repo yet (see the 2026-10-14 handoff).
+- **Status:** backfill has run (`NFL/last_refresh.json`: status ok, mode backfill, 129 files, 1 missing; player_stats
+  mirrored 2018-2026). Whether the nightly job `nfl-refresh-data` is provisioned was NOT verified here -- check before assuming.
+- **Prop systems (SHADOW ONLY -- no runner, no scheduler, no bets table writes; added on `feat/nfl-prop-systems`):**
+  - `nfl/features/props_features.py` -- leakage-proof player-week features (trailing L3/L5/SZN/EWM, closing-line game
+    environment, opponent-allowed, red-zone usage from pbp, injuries). Leakage test scrambles a week's outcomes and asserts no
+    feature at/before it moves. Depth charts are NOT used (format changed in 2025).
+  - `nfl/models/props.py` -- per-stat XGBoost (count:poisson / tweedie yards) + a fitted distribution (NegBin; hurdle-gamma
+    or normal chosen per fit by out-of-sample log score) -> `p_over(stat, mu, line, params)` with push handling.
+    `nfl/models/walkforward.py` is the leakage-proof evaluation CLI. Stats: pass_yds, rush_yds, rec_yds, receptions, pass_tds,
+    anytime_td. Artifacts are local only (`NFL_MODEL_DIR`), never written to GCS.
+  - `nfl/props/resolve.py` -- fail-closed name -> gsis_id resolver (never fuzzy; ambiguous -> no answer).
+    `nfl/props/grade.py` -- second grader off `player_stats` + `snap_counts`. **A missing player_stats row is NOT a DNP**
+    (nflverse writes a row only if a stat was recorded; ~10% of WR rows played with no row) -- "played" comes from snaps, and
+    played-no-row grades against zeros. anytime_td scope (rush+rec TDs vs also return/def TDs) is UNVERIFIED against the books'
+    rules; ~6% of Yes outcomes depend on it.
+  - `nfl/props/lines.py` + `scripts/nfl_banked_lines.py` -- turns the sweep's banked ParlayAPI payloads (`EVSweep/nfl_props/`)
+    into per-prop open/close consensus tables. `scripts/nfl_model_vs_market.py` scores model vs market on those lines.
+  - **Evidence status (2026-10-14): NO EDGE ESTABLISHED.** There are no historical NFL prop lines; walk-forward shows the
+    models beat trailing-mean baselines on accuracy/calibration (a weak bar -- a book line already contains that
+    information). The bank is 16 games / 3 days (the sweep was not running 10-06..10-11; unbanked days cannot be recovered);
+    only ~69 props have >=3 books at both open and close. On the banked weeks the pooled model-vs-market Brier gap looked
+    significant but was an artifact of single-book, flat-priced and alt-ladder props; restricted to >=3 books it is
+    -0.005 +/- 0.013 (n=83) -- no detectable difference. CLV needs a much larger bank.
 
 ---
 
