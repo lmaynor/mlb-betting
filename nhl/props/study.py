@@ -245,13 +245,23 @@ def model_sections(props: pd.DataFrame, p: pd.DataFrame) -> dict:
     return out
 
 
-def run(db: str, players_master: str | None = None) -> dict:
+def load_history_dir(d: str) -> pd.DataFrame:
+    """Canonical game log from LOCAL copies of our masters (games_master.csv, skater_boxscores_master.csv, shots_*.csv)."""
+    import glob
+    import os
+    games = pd.read_csv(os.path.join(d, "games_master.csv"), low_memory=False)
+    sk = pd.read_csv(os.path.join(d, "skater_boxscores_master.csv"), low_memory=False)
+    frames = [pd.read_csv(f, low_memory=False) for f in sorted(glob.glob(os.path.join(d, "shots_*.csv")))]
+    return gamelog.from_masters(games, sk, pd.concat(frames, ignore_index=True) if frames else None)
+
+
+def run(db: str, players_master: str | None = None, history_dir: str | None = None) -> dict:
     extra = None
     if players_master:
         pm = pd.read_csv(players_master)
         extra = pm[["player_id", "full_name", "team"]]
     pairs, gl, acct = build_dataset(db, extra)
-    p, arts, feat = add_model(pairs, gl)
+    p, arts, feat = add_model(pairs, load_history_dir(history_dir) if history_dir else gl)
     pg = p[p["status"].isin(["ok", "void"])]
     props = prop_table(pg)
     res = {"accounting": acct, "n_ok_pairs": int((p["status"] == "ok").sum()), "n_props_ok": int((props["status"] == "ok").sum()),
@@ -277,9 +287,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
     ap.add_argument("--json")
+    ap.add_argument("--history-dir", help="train/score features from our long NHL masters (local CSV copies) instead of the "
+                    "DB's 2025-26-only game log; quotes + outcomes still come from --db")
     ap.add_argument("--players-master", help="NHL/players_master.csv (extra name crosswalk for names the DB lacks)")
     a = ap.parse_args(argv)
-    res = run(a.db, a.players_master)
+    res = run(a.db, a.players_master, a.history_dir)
     res["sink_a"].pop("bets", None)
     txt = json.dumps(res, indent=1, default=_json_default)
     print(txt)
