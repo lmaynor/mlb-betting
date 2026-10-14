@@ -5,19 +5,34 @@ import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
+import { SPORT_LIST } from '@/lib/sports'
+import { useBankroll } from '@/lib/use-bankroll'
+import { fmtMoney } from '@/lib/ev-math'
 
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
-  { label: 'The Edge',   href: '/edge' },
-  { label: 'Picks',      href: '/picks' },
-  { label: 'Daily Card', href: '/cheat-sheet' },
-  { label: 'Tools',      href: '/tools' },
-  { label: 'Models',     href: '/models' },
-  { label: 'Results',    href: '/results' },
-  { label: 'Pricing',    href: '/pricing' },
-  { label: 'Learn',      href: '/learn' },
+  { label: 'Home',          href: '/' },
+  { label: '+EV Terminal',  href: '/ev', live: true },
+  { label: 'Picks Blotter', href: '/picks' },
+  { label: 'Analytics',     href: '/analytics' },
+  { label: 'Results',       href: '/results' },
+  { label: 'Tools',         href: '/tools' },
 ]
+
+function isActive(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
+}
+
+function Emblem() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="0.5" y="0.5" width="27" height="27" rx="7" fill="#11131a" stroke="#1e2230" />
+      <path d="M14 4.5 23.5 14 14 23.5 4.5 14Z" fill="none" stroke="#57F287" strokeOpacity="0.35" strokeWidth="1.2" />
+      <path d="M9.5 18.5 18.5 9.5" stroke="#57F287" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 const iconBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -36,110 +51,152 @@ const discordBtn: React.CSSProperties = {
 
 export function Nav() {
   const pathname  = usePathname()
-  const { isSignedIn } = useUser()
+  const { isSignedIn, user } = useUser()
+  const [bankroll] = useBankroll((user?.publicMetadata?.bankroll as number | undefined) ?? 1000)
 
   return (
-    <nav style={{
-      position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw',
-      background: 'color-mix(in oklab, var(--graphite) 82%, transparent)',
-      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-      borderBottom: '1px solid var(--basalt)', overflow: 'hidden',
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '60px', gap: '24px' }}>
+    <header style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw' }}>
+      {/* TIER 1 -- product bar */}
+      <nav style={{ background: '#090a0f', borderBottom: '1px solid #1e2230', overflow: 'hidden' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '56px', gap: '20px' }}>
 
-        {/* Logo */}
-        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 10px var(--signal)', flexShrink: 0 }} />
-          <span className="dell-display" style={{ fontSize: '19px', fontWeight: 800, color: 'var(--chalk)', letterSpacing: '-0.01em', lineHeight: 1 }}>
-            BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
-          </span>
-        </Link>
+          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <Emblem />
+            <span className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', letterSpacing: '-0.01em', lineHeight: 1 }}>
+              BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
+            </span>
+          </Link>
 
-        {/* Desktop nav links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1 }} className="nav-desktop">
-          {NAV_LINKS.map((l) => {
-            const active = pathname === l.href || (l.href !== '/' && pathname.startsWith(l.href))
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                style={{
-                  fontSize: '13px', fontWeight: 500, letterSpacing: '0.005em',
-                  textDecoration: 'none',
-                  color: active ? 'var(--signal)' : 'var(--silver)',
-                  padding: '7px 11px', borderRadius: 'var(--radius)',
-                  background: active ? 'var(--win-wash)' : 'transparent',
-                  transition: 'color var(--dur) var(--ease-out), background var(--dur) var(--ease-out)',
-                }}
-              >
-                {l.label}
-              </Link>
-            )
-          })}
-        </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1, justifyContent: 'center' }} className="nav-desktop">
+            {NAV_LINKS.map((l) => {
+              const active = isActive(pathname, l.href)
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '7px',
+                    fontSize: '13px', fontWeight: 500, textDecoration: 'none',
+                    color: active ? 'var(--signal)' : 'var(--silver)',
+                    padding: '7px 11px', borderRadius: 'var(--radius-sm)',
+                    background: active ? 'var(--brand-dim)' : 'transparent',
+                    transition: 'color var(--dur) var(--ease-out), background var(--dur) var(--ease-out)',
+                  }}
+                >
+                  {l.live && <span className="live-dot" style={{ width: '6px', height: '6px' }} />}
+                  {l.label}
+                </Link>
+              )
+            })}
+          </div>
 
-        {/* Desktop right: social + auth + Discord */}
-        <div className="nav-desktop" style={{ gap: '10px', alignItems: 'center', flexShrink: 0 }}>
-          <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.FYI on X" style={iconBox}>
-            <XMark size={14} color="currentColor" />
-          </a>
+          <div className="nav-desktop" style={{ gap: '10px', alignItems: 'center', flexShrink: 0, marginLeft: 'auto' }}>
+            <Link
+              href="/tools/kelly-calculator"
+              className="mono nav-xl"
+              title="Your bankroll (used to size stakes). Click to open the Kelly calculator."
+              style={{
+                fontSize: '12px', fontWeight: 600, textDecoration: 'none', color: 'var(--ash)',
+                border: '1px solid #1e2230', background: '#11131a', borderRadius: 'var(--radius-sm)', padding: '6px 10px',
+              }}
+            >
+              <span style={{ color: 'var(--fog)', marginRight: '6px' }}>BANKROLL</span>{fmtMoney(bankroll)}
+            </Link>
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={iconBox}>
+              <DiscordMark size={15} color="currentColor" />
+            </a>
+            <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.FYI on X" style={iconBox} className="nav-xl">
+              <XMark size={14} color="currentColor" />
+            </a>
+            {isSignedIn ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  style={{
+                    fontSize: '13px', fontWeight: 600, textDecoration: 'none',
+                    color: pathname.startsWith('/dashboard') ? 'var(--signal)' : 'var(--ash)',
+                    padding: '7px 12px', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)',
+                  }}
+                >
+                  Dashboard
+                </Link>
+                <UserButton />
+              </>
+            ) : (
+              <>
+                <SignInButton mode="modal">
+                  <button style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    Sign In
+                  </button>
+                </SignInButton>
+                <Link href="/pricing" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none', background: '#57F287', color: '#090a0f', borderRadius: '6px', padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                  UPGRADE TO PRO
+                </Link>
+              </>
+            )}
+          </div>
 
-          {isSignedIn ? (
-            <>
-              <Link
-                href="/dashboard"
-                style={{
-                  fontSize: '13px', fontWeight: 600, textDecoration: 'none',
-                  color: pathname.startsWith('/dashboard') ? 'var(--signal)' : 'var(--ash)',
-                  padding: '8px 14px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
-                }}
-              >
-                Dashboard
-              </Link>
+          {/* Mobile: auth + Discord. BottomNav handles routing. */}
+          <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            {isSignedIn ? (
               <UserButton />
-            </>
-          ) : (
-            <SignInButton mode="modal">
-              <button
-                style={{
-                  fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600,
-                  background: 'transparent', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
-                  padding: '8px 14px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                Sign In
-              </button>
-            </SignInButton>
-          )}
-
-          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" style={discordBtn}>
-            <DiscordMark size={15} color="currentColor" />
-            <span>Discord</span>
-          </a>
+            ) : (
+              <SignInButton mode="modal">
+                <button style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  Sign In
+                </button>
+              </SignInButton>
+            )}
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={{ ...discordBtn, padding: '7px 11px' }}>
+              <DiscordMark size={15} color="currentColor" />
+            </a>
+          </div>
         </div>
+      </nav>
 
-        {/* Mobile: auth + social. BottomNav handles routing. */}
-        <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
-          {isSignedIn ? (
-            <UserButton />
-          ) : (
-            <SignInButton mode="modal">
-              <button
-                style={{
-                  fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600,
-                  background: 'transparent', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)',
-                  padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                Sign In
-              </button>
-            </SignInButton>
-          )}
-          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={{ ...discordBtn, padding: '7px 11px' }}>
-            <DiscordMark size={15} color="currentColor" />
-          </a>
+      {/* TIER 2 -- multi-sport context bar */}
+      <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
+          <SportLink href="/" label="ALL SPORTS" active={pathname === '/'} />
+          <SportLink href="/ev" label="+EV OUTLIER FEED" active={pathname === '/ev'} accent="#57F287" />
+          {SPORT_LIST.map(p => (
+            <SportLink
+              key={p.slug}
+              href={`/sports/${p.slug}`}
+              label={p.shortName}
+              badge={p.navBadge}
+              active={pathname === `/sports/${p.slug}`}
+              accent={p.accent}
+            />
+          ))}
+          <span style={{ flex: 1 }} />
+          <SportLink href="/edge" label="THE EDGE" active={pathname.startsWith('/edge')} />
+          <SportLink href="/cheat-sheet" label="DAILY CARD" active={pathname.startsWith('/cheat-sheet')} />
         </div>
       </div>
-    </nav>
+    </header>
+  )
+}
+
+function SportLink({ href, label, badge, active, accent }: { href: string; label: string; badge?: string; active: boolean; accent?: string }) {
+  const color = active ? (accent ?? 'var(--chalk)') : 'var(--silver)'
+  return (
+    <Link
+      href={href}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '7px', textDecoration: 'none',
+        fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.05em', color,
+        padding: '5px 10px', borderRadius: 'var(--radius-sm)',
+        background: active ? 'var(--surface-elevated)' : 'transparent',
+        border: `1px solid ${active ? '#2e3446' : 'transparent'}`,
+      }}
+    >
+      {label}
+      {badge && (
+        <span style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--fog)', border: '1px solid #1e2230', borderRadius: '4px', padding: '1px 5px' }}>
+          {badge}
+        </span>
+      )}
+    </Link>
   )
 }

@@ -25,7 +25,7 @@ export function Footer() {
               </span>
             </div>
             <p className="times" style={{ fontSize: '14px', color: 'var(--fog)', lineHeight: 1.65, marginBottom: '16px', maxWidth: '34ch' }}>
-              Machine-learned MLB picks. Built on data, not gut feelings.
+              Model picks and a live +EV scanner, with every result public.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: '#8b92f0' }} aria-label="Join Discord">
@@ -37,7 +37,7 @@ export function Footer() {
             </div>
           </div>
           {[
-            { title: 'Picks',   links: [['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['F5','/picks/mlb/f5'],['Strikeouts','/picks/mlb/k']] },
+            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Analytics','/analytics'],['Sport Hubs','/sports/mlb'],['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['Strikeouts','/picks/mlb/k']] },
             { title: 'Tools',   links: [['Odds Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Edge Finder','/tools/edge-finder'],['NRFI Conditions','/tools/nrfi-conditions'],['Pitcher Matchups','/tools/pitcher-matchups']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },

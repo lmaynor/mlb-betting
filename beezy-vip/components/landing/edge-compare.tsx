@@ -65,7 +65,7 @@ export async function EdgeCompare() {
           const pill = SYSTEM_PILL[bet.system] ?? SYSTEM_PILL.ALL
           const e = edgePct(bet.edge)
           return (
-            <div key={bet.id ?? i} style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', padding: '14px 20px', borderBottom: i < rows.length - 1 ? '1px solid #201f22' : undefined }}>
+            <div key={bet.id ?? i} style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', padding: '14px 20px', borderBottom: i < rows.length - 1 ? '1px solid #151822' : undefined }}>
               {/* matchup + pick */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 240px', minWidth: 0 }}>
                 <Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" color="var(--fog)" />

@@ -15,7 +15,7 @@ export function SystemSparkline({ data, positive }: { data: SparklinePoint[]; co
   // ROI % shown in the card header; fall back to the trajectory's final value.
   const final = data[data.length - 1].cum_pnl
   const isPositive = positive ?? final >= 0
-  const tone = isPositive ? '#71d083' : '#ec6a6a'
+  const tone = isPositive ? '#57f287' : '#ef4444'
   const gid = 'spk' + rawId.replace(/:/g, '')
 
   return (
@@ -28,7 +28,7 @@ export function SystemSparkline({ data, positive }: { data: SparklinePoint[]; co
               <stop offset="100%" stopColor={tone} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <ReferenceLine y={0} stroke="#323035" strokeDasharray="2 2" />
+          <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="2 2" />
           <Area
             type="monotone"
             dataKey="cum_pnl"

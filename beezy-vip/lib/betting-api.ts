@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats, CLVDataPoint, TodaySlate } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 
 function normalizeApiUrl(value: string) {
@@ -14,12 +14,12 @@ function normalizeApiUrl(value: string) {
 const API_URL = normalizeApiUrl(process.env.BETTING_API_URL ?? '')
 const API_KEY = process.env.BETTING_API_KEY ?? ''
 
-async function apiFetch<T>(path: string, cacheSecs = 60): Promise<T> {
+async function apiFetch<T>(path: string, cacheSecs = 60, clientPath?: string): Promise<T> {
   // In browser (client components), use the Next.js proxy route to avoid
   // exposing BETTING_API_URL and BETTING_API_KEY to the client bundle.
   const isBrowser = typeof window !== 'undefined'
   const url = isBrowser
-    ? (path.includes('/stats/') ? '/api/stats' : path.replace('/api/public/', '/api/'))
+    ? (clientPath ?? (path.includes('/stats/') ? '/api/stats' : path.replace('/api/public/', '/api/')))
     : `${API_URL}${path}`
   if (!isBrowser && !API_URL) throw new Error('BETTING_API_URL is not set')
   const headers: Record<string, string> = isBrowser
@@ -239,4 +239,28 @@ export async function apiGetPlayerEnrich(date: string, normName: string): Promis
   } catch {
     return null
   }
+}
+
+// -- +EV terminal + analytics (server components call Cloud Run; client
+// components go through the /api/ev and /api/analytics proxies) ---------------
+
+export async function apiGetEvFeed(params?: { sport?: string; minEv?: number; limit?: number }): Promise<EvFeed> {
+  const sp = new URLSearchParams()
+  if (params?.sport)         sp.set('sport', params.sport)
+  if (params?.minEv != null) sp.set('min_ev', String(params.minEv))
+  if (params?.limit)         sp.set('limit', String(params.limit))
+  const qs = sp.toString() ? `?${sp.toString()}` : ''
+  return apiFetch<EvFeed>(`/api/public/ev/feed${qs}`, 60, `/api/ev${qs}`)
+}
+
+export async function apiGetAnalyticsDeepDive(
+  system?: string,
+  opts?: { bankroll?: number; kellyMult?: number },
+): Promise<AnalyticsDeepDive> {
+  const sp = new URLSearchParams()
+  if (system)                 sp.set('system', system)
+  if (opts?.bankroll != null) sp.set('bankroll', String(opts.bankroll))
+  if (opts?.kellyMult != null) sp.set('kelly_mult', String(opts.kellyMult))
+  const qs = sp.toString() ? `?${sp.toString()}` : ''
+  return apiFetch<AnalyticsDeepDive>(`/api/public/analytics/deep-dive${qs}`, 300, `/api/analytics${qs}`)
 }

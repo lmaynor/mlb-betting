@@ -330,3 +330,272 @@ def get_summary_stats(engine):
         "overall":  dict(overall) if overall else {},
         "bySystem": [dict(r) for r in by_system],
     }
+
+
+# ---------------------------------------------------------------------------
+# +EV terminal feed + analytics deep dive (added for the beezy.fyi v2 overhaul)
+# ---------------------------------------------------------------------------
+import json as _json
+import re as _re
+from datetime import datetime as _datetime, timezone as _timezone
+
+_NFL_PREFIX = "EVSweep/nfl_props"
+_NFL_STALE_MINUTES = 180
+_EV_BANDS = [("0-3%", 0.0, 0.03), ("3-5%", 0.03, 0.05), ("5-8%", 0.05, 0.08),
+             ("8-12%", 0.08, 0.12), ("12%+", 0.12, None)]
+_NBOOKS_RE = _re.compile(r"\((\d+) books\)")
+
+
+def _edge_frac(e):
+    """edge is stored as a fraction (0.08) on most rows and already-percent (8) on a few."""
+    if e is None:
+        return None
+    e = float(e)
+    return e / 100.0 if abs(e) >= 2 else e
+
+
+def _f(x):
+    try:
+        return None if x is None else float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _strip_book_suffix(bet_type, book):
+    bt = bet_type or ""
+    tag = "_" + str(book).lower() if book else ""
+    return bt[: len(bt) - len(tag)] if tag and bt.lower().endswith(tag) else bt
+
+
+def _ev_mlb_rows(engine, min_ev, limit, days):
+    since = (_date.fromisoformat(_ct_today()) - timedelta(days=int(days))).isoformat()
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT id, game_date, game_pk, player, away_team, home_team, bet_type, "
+            "model_prob, market_prob, edge, kelly_pct, odds, stake, book, result, profit, "
+            "notes, created_at "
+            "FROM bets WHERE system = 'EV' AND game_date >= :since AND edge >= :min_ev "
+            "ORDER BY game_date DESC, edge DESC LIMIT :limit"
+        ), {"since": since, "min_ev": float(min_ev), "limit": int(limit)}).mappings().all()
+    out = []
+    for r in rows:
+        d = dict(r)
+        notes = d.get("notes") or ""
+        m = _NBOOKS_RE.search(notes)
+        d["sport"] = "mlb"
+        d["n_books"] = int(m.group(1)) if m else None
+        d["anchored"] = "Pinnacle" in notes
+        d["edge"] = _edge_frac(d.get("edge"))
+        d["bet_type"] = _strip_book_suffix(d.get("bet_type"), d.get("book"))
+        out.append(d)
+    return out
+
+
+def _nfl_feed(min_ev, limit):
+    """Shadow NFL prop sweep (ev/sweep_nfl_props.py -> latest.json). Evidence only: the sweep's own
+    contract says these signals are unvalidated, so the payload carries status + freshness."""
+    from mlb_core import storage as _st
+    empty = {"rows": [], "count": 0, "status": "unavailable", "as_of": None, "age_minutes": None,
+             "stale": True, "summary": {}, "validated": False}
+    try:
+        snap = _json.loads(_st.read_bytes(_NFL_PREFIX + "/latest.json"))
+    except Exception:  # noqa: BLE001 -- no sweep output yet
+        return empty
+    now = _datetime.now(_timezone.utc)
+    ts = snap.get("ts")
+    age = None
+    try:
+        age = (now - _datetime.fromisoformat(str(ts))).total_seconds() / 60.0
+    except Exception:  # noqa: BLE001
+        pass
+    rows = []
+    for r in snap.get("rows") or []:
+        try:
+            commence = _datetime.fromisoformat(str(r.get("commence")))
+        except Exception:  # noqa: BLE001
+            continue
+        mins_now = (commence - now).total_seconds() / 60.0
+        if mins_now <= 0:
+            continue  # kicked off -- the quote is dead
+        sides = []
+        for side in ("yes", "no"):
+            ev, ask = _f(r.get("ev_" + side)), _f(r.get("ask_" + side))
+            if ev is not None and ask is not None:
+                sides.append((ev, side, ask))
+        if not sides:
+            continue
+        ev, side, ask = max(sides)
+        flag = bool(r.get("flag"))
+        if not flag and ev < min_ev:
+            continue
+        p_over = _f(r.get("p_over"))
+        rows.append({
+            "sport": "nfl", "venue": "kalshi", "ticker": r.get("ticker"), "game_key": r.get("game_key"),
+            "stat": r.get("stat"), "player": r.get("player"), "team": r.get("team"),
+            "strike": _f(r.get("strike")), "side": "OVER" if side == "yes" else "UNDER",
+            "ask": ask, "net_ev": round(ev, 4),
+            "fair_prob": None if p_over is None else round(p_over if side == "yes" else 1.0 - p_over, 4),
+            "n_books": r.get("n_books"), "books": r.get("books"), "disp": _f(r.get("disp")),
+            "spread": _f(r.get("spread")), "fee_mult": _f(r.get("fee_mult")),
+            "commence": r.get("commence"), "mins_to_kick": round(mins_now, 1),
+            "flag": flag, "reason": r.get("reason"),
+        })
+    rows.sort(key=lambda x: (not x["flag"], -x["net_ev"]))
+    rows = rows[: int(limit)]
+    stale = age is None or age > _NFL_STALE_MINUTES
+    return {"rows": rows, "count": len(rows), "status": "idle" if stale else "shadow_live",
+            "as_of": ts, "age_minutes": None if age is None else round(age, 1), "stale": stale,
+            "summary": snap.get("summary") or {}, "validated": False}
+
+
+def get_ev_scanner_feed(engine, sport="all", min_ev=0.02, limit=100, days=2):
+    """+EV terminal feed. MLB: tracked system='EV' rows (real graded history, flat stake at the flagged
+    price). NFL: latest shadow sweep rows (Kalshi ask vs book consensus), flagged unvalidated."""
+    sport = (sport or "all").lower()
+    min_ev = float(min_ev)
+    limit = max(1, min(int(limit), 200))
+    out = {"sport": sport, "min_ev": min_ev, "as_of": _datetime.now(_timezone.utc).isoformat(),
+           "mlb": {"rows": [], "count": 0}, "nfl": None}
+    if sport in ("all", "mlb"):
+        mlb = _ev_mlb_rows(engine, min_ev, limit, days)
+        out["mlb"] = {"rows": mlb, "count": len(mlb)}
+    if sport in ("all", "nfl"):
+        out["nfl"] = _nfl_feed(min_ev, limit)
+    return out
+
+
+def _roi(profit, stake):
+    return round(profit / stake * 100.0, 2) if stake else None
+
+
+def get_analytics_deep_dive(engine, system=None, bankroll=1000.0, kelly_mult=1.0, cap=0.05):
+    """Institutional views over settled bets.
+
+    system scopes edge_buckets + book_leaderboard (None = every system). bankroll_curve and ev_headline
+    always compare system='EV' (flat vs Kelly) against the MLB model systems. Voids are excluded from
+    every ROI denominator (the stake is refunded). Kelly is the non-compounding rescale used by
+    mlb.analysis.ev_kelly_bankroll: stake = clip(kelly_pct * kelly_mult, 0, cap) * bankroll, return =
+    the REAL profit/stake ratio of the graded bet."""
+    bankroll = float(bankroll)
+    kelly_mult = max(0.0, float(kelly_mult))
+    cap = max(0.0, float(cap))
+    cond = "kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push')"
+    params = {}
+    if system and str(system).strip():
+        cond += " AND system = :system"
+        params["system"] = str(system).strip().upper()
+    sql = ("SELECT id, system, game_date, game_pk, bet_type, player, odds, stake, model_prob, "
+           "market_prob, edge, kelly_pct, result, profit, book, clv_pct FROM bets "
+           f"WHERE {cond} ORDER BY game_date, id")
+    ev_sql = ("SELECT id, system, game_date, game_pk, bet_type, player, odds, stake, model_prob, "
+              "market_prob, edge, kelly_pct, result, profit, book, clv_pct FROM bets "
+              "WHERE system IN ('EV') AND stake > 0 AND result IN ('win','loss','push') "
+              "ORDER BY game_date, id")
+    model_sql = ("SELECT game_date, COALESCE(SUM(profit), 0) AS pnl FROM bets WHERE system <> 'EV' "
+                 "AND kelly_triggered = true AND stake > 0 AND result IN ('win','loss','push') "
+                 "GROUP BY game_date ORDER BY game_date")
+    counts_sql = ("SELECT COUNT(*) AS logged, "
+                  "COUNT(*) FILTER (WHERE result = 'win') AS wins, "
+                  "COUNT(*) FILTER (WHERE result = 'loss') AS losses, "
+                  "COUNT(*) FILTER (WHERE result = 'push') AS pushes, "
+                  "COUNT(*) FILTER (WHERE result = 'void') AS voids, "
+                  "COUNT(*) FILTER (WHERE result IS NULL) AS pending, "
+                  "MIN(game_date) AS first_date, MAX(game_date) AS last_date "
+                  "FROM bets WHERE system = 'EV'")
+    with engine.connect() as conn:
+        rows = [dict(r) for r in conn.execute(text(sql), params).mappings().all()]
+        ev_rows = [dict(r) for r in conn.execute(text(ev_sql)).mappings().all()]
+        model_days = [dict(r) for r in conn.execute(text(model_sql)).mappings().all()]
+        counts = dict(conn.execute(text(counts_sql)).mappings().first() or {})
+
+    # a) edge buckets ---------------------------------------------------------
+    buckets = []
+    for label, lo, hi in _EV_BANDS:
+        grp = [r for r in rows
+               if (e := _edge_frac(r.get("edge"))) is not None and e >= lo and (hi is None or e < hi)]
+        wins = sum(1 for r in grp if r["result"] == "win")
+        losses = sum(1 for r in grp if r["result"] == "loss")
+        stake = sum(float(r["stake"]) for r in grp)
+        profit = sum(float(r["profit"] or 0) for r in grp)
+        mp = [float(r["model_prob"]) for r in grp if r.get("model_prob") is not None]
+        kp = [float(r["market_prob"]) for r in grp if r.get("market_prob") is not None]
+        clv = [float(r["clv_pct"]) for r in grp if r.get("clv_pct") is not None]
+        buckets.append({
+            "bucket": label, "n": len(grp), "wins": wins, "losses": losses,
+            "hit_rate": round(wins / (wins + losses) * 100, 1) if wins + losses else None,
+            "avg_model_prob": round(sum(mp) / len(mp) * 100, 1) if mp else None,
+            "avg_market_prob": round(sum(kp) / len(kp) * 100, 1) if kp else None,
+            "roi_pct": _roi(profit, stake),
+            "mean_clv": round(sum(clv) / len(clv), 2) if clv else None,
+        })
+
+    # b) book leaderboard -------------------------------------------------------
+    by_book = {}
+    for r in rows:
+        by_book.setdefault((r.get("book") or "unknown").lower(), []).append(r)
+    leaderboard = []
+    for book, grp in by_book.items():
+        wins = sum(1 for r in grp if r["result"] == "win")
+        losses = sum(1 for r in grp if r["result"] == "loss")
+        stake = sum(float(r["stake"]) for r in grp)
+        profit = sum(float(r["profit"] or 0) for r in grp)
+        units = sum(float(r["profit"] or 0) / float(r["stake"]) for r in grp)
+        clv = [float(r["clv_pct"]) for r in grp if r.get("clv_pct") is not None]
+        edges = [e for e in (_edge_frac(r.get("edge")) for r in grp) if e is not None]
+        leaderboard.append({
+            "book": book, "n": len(grp), "wins": wins,
+            "hit_rate": round(wins / (wins + losses) * 100, 1) if wins + losses else None,
+            "roi_pct": _roi(profit, stake), "profit_units": round(units, 2),
+            "mean_clv": round(sum(clv) / len(clv), 2) if clv else None,
+            "avg_edge": round(sum(edges) / len(edges) * 100, 2) if edges else None,
+        })
+    leaderboard.sort(key=lambda b: -b["n"])
+
+    # c) bankroll curve (EV flat vs EV Kelly vs MLB model systems) -----------------
+    days_map = {}
+    flat_pnl = flat_stake = kelly_pnl = kelly_stake_total = 0.0
+    for r in ev_rows:
+        stake, profit = float(r["stake"]), float(r["profit"] or 0)
+        ratio = profit / stake
+        kp = _f(r.get("kelly_pct"))
+        k_stake = min(max((kp or 0.0) * kelly_mult, 0.0), cap) * bankroll
+        d = days_map.setdefault(r["game_date"], {"flat": 0.0, "kelly": 0.0, "models": 0.0})
+        d["flat"] += ratio * 100.0
+        d["kelly"] += ratio * k_stake
+        flat_pnl += ratio * 100.0
+        flat_stake += 100.0
+        kelly_pnl += ratio * k_stake
+        kelly_stake_total += k_stake
+    for m in model_days:
+        days_map.setdefault(m["game_date"], {"flat": 0.0, "kelly": 0.0, "models": 0.0})["models"] += float(m["pnl"])
+    curve, cf, ck, cm = [], 0.0, 0.0, 0.0
+    for day in sorted(days_map):
+        d = days_map[day]
+        cf += d["flat"]
+        ck += d["kelly"]
+        cm += d["models"]
+        curve.append({"date": day, "ev_flat_pnl": round(d["flat"], 2), "ev_kelly_pnl": round(d["kelly"], 2),
+                      "models_pnl": round(d["models"], 2), "ev_flat_cum": round(cf, 2),
+                      "ev_kelly_cum": round(ck, 2), "models_cum": round(cm, 2)})
+
+    # d) EV headline ---------------------------------------------------------------
+    unique = {(r["game_date"], r.get("game_pk"), r.get("player"), _strip_book_suffix(r.get("bet_type"), r.get("book")))
+              for r in ev_rows}
+    graded = len(ev_rows)
+    headline = {
+        "logged": int(counts.get("logged") or 0), "graded": graded,
+        "wins": int(counts.get("wins") or 0), "losses": int(counts.get("losses") or 0),
+        "pushes": int(counts.get("pushes") or 0), "voids": int(counts.get("voids") or 0),
+        "pending": int(counts.get("pending") or 0),
+        "first_date": counts.get("first_date"), "last_date": counts.get("last_date"),
+        "flat_stake_unit": 100.0, "flat_roi_pct": _roi(flat_pnl, flat_stake),
+        "flat_pnl_dollars": round(flat_pnl, 2),
+        "bankroll": bankroll, "kelly_mult": kelly_mult, "kelly_cap": cap,
+        "kelly_roi_pct": _roi(kelly_pnl, kelly_stake_total),
+        "kelly_pnl_dollars": round(kelly_pnl, 2),
+        "kelly_ending_bankroll": round(bankroll + kelly_pnl, 2),
+        "unique_props_graded": len(unique),
+        "voids_excluded_from_roi": True,
+    }
+    return {"edge_buckets": buckets, "book_leaderboard": leaderboard, "bankroll_curve": curve,
+            "ev_headline": headline, "system": params.get("system")}

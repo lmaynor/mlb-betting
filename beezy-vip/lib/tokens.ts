@@ -11,14 +11,22 @@ import type { Bet } from '@/lib/types'
 // Hairline border — replaces the old hard 1px-black Dell frame.
 export const B = '1px solid var(--basalt)'
 // Subtler inner border for table rows and nested dividers.
-export const B_INNER = '1px solid #201f22'
+export const B_INNER = '1px solid #151822'
+
+// Standard card surface (spec v2): 10px radius, hairline border, soft shadow.
+export const CARD_STYLE = {
+  background: '#11131a',
+  border: '1px solid #1e2230',
+  borderRadius: '10px',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+} as const
 
 // ── Confidence tiers (mirror --strong / --lean / --watch in globals.css) ──
 export type ScoreTier = 'strong' | 'lean' | 'watch'
 export const TIER_COLOR: Record<ScoreTier, string> = {
-  strong: '#71d083',   // signal green — high confidence
-  lean:   '#e3b261',   // amber — worth a look
-  watch:  '#b5b2bc',   // silver — neutral signal
+  strong: '#57f287',   // beezy emerald — high confidence
+  lean:   '#facc15',   // amber — worth a look
+  watch:  '#94a3b8',   // slate — neutral signal
 }
 export const TIER_LABEL: Record<ScoreTier, string> = {
   strong: 'STRONG PLAY',
@@ -48,7 +56,14 @@ export const SYSTEM_COLOR: Record<string, string> = {
   SB:          '#d9cf5a',   // yellow -- new 2026-08-20, chosen to sit clear of
                             // the green cluster (lime/mint/--signal) and the
                             // red/orange cluster (coral/amber/gold/--loss)
+  // NFL prop ladders (ev/sweep_nfl_props.py stat keys, upper-cased)
+  PASS_YDS:    '#f59e0b',
+  RUSH_YDS:    '#fb923c',
+  REC_YDS:     '#facc15',
+  RECEPTIONS:  '#34d399',
+  PASS_TDS:    '#f472b6',
   // Meta
+  KALSHI_EV:   '#00d2a0',   // Kalshi-vs-books mirror alerts (rolled into EV in the DB)
   EV:          '#d97ee0',   // orchid -- new 2026-08-20 (fast_alert_loop +
                             // kalshi_alert pooled +EV tracking, system="EV").
                             // Sits in the one open gap left in the wheel
@@ -64,9 +79,9 @@ export const SYSTEM_COLOR: Record<string, string> = {
 type Pill = { bg: string; color: string; border: string }
 function pill(hue: string): Pill {
   return {
-    bg:     `color-mix(in oklab, ${hue} 16%, #04040b)`,
+    bg:     `color-mix(in oklab, ${hue} 16%, #090a0f)`,
     color:  hue,
-    border: `1px solid color-mix(in oklab, ${hue} 40%, #04040b)`,
+    border: `1px solid color-mix(in oklab, ${hue} 40%, #090a0f)`,
   }
 }
 
@@ -76,9 +91,9 @@ export const SYSTEM_PILL: Record<string, Pill> = Object.fromEntries(
 
 // Fallback for unknown or newly-pipelined systems.
 SYSTEM_PILL.ALL = {
-  bg:     'color-mix(in oklab, #c9c6cf 10%, #04040b)',
+  bg:     'color-mix(in oklab, #c9c6cf 10%, #090a0f)',
   color:  '#c9c6cf',
-  border: '1px solid #323035',
+  border: '1px solid #2e3446',
 }
 
 // Canonical SHORT display label per system -- the ONE place pill wording
@@ -89,7 +104,9 @@ export const SYSTEM_LABEL: Record<string, string> = {
   F5: 'F5', F3: 'F3', F7: 'F7', F1H: '1st Half', GAME: 'Game',
   HR: 'HR', K: 'K', OUTS: 'Outs',
   BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K', SB: 'Stolen Bases',
-  PITCHER_ER: 'Earned Runs', EV: 'EV',
+  PITCHER_ER: 'Earned Runs', EV: 'EV', KALSHI_EV: 'Kalshi EV',
+  PASS_YDS: 'Pass Yds', RUSH_YDS: 'Rush Yds', REC_YDS: 'Rec Yds',
+  RECEPTIONS: 'Receptions', PASS_TDS: 'Pass TDs',
 }
 
 // Tighter variant for narrow table cells / chips.
@@ -328,4 +345,43 @@ export function pickLabel(bet: Bet): string {
   }
 
   return formatPick(bet.system, bet.bet_type ?? '', player, team, away, home)
+}
+
+// -- Sportsbook / exchange identity -------------------------------------------
+// Keys are canonical lowercase book ids as stored in bets.book / odds_history.
+export interface BookMeta {
+  label: string
+  short: string
+  color: string
+  bg: string
+  isExchange?: boolean
+}
+
+function bookMeta(label: string, short: string, color: string, isExchange = false): BookMeta {
+  return {
+    label, short, color,
+    bg: `color-mix(in oklab, ${color} 14%, #090a0f)`,
+    ...(isExchange ? { isExchange: true } : {}),
+  }
+}
+
+export const BOOK_META: Record<string, BookMeta> = {
+  draftkings: bookMeta('DraftKings',  'DK',   '#53d337'),
+  fanduel:    bookMeta('FanDuel',     'FD',   '#1493ff'),
+  betmgm:     bookMeta('BetMGM',      'MGM',  '#c4a35a'),
+  caesars:    bookMeta('Caesars',     'CZR',  '#d4af37'),
+  bet365:     bookMeta('bet365',      '365',  '#1ba87e'),
+  fanatics:   bookMeta('Fanatics',    'FAN',  '#e6007e'),
+  hardrock:   bookMeta('Hard Rock',   'HRB',  '#f5a623'),
+  betrivers:  bookMeta('BetRivers',   'BR',   '#3d7bd9'),
+  espnbet:    bookMeta('ESPN BET',    'ESPN', '#ff5a4f'),
+  thescore:   bookMeta('theScore',    'SCR',  '#ff5a4f'),
+  pinnacle:   bookMeta('Pinnacle',    'PIN',  '#f97316'),
+  kalshi:     bookMeta('Kalshi',      'KAL',  '#00d2a0', true),
+  novig:      bookMeta('Novig',       'NOV',  '#38bdf8', true),
+}
+
+export function bookDisplay(book: string | null | undefined): BookMeta {
+  const key = (book ?? '').toLowerCase()
+  return BOOK_META[key] ?? bookMeta(book ? book[0].toUpperCase() + book.slice(1) : '--', (book ?? '--').slice(0, 3).toUpperCase(), '#9ca3af')
 }
