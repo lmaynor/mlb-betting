@@ -1562,6 +1562,13 @@ hand and got missed in the 2026-06-24 pillarize re-provisioning (its `-m` comman
 stayed on the old `runners.*` path -> `ModuleNotFoundError` -> stale sentinels ->
 runner aborts). Re-run it after any module move.
 
+### New job schedulers need `run.invoker` on the job (status code 7)
+
+`scheduler-invoker@` must hold `roles/run.invoker` ON EACH JOB, or its scheduler entry is PERMISSION_DENIED (code 7) and the job never runs
+(a manual `jobs execute` still works, so it is easy to miss). Every `deploy/setup_*.sh` now grants it before creating the scheduler;
+`tests/test_deploy_scripts_iam.py` enforces that. After provisioning, trigger the SCHEDULER once (`gcloud scheduler jobs run`) and check
+`status.code`. Details: `docs/solutions/runtime-errors/scheduler-invoker-needs-run-invoker-per-job.md`.
+
 ### status.code values
 - `-1` -- never run or ran successfully
 - `0` -- success
