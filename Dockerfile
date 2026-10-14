@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Copy source
 COPY mlb_core/      ./mlb_core/
 COPY nba/           ./nba/
+COPY nfl/           ./nfl/
 COPY nhl/           ./nhl/
 # mlb/ pillar: runners/, training/, systems/{HR_Pro, NRFI_Pro_System, ...}
 COPY mlb/           ./mlb/
