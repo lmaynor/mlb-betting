@@ -82,7 +82,26 @@ MLB_BASE_DATA=/tmp/nhl python3 -m nhl.data.backfill --seasons 2026 --limit 20
 
 **Run one NHL job at a time** (the API throttles per IP; a backfill and a roster pull overlapping caused 429s).
 
+## Deploying (Cloud Run Jobs)
+
+`deploy/setup_nhl_jobs.sh` provisions `nhl-refresh-data` (nightly, 12:30 UTC) and `nhl-backfill`. It is
+idempotent and has modes so the backfill and the nightly refresh never overlap (the API throttles per IP):
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4 MODE=jobs      ./deploy/setup_nhl_jobs.sh   # create/update both Jobs
+gcloud run jobs execute nhl-backfill --region=us-central1 --project=concrete-crow-445205-m4 --async
+PROJECT_ID=concrete-crow-445205-m4 MODE=scheduler ./deploy/setup_nhl_jobs.sh   # AFTER the backfill finished
+PROJECT_ID=concrete-crow-445205-m4 MODE=pause     ./deploy/setup_nhl_jobs.sh   # pause the nightly (before a re-backfill)
+```
+
+A job runs whatever is in the image it was last updated with, so build the image from a CLEAN checkout of
+`main`: `deploy/deploy_service.sh` commits and pushes `CONTEXT.md` and the current branch, so do not run it from a
+working tree with other people's uncommitted work. Building a new `:latest` does not change the live service or any
+existing job (each is pinned to the digest it was last deployed with).
+
+NHL jobs spend no ParlayAPI credits and are deliberately NOT named `odds-bank-*`.
+
 ## Not done yet
 
-No Cloud Run Job / Scheduler for the refresh or backfill, no `monitor_ops` wiring, and no backfill has been run.
-Until a job is provisioned this package ships dormant: merging it changes nothing in production.
+No `monitor_ops` wiring (the sentinel `NHL/last_refresh.json` is the health signal for now: `status` is `ok`,
+`skipped` on no-game days, or `partial` -- which also exits 1 so the job shows failed).
