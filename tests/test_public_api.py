@@ -342,3 +342,127 @@ class TestRequireApiKey:
         from mlb.runners.public_api import _require_api_key
         assert _require_api_key({"X-API-Key": "real-key"}, "") is False
         assert _require_api_key({"X-API-Key": ""}, "real-key") is False
+
+
+# ---------------------------------------------------------------------------
+# +EV feed + analytics deep dive
+# ---------------------------------------------------------------------------
+
+def _ev_engine():
+    from sqlalchemy import create_engine, text
+    eng = create_engine("sqlite://")
+    with eng.begin() as c:
+        c.execute(text(
+            "CREATE TABLE bets (id INTEGER PRIMARY KEY, system TEXT, game_date TEXT, game_pk INTEGER, "
+            "bet_type TEXT, player TEXT, away_team TEXT, home_team TEXT, odds REAL, stake REAL, "
+            "model_prob REAL, market_prob REAL, edge REAL, kelly_pct REAL, kelly_triggered BOOLEAN, "
+            "result TEXT, profit REAL, paper BOOLEAN, book TEXT, notes TEXT, created_at TEXT, "
+            "clv_pct REAL)"))
+        rows = [
+            # EV: flat $100 stake, +110 win, -120 loss, void, pending
+            (1, "EV", "2026-10-01", 11, "K_OVER_6.5_draftkings", "Ace One", "A", "B", 110, 100, .52, .476, .045, .02, 1, "win", 110.0, 1, "draftkings", "soft-book +EV alert vs Pinnacle (5 books)", "2026-10-01T10:00", None),
+            (2, "EV", "2026-10-01", 12, "HR_NO_novig", "Slug Two", "A", "B", -120, 100, .60, .545, .095, .04, 1, "loss", -100.0, 1, "novig", "soft-book +EV alert vs consensus (4 books)", "2026-10-01T11:00", None),
+            (3, "EV", "2026-10-02", 13, "NRFI_caesars", None, "A", "B", -110, 100, .56, .524, .130, .03, 1, "void", 0.0, 1, "caesars", "", "2026-10-02T11:00", None),
+            (4, "EV", "2026-10-03", 14, "HR_fanduel", "Slug Three", "A", "B", 300, 100, .27, .25, .06, .01, 1, None, None, 1, "fanduel", "", "2026-10-03T11:00", None),
+            # model system rows
+            (5, "NRFI", "2026-10-01", 15, "NRFI", None, "A", "B", -110, 10, .58, .524, 8.0, .03, 1, "win", 9.09, 1, "draftkings", "", "2026-10-01T12:00", 1.5),
+            (6, "NRFI", "2026-10-02", 16, "NRFI", None, "A", "B", -110, 10, .58, .524, .02, .03, 1, "loss", -10.0, 1, "draftkings", "", "2026-10-02T12:00", None),
+        ]
+        for r in rows:
+            c.execute(text(
+                "INSERT INTO bets (id, system, game_date, game_pk, bet_type, player, away_team, home_team, odds, stake, "
+                "model_prob, market_prob, edge, kelly_pct, kelly_triggered, result, profit, paper, book, notes, "
+                "created_at, clv_pct) VALUES (:a,:b,:c,:d,:e,:f,:g,:h,:i,:j,:k,:l,:m,:n,:o,:p,:q,:r,:s,:t,:u,:v)"),
+                dict(zip("abcdefghijklmnopqrstuv", r)))
+    return eng
+
+
+def test_deep_dive_ev_headline_excludes_void_and_pending():
+    from mlb.runners.public_api import get_analytics_deep_dive
+    out = get_analytics_deep_dive(_ev_engine())
+    h = out["ev_headline"]
+    assert (h["wins"], h["losses"], h["voids"], h["pending"], h["logged"]) == (1, 1, 1, 1, 4)
+    assert h["graded"] == 2
+    assert h["flat_pnl_dollars"] == 10.0          # +110 - 100
+    assert h["flat_roi_pct"] == 5.0               # 10 / 200, void stake excluded
+    assert h["voids_excluded_from_roi"] is True
+
+
+def test_deep_dive_kelly_rescales_real_ratio_with_cap():
+    from mlb.runners.public_api import get_analytics_deep_dive
+    h = get_analytics_deep_dive(_ev_engine(), bankroll=1000, kelly_mult=1.0)["ev_headline"]
+    # win: 1.10 * (0.02*1000)=22 ; loss: -1.0 * (0.04*1000)=-40
+    assert h["kelly_pnl_dollars"] == -18.0
+    capped = get_analytics_deep_dive(_ev_engine(), bankroll=1000, kelly_mult=10.0)["ev_headline"]
+    # mult 10 -> 0.2 / 0.4 capped at 0.05 -> 50 and 50
+    assert capped["kelly_pnl_dollars"] == pytest.approx(5.0)
+
+
+def test_deep_dive_edge_buckets_normalize_percent_valued_edges():
+    from mlb.runners.public_api import get_analytics_deep_dive
+    out = get_analytics_deep_dive(_ev_engine(), system="NRFI")
+    by = {b["bucket"]: b for b in out["edge_buckets"]}
+    assert by["8-12%"]["n"] == 1      # edge stored as 8.0 (percent) is read as 0.08
+    assert by["0-3%"]["n"] == 1
+    assert by["8-12%"]["mean_clv"] == 1.5
+
+
+def test_deep_dive_book_leaderboard_and_curve():
+    from mlb.runners.public_api import get_analytics_deep_dive
+    out = get_analytics_deep_dive(_ev_engine())
+    books = {b["book"]: b for b in out["book_leaderboard"]}
+    assert books["draftkings"]["n"] == 3 and "caesars" not in books   # void excluded
+    last = out["bankroll_curve"][-1]
+    assert last["ev_flat_cum"] == 10.0
+    assert last["models_cum"] == pytest.approx(-0.91)
+
+
+def test_ev_feed_mlb_strips_book_suffix_and_parses_books():
+    from mlb.runners.public_api import _ev_mlb_rows
+    with patch("mlb.runners.public_api._ct_today", return_value="2026-10-03"):
+        rows = _ev_mlb_rows(_ev_engine(), 0.02, 50, days=5)
+    by = {r["id"]: r for r in rows}
+    assert by[2]["bet_type"] == "HR_NO" and by[2]["n_books"] == 4 and by[2]["anchored"] is False
+    assert by[1]["bet_type"] == "K_OVER_6.5" and by[1]["anchored"] is True
+    assert rows[0]["edge"] >= rows[-1]["edge"] or rows[0]["game_date"] >= rows[-1]["game_date"]
+
+
+def test_ev_feed_nfl_shadow_payload_drops_started_and_labels_unvalidated():
+    from datetime import datetime, timedelta, timezone
+    from mlb.runners.public_api import _nfl_feed
+    now = datetime.now(timezone.utc)
+    snap = {"ts": now.isoformat(), "summary": {"events_pulled": 1}, "rows": [
+        {"ticker": "A", "stat": "pass_yds", "player": "P One", "strike": 249.5, "p_over": 0.4,
+         "ask_yes": 0.3, "ev_yes": 0.08, "ask_no": 0.7, "ev_no": -0.1, "n_books": 5, "flag": True,
+         "commence": (now + timedelta(hours=2)).isoformat()},
+        {"ticker": "B", "stat": "rec_yds", "player": "P Two", "strike": 50.5, "p_over": 0.4,
+         "ask_yes": 0.3, "ev_yes": 0.5, "ask_no": 0.7, "ev_no": -0.1, "n_books": 1, "flag": False,
+         "commence": (now - timedelta(hours=1)).isoformat()},
+        {"ticker": "C", "stat": "rec_yds", "player": "P Three", "strike": 60.5, "p_over": 0.7,
+         "ask_yes": 0.9, "ev_yes": -0.2, "ask_no": 0.2, "ev_no": 0.09, "n_books": 2, "flag": False,
+         "commence": (now + timedelta(hours=3)).isoformat()},
+    ]}
+    with patch("mlb_core.storage.read_bytes", return_value=json.dumps(snap).encode()):
+        out = _nfl_feed(0.02, 50)
+    tickers = [r["ticker"] for r in out["rows"]]
+    assert tickers == ["A", "C"]                 # started game dropped, flagged first
+    assert out["rows"][1]["side"] == "UNDER" and out["rows"][1]["fair_prob"] == 0.3
+    assert out["validated"] is False and out["status"] == "shadow_live"
+
+
+def test_ev_feed_nfl_unavailable_and_stale():
+    from mlb.runners.public_api import _nfl_feed
+    with patch("mlb_core.storage.read_bytes", side_effect=FileNotFoundError):
+        assert _nfl_feed(0.02, 10)["status"] == "unavailable"
+    old = {"ts": "2020-01-01T00:00:00+00:00", "rows": []}
+    with patch("mlb_core.storage.read_bytes", return_value=json.dumps(old).encode()):
+        out = _nfl_feed(0.02, 10)
+    assert out["stale"] is True and out["status"] == "idle"
+
+
+def test_new_public_routes_require_key(client):
+    for path in ("/api/public/ev/feed", "/api/public/analytics/deep-dive"):
+        assert client.get(path).status_code == 401
+        with patch("main.get_ev_scanner_feed", return_value={"mlb": {"rows": []}}), \
+             patch("main.get_analytics_deep_dive", return_value={"edge_buckets": []}):
+            assert client.get(path, headers={"X-API-Key": VALID_KEY}).status_code == 200

@@ -885,6 +885,7 @@ from mlb.runners.public_api import (
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
     get_clv_data, get_today_slate,
+    get_ev_scanner_feed, get_analytics_deep_dive,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1094,6 +1095,58 @@ def public_alerts_today():
         return resp
     except Exception as exc:
         logger.exception("public_alerts_today failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/ev/feed", methods=["GET", "OPTIONS"])
+def public_ev_feed():
+    """+EV terminal feed: tracked MLB system='EV' rows + the shadow NFL prop sweep."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_ev_scanner_feed(
+            _get_engine(),
+            sport=request.args.get("sport", "all"),
+            min_ev=float(request.args.get("min_ev", 0.02)),
+            limit=int(request.args.get("limit", 100)),
+            days=int(request.args.get("days", 2)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except Exception as exc:
+        logger.exception("public_ev_feed failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/analytics/deep-dive", methods=["GET", "OPTIONS"])
+def public_analytics_deep_dive():
+    """Edge-bucket calibration, per-book leaderboard, EV-vs-model bankroll curve, EV headline."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_analytics_deep_dive(
+            _get_engine(),
+            system=request.args.get("system"),
+            bankroll=float(request.args.get("bankroll", 1000)),
+            kelly_mult=float(request.args.get("kelly_mult", 1.0)),
+            sport=request.args.get("sport", "mlb"),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_analytics_deep_dive failed")
         return jsonify({"error": str(exc)}), 500
 
 

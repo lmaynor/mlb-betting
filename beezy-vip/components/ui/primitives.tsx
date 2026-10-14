@@ -4,7 +4,7 @@ import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score
 import { SYSTEM_PILL, systemLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
-const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, #04040b)', color: '#c9c6cf', border: '1px solid var(--iron)' }
+const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, #090a0f)', color: '#c9c6cf', border: '1px solid var(--iron)' }
 
 export function LiveDot({ label }: { label?: string }) {
   return (

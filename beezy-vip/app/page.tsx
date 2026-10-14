@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { Hero }             from '@/components/landing/hero'
+import { CommandCenter }     from '@/components/landing/command-center'
 import { EdgeCompare }      from '@/components/landing/edge-compare'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { ModelsGrid }       from '@/components/landing/models-grid'
@@ -15,6 +16,9 @@ export default function HomePage() {
         <div style={{ marginTop: '36px', height: '320px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--basalt)', background: 'var(--graphite)' }} className="reveal" />
       }>
         <Hero />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CommandCenter />
       </Suspense>
       <Suspense fallback={null}>
         <EdgeCompare />

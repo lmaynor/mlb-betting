@@ -2,15 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Calculator, ClipboardList, ListChecks, Trophy, Zap } from 'lucide-react'
+import { BarChart3, Home, Layers, Trophy, Zap } from 'lucide-react'
 
 const TABS = [
-  { label: 'Edge',    href: '/edge',        Icon: Zap },
-  { label: 'Card',    href: '/cheat-sheet', Icon: ClipboardList },
-  { label: 'Picks',   href: '/picks',       Icon: ListChecks },
-  { label: 'Results', href: '/results',     Icon: Trophy },
-  { label: 'Tools',   href: '/tools',       Icon: Calculator },
-  { label: 'Models',  href: '/models',      Icon: BarChart3 },
+  { label: 'Home',      href: '/',          Icon: Home },
+  { label: '+EV',       href: '/ev',        Icon: Zap },
+  { label: 'Sports',    href: '/sports/mlb', Icon: Layers, match: '/sports' },
+  { label: 'Analytics', href: '/analytics', Icon: BarChart3 },
+  { label: 'Results',   href: '/results',   Icon: Trophy },
 ]
 
 export function BottomNav() {
@@ -36,7 +35,8 @@ export function BottomNav() {
       }}
     >
       {TABS.map(tab => {
-        const active = pathname === tab.href || (tab.href !== '/' && pathname.startsWith(tab.href))
+        const base = tab.match ?? tab.href
+        const active = base === '/' ? pathname === '/' : pathname === base || pathname.startsWith(base + '/')
         const color = active ? 'var(--signal)' : 'var(--fog)'
         return (
           <Link

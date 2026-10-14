@@ -1827,7 +1827,10 @@ tweet drafts aligned to `beezy.fyi` / `@beezy_fyi`.
 ```
 beezy-vip/
 ├── app/                          Next.js App Router pages
-│   ├── page.tsx                  Landing page
+│   ├── page.tsx                  Landing page (hero + daily command center)
+│   ├── ev/                       +EV terminal (page.tsx server, ev-client.tsx)
+│   ├── sports/[sport]/           Sport hubs (mlb/nfl/nba/nhl)
+│   ├── analytics/                Deep-dive analytics
 │   ├── picks/                    Pick browser pages
 │   ├── results/                  Results history
 │   ├── models/                   Model methodology
@@ -1891,6 +1894,8 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
 | `GET /api/public/stats/sparkline` | 300s | Daily cumulative P&L last 30 days |
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
+| `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow NFL sweep block read from `EVSweep/nfl_props/latest.json` (carries `status`/`age_minutes`/`stale`/`validated:false`; started games dropped) |
+| `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
 that call these are marked `export const dynamic = 'force-dynamic'` to
@@ -1964,69 +1969,46 @@ This route ONLY manages `learn_articles` -- it never touches the `bets` table.
 
 ### Design system
 
-**Dell 1996 catalog aesthetic** (fully implemented 2026-06-10). Every terminal-palette
-color (`#10b981`, `#ef4444`, `#3b82f6`, `#f59e0b`, `#71717a`) has been replaced
-site-wide. OG image routes (`/api/og/`) and `legal/` pages intentionally excluded.
+**Terminal design system v2** (2026-10-14; supersedes both the Dell 1996 look and the
+2026-06-28 Red Hat terminal). Dark fintech palette, Inter + JetBrains Mono, hairline
+borders, 6/10/14px radii. Tokens live in `app/globals.css` `:root` and `lib/tokens.ts`.
+The legacy variable NAMES (`--carbon`, `--graphite`, `--basalt`, `--signal`, ...) were kept
+and re-pointed at the new values, so existing components needed no rewrite -- change a
+colour by editing the value, not by renaming.
 
-#### Colors
-
-| Role | Value | Notes |
+| Role | Value | Var |
 |---|---|---|
-| Page background | `#0a0a0c` | CSS var `--bg` |
-| Surface | `#111114` | CSS var `--surface` |
-| Hard border | `#000` | Page frame, card edges |
-| Inner border | `#1f1f24` | CSS var `--border`; between surface elements |
-| Win / positive | `#b3bd95` | Sage -- Dell Latitude Notebooks tint |
-| Loss / negative | `#d77a7a` | Salmon -- Dell OptiPlex GX tint |
-| Info / sky | `#9ab6c8` | Sky -- Dellware catalog tint |
-| Periwinkle | `#8c9ae0` | PowerEdge Servers |
-| Peach | `#e6915d` | Dimension / OptiPlex Gs |
-| Lime | `#c0d4a7` | Edge/model signal (OptiPlex G Series) |
-| Steel | `#a5b8c0` | Neutral active state (Dimension XPS Pro) |
-| Muted text | `#888890` | WCAG AA 5.0:1 on dark bg |
-| Links | `#9999ff` | Classic hyperlink blue (7.25:1 on dark bg) |
-| CTA yellow | `#fcc20f` | Dell "BUY a DELL" sticker yellow |
-| Hero panel | `#0e1f0d` | Dark green; low-key, not alarming |
+| Canvas | `#090a0f` | `--carbon` / `--bg` |
+| Card surface | `#11131a` | `--graphite` / `--surface` |
+| Elevated / hover | `#171a24` | `--obsidian` / `--surface-elevated` |
+| Hairlines | `#1e2230` outer, `#151822` inner | `--basalt` / `--border-subtle` |
+| Brand / WIN / +EV | `#57F287` | `--signal` / `--brand` |
+| Lean | `#facc15` | `--warn` / `--lean` |
+| Loss | `#ef4444` | `--loss` |
+| Text | `#f3f4f6` / `#9ca3af` / `#7d8596` (muted, kept AA) | `--ash` / `--silver` / `--fog` |
 
-System pill assignment: NRFI = sage, HR = salmon, F5 = sky, K = periwinkle,
-OUTS = peach, BATTER_TB = sky, BATTER_HITS = sky, GAME = steel.
+Typography: `--font-inter` (UI) + `--font-mono` (JetBrains Mono; all odds, probabilities,
+EV%, stakes, timestamps). `--font-text`/`--font-display` alias Inter. Legacy class names
+`.dell-display`, `.dell-heading`, `.times`, `.mono` are retained but map to Inter/JetBrains.
+`CARD_STYLE`, `BOOK_META`/`bookDisplay()`, `TIER_META` are exported from `lib/tokens.ts` /
+`lib/beezy-score.ts`. RULE unchanged: `var()` does not work in SVG attributes (recharts) or
+Satori OG routes -- use literal hex there.
 
-#### Typography
+#### Information architecture (2026-10-14)
 
-CSS classes defined in `app/globals.css`:
-- `.dell-display` -- Arial Black, 900 weight, uppercase. H1 headlines, logo.
-- `.dell-heading` -- Arial, 700 weight, uppercase, tracked. Section labels, eyebrows, badges.
-- `.times` -- Georgia (primary), Times New Roman (fallback), serif. Body copy, descriptions.
-  Georgia is a universally available system font -- no web font load needed. Reliable on Vercel edge.
-- `.mono` -- JetBrains Mono, loaded via `next/font/google`. Data, numbers, odds, tickers.
-
-Google Fonts loaded in `app/layout.tsx`: Inter (CSS var `--font-inter`) and
-JetBrains Mono (CSS var `--font-mono`). No serif loaded via Google Fonts --
-Georgia is the system fallback for `.times` everywhere including OG image routes.
-
-#### Layout rules
-
-- `borderRadius: 0` everywhere. No rounded corners.
-- All borders `1px solid` (never `0.5px solid`).
-- Page frame: `8px solid #000` on `.page-frame` class.
-- No drop shadows. No gradients. No emissive glows.
-- Hard borders only for depth.
-
-#### Nav
-
-Sticky top nav (`components/layout/nav.tsx`):
-- Logo area: `flex: 1`. Contains 28x28px dashed placeholder box + "BEEZY.FYI" text.
-  Replace the `<div>` placeholder with `<img>` when the final mark is ready.
-- Nav links: natural width, visually centered by the two `flex: 1` flanking sections.
-- Right section: `flex: 1, justifyContent: 'flex-end'`. X icon + auth + Discord sticker.
-- Mobile: `.nav-desktop` hidden; `.mobile-only` shows auth + X + Discord compact.
-
-#### Tokens file
-
-Do not redefine `B`, `TEAM_ABBREV`, `SYSTEM_COLOR`, `SYSTEM_PILL`, or `pickLabel`
-locally in components. Import from `@/lib/tokens` instead. `B` is `'1px solid #000'`
-(hard frame border). `B_INNER` is the inner surface border. When adding a new system,
-update `lib/tokens.ts` for Dell tint colors/labels and `lib/pick-systems.ts` for routing.
+- **Nav** (`components/layout/nav.tsx`): tier 1 = Home, +EV Terminal, Picks Blotter, Analytics,
+  Results, Tools + bankroll pill (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) + auth +
+  "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating there is untouched). Tier 2 =
+  sport ribbon from `lib/sports.ts`. Bottom nav: Home | +EV | Sports | Analytics | Results.
+- **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
+  `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
+  NFL rows are SHADOW: no stake sizing, no score, idle/stale banner -- the sweep's own contract
+  says its signals are unvalidated and never member-facing.
+- **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
+  (mlb live, nfl shadow, nba data_only, nhl planned). Update that file when a pillar's real
+  status changes -- do not write aspirational copy there.
+- **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
+  per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
 
 ### Vercel deployment
 

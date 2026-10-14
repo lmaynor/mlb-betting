@@ -5,19 +5,19 @@
    Without these the classes compile to nothing and the dashboard renders
    unstyled. Hex values mirror the :root terminal palette below. */
 @theme {
-  --color-accent: #71d083;  /* --signal */
-  --color-muted:  #8a8893;  /* --fog */
-  --color-text:   #eeeef0;  /* --ash */
-  --color-bright: #f3f2f5;  /* --chalk */
-  --color-win:    #71d083;  /* --signal */
-  --color-loss:   #ec6a6a;  /* --loss */
-  --color-bg:     #04040b;  /* --carbon */
+  --color-accent: #57f287;  /* --signal */
+  --color-muted:  #7d8596;  /* --fog */
+  --color-text:   #f3f4f6;  /* --ash */
+  --color-bright: #ffffff;  /* --chalk */
+  --color-win:    #57f287;  /* --signal */
+  --color-loss:   #ef4444;  /* --loss */
+  --color-bg:     #090a0f;  /* --carbon */
 }
 
 /* ===================================================================
    beezy.fyi — Terminal design system
    Dark near-black canvas, hairline borders, Signal Green brand accent,
-   Red Hat type trio, and a per-system color taxonomy (Discord-style).
+   Inter + JetBrains Mono, and a per-system color taxonomy (Discord-style).
    Replaces the retro "Dell 1996" aesthetic site-wide.
    =================================================================== */
 
@@ -39,31 +39,31 @@ img, video { max-width: 100%; height: auto; }
 
 :root {
   /* ── Neutral surface ladder (Carbon → Slate) ───────────── */
-  --carbon:        #04040b;   /* level 0 — page canvas */
-  --graphite:      #121113;   /* level 1 — cards, nav, panels */
-  --obsidian:      #1a191b;   /* level 2 — nested panels, footer, headers */
-  --slate:         #232225;   /* level 3 — inputs, hovers, button fills */
-  --basalt:        #2b292d;   /* primary hairline border */
-  --iron:          #323035;   /* stronger divider / hover border */
-  --pewter:        #3c393f;   /* raised border */
-  --steel:         #49474e;   /* muted icon strokes, emphasis border */
+  --carbon:        #090a0f;   /* level 0 — page canvas */
+  --graphite:      #11131a;   /* level 1 — cards, nav, panels */
+  --obsidian:      #171a24;   /* level 2 — nested panels, footer, headers */
+  --slate:         #1b1f2b;   /* level 3 — inputs, hovers, button fills */
+  --basalt:        #1e2230;   /* primary hairline border */
+  --iron:          #2e3446;   /* stronger divider / hover border */
+  --pewter:        #3a4156;   /* raised border */
+  --steel:         #4b5469;   /* muted icon strokes, emphasis border */
 
   /* ── Text ladder ───────────────────────────────────────── */
-  --fog:           #8a8893;   /* muted / secondary copy (lifted for AA) */
-  --silver:        #b5b2bc;   /* secondary text, labels, icon outlines */
-  --ash:           #eeeef0;   /* primary body text */
-  --chalk:         #f3f2f5;   /* headings / display */
+  --fog:           #7d8596;   /* muted / secondary copy (lifted for AA) */
+  --silver:        #9ca3af;   /* secondary text, labels, icon outlines */
+  --ash:           #f3f4f6;   /* primary body text */
+  --chalk:         #ffffff;   /* headings / display */
 
   /* ── Brand + semantic ──────────────────────────────────── */
-  --signal:        #71d083;   /* brand / primary CTA / WIN */
-  --signal-led:    #366740;   /* green border accent */
-  --moss:          #2d5736;   /* green-tinted border */
-  --forest:        #1d3a24;   /* green tinted surface */
-  --link:          #70b8ff;   /* inline links */
+  --signal:        #57f287;   /* brand / primary CTA / WIN */
+  --signal-led:    #2c9a58;   /* green border accent */
+  --moss:          #1f6b3d;   /* green-tinted border */
+  --forest:        #10321f;   /* green tinted surface */
+  --link:          #38bdf8;   /* inline links */
   --lilac:         #baa7ff;   /* decorative violet accent */
-  --loss:          #ec6a6a;   /* LOSS / negative */
-  --warn:          #e3b261;   /* caution / lean tier / partial */
-  --push:          #8a8893;   /* push / void neutral */
+  --loss:          #ef4444;   /* LOSS / negative */
+  --warn:          #facc15;   /* caution / lean tier / partial */
+  --push:          #94a3b8;   /* push / void neutral */
 
   /* Tinted semantic surfaces (derived) */
   --win-wash:      color-mix(in oklab, var(--signal) 14%, var(--carbon));
@@ -89,7 +89,18 @@ img, video { max-width: 100%; height: auto; }
   /* ── Confidence tiers ──────────────────────────────────── */
   --strong: var(--signal);
   --lean:   var(--warn);
-  --watch:  var(--silver);
+  --watch:  #94a3b8;
+  --brand: var(--signal);
+  --brand-dim: rgba(87, 242, 135, 0.12);
+  --brand-border: rgba(87, 242, 135, 0.35);
+  --ev-gold: #f59e0b;
+  --surface-elevated: var(--obsidian);
+  --surface-glass: rgba(17, 19, 26, 0.85);
+  --text-secondary: var(--silver);
+  --border-subtle: #151822;
+  --border-strong: var(--iron);
+  --font-text: var(--font-inter);
+  --font-display: var(--font-inter);
 
   /* ── Per-system identity colors (Discord-style taxonomy) ──
      Solid = system hue (text/markers/accents).
@@ -112,11 +123,11 @@ img, video { max-width: 100%; height: auto; }
   --sys-ev:          #d97ee0;   /* orchid — pooled +EV alert tracking */
 
   /* ── Radius — soft, restrained ─────────────────────────── */
-  --radius-sm:   4px;
-  --radius:      8px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
+  --radius-sm:   6px;
+  --radius:      10px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
   --radius-pill: 999px;
 
   /* ── Elevation — subtle, premium (depth, not skeuomorphism) */
@@ -124,8 +135,8 @@ img, video { max-width: 100%; height: auto; }
   --shadow-sm:      0 1px 2px rgba(0,0,0,0.45);
   --shadow-md:      0 6px 20px -6px rgba(0,0,0,0.55);
   --shadow-lg:      0 18px 50px -12px rgba(0,0,0,0.65);
-  --shadow-card:    var(--shadow-sm);
-  --shadow-elevated:var(--shadow-md);
+  --shadow-card:    0 2px 8px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-elevated:0 8px 24px rgba(0,0,0,0.65), 0 0 0 1px rgba(87,242,135,0.18);
   --glow-signal:    0 0 24px -6px color-mix(in oklab, var(--signal) 55%, transparent);
 
   /* ── Layout rhythm ─────────────────────────────────────── */
@@ -166,15 +177,14 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: clip;
-  letter-spacing: 0.025em;
+  letter-spacing: 0;
 }
 
 /* ── Typography classes (names retained from prior system) ──────────
-   Display = Red Hat Display (tight tracking). Heading = Red Hat Text,
-   uppercase tracked labels. Body = Red Hat Text. Mono = Red Hat Mono. */
+   Display/Heading/Body = Inter. Mono (odds, EV%, stakes, times) = JetBrains Mono. */
 .dell-display {
   font-family: var(--font-display), var(--font-text), system-ui, sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.025em;
   line-height: 1.05;
   text-transform: none;
@@ -184,12 +194,13 @@ body {
   font-family: var(--font-text), system-ui, sans-serif;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.06em;
 }
 .times {
   font-family: var(--font-text), system-ui, sans-serif;
   font-weight: 400;
-  letter-spacing: 0.025em;
+  letter-spacing: 0;
+  line-height: 1.6;
 }
 .mono {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -505,6 +516,9 @@ a:focus-visible {
   .cheat-sheet-layout { flex-direction: column; align-items: center; max-width: 390px; }
   .cheat-sheet-picks-link { text-align: center; }
 }
+
+/* Secondary nav items (bankroll pill, X) drop out on narrow desktop/tablet widths */
+@media (max-width: 1099px) { .nav-xl { display: none !important; } }
 
 /* ── Nav links never wrap ───────────────────────────────────────── */
 .nav-desktop a { white-space: nowrap; }
