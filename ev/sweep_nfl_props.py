@@ -5,11 +5,16 @@ Each cycle:  ParlayAPI slate (1 credit) -> per-upcoming-event props (1 credit/ma
 de-vig -> median consensus per (player, stat, point)  ->  join to EVERY open Kalshi NFL prop market at the
 same point  ->  log every comparable row (the evidence table)  ->  flag net-of-fee EV candidates  ->
 Discord alert (new ones only, per day)  ->  write latest.json for the executor.
+Same pull, zero extra credits, two EVIDENCE-ONLY side outputs:
+  * Sink A  -- sportsbook/exchange quotes beating their leave-self-out consensus (book_outliers_{hhmmss}.csv)
+  * pooled  -- adjacent-half-point pooled consensus vs the exact-point one for each Kalshi strike (pooled_{hhmmss}.csv)
 
 SHADOW ONLY: this module never places an order. Run (Cloud Run job):
   python -m ev.sweep_nfl_props --loop-minutes 15 --until 2026-10-06T05:00:00Z
 Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/cycle_{HHMMSS}.csv    every comparable row
+  EVSweep/nfl_props/{ET day}/book_outliers_{HHMMSS}.csv   Sink A: book quotes beating leave-self-out consensus
+  EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
   EVSweep/nfl_props/latest.json                    rows for the executor
 Discord: DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin-only). NEVER the member channels:
@@ -31,7 +36,8 @@ import requests
 
 from ev.kalshi_map import game_key
 from ev.kalshi_props import PROP_SERIES, PropLeg, map_prop_market
-from ev.props import build_consensus, parse_event_props
+from ev.props import (POOL_MAX_GAP, book_points, build_consensus, parse_event_props, pooled_consensus,
+                      scan_book_outliers)
 from ev.props_config import props_config
 from ev.sports import NFL
 from mlb.execution.kalshi.client import PUBLIC_DATA_ENV, KalshiClient
@@ -121,7 +127,9 @@ def consensus_snapshot(parlay_events: list):
         points = [{"player_norm": pn, "stat": st, "point": pt, "p_over": c.p_over, "n_books": c.n_books,
                    "disp": c.disp, "books": list(c.books), "n_onesided": c.n_onesided, "n_dfs": c.n_dfs,
                    "team_hints": list(c.team_hints), "book_fair": dict(c.book_fair)} for (pn, st, pt), c in build_consensus(quotes).items()]
-        snap.append({"game_key": gk, "commence": start.isoformat(), "points": points})
+        curves = [{"player_norm": pn, "stat": st, "pts": [[b, pt, round(f, 5)] for b, pt, f in ents]}
+                  for (pn, st), ents in book_points(quotes).items() if st in POOL_MAX_GAP and len(ents) >= 2]
+        snap.append({"game_key": gk, "commence": start.isoformat(), "points": points, "curves": curves})
     return snap, stats
 
 
@@ -175,6 +183,60 @@ def compute_rows(parlay_events: list, legs_by_game: dict, now: datetime, cfg, fe
     snap, s1 = consensus_snapshot(parlay_events)
     rows, s2 = rows_from_snapshot(snap, legs_by_game, now, cfg, fee_mult)
     return rows, {**s1, **s2}
+
+
+def pooled_rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
+    """EVIDENCE ONLY: for every Kalshi strike on a poolable stat, the exact-point consensus (if any) beside the
+    adjacent-half-point POOLED consensus, with side EVs from each. Never flagged, alerted or executed; the question
+    it answers is whether pooling recovers real >= n_min_books coverage and how far its prices sit from exact ones."""
+    rows, stats = [], {"pool_legs": 0, "pool_ge_min": 0, "pool_recovered": 0}
+    for ev in snap:
+        gk, start = ev["game_key"], datetime.fromisoformat(ev["commence"])
+        exact = {(p["player_norm"], p["stat"], p["point"]): p for p in ev["points"]}
+        curves = {(c["player_norm"], c["stat"]): c["pts"] for c in ev.get("curves", [])}
+        mins = (start - now).total_seconds() / 60.0
+        for leg, mk in legs_by_game.get(gk, []):
+            ents = curves.get((leg.player_norm, leg.stat))
+            if ents is None:
+                continue
+            pc = pooled_consensus([tuple(e) for e in ents], leg.stat, leg.strike)
+            if pc is None:
+                continue
+            stats["pool_legs"] += 1
+            ex = exact.get((leg.player_norm, leg.stat, leg.strike))
+            if pc["n_books"] >= cfg.n_min_books:
+                stats["pool_ge_min"] += 1
+                if ex is None or ex["n_books"] < cfg.n_min_books:
+                    stats["pool_recovered"] += 1
+            ya, na = _f(mk.get("yes_ask_dollars")), _f(mk.get("no_ask_dollars"))
+            h = cfg.h0 + cfg.h_disp * pc["disp"]
+            ey, ny = side_eval(pc["p_over"], ya, fee_mult, cfg, h), side_eval(1.0 - pc["p_over"], na, fee_mult, cfg, h)
+            rows.append({
+                "ts": now.isoformat(), "ticker": leg.ticker, "game_key": gk, "stat": leg.stat, "player": leg.player,
+                "strike": leg.strike, "mins_to_kick": round(mins, 1),
+                "exact_p_over": None if ex is None else round(ex["p_over"], 5),
+                "exact_n_books": 0 if ex is None else ex["n_books"],
+                "pool_p_over": round(pc["p_over"], 5), "pool_n_books": pc["n_books"], "pool_disp": round(pc["disp"], 5),
+                "pool_n_exact": pc["n_exact"], "interpolated": pc["interpolated"], "pool_books": ",".join(pc["books"]),
+                "ask_yes": ya, "ask_no": na,
+                "pool_ev_yes": None if ey is None else round(ey[0], 5),
+                "pool_ev_no": None if ny is None else round(ny[0], 5)})
+    return rows, stats
+
+
+def book_outlier_rows(parlay_events: list, now: datetime, **kw) -> list:
+    """Sink A rows across the pulled events (re-parses the already-fetched payloads; no ParlayAPI credits)."""
+    rows = []
+    for pe in parlay_events:
+        eg = event_game(pe["event"])
+        if eg is None:
+            continue
+        gk, start = eg
+        mins = round((start - now).total_seconds() / 60.0, 1)
+        quotes, _ = parse_event_props(pe["props"])
+        for r in scan_book_outliers(quotes, **kw):
+            rows.append({"ts": now.isoformat(), "game_key": gk, "mins_to_kick": mins, **r})
+    return sorted(rows, key=lambda r: -r["ev"])
 
 
 # ----------------------------------------------------------------------------- IO
@@ -336,6 +398,14 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
         rows, jstats = rows_from_snapshot(snap, legs, now, cfg, mult)
     except KalshiBlocked:
         kalshi_ok = False                                  # expected on blocked egress IPs; local executor joins
+    pooled, pstats = [], {}
+    if kalshi_ok:
+        pooled, pstats = pooled_rows_from_snapshot(snap, legs, now, cfg, mult)
+    try:
+        outliers = book_outlier_rows(parlay_events, now)
+    except Exception:                                                                    # noqa: BLE001
+        log.exception("sink A outlier scan failed")                 # evidence-only: never break the cycle
+        outliers = []
     flagged = [r for r in rows if r["flag"]]
     new = post_new(flagged, state, day) if flagged else 0
     bpm = jstats.pop("books_per_match", [])
@@ -344,8 +414,15 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
                "rows": len(rows), "flagged": len(flagged), "new_alerts": new,
                "credits_remaining": pc.credits_remaining,
                "books_per_match_hist": {str(n): bpm.count(n) for n in sorted(set(bpm))},
-               "kalshi_map_fails": kfails, **sstats, **jstats}
+               "book_outliers": len(outliers), "book_outlier_books": sorted({r["book"] for r in outliers}),
+               "kalshi_map_fails": kfails, **sstats, **jstats, **pstats}
     log.info("CYCLE %s", json.dumps(summary, default=str))
+    for name, evidence in (("book_outliers", outliers), ("pooled", pooled)):
+        if evidence:
+            try:
+                _write(pd.DataFrame(evidence).to_csv(index=False).encode(), f"{PREFIX}/{day}/{name}_{hhmmss}.csv")
+            except Exception as e:                                                      # noqa: BLE001
+                log.warning("%s write failed: %r", name, e)
     if rows:
         _write(pd.DataFrame(rows).to_csv(index=False).encode(), f"{PREFIX}/{day}/cycle_{hhmmss}.csv")
         _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "summary": summary, "rows": rows},

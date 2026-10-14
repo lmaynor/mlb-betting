@@ -97,14 +97,20 @@ def evaluate(leg: Leg, book: Book, cons: ConsPoint | None, k_prev: float | None,
     inputs["book_age_s"] = round(age_s, 2)
     if age_s > cfg.book_max_age_s:
         return rej("REJ_BOOK_STALE", f"book age {age_s:.1f}s > {cfg.book_max_age_s}s")
-    if not book.is_two_sided():
+    # allow_wide_book_on_consensus: the reference price is an EXTERNAL book consensus, not this venue's mid, so a
+    # wide / one-sided venue book does not make the reference noisy -- only the executable ask matters (it is
+    # checked against the consensus below instead of the mid). Default False keeps Kalshi behavior unchanged.
+    wide_ok = cfg.allow_wide_book_on_consensus
+    if not wide_ok and not book.is_two_sided():
         return rej("REJ_BOOK_ILLIQUID", "one-sided book")
     if book.is_crossed():
         return rej("REJ_BOOK_ILLIQUID", "crossed book")
     spread = book.yes_spread()
     inputs["yes_spread"] = spread
-    if spread is None or spread > cfg.spread_max:
+    wide = spread is None or spread > cfg.spread_max
+    if wide and not wide_ok:
         return rej("REJ_BOOK_ILLIQUID", f"spread {spread} > {cfg.spread_max}")
+    inputs["wide_book"] = wide
     yes_mid = book.yes_mid()
     inputs["kalshi_yes_mid"] = yes_mid
 
@@ -125,7 +131,7 @@ def evaluate(leg: Leg, book: Book, cons: ConsPoint | None, k_prev: float | None,
     results: list[tuple[float, Decision]] = []
     for side in ("yes", "no"):
         p_side = cons.p if side == "yes" else 1.0 - cons.p
-        mid_side = yes_mid if side == "yes" else 1.0 - yes_mid
+        mid_side = None if yes_mid is None else (yes_mid if side == "yes" else 1.0 - yes_mid)
         sel = leg.selection_yes if side == "yes" else leg.selection_no
         ask = book.best_ask(side)
         side_inputs = dict(inputs, side=side, p_cons_side=round(p_side, 4), ask=ask)
@@ -145,12 +151,17 @@ def evaluate(leg: Leg, book: Book, cons: ConsPoint | None, k_prev: float | None,
         if gap <= 0:
             results.append((gap, srej("REJ_EV_LOW", f"ask {ask} >= consensus {p_side:.4f}")))
             continue
-        if abs(mid_side - p_side) > cfg.kdev_max:
+        if wide:
+            # wide/one-sided book (wide_ok only): the mid is meaningless, so bound the ask's distance to consensus
+            if gap > cfg.kdev_max:
+                results.append((gap, srej("REJ_KALSHI_OFF", f"wide book: cons {p_side:.3f} - ask {ask:.3f} > {cfg.kdev_max}")))
+                continue
+        elif abs(mid_side - p_side) > cfg.kdev_max:
             results.append((gap, srej("REJ_KALSHI_OFF", f"|mid {mid_side:.3f} - cons {p_side:.3f}| > {cfg.kdev_max}")))
             continue
 
         dp_cons = None if cons.prev_p is None else (p_side - (cons.prev_p if side == "yes" else 1.0 - cons.prev_p))
-        dp_k = None if k_prev is None else (mid_side - (k_prev if side == "yes" else 1.0 - k_prev))
+        dp_k = None if k_prev is None or mid_side is None else (mid_side - (k_prev if side == "yes" else 1.0 - k_prev))
         lag = lag_signature(dp_cons, dp_k, cfg.lag_move)
         if lag == KALSHI_INFORMED:
             results.append((gap, srej("REJ_KALSHI_INFORMED", f"dp_kalshi={dp_k:.3f} dp_cons={dp_cons:.3f}",

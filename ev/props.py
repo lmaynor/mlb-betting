@@ -23,7 +23,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
+from statistics import NormalDist
+
+from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
 DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
 
@@ -162,3 +164,90 @@ def build_consensus(quotes: list[Quote], devig_method: str = "proportional") -> 
             n_onesided=len(onesided - set(per_book)), n_dfs=n_dfs, team_hints=tuple(sorted(hints)),
             book_fair=tuple(sorted(per_book.items())))
     return out
+
+
+def scan_book_outliers(quotes: list[Quote], min_books: int = 4, min_ev: float = 0.03, max_disp: float = 0.06,
+                       devig_method: str = "proportional") -> list[dict]:
+    """Sink A: individual real-book / exchange quotes whose own price beats the LEAVE-SELF-OUT consensus at the same
+    (player, stat, point). Same reference as build_consensus (2-way de-vigged, DFS excluded) so it costs no extra
+    ParlayAPI credits. EV = p_fair * decimal - 1 at the quote's actual price; one-sided 'Yes' quotes are
+    scannable on their Over side. Evidence only -- the +7.56% paper figure behind this idea is MLB soft-book vs
+    Pinnacle-anchored consensus, not NFL."""
+    cons = build_consensus(quotes, devig_method=devig_method)
+    out = []
+    for q in quotes:
+        if q.book in DFS_BOOKS:
+            continue
+        c = cons.get((q.player_norm, q.stat, q.point))
+        if c is None:
+            continue
+        others = [p for b, p in c.book_fair if b != q.book]
+        if len(others) < min_books:
+            continue
+        disp = _mad(others)
+        if disp > max_disp:
+            continue
+        p_over = float(np.median(others))
+        for side, price, p_fair in (("OVER", q.over, p_over), ("UNDER", q.under, 1.0 - p_over)):
+            if price is None:
+                continue
+            dec = american_to_decimal(price)
+            ev = p_fair * dec - 1.0
+            if ev >= min_ev:
+                out.append({"book": q.book, "player": q.player, "player_norm": q.player_norm, "stat": q.stat,
+                            "point": q.point, "alt": q.alt, "side": side, "american": price,
+                            "decimal": round(dec, 4), "p_fair": round(p_fair, 4), "ev": round(ev, 4),
+                            "n_books": len(others), "disp": round(disp, 4)})
+    return sorted(out, key=lambda r: -r["ev"])
+
+
+# ---------------------------------------------------------------------------- pooled (adjacent half-point) consensus
+# EVIDENCE ONLY (logged next to the exact-point consensus, never used for flags/orders until shadow data says so).
+# Books split their main line across adjacent half-points (63.5 / 64.5 / 65.5), so an exact-point match often has 1-2
+# books where 3+ quote the player. Pooling moves each book's de-vigged P(over) from its own point to the target
+# point under a normal model of the stat with sd = POOL_SD_FRAC * target (UNVALIDATED rough CVs; the shift is
+# ~0.4/sd per yard so a 30% sd error moves a 1-yard shift by < 0.4pp). Discrete count stats are never pooled:
+# one reception is a ~12-15pp step, not a rounding error.
+POOL_MAX_GAP = {"pass_yds": 1.0, "rush_yds": 1.0, "rec_yds": 1.0}
+POOL_SD_FRAC = {"pass_yds": 0.22, "rush_yds": 0.65, "rec_yds": 0.55}
+
+
+def book_points(quotes: list[Quote], devig_method: str = "proportional") -> dict:
+    """{(player_norm, stat): [(book, point, fair P(over)), ...]} -- one entry per real two-sided book quote."""
+    out: dict = {}
+    for q in quotes:
+        if q.book in DFS_BOOKS or not q.two_sided:
+            continue
+        fair_over, _ = devig_two_way(american_to_implied_prob(q.over), american_to_implied_prob(q.under), devig_method)
+        out.setdefault((q.player_norm, q.stat), []).append((q.book, q.point, float(fair_over)))
+    return out
+
+
+def shift_p_over(p_over: float, from_point: float, to_point: float, sd: float) -> float:
+    """Re-express P(X > from_point) as P(X > to_point) under X ~ Normal(mu, sd) with mu implied by the price."""
+    if from_point == to_point:
+        return p_over
+    nd = NormalDist()
+    p = min(max(p_over, 1e-4), 1 - 1e-4)
+    mu = from_point + sd * nd.inv_cdf(p)                 # P(X > from) = p  ->  (from - mu)/sd = -inv_cdf(p)
+    return float(1.0 - nd.cdf((to_point - mu) / sd))
+
+
+def pooled_consensus(entries: list, stat: str, target: float, min_books: int = 1):
+    """Pooled consensus at `target` from [(book, point, fair)]: each book contributes its quote NEAREST the target
+    (within POOL_MAX_GAP[stat]), shifted to the target. None if the stat is not poolable or < min_books books."""
+    gap = POOL_MAX_GAP.get(stat)
+    if gap is None:
+        return None
+    sd = POOL_SD_FRAC[stat] * max(target, 1.0)
+    best: dict = {}
+    for book, pt, fair in entries:
+        d = abs(pt - target)
+        if d <= gap and (book not in best or d < best[book][0]):
+            best[book] = (d, pt, fair)
+    if len(best) < min_books:
+        return None
+    vals = [shift_p_over(f, pt, target, sd) for _, pt, f in best.values()]
+    n_exact = sum(1 for d, _, _ in best.values() if d == 0)
+    return {"p_over": float(np.median(vals)), "n_books": len(vals), "disp": _mad(vals), "n_exact": n_exact,
+            "interpolated": n_exact < len(vals), "books": sorted(best)}
