@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-13 22:36 CST_
+_Last updated: 2026-10-14 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -359,12 +359,15 @@ mlb-betting/
 │   │                             Kalshi join -> evidence CSVs), props_exec.py / novig/ (shadow executors),
 │   │                             props_config.py. GCS output EVSweep/nfl_props/{ET day}/: cycle_*.csv (every
 │   │                             comparable row), book_outliers_*.csv (Sink A), pooled_*.csv (exact vs pooled).
+│                             props_exec --refresh-consensus = opt-in per-game consensus refresh (s15.11).
 ├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
 │                                 bettingpros_api.py = local CLI for the HR/multi-market
 │                                 odds scrape (Cloud Run Job is mlb-backfill-bettingpros).
 │                                 novig_kalshi_scan.py = read-only Novig-vs-Kalshi NFL prop scan: taker+taker
 │                                 arbs plus hedged maker/taker margins (mm_*; shadow test #1 of
 │                                 docs/analysis/market_making_2026-10-12.md s9; gross of Kalshi maker fee).
+│                                 bettingpros_multisport_probe.py = read-only NFL/NBA/NHL BettingPros per-book
+│                                 prop coverage probe (findings: docs/analysis/bettingpros_multisport_probe_2026-10-14.md).
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
 │   ├── SGO_DEPLOY_NOTES.md
@@ -3360,6 +3363,27 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   `RiskGate`'s kill switch is ONE ledger-wide key: a plain `RiskGate("novig_paper")` tripping on a paper-API outage
   would halt every venue in that ledger, so the sandbox mirror uses `PaperRiskGate` (own key). `props_exec pnl`
   grades sandbox orders on the PAPER catalog's own settled statuses.
+- **On-demand per-game consensus refresh (`props_exec run --refresh-consensus`, 2026-10-14, PR #39).** The executor
+  used to REJECT a candidate once the cloud sweep's consensus was older than `cons_max_age_min` (25 min for props); the
+  sweep only republishes every ~15 min. `ev.sweep_nfl_props.refresh_single_event_consensus(pc, sport, event_id,
+  comm_iso, gk)` is one ParlayAPI event pull (5 credits = `len(PARLAY_MARKETS)`) returning a snapshot entry stamped
+  with the FETCH time. `props_exec.ConsRefresher` calls it for a candidate whose consensus is older than
+  `--refresh-after-min` (5), BEFORE the order-book fetch (the book has a 2s freshness gate). **OFF by default** -- it
+  spends the shared ParlayAPI pool (capped per process by `--refresh-max-credits`, default 300; needs `PARLAY_API_KEY`
+  on the machine running props_exec). Fail-closed: a failed/exhausted refresh leaves the age gate to reject
+  (`REJ_CONS_STALE`); a fresh view that no longer prices the proposition rejects `REJ_CONS_THIN` -- the old number is
+  never reused. Ledger decisions carry `inputs.cons_refreshed`. `consensus.json` entries now include `event_id`
+  (older snapshots fall back to one slate call). MLB's executor has no equivalent yet (design doc s3 S3 still open there).
+- **BettingPros as a free multi-sport prop feed (probe 2026-10-14; docs/analysis/bettingpros_multisport_probe_2026-10-14.md).**
+  `mlb_core.odds.bettingpros` fetchers take `sport=` (default MLB). Resolve market ids from the live `/v3/markets`
+  catalog by slug (`category=player-props`, `period=game`), not hardcoded ids; skip the `most-*` specials. NFL is deep
+  (11-14 books/prop, median 5-11 two-sided at the modal line) but main lines split across half-points, so exact-point
+  consensus starves exactly as on ParlayAPI; NHL skater props usable; NBA was preseason (FanDuel only) -- re-probe.
+  **Pinnacle is in `/v3/books` but NEVER quotes in the feed** (0% on props and NFL game lines; verified on raw
+  selections) -- it is not usable as a sharp anchor from BettingPros. Novig/ProphetX/Kalshi do quote (Kalshi must be
+  excluded from any consensus; DFS books like PrizePicks/Underdog are mixed in and are not two-sided prices).
+  `BOOK_ID_TO_NAME` is a trimmed US-book map that DROPS the Novig/ProphetX/Kalshi/Pinnacle ids, so a real ingest needs
+  a new book map. No BettingPros->`Quote` adapter exists yet.
 - **Settled-tape studies need a selection-safe sample.** The Kalshi tapes were fetched by FINAL volume (3,000-4,000
   cutoffs), which is outcome-dependent (a YES-resolving longshot trades ~3.5x more in-game), so the raw tape overstates
   the longshot YES rate (12.9% -> 36.3% across final-volume quintiles at a flat ~11% price). Keep only markets whose
@@ -3370,7 +3394,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-13 22:36 CST_
+_Last updated: 2026-10-14 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
