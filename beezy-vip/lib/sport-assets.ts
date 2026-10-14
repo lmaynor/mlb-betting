@@ -1,0 +1,78 @@
+/**
+ * NHL / NBA team logos + player headshots (client-safe: no JSON maps imported here).
+ *
+ *  - Team logos are SVGs COPIED into public/logos/{sport}/ by scripts/build_sport_assets.py (validated on download).
+ *  - Player headshots are HOTLINKED from the official CDNs (verified 2026-10-14 to serve transparent cutouts, so no
+ *    background-removal step):
+ *      NHL  assets.nhle.com/mugs/nhl/latest/{playerId}.png          336x336, ~100KB
+ *      NBA  a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{espnId}.png&w=200&h=146   ~31KB, ~17h cache
+ *    These are undocumented URLs and could change without notice -- every <img> must tolerate a 404 (see
+ *    components/ui/sport-assets.tsx, which hides a broken image instead of showing the broken-image icon).
+ *  - NBA ids here are ESPN's, NOT NBA personIds (the official NBA JSON endpoints are blocked from our infra).
+ *
+ * Name -> id lookups need the ~40KB player maps, so they live in lib/sport-assets.server.ts (server components only).
+ * Rows that already carry a resolved `player_id` (the +EV props feed does) can use headshotUrlById() directly.
+ * MLB keeps its own pipeline (public/headshots/player_map.json, /logos/{abbr}.png) -- unchanged.
+ *
+ * Team vocabulary: lib/sport-teams.json is GENERATED from nhl.config.TEAMS / nba.teams.TEAMS
+ * (tests/test_sport_assets.py fails if it drifts).
+ */
+import teams from './sport-teams.json'
+
+export type AssetSport = 'nhl' | 'nba'
+
+interface TeamRow { abbr: string; name: string; alias: string[] }
+const TABLE = teams as unknown as Record<AssetSport, TeamRow[]>
+
+/** accent-fold, lowercase, drop periods/hyphens, collapse spaces: "L.A. Clippers" -> "la clippers". */
+export function fold(s: string | null | undefined): string {
+  return (s ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\./g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+const BY_KEY: Record<AssetSport, Map<string, string>> = { nhl: new Map(), nba: new Map() }
+for (const sport of ['nhl', 'nba'] as AssetSport[]) {
+  for (const t of TABLE[sport]) {
+    BY_KEY[sport].set(fold(t.abbr), t.abbr)
+    BY_KEY[sport].set(fold(t.name), t.abbr)
+    for (const a of t.alias) BY_KEY[sport].set(fold(a), t.abbr)
+  }
+}
+
+/**
+ * Any of an abbreviation ('MTL'), an alias (Kalshi 'LA', ESPN 'GS'), or a full name ('Montréal Canadiens',
+ * 'L.A. Clippers') -> the canonical abbreviation, or null. Trailing-nickname match ("Canadiens") is attempted last
+ * and only when exactly one team ends with it, so an ambiguous nickname never picks a team.
+ */
+export function teamCode(sport: AssetSport, input: string | null | undefined): string | null {
+  const f = fold(input)
+  if (!f) return null
+  const hit = BY_KEY[sport].get(f)
+  if (hit) return hit
+  const tails = TABLE[sport].filter(t => fold(t.name).endsWith(' ' + f))
+  return tails.length === 1 ? tails[0].abbr : null
+}
+
+/** Repo-relative logo path for a team, or null when the team is unknown. Both leagues ship light + dark variants; the UI is dark so dark is the default. */
+export function teamLogoUrl(sport: AssetSport, team: string | null | undefined, opts: { dark?: boolean } = {}): string | null {
+  const code = teamCode(sport, team)
+  if (!code) return null
+  const base = code.toLowerCase()
+  const dark = opts.dark ?? true
+  return dark ? `/logos/${sport}/${base}-dark.svg` : `/logos/${sport}/${base}.svg`
+}
+
+/** Headshot URL from a league player id (NHL playerId / ESPN athlete id), or null for a missing/invalid id. */
+export function headshotUrlById(sport: AssetSport, id: number | string | null | undefined): string | null {
+  const n = typeof id === 'string' ? Number(id) : id
+  if (n == null || !Number.isInteger(n) || n <= 0) return null
+  return sport === 'nhl'
+    ? `https://assets.nhle.com/mugs/nhl/latest/${n}.png`
+    : `https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/${n}.png&w=200&h=146`
+}
+
+/** Same slug algorithm as scripts/build_sport_assets.py::_slug (accent-fold, lowercase, '_' separated). */
+export function playerSlug(name: string | null | undefined): string {
+  return fold(name).replace(/ /g, '_').replace(/[^a-z0-9_]/g, '')
+}

@@ -312,7 +312,7 @@ def settle_recovered() -> dict:
 
     engine = _make_engine(db_path="unused")
     with engine.connect() as conn:
-        pending = pd.read_sql(text("SELECT * FROM bets WHERE system='EV' AND result IS NULL"), conn)
+        pending = pd.read_sql(text("SELECT * FROM bets WHERE system='EV' AND sport='mlb' AND result IS NULL"), conn)
     if pending.empty:
         logger.info("settle_recovered: nothing pending")
         return {"settled": 0, "still_pending": 0}

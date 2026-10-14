@@ -51,7 +51,7 @@ from sqlalchemy import text
 def load_settled_ev(engine) -> pd.DataFrame:
     with engine.connect() as conn:
         df = pd.read_sql(
-            text("SELECT * FROM bets WHERE system='EV' AND result IS NOT NULL "
+            text("SELECT * FROM bets WHERE system='EV' AND sport='mlb' AND result IS NOT NULL "
                  "ORDER BY game_date, created_at"),
             conn,
         )

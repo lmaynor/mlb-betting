@@ -9,6 +9,8 @@ import { beezyscore } from '@/lib/beezy-score'
 import { CheatSheetClient, type EnrichedBet } from './cheat-sheet-client'
 import { formatCentralDate, siteDateKey, addDaysToDateKey } from '@/lib/dates'
 import playerMap from '@/public/headshots/player_map.json'
+import { teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
+import { headshotUrlByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
   title: 'Daily Card - Beezy.FYI',
@@ -81,7 +83,24 @@ function dateLabel(): string {
   }).toUpperCase()
 }
 
+// NHL/NBA rows (bets.sport, added 2026-10-14) resolve logos/headshots through lib/sport-assets; everything else is MLB
+// and takes the unchanged path below. The API defaults to sport=mlb, so today every row is MLB -- this is dormant until
+// NHL/NBA picks are requested.
+function assetSport(bet: Bet): AssetSport | null {
+  const s = (bet as Bet & { sport?: string }).sport
+  return s === 'nhl' || s === 'nba' ? s : null
+}
+
 function enrich(bet: Bet): EnrichedBet {
+  const sp = assetSport(bet)
+  if (sp) {
+    return {
+      ...bet,
+      headshotUrl: headshotUrlByName(sp, bet.player),
+      awayLogoUrl: teamLogoUrl(sp, bet.away_team),
+      homeLogoUrl: teamLogoUrl(sp, bet.home_team),
+    }
+  }
   return {
     ...bet,
     headshotUrl: headshotUrl(bet.player),

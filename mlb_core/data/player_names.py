@@ -3,7 +3,8 @@
 Why this exists (found live 2026-10-14, NHL): the SAME player is spelled differently by different books --
 "Alex Ovechkin" (FanDuel/Novig) vs "Alex Ovechkin (WSH)" (Bovada, team suffix) vs "Alexander Ovechkin" -- so a
 per-book consensus keyed on the raw string never groups them (n_books stayed 1). Two names can also be the SAME
-string for different people ("Jack Hughes" on NJ and VAN; "Max Muncy" in MLB). The only safe fix is to resolve
+string for different people (two Max Muncys in MLB; the current NHL/NBA rosters have no such pair, but trades and
+call-ups create them). The only safe fix is to resolve
 every quote to the league's own player id through a roster crosswalk, using the team hint when a book supplies one,
 and to FAIL CLOSED (return None) when it is still ambiguous -- a wrong merge prices a bet off another player's line.
 
@@ -103,7 +104,8 @@ class PlayerResolver:
         """-> (player_id | None, how) where how in {'exact','team','compat','ambiguous','unknown'}.
 
         `within`: the team codes actually playing in this event ((away, home)); two same-named players on different
-        teams ("Jack Hughes" NJ/VAN) resolve cleanly when only one of those teams is on the card."""
+        teams (e.g. two same-named players on different teams) resolve cleanly when only one of those teams is on the
+        card."""
         name, tail = split_team_tail(raw_name)
         team = (team or tail or "") or None
         n = norm_name(name)

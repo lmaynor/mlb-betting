@@ -1,0 +1,449 @@
+{
+ "nhl": [
+  {
+   "abbr": "ANA",
+   "name": "Anaheim Ducks",
+   "alias": [
+    "ANA"
+   ]
+  },
+  {
+   "abbr": "BOS",
+   "name": "Boston Bruins",
+   "alias": [
+    "BOS"
+   ]
+  },
+  {
+   "abbr": "BUF",
+   "name": "Buffalo Sabres",
+   "alias": [
+    "BUF"
+   ]
+  },
+  {
+   "abbr": "CGY",
+   "name": "Calgary Flames",
+   "alias": [
+    "CGY"
+   ]
+  },
+  {
+   "abbr": "CAR",
+   "name": "Carolina Hurricanes",
+   "alias": [
+    "CAR"
+   ]
+  },
+  {
+   "abbr": "CHI",
+   "name": "Chicago Blackhawks",
+   "alias": [
+    "CHI"
+   ]
+  },
+  {
+   "abbr": "COL",
+   "name": "Colorado Avalanche",
+   "alias": [
+    "COL"
+   ]
+  },
+  {
+   "abbr": "CBJ",
+   "name": "Columbus Blue Jackets",
+   "alias": [
+    "CBJ"
+   ]
+  },
+  {
+   "abbr": "DAL",
+   "name": "Dallas Stars",
+   "alias": [
+    "DAL"
+   ]
+  },
+  {
+   "abbr": "DET",
+   "name": "Detroit Red Wings",
+   "alias": [
+    "DET"
+   ]
+  },
+  {
+   "abbr": "EDM",
+   "name": "Edmonton Oilers",
+   "alias": [
+    "EDM"
+   ]
+  },
+  {
+   "abbr": "FLA",
+   "name": "Florida Panthers",
+   "alias": [
+    "FLA"
+   ]
+  },
+  {
+   "abbr": "LAK",
+   "name": "Los Angeles Kings",
+   "alias": [
+    "LA"
+   ]
+  },
+  {
+   "abbr": "MIN",
+   "name": "Minnesota Wild",
+   "alias": [
+    "MIN"
+   ]
+  },
+  {
+   "abbr": "MTL",
+   "name": "Montreal Canadiens",
+   "alias": [
+    "MTL"
+   ]
+  },
+  {
+   "abbr": "NSH",
+   "name": "Nashville Predators",
+   "alias": [
+    "NSH"
+   ]
+  },
+  {
+   "abbr": "NJD",
+   "name": "New Jersey Devils",
+   "alias": [
+    "NJ"
+   ]
+  },
+  {
+   "abbr": "NYI",
+   "name": "New York Islanders",
+   "alias": [
+    "NYI"
+   ]
+  },
+  {
+   "abbr": "NYR",
+   "name": "New York Rangers",
+   "alias": [
+    "NYR"
+   ]
+  },
+  {
+   "abbr": "OTT",
+   "name": "Ottawa Senators",
+   "alias": [
+    "OTT"
+   ]
+  },
+  {
+   "abbr": "PHI",
+   "name": "Philadelphia Flyers",
+   "alias": [
+    "PHI"
+   ]
+  },
+  {
+   "abbr": "PIT",
+   "name": "Pittsburgh Penguins",
+   "alias": [
+    "PIT"
+   ]
+  },
+  {
+   "abbr": "SEA",
+   "name": "Seattle Kraken",
+   "alias": [
+    "SEA"
+   ]
+  },
+  {
+   "abbr": "SJS",
+   "name": "San Jose Sharks",
+   "alias": [
+    "SJ"
+   ]
+  },
+  {
+   "abbr": "STL",
+   "name": "St. Louis Blues",
+   "alias": [
+    "STL"
+   ]
+  },
+  {
+   "abbr": "TBL",
+   "name": "Tampa Bay Lightning",
+   "alias": [
+    "TB"
+   ]
+  },
+  {
+   "abbr": "TOR",
+   "name": "Toronto Maple Leafs",
+   "alias": [
+    "TOR"
+   ]
+  },
+  {
+   "abbr": "UTA",
+   "name": "Utah Mammoth",
+   "alias": [
+    "UTA"
+   ]
+  },
+  {
+   "abbr": "VAN",
+   "name": "Vancouver Canucks",
+   "alias": [
+    "VAN"
+   ]
+  },
+  {
+   "abbr": "VGK",
+   "name": "Vegas Golden Knights",
+   "alias": [
+    "VGK"
+   ]
+  },
+  {
+   "abbr": "WSH",
+   "name": "Washington Capitals",
+   "alias": [
+    "WSH"
+   ]
+  },
+  {
+   "abbr": "WPG",
+   "name": "Winnipeg Jets",
+   "alias": [
+    "WPG"
+   ]
+  }
+ ],
+ "nba": [
+  {
+   "abbr": "ATL",
+   "name": "Atlanta Hawks",
+   "alias": [
+    "ATL"
+   ]
+  },
+  {
+   "abbr": "BOS",
+   "name": "Boston Celtics",
+   "alias": [
+    "BOS"
+   ]
+  },
+  {
+   "abbr": "BKN",
+   "name": "Brooklyn Nets",
+   "alias": [
+    "BKN"
+   ]
+  },
+  {
+   "abbr": "CHA",
+   "name": "Charlotte Hornets",
+   "alias": [
+    "CHA"
+   ]
+  },
+  {
+   "abbr": "CHI",
+   "name": "Chicago Bulls",
+   "alias": [
+    "CHI"
+   ]
+  },
+  {
+   "abbr": "CLE",
+   "name": "Cleveland Cavaliers",
+   "alias": [
+    "CLE"
+   ]
+  },
+  {
+   "abbr": "DAL",
+   "name": "Dallas Mavericks",
+   "alias": [
+    "DAL"
+   ]
+  },
+  {
+   "abbr": "DEN",
+   "name": "Denver Nuggets",
+   "alias": [
+    "DEN"
+   ]
+  },
+  {
+   "abbr": "DET",
+   "name": "Detroit Pistons",
+   "alias": [
+    "DET"
+   ]
+  },
+  {
+   "abbr": "GSW",
+   "name": "Golden State Warriors",
+   "alias": [
+    "GS",
+    "gs warriors"
+   ]
+  },
+  {
+   "abbr": "HOU",
+   "name": "Houston Rockets",
+   "alias": [
+    "HOU"
+   ]
+  },
+  {
+   "abbr": "IND",
+   "name": "Indiana Pacers",
+   "alias": [
+    "IND"
+   ]
+  },
+  {
+   "abbr": "LAC",
+   "name": "Los Angeles Clippers",
+   "alias": [
+    "LAC",
+    "l a clippers",
+    "la clippers",
+    "los angeles clippers"
+   ]
+  },
+  {
+   "abbr": "LAL",
+   "name": "Los Angeles Lakers",
+   "alias": [
+    "LAL",
+    "la lakers"
+   ]
+  },
+  {
+   "abbr": "MEM",
+   "name": "Memphis Grizzlies",
+   "alias": [
+    "MEM"
+   ]
+  },
+  {
+   "abbr": "MIA",
+   "name": "Miami Heat",
+   "alias": [
+    "MIA"
+   ]
+  },
+  {
+   "abbr": "MIL",
+   "name": "Milwaukee Bucks",
+   "alias": [
+    "MIL"
+   ]
+  },
+  {
+   "abbr": "MIN",
+   "name": "Minnesota Timberwolves",
+   "alias": [
+    "MIN"
+   ]
+  },
+  {
+   "abbr": "NOP",
+   "name": "New Orleans Pelicans",
+   "alias": [
+    "NO",
+    "no pelicans"
+   ]
+  },
+  {
+   "abbr": "NYK",
+   "name": "New York Knicks",
+   "alias": [
+    "NY",
+    "ny knicks"
+   ]
+  },
+  {
+   "abbr": "OKC",
+   "name": "Oklahoma City Thunder",
+   "alias": [
+    "OKC"
+   ]
+  },
+  {
+   "abbr": "ORL",
+   "name": "Orlando Magic",
+   "alias": [
+    "ORL"
+   ]
+  },
+  {
+   "abbr": "PHI",
+   "name": "Philadelphia 76ers",
+   "alias": [
+    "PHI",
+    "philadelphia sixers"
+   ]
+  },
+  {
+   "abbr": "PHX",
+   "name": "Phoenix Suns",
+   "alias": [
+    "PHX"
+   ]
+  },
+  {
+   "abbr": "POR",
+   "name": "Portland Trail Blazers",
+   "alias": [
+    "POR"
+   ]
+  },
+  {
+   "abbr": "SAC",
+   "name": "Sacramento Kings",
+   "alias": [
+    "SAC"
+   ]
+  },
+  {
+   "abbr": "SAS",
+   "name": "San Antonio Spurs",
+   "alias": [
+    "SA",
+    "sa spurs"
+   ]
+  },
+  {
+   "abbr": "TOR",
+   "name": "Toronto Raptors",
+   "alias": [
+    "TOR"
+   ]
+  },
+  {
+   "abbr": "UTA",
+   "name": "Utah Jazz",
+   "alias": [
+    "UTAH"
+   ]
+  },
+  {
+   "abbr": "WAS",
+   "name": "Washington Wizards",
+   "alias": [
+    "WSH"
+   ]
+  }
+ ]
+}

@@ -237,7 +237,7 @@ def _check_stuck_bets() -> list[str]:
         with engine.connect() as conn:
             rows = conn.execute(
                 text("SELECT system, COUNT(*) as n FROM bets "
-                     "WHERE result IS NULL AND game_date <= :cutoff "
+                     "WHERE result IS NULL AND game_date <= :cutoff AND sport = 'mlb' "
                      "GROUP BY system"),
                 {"cutoff": cutoff},
             ).fetchall()

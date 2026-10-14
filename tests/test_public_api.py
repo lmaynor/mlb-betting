@@ -357,7 +357,7 @@ def _ev_engine():
             "bet_type TEXT, player TEXT, away_team TEXT, home_team TEXT, odds REAL, stake REAL, "
             "model_prob REAL, market_prob REAL, edge REAL, kelly_pct REAL, kelly_triggered BOOLEAN, "
             "result TEXT, profit REAL, paper BOOLEAN, book TEXT, notes TEXT, created_at TEXT, "
-            "clv_pct REAL)"))
+            "clv_pct REAL, sport TEXT NOT NULL DEFAULT 'mlb')"))     # trailing col, exactly as the migration appends it
         rows = [
             # EV: flat $100 stake, +110 win, -120 loss, void, pending
             (1, "EV", "2026-10-01", 11, "K_OVER_6.5_draftkings", "Ace One", "A", "B", 110, 100, .52, .476, .045, .02, 1, "win", 110.0, 1, "draftkings", "soft-book +EV alert vs Pinnacle (5 books)", "2026-10-01T10:00", None),
@@ -466,3 +466,84 @@ def test_new_public_routes_require_key(client):
         with patch("main.get_ev_scanner_feed", return_value={"mlb": {"rows": []}}), \
              patch("main.get_analytics_deep_dive", return_value={"edge_buckets": []}):
             assert client.get(path, headers={"X-API-Key": VALID_KEY}).status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# sport scoping (2026-10-14)
+# ---------------------------------------------------------------------------
+
+def _add_nhl_rows(eng):
+    from sqlalchemy import text
+    with eng.begin() as c:
+        for i, (system, res, profit) in enumerate([("EV", "win", 250.0), ("EV", "loss", -100.0)], start=100):
+            c.execute(text(
+                "INSERT INTO bets (id, system, game_date, game_pk, bet_type, player, away_team, home_team, odds, stake, "
+                "model_prob, market_prob, edge, kelly_pct, kelly_triggered, result, profit, paper, book, notes, "
+                "created_at, sport) VALUES (:i,:s,'2026-10-03',2026020001,'GOAL_OVER_0.5_fanduel','Alex Ovechkin','MTL',"
+                "'WSH',250,100,.33,.286,.05,.02,1,:r,:p,1,'fanduel','','2026-10-03T12:00','nhl')"),
+                {"i": i, "s": system, "r": res, "p": profit})
+
+
+def test_default_queries_ignore_other_sports():
+    from mlb.runners import public_api as api
+    eng = _ev_engine()
+    _add_nhl_rows(eng)
+    ev = api._ev_mlb_rows(eng, 0.0, 100, 365)
+    assert all(r["sport"] == "mlb" for r in ev) and len(ev) == 4                   # NHL EV rows never leak in
+    # sparkline is plain SQL (runs on sqlite): MLB EV settled P&L = +110 -100 + 0(void) -- NHL's +250/-100 stays out
+    mlb_sp = api.get_pnl_sparkline(eng, days=3650, system="EV")
+    nhl_sp = api.get_pnl_sparkline(eng, days=3650, system="EV", sport="nhl")
+    assert mlb_sp[-1]["cum_pnl"] == 10.0
+    assert nhl_sp[-1]["cum_pnl"] == 150.0
+
+
+def test_deep_dive_is_sport_scoped():
+    from mlb.runners import public_api as api
+    eng = _ev_engine()
+    _add_nhl_rows(eng)
+    mlb = api.get_analytics_deep_dive(eng)
+    nhl = api.get_analytics_deep_dive(eng, sport="nhl")
+    assert mlb["ev_headline"]["logged"] == 4 and nhl["ev_headline"]["logged"] == 2
+    assert nhl["ev_headline"]["flat_pnl_dollars"] == 150.0
+
+
+def test_invalid_sport_is_a_400(client):
+    r = client.get("/api/public/picks?sport=cricket", headers={"X-API-Key": VALID_KEY})
+    assert r.status_code == 400 and "unknown sport" in r.get_json()["error"]
+
+
+def test_sport_param_reaches_the_query_layer(client):
+    with patch("main.get_picks", return_value=[]) as mock:
+        client.get("/api/public/picks?sport=nhl", headers={"X-API-Key": VALID_KEY})
+    assert mock.call_args.kwargs["sport"] == "nhl"
+    with patch("main.get_picks", return_value=[]) as mock:
+        client.get("/api/public/picks", headers={"X-API-Key": VALID_KEY})
+    assert mock.call_args.kwargs["sport"] == "mlb"                                 # unqualified == old behaviour
+
+
+def test_ev_feed_carries_nhl_nba_props_with_freshness_and_drops_started_games(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+    fut = (now + timedelta(hours=2)).isoformat()
+    past = (now - timedelta(hours=1)).isoformat()
+    payload = {"ts": now.isoformat(), "summary": {"flagged": 1}, "rows": [
+        {"book": "fanduel", "game_key": "nhl:2026-10-14:MTL@WSH", "stat": "sog", "player": "Alex Ovechkin",
+         "player_id": 8471214, "point": 2.5, "side": "OVER", "american": 112, "ev": 0.09, "p_fair": 0.52,
+         "n_books": 4, "disp": 0.01, "commence": fut, "flag": True, "reason": "FLAG"},
+        {"book": "bovada", "stat": "sog", "player": "Dead Quote", "point": 1.5, "side": "OVER", "american": 100,
+         "ev": 0.2, "commence": past, "flag": True},                                  # game already started
+        {"book": "novig", "stat": "goals", "player": "Low EV", "point": 0.5, "side": "OVER", "american": 200,
+         "ev": 0.031, "commence": fut, "flag": False}]}                                # below min_ev, not flagged
+
+    class St:
+        @staticmethod
+        def read_bytes(key):
+            if key == "EVSweep/nhl_props/latest.json":
+                return json.dumps(payload).encode()
+            raise FileNotFoundError(key)
+    monkeypatch.setattr("mlb_core.storage.read_bytes", St.read_bytes)
+    nhl = api._props_feed("nhl", 0.05, 50)
+    assert nhl["count"] == 1 and nhl["rows"][0]["player"] == "Alex Ovechkin" and nhl["validated"] is False
+    assert nhl["status"] == "shadow_live" and nhl["rows"][0]["venue"] == "book"
+    assert api._props_feed("nba", 0.05, 50)["status"] == "unavailable"                # no sweep output yet

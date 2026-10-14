@@ -41,6 +41,9 @@ class SystemConfig:
     tune_metric_dir: str | None = None # "max" / "min"
     tune_output: str | None = None    # GCS key for tuned_params.json
     force_gate: str | None = None     # None=auto | "on"=force-suppress | "off"=force-enable
+    sport: str = "mlb"                # pillar this system belongs to ("mlb" | "nhl" | "nba"); matches bets.sport.
+                                      # NHL/NBA systems register under DISTINCT names (e.g. "NHL_SOG") and must set
+                                      # this -- the MLB monitors/recap iterate CANONICAL_ORDER, which stays MLB-only.
 
 
 # Canonical system order — used for ordered iteration, display, and digests.
@@ -309,6 +312,7 @@ def get_system(name: str) -> SystemConfig:
     return cfg
 
 
-def active_systems() -> list[str]:
-    """Return names of all active systems in canonical order."""
-    return [s for s in CANONICAL_ORDER if s in SYSTEMS and SYSTEMS[s].active]
+def active_systems(sport: str = "mlb") -> list[str]:
+    """Names of all active systems for `sport` (default MLB -- unchanged behaviour), in canonical order."""
+    return [s for s in CANONICAL_ORDER
+            if s in SYSTEMS and SYSTEMS[s].active and SYSTEMS[s].sport == sport]

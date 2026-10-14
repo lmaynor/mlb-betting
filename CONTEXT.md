@@ -725,6 +725,14 @@ Two indexes are created on first BetTracker init (idempotent via CREATE INDEX IF
 
 Both live in `_init_db()` in `mlb_core/tracking/bet_tracker.py`, each in its own `engine.begin()` + try/except block.
 
+**`bets.sport` (2026-10-14):** `sport TEXT NOT NULL DEFAULT 'mlb'` (`mlb|nhl|nba`), plus `idx_bets_dedup_v4` = the v3 key + `sport`.
+`BetTracker(db, system, sport="mlb")` scopes dedup, inserts and every read to that sport; every MLB consumer of `bets`
+(settle, exposure, closing lines, monitors, calibrators, ev tooling, admin deletes) filters `sport = 'mlb'`, and the public API
+takes `?sport=` (default `mlb`, 400 on unknown). `game_pk` stays INTEGER and holds the sport's native numeric id (NHL ids fit
+int32; NBA ids lose their leading `00`). `bet_tracker.ensure_sport_column()` runs from `_make_engine`, so a reader that builds a
+bare engine can never hit a missing column. The v3 index is deliberately KEPT until no old revision can be running (an old
+revision's `ON CONFLICT` targets it); drop it afterwards with `DROP INDEX idx_bets_dedup_v3`. See s21.
+
 ### Exposure cap contract
 
 All runners use `prefetch_exposure()` + `apply_cap()` from `mlb_core.risk.exposure`:
@@ -3942,3 +3950,39 @@ backbone. Full detail in `nfl/README.md`.
   `JAX/JAC` and `LA/LAR` (plus `OAK/SD/STL` relocations). A test pins the codes and format to `ev/`.
 - **GOTCHA:** the local-mode default `MLB_BASE_DATA` is a Windows path -- set it (or `GCS_BUCKET`) before any non-test run.
 - **Status:** code merged; nothing has been downloaded or deployed from this repo yet (see the 2026-10-14 handoff).
+
+---
+
+## 21. Multi-sport infrastructure (NHL / NBA) -- 2026-10-14
+
+Built on branches/PRs (see `handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md` for state and deploy order). **Nothing here
+runs in production until its deploy step is done; the code is merged-or-in-PR, the jobs are not provisioned.**
+
+- **Odds banking (PR #42, merged):** `nba/odds/{credit_ledger,accumulator,parlay_extract}.py`. ParlayAPI has no historical props,
+  so NHL/NBA props + game lines are banked forward to `OddsAccum/{sport}/` (raw JSON is the durable training data). EVERY run is
+  metered by `credit_ledger`: per-sport monthly budget (`ODDS_BANK_BUDGET_<SPORTKEY>`, default 3,000), linear pace cap, per-run cap
+  (400), and a floor (2,500) on the SHARED pool's `x-requests-remaining`; unreadable ledger fails closed; a sport with no budget
+  (`baseball_mlb`) is refused. Props only for events starting within 30h, soonest first. Jobs/schedulers: `odds-bank-*` via
+  `deploy/setup_odds_banking.sh` (`PAUSE=1` pauses them). Per-kind pointers `OddsAccum/{sport}/latest_{props,game_lines}.json`
+  (`latest.json` is shared by both kinds -- do not read it for "the newest props"). Shapes + gotchas:
+  `docs/solutions/integration-issues/parlayapi-nhl-nba-prop-shapes.md`.
+- **Image rule (verified):** a Cloud Run JOB resolves its image tag at every execution, so new feature jobs run from
+  `gcr.io/<project>/mlb-betting-feeds`, NEVER `mlb-betting:latest` (`docs/solutions/conventions/cloud-run-job-image-tag-resolution.md`).
+- **Alerts (Sink A only, no Kalshi, no model):** `ev/sweep_props_alerts.py --sport nhl|nba` reads the banked snapshot (ZERO extra
+  credits; refuses a snapshot older than 45 min), resolves players to league ids, and flags a book quote that beats the
+  leave-self-out consensus of the other books (>=3 books, EV 3-15%, dispersion <= 0.06, >= 20 min before start). Admin webhook only
+  (`DISCORD_WEBHOOK_ALERTS` else `_OPS`; never a member channel). Evidence: `EVSweep/{sport}_props/{day}/book_outliers_*.csv`; feed:
+  `EVSweep/{sport}_props/latest.json` -> `GET /api/public/ev/feed`. `ev/grade_props.py` grades first sightings vs real results by
+  player id (NHL boxscore / ESPN summary) at a flat $100 and reports ROI with a t-stat; the verdict stays UNDETERMINED until CLV
+  vs close exists. Jobs via `deploy/setup_props_alerts.sh` (run 5 min after each bank run). Unvalidated: do not size real money off it.
+- **Identity:** `mlb_core/data/player_names.py` (`PlayerResolver`), NHL crosswalk `NHL/players_master.csv` (`nhl/data/players.py`),
+  NBA crosswalk `NBA/players_xwalk.csv` via ESPN (`nba/data/espn_players.py`; ESPN ids, not NBA personIds). Ambiguous -> dropped; a
+  partial crosswalk turns the resolver off for that event. `docs/solutions/logic-errors/cross-book-player-identity-and-partial-crosswalk.md`.
+- **Assets (beezy-vip):** team logos (light + dark SVG, validated on download, manifest with sha256) under `public/logos/{nhl,nba}/`;
+  headshots are HOTLINKED transparent cutouts (NHL mugs by playerId; NBA ESPN combiner). `lib/sport-assets.ts` (client-safe, id-based),
+  `lib/sport-assets.server.ts` (name maps, server only), `components/ui/sport-assets.tsx`. Regenerate with
+  `python scripts/build_sport_assets.py --all` (it refuses to write a partial map). `lib/sport-teams.json` is generated from
+  `nhl.config.TEAMS` / `nba.teams.TEAMS`; a test fails on drift. MLB headshots still use the local rembg PNGs; MLB's CDN `headshot/silo`
+  variant is a transparent cutout (100% coverage on all 1,272 mapped players) and is the planned replacement.
+- **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
+  rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).

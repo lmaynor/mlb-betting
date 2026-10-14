@@ -1,6 +1,17 @@
 """
 mlb_core.tracking.bet_tracker v3 — Cloud SQL + SQLite fallback.
 
+Changes from v3 (2026-10-14, NHL/NBA expansion):
+  - Added `sport` TEXT NOT NULL DEFAULT 'mlb'. Every pre-existing row is MLB (the DEFAULT backfills them for free
+    on Postgres 11+/SQLite). BetTracker(db, system, sport="mlb") scopes ALL reads/dedup/inserts to that sport, so
+    a `system="EV"` tracker for NHL never sees MLB rows (and vice versa). Existing callers pass nothing and
+    behave exactly as before.
+  - New UNIQUE index idx_bets_dedup_v4 = v3's key + `sport`. v3 is deliberately KEPT (not dropped): a rolling
+    deploy leaves old revisions running whose `ON CONFLICT (system, game_date, game_pk, player, bet_type,
+    kelly_triggered)` needs v3 to exist. Drop v3 in a later cleanup once no old revision can be live.
+  - `game_pk` stays INTEGER and holds the sport's native numeric game id: MLB gamePk, NHL gameId
+    (2026020001 fits int32), NBA gameId as an int (the leading "00" of "0022600001" is not stored).
+
 Changes from v2:
   - Added `kelly_triggered` BOOLEAN column. True when the prediction
     cleared both min_edge and min_kelly_pct and received a non-zero stake.
@@ -27,6 +38,18 @@ from mlb_core.config import DB_URL
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_SPORT = "mlb"
+VALID_SPORTS = ("mlb", "nhl", "nba")
+
+
+def norm_sport(sport) -> str:
+    """Canonical lowercase sport key; raises ValueError on anything unknown (never silently default a typo)."""
+    s = (sport or DEFAULT_SPORT).strip().lower()
+    if s not in VALID_SPORTS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {VALID_SPORTS}")
+    return s
 
 
 def _safe_int(v):
@@ -58,6 +81,7 @@ _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS bets (
     id               SERIAL PRIMARY KEY,
     system           TEXT    NOT NULL,
+    sport            TEXT    NOT NULL DEFAULT 'mlb',
     game_date        TEXT,
     game_pk          INTEGER,
     player           TEXT,
@@ -113,6 +137,10 @@ _MIGRATE_CLOSING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN closing_odds REAL"
 _MIGRATE_CLOSING_PROB_SQL = "ALTER TABLE bets ADD COLUMN closing_prob REAL"
 _MIGRATE_CLV_PCT_SQL      = "ALTER TABLE bets ADD COLUMN clv_pct REAL"
 
+# Migration: add sport (2026-10-14). NOT NULL DEFAULT 'mlb' is a metadata-only change on Postgres 11+ (no table
+# rewrite) and every existing row IS MLB, so the default is also the correct backfill.
+_MIGRATE_SPORT_SQL = "ALTER TABLE bets ADD COLUMN sport TEXT NOT NULL DEFAULT 'mlb'"
+
 # Migration: add kelly_triggered to existing tables that predate v3.
 _MIGRATE_SQL = """
 ALTER TABLE bets ADD COLUMN kelly_triggered BOOLEAN DEFAULT TRUE
@@ -166,6 +194,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3
   ON bets(system, game_date, game_pk, player, bet_type, kelly_triggered)
 """
 
+# v4 (2026-10-14): v3's key + sport, so the SAME (system, game_date, game_pk, player, bet_type) in two sports
+# (e.g. system="EV") can never collide. v3 above is intentionally left in place -- see the module docstring.
+_IDX_DEDUP_V4_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v4
+  ON bets(sport, system, game_date, game_pk, player, bet_type, kelly_triggered)
+"""
+_IDX_SPORT_SQL = "CREATE INDEX IF NOT EXISTS idx_bets_sport_date ON bets(sport, game_date)"
+
 # Partial index for pending-bet queries (Postgres only -- SQLite ignores WHERE clause).
 _IDX_PENDING_SQL = """
 CREATE INDEX IF NOT EXISTS idx_bets_pending
@@ -174,13 +210,43 @@ CREATE INDEX IF NOT EXISTS idx_bets_pending
 """
 
 
+_SPORT_COL_READY: set = set()
+
+
+def ensure_sport_column(engine: sa.Engine) -> None:
+    """Idempotently add bets.sport if it is missing (once per process per database).
+
+    Every MLB reader now filters `sport = 'mlb'` (2026-10-14), but the column is otherwise only added when a BetTracker is
+    CONSTRUCTED. Several readers build a bare engine first (settle_bets, the runners' exposure engines, the monitors,
+    calibrators, edge enrichment), so on the first run after a deploy they could query a column that does not exist yet.
+    Doing it here makes the order of first-run-after-deploy irrelevant. A missing table is left to BetTracker to create."""
+    key = str(engine.url)
+    if key in _SPORT_COL_READY:
+        return
+    try:
+        cols = {c["name"] for c in sa.inspect(engine).get_columns("bets")}
+    except Exception:  # noqa: BLE001 -- table does not exist yet (fresh DB): BetTracker._init_db creates it with the column
+        return
+    if "sport" not in cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(_MIGRATE_SPORT_SQL))
+            logger.info("bet_tracker: added bets.sport column")
+        except Exception as e:  # noqa: BLE001 -- a concurrent process may have added it first
+            logger.info(f"bet_tracker: bets.sport add skipped ({e})")
+    _SPORT_COL_READY.add(key)
+
+
 def _make_engine(db_path: str) -> sa.Engine:
     url = DB_URL or ""
     if url:
-        return sa.create_engine(url)
-    sqlite_path = Path(db_path)
-    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-    return sa.create_engine(f"sqlite:///{sqlite_path}")
+        engine = sa.create_engine(url)
+    else:
+        sqlite_path = Path(db_path)
+        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+        engine = sa.create_engine(f"sqlite:///{sqlite_path}")
+    ensure_sport_column(engine)
+    return engine
 
 
 class BetTracker:
@@ -208,9 +274,10 @@ class BetTracker:
         tracker.settle(bet_id, result="win", profit=15.65)
     """
 
-    def __init__(self, db_path: str | Path, system: str):
+    def __init__(self, db_path: str | Path, system: str, sport: str = DEFAULT_SPORT):
         self.db_path = str(db_path)
         self.system  = system.upper()
+        self.sport   = norm_sport(sport)
         self.engine  = _make_engine(self.db_path)
         self._init_db()
 
@@ -229,6 +296,12 @@ class BetTracker:
                 conn.execute(text(_MIGRATE_SQL))
         except Exception:
             pass  # Column already exists — expected after first migration.
+        # sport column (2026-10-14) -- must exist before any index/query below references it.
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(_MIGRATE_SPORT_SQL))
+        except Exception:
+            pass  # Column already exists (or fresh table created it) -- expected.
         # Deleted 2026-08-17 (finding B3.2): a one-shot OUTS-system
         # reclassification UPDATE used to run here unconditionally on
         # EVERY BetTracker construction -- every runner invocation, every
@@ -279,6 +352,14 @@ class BetTracker:
                 f"pre-existing duplicate (system,game_date,game_pk,player,"
                 f"bet_type,kelly_triggered) rows) -- {e}"
             )
+        # v4 dedup index (sport-aware) + sport/date lookup index. Failure here is NOT silent: log_bet()'s
+        # ON CONFLICT targets v4's columns, so without it every insert would error -- surface it loudly.
+        for idx_sql, label in ((_IDX_DEDUP_V4_SQL, "idx_bets_dedup_v4"), (_IDX_SPORT_SQL, "idx_bets_sport_date")):
+            try:
+                with self.engine.begin() as conn:
+                    conn.execute(text(idx_sql))
+            except Exception as e:
+                logger.error(f"bet_tracker: {label} creation FAILED -- {e}")
         # Partial index for pending queries (Postgres only).
         if self.engine.dialect.name != "sqlite":
             try:
@@ -316,11 +397,11 @@ class BetTracker:
                 row = conn.execute(
                     text("""
                         SELECT 1 FROM bets
-                        WHERE system=:s AND game_date=:d AND game_pk=:g
+                        WHERE sport=:sp AND system=:s AND game_date=:d AND game_pk=:g
                           AND player=:p AND bet_type=:t AND kelly_triggered=TRUE
                         LIMIT 1
                     """),
-                    {"s": self.system, "d": game_date, "g": game_pk,
+                    {"sp": self.sport, "s": self.system, "d": game_date, "g": game_pk,
                      "p": player, "t": bet_type},
                 ).fetchone()
             return row is not None
@@ -330,11 +411,11 @@ class BetTracker:
                 row = conn.execute(
                     text("""
                         SELECT 1 FROM bets
-                        WHERE system=:s AND game_date=:d AND game_pk=:g
+                        WHERE sport=:sp AND system=:s AND game_date=:d AND game_pk=:g
                           AND player=:p AND bet_type=:t
                         LIMIT 1
                     """),
-                    {"s": self.system, "d": game_date, "g": game_pk,
+                    {"sp": self.sport, "s": self.system, "d": game_date, "g": game_pk,
                      "p": player, "t": bet_type},
                 ).fetchone()
             return row is not None
@@ -375,12 +456,27 @@ class BetTracker:
                                  kelly_triggered=kelly_triggered):
                 return -1
 
+        try:
+            return self._insert_bet(
+                game_date, game_pk, player, away_team, home_team, bet_type, model_prob, market_prob, edge,
+                kelly_pct, odds, stake, kelly_triggered, paper, notes, lambda_k, proj_k, book, morning_odds)
+        except sa.exc.IntegrityError as e:
+            # Only reachable while the legacy idx_bets_dedup_v3 still exists (its key has no `sport`): an
+            # identical (system, date, game_pk, player, bet_type) in ANOTHER sport. Game-id ranges are disjoint
+            # across sports so this should never fire in practice -- but a runner must not crash on it.
+            logger.error(f"[{self.system}/{self.sport}] log_bet: integrity conflict on legacy v3 dedup index "
+                         f"for {bet_type} player={player} game_pk={game_pk} -- treated as duplicate: {e}")
+            return -1
+
+    def _insert_bet(self, game_date, game_pk, player, away_team, home_team, bet_type, model_prob, market_prob,
+                    edge, kelly_pct, odds, stake, kelly_triggered, paper, notes, lambda_k, proj_k, book,
+                    morning_odds) -> int:
         with self.engine.begin() as conn:
             # ON CONFLICT ... DO NOTHING + RETURNING id (finding B3.3): the
             # is_duplicate() check above is a separate SELECT on a separate
             # transaction from this INSERT -- a real check-then-insert race
             # window under concurrent or manually-retriggered runs. The
-            # idx_bets_dedup_v3 UNIQUE index (system, game_date, game_pk,
+            # idx_bets_dedup_v4 UNIQUE index (sport, system, game_date, game_pk,
             # player, bet_type, kelly_triggered) is what actually closes it:
             # if another call wins the race and inserts the identical
             # 6-tuple first, this INSERT silently matches zero rows instead
@@ -389,19 +485,19 @@ class BetTracker:
             result = conn.execute(
                 text("""
                     INSERT INTO bets
-                        (system, game_date, game_pk, player, away_team, home_team,
+                        (system, sport, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
                          odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book, morning_odds)
                     VALUES
-                        (:system, :game_date, :game_pk, :player, :away_team, :home_team,
+                        (:system, :sport, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
                          :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book, :morning_odds)
-                    ON CONFLICT (system, game_date, game_pk, player, bet_type, kelly_triggered)
+                    ON CONFLICT (sport, system, game_date, game_pk, player, bet_type, kelly_triggered)
                     DO NOTHING
                     RETURNING id
                 """),
                 {
-                    "system": self.system, "game_date": game_date,
+                    "system": self.system, "sport": self.sport, "game_date": game_date,
                     "game_pk": game_pk, "player": player,
                     "away_team": away_team, "home_team": home_team,
                     "bet_type": bet_type, "model_prob": model_prob,
@@ -527,13 +623,14 @@ class BetTracker:
     def pending(self) -> pd.DataFrame:
         with self.engine.connect() as conn:
             return pd.read_sql(
-                text("SELECT * FROM bets WHERE system = :sys AND result IS NULL ORDER BY game_date DESC"),
-                conn, params={"sys": self.system},
+                text("SELECT * FROM bets WHERE system = :sys AND sport = :sp AND result IS NULL ORDER BY game_date DESC"),
+                conn, params={"sys": self.system, "sp": self.sport},
             )
 
     def summary(self, last_n: int = None, season: str = None) -> dict:
         with self.engine.connect() as conn:
-            df = pd.read_sql(text("SELECT * FROM bets WHERE system = :sys"), conn, params={"sys": self.system})
+            df = pd.read_sql(text("SELECT * FROM bets WHERE system = :sys AND sport = :sp"), conn,
+                             params={"sys": self.system, "sp": self.sport})
 
         if df.empty:
             print(f"[{self.system}] No bets logged.")
@@ -588,6 +685,6 @@ class BetTracker:
     def all_bets(self) -> pd.DataFrame:
         with self.engine.connect() as conn:
             return pd.read_sql(
-                text("SELECT * FROM bets WHERE system = :sys ORDER BY game_date DESC"),
-                conn, params={"sys": self.system},
+                text("SELECT * FROM bets WHERE system = :sys AND sport = :sp ORDER BY game_date DESC"),
+                conn, params={"sys": self.system, "sp": self.sport},
             )

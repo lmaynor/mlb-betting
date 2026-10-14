@@ -40,15 +40,38 @@ STAT_KEYS = {
 }
 _KEY_TO_STAT = {k: s for s, ks in STAT_KEYS.items() for k in ks}
 
+# NHL / NBA (2026-10-14). Keys verified against the live ParlayAPI /v1/markets catalog AND real payloads. Per-sport
+# tables because the SAME market key means different things by sport (player_points in the NBA is a points O/U; in
+# the NHL it is a skater points market, mostly one-sided "Yes" anytime prices). Goalie saves arrive as
+# `player_saves` although the catalog lists `player_total_saves` -- both are mapped.
+STAT_KEYS_BY_SPORT = {
+    "nfl": STAT_KEYS,
+    "nhl": {
+        "goals": {"player_goals"}, "sog": {"player_shots_on_goal"}, "points": {"player_points"},
+        "assists": {"player_assists"}, "saves": {"player_saves", "player_total_saves"},
+        "pp_points": {"player_power_play_points"}, "blocked_shots": {"player_blocked_shots"},
+        "hits": {"player_hits"}, "pim": {"player_penalty_minutes"},
+    },
+    "nba": {
+        "points": {"player_points"}, "rebounds": {"player_rebounds"}, "assists": {"player_assists"},
+        "threes": {"player_threes"}, "pra": {"player_points_rebounds_assists"},
+        "pr": {"player_points_rebounds"}, "pa": {"player_points_assists"}, "ra": {"player_rebounds_assists"},
+        "steals": {"player_steals"}, "blocks": {"player_blocks"}, "turnovers": {"player_turnovers"},
+        "stocks": {"player_steals_blocks"}, "minutes": {"player_minutes"},
+    },
+}
+_KEY_TO_STAT_BY_SPORT = {sp: {k: st for st, ks in tbl.items() for k in ks} for sp, tbl in STAT_KEYS_BY_SPORT.items()}
+
 _SUFFIX_TOKENS = {"jr", "sr", "ii", "iii", "iv", "v"}
 _TEAM_TAIL = re.compile(r"\s*\(([A-Za-z]{2,4})\)\s*$")
 
 
-def stat_of(market_key: str):
-    """ParlayAPI market key -> (canonical stat | None, is_alternate)."""
+def stat_of(market_key: str, sport: str = "nfl"):
+    """ParlayAPI market key -> (canonical stat | None, is_alternate). `sport` selects the key table (default NFL,
+    the original behaviour)."""
     alt = market_key.endswith("_alternate")
     base = market_key[: -len("_alternate")] if alt else market_key
-    return _KEY_TO_STAT.get(base), alt
+    return _KEY_TO_STAT_BY_SPORT.get(sport, _KEY_TO_STAT).get(base), alt
 
 
 def split_player(raw: str):
@@ -78,21 +101,42 @@ class Quote:
     point: float
     over: int | None       # american price; for a one-sided 'Yes' ladder this is the Yes price
     under: int | None
+    player_id: object = None   # league id when a roster resolver identified the player (player_norm is then 'id<ID>')
 
     @property
     def two_sided(self) -> bool:
         return self.over is not None and self.under is not None
 
 
-def parse_event_props(event_obj: dict) -> tuple[list[Quote], dict]:
-    """One ParlayAPI single-event odds object -> ([Quote], {'unmapped_keys': {...}})."""
+def _fold_team(s: str) -> str:
+    return unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower().replace(".", "").strip()
+
+
+def parse_event_props(event_obj: dict, sport: str = "nfl", resolver=None, team_fn=None) -> tuple[list[Quote], dict]:
+    """One ParlayAPI single-event odds object -> ([Quote], {'unmapped_keys': {...}, 'unresolved': {...}}).
+
+    sport     : picks the market-key table (nfl default, nhl, nba).
+    resolver  : optional mlb_core.data.player_names.PlayerResolver. When given, each quote is resolved to the league's
+                own player id using the book's team hint and the event's two teams; the id becomes player_norm
+                ('id<ID>') so the SAME player spelled differently by different books ("Alex Ovechkin" /
+                "Alexander Ovechkin" / "Alex Ovechkin (WSH)") lands in ONE consensus group. AMBIGUOUS names are
+                DROPPED (a wrong merge prices a bet off another player's line); names not in the roster at all are
+                kept under their normalized string.
+    team_fn   : team name/abbrev -> that sport's team code (needed with a resolver for the team hint + event teams).
+    Quotes whose 'player' is really a TEAM line (ParlayAPI's NHL player_goals carries team totals) are skipped.
+    """
     quotes: list[Quote] = []
     unmapped: dict = {}
+    unresolved = {"ambiguous": 0, "unknown": 0}
+    team_rows = {_fold_team(event_obj.get("home_team")), _fold_team(event_obj.get("away_team"))} - {""}
+    within = None
+    if resolver is not None and team_fn is not None:
+        within = [c for c in (team_fn(event_obj.get("away_team")), team_fn(event_obj.get("home_team"))) if c]
     for book in (event_obj or {}).get("bookmakers", []) or []:
         bkey = book.get("key", "")
         for market in book.get("markets", []) or []:
             mkey = market.get("key", "")
-            stat, alt = stat_of(mkey)
+            stat, alt = stat_of(mkey, sport)
             if stat is None:
                 if mkey.startswith("player_"):
                     unmapped[mkey] = unmapped.get(mkey, 0) + 1
@@ -103,19 +147,33 @@ def parse_event_props(event_obj: dict) -> tuple[list[Quote], dict]:
                 name = (o.get("name") or "").strip()
                 if not raw or price is None or point is None or "{" in raw or " @ " in raw:
                     continue
+                if _fold_team(raw) in team_rows:
+                    continue                                   # a team total, not a player
                 low = name.lower()
                 side = "over" if (low.startswith("over") or low == "yes") else \
                        "under" if low.startswith("under") else None
                 if side is None:
                     continue
                 player, team = split_player(raw)
-                rec = cell.setdefault((norm_name(player), float(point)),
-                                      {"player": player, "team": team, "over": None, "under": None})
+                pn, pid = norm_name(player), None
+                if resolver is not None:
+                    hint = team_fn(team) if (team and team_fn) else team
+                    pid, how = resolver.resolve(player, hint, within=within)
+                    if how == "ambiguous":
+                        unresolved["ambiguous"] += 1
+                        continue
+                    if pid is not None:
+                        pn = f"id{pid}"
+                    else:
+                        unresolved["unknown"] += 1
+                rec = cell.setdefault((pn, float(point)),
+                                      {"player": player, "team": team, "over": None, "under": None, "pid": pid})
                 if rec[side] is None:                       # first price wins; a book repeats a point rarely
                     rec[side] = int(price)
             for (pn, pt), rec in cell.items():
-                quotes.append(Quote(bkey, stat, alt, rec["player"], pn, rec["team"], pt, rec["over"], rec["under"]))
-    return quotes, {"unmapped_keys": unmapped}
+                quotes.append(Quote(bkey, stat, alt, rec["player"], pn, rec["team"], pt, rec["over"], rec["under"],
+                                    rec["pid"]))
+    return quotes, {"unmapped_keys": unmapped, "unresolved": unresolved}
 
 
 @dataclass(frozen=True)
@@ -194,7 +252,8 @@ def scan_book_outliers(quotes: list[Quote], min_books: int = 4, min_ev: float = 
             dec = american_to_decimal(price)
             ev = p_fair * dec - 1.0
             if ev >= min_ev:
-                out.append({"book": q.book, "player": q.player, "player_norm": q.player_norm, "stat": q.stat,
+                out.append({"book": q.book, "player": q.player, "player_norm": q.player_norm, "player_id": q.player_id,
+                            "stat": q.stat,
                             "point": q.point, "alt": q.alt, "side": side, "american": price,
                             "decimal": round(dec, 4), "p_fair": round(p_fair, 4), "ev": round(ev, 4),
                             "n_books": len(others), "disp": round(disp, 4)})

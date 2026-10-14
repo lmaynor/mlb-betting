@@ -707,7 +707,7 @@ def reset_and_run():
     for sys in systems + ["OUTS"]:
         with bt.engine.begin() as conn:
             r = conn.execute(text(
-                "DELETE FROM bets WHERE game_date = :d AND system = :s"
+                "DELETE FROM bets WHERE game_date = :d AND system = :s AND sport = 'mlb'"
             ), {"d": run_date, "s": sys})
             deleted[sys] = r.rowcount
     logger.info(f"reset-and-run: deleted {deleted} for {run_date}")
@@ -737,8 +737,14 @@ def reset_bets():
     if not date:
         return jsonify({"error": "date is required"}), 400
     bt = BetTracker(_require_db_url(), "HR")
-    where = "WHERE game_date = :date"
-    params = {"date": date}
+    # sport defaults to mlb so an unqualified call can never delete NHL/NBA rows (2026-10-14).
+    from mlb_core.tracking.bet_tracker import norm_sport
+    try:
+        sport = norm_sport(body.get("sport"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    where = "WHERE game_date = :date AND sport = :sport"
+    params = {"date": date, "sport": sport}
     if system:
         where += " AND system = :system"
         params["system"] = system.upper()
@@ -779,7 +785,7 @@ def dashboard():
                 "SUM(profit) FILTER (WHERE result IS NOT NULL AND kelly_triggered=true) as pnl, "
                 "AVG(edge) FILTER (WHERE kelly_triggered=true) as avg_edge, "
                 "COUNT(*) FILTER (WHERE result IS NULL AND kelly_triggered=true) as pending "
-                "FROM bets WHERE system=:s "
+                "FROM bets WHERE system=:s AND sport='mlb' "
                 "AND game_date >= TO_CHAR(NOW() - INTERVAL '30 days', 'YYYY-MM-DD')"
             ), {"s": sys}).fetchone()
         settled  = r[0] or 0
@@ -791,7 +797,7 @@ def dashboard():
             f"<td>${pnl:+.2f}</td><td>{avg_edge}</td></tr>"
         )
 
-    where_clause = f"WHERE created_at >= NOW() - INTERVAL '{days} days'"
+    where_clause = f"WHERE sport = 'mlb' AND created_at >= NOW() - INTERVAL '{days} days'"
     bind_params: dict = {}
     if system_filter:
         # Whitelist — never interpolate user input into SQL strings.
@@ -993,11 +999,13 @@ def public_picks_today():
         return err
     try:
         include_all = request.args.get("all") == "1"
-        picks = get_today_picks(_get_engine(), include_all=include_all)
+        picks = get_today_picks(_get_engine(), include_all=include_all, sport=request.args.get("sport", "mlb"))
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_picks_today failed")
         return jsonify({"error": str(exc)}), 500
@@ -1019,11 +1027,14 @@ def public_picks():
             limit=request.args.get("limit", 50),
             offset=request.args.get("offset", 0),
             book=request.args.get("book"),
+            sport=request.args.get("sport", "mlb"),
         )
         resp = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_picks failed")
         return jsonify({"error": str(exc)}), 500
@@ -1038,11 +1049,13 @@ def public_picks_recent():
         return err
     try:
         limit = int(request.args.get("limit", 20))
-        picks = get_recent_settled(_get_engine(), limit=limit)
+        picks = get_recent_settled(_get_engine(), limit=limit, sport=request.args.get("sport", "mlb"))
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=120"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_picks_recent failed")
         return jsonify({"error": str(exc)}), 500
@@ -1160,11 +1173,13 @@ def public_stats_sparkline():
     try:
         days = int(request.args.get("days", 30))
         system = request.args.get("system")
-        data = get_pnl_sparkline(_get_engine(), days=days, system=system)
+        data = get_pnl_sparkline(_get_engine(), days=days, system=system, sport=request.args.get("sport", "mlb"))
         resp = jsonify({"sparkline": data, "days": days, "system": system})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=300"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_stats_sparkline failed")
         return jsonify({"error": str(exc)}), 500
@@ -1178,11 +1193,13 @@ def public_stats_summary():
     if err:
         return err
     try:
-        stats = get_summary_stats(_get_engine())
+        stats = get_summary_stats(_get_engine(), sport=request.args.get("sport", "mlb"))
         resp  = jsonify(stats)
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=300"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_stats_summary failed")
         return jsonify({"error": str(exc)}), 500
@@ -1200,11 +1217,13 @@ def public_stats_clv():
     try:
         days    = request.args.get("days", 90)
         systems = request.args.get("systems")
-        data    = get_clv_data(_get_engine(), days=days, systems=systems)
+        data    = get_clv_data(_get_engine(), days=days, systems=systems, sport=request.args.get("sport", "mlb"))
         resp    = jsonify({"data": data, "count": len(data)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=300"
         return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_stats_clv failed")
         return jsonify({"error": str(exc)}), 500
@@ -1452,7 +1471,7 @@ def model_health_handler():
             rows = [dict(r._mapping) for r in conn.execute(_text(
                 "SELECT system, result, stake, profit, model_prob, market_prob, "
                 "edge, clv_pct, game_date FROM bets "
-                "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                "WHERE game_date LIKE :y AND sport = 'mlb' AND kelly_triggered = TRUE "
                 f"{_mh_since_sql}"
                 "ORDER BY game_date ASC"
             ), _mh_params)]
@@ -1600,7 +1619,7 @@ def edge_analysis_handler():
             rows = [dict(r._mapping) for r in conn.execute(_text(
                 "SELECT system, result, stake, profit, model_prob, market_prob, "
                 "edge, clv_pct, game_date FROM bets "
-                "WHERE game_date LIKE :y AND kelly_triggered = TRUE "
+                "WHERE game_date LIKE :y AND sport = 'mlb' AND kelly_triggered = TRUE "
                 f"{_ea_since_sql}"
                 "ORDER BY game_date ASC"
             ), _ea_params)]
@@ -1872,7 +1891,7 @@ def backfill_notes_handler():
     with engine.connect() as conn:
         null_bets = conn.execute(text(
             "SELECT id, system, game_pk, player FROM bets "
-            "WHERE game_date = :d AND notes IS NULL"
+            "WHERE game_date = :d AND sport = 'mlb' AND notes IS NULL"
         ), {"d": run_date}).fetchall()
 
     if not null_bets:

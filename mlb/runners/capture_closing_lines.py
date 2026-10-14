@@ -75,6 +75,7 @@ def _load_open_bets(run_date: str) -> pd.DataFrame:
                        odds, market_prob, book
                   FROM bets
                  WHERE game_date   = :d
+                   AND sport       = 'mlb'
                    AND kelly_triggered = TRUE
                    AND result      IS NULL
                    AND closing_odds IS NULL
@@ -277,7 +278,7 @@ def backfill_clv() -> dict:
     engine = _make_engine("unused")
     with engine.connect() as conn:
         rows = pd.read_sql(text(
-            "SELECT id, odds, closing_odds FROM bets WHERE closing_odds IS NOT NULL"
+            "SELECT id, odds, closing_odds FROM bets WHERE closing_odds IS NOT NULL AND sport = 'mlb'"
         ), conn)
     updated = 0
     with engine.begin() as conn:

@@ -126,7 +126,7 @@ try:
             text("""
                 SELECT system, COUNT(*) as n, MIN(game_date) as oldest
                 FROM bets
-                WHERE result IS NULL AND game_date <= :cutoff
+                WHERE result IS NULL AND game_date <= :cutoff AND sport = 'mlb'
                 GROUP BY system
                 ORDER BY oldest
             """),
@@ -140,7 +140,7 @@ try:
     # Also show count of ALL pending bets for context
     with engine.connect() as conn:
         total = conn.execute(
-            text("SELECT system, COUNT(*) FROM bets WHERE result IS NULL GROUP BY system")
+            text("SELECT system, COUNT(*) FROM bets WHERE result IS NULL AND sport = 'mlb' GROUP BY system")
         ).fetchall()
     if total:
         print(f"\n  Pending (all): " + ", ".join(f"{r[0]}={r[1]}" for r in total))
