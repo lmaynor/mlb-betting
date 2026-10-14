@@ -53,8 +53,10 @@ def to_kbook(book, leg: NovigLeg, fetched_at: float | None = None) -> KBook:
 
 
 def novig_config(cfg):
-    """Zero fee pre-game; a looser EV floor is NOT assumed (same gates), only the fee drag differs."""
-    return replace(cfg, taker_multiplier=0.0)
+    """Zero fee pre-game; a looser EV floor is NOT assumed (same gates), only the fee drag differs. The reference is
+    the books' leave-Novig-out consensus, so a wide Novig bid does not invalidate a cheap ask: the spread/mid gates
+    are replaced by an ask-vs-consensus bound (kdev_max)."""
+    return replace(cfg, taker_multiplier=0.0, allow_wide_book_on_consensus=True)
 
 
 def load_novig_legs(nc: NovigClient, now: datetime) -> dict:

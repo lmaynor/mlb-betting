@@ -36,6 +36,7 @@ class ExecConfig:
     disp_max: float = 0.06          # MAD of per-book fair_prob
     kdev_max: float = 0.08          # |kalshi mid - book fair| beyond this => news, not lag
     spread_max: float = 0.04
+    allow_wide_book_on_consensus: bool = False   # exchange taker vs EXTERNAL consensus: judge the ask, not the mid
     min_top_size: float = 25.0      # contracts at best ask
     price_min: float = 0.03         # liquid game-level markets
     price_max: float = 0.97

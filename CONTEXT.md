@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-13 22:23 CST_
+_Last updated: 2026-10-13 22:30 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -348,9 +348,23 @@ mlb-betting/
 │                                 O/U parsing checks, model-vs-market comparison, snapshot
 │                                 freshness, outlier detection, odds_history integrity, NRFI backtest).
 ├── notebooks/                    Modeling notebooks (moved from root 2026-06-24).
+├── mlb/execution/kalshi/         Taker-only Kalshi executor (DEMO only; production refused in code): pure
+│                                 gates.evaluate() + Kelly sizing + risk gate + ledger + PaperVenue. ExecConfig
+│                                 (KEXEC_* env). allow_wide_book_on_consensus (default False) lets an exchange
+│                                 taker judge the ASK vs an EXTERNAL consensus instead of the venue mid -- on only
+│                                 for Novig (see 15.11). Reused unchanged by ev/novig/exec.py.
+├── ev/                           Multi-sport +EV sweep (shadow/paper only, NFL props first): props.py (ParlayAPI
+│   │                             props -> per-book devig -> consensus; scan_book_outliers = Sink A; pooled
+│   │                             adjacent-half-point consensus), sweep_nfl_props.py (cycle: consensus ->
+│   │                             Kalshi join -> evidence CSVs), props_exec.py / novig/ (shadow executors),
+│   │                             props_config.py. GCS output EVSweep/nfl_props/{ET day}/: cycle_*.csv (every
+│   │                             comparable row), book_outliers_*.csv (Sink A), pooled_*.csv (exact vs pooled).
 ├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
 │                                 bettingpros_api.py = local CLI for the HR/multi-market
 │                                 odds scrape (Cloud Run Job is mlb-backfill-bettingpros).
+│                                 novig_kalshi_scan.py = read-only Novig-vs-Kalshi NFL prop scan: taker+taker
+│                                 arbs plus hedged maker/taker margins (mm_*; shadow test #1 of
+│                                 docs/analysis/market_making_2026-10-12.md s9; gross of Kalshi maker fee).
 ├── deploy/                       Operational scripts and runbooks
 │   ├── deploy.sh
 │   ├── SGO_DEPLOY_NOTES.md
@@ -3327,11 +3341,32 @@ hyphens disappear entirely. Affected: Ha-Seong Kim, Isiah Kiner-Falefa,
 Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 `process_headshots.py` `slug()` were normalized simultaneously.
 
+### 15.11 Exchange shadow executors (Kalshi / Novig) and the NFL prop sweep
+
+- **Wide book != bad price when the reference is external.** `gates.evaluate()` rejected any book with
+  `spread > spread_max` and compared the venue MID to consensus (`kdev_max`). For Novig the reference is the
+  leave-Novig-out sportsbook consensus, so a wide/empty bid on the other side says nothing about a cheap ask --
+  the +2% to +4% candidates were being rejected as `REJ_BOOK_ILLIQUID`. Fix: `ExecConfig.allow_wide_book_on_consensus`
+  (default False, Kalshi unchanged; True via `novig_config()`): wide/one-sided books pass, and the ask is bounded
+  against consensus (`cons - ask > kdev_max` -> `REJ_KALSHI_OFF`, which still guards mapping errors). A crossed book
+  is always rejected. Wide-book decisions carry `inputs.wide_book=true` in the ledger -- compare their paper fills
+  to tight-book fills before trusting them (a cheap ask in a wide book is also the likeliest stale/adverse one).
+- **Exact-point consensus starves.** `build_consensus` keys on `(player_norm, stat, point)`; books split a main line
+  across adjacent half-points, so most matches have 1-2 books. Pooling (`ev.props.pooled_consensus`) is
+  EVIDENCE ONLY: yardage stats within 1.0 yd of the target, normal-model shift with unvalidated per-stat sd
+  (`POOL_SD_FRAC`); reception/TD stats are never pooled. It is logged beside the exact consensus
+  (`pooled_*.csv`) and never feeds flags or orders until shadow data supports it.
+- **Sink A** (`scan_book_outliers`): book/exchange quotes beating their leave-self-out consensus, from the same
+  ParlayAPI pull (zero extra credits). The +7.56% paper figure behind it is MLB soft-book vs Pinnacle-anchored,
+  not NFL -- treat NFL Sink A as unvalidated evidence.
+- Market-making on Kalshi NFL props is -EV (docs/analysis/market_making_2026-10-12.md); `mm_*` columns in
+  `scripts/novig_kalshi_scan.py` measure the QUOTED hedged opportunity only, not realised P&L.
+
 ---
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-13 22:23 CST_
+_Last updated: 2026-10-13 22:30 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

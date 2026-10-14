@@ -114,3 +114,47 @@ def test_candidates_use_the_leave_novig_out_consensus():
     pt["book_fair"]["c"] = 0.55
     out = nx.candidates(snap, legs, cfg, LEG.start_utc - timedelta(hours=3))
     assert len(out) == 1 and out[0][1]["n_books"] == 3 and out[0][1]["p_over"] == pytest.approx(0.55)
+
+
+# ---- wide-bid books: judge the ask against the external consensus, not the venue mid -------------------------
+def test_wide_bid_with_cheap_ask_plans_on_novig(tmp_path):
+    # Over bid 0.20, Under bid 0.50 -> Over ask 0.50, spread 0.30. Consensus 0.55 -> +9% EV vs the ask.
+    s, ledger, cfg = run(tmp_path, FakeNC(over_bid=0.20, under_bid=0.50), p=point(p_over=0.55))
+    assert s["hist"].get("EXECUTED") == 1, s
+    assert "REJ_BOOK_ILLIQUID" not in s["hist"] and "REJ_KALSHI_OFF" not in s["hist"]
+    with ledger._lock:
+        d = [tuple(r) for r in ledger._c.execute("SELECT inputs_json FROM decisions")][0]
+    assert json.loads(d[0])["wide_book"] is True
+
+
+def test_wide_bid_ask_far_from_consensus_still_rejected_kalshi_off(tmp_path):
+    # Over ask 0.30 vs consensus 0.55: a 25c gap is a mapping/news red flag, not an edge
+    s, _, _ = run(tmp_path, FakeNC(over_bid=0.20, under_bid=0.70), p=point(p_over=0.55))
+    assert s["hist"].get("REJ_KALSHI_OFF") == 1 and not s["executed"], s
+
+
+def test_one_sided_book_with_ask_is_allowed_but_crossed_never(tmp_path):
+    nc = FakeNC(over_bid=0.20, under_bid=0.50)
+    nc.b[LEG.over_id] = []                                    # no Over bids at all -> yes_mid None, Over ask 0.50 exists
+    s, _, _ = run(tmp_path, nc, p=point(p_over=0.55))
+    assert s["hist"].get("EXECUTED") == 1, s
+    sub = tmp_path / "crossed"
+    sub.mkdir()
+    s, _, _ = run(sub, FakeNC(over_bid=0.60, under_bid=0.50), p=point(p_over=0.55))   # bids sum > 1
+    assert s["hist"].get("REJ_BOOK_ILLIQUID") == 1 and not s["executed"], s
+
+
+def test_flag_off_keeps_original_spread_gate(tmp_path):
+    from dataclasses import replace
+    from datetime import datetime
+    from ev.novig.exec import NovigExecLeg, to_kbook
+    from mlb.execution.kalshi import gates
+    from mlb.execution.kalshi.consensus import ConsPoint
+    cfg = replace(props_config(env={}), taker_multiplier=0.0)                    # allow_wide_book_on_consensus False
+    assert cfg.allow_wide_book_on_consensus is False
+    kb = to_kbook(FakeNC(0.20, 0.50).get_book("m"), LEG)
+    xl = NovigExecLeg(ticker=LEG.market_id, market="novig:x", game_pk=LEG.game_key, line=LEG.strike,
+                      start_utc=LEG.start_utc, game_date=LEG.game_key.split(":")[1], group="g")
+    cons = ConsPoint(p=0.55, n_books=4, disp=0.01, ts=T0, prev_p=None)
+    d = gates.evaluate(xl, kb, cons, None, T0 + timedelta(seconds=0.5), cfg, cfg.bankroll, 50.0)
+    assert d.outcome == "REJ_BOOK_ILLIQUID"
