@@ -546,3 +546,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 ::selection { background: color-mix(in oklab, var(--signal) 30%, transparent); color: var(--chalk); }
 
 a { color: inherit; }
+
+/* ── /ev card: strict column grid on desktop, wrapping flex below 960px ─────────────────────────── */
+.ev-card-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+@media (min-width: 960px) {
+  .ev-card-grid {
+    display: grid;
+    grid-template-columns: 72px minmax(230px, 2.2fr) minmax(145px, 1.1fr) minmax(150px, 1.1fr) 88px 130px auto;
+    gap: 16px;
+    align-items: center;
+  }
+}
+
+/* ── /edge cockpit master-detail: two columns >= 960px, full-screen inspector sheet below ───────── */
+.cockpit-grid   { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.cockpit-detail { display: none; min-width: 0; }
+.cockpit-detail.is-open {
+  display: block; position: fixed; inset: 0; z-index: var(--z-backdrop); overflow-y: auto;
+  overscroll-behavior: contain; background: var(--carbon);
+  padding: 12px 12px calc(24px + env(safe-area-inset-bottom));
+}
+@media (min-width: 960px) {
+  .cockpit-grid { grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.2fr); }
+  .cockpit-detail,
+  .cockpit-detail.is-open {
+    display: block; position: sticky; inset: auto; top: 112px; z-index: auto; background: transparent;
+    padding: 0; max-height: calc(100vh - 128px); overflow-y: auto;
+  }
+  .cockpit-close { display: none !important; }
+}
+

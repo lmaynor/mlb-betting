@@ -416,6 +416,23 @@ def _american_to_decimal(a):
     return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
 
 
+def _book_strip(raw):
+    """Sink A `all_books` (ev.props._all_books) -> a clean [{book, over, under, fair}] list for the UI's line-shopping
+    drawer, or None. Untrusted shape (it round-trips through JSON in GCS): anything malformed is dropped, not raised."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for b in raw:
+        if not isinstance(b, dict) or not b.get("book"):
+            continue
+        over, under, fair = _f(b.get("over")), _f(b.get("under")), _f(b.get("fair"))
+        ok = lambda x: x is not None and x == x and x != 0          # noqa: E731 -- finite, non-zero American price
+        out.append({"book": str(b["book"]), "over": int(over) if ok(over) else None,
+                    "under": int(under) if ok(under) else None,
+                    "fair": round(fair, 4) if fair is not None and fair == fair else None})
+    return out or None
+
+
 def _outlier_row(r, sport, now, age_min=None, credible=None):
     """One raw Sink A row -> the public EvBookOutlierRow dict, or None when it cannot be shown: no usable EV/price, or
     the game has started (the quote is dead). Kick-off comes from `commence`; rows written before that column existed
@@ -449,6 +466,7 @@ def _outlier_row(r, sport, now, age_min=None, credible=None):
         "american": int(american), "decimal": _f(r.get("decimal")) or round(_american_to_decimal(american), 4),
         "p_fair": _f(r.get("p_fair")), "ev": round(ev, 4), "n_books": n_books, "disp": _f(r.get("disp")),
         "flag": bool(flag), "reason": r.get("reason"),
+        "all_books": _book_strip(r.get("all_books")), "books": r.get("books"),
     }
 
 
@@ -508,6 +526,9 @@ def _nfl_feed(min_ev, limit):
             "fair_prob": None if p_over is None else round(p_over if side == "yes" else 1.0 - p_over, 4),
             "n_books": r.get("n_books"), "books": r.get("books"), "disp": _f(r.get("disp")),
             "spread": _f(r.get("spread")), "fee_mult": _f(r.get("fee_mult")),
+            # pooled (adjacent half-point) consensus is a TAGGED fallback: UNVALIDATED, shown as such
+            "consensus_src": r.get("consensus_src") or "exact", "interpolated": bool(r.get("interpolated")),
+            "exact_n_books": r.get("exact_n_books"),
             "commence": r.get("commence"), "mins_to_kick": round(mins_now, 1),
             "flag": flag, "reason": r.get("reason"),
         })
@@ -568,6 +589,190 @@ def get_ev_scanner_feed(engine, sport="all", min_ev=0.02, limit=100, days=2):
     for sp in ("nhl", "nba"):
         if sport in ("all", sp):
             out[sp] = _props_feed(sp, min_ev, limit)
+    return out
+
+
+# -- multi-sport prop research cockpit (/edge) ----------------------------------------------------------------------
+# One unified row shape across MLB / NFL / NHL / NBA so the frontend's master-detail inspector needs no per-sport
+# branching for the list: every row is a player + stat + line + the book quote being flagged, optionally with the
+# player's last-10 game log vs that line (`recentForm`, mlb_core.data.cockpit_form). NFL/NHL/NBA rows come from the
+# shadow sweeps (UNVALIDATED, `shadow: true`); MLB rows are today's model predictions plus tracked system='EV' alerts.
+_COCKPIT_SPORTS = ("mlb", "nfl", "nhl", "nba")
+_MLB_SYS_STAT = {"HR": "home_runs", "K": "strikeouts", "OUTS": "outs", "BATTER_HITS": "hits",
+                 "BATTER_TB": "total_bases", "PITCHER_ER": "earned_runs", "SB": "stolen_bases"}
+_MLB_BET_RE = _re.compile(r"^(?P<sys>[A-Z_]+?)_(?P<side>OVER|UNDER|\d+PLUS)_(?P<line>\d+(?:\.\d+)?)$")
+
+
+def _decimal_to_american(dec):
+    dec = float(dec)
+    if dec <= 1.0:
+        return None
+    return int(round((dec - 1.0) * 100.0)) if dec >= 2.0 else int(round(-100.0 / (dec - 1.0)))
+
+
+def _enrich_key(name):
+    """Same folding the enrichment builder keys its players by: NFD, strip combining marks, lowercase."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", str(name or ""))
+    return "".join(c for c in s if unicodedata.category(c) != "Mn").lower().strip()
+
+
+def _parse_mlb_prop(bet_type):
+    """'K_OVER_7.5' -> ('K', 'OVER', 7.5); '3PLUS' thresholds -> Over N-0.5; HR / HR_NO -> 0.5. None for anything that
+    is not a player prop (NRFI, F5, GAME ... have no player and no game log)."""
+    bt = (bet_type or "").upper()
+    if bt == "HR":
+        return "HR", "OVER", 0.5
+    if bt == "HR_NO":
+        return "HR", "UNDER", 0.5
+    m = _MLB_BET_RE.match(bt)
+    if not m or m.group("sys") not in _MLB_SYS_STAT:
+        return None
+    side, line = m.group("side"), float(m.group("line"))
+    if side.endswith("PLUS"):
+        side, line = "OVER", int(side[:-4]) - 0.5
+    return m.group("sys"), side, line
+
+
+def _cockpit_form(sport, stat, line, player, player_id):
+    from mlb_core.data import cockpit_form
+    try:
+        return cockpit_form.recent_form(sport, stat, line, player, player_id)
+    except Exception:  # noqa: BLE001 -- a bad game-log row must never take the cockpit down
+        logger.exception("cockpit recent_form failed (%s %s %s)", sport, stat, player)
+        return None
+
+
+def _cockpit_book_row(o, sport, source):
+    """A Sink A row (`_outlier_row` output) -> the unified cockpit row."""
+    stat, line, side = o.get("stat"), o.get("point"), str(o.get("side") or "").upper()
+    return {
+        "id": f"{sport}|{o.get('game_key')}|{o.get('player_norm') or o.get('player')}|{stat}|{line}|{side}|{o.get('book')}",
+        "sport": sport, "source": source, "shadow": True,
+        "player": o.get("player"), "player_id": o.get("player_id"), "team": o.get("team"),
+        "matchup": " @ ".join(x for x in (o.get("away_team"), o.get("home_team")) if x) or None,
+        "commence": o.get("commence"), "mins_to_kick": o.get("mins_to_kick"),
+        "stat": stat, "side": side, "line": line, "book": o.get("book"),
+        "american": o.get("american"), "decimal": o.get("decimal"), "ev": o.get("ev"), "p_fair": o.get("p_fair"),
+        "n_books": o.get("n_books"), "flag": bool(o.get("flag")), "reason": o.get("reason"),
+        "all_books": o.get("all_books"), "recentForm": _cockpit_form(sport, stat, line, o.get("player"), o.get("player_id")),
+    }
+
+
+def _cockpit_kalshi_row(r):
+    """An NFL Kalshi-ask row (`_nfl_feed` rows) -> the unified cockpit row (the ask is the price, as an American quote)."""
+    ask = _f(r.get("ask"))
+    american = _decimal_to_american(1.0 / ask) if ask and 0.0 < ask < 1.0 else None
+    if american is None:
+        return None
+    gk = r.get("game_key")
+    teams = str(gk).split(":")[-1].split("@") if gk and "@" in str(gk) else []
+    stat, line = r.get("stat"), r.get("strike")
+    return {
+        "id": f"nfl|{r.get('ticker')}|{r.get('side')}", "sport": "nfl", "source": "kalshi", "shadow": True,
+        "player": r.get("player"), "player_id": None, "team": r.get("team"),
+        "matchup": " @ ".join(teams) if len(teams) == 2 else None,
+        "commence": r.get("commence"), "mins_to_kick": r.get("mins_to_kick"),
+        "stat": stat, "side": r.get("side"), "line": line, "book": "kalshi",
+        "american": american, "decimal": round(1.0 / ask, 4), "ev": r.get("net_ev"), "p_fair": r.get("fair_prob"),
+        "n_books": r.get("n_books"), "flag": bool(r.get("flag")), "reason": r.get("reason"), "all_books": None,
+        "recentForm": _cockpit_form("nfl", stat, line, r.get("player"), None),
+    }
+
+
+def _sort_rows(rows, limit):
+    rows.sort(key=lambda x: (not x.get("flag"), -(x.get("ev") or 0.0)))
+    return rows[: int(limit)]
+
+
+def _mlb_cockpit_rows(engine, min_ev, limit):
+    """Today's MLB player-prop candidates: model predictions (any system with a player + line) and tracked system='EV'
+    alerts, each with the Statcast enrichment (last-12 form for that stat, spray chart, EV/LA scatter) when built."""
+    import json as _j
+    from mlb_core import storage as _st
+    today = _ct_today()
+    try:
+        players = _j.loads(_st.read_bytes(f"Enrich/edge/{today}.json")).get("players") or {}
+    except Exception:  # noqa: BLE001 -- enrichment not built yet / transient: rows still render, just without form
+        players = {}
+    cands = []
+    for p in get_today_picks(engine, include_all=True):
+        if p.get("system") == "EV" or not p.get("player"):
+            continue
+        parsed = _parse_mlb_prop(p.get("bet_type"))
+        ev = _edge_frac(p.get("edge"))
+        if parsed is None or ev is None or ev < min_ev or p.get("result") is not None or not p.get("odds"):
+            continue
+        cands.append(("model", p, parsed, ev, _f(p.get("market_prob")), bool(p.get("kelly_triggered")), None))
+    for p in _ev_mlb_rows(engine, min_ev, limit * 3, 0):
+        if p.get("result") is not None or not p.get("player") or not p.get("odds"):
+            continue
+        parsed = _parse_mlb_prop(p.get("bet_type"))
+        if parsed is None or p.get("edge") is None:
+            continue
+        cands.append(("ev_alert", p, parsed, p["edge"], _f(p.get("model_prob")), True, p.get("n_books")))
+    from mlb_core.data import cockpit_form
+    out = []
+    for source, p, (system, side, line), ev, p_fair, flag, n_books in cands:
+        stat = _MLB_SYS_STAT[system]
+        american = int(p["odds"])
+        en = players.get(_enrich_key(p["player"])) or {}
+        rf = en.get("recent_form") or {}
+        form = None
+        if rf.get("stat") == stat and rf.get("games"):
+            form = cockpit_form.form_from_pairs([(g.get("date"), g.get("value")) for g in rf["games"]], line)
+        row = {
+            "id": f"mlb|{source}|{p.get('id')}", "sport": "mlb", "source": source, "shadow": False,
+            "player": p["player"], "player_id": None, "team": None,
+            "matchup": " @ ".join(x for x in (p.get("away_team"), p.get("home_team")) if x) or None,
+            "commence": None, "mins_to_kick": None, "stat": stat, "side": side, "line": line,
+            "book": p.get("book"), "american": american, "decimal": round(_american_to_decimal(american), 4),
+            "ev": round(ev, 4), "p_fair": p_fair, "n_books": n_books, "flag": flag, "reason": None, "all_books": None,
+            "recentForm": form, "system": system, "bet_type": p.get("bet_type"),
+            "model_prob": _f(p.get("model_prob")) if source == "model" else None,
+            "spray": en.get("spray") or None, "ev_la": en.get("ev_la") or None,
+        }
+        out.append(row)
+    return _sort_rows(out, limit)
+
+
+def get_multisport_cockpit(sport="all", limit=60, engine=None, min_ev=0.02):
+    """The /edge research cockpit: prop candidates for MLB, NFL, NHL and NBA in ONE row shape, each with the player's
+    last-10 game log against the line (`recentForm`, None when the sport's game-log master is absent). `engine` is
+    only needed for the MLB rows (a DB read); without it MLB reports status 'unavailable'. Every non-MLB row is a
+    SHADOW sweep signal (unvalidated); the payload carries per-sport status/freshness exactly like /ev/feed."""
+    sport = (sport or "all").lower()
+    if sport != "all" and sport not in _COCKPIT_SPORTS:
+        raise ValueError(f"unknown sport {sport!r}")
+    limit = max(1, min(int(limit), 150))
+    min_ev = float(min_ev)
+    want = _COCKPIT_SPORTS if sport == "all" else (sport,)
+    out = {"as_of": _datetime.now(_timezone.utc).isoformat(), "sport": sport, "min_ev": min_ev, "rows": [], "sports": {}}
+    for sp in want:
+        meta = {"status": "unavailable", "count": 0, "as_of": None, "age_minutes": None, "stale": True, "validated": sp == "mlb"}
+        rows = []
+        try:
+            if sp == "mlb":
+                if engine is not None:
+                    rows = _mlb_cockpit_rows(engine, min_ev, limit)
+                    meta.update(status="live" if rows else "idle", stale=False)
+            elif sp == "nfl":
+                feed = _nfl_feed(min_ev, limit)
+                rows = [_cockpit_book_row(o, "nfl", "sink_a") for o in feed["book_outliers"]]
+                rows += [r for r in (_cockpit_kalshi_row(k) for k in feed["rows"]) if r]
+                meta.update({k: feed[k] for k in ("status", "as_of", "age_minutes", "stale")})
+            else:
+                feed = _props_feed(sp, min_ev, limit)
+                rows = [_cockpit_book_row(o, sp, "sink_a") for o in feed["rows"]]
+                meta.update({k: feed[k] for k in ("status", "as_of", "age_minutes", "stale")})
+        except Exception:  # noqa: BLE001 -- one sport failing must not blank the others
+            logger.exception("cockpit %s failed", sp)
+            rows = []
+        rows = _sort_rows(rows, limit)
+        meta["count"] = len(rows)
+        out["sports"][sp] = meta
+        out["rows"].extend(rows)
+    out["rows"].sort(key=lambda x: (not x.get("flag"), -(x.get("ev") or 0.0)))
     return out
 
 

@@ -891,7 +891,7 @@ from mlb.runners.public_api import (
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
     get_clv_data, get_today_slate,
-    get_ev_scanner_feed, get_analytics_deep_dive,
+    get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1133,6 +1133,33 @@ def public_ev_feed():
         return resp
     except Exception as exc:
         logger.exception("public_ev_feed failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/edge/cockpit", methods=["GET", "OPTIONS"])
+def public_edge_cockpit():
+    """/edge multi-sport prop research cockpit: MLB + NFL + NHL + NBA candidates in one row shape, each with the
+    player's last-10 game log vs the line (`recentForm`, null when that sport's game-log master is absent)."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_multisport_cockpit(
+            sport=request.args.get("sport", "all"),
+            limit=int(request.args.get("limit", 60)),
+            engine=_get_engine(),
+            min_ev=float(request.args.get("min_ev", 0.02)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # unknown sport
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_edge_cockpit failed")
         return jsonify({"error": str(exc)}), 500
 
 

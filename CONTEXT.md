@@ -1121,7 +1121,7 @@ re-add them. Production deps only in `setup.py`.
 ### ASCII only in source files
 Use ASCII-only characters in all Python string literals, comments, log messages, and docstrings. No Unicode punctuation: use `->` not Unicode arrow, `--` not em-dash, `>=` not Unicode greater-equal. Em-dashes and Unicode arrows look identical to ASCII in the terminal but have different bytes, causing silent `str.replace()` assert failures. Enforced by convention; will be added to ruff config when linting is set up.
 
-**TypeScript/TSX in `beezy-vip/` follows the same rule via escapes** (2026-10-14): `\u00a2` (cent), `\u00b7` (middle dot), `\u2014` (em dash), `/[\u0300-\u036f]/g` (combining marks), `Montr\u00e9al` in tests -- never the raw character. A raw multibyte character in a Windows PowerShell / cp1252 edit round-trips into mojibake, and a mangled regex range silently stops accent-folding. In JSX TEXT a `\uXXXX` escape renders literally, so use an entity there (`&middot;`, `&mdash;`, `&cent;`); in JS strings/template literals use the escape. `beezy-vip/tests/ev-terminal-shadow.test.tsx` pins the files that were fixed. Legacy files (articles, legal pages, edge, cheat-sheet, model-specs) still carry raw characters -- do not mass-convert; fix a file when you touch it.
+**TypeScript/TSX in `beezy-vip/` follows the same rule via escapes** (2026-10-14; the Claude Code Write tool turns a typed `\uXXXX` into the raw character, so after writing a file run a non-ASCII grep or post-process it): `\u00a2` (cent), `\u00b7` (middle dot), `\u2014` (em dash), `/[\u0300-\u036f]/g` (combining marks), `Montr\u00e9al` in tests -- never the raw character. A raw multibyte character in a Windows PowerShell / cp1252 edit round-trips into mojibake, and a mangled regex range silently stops accent-folding. In JSX TEXT a `\uXXXX` escape renders literally, so use an entity there (`&middot;`, `&mdash;`, `&cent;`); in JS strings/template literals use the escape. `beezy-vip/tests/ev-terminal-shadow.test.tsx` pins the files that were fixed. Legacy files (articles, legal pages, edge, cheat-sheet, model-specs) still carry raw characters -- do not mass-convert; fix a file when you touch it.
 
 ### Deploy script runs tests before building
 `./deploy/deploy_service.sh` runs `python3 -m compileall` + `pytest tests/` before
@@ -1922,6 +1922,7 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/sparkline` | 300s | Daily cumulative P&L last 30 days |
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
 | `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow sweep blocks: `nfl` (read from `EVSweep/nfl_props/latest.json`: Kalshi `rows` plus `book_outliers`, the Sink A book/exchange rows -- present even when Kalshi blocks the cloud egress IP and `rows` is empty), `nhl` / `nba` (`EVSweep/{sport}_props/latest.json`). Every shadow block carries `status`/`age_minutes`/`stale`/`validated:false`, started games are dropped, and Sink A rows share one shape (`EvBookOutlierRow`: `ev`, `p_fair`, `point`, `american`, `decimal`, `n_books`, `flag`). An outlier-only NFL snapshot counts as live for 45 min (Kalshi-backed snapshots for 180) |
+| `GET /api/public/edge/cockpit` | 60s | `/edge` multi-sport prop cockpit (`sport`, `limit`, `min_ev`): MLB (today's model predictions + `system='EV'` alerts, with the Statcast enrichment) + NFL / NHL / NBA sweep rows in ONE row shape (`CockpitRow`), each with `recentForm` = the player's last-10 game log vs the line (`mlb_core/data/cockpit_form.py`; reads `NFL/nflverse/player_stats/`, `NHL/{skater,goalie}_boxscores_master.csv`, `NBA/player_boxscores_master`, cached 10 min, `null` when a master is absent) and `all_books` for line shopping. Per-sport `status`/freshness like `/ev/feed`. Next.js proxy `/api/edge-cockpit`; `/edge` falls back to the MLB model board when this endpoint is unreachable |
 | `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
@@ -2029,14 +2030,20 @@ Satori OG routes -- use literal hex there.
 
 #### Information architecture (2026-10-14)
 
-- **Nav** (`components/layout/nav.tsx`): tier 1 = Home, +EV Terminal, Picks Blotter, Analytics,
+- **Nav** (`components/layout/nav.tsx`): tier 1 = Home, +EV Terminal, The Edge, Picks, Analytics,
   Results, Tools + bankroll pill (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) + auth +
   "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating there is untouched). Tier 2 =
   sport ribbon from `lib/sports.ts`. Bottom nav: Home | +EV | Sports | Analytics | Results.
 - **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
   `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
-  NFL / NHL / NBA rows are SHADOW (`Row.shadow`): no stake sizing, no Beezy score, idle/stale banner -- the sweeps' own
-  contract says their signals are unvalidated and never member-facing. All five sport filters are live.
+  NFL / NHL / NBA rows are still UNVALIDATED (`Row.shadow`) but are presented as MARKET (consensus) rows (2026-10-14 copy
+  change): a sky `MARKET` badge + `N BK` instead of a Beezy score (the 0-100 score stays on MLB model-scored rows only), and a
+  1/4 Kelly stake whenever >= 3 reference books anchor the fair probability (`Thin (<3 bks)` below that). The page still says
+  these signals are not yet in the public track record. All five sport filters are live. Cards use the `.ev-card-grid` CSS grid.
+- **`/edge`** (`app/edge/`): multi-sport prop research cockpit. Sport switcher ALL | MLB | NFL | NHL | NBA, market filter,
+  master-detail list + inspector (`cockpit.tsx`: L10 game log vs line `FormSparkline`, opportunity/volume `UsageSparkline`,
+  multi-book `OddsMatrix`; MLB shows the existing `EvLaScatter` + `SprayChart`). Below 960px the inspector is a full-screen
+  sheet. The old MLB model board (players/games, bet slip) is the `MODEL BOARD` view under the MLB tab.
 - **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
   (mlb live, nfl shadow, nhl shadow, nba data_only). Update that file when a pillar's real
   status changes -- do not write aspirational copy there.

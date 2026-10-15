@@ -67,7 +67,7 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     accent: '#f59e0b',
     accentBg: 'rgba(245, 158, 11, 0.12)',
     description:
-      'Player-prop consensus from sportsbooks (ParlayAPI) joined to Kalshi and Novig order books. Evidence collection only: no orders are placed, and these signals are not validated.',
+      'Player-prop consensus from sportsbooks (ParlayAPI) joined to Kalshi and Novig order books. A market-consensus scanner: no orders are placed and these signals are not yet part of the public track record.',
     primarySource: 'ParlayAPI books + Kalshi + Novig',
     markets: [
       { key: 'rec_yds', label: 'Receiving Yards Ladder', kind: 'prop', status: 'Shadow' },
@@ -106,7 +106,7 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     accent: '#38bdf8',
     accentBg: 'rgba(56, 189, 248, 0.12)',
     description:
-      'Sportsbook player-prop quotes (ParlayAPI) are banked and scanned against the consensus of the other books. Evidence collection only: nothing is validated, no orders are placed and no stakes are sized.',
+      'Sportsbook player-prop quotes (ParlayAPI) are banked and scanned against the consensus of the other books. A market-consensus scanner: no orders are placed and these signals are not yet part of the public track record.',
     primarySource: 'ParlayAPI books',
     markets: [
       { key: 'sog', label: 'Shots on Goal O/U', kind: 'prop', status: 'Shadow' },
@@ -127,6 +127,8 @@ const PROP_STAT_LABEL: Record<string, string> = {
   blocked_shots: 'Blocked Shots', hits: 'Hits', pim: 'Penalty Min',
   rebounds: 'Rebounds', threes: '3-Pointers', pra: 'Pts+Reb+Ast', pr: 'Pts+Reb', pa: 'Pts+Ast', ra: 'Reb+Ast',
   steals: 'Steals', blocks: 'Blocks', turnovers: 'Turnovers', stocks: 'Stl+Blk', minutes: 'Minutes',
+  home_runs: 'Home Runs', strikeouts: 'Strikeouts', outs: 'Pitcher Outs', total_bases: 'Total Bases',
+  earned_runs: 'Earned Runs', stolen_bases: 'Stolen Bases',
 }
 
 /** Display label for a props-sweep `stat` key ('sog' -> 'Shots on Goal'); unknown keys degrade to 'some stat'. */

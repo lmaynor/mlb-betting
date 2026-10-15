@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { Bet, EvBookOutlierRow, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
+import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
 import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
@@ -41,9 +41,14 @@ interface Row {
   team?: string | null
   /** shadow row that failed the sweep's credibility gates (thin reference / EV above the cap): listed, but after credible rows */
   lowConf?: boolean
+  /** target side of the flagged quote ('OVER' | 'UNDER'): decides which price the Compare books strip ranks by */
+  side?: string
+  /** every book quoting this line (line shopping); the Compare books drawer needs more than one */
+  allBooks?: EvBookQuote[]
 }
 
 const HAIR = '#1e2230'
+const SKY = '#38bdf8'
 const MIN_EDGE = [
   { label: 'All (+2%+)', v: 0.02 },
   { label: '+3%+', v: 0.03 },
@@ -167,7 +172,26 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     playerId: r.player_id ?? null,
     team: r.team ?? null,
     lowConf: r.flag === false,
+    side: String(r.side).toUpperCase(),
+    allBooks: r.all_books,
   }
+}
+
+/** Order two American prices (null = no quote) by payout: +150 > +110 > -105 > -130. Higher decimal payout is better. */
+function priceDecimal(american: number | null | undefined): number | null {
+  if (american == null || !isFinite(american) || american === 0) return null
+  return americanToDecimal(american)
+}
+
+/** Strip rows for the Compare books drawer: best price for the target side first, unpriced books last. */
+function rankBookQuotes(quotes: EvBookQuote[], side: string | undefined): { quote: EvBookQuote; best: boolean }[] {
+  const pick = (q: EvBookQuote) => priceDecimal(String(side).toUpperCase() === 'UNDER' ? q.under : q.over)
+  const known = side === 'OVER' || side === 'UNDER'
+  const top = known ? Math.max(...quotes.map(q => pick(q) ?? -Infinity)) : -Infinity
+  return quotes
+    .map((quote, i) => ({ quote, i, d: known ? pick(quote) : null }))
+    .sort((a, b) => (b.d ?? -Infinity) - (a.d ?? -Infinity) || a.i - b.i)
+    .map(({ quote, d }) => ({ quote, best: known && d != null && d === top }))
 }
 
 export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null; headline: EvHeadline | null }) {
@@ -230,9 +254,9 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
           Prices that lag the market, sized to your bankroll.
         </h1>
         <p className="times" style={{ color: 'var(--silver)', fontSize: '15px', maxWidth: '72ch', marginTop: '10px' }}>
-          Every row is a sportsbook or exchange price beating the de-vigged consensus of other books. MLB rows are
-          tracked and settled publicly at the flagged price. NFL, NHL and NBA rows come from shadow sweeps: evidence only,
-          never sized or scored.
+          Every row is a sportsbook or exchange price beating the de-vigged consensus of other books. MLB rows carry a
+          0&ndash;100 Beezy Score and are tracked and settled publicly at the flagged price. NFL, NHL and NBA rows are
+          market-consensus signals, sized at 1/4 Kelly once at least three reference books agree.
         </p>
       </header>
 
@@ -242,29 +266,40 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       <section style={{ ...CARD_STYLE, padding: '14px 16px', margin: '18px 0', display: 'grid', gap: '12px' }} aria-label="Filters">
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Label>SPORT</Label>
-          {(['all', 'mlb', 'nfl', 'nhl', 'nba'] as SportFilter[]).map(s => (
-            <Pill key={s} active={sport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>
-          ))}
+          <PillGroup>
+            {(['all', 'mlb', 'nfl', 'nhl', 'nba'] as SportFilter[]).map(s => (
+              <Pill key={s} active={sport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>
+            ))}
+          </PillGroup>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Label>VENUE</Label>
-          {VENUES.map(v => <Pill key={v.id} active={venue === v.id} onClick={() => setVenue(v.id)}>{v.label}</Pill>)}
+          <PillGroup>
+            {VENUES.map(v => <Pill key={v.id} active={venue === v.id} onClick={() => setVenue(v.id)}>{v.label}</Pill>)}
+          </PillGroup>
         </div>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <Label>MIN EDGE</Label>
-            {MIN_EDGE.map(m => <Pill key={m.v} active={minEdge === m.v} onClick={() => setMinEdge(m.v)}>{m.label}</Pill>)}
-            <Pill active={includeSettled} onClick={() => setIncludeSettled(v => !v)}>INCLUDE SETTLED</Pill>
+            <PillGroup>
+              {MIN_EDGE.map(m => <Pill key={m.v} active={minEdge === m.v} onClick={() => setMinEdge(m.v)}>{m.label}</Pill>)}
+            </PillGroup>
+            <PillGroup>
+              <Pill active={includeSettled} onClick={() => setIncludeSettled(v => !v)}>INCLUDE SETTLED</Pill>
+            </PillGroup>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <Label htmlFor="ev-bankroll">BANKROLL</Label>
-            <input
-              id="ev-bankroll" className="mono" inputMode="decimal"
-              value={bankrollText === '' ? String(bankroll) : bankrollText}
-              onChange={e => { setBankrollText(e.target.value); const n = parseFloat(e.target.value.replace(/[$,]/g, '')); if (isFinite(n) && n > 0) setBankroll(n) }}
-              onBlur={() => setBankrollText('')}
-              style={{ width: '110px', padding: '8px 10px', fontSize: '13px', textAlign: 'right' }}
-            />
+            <div style={{ background: '#090a0f', border: '1px solid #2e3446', borderRadius: '6px', padding: '0 10px', height: '34px', display: 'inline-flex', alignItems: 'center' }}>
+              <span className="mono" style={{ color: 'var(--fog)', fontSize: '13px', marginRight: '4px' }}>$</span>
+              <input
+                id="ev-bankroll" className="mono" inputMode="decimal"
+                value={bankrollText === '' ? String(bankroll) : bankrollText}
+                onChange={e => { setBankrollText(e.target.value); const n = parseFloat(e.target.value.replace(/[$,]/g, '')); if (isFinite(n) && n > 0) setBankroll(n) }}
+                onBlur={() => setBankrollText('')}
+                style={{ background: 'transparent', border: 'none', color: 'var(--chalk)', width: '84px', fontSize: '13px', textAlign: 'right', outline: 'none' }}
+              />
+            </div>
             <span style={{ fontSize: '11.5px', color: 'var(--fog)' }}>1/4 Kelly, 5% cap</span>
           </div>
         </div>
@@ -311,13 +346,24 @@ function Pill({ children, active, onClick, disabled, title }: { children: React.
       style={{
         fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em',
         padding: '6px 11px', borderRadius: '6px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1,
-        color: active ? '#090a0f' : 'var(--silver)',
-        background: active ? 'var(--signal)' : 'var(--surface-elevated)',
-        border: `1px solid ${active ? 'var(--signal)' : HAIR}`,
+        color: active ? '#ffffff' : 'var(--silver)',
+        background: active ? '#1b1f2b' : 'transparent',
+        border: `1px solid ${active ? '#3a4156' : 'transparent'}`,
+        boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none',
       }}
     >
       {children}
     </button>
+  )
+}
+
+/** Recessed container for a row of segmented filter buttons: the active one is an elevated slate surface, so the brand
+ * green stays reserved for +EV values. */
+function PillGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '2px', padding: '3px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '8px', maxWidth: '100%' }}>
+      {children}
+    </div>
   )
 }
 
@@ -345,14 +391,19 @@ function TrackRecord({ h }: { h: EvHeadline | null }) {
         <Kpi label="TRACKED +EV ALERTS" value={`${h.graded.toLocaleString()} graded`} sub={`${h.wins.toLocaleString()} W \u00b7 ${h.losses.toLocaleString()} L \u00b7 ${h.pushes} push \u00b7 ${h.voids.toLocaleString()} void \u00b7 ${h.pending} pending`} />
         <Kpi label={`FLAT STAKE ($${h.flat_stake_unit}) P&L`} value={fmtMoney(h.flat_pnl_dollars, true)} color={pos(h.flat_roi_pct)} sub={`${h.flat_roi_pct != null ? (h.flat_roi_pct > 0 ? '+' : '') + h.flat_roi_pct.toFixed(2) : '--'}% ROI, voids excluded`} />
         <Kpi label={`1/4 KELLY ON ${fmtMoney(h.bankroll)}`} value={fmtMoney(h.kelly_ending_bankroll)} color={pos(h.kelly_roi_pct)} sub={`${h.kelly_roi_pct != null ? (h.kelly_roi_pct > 0 ? '+' : '') + h.kelly_roi_pct.toFixed(2) : '--'}% ROI on staked, ${fmtPct(h.kelly_cap, 0)} per-bet cap, non-compounding`} />
-        <Kpi label="EXCHANGE SWEEP" value="Kalshi + Novig" sub="NFL props, shadow mode: priced and logged, no orders placed. Novig pre-game fee is $0." />
+        <Kpi label="EXCHANGE SWEEP" value="Kalshi + Novig" sub="NFL props priced against Kalshi and Novig and logged for review. No orders are placed. Novig pre-game fee is $0." />
       </div>
-      <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', margin: '12px 2px 0', lineHeight: 1.6, maxWidth: '100ch' }}>
-        Paper results only: no slippage, limits or line movement, and the same prop flagged at several books counts several
-        times ({h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts). Treat it as
-        promising and unverified for execution. Methodology and per-book results on the{' '}
-        <Link href="/analytics" style={{ color: 'var(--link)' }}>analytics page</Link>.
-      </p>
+      <details style={{ margin: '12px 2px 0' }}>
+        <summary className="dell-heading" style={{ fontSize: '10.5px', color: 'var(--silver)', cursor: 'pointer', letterSpacing: '0.06em' }}>
+          Methodology &amp; Audit Notes
+        </summary>
+        <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', margin: '10px 0 0', lineHeight: 1.6, maxWidth: '100ch' }}>
+          Paper results only: no slippage, limits or line movement, and the same prop flagged at several books counts several
+          times ({h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts). Treat it as
+          promising and unverified for execution. Methodology and per-book results on the{' '}
+          <Link href="/analytics" style={{ color: 'var(--link)' }}>analytics page</Link>.
+        </p>
+      </details>
     </section>
   )
 }
@@ -361,9 +412,9 @@ function ShadowBanner({ label, body, status, ageMinutes }: { label: string; body
   const idle = status !== 'shadow_live'
   const hrs = ageMinutes != null ? ageMinutes / 60 : null
   return (
-    <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.07)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
-      <strong style={{ color: '#f59e0b' }}>{label} SHADOW SWEEP.</strong>{' '}
-      {body} Evidence collection only: unvalidated, no stake sizing or score shown.{' '}
+    <div role="note" style={{ border: '1px solid rgba(56,189,248,0.30)', background: 'rgba(56,189,248,0.06)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
+      <strong style={{ color: SKY }}>{label} MARKET SCANNER.</strong>{' '}
+      {body} Signals are not yet part of the public track record.{' '}
       {status === 'unavailable'
         ? 'No sweep output is available yet.'
         : idle
@@ -405,17 +456,64 @@ function Cell({ label, children, basis, grow = 0 }: { label: string; children: R
   )
 }
 
+function BookStrip({ id, r }: { id: string; r: Row }) {
+  const ranked = rankBookQuotes(r.allBooks ?? [], r.side)
+  const price = (american: number | null, best: boolean) => (
+    <span className="mono" style={{ fontSize: '13px', fontWeight: best ? 800 : 600, color: best ? 'var(--signal)' : 'var(--chalk)' }}>
+      {american == null ? <>&ndash;</> : formatOdds(american)}
+    </span>
+  )
+  return (
+    <div id={id} role="group" aria-label={`All books for ${r.title}`} style={{ flex: '1 0 100%', gridColumn: '1 / -1', borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+      <div className="dell-heading" style={{ fontSize: '9px', color: 'var(--fog)', marginBottom: '8px' }}>
+        LINE SHOPPING &middot; FAIR = DE-VIGGED P(OVER) AT EACH BOOK
+      </div>
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        {ranked.map(({ quote, best }) => {
+          const b = bookDisplay(quote.book)
+          const bestSide = r.side === 'UNDER' ? 'under' : 'over'
+          return (
+            <div
+              key={quote.book} data-best={best ? 'true' : undefined}
+              style={{ flex: '0 0 auto', minWidth: '132px', background: 'var(--surface-elevated)', border: `1px solid ${best ? '#57F287' : HAIR}`, borderRadius: '8px', padding: '8px 10px', display: 'grid', gap: '6px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
+                {best && <span className="dell-heading" style={{ fontSize: '8.5px', color: '#57F287' }} aria-label={`Best ${bestSide} price`}>BEST</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>OVER</div>{price(quote.over, best && bestSide === 'over')}</div>
+                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>UNDER</div>{price(quote.under, best && bestSide === 'under')}</div>
+              </div>
+              <div className="mono" style={{ fontSize: '11px', color: 'var(--ash)' }}>
+                fair {quote.fair != null ? `${(quote.fair * 100).toFixed(1)}%` : <>&ndash;</>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function EvCard({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; copied: boolean; onCopy: () => void }) {
+  const [compare, setCompare] = useState(false)
+  const nQuotes = r.allBooks?.length ?? 0
+  const stripId = `compare-${r.key.replace(/[^A-Za-z0-9_-]/g, '-')}`
   const book = bookDisplay(r.bookKey)
   const tier = r.score != null ? scoreTier(r.score) : 'watch'
   const meta = TIER_META[tier]
-  const size = r.shadow ? null : kellySizing(bankroll, r.fairProb, r.decimal)
+  // a de-vigged consensus of 3+ reference books is a valid anchor for fractional Kelly, tracked or not
+  const size = !r.shadow || ((r.nBooks ?? 0) >= 3 && r.fairProb != null) ? kellySizing(bankroll, r.fairProb, r.decimal) : null
   const statusColor = r.status === 'win' ? 'var(--signal)' : r.status === 'loss' ? 'var(--loss)' : 'var(--fog)'
   return (
-    <article style={{ ...CARD_STYLE, padding: '14px 16px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center', boxShadow: r.shadow ? CARD_STYLE.boxShadow : meta.glow, borderColor: r.shadow ? HAIR : meta.border }}>
+    <article className="ev-card-grid" style={{ ...CARD_STYLE, padding: '14px 16px', boxShadow: r.score == null ? CARD_STYLE.boxShadow : meta.glow, borderColor: r.score == null ? HAIR : meta.border }}>
       <div style={{ flex: '0 0 74px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
-        {r.shadow ? (
-          <span className="mono" style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '6px', padding: '4px 7px' }}>SHADOW</span>
+        {r.score == null ? (
+          <>
+            <span className="dell-heading" style={{ fontSize: '10px', fontWeight: 700, color: SKY, background: 'rgba(56,189,248,0.10)', border: '1px solid rgba(56,189,248,0.40)', borderRadius: '6px', padding: '3px 7px', letterSpacing: '0.06em' }}>MARKET</span>
+            <span className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>{r.nBooks ?? 0} BK</span>
+          </>
         ) : (
           <>
             <span className="mono" style={{ fontSize: '24px', fontWeight: 800, color: meta.color, lineHeight: 1 }} aria-label={`Beezy score ${r.score}`}>{r.score}</span>
@@ -458,21 +556,30 @@ function EvCard({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; cop
         </span>
       </Cell>
 
-      <Cell label={r.shadow ? 'STAKE' : '1/4 KELLY STAKE'} basis="130px">
+      <Cell label="1/4 KELLY STAKE" basis="130px">
         {size ? (
           <>
             <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: size.dollars > 0 ? 'var(--chalk)' : 'var(--fog)' }}>{size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</div>
             <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>{size.dollars > 0 ? `${size.units.toFixed(2)}% of bankroll` : 'below Kelly floor'}</div>
           </>
         ) : (
-          <div style={{ fontSize: '11.5px', color: 'var(--fog)', lineHeight: 1.4 }}>none &mdash; unvalidated</div>
+          <div style={{ fontSize: '11.5px', color: 'var(--fog)', lineHeight: 1.4 }}>Thin (&lt;3 bks)</div>
         )}
       </Cell>
 
       <div style={{ flex: '0 0 auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
         {r.status !== 'pending' && <span className="dell-heading" style={{ fontSize: '10px', color: statusColor }}>{r.status.toUpperCase()}</span>}
+        {nQuotes > 1 && (
+          <button
+            onClick={() => setCompare(v => !v)} className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}
+            aria-expanded={compare} aria-controls={stripId} aria-label={`Compare ${nQuotes} books for ${r.title}`}
+          >
+            Compare {nQuotes} books
+          </button>
+        )}
         <button onClick={onCopy} className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>{copied ? 'Copied' : 'Copy bet'}</button>
       </div>
+      {compare && nQuotes > 1 && <BookStrip id={stripId} r={r} />}
     </article>
   )
 }
