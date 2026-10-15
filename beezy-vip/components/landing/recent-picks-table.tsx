@@ -33,7 +33,7 @@ function ScoreMark({ score, tier }: { score: number; tier: ReturnType<typeof sco
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
       <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color, whiteSpace: 'nowrap' }}>
-        {TIER_LABEL[tier].replace(' PLAY', '')}
+        {TIER_LABEL[tier]}
       </span>
     </div>
   )

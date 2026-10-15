@@ -12,6 +12,7 @@ import { useBankroll } from '@/lib/use-bankroll'
 import { siteDateKey } from '@/lib/dates'
 import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { ScoreLegend } from '@/components/ui/score-legend'
 
 type SportFilter = 'all' | 'mlb' | 'nfl' | 'nba' | 'nhl'
 type VenueFilter = 'all' | 'exchanges' | string
@@ -271,7 +272,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       if (!cur) { best.set(k, { ...r, bookCount: 1 }); out.push(best.get(k)!) }
       else { cur.bookCount = (cur.bookCount ?? 1) + 1; if (r.ev > cur.ev) Object.assign(cur, { ...r, bookCount: cur.bookCount }) }
     }
-    return out.sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || b.ev - a.ev)
+    return out.sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || (b.score ?? 0) - (a.score ?? 0) || b.ev - a.ev)
   }, [allRows, sport, venue, minEdge, includeSettled, showThin])
 
   const thinHidden = useMemo(() => allRows.filter(r => r.lowConf && r.ev >= minEdge && (sport === 'all' || r.sport === sport)).length, [allRows, minEdge, sport])
@@ -372,6 +373,8 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
           </table>
         </div>
       )}
+
+      <ScoreLegend />
 
       <p className="times" style={{ color: 'var(--fog)', fontSize: '12px', marginTop: '28px', maxWidth: '90ch', lineHeight: 1.6 }}>
         Every row is a sportsbook or exchange price beating the de-vigged consensus of the other books. MLB rows carry a

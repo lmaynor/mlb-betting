@@ -649,7 +649,7 @@ export function CheatSheetClient({
               WHAT IS THIS?
             </div>
             <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65, marginBottom: '12px' }}>
-              The Daily Card is a share-ready image of today&apos;s top MLB model picks, ranked by Beezy Score (edge, price and confidence in one 0-100 number). It is the model slice of the Picks page, sized for posting. +EV alerts are not on the card; they live in the +EV Terminal.
+              The Daily Card is a share-ready image of today&apos;s top MLB model picks, ranked by Beezy Score (edge, how many books agree, and hit probability in one 0-100 number). It is the model slice of the Picks page, sized for posting. +EV alerts are not on the card; they live in the +EV Terminal.
             </p>
             <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65 }}>
               The card publishes after the ~11:00 AM CT model run. Tap any pick to see why it made the card.
@@ -666,9 +666,9 @@ export function CheatSheetClient({
               SCORE LEGEND
             </div>
             {[
-              { tier: 'strong', color: '#57f287', label: 'STRONG', desc: 'Score 65+: large edge at a playable price' },
-              { tier: 'lean',   color: '#facc15', label: 'LEAN',   desc: 'Score 40-64: positive edge, moderate confidence' },
-              { tier: 'watch',  color: '#94a3b8', label: 'WATCH',  desc: 'Score under 40: small edge, listed for reference' },
+              { tier: 'strong', color: '#57f287', label: 'STRONG', desc: 'Score 70+: large edge, many books agree' },
+              { tier: 'lean',   color: '#facc15', label: 'LEAN',   desc: 'Score 45-69: positive edge, moderate confidence' },
+              { tier: 'watch',  color: '#94a3b8', label: 'WATCH',  desc: 'Score under 45: small edge, listed for reference' },
             ].map(row => (
               <div key={row.tier} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                 <span className="dell-heading" style={{
