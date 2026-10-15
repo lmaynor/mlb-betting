@@ -445,7 +445,7 @@ function LedgerStrip({ h }: { h: EvHeadline | null }) {
           times ({h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts). Voids are excluded
           from ROI; Kelly is {fmtPct(h.kelly_cap, 0)} per-bet capped and non-compounding. Treat it as promising and unverified for
           execution. Methodology and per-book results on the{' '}
-          <Link href="/analytics" style={{ color: 'var(--link)' }}>analytics page</Link>.
+          <Link href="/analytics?tab=bankroll" style={{ color: 'var(--link)' }}>analytics page</Link>.
         </p>
       </details>
     </section>
