@@ -2040,14 +2040,19 @@ Satori OG routes -- use literal hex there.
 
 #### Information architecture (2026-10-14)
 
-- **Nav** (`components/layout/nav.tsx`), revised 2026-10-15 (PR `fix/ui-consistency-sweep`): tier 1 = Home, +EV Terminal, Picks,
-  Prop Research (`/edge`), Analytics, Results, Tools + auth + "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating
-  untouched). The bankroll pill is gone from the nav; the bankroll (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) is set
-  on `/ev` and the Kelly calculator, which share it. Tier 2 = sport ribbon from `lib/sports.ts` (the Daily Card link was removed;
-  it is reached from `/picks` "Share card"). Nav + ticker sit in one sticky `.site-chrome` wrapper (`app/layout.tsx`); anything
-  sticky under it must clear ~131px (`.ev-table th` top, cockpit inspector top). Bottom nav (mobile): +EV | Picks | Research |
-  Analytics | Results | Tools (logo = Home). Status vocabulary: LIVE / PREVIEW (was "shadow sweep") / COMING SOON; never write
-  "Sink A", "sweep", "pillars", "hubs" or "blotter" in UI copy. Model runs publish ~11:00 AM CT, never "ET".
+- **Nav / IA** (`beezy-vip/lib/ia.ts` is the single source; `components/layout/nav.tsx`, `bottom-nav.tsx`,
+  `section-tabs.tsx` read it), revised 2026-10-15: five top-level items for five questions -- Home | +EV Terminal | Picks |
+  Results | Tools (+ Discord/X + auth + "JOIN WAITLIST" while `lib/launch.ts` PRE_LAUNCH is true). Everything else is a
+  tab strip under the nav (`SectionTabs`, only on pages of a multi-page section): **Scanner** = /ev + /edge (Prop Research);
+  **Picks** = /picks (Today) + /picks/mlb (Systems) + /cheat-sheet (Daily Card); **Results** = /results (Ledger) +
+  /analytics?tab=bankroll|calibration|books|health + /models. `/sports/mlb` is retired (308 -> /picks, `next.config.ts`);
+  NFL/NHL/NBA keep status pages; the sport ribbon's MLB link goes to /picks. `/tools/edge-finder|nrfi-conditions|
+  pitcher-matchups` are 308s. `tests/ia.test.ts` fails if a nav or tab link points at a page that does not exist.
+  The bankroll (`lib/use-bankroll.ts`) is set on /ev and the Kelly calculator, which share it. Nav + ticker sit in one sticky
+  `.site-chrome`; the section tabs are outside it and scroll away. Status vocabulary: LIVE / PREVIEW / COMING SOON; never
+  write "Sink A", "sweep", "pillars", "hubs" or "blotter" in UI copy. Model runs publish ~11:00 AM CT, never "ET".
+  **Beezy Score v2** (`lib/beezy-score.ts`): edge 60 + consensus size 20 + hit probability 20, gated on having an edge;
+  STRONG >= 70, LEAN 45-69, WATCH < 45; formula published by `ScoreLegend`; backtest in `scripts/beezy_score_backtest.py`.
 - **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
   `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
   NFL / NHL / NBA rows are still UNVALIDATED (`Row.shadow`) but are presented as MARKET (consensus) rows (2026-10-14 copy

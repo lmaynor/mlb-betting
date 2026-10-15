@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { AnalyticsDeepDive, SystemStats } from '@/lib/types'
 import { apiGetAnalyticsDeepDive } from '@/lib/betting-api'
@@ -24,7 +25,10 @@ const SYSTEM_CHIPS = ['EV', 'ALL', 'NRFI', 'HR', 'K', 'OUTS', 'F5', 'GAME', 'BAT
 const tipStyle = { background: '#171a24', border: `1px solid ${GRID}`, borderRadius: 8, fontSize: 12, color: '#f3f4f6' }
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
-  const [tab, setTab] = useState<Tab>('bankroll')
+  // The tab lives in the URL (?tab=) and is chosen from the Results section tabs under the nav, so it is linkable.
+  const sp = useSearchParams()
+  const tabParam = sp.get('tab')
+  const tab: Tab = TABS.some(t => t.id === tabParam) ? (tabParam as Tab) : 'bankroll'
   const [data, setData] = useState<AnalyticsDeepDive | null>(initial)
   const [bankroll, setBankroll] = useState(1000)
   const [fraction, setFraction] = useState(STORED_KELLY_FRACTION)
@@ -46,17 +50,8 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 24px 64px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '16px' }}>
-      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Performance &amp; Calibration Ledger</h1>
-      <div role="tablist" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-        {TABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer',
-              color: tab === t.id ? '#090a0f' : 'var(--silver)', background: tab === t.id ? 'var(--signal)' : 'var(--surface-elevated)', border: `1px solid ${tab === t.id ? 'var(--signal)' : GRID}` }}>
-            {t.label}
-          </button>
-        ))}
-        {loading && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', alignSelf: 'center' }}>updating...</span>}
-      </div>
+      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>{TABS.find(t => t.id === tab)!.label}</h1>
+      {loading && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>updating...</span>}
       </div>
 
       {!data ? (

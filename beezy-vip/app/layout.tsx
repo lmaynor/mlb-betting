@@ -10,6 +10,8 @@ import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
 import { BottomNav } from '@/components/layout/bottom-nav'
+import { SectionTabs } from '@/components/layout/section-tabs'
+import { Suspense } from 'react'
 
 export const viewport = {
   width: 'device-width',
@@ -42,6 +44,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Nav authDisabled={AUTH_DISABLED} />
             <LiveTicker />
           </div>
+          {/* Outside the sticky chrome on purpose: it scrolls away so the pinned header stays ~131px. */}
+          <Suspense fallback={null}><SectionTabs /></Suspense>
           <main>{children}</main>
           <Footer />
           <BottomNav />

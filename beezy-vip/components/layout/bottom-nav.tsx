@@ -2,16 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Crosshair, Trophy, Wrench, Zap, ListChecks } from 'lucide-react'
+import { Home, Trophy, Wrench, Zap, ListChecks } from 'lucide-react'
 
-// The logo (top bar) is Home; the sport ribbon under it covers the sport hubs.
+// Five questions, five tabs (lib/ia.ts). Home is also the logo in the top bar.
 const TABS = [
-  { label: '+EV',       href: '/ev',        Icon: Zap },
-  { label: 'Picks',     href: '/picks',     Icon: ListChecks },
-  { label: 'Research',  href: '/edge',      Icon: Crosshair },
-  { label: 'Analytics', href: '/analytics', Icon: BarChart3 },
-  { label: 'Results',   href: '/results',   Icon: Trophy },
-  { label: 'Tools',     href: '/tools',     Icon: Wrench },
+  { label: 'Home',    href: '/',        Icon: Home,       prefixes: [] as string[] },
+  { label: '+EV',     href: '/ev',      Icon: Zap,        prefixes: ['/ev', '/edge'] },
+  { label: 'Picks',   href: '/picks',   Icon: ListChecks, prefixes: ['/picks', '/cheat-sheet'] },
+  { label: 'Results', href: '/results', Icon: Trophy,     prefixes: ['/results', '/analytics', '/models'] },
+  { label: 'Tools',   href: '/tools',   Icon: Wrench,     prefixes: ['/tools'] },
 ]
 
 export function BottomNav() {
@@ -37,8 +36,7 @@ export function BottomNav() {
       }}
     >
       {TABS.map(tab => {
-        const base = tab.href
-        const active = base === '/' ? pathname === '/' : pathname === base || pathname.startsWith(base + '/')
+        const active = tab.href === '/' ? pathname === '/' : tab.prefixes.some(p => pathname === p || pathname.startsWith(p + '/'))
         const color = active ? 'var(--signal)' : 'var(--fog)'
         return (
           <Link

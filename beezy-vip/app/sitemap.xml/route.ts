@@ -11,7 +11,6 @@ const STATIC_ROUTES = [
   { path: '/edge',           priority: '0.7', changefreq: 'hourly'  },
   { path: '/analytics',      priority: '0.7', changefreq: 'daily'   },
   { path: '/cheat-sheet',    priority: '0.5', changefreq: 'daily'   },
-  { path: '/sports/mlb',     priority: '0.7', changefreq: 'daily'   },
   { path: '/sports/nfl',     priority: '0.6', changefreq: 'daily'   },
   { path: '/sports/nhl',     priority: '0.5', changefreq: 'daily'   },
   { path: '/sports/nba',     priority: '0.4', changefreq: 'weekly'  },

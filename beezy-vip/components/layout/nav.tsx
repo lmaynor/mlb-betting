@@ -6,22 +6,11 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 import { SPORT_LIST } from '@/lib/sports'
+import { NAV, navActive, sportHref } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { PRE_LAUNCH } from '@/lib/launch'
-const NAV_LINKS = [
-  { label: 'Home',          href: '/' },
-  { label: '+EV Terminal',  href: '/ev', live: true },
-  { label: 'Picks',         href: '/picks' },
-  { label: 'Prop Research', href: '/edge' },
-  { label: 'Analytics',     href: '/analytics' },
-  { label: 'Results',       href: '/results' },
-  { label: 'Tools',         href: '/tools' },
-]
 
-function isActive(pathname: string, href: string) {
-  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/')
-}
 
 function Emblem() {
   return (
@@ -91,8 +80,8 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           </Link>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1, justifyContent: 'center' }} className="nav-desktop">
-            {NAV_LINKS.map((l) => {
-              const active = isActive(pathname, l.href)
+            {NAV.map((l) => {
+              const active = navActive(pathname, l)
               return (
                 <Link
                   key={l.href}
@@ -164,9 +153,9 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           {SPORT_LIST.map(p => (
             <SportLink
               key={p.slug}
-              href={`/sports/${p.slug}`}
+              href={sportHref(p.slug)}
               label={p.shortName}
-              active={pathname === `/sports/${p.slug}`}
+              active={pathname === sportHref(p.slug) && p.slug !== 'mlb'}
               accent={p.accent}
             />
           ))}
