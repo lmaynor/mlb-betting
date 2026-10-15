@@ -39,6 +39,8 @@ interface Row {
   /** league player id (NHL playerId / ESPN athlete id) when the feed resolved one: drives the headshot */
   playerId?: number | string | null
   team?: string | null
+  /** shadow row that failed the sweep's credibility gates (thin reference / EV above the cap): listed, but after credible rows */
+  lowConf?: boolean
 }
 
 const HAIR = '#1e2230'
@@ -164,6 +166,7 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     copy: `${title} (${matchup}) @ ${book.label} ${priceMain} -- shadow signal, unvalidated`,
     playerId: r.player_id ?? null,
     team: r.team ?? null,
+    lowConf: r.flag === false,
   }
 }
 
@@ -206,7 +209,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       .filter(r => (venue === 'all' ? true : venue === 'exchanges' ? !!BOOK_META[r.bookKey]?.isExchange : r.bookKey === venue))
       .filter(r => r.ev >= minEdge)
       .filter(r => includeSettled || r.status === 'pending')
-      .sort((a, b) => Number(a.shadow) - Number(b.shadow) || b.ev - a.ev)
+      .sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || b.ev - a.ev)
   }, [feed, sport, venue, minEdge, includeSettled])
 
   const nfl = feed?.nfl ?? null

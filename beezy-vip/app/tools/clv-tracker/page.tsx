@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
+import { getUserId } from '@/lib/auth'
+import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { apiGetCLVData } from '@/lib/betting-api'
 import { CLVClient } from './clv-client'
 import type { Metadata } from 'next'
@@ -12,8 +13,8 @@ export const metadata: Metadata = {
 }
 
 export default async function CLVTrackerPage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/login')
+  const userId = await getUserId()
+  if (!userId && !AUTH_DISABLED) redirect('/login')
 
   const initial = await apiGetCLVData(90).catch(() => [])
 

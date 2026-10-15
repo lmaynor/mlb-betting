@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import Stripe           from 'stripe'
-import { currentUser }  from '@clerk/nextjs/server'
+import { getCurrentUser } from '@/lib/auth'
 import { redirect }     from 'next/navigation'
 
 function getStripe() {
@@ -10,7 +10,7 @@ function getStripe() {
 }
 
 export async function GET() {
-  const user = await currentUser().catch(() => null)
+  const user = await getCurrentUser()
 
   if (!user) {
     return NextResponse.redirect('/login')

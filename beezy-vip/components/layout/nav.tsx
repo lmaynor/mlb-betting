@@ -49,10 +49,36 @@ const discordBtn: React.CSSProperties = {
   color: '#c6ccff', border: '1px solid color-mix(in oklab, #5865f2 50%, var(--carbon))',
 }
 
-export function Nav() {
-  const pathname  = usePathname()
+const SIGN_IN_STYLE: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }
+
+/** `authDisabled` (lib/auth-mode.ts) renders the nav with no Clerk hooks/components, so it works without a ClerkProvider. */
+export function Nav({ authDisabled = false }: { authDisabled?: boolean }) {
+  if (authDisabled) {
+    return (
+      <NavShell isSignedIn={false} bankrollDefault={1000} userButton={null}
+        signIn={<Link href="/login" style={{ ...SIGN_IN_STYLE, textDecoration: 'none' }}>Sign In</Link>} />
+    )
+  }
+  return <ClerkNav />
+}
+
+function ClerkNav() {
   const { isSignedIn, user } = useUser()
-  const [bankroll] = useBankroll((user?.publicMetadata?.bankroll as number | undefined) ?? 1000)
+  return (
+    <NavShell
+      isSignedIn={!!isSignedIn}
+      bankrollDefault={(user?.publicMetadata?.bankroll as number | undefined) ?? 1000}
+      userButton={<UserButton />}
+      signIn={<SignInButton mode="modal"><button style={SIGN_IN_STYLE}>Sign In</button></SignInButton>}
+    />
+  )
+}
+
+function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
+  isSignedIn: boolean; bankrollDefault: number; userButton: React.ReactNode; signIn: React.ReactNode
+}) {
+  const pathname  = usePathname()
+  const [bankroll] = useBankroll(bankrollDefault)
 
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw' }}>
@@ -120,15 +146,11 @@ export function Nav() {
                 >
                   Dashboard
                 </Link>
-                <UserButton />
+                {userButton}
               </>
             ) : (
               <>
-                <SignInButton mode="modal">
-                  <button style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                    Sign In
-                  </button>
-                </SignInButton>
+                {signIn}
                 <Link href="/pricing" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none', background: '#57F287', color: '#090a0f', borderRadius: '6px', padding: '8px 12px', whiteSpace: 'nowrap' }}>
                   UPGRADE TO PRO
                 </Link>
@@ -139,13 +161,9 @@ export function Nav() {
           {/* Mobile: auth + Discord. BottomNav handles routing. */}
           <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
             {isSignedIn ? (
-              <UserButton />
+              userButton
             ) : (
-              <SignInButton mode="modal">
-                <button style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                  Sign In
-                </button>
-              </SignInButton>
+              signIn
             )}
             <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={{ ...discordBtn, padding: '7px 11px' }}>
               <DiscordMark size={15} color="currentColor" />

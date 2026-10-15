@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe                        from 'stripe'
-import { auth, currentUser }         from '@clerk/nextjs/server'
+import { currentUser }               from '@clerk/nextjs/server'
+import { getUserId }                 from '@/lib/auth'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!)
@@ -15,7 +16,7 @@ const PRICE_MAP: Record<string, string | undefined> = {
 }
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
+  const userId = await getUserId()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

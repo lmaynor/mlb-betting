@@ -1953,6 +1953,12 @@ pytest suite run by `./deploy/deploy_service.sh`).
 
 ### Auth
 
+**Running without Clerk (local review):** set `AUTH_DISABLED=1` (server env; `beezy-vip-noauth` in `.claude/launch.json` does it). No ClerkProvider, no
+`clerkMiddleware`, no Clerk keys needed; geo-blocking still applies; protected pages are viewable and `getUserTier()` returns `pro`; routes that need a real
+user (bankroll, Stripe checkout/portal) answer 401. **Ignored when `VERCEL_ENV=production`**, so it can never open the member areas on beezy.fyi
+(`lib/auth-mode.ts`, pinned by `tests/auth-mode.test.ts`). New server code must use `getUserId()` / `getCurrentUser()` from `lib/auth.ts`, not Clerk's `auth()` /
+`currentUser()` directly, or it will throw when the switch is on.
+
 Clerk handles authentication. Keys are set as Vercel environment variables:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
