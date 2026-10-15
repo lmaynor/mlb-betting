@@ -86,5 +86,5 @@ export function plainSummary(md: string, max = 155): string {
   const t = md.replace(/`/g, '').replace(/\*\*/g, '').replace(/(^|\s)\*(\S[^*]*?)\*/g, '$1$2').replace(/\s+/g, ' ').trim()
   if (t.length <= max) return t
   const cut = t.slice(0, max)
-  return cut.slice(0, cut.lastIndexOf(' ')).replace(/[,;:\-—]+$/, '') + '...'
+  return cut.slice(0, cut.lastIndexOf(' ')).replace(/[,;:-]+$/, '') + '...'
 }
