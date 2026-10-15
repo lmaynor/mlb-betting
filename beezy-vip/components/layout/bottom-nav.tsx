@@ -2,14 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, Home, Layers, Trophy, Zap } from 'lucide-react'
+import { BarChart3, Crosshair, Trophy, Wrench, Zap, ListChecks } from 'lucide-react'
 
+// The logo (top bar) is Home; the sport ribbon under it covers the sport hubs.
 const TABS = [
-  { label: 'Home',      href: '/',          Icon: Home },
   { label: '+EV',       href: '/ev',        Icon: Zap },
-  { label: 'Sports',    href: '/sports/mlb', Icon: Layers, match: '/sports' },
+  { label: 'Picks',     href: '/picks',     Icon: ListChecks },
+  { label: 'Research',  href: '/edge',      Icon: Crosshair },
   { label: 'Analytics', href: '/analytics', Icon: BarChart3 },
   { label: 'Results',   href: '/results',   Icon: Trophy },
+  { label: 'Tools',     href: '/tools',     Icon: Wrench },
 ]
 
 export function BottomNav() {
@@ -35,7 +37,7 @@ export function BottomNav() {
       }}
     >
       {TABS.map(tab => {
-        const base = tab.match ?? tab.href
+        const base = tab.href
         const active = base === '/' ? pathname === '/' : pathname === base || pathname.startsWith(base + '/')
         const color = active ? 'var(--signal)' : 'var(--fog)'
         return (
@@ -56,7 +58,7 @@ export function BottomNav() {
           >
             <span style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: '40px', height: '26px', borderRadius: 'var(--radius-pill)',
+              width: '36px', height: '26px', borderRadius: 'var(--radius-pill)',
               background: active ? 'var(--win-wash)' : 'transparent',
               transition: 'background var(--dur) var(--ease-out)',
             }}>
@@ -64,7 +66,7 @@ export function BottomNav() {
             </span>
             <span
               className="dell-heading"
-              style={{ fontSize: '9.5px', letterSpacing: '0.05em' }}
+              style={{ fontSize: '9px', letterSpacing: '0.03em' }}
             >
               {tab.label}
             </span>

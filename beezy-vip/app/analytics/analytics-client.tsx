@@ -283,7 +283,7 @@ function Health({ stats }: { stats: SystemStats[] }) {
           const n = Number(s.total_bets), roi = Number(s.roi)
           const isEv = s.system === 'EV'
           const color = SYSTEM_COLOR[s.system] ?? 'var(--silver)'
-          const status = isEv ? 'TRACKED (NOT GATED)' : n >= GATE ? 'GATE REACHED' : 'PAPER / GATE PENDING'
+          const status = isEv ? 'TRACKED (NOT GATED)' : n >= GATE ? '200+ BETS' : 'PAPER / GATE PENDING'
           return (
             <div key={s.system} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 150px) 1fr 70px 80px 150px', minWidth: '620px', gap: '14px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #151822' }}>
               <span style={{ color, fontWeight: 700, fontSize: '13px' }}>{systemLabel(s.system)}</span>

@@ -2040,10 +2040,14 @@ Satori OG routes -- use literal hex there.
 
 #### Information architecture (2026-10-14)
 
-- **Nav** (`components/layout/nav.tsx`): tier 1 = Home, +EV Terminal, The Edge, Picks, Analytics,
-  Results, Tools + bankroll pill (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) + auth +
-  "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating there is untouched). Tier 2 =
-  sport ribbon from `lib/sports.ts`. Bottom nav: Home | +EV | Sports | Analytics | Results.
+- **Nav** (`components/layout/nav.tsx`), revised 2026-10-15 (PR `fix/ui-consistency-sweep`): tier 1 = Home, +EV Terminal, Picks,
+  Prop Research (`/edge`), Analytics, Results, Tools + auth + "UPGRADE TO PRO" (links to `/pricing`; `PRE_LAUNCH` gating
+  untouched). The bankroll pill is gone from the nav; the bankroll (`lib/use-bankroll.ts`, localStorage `beezy_bankroll`) is set
+  on `/ev` and the Kelly calculator, which share it. Tier 2 = sport ribbon from `lib/sports.ts` (the Daily Card link was removed;
+  it is reached from `/picks` "Share card"). Nav + ticker sit in one sticky `.site-chrome` wrapper (`app/layout.tsx`); anything
+  sticky under it must clear ~131px (`.ev-table th` top, cockpit inspector top). Bottom nav (mobile): +EV | Picks | Research |
+  Analytics | Results | Tools (logo = Home). Status vocabulary: LIVE / PREVIEW (was "shadow sweep") / COMING SOON; never write
+  "Sink A", "sweep", "pillars", "hubs" or "blotter" in UI copy. Model runs publish ~11:00 AM CT, never "ET".
 - **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
   `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
   NFL / NHL / NBA rows are still UNVALIDATED (`Row.shadow`) but are presented as MARKET (consensus) rows (2026-10-14 copy

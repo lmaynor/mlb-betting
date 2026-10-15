@@ -11,10 +11,10 @@ const META: Record<string, { name: string; desc: string; href: string }> = {
   HR:          { name: 'Home Run Props',         desc: 'Launch angle, exit velocity, and barrel rate vs. pitcher HR/9.',                                href: '/picks/mlb/hr' },
   F5:          { name: 'First 5 Innings',        desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                    href: '/picks/mlb/f5' },
   K:           { name: 'Strikeout Props',         desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                 href: '/picks/mlb/k' },
-  OUTS:        { name: 'Pitcher Outs Props',     desc: 'IP projection via Normal model for DraftKings pitcher outs markets.',                           href: '/picks/mlb/outs' },
-  GAME:        { name: 'Full Game',              desc: 'Moneyline and totals layer extending F5 context into full-game pricing.',                       href: '/picks/mlb/game' },
+  OUTS:        { name: 'Pitcher Outs Props',     desc: 'Negative-binomial projection of outs recorded, priced against the best available pitcher-outs line.',                           href: '/picks/mlb/outs' },
+  GAME:        { name: 'Full Game',              desc: 'Full-game moneyline from starter, bullpen fatigue and lineup features. Log-only until it has 200 bets.',                       href: '/picks/mlb/game' },
   F3:          { name: 'First 3 Innings',         desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',               href: '/picks/mlb/f3' },
-  F1H:         { name: 'First Half',              desc: 'Hybrid innings window before bullpen noise dominates the projection.',                         href: '/picks/mlb/f1h' },
+  F1H:         { name: 'First Half',              desc: 'First-half (innings 1-4) moneyline built from the F5 model. Log-only.',                         href: '/picks/mlb/f1h' },
   F7:          { name: 'First 7 Innings',         desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                         href: '/picks/mlb/f7' },
   BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                     href: '/picks/mlb/batter-k' },
   BATTER_TB:   { name: 'Total Bases',            desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                href: '/picks/mlb/batter-tb' },
@@ -25,13 +25,13 @@ const META: Record<string, { name: string; desc: string; href: string }> = {
 }
 
 export async function ModelsGrid() {
-  let stats: Array<{ system: string; win_rate: number; roi: number; total_bets: number }> = []
+  let stats: Array<{ system: string; win_rate: number; roi: number | null; total_bets: number }> = []
   const sparklines: Record<string, Awaited<ReturnType<typeof apiGetSparklineBySystem>>> = {}
   try {
     const db = await apiGetStats().then(s => s.bySystem)
     stats = db.map(s => ({
       system: s.system, win_rate: parseFloat(String(s.win_rate)),
-      roi: parseFloat(String(s.roi ?? 0)), total_bets: parseInt(String(s.total_bets)),
+      roi: s.roi == null ? null : parseFloat(String(s.roi)), total_bets: parseInt(String(s.total_bets)),
     }))
     const sparklineResults = await Promise.allSettled(
       stats.map(s => apiGetSparklineBySystem(s.system, 30))
@@ -58,7 +58,7 @@ export async function ModelsGrid() {
       const ag = a.total_bets >= 200 ? 1 : 0
       const bg = b.total_bets >= 200 ? 1 : 0
       if (ag !== bg) return bg - ag
-      return b.roi - a.roi
+      return (b.roi ?? -Infinity) - (a.roi ?? -Infinity)
     })
     .map(s => {
       const meta = META[s.system]

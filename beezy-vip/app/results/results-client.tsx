@@ -9,7 +9,8 @@ import { formatOdds } from '@/lib/odds'
 import { B, SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel } from '@/lib/tokens'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
-import type { Bet, SystemStats } from '@/lib/types'
+import type { Bet, SystemStats, BankrollPoint } from '@/lib/types'
+import { collapseBooks } from '@/lib/dedupe'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
   ResponsiveContainer, ComposedChart, Area,
@@ -27,7 +28,7 @@ const SYSTEM_GROUPS = {
   // Pooled +EV alert tracking (fast_alert_loop + kalshi_alert, system="EV")
   // -- not a model, so it doesn't fit any market group above; own group so
   // it's still filterable/chartable instead of only reachable via "ALL".
-  'Live Alerts':     ['EV'],
+  '+EV Alerts':      ['EV'],
 } as const
 
 // Flat list for the filter chip row: ALL + each system
@@ -98,7 +99,7 @@ function buildPnLChart(bets: Bet[], activeSystem: string) {
         ...Object.fromEntries(systems.map(s => [s, prev[s] ?? 0])),
       }
     }
-    const profit = parseFloat(String(bet.profit)) / 10
+    const profit = parseFloat(String(bet.profit))
     cum['ALL'] += profit
     byDate[date]['ALL'] = parseFloat(cum['ALL'].toFixed(2))
     if (systems.includes(bet.system)) {
@@ -153,6 +154,7 @@ function buildEdgeChart(bets: Bet[]) {
   return result
 }
 
+const fmtSigned = (v: unknown) => { const n = parseFloat(String(v ?? '')); return isFinite(n) ? `${n >= 0 ? '+' : '-'}${Math.abs(n).toFixed(1)}%` : '--' }
 const fmtDate = (d: string) => { const p = d.split('-'); return `${p[1]}/${p[2]}` }
 const fmtDisplayDate = (d: string) => formatDateKey(d, { month: 'short', day: 'numeric' })
 
@@ -165,7 +167,7 @@ const PnLTooltip = ({ active, payload, label }: any) => {
         .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
         .map((p: any) => (
           <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? 'var(--ash)', marginBottom: '2px' }}>
-            {p.dataKey}: {p.value >= 0 ? '+' : ''}{p.value.toFixed(1)}u
+            {p.dataKey}: {p.value >= 0 ? '+' : '-'}${Math.abs(p.value).toFixed(0)}
           </div>
         ))}
     </div>
@@ -187,10 +189,10 @@ const EdgeTooltip = ({ active, payload, label }: any) => {
 }
 
 function exportCSV(bets: Bet[]) {
-  const headers = ['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Stake', 'Book', 'Result', 'P&L (units)']
+  const headers = ['Date', 'System', 'Game', 'Pick', 'Odds', 'Edge', 'Stake', 'Book', 'Result', 'P&L (units of stake)']
   const rows = bets.map(b => {
     const game = b.home_team ? `${b.away_team} @ ${b.home_team}` : `Game ${b.game_pk}`
-    const pnl  = b.profit != null ? (parseFloat(String(b.profit)) / 10).toFixed(2) : ''
+    const pnl  = b.profit != null ? (parseFloat(String(b.profit)) / (b.stake != null && b.stake > 0 ? b.stake : 10)).toFixed(2) : ''
     return [
       b.game_date, b.system, game, pickLabel(b),
       b.odds ?? '', b.edge != null ? `${(b.edge * 100).toFixed(1)}%` : '',
@@ -248,7 +250,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
         ))}
         <div>
           <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>P&L</div>
-          <PnL value={bet.profit} />
+          <PnL value={bet.profit} stake={bet.stake} />
         </div>
       </div>
     </div>
@@ -258,9 +260,11 @@ function ResultBetCard({ bet }: { bet: Bet }) {
 export function ResultsClient({
   initialPicks,
   initialStats,
+  curve = [],
 }: {
   initialPicks: Bet[]
   initialStats: SystemStats[]
+  curve?: BankrollPoint[]
 }) {
   const sp = useSearchParams()
   const dateFilter = sp.get('date') ?? null
@@ -270,17 +274,22 @@ export function ResultsClient({
   const [sortBy,  setSortBy]  = useState<'date' | 'edge' | 'odds' | 'pnl'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page,    setPage]    = useState(0)
+  const [onePerProp, setOnePerProp] = useState(true)
 
   const PAGE_SIZE = 30
 
+  // The ledger can list one prop several times (once per book that flagged it). Default to one row per prop;
+  // the P&L chart and the per-system table above keep every row, since each book's price was a separate paper bet.
+  const ledger = useMemo(() => (onePerProp ? collapseBooks(initialPicks) : initialPicks), [initialPicks, onePerProp])
+
   const countsBySystem = useMemo(() =>
     Object.fromEntries(
-      ALL_SYSTEMS.map(s => [s, s === 'ALL' ? initialPicks.length
-        : initialPicks.filter(p => p.system === s).length])
-    ), [initialPicks])
+      ALL_SYSTEMS.map(s => [s, s === 'ALL' ? ledger.length
+        : ledger.filter(p => p.system === s).length])
+    ), [ledger])
 
   const filtered = useMemo(() => {
-    const f = initialPicks.filter(p => {
+    const f = ledger.filter(p => {
       if (dateFilter && p.game_date !== dateFilter) return false
       if (system !== 'ALL' && p.system !== system) return false
       if (result !== 'ALL' && p.result?.toUpperCase() !== result) return false
@@ -294,7 +303,7 @@ export function ResultsClient({
       if (sortBy === 'pnl')  return dir * (parseFloat(String(a.profit ?? 0)) - parseFloat(String(b.profit ?? 0)))
       return 0
     })
-  }, [initialPicks, system, result, sortBy, sortDir, dateFilter])
+  }, [ledger, system, result, sortBy, sortDir, dateFilter])
 
   const { rows: pnlRows, systems: chartSystems } = useMemo(
     () => buildPnLChart(initialPicks, system), [initialPicks, system]
@@ -304,46 +313,67 @@ export function ResultsClient({
   const pageIndex = Math.min(page, Math.max(0, pageCount - 1))
   const pageStart = pageIndex * PAGE_SIZE
 
-  const overall = initialStats.reduce(
-    (acc, s) => ({
-      bets: acc.bets + parseInt(String(s.total_bets)),
-      wins: acc.wins + parseInt(String(s.wins ?? 0)),
-      pnl:  acc.pnl  + parseFloat(String(s.total_pnl ?? 0)),
-    }),
-    { bets: 0, wins: 0, pnl: 0 }
-  )
-  const winRate = overall.bets > 0 ? (overall.wins / overall.bets * 100).toFixed(1) : '0.0'
+  // Model systems and the +EV alert pool are different things staked differently (Kelly paper stakes vs a flat $100),
+  // so they are summarised separately rather than blended into one headline.
+  const sum = (rows: SystemStats[]) => {
+    const t = rows.reduce(
+      (acc, s) => ({
+        bets: acc.bets + parseInt(String(s.total_bets)),
+        wins: acc.wins + parseInt(String(s.wins ?? 0)),
+        losses: acc.losses + parseInt(String(s.losses ?? 0)),
+        pnl:  acc.pnl  + parseFloat(String(s.total_pnl ?? 0)),
+      }),
+      { bets: 0, wins: 0, losses: 0, pnl: 0 }
+    )
+    const decided = t.wins + t.losses
+    return { ...t, winRate: decided > 0 ? (t.wins / decided * 100).toFixed(1) : '--' }
+  }
+  const models = sum(initialStats.filter(s => s.system !== 'EV'))
+  const ev     = sum(initialStats.filter(s => s.system === 'EV'))
+  const money  = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Results</h1>
-        <p className="times" style={{ fontSize: '14px', color: 'var(--fog)' }}>
-          All settled bets &middot; Central Time &middot; paper mode &middot; past performance is not indicative of future results
-        </p>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Results</h1>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{filtered.length} bets shown &middot; Central Time &middot; paper</span>
       </div>
 
-      {/* Summary stats strip */}
-      <div className="stats-strip" style={{ gridTemplateColumns: 'repeat(4,1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden', marginBottom: '24px' }}>
-        {[
-          { label: 'Total Bets', value: String(overall.bets) },
-          { label: 'Win Rate',   value: `${winRate}%` },
-          { label: 'Total P&L',  value: `${overall.pnl >= 0 ? '+' : ''}${(overall.pnl / 10).toFixed(1)}u`, color: overall.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' },
-          { label: 'Systems',    value: String(initialStats.length) },
-        ].map((s, i) => (
-          <div key={s.label} style={{ padding: '20px 24px', borderRight: i < 3 ? B : undefined }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '8px' }}>{s.label}</div>
-            <div className="mono" style={{ fontSize: '24px', fontWeight: 600, color: s.color ?? 'var(--ash)', lineHeight: 1 }}>{s.value}</div>
+      {/* One inline metric strip: models and +EV alerts are summarised separately. */}
+      <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 22px', alignItems: 'center', minHeight: '38px', padding: '8px 14px', background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', fontSize: '12px', color: 'var(--silver)', marginBottom: '20px' }}>
+        <span><span style={{ color: 'var(--fog)' }}>MODELS</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
+        <span><span style={{ color: 'var(--fog)' }}>+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
+      </div>
+
+      {/* Season curve: cumulative P&L of the models (paper stakes) vs the +EV alerts (flat $100), from the first graded bet. */}
+      {system === 'ALL' && curve.length > 2 && (
+        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', marginBottom: '20px', padding: '14px 16px 8px 8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 10px', gap: '12px', flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Cumulative P&L, full season ($)</span>
+            <span style={{ display: 'flex', gap: '14px' }}>
+              <span className="mono" style={{ fontSize: '10px', color: '#57f287' }}>-- +EV alerts, flat $100</span>
+              <span className="mono" style={{ fontSize: '10px', color: '#f3f4f6' }}>-- models, paper stakes</span>
+            </span>
           </div>
-        ))}
-      </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={curve} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(1, Math.floor(curve.length / 7))} />
+              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toLocaleString()}`} width={68} />
+              <Tooltip contentStyle={{ background: '#171a24', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#7d8596' }} formatter={(v) => money(Number(v))} />
+              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
+              <Line type="monotone" dataKey="ev_flat_cum" name="+EV alerts (flat $100)" stroke="#57f287" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="models_cum" name="Models (paper stakes)" stroke="#f3f4f6" strokeWidth={2} dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-      {/* P&L Chart */}
-      {pnlRows.length > 2 && (
+      {/* P&L Chart: per system, over the recent rows loaded here */}
+      {system !== 'ALL' && pnlRows.length > 2 && (
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', marginBottom: '24px', padding: '20px 16px 12px 8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px 16px' }}>
             <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
-              Cumulative P&L
+              Cumulative P&L ($ at paper stakes)
             </span>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
               {[...chartSystems, 'ALL'].map(s => (
@@ -365,7 +395,7 @@ export function ResultsClient({
                 interval={Math.floor(pnlRows.length / 6)} />
               <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                 tickLine={false} axisLine={false}
-                tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}u`} width={52} />
+                tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(0)}`} width={60} />
               <Tooltip content={<PnLTooltip />} />
               <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
               <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
@@ -439,7 +469,7 @@ export function ResultsClient({
                   }}>{groupName}</div>
                 </div>,
                 ...groupStats.map(s => {
-                  const r = parseFloat(String(s.roi ?? 0))
+                  const r = s.roi == null ? null : parseFloat(String(s.roi))
                   const pnl = parseFloat(String(s.total_pnl ?? 0))
                   const pc = PILL[s.system] ?? 'var(--silver)'
                   return (
@@ -449,12 +479,12 @@ export function ResultsClient({
                     }}>
                       <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
                       <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>
-                        {s.total_bets}<span style={{ color: 'var(--iron)' }}>/{GATE}</span>
+                        {s.total_bets}{parseInt(String(s.total_bets)) < GATE && <span style={{ color: 'var(--fog)' }}> / {GATE}</span>}
                       </div>
                       <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}%</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{pnl >= 0 ? '+' : ''}{(pnl / 10).toFixed(2)}u</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--signal)' }}>+{parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
+                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>{fmtSigned(s.avg_edge)}</div>
                     </div>
                   )
                 }),
@@ -474,21 +504,21 @@ export function ResultsClient({
                   <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '8px' }}>{groupName}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {groupStats.map(s => {
-                      const r = parseFloat(String(s.roi ?? 0))
+                      const r = s.roi == null ? null : parseFloat(String(s.roi))
                       const pnl = parseFloat(String(s.total_pnl ?? 0))
                       const pc = PILL[s.system] ?? 'var(--silver)'
                       return (
                         <div key={s.system} style={{ border: B, borderRadius: 'var(--radius)', background: 'var(--graphite)', padding: '12px 13px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
                             <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: pc }}>{s.system}</span>
-                            <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r >= 0 ? '+' : ''}{r.toFixed(1)}% ROI</span>
+                            <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
                             {[
-                              ['Bets', `${s.total_bets}/${GATE}`, 'var(--ash)'],
+                              ['Bets', parseInt(String(s.total_bets)) < GATE ? `${s.total_bets} / ${GATE}` : String(s.total_bets), 'var(--ash)'],
                               ['Win', `${parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%`, 'var(--ash)'],
-                              ['P&L', `${pnl >= 0 ? '+' : ''}${(pnl / 10).toFixed(2)}u`, pnl >= 0 ? 'var(--signal)' : 'var(--loss)'],
-                              ['Edge', `+${parseFloat(String(s.avg_edge ?? 0)).toFixed(1)}%`, 'var(--signal)'],
+                              ['P&L', money(pnl), pnl >= 0 ? 'var(--signal)' : 'var(--loss)'],
+                              ['Edge', fmtSigned(s.avg_edge), 'var(--ash)'],
                             ].map(([label, value, color]) => (
                               <div key={label}>
                                 <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '3px' }}>{label}</div>
@@ -560,6 +590,9 @@ export function ResultsClient({
             ))}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <label className="mono" style={{ fontSize: '10px', color: 'var(--silver)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} title="The same prop flagged at several books shows as one row">
+              <input type="checkbox" checked={onePerProp} onChange={e => { setOnePerProp(e.target.checked); setPage(0) }} /> One row per prop
+            </label>
             <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{filtered.length} bets</span>
             {filtered.length > 0 && (
               <button onClick={() => exportCSV(filtered)} className="mono" style={{
@@ -630,10 +663,10 @@ export function ResultsClient({
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}
                 </div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: 'var(--fog)', textTransform: 'capitalize' }}>
-                  {bet.book ?? '--'}
+                  {bet.book ?? '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
                 </div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
-                <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} /></div>
+                <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} stake={bet.stake} /></div>
               </div>
             )
           })}

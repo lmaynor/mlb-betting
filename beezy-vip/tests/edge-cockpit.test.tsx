@@ -68,7 +68,7 @@ describe('sport switcher', () => {
     expect(inList().getByText('Test Receiver')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: /^NBA/ }))
-    expect(screen.getByText(/NBA feed has no output yet/)).toBeInTheDocument()
+    expect(screen.getByText(/NBA: coming soon/)).toBeInTheDocument()
     expect(screen.getByText('No props match right now')).toBeInTheDocument()
   })
 
@@ -233,19 +233,17 @@ describe('OddsMatrix', () => {
 })
 
 describe('without a cockpit feed', () => {
-  it('opens on the MLB model board exactly as before and says so on the other sports', () => {
+  it('opens on the MLB model board and hides the sport tabs that cannot work without a feed', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={null} />)
-    expect(screen.getByRole('tab', { name: /^MLB/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('No picks match these filters.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('tab', { name: /^NFL/ }))
-    expect(screen.getByText('Cockpit feed unavailable')).toBeInTheDocument()
+    expect(screen.queryAllByRole('tab', { name: /^(NFL|NHL|NBA|ALL SPORTS)/ })).toHaveLength(0)
+    expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
   })
 
   it('keeps the model board reachable next to the cockpit for MLB', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     fireEvent.click(screen.getByRole('tab', { name: /^MLB/ }))
     fireEvent.click(screen.getByRole('button', { name: 'MODEL BOARD' }))
-    expect(screen.getByText('No picks match these filters.')).toBeInTheDocument()
+    expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'PROP COCKPIT' }))
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
   })

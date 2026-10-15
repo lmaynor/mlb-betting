@@ -89,13 +89,27 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   )
 }
 
+// The API serialises Postgres numerics as strings ("9.80"); summing those concatenated into NaN. Coerce once at ingest
+// and drop anything non-finite so every downstream mean/correlation/axis works on real numbers.
+function normalizeClv(rows: CLVDataPoint[]): CLVDataPoint[] {
+  return rows
+    .map(p => ({ ...p, model_edge_pct: Number(p.model_edge_pct), clv_pct: Number(p.clv_pct) }))
+    .filter(p => Number.isFinite(p.model_edge_pct) && Number.isFinite(p.clv_pct))
+}
+
+function percentile(sorted: number[], q: number): number {
+  if (sorted.length === 0) return 0
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))
+  return sorted[i]
+}
+
 // ---- main component ----------------------------------------------------------
 
 export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
   const [days,            setDays]            = useState(90)
   const [activeSystems,   setActiveSystems]   = useState<string[]>([])   // empty = all
   const [resultFilter,    setResultFilter]    = useState('All')
-  const [data,            setData]            = useState<CLVDataPoint[]>(initial)
+  const [data,            setData]            = useState<CLVDataPoint[]>(() => normalizeClv(initial))
   const [loading,         setLoading]         = useState(false)
   const [infoOpen,        setInfoOpen]        = useState(false)
 
@@ -106,7 +120,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       const res  = await fetch(`/api/stats/clv?days=${d}`)
       if (res.ok) {
         const json = await res.json()
-        setData((json.data ?? []) as CLVDataPoint[])
+        setData(normalizeClv((json.data ?? []) as CLVDataPoint[]))
       }
     } finally {
       setLoading(false)
@@ -151,25 +165,29 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
     const meanCLV = filtered.reduce((s, p) => s + p.clv_pct, 0) / filtered.length
     const pctPos  = filtered.filter(p => p.clv_pct > 0).length / filtered.length * 100
     const r       = pearsonR(filtered.map(p => ({ x: p.model_edge_pct, y: p.clv_pct })))
-    return { meanCLV, pctPos, r, n: filtered.length }
+    const sortedClv = filtered.map(p => p.clv_pct).sort((x, y) => x - y)
+    const medianCLV = sortedClv[Math.floor(sortedClv.length / 2)]
+    return { meanCLV, medianCLV, pctPos, r, n: filtered.length }
   }, [filtered])
 
   // Axis domain (dynamic + padded)
   const xVals = filtered.map(p => p.model_edge_pct)
   const yVals = filtered.map(p => p.clv_pct)
-  const xMin  = xVals.length ? Math.floor(Math.min(...xVals) - 2) : -5
-  const xMax  = xVals.length ? Math.ceil(Math.max(...xVals)  + 2) : 20
-  const yMin  = yVals.length ? Math.floor(Math.min(...yVals) - 3) : -20
-  const yMax  = yVals.length ? Math.ceil(Math.max(...yVals)  + 3) : 20
+  // Axes span the 1st-99th percentile so a few extreme closes cannot squash the other 98% of points flat.
+  const xs = [...xVals].sort((a, b) => a - b)
+  const ys = [...yVals].sort((a, b) => a - b)
+  const xMin  = xVals.length ? Math.floor(Math.min(0, percentile(xs, 0.01)) - 2) : -5
+  const xMax  = xVals.length ? Math.ceil(percentile(xs, 0.99) + 2) : 20
+  const yMin  = yVals.length ? Math.floor(percentile(ys, 0.01) - 3) : -20
+  const yMax  = yVals.length ? Math.ceil(percentile(ys, 0.99) + 3) : 20
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Tools — Pro</p>
-        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '6px' }}>CLV + Edge Correlation</h1>
-        <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>Each dot is a settled Beezy pick. X = model edge at bet time. Y = closing line value. Positive CLV in the top-right quadrant means the model consistently finds real market inefficiencies.</p>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }} title="Each dot is a settled pick: edge at bet time (x) against closing line value (y).">CLV Tracker</h1>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Edge at bet time vs closing line value &middot; axes show the 1st-99th percentile</span>
       </div>
 
       {/* Filter bar */}
@@ -231,6 +249,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 dataKey="x"
                 type="number"
                 domain={[xMin, xMax]}
+                allowDataOverflow
                 name="Model Edge"
                 unit="%"
                 tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
@@ -242,6 +261,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
                 dataKey="y"
                 type="number"
                 domain={[yMin, yMax]}
+                allowDataOverflow
                 name="CLV"
                 unit="%"
                 tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}
@@ -295,7 +315,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           <StatCard
             label="Mean CLV"
             value={fmt2(stats.meanCLV)}
-            sub="avg closing line value per bet"
+            sub={`average per bet; median ${fmt2(stats.medianCLV)}`}
             color={stats.meanCLV >= 0 ? 'var(--signal)' : 'var(--loss)'}
           />
           <div style={{ width: '1px', background: 'var(--basalt)', flexShrink: 0 }} />

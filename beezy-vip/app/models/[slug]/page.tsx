@@ -221,7 +221,7 @@ export default async function ModelDetailPage({ params }: Props) {
           color: bets >= 200 ? 'var(--signal)' : 'var(--fog)',
           background: bets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
         }}>
-          {bets >= 200 ? 'Gate Cleared' : 'Paper Mode'}
+          {bets >= 200 ? '200+ bets, paper' : 'Paper Mode'}
         </span>
       </div>
 

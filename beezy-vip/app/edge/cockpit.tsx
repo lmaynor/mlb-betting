@@ -391,7 +391,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
         </div>
         <div style={{ fontSize: '11.5px', color: 'var(--fog)', lineHeight: 1.5 }}>
           {r.n_books != null ? `De-vigged consensus of ${r.n_books} reference book${r.n_books === 1 ? '' : 's'}.` : 'De-vigged market consensus.'}
-          {r.shadow ? ' Market-consensus signal: not yet part of the public track record.' : r.source === 'model' ? ' Model probability vs the market line.' : ' Tracked and settled publicly at the flagged price.'}
+          {r.shadow ? ' Preview signal: not yet tracked in the public results.' : r.source === 'model' ? ' Model probability vs the market line.' : ' Tracked and settled publicly at the flagged price.'}
         </div>
       </header>
 
@@ -540,10 +540,10 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
   const ageLabel = ageSecs < 90 ? `${ageSecs}s ago` : `${Math.round(ageSecs / 60)}m ago`
   const statusLine = (() => {
     if (!meta) return null
-    if (meta.status === 'unavailable') return `${sport.toUpperCase()} feed has no output yet.`
+    if (meta.status === 'unavailable') return `${sport.toUpperCase()}: coming soon.`
     if (meta.stale || meta.status === 'idle') {
       const h = meta.age_minutes != null ? meta.age_minutes / 60 : null
-      return `${sport.toUpperCase()} sweep is idle${h != null ? ` (last run ${h < 48 ? `${h.toFixed(1)}h` : `${Math.round(h / 24)}d`} ago)` : ''}; it refreshes around game windows.`
+      return `${sport.toUpperCase()} lines${h != null ? ` were last refreshed ${h < 48 ? `${h.toFixed(1)}h` : `${Math.round(h / 24)}d`} ago and` : ''} update around game windows.`
     }
     return null
   })()
@@ -551,9 +551,9 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
   if (feed == null) {
     return (
       <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
-        <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>Cockpit feed unavailable</div>
+        <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>Prop research is temporarily unavailable</div>
         <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>
-          The props API did not respond. This page retries every minute.
+          Prop data is temporarily unavailable. This page retries every minute.
         </div>
       </div>
     )

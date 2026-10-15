@@ -4,58 +4,50 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title:       'Free MLB Betting Tools',
-  description: 'Odds calculator, Kelly criterion calculator, edge finder, NRFI conditions, and pitcher matchup dashboard.',
+  title:       'Betting Tools',
+  description: 'Odds and vig, Kelly and boost EV calculators, plus the daily slate and closing-line tracker.',
 }
 
-const TOOLS = [
-  { href: '/tools/clv-tracker',   title: 'CLV + Edge Tracker',           description: 'Each pick plotted by model edge vs. closing line value. Positive CLV in the top-right proves the model finds real inefficiencies.', tag: 'Pro',     keywords: 'closing line value · model edge · clv scatter' },
-  { href: '/tools/slate',         title: 'Slate Command Center',         description: "Today's full MLB slate with every Beezy pick, starters, and start times. One screen covers everything.",                            tag: 'Pro',     keywords: 'todays mlb slate · picks dashboard · command center' },
-  { href: '/tools/odds-calculator',  title: 'Odds & Vig Calculator',      description: 'Input American odds for both sides. Get implied probability, vig percentage, and fair value odds instantly.', tag: 'Free',    keywords: 'implied probability · vig removal · fair odds' },
-  { href: '/tools/kelly-calculator', title: 'Kelly Criterion Calculator',  description: 'Enter your bankroll, the line, and your estimated win probability. Get full and half Kelly stake sizes.',        tag: 'Free',    keywords: 'bankroll management · stake sizing · Kelly %' },
-  { href: '/tools/boost-ev',         title: 'Boost EV Calculator',         description: 'Enter a boosted price and the market’s normal two-sided prices. Get the boost’s true expected value and Kelly stake.', tag: 'Free',    keywords: 'profit boost EV · promo value · odds boost calculator' },
-  { href: '/tools/nrfi-conditions',  title: 'NRFI Conditions Dashboard',   description: "Today's full MLB slate with starter ERA, umpire K-rate, weather, and park factors. Model probability for members.", tag: 'Pro',     keywords: 'nrfi conditions today · first inning betting' },
-  { href: '/tools/pitcher-matchups', title: 'Pitcher Matchup Dashboard',   description: "Today's starters with SwStr%, zone rate, and opponent K%. Beezy strikeout projection for Pro members.",         tag: 'Pro',     keywords: 'mlb strikeout props today · pitcher matchups' },
-  { href: '/tools/edge-finder',      title: 'Edge Finder',                 description: 'Input the line you see at your book. Get implied probability and -- for Pro members -- the Beezy model number.',    tag: 'Partial', keywords: 'sports betting edge · model vs market' },
-  { href: '/tools/bet-tracker',      title: 'Personal Bet Tracker',        description: 'Log your own bets, track ROI, and compare your performance against the Beezy model. Members only.',              tag: 'Pro',     keywords: 'bet tracking · personal ROI · P&L' },
+type Access = 'Free' | 'Pro' | 'Coming soon'
+
+const TOOLS: { href: string; title: string; description: string; access: Access }[] = [
+  { href: '/tools/odds-calculator',  title: 'Odds & Vig Calculator',  description: 'American odds for both sides to implied probability, vig and fair odds.', access: 'Free' },
+  { href: '/tools/kelly-calculator', title: 'Kelly Calculator',       description: 'Bankroll, line and your win probability to edge and full or half Kelly stake.', access: 'Free' },
+  { href: '/tools/boost-ev',         title: 'Boost EV Calculator',    description: "A boosted price against the market's normal two-sided prices to true expected value and Kelly stake.", access: 'Free' },
+  { href: '/tools/slate',            title: "Today's Slate",     description: 'Every MLB game today with starters, start times and Beezy picks. Filter by system.', access: 'Pro' },
+  { href: '/tools/clv-tracker',      title: 'CLV Tracker',            description: 'Each settled pick plotted by edge at bet time against closing line value.', access: 'Pro' },
+  { href: '/tools/bet-tracker',      title: 'Personal Bet Tracker',   description: 'Log your own bets and compare your ROI to the model.', access: 'Coming soon' },
 ]
 
-const TAG: Record<string, { color: string }> = {
-  Free:    { color: 'var(--signal)' },
-  Partial: { color: 'var(--warn)' },
-  Pro:     { color: 'var(--lilac)' },
-}
+const ACCESS_COLOR: Record<Access, string> = { Free: 'var(--signal)', Pro: 'var(--lilac)', 'Coming soon': 'var(--fog)' }
+
+const th: React.CSSProperties = { textAlign: 'left', padding: '9px 12px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.06em', color: 'var(--fog)', background: '#11131a', borderBottom: '1px solid #1e2230' }
+const td: React.CSSProperties = { padding: '12px', borderBottom: '1px solid #151822', verticalAlign: 'middle' }
 
 export default function ToolsPage() {
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Betting tools</h1>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>Free calculators. Pro dashboards for members.</p>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Tools</h1>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>3 free calculators &middot; 2 Pro dashboards &middot; 1 coming soon</span>
       </div>
-
-      <div className="tools-grid">
-        {TOOLS.map((tool) => {
-          const c = (TAG[tool.tag] ?? TAG.Free).color
-          return (
-            <Link key={tool.href} href={tool.href} className="card-hover" style={{
-              display: 'flex', flexDirection: 'column', padding: '20px', textDecoration: 'none',
-              background: 'var(--graphite)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)',
-            }}>
-              <span className="dell-heading" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.06em', padding: '3px 9px', borderRadius: 'var(--radius-pill)', color: c, background: `color-mix(in oklab, ${c} 15%, var(--carbon))`, border: `1px solid color-mix(in oklab, ${c} 40%, var(--carbon))`, display: 'inline-block', alignSelf: 'flex-start', marginBottom: '14px' }}>
-                {tool.tag.toUpperCase()}
-              </span>
-              <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '8px', letterSpacing: '-0.01em' }}>{tool.title}</div>
-              <div className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55, marginBottom: '14px', flex: 1 }}>{tool.description}</div>
-              <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.02em' }}>{tool.keywords}</div>
-              {tool.tag !== 'Free' && (
-                <div className="mono" style={{ fontSize: '10px', color: 'var(--lilac)', marginTop: '10px' }}>
-                  Sign in required &rarr;
-                </div>
-              )}
-            </Link>
-          )
-        })}
+      <div style={{ overflowX: 'auto', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px' }}>
+          <thead>
+            <tr><th style={th}>TOOL</th><th style={th}>WHAT IT DOES</th><th style={th}>ACCESS</th></tr>
+          </thead>
+          <tbody>
+            {TOOLS.map(t => (
+              <tr key={t.href} className="sys-row">
+                <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                  <Link href={t.href} style={{ color: 'var(--chalk)', fontWeight: 600, fontSize: '14px', textDecoration: 'none' }}>{t.title}</Link>
+                </td>
+                <td style={{ ...td, fontSize: '13px', color: 'var(--silver)', lineHeight: 1.5 }}>{t.description}</td>
+                <td className="mono" style={{ ...td, fontSize: '11px', fontWeight: 600, color: ACCESS_COLOR[t.access], whiteSpace: 'nowrap' }}>{t.access.toUpperCase()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

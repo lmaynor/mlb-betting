@@ -308,7 +308,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Footer note */}
       <div style={{ marginTop: '16px' }}>
         <p className="mono" style={{ fontSize: '10px', color: '#27272a' }}>
-          Picks shown are kelly-triggered. Picks appear after the 11 AM ET morning scoring run.
+          Picks shown are kelly-triggered. Picks appear after the ~11:00 AM CT model run.
           Data refreshes every 5 minutes automatically.
         </p>
       </div>

@@ -4,6 +4,7 @@ import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score
 import { SYSTEM_PILL, pickLabel } from '@/lib/tokens'
 import { Matchup } from '@/components/ui/matchup'
 import type { Bet } from '@/lib/types'
+import { collapseBooks } from '@/lib/dedupe'
 
 function resultTone(result: string | null) {
   const r = result?.toLowerCase()
@@ -56,7 +57,7 @@ export async function RecentPicksTable() {
   let rows: Row[] = []
 
   try {
-    const bets = await apiGetRecentSettled(16)
+    const bets = collapseBooks(await apiGetRecentSettled(60))
     rows = bets.slice(0, 8).map(b => {
       const score = beezyscore(b)
       return {
@@ -77,7 +78,7 @@ export async function RecentPicksTable() {
         <div>
           <h2 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>Recent graded plays</h2>
           <p className="times" style={{ fontSize: '15px', color: 'var(--fog)', marginTop: '8px' }}>
-            Wins and losses alike, scored before the first pitch &mdash; settled in the open.
+            Wins and losses alike, flagged before the first pitch and settled in public. One row per prop.
           </p>
         </div>
         <Link href="/results" className="times" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>

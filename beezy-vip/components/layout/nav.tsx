@@ -6,16 +6,14 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 import { SPORT_LIST } from '@/lib/sports'
-import { useBankroll } from '@/lib/use-bankroll'
-import { fmtMoney } from '@/lib/ev-math'
 
 const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
 const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
   { label: 'Home',          href: '/' },
   { label: '+EV Terminal',  href: '/ev', live: true },
-  { label: 'The Edge',      href: '/edge' },
   { label: 'Picks',         href: '/picks' },
+  { label: 'Prop Research', href: '/edge' },
   { label: 'Analytics',     href: '/analytics' },
   { label: 'Results',       href: '/results' },
   { label: 'Tools',         href: '/tools' },
@@ -56,7 +54,7 @@ const SIGN_IN_STYLE: React.CSSProperties = { fontFamily: 'var(--font-text), sans
 export function Nav({ authDisabled = false }: { authDisabled?: boolean }) {
   if (authDisabled) {
     return (
-      <NavShell isSignedIn={false} bankrollDefault={1000} userButton={null}
+      <NavShell isSignedIn={false} userButton={null}
         signIn={<Link href="/login" style={{ ...SIGN_IN_STYLE, textDecoration: 'none' }}>Sign In</Link>} />
     )
   }
@@ -64,25 +62,23 @@ export function Nav({ authDisabled = false }: { authDisabled?: boolean }) {
 }
 
 function ClerkNav() {
-  const { isSignedIn, user } = useUser()
+  const { isSignedIn } = useUser()
   return (
     <NavShell
       isSignedIn={!!isSignedIn}
-      bankrollDefault={(user?.publicMetadata?.bankroll as number | undefined) ?? 1000}
       userButton={<UserButton />}
       signIn={<SignInButton mode="modal"><button style={SIGN_IN_STYLE}>Sign In</button></SignInButton>}
     />
   )
 }
 
-function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
-  isSignedIn: boolean; bankrollDefault: number; userButton: React.ReactNode; signIn: React.ReactNode
+function NavShell({ isSignedIn, userButton, signIn }: {
+  isSignedIn: boolean; userButton: React.ReactNode; signIn: React.ReactNode
 }) {
   const pathname  = usePathname()
-  const [bankroll] = useBankroll(bankrollDefault)
 
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 50, width: '100%', maxWidth: '100vw' }}>
+    <header style={{ width: '100%', maxWidth: '100vw' }}>
       {/* TIER 1 -- product bar */}
       <nav style={{ background: '#090a0f', borderBottom: '1px solid #1e2230', overflow: 'hidden' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '56px', gap: '20px' }}>
@@ -118,17 +114,6 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
           </div>
 
           <div className="nav-desktop" style={{ gap: '10px', alignItems: 'center', flexShrink: 0, marginLeft: 'auto' }}>
-            <Link
-              href="/tools/kelly-calculator"
-              className="mono nav-xl"
-              title="Your bankroll (used to size stakes). Click to open the Kelly calculator."
-              style={{
-                fontSize: '12px', fontWeight: 600, textDecoration: 'none', color: 'var(--ash)',
-                border: '1px solid #1e2230', background: '#11131a', borderRadius: 'var(--radius-sm)', padding: '6px 10px',
-              }}
-            >
-              <span style={{ color: 'var(--fog)', marginRight: '6px' }}>BANKROLL</span>{fmtMoney(bankroll)}
-            </Link>
             <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={iconBox}>
               <DiscordMark size={15} color="currentColor" />
             </a>
@@ -186,8 +171,6 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
               accent={p.accent}
             />
           ))}
-          <span style={{ flex: 1 }} />
-          <SportLink href="/cheat-sheet" label="DAILY CARD" active={pathname.startsWith('/cheat-sheet')} />
         </div>
       </div>
     </header>

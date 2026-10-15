@@ -8,10 +8,10 @@ import { EdgeClient, type EdgePick } from './edge-client'
 import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
-  title: 'The Edge - Beezy.FYI',
+  title: 'Prop Research',
   description: 'Multi-sport prop research cockpit: MLB, NFL, NHL and NBA lines with last-10 game logs, volume trends and every book price side by side.',
   openGraph: {
-    title: 'The Edge - Beezy.FYI',
+    title: 'Prop Research',
     description: 'Prop research across MLB, NFL, NHL and NBA: price, form and volume for every flagged line.',
   },
 }
@@ -49,7 +49,8 @@ function normName(name: string | null): string {
 export default async function EdgePage() {
   const date = siteDateKey()
   const [raw, slate, enrichData, alerts, cockpitRaw] = await Promise.all([
-    apiGetTodayAllPredictions().catch(() => [] as Bet[]),
+    // The model board is model predictions only; pooled +EV rows (system EV) belong to the +EV Terminal.
+    apiGetTodayAllPredictions().then(r => r.filter(b => b.system !== 'EV')).catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
     apiGetEdgeEnrich(date),
     apiGetTodayAlerts(date),

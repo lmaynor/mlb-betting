@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react'
 import type { Bet } from '@/lib/types'
 import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
-import { pickLabel, SYSTEM_COLOR, SYSTEM_LABEL_SHORT as SYSTEM_LABEL } from '@/lib/tokens'
+import { pickLabel, resolveEvUnderlying, SYSTEM_COLOR, SYSTEM_LABEL_SHORT as SYSTEM_LABEL } from '@/lib/tokens'
+import { SPORT_PILLARS } from '@/lib/sports'
 import { ScoreBadge } from '@/components/ui/primitives'
 
 
@@ -29,10 +30,13 @@ export interface EnrichedBet extends Bet {
   homeLogoUrl: string | null
 }
 
+// A pooled +EV row's own system is "EV"; filter on the market it actually alerted on.
+const effSystem = (b: Bet) => (b.system === 'EV' ? resolveEvUnderlying(b).system : b.system)
+
 function filterBets(bets: EnrichedBet[], key: FilterKey): EnrichedBet[] {
-  if (key === 'game') return bets.filter(b => GAME_SYSTEMS.has(b.system))
-  if (key === 'pitcher') return bets.filter(b => PITCHER_SYSTEMS.has(b.system))
-  if (key === 'player') return bets.filter(b => PLAYER_SYSTEMS.has(b.system))
+  if (key === 'game') return bets.filter(b => GAME_SYSTEMS.has(effSystem(b)))
+  if (key === 'pitcher') return bets.filter(b => PITCHER_SYSTEMS.has(effSystem(b)))
+  if (key === 'player') return bets.filter(b => PLAYER_SYSTEMS.has(effSystem(b)))
   return bets
 }
 
@@ -534,7 +538,7 @@ export function CheatSheetClient({
           {filtered.length === 0 ? (
             <div style={{ padding: '20px 16px' }}>
               <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
-                NO {filter.toUpperCase()} PICKS YET — NEXT CARD ~11AM ET
+                {filter === 'all' ? 'NO PICKS YET' : `NO ${filter.toUpperCase()} PICKS YET`} &mdash; MODEL CARD PUBLISHES ~11:00 AM CT
               </div>
               {yesterdayPicks.length > 0 && (
                 <>
@@ -573,7 +577,7 @@ export function CheatSheetClient({
                   borderTop: '1px solid var(--basalt)',
                   textAlign: 'center',
                 }}>
-                  +{filtered.length - DEFAULT_LIMIT} MORE ON FULL PICKS TABLE
+                  +{filtered.length - DEFAULT_LIMIT} MORE ON THE PICKS PAGE
                 </div>
               )}
             </>
@@ -645,10 +649,10 @@ export function CheatSheetClient({
               WHAT IS THIS?
             </div>
             <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65, marginBottom: '12px' }}>
-              The Daily Card surfaces today&apos;s top MLB bets ranked by Beezy Score — a composite of edge, historical system accuracy, and model confidence.
+              The Daily Card is a share-ready image of today&apos;s top MLB model picks, ranked by Beezy Score (edge, price and confidence in one 0-100 number). It is the model slice of the Picks page, sized for posting. +EV alerts are not on the card; they live in the +EV Terminal.
             </p>
             <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65 }}>
-              Cards are published each morning after the model run (~11am ET). Tap any pick to see why the model likes it.
+              The card publishes after the ~11:00 AM CT model run. Tap any pick to see why it made the card.
             </p>
           </div>
 
@@ -662,9 +666,9 @@ export function CheatSheetClient({
               SCORE LEGEND
             </div>
             {[
-              { tier: 'strong', color: 'var(--signal)', label: 'STRONG', desc: 'High edge + high confidence' },
-              { tier: 'lean',   color: 'var(--signal)', label: 'LEAN',   desc: 'Positive edge, moderate confidence' },
-              { tier: 'pass',   color: 'var(--fog)', label: 'PASS',   desc: 'Listed for reference, not recommended' },
+              { tier: 'strong', color: '#57f287', label: 'STRONG', desc: 'Score 65+: large edge at a playable price' },
+              { tier: 'lean',   color: '#facc15', label: 'LEAN',   desc: 'Score 40-64: positive edge, moderate confidence' },
+              { tier: 'watch',  color: '#94a3b8', label: 'WATCH',  desc: 'Score under 40: small edge, listed for reference' },
             ].map(row => (
               <div key={row.tier} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                 <span className="dell-heading" style={{
@@ -692,16 +696,10 @@ export function CheatSheetClient({
               SYSTEMS
             </div>
             {[
-              { key: 'NRFI', color: '#5fd0a0', desc: 'No Run First Inning — game pick' },
-              { key: 'F5',   color: '#4ea6f5', desc: 'First 5 innings ML — game pick' },
-              { key: 'HR',   color: 'var(--loss)', desc: 'Home Run — batter prop' },
-              { key: 'K',    color: '#a987f0', desc: 'Strikeouts Over — pitcher prop' },
-              { key: 'OUTS', color: '#ef9a52', desc: 'Outs Recorded — pitcher prop' },
-              { key: 'P.ER', color: '#ef7f6e', desc: 'Pitcher Earned Runs — pitcher prop' },
-              { key: 'HITS', color: 'var(--signal)', desc: 'Batter Hits Over — batter prop' },
+              ...SPORT_PILLARS.mlb.markets.map(m => ({ key: m.key, color: SYSTEM_COLOR[m.key] ?? '#9ca3af', desc: m.label })),
             ].map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>
-                <span className="mono" style={{ fontSize: '9px', color: row.color, width: '36px', flexShrink: 0 }}>{row.key}</span>
+                <span className="mono" style={{ fontSize: '9px', color: row.color, width: '96px', flexShrink: 0 }}>{row.key}</span>
                 <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
               </div>
             ))}
@@ -720,7 +718,7 @@ export function CheatSheetClient({
           letterSpacing: '0.06em',
         }}
       >
-        FULL PICKS TABLE →
+        ALL PICKS &rarr;
       </a>
     </div>
   )

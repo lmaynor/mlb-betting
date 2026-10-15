@@ -67,7 +67,7 @@ describe('EvClient shadow rows', () => {
     expect(screen.queryByLabelText(/Beezy score/)).toBeNull()
   })
 
-  it('sizes consensus rows with 3+ reference books at 1/4 Kelly and shows Thin (<3 bks) below that', () => {
+  it('sizes consensus rows with 3+ reference books at 1/4 Kelly and shows Too few books to size below that', () => {
     render(<EvClient initialFeed={feed} headline={null} />)
     expect(screen.getAllByText('1/4 KELLY STAKE')).toHaveLength(1)              // one column header, not a label repeated per row
     expect(screen.queryByText(/none/)).toBeNull()
@@ -77,7 +77,7 @@ describe('EvClient shadow rows', () => {
 
     const thin: EvFeed = { ...feed, mlb: { rows: [], count: 0 }, nfl: null, nba: null, nhl: block([outlier({ n_books: 2 })]) }
     render(<EvClient initialFeed={thin} headline={null} />)
-    expect(screen.getByText('Thin (<3 bks)')).toBeInTheDocument()
+    expect(screen.getByText('Too few books to size')).toBeInTheDocument()
     expect(screen.getAllByText('2 BK')).toHaveLength(1)
   })
 
@@ -116,7 +116,7 @@ describe('EvClient shadow rows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'NHL' }))
     expect(screen.getByText(/Alex Ovechkin/)).toBeInTheDocument()
     expect(screen.queryByText(/Test Guard/)).toBeNull()
-    expect(screen.getByText(/The sweep|Sweep is running/, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(/Updating live|Last updated/, { exact: false })).toBeInTheDocument()
     const img = container.querySelector('img') as HTMLImageElement
     expect(img.src).toBe('https://assets.nhle.com/mugs/nhl/latest/8471214.png')
     fireEvent.click(screen.getByRole('button', { name: 'NBA' }))
@@ -125,11 +125,11 @@ describe('EvClient shadow rows', () => {
     expect(container.querySelector('img')).toBeNull()                            // NFL has no headshots
   })
 
-  it('states the sweep is idle instead of pretending, when the block is stale', () => {
+  it('states how stale the data is instead of pretending, when the block is stale', () => {
     const idle = { ...feed, nhl: { ...block([outlier({})]), status: 'idle' as const, stale: true, age_minutes: 600 } }
     render(<EvClient initialFeed={idle} headline={null} />)
     fireEvent.click(screen.getByRole('button', { name: 'NHL' }))
-    expect(screen.getByRole('note')).toHaveTextContent(/sweep is idle \(last run 10\.0h ago\)/)
+    expect(screen.getByRole('note')).toHaveTextContent(/Last updated 10\.0h ago/)
   })
 })
 

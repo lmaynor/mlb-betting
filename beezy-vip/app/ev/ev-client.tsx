@@ -143,7 +143,7 @@ function nflRow(r: EvNflRow): Row {
     score: null,
     shadow: true,
     status: 'pending',
-    copy: `${title} (${gm}) YES-side ask ${Math.round(r.ask * 100)}c on ${book.label} -- shadow signal, unvalidated`,
+    copy: `${title} (${gm}) YES-side ask ${Math.round(r.ask * 100)}c on ${book.label} -- preview signal, not yet tracked`,
   }
 }
 
@@ -169,7 +169,7 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     title,
     bookKey: r.book.toLowerCase(),
     priceMain,
-    priceSub: book.isExchange ? 'exchange (shadow)' : 'sportsbook (shadow)',
+    priceSub: book.isExchange ? 'exchange (preview)' : 'sportsbook (preview)',
     fairProb: r.p_fair,
     fairSub: `${r.n_books} book${r.n_books === 1 ? '' : 's'}${gate}`,
     nBooks: r.n_books,
@@ -179,7 +179,7 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     score: null,
     shadow: true,
     status: 'pending',
-    copy: `${title} (${matchup}) @ ${book.label} ${priceMain} -- shadow signal, unvalidated`,
+    copy: `${title} (${matchup}) @ ${book.label} ${priceMain} -- preview signal, not yet tracked`,
     playerId: r.player_id ?? null,
     team: r.team ?? null,
     lowConf: r.flag === false,
@@ -312,11 +312,11 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       {(sport === 'nhl' || sport === 'nba') && feed?.[sport] && <PropsBanner sport={sport} block={feed[sport]!} />}
 
       {feed == null ? (
-        <Empty title="Feed unavailable" body="The odds API did not respond. This page retries every minute." />
+        <Empty title="Temporarily unavailable" body="Live prices could not be loaded. This page retries every minute." />
       ) : rows.length === 0 ? (
         <Empty
           title="Nothing clears your filters right now"
-          body="The scanner re-checks lines every 15 minutes through the betting day. Lower the minimum edge, widen the venue filter, or include settled rows."
+          body="Lines are re-checked every 15 minutes through the betting day. Lower the minimum edge, widen the venue filter, or include settled rows."
         />
       ) : (
         <div className="ev-table-wrap" style={{ ...BAR_STYLE, padding: 0 }}>
@@ -416,13 +416,13 @@ function ShadowBanner({ label, body, status, ageMinutes }: { label: string; body
   const hrs = ageMinutes != null ? ageMinutes / 60 : null
   return (
     <div role="note" style={{ border: '1px solid rgba(56,189,248,0.30)', background: 'rgba(56,189,248,0.06)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
-      <strong style={{ color: SKY }}>{label} MARKET SCANNER.</strong>{' '}
-      {body} Signals are not yet part of the public track record.{' '}
+      <strong style={{ color: SKY }}>{label} PREVIEW.</strong>{' '}
+      {body} Not yet tracked in the public results.{' '}
       {status === 'unavailable'
-        ? 'No sweep output is available yet.'
+        ? 'No data yet.'
         : idle
-          ? `The sweep is idle${hrs != null ? ` (last run ${hrs < 48 ? `${hrs.toFixed(1)}h` : `${Math.round(hrs / 24)}d`} ago)` : ''}; it runs around game windows.`
-          : 'Sweep is running.'}
+          ? `Last updated${hrs != null ? ` ${hrs < 48 ? `${hrs.toFixed(1)}h` : `${Math.round(hrs / 24)}d`} ago` : ' earlier'}; refreshes around game windows.`
+          : 'Updating live.'}
     </div>
   )
 }
@@ -430,14 +430,14 @@ function ShadowBanner({ label, body, status, ageMinutes }: { label: string; body
 function NflBanner({ nfl }: { nfl: NonNullable<EvFeed['nfl']> }) {
   return (
     <ShadowBanner label="NFL" status={nfl.status} ageMinutes={nfl.age_minutes}
-      body="Sportsbook and exchange quotes beating the consensus of the other books, plus Kalshi asks vs that consensus (net of fee). Most props have 1-2 reference books." />
+      body="Sportsbook and exchange prices beating the consensus of the other books, plus Kalshi asks. Many props have only 1-2 reference books." />
   )
 }
 
 function PropsBanner({ sport, block }: { sport: 'nhl' | 'nba'; block: EvPropsBlock }) {
   return (
     <ShadowBanner label={sport.toUpperCase()} status={block.status} ageMinutes={block.age_minutes}
-      body="Sportsbook quotes beating the consensus of the other books at the same player, stat and line." />
+      body="Sportsbook prices beating the consensus of the other books on the same player, stat and line." />
   )
 }
 
@@ -554,7 +554,7 @@ function EvRow({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; copi
               <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '3px' }}>{size.dollars > 0 ? `${size.units.toFixed(2)}% of bankroll` : 'below Kelly floor'}</div>
             </>
           ) : (
-            <span style={{ fontSize: '11.5px', color: 'var(--fog)' }}>Thin (&lt;3 bks)</span>
+            <span style={{ fontSize: '11.5px', color: 'var(--fog)' }}>Too few books to size</span>
           )}
         </td>
         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

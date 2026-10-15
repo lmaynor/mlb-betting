@@ -10,7 +10,7 @@ import { teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
 import { headshotUrlByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
-  title: 'Daily Card - Beezy.FYI',
+  title: 'Daily Card',
   description: "Today's MLB Daily Card - top Beezy Score picks, filterable by game, pitcher, and player props.",
   openGraph: {
     title: 'MLB Daily Card - Beezy.FYI',

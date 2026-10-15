@@ -5,14 +5,13 @@ import type { Metadata } from 'next'
 import { DateBar } from '@/components/picks/date-bar'
 import { FilterBar } from '@/components/picks/filter-bar'
 import { PicksTable } from '@/components/picks/picks-table'
-import { apiGetPicks as getPicks, apiGetTodayAlerts } from '@/lib/betting-api'
+import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
-import { PICK_SYSTEMS } from '@/lib/pick-systems'
-import { LiveEvBoard } from '@/components/picks/live-ev-board'
+import { collapseBooks } from '@/lib/dedupe'
 
 export const metadata: Metadata = {
-  title: 'MLB Picks - All Systems',
-  description: 'Every MLB pick from all Beezy.FYI machine learning systems.',
+  title: 'MLB Picks',
+  description: 'Model picks and +EV alerts for today\'s MLB slate, ranked by Beezy Score.',
 }
 
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -52,18 +51,13 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
       {shownDate !== date && (
         <div style={{ marginBottom: '16px', padding: '10px 14px', border: '1px solid var(--iron)', borderRadius: 'var(--radius)', background: 'var(--obsidian)' }}>
           <p className="mono" style={{ fontSize: '11px', color: 'var(--warn)', margin: 0 }}>
-            Showing {formatDateKey(shownDate, { weekday: 'short', month: 'short', day: 'numeric' })} &mdash; today&rsquo;s card publishes after the 11:00 AM CT model run.
+            Showing {formatDateKey(shownDate, { weekday: 'short', month: 'short', day: 'numeric' })}. Today&rsquo;s model card publishes after the ~11:00 AM CT run; +EV alerts post through the day.
           </p>
         </div>
       )}
-      <PicksTable bets={picks} sort={sort} dir={dir} />
+      <PicksTable bets={book ? picks : collapseBooks(picks)} sort={sort} dir={dir} />
     </>
   )
-}
-
-async function AlertsStrip() {
-  const alerts = await apiGetTodayAlerts(siteDateKey()).catch(() => [])
-  return <LiveEvBoard alerts={alerts} />
 }
 
 export default function PicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -72,20 +66,14 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
       <DateBar />
       <FilterBar />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>Today&rsquo;s picks</h1>
-            <p className="times" style={{ fontSize: '15px', color: 'var(--fog)', marginTop: '8px', maxWidth: '60ch', lineHeight: 1.55 }}>
-              Every model-qualified MLB play across {PICK_SYSTEMS.length} systems, ranked by Beezy Score with market, book, edge, and result context.
-            </p>
-          </div>
-          <a href="/cheat-sheet" className="btn btn-primary">
-            Daily Card &rarr;
-          </a>
+        <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Today&rsquo;s picks</h1>
+          <span style={{ display: 'flex', gap: '16px', alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Model picks + +EV alerts &middot; one row per prop, ranked by Beezy Score</span>
+            <a href="/ev" style={{ fontSize: '12.5px', color: 'var(--link)' }}>+EV Terminal &rarr;</a>
+            <a href="/cheat-sheet" style={{ fontSize: '12.5px', color: 'var(--link)' }}>Share card &rarr;</a>
+          </span>
         </div>
-        <Suspense fallback={null}>
-          <AlertsStrip />
-        </Suspense>
         <Suspense fallback={
           <div style={{ padding: '48px', textAlign: 'center', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
             <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Loading picks...</p>

@@ -9,7 +9,7 @@ import type { Metadata } from 'next'
 import { formatCentralDate } from '@/lib/dates'
 
 export const metadata: Metadata = {
-  title: "Today's MLB Slate -- Beezy Command Center",
+  title: "Today's MLB Slate",
   robots: { index: false, follow: false },
 }
 

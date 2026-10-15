@@ -37,8 +37,9 @@ export function Footer() {
             </div>
           </div>
           {[
-            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Analytics','/analytics'],['Sport Hubs','/sports/mlb'],['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['Strikeouts','/picks/mlb/k']] },
-            { title: 'Tools',   links: [['Odds Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Edge Finder','/tools/edge-finder'],['NRFI Conditions','/tools/nrfi-conditions'],['Pitcher Matchups','/tools/pitcher-matchups']] },
+            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Today\'s Picks','/picks'],['Prop Research','/edge'],['Analytics','/analytics'],['MLB Systems','/picks/mlb'],['Daily Card','/cheat-sheet']] },
+            { title: 'Sports',  links: [['MLB','/sports/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
+            { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },
           ].map(col => (

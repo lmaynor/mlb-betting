@@ -30,4 +30,13 @@ describe('no-slop-ui', () => {
     expect(src).not.toMatch(/kpi-grid|<Kpi\b/)
     expect(src).not.toMatch(/<article/)
   })
+  it('top nav has no bankroll pill and the ribbon has no Daily Card link', () => {
+    const nav = read('components/layout/nav.tsx')
+    expect(nav).not.toMatch(/BANKROLL|useBankroll/)
+    expect(nav).not.toMatch(/DAILY CARD/)
+  })
+  it('the shared ticker and nav are pinned together in one sticky chrome wrapper', () => {
+    expect(read('app/layout.tsx')).toMatch(/site-chrome/)
+    expect(read('app/globals.css')).toMatch(/\.site-chrome \{ position: sticky/)
+  })
 })

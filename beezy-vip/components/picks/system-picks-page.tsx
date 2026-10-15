@@ -102,7 +102,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
           color: totalBets >= 200 ? 'var(--signal)' : 'var(--fog)',
           background: totalBets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
         }}>
-          {totalBets >= 200 ? 'GATE CLEARED' : 'PAPER MODE'}
+          {totalBets >= 200 ? '200+ BETS, PAPER' : 'PAPER MODE'}
         </span>
       </div>
 

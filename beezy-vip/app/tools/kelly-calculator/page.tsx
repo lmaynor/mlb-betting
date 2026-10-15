@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useBankroll } from '@/lib/use-bankroll'
 import { kellyStake, formatOdds, americanToImpliedProb, formatProb } from '@/lib/odds'
 
 const B = '1px solid var(--basalt)'
@@ -9,7 +10,11 @@ const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slat
 const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '8px' }
 
 export default function KellyCalculatorPage() {
-  const [bankroll, setBankroll] = useState('1000')
+  // Shared with the +EV terminal: editing it here updates the stake sizing there (stored per browser).
+  const [sharedBankroll, setSharedBankroll] = useBankroll(1000)
+  const [typed, setTyped] = useState<string | null>(null)
+  const bankroll = typed ?? String(sharedBankroll)
+  const setBankroll = (v: string) => { setTyped(v); const n = parseFloat(v); if (isFinite(n) && n > 0) setSharedBankroll(n) }
   const [odds, setOdds]         = useState('')
   const [prob, setProb]         = useState('')
 
