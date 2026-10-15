@@ -81,4 +81,6 @@ echo
 echo "Done: commit ${COMMIT} -> ${DIGEST}"
 for T in "${TARGETS[@]}"; do echo "  ${T}"; done
 echo "Verify:  gcloud container images list-tags ${BUILD_REPO} --filter=\"digest=${DIGEST}\""
-echo "Service (not changed by this script):  gcloud run services update mlb-betting --region=us-central1 --image=gcr.io/${PROJECT_ID}/mlb-betting@${DIGEST} --add-cloudsql-instances=${PROJECT_ID}:us-central1:mlb-betting-db"
+# The digest lives in BUILD_REPO (the feeds repo) even under SKIP_PROD=1, when mlb-betting never received it.
+echo "Service (not changed by this script):  gcloud run services update mlb-betting --region=us-central1 --image=${BUILD_REPO}@${DIGEST} --add-cloudsql-instances=${PROJECT_ID}:us-central1:mlb-betting-db"
+echo "  Canary first: add --no-traffic --tag=canary, compare against prod, then gcloud run services update-traffic mlb-betting --to-revisions=<new>=100"
