@@ -20,14 +20,14 @@ export const viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default:  'Beezy.FYI — MLB Picks Backed by Machine Learning',
+    default:  'Beezy.FYI \u2014 +EV Scanner and MLB Models',
     template: '%s — Beezy.FYI',
   },
   description:
-    'Five XGBoost models scoring MLB games daily. NRFI, HR, F5, K, and OUTS systems. Real data, real results, no gut feelings.',
+    'A 15-minute +EV scanner across sportsbooks, Kalshi and Novig, plus MLB models graded daily. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
-    images: [{ url: '/api/og?title=MLB+Picks+%2F+Backed+by+Data', width: 1200, height: 630 }],
+    images: [{ url: '/api/og?title=%2BEV+Scanner+%2F+MLB+Models&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
     siteName: 'Beezy.FYI',
     type:     'website',
   },
@@ -38,8 +38,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
         <div className="page-frame">
-          <Nav authDisabled={AUTH_DISABLED} />
-          <LiveTicker />
+          <div className="site-chrome">
+            <Nav authDisabled={AUTH_DISABLED} />
+            <LiveTicker />
+          </div>
           <main>{children}</main>
           <Footer />
           <BottomNav />

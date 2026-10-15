@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Privacy Policy' }
+
 export default function PrivacyPage() {
   return (
-    <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
+    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
 
       {/* Legal review banner */}
       <div style={{
@@ -209,6 +213,6 @@ export default function PrivacyPage() {
         </p>
 
       </div>
-    </main>
+    </div>
   );
 }

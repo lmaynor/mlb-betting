@@ -1,7 +1,7 @@
 'use client'
 
-const PRE_LAUNCH = true
-const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
+import { PRE_LAUNCH } from '@/lib/launch'
+import { DISCORD_URL } from '@/lib/links'
 
 import dynamic from 'next/dynamic'
 const CheckoutButton = dynamic(
@@ -16,7 +16,7 @@ const TIERS = [
     period: '/mo',
     tier: 'starter' as const,
     featured: false,
-    features: ['1 system picks daily', 'Full results history', 'All free tools', 'Discord access'],
+    features: ['Picks from 1 system daily', 'Full results history', 'All free tools', 'Discord access'],
   },
   {
     name: 'Pro',
@@ -24,7 +24,7 @@ const TIERS = [
     period: '/mo',
     tier: 'pro' as const,
     featured: true,
-    features: ['All 5 system picks', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export', 'Edge finder (full)'],
+    features: ['Picks from every system', 'Kelly stake sizing', 'Model probabilities', 'Dashboard access', 'CSV export'],
   },
   {
     name: 'Season',
@@ -32,7 +32,7 @@ const TIERS = [
     period: '/season',
     tier: 'season' as const,
     featured: false,
-    features: ['Everything in Pro', 'Full 2026 MLB season', 'Best per-month value', 'Priority Discord role'],
+    features: ['Everything in Pro', 'Full MLB season', 'Best per-month value', 'Priority Discord role'],
   },
 ]
 
@@ -62,14 +62,6 @@ export function PricingSection() {
           >
             <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span className="dell-heading" style={{ fontSize: '12px', letterSpacing: '0.08em', color: t.featured ? 'var(--signal)' : 'var(--silver)' }}>{t.name.toUpperCase()}</span>
-              {t.featured && (
-                <span
-                  className="dell-heading"
-                  style={{ fontSize: '8.5px', letterSpacing: '0.08em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: 'color-mix(in oklab, var(--signal) 18%, var(--carbon))', color: 'var(--signal)', border: '1px solid var(--win-border)' }}
-                >
-                  MOST POPULAR
-                </span>
-              )}
             </div>
 
             <div style={{ padding: '16px 20px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>

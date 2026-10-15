@@ -8,18 +8,19 @@ import { bookDisplay, CARD_STYLE, pickLabel } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { ScoreBadge, SystemBadge } from '@/components/ui/primitives'
 import { SPORT_LIST, STATUS_LABEL } from '@/lib/sports'
+import { collapseBooks } from '@/lib/dedupe'
 
-type Tab = 'plays' | 'pillars'
+type Tab = 'plays' | 'sports'
 
 export function CommandCenterClient({ bets }: { bets: Bet[] }) {
   const [tab, setTab] = useState<Tab>('plays')
   const [open, setOpen] = useState<number | null>(null)
-  const top = useMemo(() => [...bets].sort((a, b) => beezyscore(b) - beezyscore(a)).slice(0, 8), [bets])
+  const top = useMemo(() => collapseBooks([...bets].sort((a, b) => beezyscore(b) - beezyscore(a))).slice(0, 8), [bets])
 
   return (
     <section style={{ marginTop: '36px' }} aria-label="Daily command center">
       <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
-        {([['plays', "TODAY'S TOP MODEL & +EV PLAYS"], ['pillars', 'SPORT PILLARS']] as [Tab, string][]).map(([id, label]) => (
+        {([['plays', "TODAY'S TOP PLAYS"], ['sports', 'SPORTS']] as [Tab, string][]).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer',
               color: tab === id ? '#090a0f' : 'var(--silver)', background: tab === id ? 'var(--signal)' : 'var(--surface-elevated)', border: `1px solid ${tab === id ? 'var(--signal)' : '#1e2230'}` }}>
@@ -47,7 +48,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
                       <div style={{ marginBottom: '5px' }}><SystemBadge system={b.system} /></div>
                       <div style={{ color: 'var(--chalk)', fontWeight: 600, fontSize: '14.5px', lineHeight: 1.35 }}>{pickLabel(b)}</div>
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: book.color, background: book.bg, border: `1px solid ${book.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.book ? book.label : '--'}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: book.color, background: book.bg, border: `1px solid ${book.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.book ? book.label : '--'}{b.bookCount > 1 ? ` +${b.bookCount - 1}` : ''}</span>
                     <span className="mono" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--chalk)', minWidth: '56px' }}>{formatOdds(b.odds)}</span>
                     <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#090a0f', background: 'var(--signal)', borderRadius: '6px', padding: '4px 8px' }}>
                       +{((Math.abs(b.edge ?? 0) < 2 ? (b.edge ?? 0) * 100 : (b.edge ?? 0))).toFixed(1)}%
@@ -65,8 +66,8 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
               )
             })}
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', padding: '6px 2px' }}>
-              <Link href="/ev" style={{ color: 'var(--link)', fontSize: '13px' }}>Full +EV terminal &rarr;</Link>
-              <Link href="/picks" style={{ color: 'var(--link)', fontSize: '13px' }}>Full picks blotter &rarr;</Link>
+              <Link href="/ev" style={{ color: 'var(--link)', fontSize: '13px' }}>+EV terminal &rarr;</Link>
+              <Link href="/picks" style={{ color: 'var(--link)', fontSize: '13px' }}>All picks &rarr;</Link>
             </div>
           </div>
         )

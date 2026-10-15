@@ -13,9 +13,10 @@ jest.mock('@/lib/betting-api', () => ({ apiGetEvFeed: jest.fn(() => new Promise(
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }))
 
 import { EvClient } from '../app/ev/ev-client'
+import { siteDateKey } from '../lib/dates'
 
 const mlb: EvMlbRow = {
-  sport: 'mlb', id: 7, game_date: '2026-10-14', game_pk: 1, player: 'Pat Pitcher', away_team: 'NYY', home_team: 'BOS',
+  sport: 'mlb', id: 7, game_date: siteDateKey(), game_pk: 1, player: 'Pat Pitcher', away_team: 'NYY', home_team: 'BOS',
   bet_type: 'K_OVER_6.5', model_prob: 0.58, market_prob: 0.5, edge: 0.06, kelly_pct: 0.02, odds: 110, stake: 100,
   book: 'draftkings', result: null, profit: null, notes: null, n_books: 5, anchored: true, created_at: '2026-10-14T12:00:00Z',
 }
@@ -67,7 +68,7 @@ describe('EvClient shadow rows', () => {
     expect(screen.queryByLabelText(/Beezy score/)).toBeNull()
   })
 
-  it('sizes consensus rows with 3+ reference books at 1/4 Kelly and shows Thin (<3 bks) below that', () => {
+  it('sizes consensus rows with 3+ reference books at 1/4 Kelly and shows Too few books to size below that', () => {
     render(<EvClient initialFeed={feed} headline={null} />)
     expect(screen.getAllByText('1/4 KELLY STAKE')).toHaveLength(1)              // one column header, not a label repeated per row
     expect(screen.queryByText(/none/)).toBeNull()
@@ -77,7 +78,7 @@ describe('EvClient shadow rows', () => {
 
     const thin: EvFeed = { ...feed, mlb: { rows: [], count: 0 }, nfl: null, nba: null, nhl: block([outlier({ n_books: 2 })]) }
     render(<EvClient initialFeed={thin} headline={null} />)
-    expect(screen.getByText('Thin (<3 bks)')).toBeInTheDocument()
+    expect(screen.getByText('Too few books to size')).toBeInTheDocument()
     expect(screen.getAllByText('2 BK')).toHaveLength(1)
   })
 
@@ -116,7 +117,7 @@ describe('EvClient shadow rows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'NHL' }))
     expect(screen.getByText(/Alex Ovechkin/)).toBeInTheDocument()
     expect(screen.queryByText(/Test Guard/)).toBeNull()
-    expect(screen.getByText(/The sweep|Sweep is running/, { exact: false })).toBeInTheDocument()
+    expect(screen.getByText(/Updating live|Last updated/, { exact: false })).toBeInTheDocument()
     const img = container.querySelector('img') as HTMLImageElement
     expect(img.src).toBe('https://assets.nhle.com/mugs/nhl/latest/8471214.png')
     fireEvent.click(screen.getByRole('button', { name: 'NBA' }))
@@ -125,11 +126,11 @@ describe('EvClient shadow rows', () => {
     expect(container.querySelector('img')).toBeNull()                            // NFL has no headshots
   })
 
-  it('states the sweep is idle instead of pretending, when the block is stale', () => {
+  it('states how stale the data is instead of pretending, when the block is stale', () => {
     const idle = { ...feed, nhl: { ...block([outlier({})]), status: 'idle' as const, stale: true, age_minutes: 600 } }
     render(<EvClient initialFeed={idle} headline={null} />)
     fireEvent.click(screen.getByRole('button', { name: 'NHL' }))
-    expect(screen.getByRole('note')).toHaveTextContent(/sweep is idle \(last run 10\.0h ago\)/)
+    expect(screen.getByRole('note')).toHaveTextContent(/Last updated 10\.0h ago/)
   })
 })
 
@@ -206,5 +207,22 @@ describe('source files with typographic characters stay ASCII', () => {
   it('fold() strips combining marks via an escaped range', () => {
     const src = fs.readFileSync(path.join(root, 'lib/sport-assets.ts'), 'utf8')
     expect(src).toContain('.replace(/[\\u0300-\\u036f]/g, \'\')')
+  })
+})
+
+describe('EvClient stale and thin rows', () => {
+  it('drops a pending MLB alert from an earlier date (a finished game is not a live price)', () => {
+    const old: EvFeed = { sport: 'all', min_ev: 0.02, as_of: 'x', mlb: { rows: [{ ...mlb, game_date: '2020-01-01' }], count: 1 }, nfl: null }
+    render(<EvClient initialFeed={old} headline={null} />)
+    expect(screen.queryByText(/Pat Pitcher/)).toBeNull()
+  })
+
+  it('hides single-book Kalshi rows until THIN CONSENSUS is switched on', () => {
+    const kalshi = { ticker: 'KX-1', side: 'UNDER', player: 'Thin Guy', stat: 'rec_yds', strike: 49.5, ask: 0.17, fair_prob: 0.309, n_books: 1, net_ev: 0.688, flag: false, reason: 'THIN_CONS', venue: 'kalshi', game_key: 'nfl:2026-10-16:SEA@DEN', mins_to_kick: 600 }
+    const feed2 = { sport: 'all', min_ev: 0.02, as_of: 'x', mlb: { rows: [], count: 0 }, nfl: { rows: [kalshi], book_outliers: [], count: 1, status: 'shadow_live', as_of: null, age_minutes: 5, stale: false, summary: {}, validated: false } } as unknown as EvFeed
+    render(<EvClient initialFeed={feed2} headline={null} />)
+    expect(screen.queryByText(/Thin Guy/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /THIN CONSENSUS/ }))
+    expect(screen.getByText(/Thin Guy Under 49.5/)).toBeInTheDocument()
   })
 })

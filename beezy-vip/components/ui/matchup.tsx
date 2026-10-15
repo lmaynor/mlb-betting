@@ -28,7 +28,7 @@ export function Matchup({
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0, whiteSpace: 'nowrap' }}>
       <TeamToken src={aSrc} ab={aAb} size={size} fontSize={fontSize} color={color} showText={showText} />
-      {showText && <span className="mono" style={{ fontSize, color: 'var(--steel)' }}>@</span>}
+      {showText && <span className="mono" style={{ fontSize, color: 'var(--fog)' }}>@</span>}
       <TeamToken src={hSrc} ab={hAb} size={size} fontSize={fontSize} color={color} showText={showText} />
     </span>
   )

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
 import { SYSTEM_COLOR } from '@/lib/tokens'
+import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 
 const B = '1px solid var(--basalt)'
 
@@ -40,6 +41,7 @@ const SYSTEM_DOTS: Record<string, string> = {
 
 // Sort options shown inline in the toggle bar
 const SORT_OPTIONS = [
+  { value: 'score', label: 'Score' },
   { value: 'date',  label: 'Date' },
   { value: 'edge',  label: 'Edge' },
   { value: 'odds',  label: 'Odds' },
@@ -54,7 +56,7 @@ export function FilterBar() {
   const date   = sp.get('date')   ?? 'today'
   const status = sp.get('status') ?? 'ALL'
   const book   = sp.get('book')   ?? 'ALL'
-  const sort   = sp.get('sort')   ?? 'date'
+  const sort   = sp.get('sort')   ?? 'score'
   const dir    = sp.get('dir')    ?? 'desc'
 
   const set = useCallback((key: string, value: string, defaultVal: string) => {
@@ -79,13 +81,15 @@ export function FilterBar() {
     router.push('/picks?' + params.toString())
   }, [router, sp, sort, dir])
 
-  const SYSTEMS = ['ALL', ...PICK_SYSTEMS.map(system => system.key)]
+  const SYSTEMS = ['ALL', 'EV', ...PICK_SYSTEMS.map(system => system.key)]
   const RESULTS = ['ALL', 'WIN', 'LOSS', 'PENDING']
   // Removed 'ALL' (All Time) — results page handles full history
-  const DATES   = ['today', 'yesterday', 'last7']
-  const BOOKS   = ['ALL', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'theScore']
+  const DATES   = ['today', 'yesterday']
+  const yesterdayKey = addDaysToDateKey(siteDateKey(), -1)
+  const dateChoice = date === 'today' ? 'today' : date === yesterdayKey ? 'yesterday' : date
+  const BOOKS   = ['ALL', 'DraftKings', 'FanDuel', 'Caesars', 'BetMGM', 'theScore', 'Hard Rock', 'Fanatics', 'bet365', 'Party Casino', 'BetRivers', 'Parx', 'Underdog', 'Novig']
 
-  const DATE_LABELS:   Record<string, string> = { today: 'Today', yesterday: 'Yesterday', last7: 'Last 7d' }
+  const DATE_LABELS:   Record<string, string> = { today: 'Today', yesterday: 'Yesterday' }
   const RESULT_LABELS: Record<string, string> = { ALL: 'All', WIN: 'Win', LOSS: 'Loss', PENDING: 'Pending' }
 
   const activeCount = [
@@ -159,7 +163,7 @@ export function FilterBar() {
                   {market}
                 </span>
               )}
-              {date !== 'today'  && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[date] ?? date}</span>}
+              {date !== 'today'  && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[dateChoice] ?? date}</span>}
               {status !== 'ALL'  && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{RESULT_LABELS[status] ?? status}</span>}
               {book !== 'ALL'    && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{book}</span>}
             </>
@@ -195,7 +199,7 @@ export function FilterBar() {
       {open && (
         <div style={{ borderTop: B }}>
           {row('MARKET', SYSTEMS.map(s => chip(s, market === s, () => set('market', s, 'ALL'), SYSTEM_DOTS[s])))}
-          {row('DATE',   DATES.map(d   => chip(DATE_LABELS[d], date === d, () => set('date', d, 'today'))))}
+          {row('DATE',   DATES.map(d   => chip(DATE_LABELS[d], dateChoice === d, () => set('date', d === 'yesterday' ? yesterdayKey : 'today', 'today'))))}
           {row('RESULT', RESULTS.map(r => chip(RESULT_LABELS[r], status === r, () => set('status', r, 'ALL'))))}
           {row('BOOK',   BOOKS.map(b   => chip(b === 'ALL' ? 'All Books' : b, book === b, () => set('book', b, 'ALL'))))}
         </div>

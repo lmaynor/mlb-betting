@@ -664,7 +664,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
       {/* live line alert: a book is lagging the market on this pick RIGHT NOW */}
       {p.alert?.ev != null && (
         <div className="edge-alert">
-          <span className="edge-alert-flash" aria-hidden>&#9889;</span>
+          <span className="edge-alert-flash" aria-hidden>+EV</span>
           <div className="edge-alert-body">
             <div className="edge-alert-h">
               Live line alert &middot; <b>{p.alert.book}</b>
@@ -954,18 +954,13 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
       <Styles />
       <header className="edge-header">
         <div className="edge-title-row">
-          <h1 className="edge-title">THE EDGE</h1>
+          <h1 className="edge-title" title={showCockpit ? 'Price, recent form and volume for every flagged prop line, across sports.' : 'Our model probability vs the market line on every pick.'}>Prop Research</h1>
           <span className="edge-updated">
             <span className="edge-live-dot" /> UPDATED HOURLY <span className="edge-updated-time">{updated}</span>
           </span>
         </div>
-        <p className="edge-tagline">
-          {showCockpit
-            ? 'Multi-sport prop research: price, form and volume for every flagged line, in one cockpit.'
-            : 'Our model probability vs the market line on every pick. The gap is your edge.'}
-        </p>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '16px' }}>
-          <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
+          {feed != null && <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
               const active = sport === k
@@ -977,7 +972,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
                 </button>
               )
             })}
-          </div>
+          </div>}
           {sport === 'mlb' && feed != null && (
             <div role="group" aria-label="MLB view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
               {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
@@ -1025,7 +1020,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
           )}
           {hud.liveAlerts > 0 && (
             <div className="edge-hud-cell">
-              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>&#9889; {hud.liveAlerts}</span>
+              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>{hud.liveAlerts}</span>
               <span className="edge-hud-k">line alerts</span>
             </div>
           )}
@@ -1113,8 +1108,17 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
 
       {visible.length === 0 ? (
         <div className="edge-empty">
-          <p className="edge-empty-h">No picks match these filters.</p>
-          <p className="edge-empty-s">Picks publish through the day &mdash; loosen a filter, or see <a href="/results" className="edge-link">recent results</a>.</p>
+          {picks.length === 0 ? (
+            <>
+              <p className="edge-empty-h">No model picks scored yet today.</p>
+              <p className="edge-empty-s">The model card publishes after the ~11:00 AM CT run. Live +EV alerts are in the <a href="/ev" className="edge-link">+EV Terminal</a>, and past picks are in <a href="/results" className="edge-link">Results</a>.</p>
+            </>
+          ) : (
+            <>
+              <p className="edge-empty-h">No picks match these filters.</p>
+              <p className="edge-empty-s">Loosen a filter, or see <a href="/results" className="edge-link">recent results</a>.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="edge-grid">
@@ -1151,7 +1155,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
                         {p.matchup?.startTime && <span className="edge-row-time">{p.matchup.startTime}</span>}
                         {p.alert?.ev != null && (
                           <span className="edge-row-alert" title={`Live outlier: ${p.alert.book} ${p.alert.american != null ? fmtOdds(p.alert.american) : ''} = +${(p.alert.ev * 100).toFixed(1)}% EV vs consensus`}>
-                            &#9889; +{(p.alert.ev * 100).toFixed(1)}%
+                            +EV {(p.alert.ev * 100).toFixed(1)}%
                           </span>
                         )}
                       </span>
@@ -1237,7 +1241,7 @@ function Styles() {
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
 .edge-header { border-bottom: 1px solid var(--basalt); padding-bottom: 18px; margin-bottom: 18px; }
 .edge-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.edge-title { font-size: clamp(1.9rem, 6vw, 3rem); font-weight: 860; letter-spacing: -0.04em;
+.edge-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
   margin: 0; text-wrap: balance; }
 .edge-updated { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; color: var(--signal); }
@@ -1468,7 +1472,7 @@ function Styles() {
 .edge-alert { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; padding: 11px 14px;
   border: 1px solid color-mix(in oklab, var(--warn) 45%, var(--carbon));
   background: color-mix(in oklab, var(--warn) 9%, var(--carbon)); border-radius: var(--radius); }
-.edge-alert-flash { font-size: 15px; line-height: 1.3; }
+.edge-alert-flash { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--signal); line-height: 1.3; }
 .edge-alert-h { font-size: 13px; color: var(--ash); }
 .edge-alert-h b { font-weight: 800; }
 .edge-alert-h .mono { font-family: var(--font-mono), ui-monospace, monospace; font-weight: 700; color: var(--warn); }

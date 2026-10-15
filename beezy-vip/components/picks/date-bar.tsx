@@ -15,7 +15,9 @@ export function DateBar() {
   const pathname = usePathname()
 
   const todayStr = siteDateKey()
-  const current = sp.get('date') ?? todayStr
+  // A stray non-ISO value (old chips wrote 'yesterday'/'last7') must not reach the date math.
+  const rawDate = sp.get('date')
+  const current = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayStr
   const prev = addDaysToDateKey(current, -1)
   const next = addDaysToDateKey(current, 1)
 
@@ -43,8 +45,8 @@ export function DateBar() {
         style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: isToday ? 600 : 400, padding: '6px 14px', borderRadius: 'var(--radius)', cursor: 'pointer', border: `1px solid ${isToday ? 'var(--win-border)' : 'var(--basalt)'}`, background: isToday ? 'var(--win-wash)' : 'var(--graphite)', color: isToday ? 'var(--signal)' : 'var(--ash)', letterSpacing: '0.04em', flex: '0 1 auto', whiteSpace: 'nowrap' }}>
         {isToday ? `TODAY · ${fmtDisplay(current)} CT` : `${fmtDisplay(current)} CT`}
       </button>
-      <button onClick={() => navigate(next)} disabled={isFuture}
-        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 12px', borderRadius: 'var(--radius)', cursor: isFuture ? 'default' : 'pointer', border: B, background: 'var(--graphite)', color: isFuture ? 'var(--iron)' : 'var(--silver)', opacity: isFuture ? 0.5 : 1 }}>
+      <button onClick={() => navigate(next)} disabled={isFuture || isToday}
+        style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 12px', borderRadius: 'var(--radius)', cursor: (isFuture || isToday) ? 'default' : 'pointer', border: B, background: 'var(--graphite)', color: isFuture ? 'var(--iron)' : 'var(--silver)', opacity: isFuture ? 0.5 : 1 }}>
         Next &rarr;
       </button>
     </div>

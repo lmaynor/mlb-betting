@@ -1,4 +1,5 @@
 import { apiGetEvFeed, apiGetTodayPicks } from '@/lib/betting-api'
+import { siteDateKey } from '@/lib/dates'
 import type { Bet, EvMlbRow } from '@/lib/types'
 import { CommandCenterClient } from './command-center-client'
 
@@ -17,6 +18,7 @@ export async function CommandCenter() {
     apiGetTodayPicks().catch(() => [] as Bet[]),
     apiGetEvFeed({ sport: 'mlb', minEv: 0.03, limit: 40 }).catch(() => null),
   ])
-  const ev = (feed?.mlb.rows ?? []).filter(r => r.result == null).map(evToBet)
+  // Only today's open alerts: an earlier date means the game is over and just awaiting grading.
+  const ev = (feed?.mlb.rows ?? []).filter(r => r.result == null && r.game_date >= siteDateKey()).map(evToBet)
   return <CommandCenterClient bets={[...picks.filter(p => p.result == null), ...ev]} />
 }

@@ -53,10 +53,11 @@ export default async function ModelDetailPage({ params }: Props) {
   ])
 
   const stat     = allStats.find(s => s.system === spec.system)
-  const roi      = stat ? parseFloat(String(stat.roi))      : null
+  const finite   = (v: unknown) => { const n = parseFloat(String(v ?? '')); return isFinite(n) ? n : null }
+  const roi      = stat ? finite(stat.roi)      : null
   const winRate  = stat ? parseFloat(String(stat.win_rate)) : null
   const bets     = stat ? parseInt(String(stat.total_bets)) : 0
-  const avgEdge  = stat ? parseFloat(String(stat.avg_edge)) : null
+  const avgEdge  = stat ? finite(stat.avg_edge) : null
   const totalPnl = stat ? parseFloat(String(stat.total_pnl)) : null
   const gatePct  = Math.min(100, (bets / 200) * 100)
 
@@ -91,7 +92,7 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
         <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--iron)' }}>&middot;</span>
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 
@@ -117,8 +118,8 @@ export default async function ModelDetailPage({ params }: Props) {
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
         <div style={{ padding: '18px' }}>
           <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Avg Edge</div>
-          <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--signal)' }}>
-            {avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '--'}
+          <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--fog)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+            {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
           <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>Model vs implied</div>
         </div>
@@ -221,15 +222,15 @@ export default async function ModelDetailPage({ params }: Props) {
           color: bets >= 200 ? 'var(--signal)' : 'var(--fog)',
           background: bets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
         }}>
-          {bets >= 200 ? 'Gate Cleared' : 'Paper Mode'}
+          {bets >= 200 ? '200+ bets, paper' : 'Paper Mode'}
         </span>
       </div>
 
       {/* P&L summary */}
       {totalPnl !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden', marginBottom: '28px' }}>
-          <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : ''}${(totalPnl / 10).toFixed(2)}u`} accent={totalPnl > 0} />
-          <StatBlock label="Avg Edge"    value={avgEdge !== null ? `+${avgEdge.toFixed(1)}%` : '--'} />
+          <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
+          <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
           <div style={{ padding: '18px' }}>
             <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Sample Size</div>

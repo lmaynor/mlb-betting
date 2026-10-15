@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 
-const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
-const X_URL = 'https://x.com/beezy_fyi'
+import { DISCORD_URL } from '@/lib/links'
+import { X_URL } from '@/lib/links'
 
 const socialBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -37,8 +37,9 @@ export function Footer() {
             </div>
           </div>
           {[
-            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Analytics','/analytics'],['Sport Hubs','/sports/mlb'],['MLB','/picks/mlb'],['NRFI','/picks/mlb/nrfi'],['Home Runs','/picks/mlb/hr'],['Strikeouts','/picks/mlb/k']] },
-            { title: 'Tools',   links: [['Odds Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Edge Finder','/tools/edge-finder'],['NRFI Conditions','/tools/nrfi-conditions'],['Pitcher Matchups','/tools/pitcher-matchups']] },
+            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Today\'s Picks','/picks'],['Prop Research','/edge'],['Analytics','/analytics'],['MLB Systems','/picks/mlb'],['Daily Card','/cheat-sheet']] },
+            { title: 'Sports',  links: [['MLB','/sports/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
+            { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },
           ].map(col => (
@@ -72,13 +73,13 @@ export function Footer() {
             PAPER MODE
           </span>
           <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55 }}>
-            Beezy.FYI is in pre-launch paper mode. No real money is being wagered or transacted. Paid access opens when the first system clears its 200-bet validation gate.
+            Beezy.FYI is in pre-launch paper mode. No real money is being wagered or transacted. Paid plans are not open yet.
           </p>
         </div>
 
         <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '20px' }}>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet.</p>
+          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet. If gambling is a problem, call 1-800-GAMBLER.</p>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>
             &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> <Link href="/" style={{ color: 'var(--link)', textDecoration: 'none' }}>Beezy.FYI</Link> &middot; All rights reserved
           </p>

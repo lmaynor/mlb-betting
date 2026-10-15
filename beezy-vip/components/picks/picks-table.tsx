@@ -50,11 +50,11 @@ function ResultPill({ result }: { result: string | null }) {
   )
 }
 
-function PnL({ profit, result }: { profit: number | null; result: string | null }) {
-  if (profit === null || result === null || result === 'pending') {
+function PnL({ profit, result, stake }: { profit: number | null; result: string | null; stake?: number | null }) {
+  if (profit === null || result === null || result === 'pending' || result === 'void' || result === 'push') {
     return <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>--</span>
   }
-  const units = (profit / 10).toFixed(1)
+  const units = (profit / (stake != null && stake > 0 ? stake : 10)).toFixed(2)
   const pos = profit >= 0
   return (
     <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
@@ -140,7 +140,7 @@ function pickDescription(bet: Bet, detail: string) {
 }
 
 function TableRow({ bet }: { bet: Bet }) {
-  const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
+  const pill = SYSTEM_PILL[effectiveSystem(bet) as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
   const notes = splitNotes(bet.notes)
@@ -178,7 +178,7 @@ function TableRow({ bet }: { bet: Bet }) {
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}>
-          {systemDisplay(bet.system)}
+          {systemDisplay(effectiveSystem(bet))}
         </span>
       </div>
 
@@ -220,16 +220,16 @@ function TableRow({ bet }: { bet: Bet }) {
         {fmtEdge(bet.edge)}
       </div>
       <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', color: 'var(--silver)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {bet.book ?? '--'}
+        {bet.book ?? '--'}{((bet as { bookCount?: number }).bookCount ?? 1) > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
       </div>
       <div style={{ padding: '10px 6px' }}><ResultPill result={bet.result} /></div>
-      <div style={{ padding: '10px 6px' }}><PnL profit={bet.profit ?? null} result={bet.result} /></div>
+      <div style={{ padding: '10px 6px' }}><PnL profit={bet.profit ?? null} result={bet.result} stake={bet.stake} /></div>
     </div>
   )
 }
 
 function BetCard({ bet }: { bet: Bet }) {
-  const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
+  const pill = SYSTEM_PILL[effectiveSystem(bet) as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
   const notes = splitNotes(bet.notes)
@@ -260,7 +260,7 @@ function BetCard({ bet }: { bet: Bet }) {
             background: pill.bg,
             border: pill.border,
           }}>
-            {systemDisplay(bet.system)}
+            {systemDisplay(effectiveSystem(bet))}
           </span>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{fmtDate(bet.game_date)}</span>
         </div>
@@ -308,7 +308,7 @@ function BetCard({ bet }: { bet: Bet }) {
           </div>
         ))}
         <div><ResultPill result={bet.result} /></div>
-        <div><PnL profit={bet.profit ?? null} result={bet.result} /></div>
+        <div><PnL profit={bet.profit ?? null} result={bet.result} stake={bet.stake} /></div>
       </div>
       </div>
     </div>

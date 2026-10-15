@@ -1,18 +1,20 @@
 export const dynamic = 'force-dynamic'
+import Link from 'next/link'
 import type { Metadata } from 'next'
+import { ToolHeader } from '@/components/ui/tool-header'
+
 export const metadata: Metadata = { title: 'Personal Bet Tracker', robots: { index: false, follow: false } }
-const B = '1px solid var(--basalt)'
+
 export default function BetTrackerPage() {
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '8px' }}>Tools · Pro</p>
-        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '8px' }}>Personal bet tracker</h1>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>Log your own bets, track ROI, and compare your performance against the Beezy model. Pro tier only.</p>
-      </div>
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '48px', textAlign: 'center' }}>
-        <p className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '20px' }}>Available to Pro subscribers after launch.</p>
-        <a href="https://discord.gg/beezy" className="btn btn-primary">Join waitlist</a>
+    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px' }}>
+      <ToolHeader title="Personal Bet Tracker" hint="Coming soon" />
+      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '32px 24px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--silver)', margin: '0 0 6px' }}>Under construction.</p>
+        <p style={{ fontSize: '13px', color: 'var(--fog)', margin: '0 0 18px', lineHeight: 1.55 }}>
+          Log your own bets and compare your ROI to the model. It will be a Pro feature at launch.
+        </p>
+        <Link href="/pricing" className="btn btn-primary">See pricing</Link>
       </div>
     </div>
   )

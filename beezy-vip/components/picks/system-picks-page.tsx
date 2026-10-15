@@ -36,9 +36,11 @@ export async function SystemPicksPage({ system }: { system: string }) {
 
   const stats     = allStats.find(s => s.system === system)
   const winRate   = stats ? parseFloat(String(stats.win_rate)).toFixed(1) : '--'
-  const roi       = stats ? parseFloat(String(stats.roi)) : null
+  const finite = (v: unknown) => { const n = parseFloat(String(v ?? '')); return isFinite(n) ? n : null }
+  const roi       = stats ? finite(stats.roi) : null
   const totalBets = stats ? parseInt(String(stats.total_bets)) : 0
-  const avgEdge   = stats ? parseFloat(String(stats.avg_edge)).toFixed(1) : '--'
+  const avgEdgeN  = stats ? finite(stats.avg_edge) : null
+  const avgEdge   = avgEdgeN !== null ? avgEdgeN.toFixed(1) : '--'
 
   const history = await getPicks({ system, status: 'settled', limit: 20 }).catch(() => [])
   const gatePct = Math.min(100, (totalBets / 200) * 100)
@@ -51,7 +53,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         <Link href="/picks/mlb" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           MLB Picks
         </Link>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--iron)' }}>&middot;</span>
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
         <SystemBadge system={system} />
       </div>
 
@@ -80,7 +82,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         <StatBlock label="Total Bets"  value={String(totalBets)} sub="Paper mode" />
         <div style={{ padding: '20px' }}>
           <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Avg Edge</div>
-          <div className="mono" style={{ fontSize: '24px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--signal)' }}>{avgEdge !== '--' ? `+${avgEdge}%` : '--'}</div>
+          <div className="mono" style={{ fontSize: '24px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdgeN === null ? 'var(--fog)' : avgEdgeN >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{avgEdgeN === null ? '--' : `${avgEdgeN >= 0 ? '+' : ''}${avgEdge}%`}</div>
           <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>Model vs implied</div>
         </div>
       </div>
@@ -102,7 +104,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
           color: totalBets >= 200 ? 'var(--signal)' : 'var(--fog)',
           background: totalBets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
         }}>
-          {totalBets >= 200 ? 'GATE CLEARED' : 'PAPER MODE'}
+          {totalBets >= 200 ? '200+ BETS, PAPER' : 'PAPER MODE'}
         </span>
       </div>
 

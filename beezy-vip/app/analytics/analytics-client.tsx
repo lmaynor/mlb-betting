@@ -204,7 +204,7 @@ function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; sys
             <tbody>
               {rows.map(b => (
                 <tr key={b.bucket} style={{ borderBottom: '1px solid #151822' }}>
-                  <Td strong>{b.bucket}</Td><Td mono>{b.n}</Td>
+                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span style={{ color: 'var(--warn)', marginLeft: '6px', fontSize: '10px' }}>low n</span>}</Td>
                   <Td mono>{b.hit_rate != null ? `${b.hit_rate.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_model_prob != null ? `${b.avg_model_prob.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_market_prob != null ? `${b.avg_market_prob.toFixed(1)}%` : '--'}</Td>
@@ -216,12 +216,12 @@ function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; sys
           </table>
         </div>
         <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '10px' }}>
-          Closing-line value is only captured for model systems; +EV alert rows show n/a.
+          Mean CLV is the average of each bet's price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
         </p>
       </Panel>
       <Panel title="HOW MODEL PROBABILITIES ARE CONTROLLED">
         <p className="times" style={{ fontSize: '13.5px', color: 'var(--silver)', lineHeight: 1.65, maxWidth: '90ch' }}>
-          Model systems pass every probability through an isotonic calibrator fit on realized outcomes (<span className="mono">mlb_core/risk/calibration.py</span>),
+          Model systems pass every probability through an isotonic calibrator fit on realized outcomes,
           then skip any bet whose post-calibration edge still exceeds an edge cap. Both exist because early diagnostics showed the largest claimed edges were mostly
           overconfidence, not value. Calibration is fit on past bets, so treat the chart above as the ongoing test of whether it works.
         </p>
@@ -252,8 +252,8 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
               {rows.map(r => {
                 const b = bookDisplay(r.book)
                 return (
-                  <tr key={r.book} style={{ borderBottom: '1px solid #151822' }}>
-                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.label}</span>{b.isExchange && <span style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--fog)' }}>exchange</span>}</Td>
+                  <tr key={r.book} style={{ borderBottom: '1px solid #151822', opacity: r.n < 100 ? 0.6 : 1 }} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
+                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--fog)' }}>exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>
@@ -274,31 +274,38 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
 // -- 4. System health ------------------------------------------------------------
 
 function Health({ stats }: { stats: SystemStats[] }) {
-  const mlbKeys = new Set(SPORT_PILLARS.mlb.markets.map(m => m.system).filter(Boolean) as string[])
-  const rows = stats.filter(s => mlbKeys.has(s.system) || s.system === 'EV').sort((a, b) => Number(b.total_bets) - Number(a.total_bets))
+  const logOnly = new Set(SPORT_PILLARS.mlb.markets.filter(m => m.status === 'Log-only').map(m => m.system).filter(Boolean) as string[])
+  const rows = stats.filter(s => Number(s.total_bets) > 0).sort((a, b) => Number(b.total_bets) - Number(a.total_bets))
+  const labelOf = (k: string) => (k === '1IOU' ? '1st Inn O/U' : systemLabel(k))
   return (
-    <Panel title="SYSTEM HEALTH AND THE 200-BET GATE" sub="No system leaves paper mode before 200 settled bets with a positive season ROI. A passed gate is necessary, not sufficient: closing-line value also has to clear its bar.">
-      <div style={{ display: 'grid', gap: '10px', overflowX: 'auto', minWidth: 0 }}>
-        {rows.map(s => {
-          const n = Number(s.total_bets), roi = Number(s.roi)
-          const isEv = s.system === 'EV'
-          const color = SYSTEM_COLOR[s.system] ?? 'var(--silver)'
-          const status = isEv ? 'TRACKED (NOT GATED)' : n >= GATE ? 'GATE REACHED' : 'PAPER / GATE PENDING'
-          return (
-            <div key={s.system} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, 150px) 1fr 70px 80px 150px', minWidth: '620px', gap: '14px', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #151822' }}>
-              <span style={{ color, fontWeight: 700, fontSize: '13px' }}>{systemLabel(s.system)}</span>
-              <div>
-                <div style={{ height: '6px', background: '#1b1f2b', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, (n / GATE) * 100)}%`, height: '100%', background: n >= GATE || isEv ? 'var(--signal)' : color }} />
-                </div>
-              </div>
-              <span className="mono" style={{ fontSize: '12px', color: 'var(--silver)' }}>{n.toLocaleString()}</span>
-              <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi > 0 ? '+' : ''}{roi.toFixed(1)}%</span>
-              <span className="dell-heading" style={{ fontSize: '9.5px', color: n >= GATE && !isEv ? 'var(--signal)' : 'var(--fog)' }}>{status}</span>
-            </div>
-          )
-        })}
-        {rows.length === 0 && <div style={{ color: 'var(--fog)' }}>System stats unavailable.</div>}
+    <Panel title="SYSTEM HEALTH" sub="Bets are every graded prediction a system logged, including unstaked log-only ones. Reaching 200 means the sample is big enough to judge, not that the system is profitable.">
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '13px' }}>
+          <thead><tr>{['System', 'Status', 'Bets', 'ROI'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
+          <tbody>
+            {rows.map(s => {
+              const n = Number(s.total_bets)
+              const roi = s.roi == null ? null : Number(s.roi)
+              const isEv = s.system === 'EV'
+              const color = SYSTEM_COLOR[s.system] ?? 'var(--silver)'
+              const status = isEv ? 'Tracked, not gated'
+                : logOnly.has(s.system) ? 'Log-only'
+                : n < GATE ? `Paper, ${n}/${GATE} bets`
+                : roi != null && roi < 0 ? '200+ bets, negative ROI'
+                : '200+ bets, paper'
+              const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--fog)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--silver)'
+              return (
+                <tr key={s.system} style={{ borderBottom: '1px solid #151822' }}>
+                  <Td><span style={{ color, fontWeight: 700 }}>{labelOf(s.system)}</span></Td>
+                  <Td><span style={{ color: statusColor }}>{status}</span></Td>
+                  <Td mono>{n.toLocaleString()}</Td>
+                  <Td mono color={roi == null ? undefined : roi >= 0 ? 'var(--signal)' : 'var(--loss)'}>{roi == null ? '--' : `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%`}</Td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {rows.length === 0 && <div style={{ color: 'var(--fog)', padding: '12px 0' }}>System stats unavailable.</div>}
       </div>
     </Panel>
   )

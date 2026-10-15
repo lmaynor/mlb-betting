@@ -349,10 +349,22 @@ a:focus-visible {
   animation: pulse-dot 1.8s ease-in-out infinite;
 }
 
+/* Nav + ticker stay pinned together at the top of the viewport. */
+.site-chrome { position: sticky; top: 0; z-index: 50; width: 100%; max-width: 100vw; }
+
 /* ── Ticker ─────────────────────────────────────────────────────── */
 @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 .ticker-track { display: flex; width: max-content; animation: ticker-scroll 64s linear infinite; }
 .ticker-track:hover { animation-play-state: paused; }
+/* Reduce-motion users get a static, scrollable strip instead of a frozen half-offset track. */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track { animation: none !important; }
+  .ticker-viewport { overflow-x: auto !important; }
+}
+
+/* System index rows: hover = background only */
+.sys-row { transition: background-color 120ms ease; }
+.sys-row:hover { background: #171a24; }
 
 /* ── Scrollbars ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -390,7 +402,7 @@ a:focus-visible {
 .systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .tools-grid     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.footer-grid    { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; }
+.footer-grid    { display: grid; grid-template-columns: 1.6fr repeat(5, 1fr); gap: 28px; }
 .models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 
@@ -453,7 +465,9 @@ a:focus-visible {
   .model-config-grid { grid-template-columns: 1fr !important; }
 
   .live-ticker-shell { padding: 6px 0 !important; max-height: 32px; }
-  .live-ticker-shell .ticker-track { animation-duration: 44s; }
+  .live-ticker-shell .ticker-track { animation-duration: 36s !important; }
+  /* Phone width: keep the crawl itself readable; label text and the All results link are dropped. */
+  .live-ticker-shell .ticker-label, .live-ticker-shell .edge-ribbon-cta { display: none !important; }
   .live-ticker-shell span { font-size: 10px !important; }
 }
 
@@ -548,7 +562,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 a { color: inherit; }
 
 /* ── /ev data table: one sticky header (clears the 96px two-tier nav), hairline rows, hover = background only ── */
-.ev-table th { position: sticky; top: 97px; z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
+.ev-table th { position: sticky; top: 131px; z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
 .ev-table td { padding: 10px 12px; vertical-align: middle; border-bottom: 1px solid #151822; }
 .ev-table tbody tr { transition: background-color 120ms ease; }
 .ev-table tbody tr[data-row]:hover { background: #171a24; }
@@ -567,9 +581,19 @@ a { color: inherit; }
   .cockpit-grid { grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.2fr); }
   .cockpit-detail,
   .cockpit-detail.is-open {
-    display: block; position: sticky; inset: auto; top: 112px; z-index: auto; background: transparent;
-    padding: 0; max-height: calc(100vh - 128px); overflow-y: auto;
+    display: block; position: sticky; inset: auto; top: 146px; z-index: auto; background: transparent;
+    padding: 0; max-height: calc(100vh - 162px); overflow-y: auto;
   }
   .cockpit-close { display: none !important; }
 }
 
+
+/* Article tables, quotes and lists (rendered by lib/markdown.ts) */
+.article-body .table-wrap { overflow-x: auto; margin: 16px 0; }
+.article-body table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.article-body th, .article-body td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #1e2230; white-space: nowrap; }
+.article-body th { color: var(--fog); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; background: #11131a; }
+.article-body blockquote { margin: 16px 0; padding: 8px 14px; border-left: 3px solid var(--iron); color: var(--silver); background: #11131a; }
+.article-body ol { padding-left: 22px; margin: 12px 0; }
+.article-body ol li, .article-body ul li { margin: 4px 0; }
+.article-body hr { border: 0; border-top: 1px solid #1e2230; margin: 24px 0; }

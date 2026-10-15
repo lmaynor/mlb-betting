@@ -1,17 +1,16 @@
 User-agent: *
 Allow: /
 
+# Social cards must stay fetchable: the og:image URLs live under /api/og.
+Allow: /api/og
+Disallow: /api
+
 # Auth + private
 Disallow: /dashboard
-Disallow: /api
 Disallow: /login
 Disallow: /signup
-
-# Deferred routes (noindex, v2)
-Disallow: /pitchers
-Disallow: /players
-Disallow: /recap
-Disallow: /teams
-Disallow: /games
+Disallow: /tools/slate
+Disallow: /tools/clv-tracker
+Disallow: /tools/bet-tracker
 
 Sitemap: https://beezy.fyi/sitemap.xml

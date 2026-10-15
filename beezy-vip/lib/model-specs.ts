@@ -33,7 +33,7 @@ export const MODEL_SPECS: ModelSpec[] = [
     oosAUC:      0.577,
     edgeThreshold: 0.04,
     kellyFraction: 0.5,
-    learnSlug:   'what-is-nrfi',
+    learnSlug:   'what-is-nrfi-betting',
     features: [
       { name: 'Home Starter ERA (L5)',     description: 'Home starter ERA over last 5 starts', importance: 'High' },
       { name: 'Away Starter ERA (L5)',     description: 'Away starter ERA over last 5 starts', importance: 'High' },
@@ -60,7 +60,7 @@ export const MODEL_SPECS: ModelSpec[] = [
     oosAUC:      0.630,
     edgeThreshold: 0.03,
     kellyFraction: 0.33,
-    learnSlug:   'home-run-props',
+    learnSlug:   'mlb-home-run-props',
     features: [
       { name: 'Barrel Rate',          description: 'Batted ball barrel rate (ideal launch angle + exit velo combo)', importance: 'High' },
       { name: 'Hard Hit %',           description: 'Batted ball hard-hit rate (exit velo >= 95 mph)',               importance: 'High' },
@@ -85,7 +85,7 @@ export const MODEL_SPECS: ModelSpec[] = [
     oosAUC:      0.553,
     edgeThreshold: 0.04,
     kellyFraction: 0.5,
-    learnSlug:   'f5-betting',
+    learnSlug:   'f5-betting-mlb',
     features: [
       { name: 'Starter SIERA',        description: 'Skill-Interactive ERA — best predictor of future performance', importance: 'High' },
       { name: 'Starter ERA (L5)',      description: 'ERA over last 5 starts',                                      importance: 'High' },
@@ -109,7 +109,7 @@ export const MODEL_SPECS: ModelSpec[] = [
     oosAUC:      1.807,
     edgeThreshold: 0.05,
     kellyFraction: 0.5,
-    learnSlug:   'mlb-strikeout-props',
+    learnSlug:   'mlb-strikeout-props-guide',
     features: [
       { name: 'Swinging Strike %',       description: 'SwStr% — single best predictor of strikeout rate',       importance: 'High' },
       { name: 'Zone %',                  description: '% of pitches in the strike zone',                        importance: 'High' },

@@ -20,13 +20,13 @@ const ACTIVE_MODELS = [
   { system: 'HR', version: 'v6', desc: 'Prices batter HR probability with barrel rate, launch angle, pitcher HR risk, park factor, and platoon split.', range: '2021-2025', metric: '0.630', metricLabel: 'OOS AUC', href: '/models/hr' },
   { system: 'F5', version: 'v5', desc: 'Models first-five moneyline outcomes from starter SIERA, recent form, opponent wOBA, umpire, and weather.', range: '2022-2025', metric: '0.553', metricLabel: 'OOS AUC', href: '/models/f5' },
   { system: 'K', version: 'v1', desc: 'Projects starter strikeout totals with swinging strikes, zone/chase rates, opponent K%, and recent K workload.', range: '2021-2025', metric: '1.807', metricLabel: 'OOS MAE', href: '/models/k' },
-  { system: 'OUTS', version: 'v1', desc: 'Projects starter outs recorded from pitch efficiency, innings trends, bullpen context, and opponent OBP.', range: '2021-2025', metric: 'Proxy', metricLabel: 'IP model', href: '/models/outs' },
+  { system: 'OUTS', version: 'v1', desc: 'Projects starter outs recorded with a negative-binomial count model from pitch efficiency, innings trends, bullpen context, and opponent OBP.', range: '2021-2025', metric: 'NegBin', metricLabel: 'Count model', href: '/models/outs' },
 ]
 
 const PIPELINE_MODELS = [
-  { system: 'GAME', label: 'Full Game', note: 'Moneyline and totals layer that extends F5 context into full-game pricing.' },
+  { system: 'GAME', label: 'Full Game', note: 'Full-game moneyline from starter, bullpen fatigue and lineup features. Log-only until it reaches 200 bets.' },
   { system: 'F3', label: 'First 3', note: 'Early-game starter window for openers, short leashes, and lineup-top exposure.' },
-  { system: 'F1H', label: 'First Half', note: 'Hybrid innings window for stronger starter splits before bullpen noise dominates.' },
+  { system: 'F1H', label: 'First Half', note: 'First-half (innings 1-4) moneyline built from the F5 model. Log-only.' },
   { system: 'F7', label: 'First 7', note: 'Late starter and bridge-relief pricing before full bullpen exposure.' },
   { system: 'BATTER_K', label: 'Batter K', note: 'Batter strikeout props using pitcher shape, zone, chase, and batter whiff profile.' },
   { system: 'BATTER_TB', label: 'Total Bases', note: 'Batter total-base props with contact quality, matchup, lineup slot, and park.' },
@@ -40,30 +40,15 @@ export default async function ModelsPage() {
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-        <div>
-          <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Models</h1>
-          <p className="times" style={{ fontSize: '13px', color: 'var(--fog)', maxWidth: '620px', lineHeight: 1.55 }}>
-            Active systems, pipeline markets, and the validation rules behind the card.
-          </p>
-        </div>
-        <Link href="/results" className="times" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}>
-          View results
-        </Link>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Models</h1>
+        <Link href="/results" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}>View results &rarr;</Link>
       </div>
 
-      <div className="models-strip" style={{ gridTemplateColumns: 'repeat(3,1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden', marginBottom: '22px' }}>
-        {[
-          { label: 'Core engine', value: 'XGBoost + props sims', sub: 'Market-specific model stack' },
-          { label: 'Validation', value: 'Walk-forward CV', sub: 'No future data leakage' },
-          { label: 'Launch gate', value: '200 bets', sub: 'Per-system paper validation' },
-        ].map((item, i) => (
-          <div key={item.label} style={{ padding: '18px', borderRight: i < 2 ? B : undefined }}>
-            <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '6px' }}>{item.label}</div>
-            <div className="mono" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ash)', marginBottom: '4px' }}>{item.value}</div>
-            <div style={{ fontSize: '11px', color: 'var(--fog)' }}>{item.sub}</div>
-          </div>
-        ))}
+      <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 22px', alignItems: 'center', minHeight: '38px', padding: '8px 14px', background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', fontSize: '12px', color: 'var(--silver)', marginBottom: '22px' }}>
+        <span><span style={{ color: 'var(--fog)' }}>ENGINE</span> XGBoost + count-model sims</span>
+        <span><span style={{ color: 'var(--fog)' }}>VALIDATION</span> walk-forward, no future data</span>
+        <span><span style={{ color: 'var(--fog)' }}>SAMPLE</span> 200 bets per system, paper</span>
       </div>
 
       <section style={{ padding: '20px', border: B, borderRadius: 'var(--radius-lg)', marginBottom: '24px', background: 'var(--graphite)' }}>
@@ -71,7 +56,7 @@ export default async function ModelsPage() {
         {[
           'Models use walk-forward validation: trained on prior seasons and validated on the next season so the model never sees future data.',
           'A pick has to clear model probability, implied probability, edge threshold, and Kelly-positive checks before it reaches the card.',
-          'Systems stay in paper mode until they clear the 200-bet gate. Results are tracked transparently before paid access opens.',
+          'Every system is paper-only and settled publicly. Reaching 200 bets means the sample is large enough to judge, not that the system is profitable; live ROI is shown next to each model.',
         ].map((p, i) => (
           <p key={i} style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.7, marginBottom: i < 2 ? '10px' : 0 }}>{p}</p>
         ))}
@@ -88,7 +73,7 @@ export default async function ModelsPage() {
           {ACTIVE_MODELS.map((model, i) => {
             const stat = stats.find(s => s.system === model.system)
             const pill = PILL[model.system]
-            const roi = stat ? parseFloat(String(stat.roi ?? 0)) : null
+            const roi = stat && stat.roi != null ? parseFloat(String(stat.roi)) : null
             return (
               <div key={model.system} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', borderBottom: i < ACTIVE_MODELS.length - 1 ? B : undefined, alignItems: 'center' }}>
                 <div style={{ padding: '12px' }}>
@@ -99,7 +84,7 @@ export default async function ModelsPage() {
                 <div style={{ padding: '12px' }}>
                   <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ash)' }}>{model.metric}</div>
                   <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
-                  {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}%</div>}
+                  {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
                 </div>
                 <div className="mono" style={{ padding: '12px', fontSize: '11px', color: 'var(--silver)' }}>{model.range}</div>
                 <div style={{ padding: '12px' }}>
@@ -114,7 +99,7 @@ export default async function ModelsPage() {
           {ACTIVE_MODELS.map(model => {
             const stat = stats.find(s => s.system === model.system)
             const pill = PILL[model.system]
-            const roi = stat ? parseFloat(String(stat.roi ?? 0)) : null
+            const roi = stat && stat.roi != null ? parseFloat(String(stat.roi)) : null
             return (
               <Link key={model.system} href={model.href} style={{ display: 'block', textDecoration: 'none', border: B, borderRadius: 'var(--radius)', background: 'var(--graphite)', padding: '13px', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '9px' }}>

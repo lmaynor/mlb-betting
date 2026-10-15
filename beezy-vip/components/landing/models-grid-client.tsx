@@ -13,7 +13,7 @@ export interface SystemCard {
   href: string
   tint: string
   win_rate: number
-  roi: number
+  roi: number | null
   total_bets: number
   sparkline: SparklinePoint[] | null
 }
@@ -39,7 +39,7 @@ function Chevron({ open, color }: { open: boolean; color: string }) {
 function SystemTile({ s }: { s: SystemCard }) {
   const [open, setOpen] = useState(false)
   const panelId = useId()
-  const roiPos = s.roi >= 0
+  const roiPos = (s.roi ?? 0) >= 0
   const gateCleared = s.total_bets >= 200
   const pill = SYSTEM_PILL[s.system] ?? { bg: 'var(--slate)', color: s.tint, border: '1px solid var(--iron)' }
 
@@ -79,7 +79,7 @@ function SystemTile({ s }: { s: SystemCard }) {
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roiPos ? 'var(--signal)' : 'var(--loss)', flexShrink: 0 }}>
-            {roiPos ? '+' : ''}{s.roi.toFixed(1)}%
+            {s.roi == null ? '--' : `${roiPos ? '+' : ''}${s.roi.toFixed(1)}%`}
           </span>
           <Chevron open={open} color="var(--fog)" />
         </span>
@@ -90,7 +90,7 @@ function SystemTile({ s }: { s: SystemCard }) {
         <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', letterSpacing: '-0.01em' }}>
           {s.name}
         </div>
-        {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} positive={s.roi >= 0} />}
+        {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} positive={roiPos} />}
       </div>
 
       {/* Expandable detail */}
@@ -113,7 +113,7 @@ function SystemTile({ s }: { s: SystemCard }) {
               {[
                 ['Win rate', s.win_rate.toFixed(1) + '%', 'var(--chalk)'] as const,
                 ['Bets', String(s.total_bets), 'var(--chalk)'] as const,
-                ['Gate', gateCleared ? 'CLEARED' : s.total_bets + '/200', gateCleared ? 'var(--signal)' : 'var(--fog)'] as const,
+                ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--chalk)' : 'var(--fog)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
                   <div className="dell-heading" style={{ fontSize: '8.5px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
