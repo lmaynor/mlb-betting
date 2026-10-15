@@ -235,3 +235,98 @@ def test_push_to_typefully_social_set_lookup_failure_does_not_crash():
         result = td.push_to_typefully(["tweet a"], "picks")
     assert len(result) == 1
     assert "social-set lookup FAILED" in result[0]
+
+
+# ── #GamblingX voice, modes, settlement (2026-10-14) ─────────────────────────
+
+@pytest.mark.parametrize("text", [
+    "Let's dive in to today's card", "Lock it in: Judge HR", "Smash the over", "Our AI found an edge",
+    "proprietary algorithm says over", "guaranteed winner", "Parlay of the day", "two \U0001F525\U0001F525 emojis",
+])
+def test_voice_filter_rejects_banned_copy(text):
+    assert td.violates_voice(text)
+
+
+def test_voice_filter_allows_deadpan_numbers_copy():
+    assert not td.violates_voice("DraftKings +115 vs 12-book fair -108 (+7.1% EV). Full board -> beezy.fyi/ev")
+    assert not td.violates_voice("Said it was a main slate")  # 'ai' inside words must not trip the ' ai ' rule
+
+
+def test_generate_tweets_drops_banned_variants_and_raises_when_none_left():
+    def fake(texts):
+        resp = MagicMock()
+        resp.json.return_value = {"candidates": [{"content": {"parts": [{"text": json.dumps(texts)}]}}]}
+        return resp
+
+    with patch.object(td.requests, "post", return_value=fake(["Smash it", "DK +115 vs -108 fair. beezy.fyi"])):
+        assert td.generate_tweets("p") == ["DK +115 vs -108 fair. beezy.fyi"]
+    with patch.object(td.requests, "post", return_value=fake(["Smash it", "Lock it in"])):
+        with pytest.raises(RuntimeError, match="voice rules"):
+            td.generate_tweets("p")
+
+
+import json  # noqa: E402
+
+
+def test_resolve_mode_cli_beats_env_and_morning_aliases_picks():
+    assert td.resolve_mode(["--mode", "settlement"]) == "settlement"
+    assert td.resolve_mode(["--mode", "morning"]) == "picks"
+    assert td.resolve_mode([]) == td.MODE
+
+
+def test_build_settlement_none_when_nothing_graded():
+    assert td.build_settlement([], {}) is None
+    assert td.build_settlement([_bet(YESTERDAY, "void", 0)], {}) is None
+
+
+def test_build_settlement_winning_day_text_and_card_url():
+    settled = [
+        _bet(YESTERDAY, "win", 1.15, player="Gerrit Cole", odds=115, sport="mlb"),
+        _bet(YESTERDAY, "loss", -1.0),
+        _bet(TWO_DAYS_AGO, "win", 9.0),
+    ]
+    s = td.build_settlement(settled, {"overall": {"roi": 8.2, "total_bets": 7550}})
+    assert s["date"] == YESTERDAY and (s["w"], s["l"], s["p"]) == (1, 1, 0)
+    assert s["net"] == pytest.approx(0.15)
+    assert "Gerrit Cole +115 (+1.15u)" in s["text"]
+    assert "Season ledger +8.2% ROI across 7,550 graded bets" in s["text"]
+    assert s["card_url"] == f"{td.BEEZY_SITE_URL}/api/og/settlement-card?date={YESTERDAY}&sport=all"
+    assert not td.violates_voice(s["text"])
+
+
+def test_build_settlement_losing_day_owns_the_variance():
+    settled = [_bet(YESTERDAY, "loss", -1.0), _bet(YESTERDAY, "loss", -0.8), _bet(YESTERDAY, "win", 0.0)]
+    s = td.build_settlement(settled, {"overall": {"roi": 8.2, "total_bets": 7550}})
+    assert s["text"].startswith("Dropped 1.80u on")
+    assert "Every play logged publicly" in s["text"]
+    assert s["hero"] is not None
+
+
+def test_post_settlement_attaches_card_and_gif(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
+    summary = {"date": "2026-10-13", "text": "tweet body", "card_url": "https://beezy.fyi/api/og/settlement-card?date=2026-10-13"}
+    gif = {"gif_url": "https://x/g.gif", "preview_url": "https://x/t.gif", "query": "Aaron Judge celebration"}
+    with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
+        out = td.post_settlement_to_discord(summary, gif)
+    body = post.call_args.kwargs["json"]
+    assert "ok" in out and "tweet body" in body["content"] and "https://x/g.gif" in body["content"]
+    assert [e["image"]["url"] for e in body["embeds"]] == [summary["card_url"], "https://x/t.gif"]
+
+
+def test_post_settlement_without_webhook_skips(monkeypatch):
+    monkeypatch.delenv("DISCORD_WEBHOOK_TWEETS", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_OPS", raising=False)
+    assert "SKIPPED" in td.post_settlement_to_discord({"date": "d", "text": "t", "card_url": "u"}, {"gif_url": "", "query": "q"})
+
+
+def test_run_settlement_end_to_end_attaches_gif_and_card(monkeypatch, capsys):
+    monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://discord.test/ops")
+    monkeypatch.delenv("DISCORD_WEBHOOK_TWEETS", raising=False)
+    rows = [_bet(YESTERDAY, "win", 2.0, player="Aaron Judge", odds=150)]
+    monkeypatch.setattr(td, "get_recent_settled", lambda limit=10, sport=None: rows if sport == "mlb" else [])
+    monkeypatch.setattr(td, "get_stats", lambda: {"overall": {"roi": 8.2, "total_bets": 100}})
+    monkeypatch.setattr(td, "fetch_celebration_gif", lambda bet: {"gif_url": "https://x/g.gif", "preview_url": "", "query": f"{bet['player']} celebration"})
+    with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
+        td.run_settlement()
+    body = post.call_args.kwargs["json"]
+    assert "Aaron Judge celebration" in body["content"] and len(body["embeds"]) == 2
