@@ -51,7 +51,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         <Link href="/picks/mlb" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           MLB Picks
         </Link>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--iron)' }}>&middot;</span>
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
         <SystemBadge system={system} />
       </div>
 

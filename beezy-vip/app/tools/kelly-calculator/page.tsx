@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ToolHeader } from '@/components/ui/tool-header'
 import { useBankroll } from '@/lib/use-bankroll'
 import { kellyStake, formatOdds, americanToImpliedProb, formatProb } from '@/lib/odds'
 
@@ -15,8 +16,8 @@ export default function KellyCalculatorPage() {
   const [typed, setTyped] = useState<string | null>(null)
   const bankroll = typed ?? String(sharedBankroll)
   const setBankroll = (v: string) => { setTyped(v); const n = parseFloat(v); if (isFinite(n) && n > 0) setSharedBankroll(n) }
-  const [odds, setOdds]         = useState('')
-  const [prob, setProb]         = useState('')
+  const [odds, setOdds]         = useState('-110')
+  const [prob, setProb]         = useState('55')
 
   const b = parseFloat(bankroll), o = parseFloat(odds), p = parseFloat(prob) / 100
   const valid = !isNaN(b) && b > 0 && !isNaN(o) && !isNaN(p) && p > 0 && p < 1
@@ -24,14 +25,10 @@ export default function KellyCalculatorPage() {
   const impliedP = !isNaN(o) ? americanToImpliedProb(o) : null
 
   return (
-    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '8px' }}>Tools</p>
-        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '8px' }}>Kelly criterion calculator</h1>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>Calculate optimal bet size based on your edge. Enter bankroll, line, and estimated win probability.</p>
-      </div>
+    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px' }}>
+      <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
 
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '24px', marginBottom: '16px' }}>
+      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
         <div style={{ marginBottom: '16px' }}>
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
@@ -55,7 +52,7 @@ export default function KellyCalculatorPage() {
       </div>
 
       {result && (
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
+        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
               <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Full Kelly</div>

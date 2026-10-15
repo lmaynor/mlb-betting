@@ -1987,9 +1987,9 @@ empty -- blocks nothing. Applies to `/picks/**`, `/dashboard/**`,
 
 ### Stripe
 
-Stripe is wired but NOT active. `PRE_LAUNCH = true` in:
-- `app/signup/page.tsx`
-- `components/landing/pricing.tsx`
+Stripe is wired but NOT active. `PRE_LAUNCH = true` lives in ONE place, `beezy-vip/lib/launch.ts`
+(imported by `app/signup/page.tsx`, `components/landing/pricing.tsx` and the nav CTA, which reads JOIN WAITLIST
+while it is true). Outbound Discord/X URLs live in `beezy-vip/lib/links.ts` -- never hard-code an invite.
 
 Do not flip these to `false` without explicit confirmation. Gate criteria:
 1. >= 200 settled bets per system at gate criteria

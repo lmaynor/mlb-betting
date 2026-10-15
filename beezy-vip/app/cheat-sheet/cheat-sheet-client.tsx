@@ -542,7 +542,7 @@ export function CheatSheetClient({
               </div>
               {yesterdayPicks.length > 0 && (
                 <>
-                  <div className="mono" style={{ fontSize: '8px', color: 'var(--steel)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
+                  <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
                     YESTERDAY&apos;S RESULTS
                   </div>
                   {yesterdayPicks.slice(0, 3).map(bet => (
@@ -573,7 +573,7 @@ export function CheatSheetClient({
                   padding: '8px 16px',
                   fontSize: '9px',
                   letterSpacing: '0.08em',
-                  color: 'var(--steel)',
+                  color: 'var(--fog)',
                   borderTop: '1px solid var(--basalt)',
                   textAlign: 'center',
                 }}>
@@ -610,7 +610,7 @@ export function CheatSheetClient({
               {copied ? 'COPIED!' : 'SHARE CARD'}
             </button>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: '8px', color: 'var(--steel)', letterSpacing: '0.08em' }}>
+            <span className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
               BEEZY.FYI
             </span>
           </div>

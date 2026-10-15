@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { getCurrentUser, getUserTier }  from '@/lib/auth'
 import { BankrollInput } from '@/components/ui/bankroll-input'
 import type { Metadata } from 'next'
+import { DISCORD_URL } from '@/lib/links'
 
 export const metadata: Metadata = { title: 'Settings — Dashboard' }
 
@@ -70,7 +71,7 @@ export default async function DashboardSettingsPage() {
           Picks are delivered via Discord. Join the Pro channel for push notifications.
         </p>
         <a
-          href="https://discord.gg/beezy"
+          href={DISCORD_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="mono text-xs uppercase tracking-widest text-accent hover:underline inline-block mt-3"

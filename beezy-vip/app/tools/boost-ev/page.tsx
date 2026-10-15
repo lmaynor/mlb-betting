@@ -1,5 +1,6 @@
 'use client'
 
+import { ToolHeader } from '@/components/ui/tool-header'
 import { useState } from 'react'
 import { americanToImpliedProb, removeVig, formatProb } from '@/lib/odds'
 
@@ -13,10 +14,10 @@ function americanToDecimal(odds: number): number {
 
 export default function BoostEvPage() {
   // boosted price you are offered
-  const [boosted, setBoosted] = useState('')
+  const [boosted, setBoosted] = useState('150')
   // fair value: devig the market's two sides (the normal price of your side + the other side)
-  const [sideOdds, setSideOdds]   = useState('')
-  const [otherOdds, setOtherOdds] = useState('')
+  const [sideOdds, setSideOdds]   = useState('110')
+  const [otherOdds, setOtherOdds] = useState('-130')
 
   const bo = parseFloat(boosted), so = parseFloat(sideOdds), oo = parseFloat(otherOdds)
   const validFair = !isNaN(so) && so !== 0 && !isNaN(oo) && oo !== 0
@@ -37,16 +38,10 @@ export default function BoostEvPage() {
   }
 
   return (
-    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <p className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '8px' }}>Tools</p>
-        <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '8px' }}>Boost EV calculator</h1>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>
-          Profit boosts and promo odds are the most reliable +EV a bettor gets. Enter the boosted price and the market&apos;s normal two-sided prices — we devig those into a fair probability and show the boost&apos;s true expected value.
-        </p>
-      </div>
+    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px' }}>
+      <ToolHeader title="Boost EV Calculator" hint="Example values shown; edit them" current="/tools/boost-ev" />
 
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '24px', marginBottom: '16px' }}>
+      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
         <div style={{ marginBottom: '16px' }}>
           <label style={labelStyle}>Boosted line you&apos;re offered (American)</label>
           <input type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
@@ -70,7 +65,7 @@ export default function BoostEvPage() {
       </div>
 
       {ev != null && kellyPct != null && (
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
+        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
             <div style={{ padding: '20px', borderRight: B }}>
               <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Expected value</div>

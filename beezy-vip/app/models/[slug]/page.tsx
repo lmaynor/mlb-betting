@@ -91,7 +91,7 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
         <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--iron)' }}>&middot;</span>
+        <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 

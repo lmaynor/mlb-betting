@@ -1,7 +1,7 @@
 'use client'
 
-const PRE_LAUNCH = true
-const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
+import { PRE_LAUNCH } from '@/lib/launch'
+import { DISCORD_URL } from '@/lib/links'
 
 import dynamic from 'next/dynamic'
 const CheckoutButton = dynamic(

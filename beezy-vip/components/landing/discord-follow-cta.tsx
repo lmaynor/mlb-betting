@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 
-const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
-const X_URL = 'https://x.com/beezy_fyi'
+import { DISCORD_URL } from '@/lib/links'
+import { X_URL } from '@/lib/links'
 
 export function DiscordFollowCTA() {
   return (

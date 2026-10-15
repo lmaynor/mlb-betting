@@ -68,7 +68,7 @@ function GroupLabel({ label }: { label: string }) {
     <span style={{
       fontFamily: 'var(--font-mono), monospace', fontSize: '9px',
       letterSpacing: '0.1em', textTransform: 'uppercase' as const,
-      color: 'var(--steel)', padding: '0 4px', whiteSpace: 'nowrap' as const,
+      color: 'var(--fog)', padding: '0 4px', whiteSpace: 'nowrap' as const,
     }}>{label}</span>
   )
 }
@@ -418,7 +418,7 @@ export function ResultsClient({
               <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
                 Model Edge vs Realized ROI
               </span>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--iron)', marginLeft: '8px' }}>7-day rolling</span>
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginLeft: '8px' }}>7-day rolling</span>
             </div>
             <div style={{ display: 'flex', gap: '16px' }}>
               <span className="mono" style={{ fontSize: '10px', color: 'var(--signal)' }}>-- model edge</span>
@@ -465,7 +465,7 @@ export function ResultsClient({
                   <div className="mono" style={{
                     gridColumn: '1 / -1', padding: '6px 12px',
                     fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: 'var(--iron)',
+                    color: 'var(--fog)',
                   }}>{groupName}</div>
                 </div>,
                 ...groupStats.map(s => {

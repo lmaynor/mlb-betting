@@ -7,8 +7,8 @@ import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 import { SPORT_LIST } from '@/lib/sports'
 
-const DISCORD_URL = 'https://discord.gg/HfMYCmbmE'
-const X_URL = 'https://x.com/beezy_fyi'
+import { DISCORD_URL, X_URL } from '@/lib/links'
+import { PRE_LAUNCH } from '@/lib/launch'
 const NAV_LINKS = [
   { label: 'Home',          href: '/' },
   { label: '+EV Terminal',  href: '/ev', live: true },
@@ -138,7 +138,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
               <>
                 {signIn}
                 <Link href="/pricing" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none', background: '#57F287', color: '#090a0f', borderRadius: '6px', padding: '8px 12px', whiteSpace: 'nowrap' }}>
-                  UPGRADE TO PRO
+                  {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
                 </Link>
               </>
             )}

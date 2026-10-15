@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
+import { DISCORD_URL } from '@/lib/links'
 
 export const metadata: Metadata = { title: 'Log In -- Beezy.FYI' }
 
@@ -22,7 +23,7 @@ export default function LoginPage() {
             Paid access launches after the first system clears 200 bets.
             Join Discord for free picks now.
           </p>
-          <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer"
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer"
             className="btn btn-primary" style={{ width: '100%' }}>
             Join Discord (free)
           </a>

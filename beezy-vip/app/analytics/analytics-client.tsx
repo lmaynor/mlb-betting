@@ -204,7 +204,7 @@ function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; sys
             <tbody>
               {rows.map(b => (
                 <tr key={b.bucket} style={{ borderBottom: '1px solid #151822' }}>
-                  <Td strong>{b.bucket}</Td><Td mono>{b.n}</Td>
+                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span style={{ color: 'var(--warn)', marginLeft: '6px', fontSize: '10px' }}>low n</span>}</Td>
                   <Td mono>{b.hit_rate != null ? `${b.hit_rate.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_model_prob != null ? `${b.avg_model_prob.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_market_prob != null ? `${b.avg_market_prob.toFixed(1)}%` : '--'}</Td>
@@ -216,12 +216,12 @@ function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; sys
           </table>
         </div>
         <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '10px' }}>
-          Closing-line value is only captured for model systems; +EV alert rows show n/a.
+          Mean CLV is the average of each bet's price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
         </p>
       </Panel>
       <Panel title="HOW MODEL PROBABILITIES ARE CONTROLLED">
         <p className="times" style={{ fontSize: '13.5px', color: 'var(--silver)', lineHeight: 1.65, maxWidth: '90ch' }}>
-          Model systems pass every probability through an isotonic calibrator fit on realized outcomes (<span className="mono">mlb_core/risk/calibration.py</span>),
+          Model systems pass every probability through an isotonic calibrator fit on realized outcomes,
           then skip any bet whose post-calibration edge still exceeds an edge cap. Both exist because early diagnostics showed the largest claimed edges were mostly
           overconfidence, not value. Calibration is fit on past bets, so treat the chart above as the ongoing test of whether it works.
         </p>

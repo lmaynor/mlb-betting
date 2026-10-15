@@ -6,7 +6,8 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Join Beezy.FYI' }
 
-const PRE_LAUNCH = true
+import { PRE_LAUNCH } from '@/lib/launch'
+import { DISCORD_URL } from '@/lib/links'
 const B = '1px solid var(--basalt)'
 
 const SYSTEMS = [
@@ -33,7 +34,7 @@ export default async function SignupPage() {
             Models are in paper mode. Join Discord to get picks now &mdash; free, no account needed.
             Paid access opens once the first system clears a 200-bet validation gate.
           </p>
-          <a href="https://discord.gg/beezy" target="_blank" rel="noopener noreferrer"
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer"
             className="btn btn-primary" style={{ width: '100%', marginBottom: '10px' }}>
             Join Discord (free picks now)
           </a>
@@ -54,7 +55,7 @@ export default async function SignupPage() {
                 <div key={s.system} style={{ marginBottom: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: s.color }}>{s.system}</span>
-                    <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{count}/200</span>
+                    <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{count >= 200 ? `200+ (${count.toLocaleString()})` : `${count}/200`}</span>
                   </div>
                   <div style={{ height: '7px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
                     <div style={{ height: '7px', borderRadius: 'var(--radius-pill)', background: s.color, width: `${pct}%`, transition: 'width 0.4s var(--ease-out)' }} />
