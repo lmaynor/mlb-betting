@@ -10,15 +10,27 @@ Secrets (Secret Manager):
                            against the v2 API this file now calls -- see
                            TYPEFULLY_URL comment below, no rotation needed)
 
+Modes (--mode or TWEET_MODE env; the env var is what the Cloud Run Jobs set):
+  picks | morning  Gemini drafts for today's card -> Typefully  ("morning" is the new name for "picks")
+  recap            Gemini drafts recapping the last settled slate -> Typefully
+  settlement       Deterministic #GamblingX receipt post for the last settled slate: tweet text +
+                   /api/og/settlement-card PNG + celebration GIF -> Discord (DISCORD_WEBHOOK_TWEETS,
+                   falling back to DISCORD_WEBHOOK_OPS) for a 1-tap post on X. No Gemini, no Typefully.
+  steam            NOT BUILT: needs a public per-bet closing-line endpoint that does not exist yet.
+
 Schedule (recommended):
   Morning job (10:00 ET): picks tweet for today's slate
   Evening job (23:30 ET): recap tweet after settlement
 """
 
 import os
+import re
+import sys
 import json
 import requests
 from datetime import date, datetime
+
+from mlb_core.social.gif_fetcher import fetch_celebration_gif
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -49,40 +61,66 @@ GEMINI_URL = (
 # docs/solutions/integration-issues/typefully-api-v1-sunset.md.
 TYPEFULLY_URL = "https://api.typefully.com/v2/social-sets"
 
-MODE = os.environ.get("TWEET_MODE", "picks")  # "picks" or "recap"
+MODE = os.environ.get("TWEET_MODE", "picks")  # picks|morning|recap|settlement (see module docstring)
+SETTLEMENT_SPORTS = ("mlb", "nhl", "nba")
 
 # ── Brand voice system prompt ─────────────────────────────────────────────────
 
+# #GamblingX voice rules. Hard-enforced after generation by violates_voice(); also stated in the prompt.
+BANNED_PHRASES = (
+    "let's dive in", "lets dive in", "lock it in", "lock of the", "smash", " ai ", "ai-powered", "algorithm",
+    "guaranteed", "parlay of the day", "cash it", "can't lose", "free money",
+)
+
 SYSTEM_PROMPT = """
-You are the voice of @beezy_fyi on Twitter — a model-driven MLB betting
-analytics account. beezy.fyi publishes quantitative MLB picks across game
-markets, pitcher props, and batter props with edge %, Kelly stake, and full
-results history. Paper mode now; launching when validation gates are cleared.
+You are the voice of @beezy_fyi on X (#GamblingX): a model-driven betting
+analytics account. beezy.fyi publishes quantitative picks and a +EV board with
+edge %, Kelly stake, and a full public results ledger. Paper mode now.
 
-Voice: confident but not loud. Data-first. Let the numbers do the talking.
-Occasionally explain *why* the edge exists (1 sentence max). No hype, no
-emojis beyond one understated use, no "LOCK", no "CASH IT 🔥". Think
-Bloomberg terminal meets someone who actually knows what they're doing.
+Voice: deadpan, numbers-first, sharp market commentary, slightly irreverent.
+Think @UnabatedSports / @SpankOdds / @PlusEVAnalytics. Lead with the specific
+price dislocation or the closing-line move. Show exact numbers: book + price vs
+the de-vigged consensus fair price, net EV %. When a day loses, say so
+flatly and cite the season sample. Receipts, not hype.
 
-Audience: sports bettors who are tired of tout accounts, want to see real
-edge, and are curious how quant models apply to betting markets.
+BANNED: "let's dive in", "lock it in", "lock of the century", "smash",
+"AI", "algorithm", "guaranteed", "parlay of the day", hype caps, more than one
+emoji (zero is better).
 
-Goal: build credibility and followers who will convert to beezy.fyi members.
+Audience: bettors tired of tout accounts who want to see real edge.
 Always include beezy.fyi in at least one tweet variant.
 
 Format rules:
 - Max 280 characters per tweet
 - Return exactly 3 tweet variants as a JSON array of strings
 - No markdown, no explanations outside the JSON
-- Each variant should have a slightly different angle (data-first / educational / understated)
+- Each variant should have a slightly different angle (price dislocation / season ledger / understated)
 
 Example good tweet:
-"HR model flagged Stanton today: 62% vs market's 54%. +8.3% edge, 0.4u Kelly. 
-Running walk-forward since 2021. beezy.fyi"
+"DraftKings is 23 cents off the market on Stanton HR right now. 12-book fair
+is -108, DK hanging +115 (+7.1% EV). Full board -> beezy.fyi/ev"
 
 Example bad tweet:
 "STANTON IS A LOCK TODAY 🔥🔥 BET THE HOUSE #MLB"
 """
+
+
+def violates_voice(text):
+    """True when a draft breaks the #GamblingX voice rules (banned phrase or more than one emoji)."""
+    low = f" {text.lower()} "
+    if any(b in low for b in BANNED_PHRASES):
+        return True
+    emoji = [c for c in text if ord(c) >= 0x1F000 or 0x2600 <= ord(c) <= 0x27BF]
+    return len(emoji) > 1
+
+
+def filter_voice(tweets):
+    """Drop drafts that violate the voice rules; raise if nothing is left rather than pushing banned copy."""
+    kept = [t for t in tweets if isinstance(t, str) and not violates_voice(t)]
+    if not kept:
+        raise RuntimeError("every generated draft violated the #GamblingX voice rules; nothing to push")
+    return kept
+
 
 # ── Fetch beezy data ──────────────────────────────────────────────────────────
 
@@ -96,11 +134,14 @@ def get_today_picks():
     return resp.json()
 
 
-def get_recent_settled():
+def get_recent_settled(limit=10, sport=None):
+    params = {"limit": limit}
+    if sport:
+        params["sport"] = sport
     resp = requests.get(
         f"{BEEZY_API_URL}/api/public/picks/recent",
         headers={"X-API-Key": BEEZY_API_KEY},
-        params={"limit": 10},
+        params=params,
         timeout=10,
     )
     resp.raise_for_status()
@@ -267,8 +308,7 @@ def generate_tweets(user_prompt):
     if raw.endswith("```"):
         raw = raw.rsplit("```", 1)[0]
 
-    tweets = json.loads(raw.strip())
-    return tweets
+    return filter_voice(json.loads(raw.strip()))
 
 
 # ── Push to Typefully ─────────────────────────────────────────────────────────
@@ -322,12 +362,115 @@ def push_to_typefully(tweets, label):
     return pushed
 
 
+# ── Settlement receipt (deterministic, no Gemini) ─────────────────────────────
+
+def _u(x):
+    return f"{'+' if x >= 0 else '-'}{abs(x):.2f}u"
+
+
+def get_settled_all_sports(limit=200):
+    """Recent settled bets across the live sports, each row tagged with `sport`. One sport failing is not fatal."""
+    rows = []
+    for sp in SETTLEMENT_SPORTS:
+        try:
+            data = get_recent_settled(limit=limit, sport=sp)
+        except Exception as e:  # noqa: BLE001
+            print(f"  settled fetch failed for {sp}: {e}")
+            continue
+        for r in (data if isinstance(data, list) else data.get("picks", [])):
+            rows.append({**r, "sport": sp})
+    return rows
+
+
+def build_settlement(settled, stats):
+    """Summarize the most recent fully settled slate. None when there is nothing graded.
+    Returns {date, w, l, p, net, hero, text, card_url}; text is the ready-to-post #GamblingX tweet."""
+    dated = [r for r in settled if r.get("game_date") and r.get("result") in ("win", "loss", "push")]
+    if not dated:
+        return None
+    day = max(r["game_date"] for r in dated)
+    slate = [r for r in dated if r["game_date"] == day]
+    w = sum(r["result"] == "win" for r in slate)
+    l = sum(r["result"] == "loss" for r in slate)
+    p = sum(r["result"] == "push" for r in slate)
+    net = sum(float(r.get("profit") or 0) for r in slate)
+    wins = [r for r in slate if r["result"] == "win"]
+    hero = max(wins, key=lambda r: float(r.get("profit") or 0)) if wins else None
+
+    overall = (stats or {}).get("overall", {}) or {}
+    ledger = ""
+    if overall.get("roi") is not None and overall.get("total_bets") is not None:
+        try:
+            ledger = f" Season ledger {float(overall['roi']):+.1f}% ROI across {int(overall['total_bets']):,} graded bets."
+        except (TypeError, ValueError):
+            ledger = ""
+
+    card_url = f"{BEEZY_SITE_URL}/api/og/settlement-card?date={day}&sport=all"
+    if net < 0:
+        text = f"Dropped {abs(net):.2f}u on {day} card ({w}-{l}{f'-{p}' if p else ''}).{ledger} Every play logged publicly. {BEEZY_SITE_URL}/results"
+    else:
+        best = ""
+        if hero:
+            who = hero.get("player") or hero.get("bet_type", "").replace("_", " ")
+            best = f" Best price: {who} {int(hero['odds']):+d} ({_u(float(hero.get('profit') or 0))})." if hero.get("odds") is not None else ""
+        text = f"{day} card: {w}-{l}{f'-{p}' if p else ''}, {_u(net)}.{best}{ledger} Receipts: {BEEZY_SITE_URL}/results"
+    return {"date": day, "w": w, "l": l, "p": p, "net": net, "hero": hero, "text": text, "card_url": card_url}
+
+
+def post_settlement_to_discord(summary, gif):
+    """Post tweet text + receipt PNG + GIF to the tweet-queue webhook so the operator can post both to X in one go."""
+    hook = os.environ.get("DISCORD_WEBHOOK_TWEETS") or os.environ.get("DISCORD_WEBHOOK_OPS")
+    if not hook:
+        return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
+    content = f"**Settlement tweet draft ({summary['date']})**\n```\n{summary['text']}\n```"
+    embeds = [{"title": f"Settlement receipt {summary['date']}", "image": {"url": summary["card_url"]}}]
+    if gif.get("gif_url"):
+        content += f"\nCelebration GIF ({gif['query']}): {gif['gif_url']}"
+        embeds.append({"title": gif["query"], "image": {"url": gif.get("preview_url") or gif["gif_url"]}})
+    else:
+        content += f"\nNo GIF resolved for \"{gif['query']}\" (no TENOR_API_KEY/GIPHY_API_KEY): {gif.get('search_url', '')}"
+    resp = requests.post(hook, json={"content": content, "embeds": embeds}, timeout=10)
+    return f"  Discord post {'ok' if resp.status_code in (200, 204) else f'FAILED ({resp.status_code})'}"
+
+
+def run_settlement():
+    settled = get_settled_all_sports()
+    summary = build_settlement(settled, get_stats())
+    if not summary:
+        print("No settled bets found -- skipping.")
+        return
+    if violates_voice(summary["text"]):
+        raise RuntimeError(f"settlement text violates voice rules: {summary['text']}")
+    gif = fetch_celebration_gif(summary["hero"] or {})
+    print(f"Settlement tweet: {summary['text']}\nCard: {summary['card_url']}\nGIF: {gif.get('gif_url') or gif.get('search_url')}")
+    print(post_settlement_to_discord(summary, gif))
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
-    print(f"[tweet_drafter] mode={MODE} date={date.today()}")
+def resolve_mode(argv=None):
+    """--mode wins over TWEET_MODE. 'morning' is the multi-sport-era name for 'picks'."""
+    argv = sys.argv[1:] if argv is None else argv
+    mode = MODE
+    if "--mode" in argv:
+        i = argv.index("--mode")
+        if i + 1 >= len(argv):
+            raise ValueError("--mode needs a value")
+        mode = argv[i + 1]
+    return "picks" if mode == "morning" else mode
 
-    if MODE == "picks":
+
+def main():
+    mode = resolve_mode()
+    print(f"[tweet_drafter] mode={mode} date={date.today()}")
+
+    if mode == "settlement":
+        run_settlement()
+        return
+    if mode == "steam":
+        raise NotImplementedError("steam mode needs a public per-bet closing-line endpoint; not built yet")
+
+    if mode == "picks":
         print("Fetching today's picks...")
         picks = get_today_picks()
         picks_list = picks if isinstance(picks, list) else picks.get("picks", [])
@@ -339,7 +482,7 @@ def main():
         prompt = build_picks_prompt(picks_list)
         label = "picks"
 
-    elif MODE == "recap":
+    elif mode == "recap":
         print("Fetching recent settled bets and stats...")
         settled = get_recent_settled()
         settled_list = settled if isinstance(settled, list) else settled.get("picks", [])
@@ -353,7 +496,7 @@ def main():
             return
 
     else:
-        raise ValueError(f"Unknown TWEET_MODE: {MODE}")
+        raise ValueError(f"Unknown TWEET_MODE: {mode}")
 
     print(f"Generating tweets via Gemini...")
     tweets = generate_tweets(prompt)

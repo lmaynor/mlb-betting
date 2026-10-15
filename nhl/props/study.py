@@ -47,10 +47,20 @@ def build_dataset(db: str, extra_names: pd.DataFrame | None = None):
     return pairs, gl, acct
 
 
-def add_model(pairs: pd.DataFrame, gl: pd.DataFrame):
-    """Expanding monthly retrain; each pair is scored by the model fit strictly before its month. Adds mu, nb_alpha, p_model_over."""
+def add_model(pairs: pd.DataFrame, gl: pd.DataFrame, cutoffs=None):
+    """Expanding monthly retrain; each pair is scored by the model fit strictly before its month. Adds mu, nb_alpha, p_model_over.
+    `cutoffs` (default None = the pre-registered CUTOFFS, behaviour unchanged) lets the multi-season BettingPros study
+    pass its own month starts; a cutoff with too little history to fit is then skipped (its month stays unscored)."""
     feat = build_features(gl)
-    arts = {c: train.fit(feat, c) for c in CUTOFFS}
+    if cutoffs is None:
+        arts = {c: train.fit(feat, c) for c in CUTOFFS}
+    else:
+        arts = {}
+        for c in cutoffs:
+            try:
+                arts[c] = train.fit(feat, c)
+            except RuntimeError:                       # fewer than 500 pre-cutoff training rows: leave the month unscored
+                continue
     fkey = feat.set_index(["game_id", "player_id"])
     p = pairs.copy()
     p["month_cut"] = p["game_date"].str[:7] + "-01"
@@ -243,6 +253,89 @@ def model_sections(props: pd.DataFrame, p: pd.DataFrame) -> dict:
         out["H1"][name] = market.roi_stats(d["ret_u"], d["game_id"])
     out["H1_all_soft_unders"] = market.roi_stats(q["ret_u"], q["game_id"])
     return out
+
+
+# ------------------------------------------------------------------------------------------------- BettingPros history
+def month_cutoffs(game_dates) -> list:
+    """Sorted distinct month starts ('YYYY-MM-01') covering the given game dates: month m is scored by a model fit on date < m."""
+    return sorted({str(d)[:7] + "-01" for d in game_dates if isinstance(d, str) and len(d) >= 7})
+
+
+def games_from_gamelog(gl: pd.DataFrame) -> pd.DataFrame:
+    """game_id, date, home_team, away_team from the canonical game log (each game has a home skater row with its opp)."""
+    h = gl[gl["is_home"] == 1][["game_id", "date", "team", "opp"]].drop_duplicates("game_id")
+    return h.rename(columns={"team": "home_team", "opp": "away_team"}).reset_index(drop=True)
+
+
+def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.DataFrame, min_books: int = 3,
+                                cutoffs=None, allow_compat: bool = True) -> dict:
+    """OPTIONAL (nothing calls it by default): score the SOG model against HISTORICAL BettingPros consensus lines.
+
+    cons   mlb_core.odds.bettingpros_loader consensus frame (stat label 'sog'); gl  canonical game log (nhl.props.gamelog);
+    names  player_id / full_name / team crosswalk (e.g. NHL/players_master.csv columns, see history.name_table).
+    Pipeline (reuses this module's own pieces): resolve_players (mlb_core.data.player_names, FAIL-CLOSED, within the event's
+    two teams) -> attach_outcomes -> add_model (expanding monthly retrain, month m scored by a model fit on date < m;
+    `cutoffs` default = every month present) -> market.logloss / brier / blend_regression via
+    mlb_core.odds.model_vs_market.score_model_vs_market (model P(over) at the market's own line vs the consensus P(over)).
+
+    Selection safety: the consensus is the LAST quote BettingPros held for the day (close-ish, one snapshot per day;
+    quotes updated after the scheduled start are dropped as `postgame_quote`); the model's features for a game use only
+    earlier games and its booster only earlier dates; void props (player did not appear) are dropped, never graded.
+    `allow_compat=False` additionally drops names the resolver matched only by compatible first name.
+    Returns {"coverage": {consensus_rows, matched, dropped{low_books, postgame_quote, no_game, unresolved, ambiguous,
+    void, duplicate, no_model, push}}, "resolve_how": {...}, "scores": {...}, "frame": props, "cutoffs": [...]}.
+    Team codes: BettingPros away/home are assumed to be NHL abbreviations (history.TEAM_FIX applied); a code the game log
+    spells differently shows up as `no_game` -- check that count on real data before trusting coverage."""
+    from mlb_core.odds import model_vs_market as MVM
+    c, n_in, dropped = MVM.screen_consensus(cons, {"sog": "sog"}, min_books)
+    dropped = dict(dropped, no_game=0, unresolved=0, ambiguous=0, void=0, duplicate=0, no_model=0, push=0)
+    cols = ["event_id", "pkey", "line", "game_id", "game_date", "status", "won_over", "push", "cons_fair", "cons_n",
+            "p_model"]
+    if len(c) == 0:
+        return {"coverage": MVM.coverage(n_in, 0, dropped), "resolve_how": {}, "scores": MVM.score_model_vs_market([], [], [], []),
+                "frame": pd.DataFrame(columns=cols), "cutoffs": []}
+    fix = history.TEAM_FIX
+    pairs = pd.DataFrame({"event_id": c["event_id"].to_numpy(), "game_date": c["game_date"].astype(str).to_numpy(),
+                          "home_abbrev": c["home"].replace(fix).to_numpy(), "away_abbrev": c["away"].replace(fix).to_numpy(),
+                          "player_name": c["player"].to_numpy(), "player_norm": c["player_norm"].to_numpy(),
+                          "line": c["line"].astype(float).to_numpy(), "cons_fair": c["p_over_cons"].astype(float).to_numpy(),
+                          "cons_n": c["n_books"].to_numpy()})
+    pairs = history.resolve_players(pairs, names)
+    how = pairs["resolve_how"].value_counts().to_dict()
+    if not allow_compat:
+        pairs.loc[pairs["resolve_how"] == "compat", "player_id"] = pd.NA
+    pairs = history.attach_outcomes(pairs, games_from_gamelog(gl), gl)
+    amb = (pairs["resolve_how"] == "ambiguous") | (pairs["resolve_how"] == "compat") & pairs["player_id"].isna()
+    st = pairs["status"].to_numpy(dtype=object).copy()
+    reason = np.full(len(pairs), "", dtype=object)
+    reason[st == "no_game"] = "no_game"
+    reason[(st == "unresolved") & amb.to_numpy()] = "ambiguous"
+    reason[(st == "unresolved") & ~amb.to_numpy()] = "unresolved"
+    reason[st == "void"] = "void"
+    live = reason == ""
+    dup = live & pairs.duplicated(["game_id", "player_id"], keep=False).to_numpy()
+    reason[dup] = "duplicate"
+    for k in ("no_game", "ambiguous", "unresolved", "void", "duplicate"):
+        dropped[k] = int((reason == k).sum())
+    p = pairs[reason == ""].reset_index(drop=True)
+    cuts = list(cutoffs) if cutoffs is not None else month_cutoffs(p["game_date"].unique())
+    if len(p):
+        p, _arts, _feat = add_model(p, gl, cutoffs=cuts)
+    else:
+        p["p_model_over"] = np.nan
+    nomodel = p["p_model_over"].isna().to_numpy() if len(p) else np.array([], dtype=bool)
+    dropped["no_model"] = int(nomodel.sum())
+    p = p[~nomodel].reset_index(drop=True)
+    pushed = p["push"].to_numpy(dtype=bool) if len(p) else np.array([], dtype=bool)
+    dropped["push"] = int(pushed.sum())
+    p = p[~pushed].reset_index(drop=True)
+    p["pkey"] = "id" + p["player_id"].astype(str)
+    p["p_model"] = p["p_model_over"]
+    props = p[cols].reset_index(drop=True) if len(p) else pd.DataFrame(columns=cols)
+    cov = MVM.coverage(n_in, len(props), dropped)
+    scores = MVM.score_model_vs_market(props["won_over"], props["p_model"], props["cons_fair"], props["game_id"]) \
+        if len(props) else MVM.score_model_vs_market([], [], [], [])
+    return {"coverage": cov, "resolve_how": how, "scores": scores, "frame": props, "cutoffs": cuts}
 
 
 def load_history_dir(d: str) -> pd.DataFrame:

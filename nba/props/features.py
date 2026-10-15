@@ -12,6 +12,15 @@ DESIGN (why the leakage guarantee is structural, not a matter of careful shiftin
      uncertainty is the dominant NBA prop driver and is handled in the distribution (train.py variance model) and the
      scorer's abstain rules, NOT hidden in a feature the live path cannot reproduce.
 
+  4. AVAILABILITY features (opt-in, see features(availability=...)): team_missing_min_l10 / team_missing_usg_proxy_l10 /
+     team_missing_n_rotation. They are the one place a feature depends on WHO DRESSED in the row's own game (training
+     path: rotation players absent from that game). That is legitimate -- inactives are published ~30 min before tip and
+     are not an OUTCOME of the game -- and it is OUTCOME-ADJACENT FOR OTHER PLAYERS ONLY: the per-player trailing numbers
+     that are summed are strictly pre-game (same merge_asof), and a player's own row never counts himself (training rows
+     are players who played, so he is never in the absent set; the live path drops the query player explicitly). The live
+     path builds the same columns from the injury list: absent = rotation players on the list. Training and live share
+     ONE code path (_group_candidates), so they cannot drift. The default feature set is unchanged (FEATURE_SET v1).
+
 Rolling series run over games the player PLAYED (minutes > 0); games missed are encoded separately (days since last
 played, team games missed since / in the last 10). Windows span season boundaries on purpose (rollover).
 """
@@ -39,6 +48,12 @@ ID_COLS = ["player_id", "date", "team", "opp", "is_home", "season_year", "season
 # ----------------------------------------------------------------------------- generic helpers
 def _days(s: pd.Series) -> np.ndarray:
     return (pd.to_datetime(s).values.astype("datetime64[D]").astype("int64"))
+
+
+def _ns(s) -> pd.Series:
+    """Datetime column as datetime64[ns]. pandas 3 infers us/s resolution for Timestamps parsed from strings, and
+    merge_asof refuses to join keys of different resolution (the root cause of the pre-existing MergeError)."""
+    return pd.to_datetime(s).astype("datetime64[ns]")
 
 
 def window_ratio(days: np.ndarray, vals: np.ndarray, w: np.ndarray, q_days: np.ndarray, window: int) -> np.ndarray:
@@ -174,6 +189,8 @@ class FeatureContext:
     """Everything needed to featurise any query row against a fixed history. Build once, call .features(queries)."""
 
     def __init__(self, rows: pd.DataFrame, tg: pd.DataFrame):
+        rows = rows.assign(date=_ns(rows["date"]))          # one datetime resolution everywhere (see _ns)
+        tg = tg.assign(date=_ns(tg["date"]))
         self.tg = team_index(tg)
         self.ps = player_series(rows, self.tg)
         self._ps_right = (self.ps.drop(columns=["tip_sort"]).rename(columns={"last_date": "_ld"})
@@ -192,6 +209,8 @@ class FeatureContext:
         # (player, team) -> sorted tgn of PLAYED games, for "games missed in the last N team games"
         r = rows.merge(t[["game_id", "team", "tgn"]], on=["game_id", "team"], how="left")
         self._pt_tgn = {k: np.sort(v.to_numpy()) for k, v in r.groupby(["player_id", "team"])["tgn"]}
+        # (team, tgn) -> player ids who PLAYED that team game (availability features)
+        self._tg_players = {k: v.to_numpy(object) for k, v in r.groupby(["team", "tgn"])["player_id"]}
         self.last_date = rows["date"].max()
         self.last_season = int(rows.loc[rows["date"] == self.last_date, "season_year"].max())
 
@@ -219,10 +238,16 @@ class FeatureContext:
         out[f"{prefix}b2b"][np.isnan(rest)] = np.nan
         return out, tgn_before
 
-    def features(self, q: pd.DataFrame) -> pd.DataFrame:
-        """Feature matrix for query rows (columns ID_COLS; extra columns ignored). Index preserved."""
+    def features(self, q: pd.DataFrame, availability=None) -> pd.DataFrame:
+        """Feature matrix for query rows (columns ID_COLS; extra columns ignored). Index preserved.
+
+        availability=None (default): the v1 feature set, exactly as before.
+        availability="history": ALSO emit C.AVAILABILITY_FEATURES from who dressed in each row's own game (training; the
+            game must be in this context's history, else NaN).
+        availability={team: iterable of SportsBlaze player ids on the injury list}: ALSO emit them live (absent =
+            rotation players on the list). A team missing from the mapping -> NaN (unknown is not 'healthy')."""
         q = q[ID_COLS].copy()
-        q["date"] = pd.to_datetime(q["date"])
+        q["date"] = _ns(q["date"])
         q["_i"] = np.arange(len(q))
         orig_index = q.index
         q = q.reset_index(drop=True)
@@ -313,18 +338,153 @@ class FeatureContext:
         feat["is_playoff"] = (m["season_type"] == "Playoffs").astype(float)
         feat["min_ratio_l5_l20"] = feat["min_l5"] / feat["min_l20"].clip(lower=1.0)
         feat["min_cv10"] = feat["min_std10"] / feat["min_l10"].clip(lower=1.0)
+        if availability is not None:
+            feat.update(self._availability(pids, teams, qday, tgn_before, availability))
         out = pd.DataFrame(feat, index=m.index)
         out.index = orig_index
         return out
 
+    # -- availability (team_missing_*) --------------------------------------------------------------------------
+    def _rotation_at(self, team, qd: int, tb):
+        """Rotation player ids (played for `team` in >= 1 of its previous ROTATION_GAMES games), or None when it cannot
+        be built (unknown team, no prior game, offseason gap)."""
+        if tb is None or not np.isfinite(tb) or tb < 1:
+            return None
+        tb = int(tb)
+        days = self._team_days.get(team)
+        if days is None or tb > len(days) or qd - int(days[tb - 1]) > C.ROTATION_MAX_GAP_DAYS:
+            return None
+        rot: set = set()
+        for g in range(max(1, tb - C.ROTATION_GAMES + 1), tb + 1):
+            rot.update(self._tg_players.get((team, g), ()))
+        return rot
 
-def build_training_frame(rows: pd.DataFrame, tg: pd.DataFrame, ctx: FeatureContext | None = None):
+    def _group_candidates(self, team, qd: int, tb, availability):
+        """-> (rotation ids, absent ids) for the (team, ET day qd) whose previous-game count is `tb`, or None when it
+        cannot be built (see _rotation_at; game not in history for "history"; team not in the live mapping). The SAME
+        function serves training ("history") and live (injury mapping) -- that is the parity guarantee."""
+        rot = self._rotation_at(team, qd, tb)
+        if rot is None:
+            return None
+        tb = int(tb)
+        if isinstance(availability, str):
+            if availability != "history":
+                raise ValueError(f"availability must be None, 'history' or a mapping, got {availability!r}")
+            days = self._team_days[team]
+            active = self._tg_players.get((team, tb + 1))
+            if active is None or tb >= len(days) or int(days[tb]) != qd:
+                return None                                   # this game is not in the history: cannot know who dressed
+            act = set(active)
+            absent = {p for p in rot if p not in act}
+        else:
+            inj = availability.get(team)
+            if inj is None:
+                return None
+            absent = rot & set(inj)
+        return rot, absent
+
+    def _tb(self, team: str, date):
+        d = int(_days(pd.Series([pd.Timestamp(date)]))[0])
+        days = self._team_days.get(team)
+        return d, (None if days is None else int(np.searchsorted(days, d, side="left")))
+
+    def absent_set(self, team: str, date) -> set | None:
+        """Training-path absent set for the team's game on ET day `date` (None if not derivable). For parity tests and
+        for callers that want to replay it through the live path."""
+        d, tb = self._tb(team, date)
+        res = self._group_candidates(team, d, tb, "history")
+        return None if res is None else res[1]
+
+    def rotation(self, team: str, date) -> set | None:
+        d, tb = self._tb(team, date)
+        return self._rotation_at(team, d, tb)
+
+    def _availability(self, pids: np.ndarray, teams: np.ndarray, qday: np.ndarray, tgn_before: np.ndarray,
+                      availability) -> dict:
+        n = len(pids)
+        names = C.AVAILABILITY_FEATURES
+        out = {k: np.full(n, np.nan) for k in names}
+        groups = pd.DataFrame({"team": teams, "qd": qday, "tb": tgn_before}).drop_duplicates(["team", "qd"])
+        cand_rows: list = []
+        valid: set = set()
+        for team, qd, tb in groups.itertuples(index=False):
+            res = self._group_candidates(team, int(qd), tb, availability)
+            if res is None:
+                continue
+            rot, absent = res
+            valid.add((team, int(qd)))
+            for p in rot:
+                cand_rows.append((team, int(qd), p, p in absent))
+        if not valid:
+            return out
+        cand = pd.DataFrame(cand_rows, columns=["team", "qd", "player_id", "absent"])
+        cand["date"] = cand["qd"].to_numpy().astype("datetime64[D]").astype("datetime64[ns]")
+        right = self._ps_right[["date", "player_id", "min_l10", "points_l10", "assists_l10", "rebounds_l10",
+                                "last_team"]]
+        cand = cand.sort_values("date", kind="stable")
+        cand = pd.merge_asof(cand, right, on="date", by="player_id", allow_exact_matches=False, direction="backward")
+        # pre-game trailing numbers only; a player who has since left the team is not in this team's rotation
+        ok = (cand["last_team"] == cand["team"]) & (cand["min_l10"] >= C.ROTATION_MIN_L10)
+        cand = cand[ok].copy()
+        cand["usg"] = cand["points_l10"] + C.USG_PROXY_AST_WEIGHT * cand["assists_l10"] + cand["rebounds_l10"]
+        ab = cand[cand["absent"]]
+        sums: dict = {k: [0.0, 0.0, 0.0] for k in valid}
+        contrib: dict = {}
+        for team, qd, pid, mn, us in zip(ab["team"], ab["qd"], ab["player_id"], ab["min_l10"], ab["usg"]):
+            a = sums[(team, int(qd))]
+            a[0] += float(mn)
+            a[1] += float(us)
+            a[2] += 1.0
+            contrib[(team, int(qd), pid)] = (float(mn), float(us))
+        o_min, o_usg, o_n = (out[k] for k in names)
+        for i, (team, qd, pid) in enumerate(zip(teams, qday, pids)):
+            k = (team, int(qd))
+            if k not in sums:
+                continue
+            a = sums[k]
+            own = contrib.get((team, int(qd), pid))      # own-row exclusion: a player never counts himself
+            o_min[i] = a[0] - (own[0] if own else 0.0)
+            o_usg[i] = a[1] - (own[1] if own else 0.0)
+            o_n[i] = a[2] - (1.0 if own else 0.0)
+        return out
+
+
+def availability_from_injuries(absent_espn_by_team: dict, bridge) -> dict:
+    """{tricode: iterable of ESPN player ids (e.g. nba.data.espn_injuries.absent_ids)} -> {tricode: set of SportsBlaze ids}
+    for FeatureContext.features(availability=...). An ESPN id with no SportsBlaze bridge has no history, so it cannot
+    be a rotation player and is dropped; the TEAM key is kept even when its set ends up empty (known-healthy)."""
+    out: dict = {}
+    for team, ids in (absent_espn_by_team or {}).items():
+        sb = set()
+        for e in ids or ():
+            sid, _why = bridge.sb_id(e)
+            if sid is not None:
+                sb.add(sid)
+        out[team] = sb
+    return out
+
+
+def feature_columns(version: str = C.FEATURE_SET_DEFAULT, base: list | None = None) -> list | None:
+    """Versioned feature list. 'v1' (default) -> None meaning 'every default column the builder emits' (what existing
+    artifacts were trained on; unchanged). 'v2' -> `base` (the v1 column list) + AVAILABILITY_FEATURES. A model trained
+    on v2 must be fed features(availability=...) at serve time -- score.Resources.availability does that."""
+    if version == "v1":
+        return None
+    if version == "v2":
+        if base is None:
+            raise ValueError("v2 needs the v1 column list as `base`")
+        return list(base) + [c for c in C.AVAILABILITY_FEATURES if c not in base]
+    raise ValueError(f"unknown feature set {version!r}")
+
+
+def build_training_frame(rows: pd.DataFrame, tg: pd.DataFrame, ctx: FeatureContext | None = None,
+                         availability=None):
     """Features + targets for every played row (the row's own game is excluded from its features by construction).
 
     -> (X, meta) where meta holds game_id, player_id, date, season_year, season_type, team, opp, min and the five
     target columns. Rows with fewer than MIN_HISTORY_GAMES prior played games are dropped."""
     ctx = ctx or FeatureContext(rows, tg)
-    X = ctx.features(rows[ID_COLS])
+    X = ctx.features(rows[ID_COLS], availability=availability)
     meta = rows[["game_id", "player_id", "name", "date", "season_year", "season_type", "team", "opp", "min", "starter",
                  "points", "rebounds", "assists", "three_points_made", "pra"]].rename(
         columns={"three_points_made": "threes"}).copy()

@@ -37,6 +37,11 @@ STAT_KEYS = {
     "receptions": {"player_receptions"},
     "pass_tds": {"player_pass_tds", "player_passing_touchdowns", "player_passing_tds"},
     "anytime_td": {"player_anytime_td", "player_anytime_touchdown_scorer"},
+    # Count stats with no Kalshi series (2026-10-14): book-vs-book only, never pooled (POOL_MAX_GAP is yardage-only).
+    "pass_attempts": {"player_pass_attempts", "player_passing_attempts"},
+    "pass_completions": {"player_pass_completions", "player_passing_completions"},
+    "rush_attempts": {"player_rush_attempts", "player_rushing_attempts"},
+    "interceptions": {"player_interceptions", "player_pass_interceptions"},
 }
 _KEY_TO_STAT = {k: s for s, ks in STAT_KEYS.items() for k in ks}
 
@@ -47,7 +52,7 @@ _KEY_TO_STAT = {k: s for s, ks in STAT_KEYS.items() for k in ks}
 STAT_KEYS_BY_SPORT = {
     "nfl": STAT_KEYS,
     "nhl": {
-        "goals": {"player_goals"}, "sog": {"player_shots_on_goal"}, "points": {"player_points"},
+        "goals": {"player_goals", "player_goal_scorer_anytime"}, "sog": {"player_shots_on_goal"}, "points": {"player_points"},
         "assists": {"player_assists"}, "saves": {"player_saves", "player_total_saves"},
         "pp_points": {"player_power_play_points"}, "blocked_shots": {"player_blocked_shots"},
         "hits": {"player_hits"}, "pim": {"player_penalty_minutes"},
@@ -186,6 +191,7 @@ class PropConsensus:
     n_dfs: int
     team_hints: tuple = ()  # distinct team codes any book attached to this player's quote ('IND')
     book_fair: tuple = ()   # ((book, fair P(over)), ...) -- lets a venue be left OUT of its own reference price
+    book_quotes: tuple = ()  # ((book, over_american, under_american, fair P(over)), ...) sorted by book -- line shopping
 
 
 def _mad(x) -> float:
@@ -201,6 +207,7 @@ def build_consensus(quotes: list[Quote], devig_method: str = "proportional") -> 
     out = {}
     for key, qs in groups.items():
         per_book: dict = {}
+        prices: dict = {}
         n_dfs = 0
         onesided = set()
         hints = {q.team_hint for q in qs if q.team_hint}
@@ -214,13 +221,25 @@ def build_consensus(quotes: list[Quote], devig_method: str = "proportional") -> 
             fair_over, _ = devig_two_way(american_to_implied_prob(q.over), american_to_implied_prob(q.under),
                                          devig_method)
             per_book[q.book] = float(fair_over)
+            prices[q.book] = (int(q.over), int(q.under))
         if not per_book:
             continue
         vals = list(per_book.values())
         out[key] = PropConsensus(
             p_over=float(np.median(vals)), n_books=len(vals), disp=_mad(vals), books=tuple(sorted(per_book)),
             n_onesided=len(onesided - set(per_book)), n_dfs=n_dfs, team_hints=tuple(sorted(hints)),
-            book_fair=tuple(sorted(per_book.items())))
+            book_fair=tuple(sorted(per_book.items())),
+            book_quotes=tuple((b, prices[b][0], prices[b][1], per_book[b]) for b in sorted(per_book)))
+    return out
+
+
+def _all_books(c: PropConsensus, q: Quote) -> list[dict]:
+    """Per-book line-shopping strip for one (player, stat, point): every two-sided real book's own American prices and
+    de-vigged fair P(over). A one-sided quote that is NOT in the consensus (a 'Yes'-only ladder) is appended with
+    under/fair = None so the book that triggered the outlier is always visible."""
+    out = [{"book": b, "over": o, "under": u, "fair": round(f, 4)} for b, o, u, f in c.book_quotes]
+    if q.book not in {r["book"] for r in out}:
+        out.append({"book": q.book, "over": q.over, "under": q.under, "fair": None})
     return out
 
 
@@ -246,6 +265,7 @@ def scan_book_outliers(quotes: list[Quote], min_books: int = 4, min_ev: float = 
         if disp > max_disp:
             continue
         p_over = float(np.median(others))
+        all_books = _all_books(c, q)
         for side, price, p_fair in (("OVER", q.over, p_over), ("UNDER", q.under, 1.0 - p_over)):
             if price is None:
                 continue
@@ -256,7 +276,7 @@ def scan_book_outliers(quotes: list[Quote], min_books: int = 4, min_ev: float = 
                             "stat": q.stat,
                             "point": q.point, "alt": q.alt, "side": side, "american": price,
                             "decimal": round(dec, 4), "p_fair": round(p_fair, 4), "ev": round(ev, 4),
-                            "n_books": len(others), "disp": round(disp, 4)})
+                            "n_books": len(others), "disp": round(disp, 4), "all_books": all_books})
     return sorted(out, key=lambda r: -r["ev"])
 
 

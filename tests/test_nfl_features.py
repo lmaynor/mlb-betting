@@ -239,3 +239,181 @@ def test_aggregate_pbp_redzone():
     out = F.aggregate_pbp_redzone(pbp).set_index("player_id")
     assert out.loc["rb", "rz_car"] == 2 and out.loc["rb", "gl_car"] == 1
     assert out.loc["wr", "rz_tgt"] == 1
+
+
+# ================================================================================================ teammate-absence usage
+TM_COLS = F.TEAM_MISSING_COLS
+
+
+def _inj_row(week, team, pid, status, practice="Did Not Participate In Practice"):
+    return {"season": SEASON, "week": week, "team": team, "gsis_id": pid, "report_status": status,
+            "practice_status": practice, "game_type": "REG"}
+
+
+def _with_injuries(fr, entries, drop_rows=True):
+    """entries: (week, team, pid, status). drop_rows removes the player's stat + snap rows for that week (a real
+    'Out' has none). Every team-week of weeks 1..7 gets a filler 'healthy' row so a report 'exists' everywhere."""
+    fr = F.Frames(fr.player_stats.copy(), fr.schedules, fr.team_stats, fr.snap_counts.copy(), None, fr.players, None)
+    rows = []
+    for w, games in SCHEDULE.items():
+        if w not in PLAYED_WEEKS:
+            continue
+        for home, away in games:
+            for t in (home, away):
+                rows.append(_inj_row(w, t, f"qb_{t}", None, "Full Participation in Practice"))
+    for e in entries:
+        rows.append(_inj_row(*e))
+        if drop_rows and e[3] is not None:
+            w, _, pid, _ = e
+            fr.player_stats = fr.player_stats[~((fr.player_stats["player_id"] == pid) & (fr.player_stats["week"] == w))]
+            fr.snap_counts = fr.snap_counts[~((fr.snap_counts["player"] == pid) & (fr.snap_counts["week"] == w))]
+    fr.injuries = pd.DataFrame(rows)
+    return fr
+
+
+def _expected_share(fr, pid, upto_week, stat, n=5):
+    ps = fr.player_stats
+    ps = ps[(ps["week"] < upto_week) & ps["position"].isin(F.SKILL_POS)]
+    tot = ps.groupby(["game_id", "team"])[stat].transform("sum")
+    mine = ps[ps["player_id"] == pid]
+    sh = (mine[stat] / tot[mine.index]).to_numpy()
+    return float(np.mean(sh[-n:]))
+
+
+def test_team_missing_shares_values_and_defaults_exclusion():
+    fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")])
+    out = F.build_from_frames(fr, [SEASON])
+    row = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]
+    want = _expected_share(fr, "wr1_AAA", 5, "targets")
+    assert 0.05 < want < 0.5
+    assert row["team_missing_target_share_l5"] == pytest.approx(want)
+    assert row["team_missing_rush_share_l5"] == pytest.approx(0.0)         # wr1 has no carries
+    assert row["team_missing_pass_att_share_l5"] == pytest.approx(0.0)
+    # other team / other week unaffected: report exists, nobody absent -> 0 (not NaN)
+    ccc = out[(out["player_id"] == "wr2_CCC") & (out["week"] == 5)].iloc[0]
+    assert ccc["team_missing_target_share_l5"] == 0.0
+    # the default model feature list does NOT contain the experimental columns; opt-in does
+    assert not set(TM_COLS) & set(F.feature_columns(out))
+    assert set(TM_COLS) <= set(F.feature_columns(out, include_experimental=True))
+
+
+def test_team_missing_rush_and_pass_att_shares():
+    fr = _with_injuries(make_frames(), [(6, "CCC", "rb_CCC", "Doubtful"), (6, "DDD", "qb_DDD", "Out")])
+    out = F.build_from_frames(fr, [SEASON])
+    r = out[(out["player_id"] == "wr1_CCC") & (out["week"] == 6)].iloc[0]
+    assert r["team_missing_rush_share_l5"] == pytest.approx(_expected_share(fr, "rb_CCC", 6, "carries"))
+    assert r["team_missing_rush_share_l5"] > 0.2
+    d = out[(out["player_id"] == "rb_DDD") & (out["week"] == 6)].iloc[0]
+    assert d["team_missing_pass_att_share_l5"] == pytest.approx(_expected_share(fr, "qb_DDD", 6, "attempts"))
+    assert d["team_missing_pass_att_share_l5"] > 0.9            # the lone QB threw ~all attempts
+
+
+def test_team_missing_status_mapping():
+    # Questionable and blank do NOT count; Doubtful / Out / IR aliases (any case) do
+    ents = [(5, "AAA", "wr1_AAA", "Questionable"), (5, "BBB", "wr1_BBB", "OUT"), (5, "CCC", "wr1_CCC", " doubtful "),
+            (5, "DDD", "wr1_DDD", "Injured Reserve")]
+    out = F.build_from_frames(_with_injuries(make_frames(), ents, drop_rows=False), [SEASON])
+    wk5 = out[(out["week"] == 5) & (out["player_id"] == "te_AAA")].iloc[0]
+    assert wk5["team_missing_target_share_l5"] == 0.0                    # Questionable only
+    for team, other in (("BBB", "te_BBB"), ("CCC", "te_CCC"), ("DDD", "te_DDD")):
+        r = out[(out["week"] == 5) & (out["player_id"] == other)].iloc[0]
+        assert r["team_missing_target_share_l5"] > 0.05, team
+
+
+def test_team_missing_own_listing_never_feeds_own_row():
+    # wr1_AAA is listed Out but has a stat row (he played anyway): he must not see himself, teammates still do
+    fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")], drop_rows=False)
+    out = F.build_from_frames(fr, [SEASON])
+    me = out[(out["player_id"] == "wr1_AAA") & (out["week"] == 5)].iloc[0]
+    mate = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]
+    for c in TM_COLS:
+        assert me[c] == 0.0
+    assert mate["team_missing_target_share_l5"] > 0.05
+    # two absent teammates: each only sees the OTHER one
+    fr2 = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out"), (5, "AAA", "wr2_AAA", "Out")], drop_rows=False)
+    o2 = F.build_from_frames(fr2, [SEASON])
+    a = o2[(o2["player_id"] == "wr1_AAA") & (o2["week"] == 5)].iloc[0]["team_missing_target_share_l5"]
+    b = o2[(o2["player_id"] == "wr2_AAA") & (o2["week"] == 5)].iloc[0]["team_missing_target_share_l5"]
+    assert a == pytest.approx(_expected_share(fr2, "wr2_AAA", 5, "targets"))
+    assert b == pytest.approx(_expected_share(fr2, "wr1_AAA", 5, "targets"))
+
+
+def test_team_missing_is_nan_without_injury_data_never_zero():
+    fr = make_frames()                                               # empty injuries frame
+    out = F.build_from_frames(fr, [SEASON])
+    assert out[TM_COLS].isna().all().all()
+    fr.injuries = None
+    assert F.build_from_frames(fr, [SEASON])[TM_COLS].isna().all().all()
+    # report present for week 5 only (a season with gaps): weeks without a report are NaN, week 5 is a number
+    fr2 = make_frames()
+    fr2.injuries = pd.DataFrame([_inj_row(5, "AAA", "wr1_AAA", "Out")])
+    o = F.build_from_frames(fr2, [SEASON])
+    aaa5 = o[(o["team"] == "AAA") & (o["week"] == 5)]
+    assert aaa5["team_missing_target_share_l5"].notna().all()
+    assert o[(o["team"] == "AAA") & (o["week"] != 5)]["team_missing_target_share_l5"].isna().all()
+    assert o[(o["team"] == "BBB") & (o["week"] == 5)]["team_missing_target_share_l5"].isna().all()
+
+
+def test_team_missing_unknown_usage_contributes_zero_and_other_team_history_ignored():
+    # absent at week 1: no prior appearance -> contributes 0 (not NaN, report exists)
+    out = F.build_from_frames(_with_injuries(make_frames(), [(1, "AAA", "wr1_AAA", "Out")]), [SEASON])
+    r = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 1)].iloc[0]
+    assert r["team_missing_target_share_l5"] == 0.0
+
+
+def test_injury_entry_for_week_w_affects_week_w_only_and_outcomes_of_w_never_do():
+    base_fr = _with_injuries(make_frames(), [])
+    inj_fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")])
+    b = F.build_from_frames(base_fr, [SEASON]).set_index(["player_id", "game_id"])
+    i = F.build_from_frames(inj_fr, [SEASON]).set_index(["player_id", "game_id"])
+    # (a) the week-5 injury entry changes week-5 teammate features ...
+    wr2_5 = (("wr2_AAA"), _gid(5, "AAA", "DDD"))
+    assert i.loc[wr2_5, "team_missing_target_share_l5"] > b.loc[wr2_5, "team_missing_target_share_l5"]
+    # ... and NO feature of any row from weeks 1-4 (it is not a post-hoc fact about the past) ...
+    common = b.index.intersection(i.index)
+    early = [k for k in common if b.loc[k, "week"] < 5 and k[0] != "wr1_AAA"]
+    for c in TM_COLS:
+        np.testing.assert_array_equal(b.loc[early, c].to_numpy(float), i.loc[early, c].to_numpy(float))
+    # ... and week-6 features only through the player's absence (his week-5 row is gone), never the report flag itself
+    assert i.loc[("wr2_AAA", _gid(6, "CCC", "AAA")), "team_missing_target_share_l5"] == 0.0
+
+    # (b) outcomes of week 5 never reach week-5 (or earlier) rows: scramble them and compare
+    fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out"), (6, "AAA", "wr1_AAA", "Out")], drop_rows=False)
+    out0 = F.build_from_frames(fr, [SEASON]).set_index(["player_id", "game_id"])
+    out1 = F.build_from_frames(F.perturb_outcomes(fr, SEASON, 5, seed=11), [SEASON]).set_index(["player_id", "game_id"])
+    common = out0.index.intersection(out1.index)
+    upto5 = [k for k in common if out0.loc[k, "week"] <= 5]
+    for c in TM_COLS:
+        np.testing.assert_array_equal(out0.loc[upto5, c].to_numpy(float), out1.loc[upto5, c].to_numpy(float))
+    # power: wr1_AAA is listed out in week 6 and his usage comes from his (scrambled) week-5 line -> week 6 moves
+    k = ("wr2_AAA", _gid(6, "CCC", "AAA"))
+    assert out0.loc[k, "team_missing_target_share_l5"] != out1.loc[k, "team_missing_target_share_l5"]
+
+
+@pytest.mark.parametrize("drop_rows", [True, False])      # False: listed players still HAVE a (scrambled) stat row
+@pytest.mark.parametrize("wk", [3, 4, 6])
+def test_leakage_with_injury_reports_scrambles_outcomes_and_snaps(wk, drop_rows):
+    """The existing leakage contract, on frames whose injury reports make the NEW features non-trivial. perturb_outcomes
+    scrambles the week's stat lines, team stats, scores AND snap counts; no feature at/before the week may move."""
+    fr = _with_injuries(make_frames(), [(2, "AAA", "wr1_AAA", "Out"), (4, "CCC", "rb_CCC", "Doubtful"),
+                                        (5, "BBB", "wr2_BBB", "Out"), (6, "DDD", "te_DDD", "Out"),
+                                        (7, "AAA", "rb_AAA", "Out")], drop_rows=drop_rows)
+    pert = F.perturb_outcomes(fr, SEASON, wk, seed=wk)
+    sn0 = fr.snap_counts[fr.snap_counts["week"] == wk]["offense_snaps"].to_numpy()
+    sn1 = pert.snap_counts[pert.snap_counts["week"] == wk]["offense_snaps"].to_numpy()
+    assert not np.array_equal(sn0, sn1), "the snap counts of the scrambled week were not perturbed"
+    r = F.leakage_check(fr, [SEASON], SEASON, wk, seed=wk)
+    assert r["changed_cols"] == [], r["changed_cols"]
+    assert r["n_checked"] > 0 and r["n_changed_after"] > 0
+    built = F.build_from_frames(fr, [SEASON])
+    assert built[TM_COLS].notna().all().all() and (built["team_missing_target_share_l5"] > 0).any()
+    assert set(TM_COLS) <= set(F.feature_columns(built, include_experimental=True))   # the check covered them
+
+
+def test_new_stat_targets_present_and_correct(frames, built):
+    r = built[(built["player_id"] == "qb_AAA") & (built["week"] == 2)].iloc[0]
+    s = frames.player_stats.query("player_id == 'qb_AAA' and week == 2").iloc[0]
+    assert r["y_pass_attempts"] == s["attempts"] and r["y_completions"] == s["completions"]
+    assert r["y_rush_attempts"] == s["carries"]
+    up = F.build_from_frames(frames, [SEASON], include_upcoming=True)
+    assert up[up["is_upcoming"]][["y_pass_attempts", "y_completions", "y_rush_attempts"]].isna().all().all()

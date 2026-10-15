@@ -57,6 +57,10 @@ class Resources:
     history: dict                 # data.history_status(...)
     team_fn: object = None
     model_version: str = C.MODEL_VERSION
+    # {tricode: set of SportsBlaze ids on the injury list} (features.availability_from_injuries over
+    # nba.data.espn_injuries.absent_by_team). Only read when a loaded model's feature list contains
+    # C.AVAILABILITY_FEATURES; None/{} -> those columns are NaN (availability unknown), never zeros.
+    availability: dict | None = None
 
 
 # ----------------------------------------------------------------------------- guards
@@ -117,6 +121,15 @@ def ev_at(p_win: float, p_push: float, american: int) -> float:
     dec = american_to_decimal(american)
     p_loss = max(0.0, 1.0 - p_win - p_push)
     return p_win * (dec - 1.0) - p_loss
+
+
+def _avail_for(res: Resources):
+    """None (v1 models: no availability columns built) unless some loaded model was trained on them."""
+    wants = any(f in (getattr(m, "features", None) or ()) for m in res.models.values()
+                for f in C.AVAILABILITY_FEATURES)
+    if not wants:
+        return None
+    return res.availability or {}            # {} -> every team unknown -> NaN columns (fail closed)
 
 
 # ----------------------------------------------------------------------------- core
@@ -185,7 +198,9 @@ def score_events(events: list, now: datetime, res: Resources, allow_rollover: bo
         if not qrows:
             continue
         qdf = pd.DataFrame(qrows)
-        feats = res.ctx.features(qdf[ID_COLS]).reset_index(drop=True)
+        av = _avail_for(res)
+        feats = (res.ctx.features(qdf[ID_COLS]) if av is None
+                 else res.ctx.features(qdf[ID_COLS], availability=av)).reset_index(drop=True)
         preds = {}
         for stat, m in res.models.items():
             mu, var = m.predict(feats)

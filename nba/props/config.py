@@ -33,6 +33,17 @@ SCHEDULE_WINDOW_DAYS = 7
 POS_GROUP = {"PG": "G", "SG": "G", "G": "G", "SF": "W", "F": "W", "G-F": "W", "F-G": "W", "PF": "B", "C": "B",
              "F-C": "B", "C-F": "B"}
 
+# ---- availability features (OPT-IN feature set "v2"; the default feature list is UNCHANGED) ----
+# A model trained before these existed keeps its own `features` list in its meta and reads only those columns
+# (StatModel._dm reindexes), so emitting extra columns can never break an old artifact. To TRAIN with them, ask for them:
+# build_training_frame(..., availability="history") and pass FEATURES_V2-style column lists explicitly.
+FEATURE_SET_DEFAULT = "v1"
+AVAILABILITY_FEATURES = ("team_missing_min_l10", "team_missing_usg_proxy_l10", "team_missing_n_rotation")
+ROTATION_GAMES = 5                # rotation = played for the team in at least one of its previous N games
+ROTATION_MIN_L10 = 10.0           # ... AND averaged >= this many minutes over his trailing 10 played games
+ROTATION_MAX_GAP_DAYS = 30        # previous team game further back than this (offseason) -> features NaN, not guessed
+USG_PROXY_AST_WEIGHT = 1.5        # usage proxy per game = PTS + 1.5*AST + REB (trailing L10 means)
+
 # ---- live scorer guards (mirror ev/sweep_props_alerts.py; UNVALIDATED starting points) ----
 MAX_HISTORY_GAP_DAYS = 4          # newest box score must be within this many days of the event date
 ROLLOVER_MAX_GAP_DAYS = 150       # explicit opt-in only: last season's history carried into a new season
