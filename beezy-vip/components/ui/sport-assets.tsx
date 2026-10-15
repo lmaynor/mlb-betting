@@ -5,7 +5,7 @@
  * image icon on a pick card is worse than no image. Lazy + async-decoded so a long +EV table does not stall paint.
  */
 import { useState } from 'react'
-import { headshotUrlById, teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
+import { headshotUrlById, teamLogoUrl, type AssetSport, type HeadshotSport } from '@/lib/sport-assets'
 
 export function TeamLogo({ sport, team, size = 24, dark = true }: {
   sport: AssetSport; team: string | null | undefined; size?: number; dark?: boolean
@@ -19,7 +19,7 @@ export function TeamLogo({ sport, team, size = 24, dark = true }: {
 }
 
 export function PlayerHeadshot({ sport, id, name, size = 48 }: {
-  sport: AssetSport; id?: number | string | null; name?: string; size?: number
+  sport: HeadshotSport; id?: number | string | null; name?: string; size?: number
 }) {
   const [bad, setBad] = useState(false)
   const src = headshotUrlById(sport, id)

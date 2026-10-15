@@ -386,3 +386,72 @@ def test_run_cycle_writes_sink_a_and_pooled_evidence_and_counts_them(monkeypatch
     assert out["pool_legs"] == 1 and out["kalshi_reachable"] is True
     keys = list(written)
     assert any("/book_outliers_" in k for k in keys) and any("/pooled_" in k for k in keys)
+
+
+# ---------------- Kalshi-403 starvation: Sink A must still reach latest.json + Discord ----------------
+def _sink_a_events(leg, n_ref_books=5):
+    """Book pack priced -110/-110 plus one soft book at +115/-140 -> a Sink A outlier with n_ref_books reference books."""
+    refs = ("draftkings", "fanduel", "betmgm", "caesars", "bet365", "hardrock")[:n_ref_books]
+    events = _parlay_events(leg, books=refs)
+    events[0]["event"]["commence_time"] = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    events[0]["props"]["bookmakers"].append({"key": "softbook", "markets": [{"key": "player_reception_yds", "outcomes": [
+        {"name": f"Over {leg.player}", "description": leg.player, "price": 115, "point": leg.strike},
+        {"name": f"Under {leg.player}", "description": leg.player, "price": -140, "point": leg.strike}]}]})
+    return events
+
+
+class _DeadKalshi:
+    def get_series(self, s):
+        raise RuntimeError("HTTP 403 could not be satisfied")
+
+    def get_markets(self, s):
+        raise RuntimeError("HTTP 403")
+
+
+def test_kalshi_403_still_writes_latest_json_with_book_outliers_and_posts_sink_a(monkeypatch):
+    leg, _ = _leg_and_market()
+    events = _sink_a_events(leg)
+    written, posts = {}, []
+    monkeypatch.setattr(sw, "_write", lambda data, key: written.__setitem__(key, data))
+    monkeypatch.setattr(sw, "_read", lambda key: written.get(key))
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append((text, embeds)) or True)
+    state = {}
+    out = sw.run_cycle(_fake_pc(events), _DeadKalshi(), props_config(env={}), 0, 40.0, state)
+    assert out["kalshi_reachable"] is False and out["rows"] == 0
+    assert out["book_outliers"] >= 1 and out["new_sink_a_alerts"] == out["book_outliers"]
+    latest = json.loads(written["EVSweep/nfl_props/latest.json"])                  # NOT starved by the empty `rows`
+    assert latest["rows"] == [] and latest["summary"]["kalshi_reachable"] is False
+    assert latest["book_outliers"] and {r["book"] for r in latest["book_outliers"]} == {"softbook"}
+    assert all(r["commence"] and r["game_key"] and r["player_norm"] for r in latest["book_outliers"])
+    assert len(posts) == 1 and "Sink A" in posts[0][1][0]["title"] and "SHADOW" in posts[0][1][0]["title"]
+    assert "softbook" in posts[0][1][0]["fields"][0]["value"]
+    # the dedup keys are persisted and a second cycle (fresh in-memory state, i.e. a restarted task) does not re-alert
+    day = datetime.now(timezone.utc).astimezone(sw._ET).date().isoformat()
+    assert any(k.startswith("sinkA|") for k in json.loads(written[f"EVSweep/nfl_props/{day}/notified.json"]))
+    out2 = sw.run_cycle(_fake_pc(events), _DeadKalshi(), props_config(env={}), 1, 40.0, {})
+    assert out2["new_sink_a_alerts"] == 0 and len(posts) == 1
+
+
+def test_sink_a_alert_gates_and_embed_shape(monkeypatch):
+    cfg = props_config(env={})
+    base = {"game_key": "nfl:2026-10-04:IND@WAS", "player": "Test Player", "player_norm": "test player",
+            "stat": "rec_yds", "point": 63.5, "side": "OVER", "book": "softbook", "american": 115, "p_fair": 0.5,
+            "ev": 0.075, "n_books": 5}
+    posts, store = [], {}
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append(embeds) or True)
+    monkeypatch.setattr(sw, "_write", lambda data, key: store.__setitem__(key, data))
+    monkeypatch.setattr(sw, "_read", lambda key: store.get(key))
+    thin, huge, low = dict(base, n_books=3), dict(base, ev=0.30), dict(base, ev=0.01)
+    assert sw.post_new_sink_a([thin, huge, low], {}, "2026-10-04", cfg) == 0 and posts == []   # none credible
+    assert sw.post_new_sink_a([base, thin, huge], {}, "2026-10-04", cfg) == 1
+    emb = posts[0][0]
+    assert emb["title"] == "NFL props Sink A: 1 book outlier(s) (SHADOW / unvalidated)" and emb["color"] == 0x57F287
+    assert emb["fields"][0]["name"] == "2026-10-04:IND@WAS"
+    assert emb["fields"][0]["value"] == "**Test Player** rec_yds OVER 63.5 @ **softbook** (+115) | fair 50.0% | EV **+7.5%** (5 bks)"
+
+
+def test_sink_a_never_posts_to_the_member_channel(monkeypatch):
+    monkeypatch.delenv("DISCORD_WEBHOOK_ALERTS", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_OPS", raising=False)
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://example.invalid/picks")             # member channel
+    assert sw.webhook_url() == ""                                                           # -> post_discord is a no-op

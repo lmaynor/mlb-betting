@@ -2,15 +2,16 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { Bet, EvFeed, EvNflRow, SystemStats, TodaySlate } from '@/lib/types'
+import type { Bet, EvBookOutlierRow, EvFeed, EvNflRow, EvPropsBlock, SystemStats, TodaySlate } from '@/lib/types'
 import type { SparklinePoint } from '@/lib/betting-api'
-import { SPORT_PILLARS, STATUS_LABEL, type SportSlug } from '@/lib/sports'
+import { propStatLabel, SPORT_PILLARS, STATUS_LABEL, type SportSlug } from '@/lib/sports'
 import { getPickSystemByKey } from '@/lib/pick-systems'
 import { beezyscore } from '@/lib/beezy-score'
 import { bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { PicksTable } from '@/components/picks/picks-table'
 import { SystemSparkline } from '@/components/landing/system-sparkline'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
 
 const GATE = 200
 type Tab = 'today' | 'models' | 'slate'
@@ -85,12 +86,14 @@ function TodayTab({ sport, picks, feed }: Props) {
   if (sport === 'mlb') return <MlbToday picks={picks} feed={feed} />
   if (sport === 'nfl') return <NflToday feed={feed} />
   const p = SPORT_PILLARS[sport]
+  const block = sport === 'nhl' || sport === 'nba' ? feed?.[sport] : null
+  if (block && block.rows.length > 0) return <PropsToday sport={sport as 'nhl' | 'nba'} block={block} />
   return (
     <Empty
-      title={`${p.shortName}: nothing to show yet`}
+      title={`${p.shortName}: no open props rows`}
       body={sport === 'nba'
-        ? 'Only historical box scores are ingested. There is no live odds feed, model or tracker for the NBA, so no picks or +EV alerts exist. This page will light up when that changes.'
-        : 'Market adapters exist but no sweep is running and nothing is tracked. This page will light up when that changes.'}
+        ? 'No NBA props quote is beating its consensus right now. NBA is evidence-only: box scores are ingested nightly, nothing is validated, and no picks are tracked. Rows appear here when the props sweep finds one before tip-off.'
+        : 'No NHL props quote is beating its consensus right now. The sweep is evidence-only (nothing is validated and no picks are tracked); rows appear here when it finds one before puck drop.'}
       cta={{ href: '/ev', label: 'Open the +EV terminal' }}
     />
   )
@@ -150,41 +153,121 @@ function MlbToday({ picks, feed }: { picks: Bet[]; feed: EvFeed | null }) {
   )
 }
 
+function ShadowNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.07)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
+      <strong style={{ color: '#f59e0b' }}>SHADOW DATA.</strong> {children}
+    </div>
+  )
+}
+
+function sweepStatus(block: { status: string; age_minutes: number | null } | null | undefined): string {
+  if (block?.status === 'shadow_live') return 'Sweep is running.'
+  if (block?.age_minutes != null) return `Sweep idle; last run ${(block.age_minutes / 60).toFixed(1)}h ago.`
+  return 'No sweep output available.'
+}
+
+/** Sink A table (NFL book_outliers, NHL/NBA props): a book/exchange quote vs the consensus of the OTHER books. No stake, no score. */
+function OutlierTable({ rows, sport }: { rows: EvBookOutlierRow[]; sport: 'nfl' | 'nhl' | 'nba' }) {
+  return (
+    <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px', fontSize: '13px' }}>
+        <thead>
+          <tr>{['Player / prop', 'Game', 'Side', 'Book', 'Price', 'Fair', 'Books', 'EV', 'Status'].map(h => (
+            <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230' }}>{h}</th>))}</tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 60).map(r => {
+            const b = bookDisplay(r.book)
+            const point = r.point ?? r.line
+            return (
+              <tr key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`} style={{ borderBottom: '1px solid #151822' }}>
+                <td style={{ padding: '10px 12px', color: 'var(--chalk)', fontWeight: 600 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    {sport !== 'nfl' && r.player_id != null && <PlayerHeadshot sport={sport} id={r.player_id} name={r.player} size={28} />}
+                    <span>{r.player} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{point} {propStatLabel(r.stat ?? r.market)}</span></span>
+                  </span>
+                </td>
+                <td className="mono" style={{ padding: '10px 12px', color: 'var(--silver)' }}>{(r.game_key ?? '').split(':')[2]}</td>
+                <td style={{ padding: '10px 12px', color: 'var(--silver)' }}>{String(r.side).toUpperCase()}</td>
+                <td style={{ padding: '10px 12px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.label}</span>
+                </td>
+                <td className="mono" style={{ padding: '10px 12px' }}>{formatOdds(r.american)}</td>
+                <td className="mono" style={{ padding: '10px 12px' }}>{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
+                <td className="mono" style={{ padding: '10px 12px', color: r.n_books >= 3 ? 'var(--silver)' : 'var(--warn)' }}>{r.n_books}</td>
+                <td className="mono" style={{ padding: '10px 12px', fontWeight: 700, color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
+                <td className="dell-heading" style={{ padding: '10px 12px', fontSize: '9.5px', color: r.flag ? '#f59e0b' : 'var(--fog)' }}>{r.flag ? 'FLAGGED' : (r.reason ?? '').replace(/_/g, ' ')}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function PropsToday({ sport, block }: { sport: 'nhl' | 'nba'; block: EvPropsBlock }) {
+  return (
+    <div style={{ display: 'grid', gap: '16px' }}>
+      <ShadowNote>
+        {SPORT_PILLARS[sport].shortName} sportsbook quotes beating the consensus of the other books at the same player, stat and line. Nothing here is
+        validated, the sweep places no orders and no stake or score is shown. {sweepStatus(block)}
+      </ShadowNote>
+      <OutlierTable rows={block.rows} sport={sport} />
+    </div>
+  )
+}
+
 function NflToday({ feed }: { feed: EvFeed | null }) {
   const nfl = feed?.nfl
   const rows: EvNflRow[] = nfl?.rows ?? []
+  const outliers: EvBookOutlierRow[] = nfl?.book_outliers ?? []
   return (
-    <div style={{ display: 'grid', gap: '16px' }}>
-      <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.07)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
-        <strong style={{ color: '#f59e0b' }}>SHADOW DATA.</strong> Kalshi asks vs a sportsbook consensus, net of fee. Nothing here is validated and the sweep places no
-        orders. {nfl?.status === 'shadow_live' ? 'Sweep is running.' : nfl?.age_minutes != null ? `Sweep idle; last run ${(nfl.age_minutes / 60).toFixed(1)}h ago.` : 'No sweep output available.'}
-      </div>
-      {rows.length === 0 ? (
-        <Empty title="No NFL rows" body="The sweep runs around game windows. Rows appear when a Kalshi ask beats the consensus before kickoff." />
-      ) : (
-        <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px', fontSize: '13px' }}>
-            <thead>
-              <tr>{['Player / prop', 'Game', 'Side', 'Ask', 'Fair', 'Books', 'Net EV', 'Status'].map(h => (
-                <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230' }}>{h}</th>))}</tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 60).map(r => (
-                <tr key={`${r.ticker}-${r.side}`} style={{ borderBottom: '1px solid #151822' }}>
-                  <td style={{ padding: '10px 12px', color: 'var(--chalk)', fontWeight: 600 }}>{r.player} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{r.strike} {SYSTEM_LABEL[(r.stat ?? '').toUpperCase()] ?? r.stat}</span></td>
-                  <td className="mono" style={{ padding: '10px 12px', color: 'var(--silver)' }}>{(r.game_key ?? '').split(':')[2]}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--silver)' }}>{r.side}</td>
-                  <td className="mono" style={{ padding: '10px 12px' }}>{Math.round(r.ask * 100)}&cent;</td>
-                  <td className="mono" style={{ padding: '10px 12px' }}>{r.fair_prob != null ? `${(r.fair_prob * 100).toFixed(1)}%` : '--'}</td>
-                  <td className="mono" style={{ padding: '10px 12px', color: (r.n_books ?? 0) >= 3 ? 'var(--silver)' : 'var(--warn)' }}>{r.n_books ?? 0}</td>
-                  <td className="mono" style={{ padding: '10px 12px', fontWeight: 700, color: r.net_ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.net_ev >= 0 ? '+' : ''}{(r.net_ev * 100).toFixed(1)}%</td>
-                  <td className="dell-heading" style={{ padding: '10px 12px', fontSize: '9.5px', color: r.flag ? '#f59e0b' : 'var(--fog)' }}>{r.flag ? 'FLAGGED' : (r.reason ?? '').replace(/_/g, ' ')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div style={{ display: 'grid', gap: '26px' }}>
+      <ShadowNote>
+        Sportsbook and exchange quotes versus a sportsbook consensus, plus Kalshi asks net of fee. Nothing here is validated and the sweep places no
+        orders. {sweepStatus(nfl)}
+      </ShadowNote>
+
+      <section>
+        <SectionTitle title={'NFL Sportsbook & Exchange Outliers (Sink A)'} sub="A book or exchange quote beating the leave-self-out consensus of the other books, from the same pull as the Kalshi comparison." />
+        {outliers.length === 0 ? (
+          <Empty title="No outliers right now" body="The sweep runs around game windows. Rows appear when a book or exchange price beats a consensus of at least four other books before kickoff." />
+        ) : (
+          <OutlierTable rows={outliers} sport="nfl" />
+        )}
+      </section>
+
+      <section>
+        <SectionTitle title="Kalshi Order-Book Comparison" sub="Kalshi asks vs the sportsbook consensus at the same line. Needs Kalshi to be reachable from the sweep; otherwise this stays empty." />
+        {rows.length === 0 ? (
+          <Empty title="No Kalshi rows" body="Rows appear when a Kalshi ask beats the consensus before kickoff." />
+        ) : (
+          <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px', fontSize: '13px' }}>
+              <thead>
+                <tr>{['Player / prop', 'Game', 'Side', 'Ask', 'Fair', 'Books', 'Net EV', 'Status'].map(h => (
+                  <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230' }}>{h}</th>))}</tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 60).map(r => (
+                  <tr key={`${r.ticker}-${r.side}`} style={{ borderBottom: '1px solid #151822' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--chalk)', fontWeight: 600 }}>{r.player} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{r.strike} {SYSTEM_LABEL[(r.stat ?? '').toUpperCase()] ?? r.stat}</span></td>
+                    <td className="mono" style={{ padding: '10px 12px', color: 'var(--silver)' }}>{(r.game_key ?? '').split(':')[2]}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--silver)' }}>{r.side}</td>
+                    <td className="mono" style={{ padding: '10px 12px' }}>{Math.round(r.ask * 100)}&cent;</td>
+                    <td className="mono" style={{ padding: '10px 12px' }}>{r.fair_prob != null ? `${(r.fair_prob * 100).toFixed(1)}%` : '--'}</td>
+                    <td className="mono" style={{ padding: '10px 12px', color: (r.n_books ?? 0) >= 3 ? 'var(--silver)' : 'var(--warn)' }}>{r.n_books ?? 0}</td>
+                    <td className="mono" style={{ padding: '10px 12px', fontWeight: 700, color: r.net_ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.net_ev >= 0 ? '+' : ''}{(r.net_ev * 100).toFixed(1)}%</td>
+                    <td className="dell-heading" style={{ padding: '10px 12px', fontSize: '9.5px', color: r.flag ? '#f59e0b' : 'var(--fog)' }}>{r.flag ? 'FLAGGED' : (r.reason ?? '').replace(/_/g, ' ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
@@ -253,7 +336,7 @@ function SlateTab({ sport, slate, feed }: Props) {
     if (games.length === 0) return <Empty title="No slate available" body="The schedule did not load or there are no games today." />
     return (
       <div>
-        <SectionTitle title={`Today's slate · ${slate!.total_games} games`} sub="Probable starters and the number of tracked picks per game." />
+        <SectionTitle title={`Today's slate \u00b7 ${slate!.total_games} games`} sub="Probable starters and the number of tracked picks per game." />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
           {games.map(g => (
             <div key={g.game_pk} style={{ ...CARD_STYLE, padding: '14px 16px' }}>
@@ -274,21 +357,29 @@ function SlateTab({ sport, slate, feed }: Props) {
       </div>
     )
   }
-  if (sport === 'nfl') {
+  if (sport === 'nfl' || sport === 'nhl' || sport === 'nba') {
+    const items: { game_key: string | null; mins: number | null | undefined; flag: boolean }[] = []
+    if (sport === 'nfl') {
+      for (const r of feed?.nfl?.rows ?? []) items.push({ game_key: r.game_key, mins: r.mins_to_kick, flag: r.flag })
+      for (const r of feed?.nfl?.book_outliers ?? []) items.push({ game_key: r.game_key, mins: r.mins_to_kick, flag: !!r.flag })
+    } else {
+      for (const r of feed?.[sport]?.rows ?? []) items.push({ game_key: r.game_key, mins: r.mins_to_kick, flag: !!r.flag })
+    }
     const byGame = new Map<string, { n: number; flagged: number; mins: number }>()
-    for (const r of feed?.nfl?.rows ?? []) {
-      const k = (r.game_key ?? '').split(':')[2] ?? '?'
-      const cur = byGame.get(k) ?? { n: 0, flagged: 0, mins: r.mins_to_kick }
-      cur.n++; if (r.flag) cur.flagged++; cur.mins = Math.min(cur.mins, r.mins_to_kick)
+    for (const it of items) {
+      const k = (it.game_key ?? '').split(':')[2] ?? '?'
+      const cur = byGame.get(k) ?? { n: 0, flagged: 0, mins: it.mins ?? Infinity }
+      cur.n++; if (it.flag) cur.flagged++; cur.mins = Math.min(cur.mins, it.mins ?? Infinity)
       byGame.set(k, cur)
     }
-    if (byGame.size === 0) return <Empty title="No upcoming games in the sweep" body="Games appear here while the sweep has open Kalshi prop markets before kickoff." />
+    if (byGame.size === 0) return <Empty title="No upcoming games in the sweep" body="Games appear here while the sweep has open rows before the game starts." />
+    const lead = sport === 'nfl' ? 'kick in' : 'starts in'
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
         {[...byGame.entries()].sort((a, b) => a[1].mins - b[1].mins).map(([k, v]) => (
           <div key={k} style={{ ...CARD_STYLE, padding: '14px 16px' }}>
             <div className="mono" style={{ color: 'var(--chalk)', fontWeight: 700 }}>{k.replace('@', ' @ ')}</div>
-            <div style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '6px' }}>kick in {v.mins < 90 ? `${Math.round(v.mins)}m` : `${(v.mins / 60).toFixed(1)}h`} &middot; {v.n} comparable rows &middot; {v.flagged} flagged</div>
+            <div style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '6px' }}>{Number.isFinite(v.mins) ? `${lead} ${v.mins < 90 ? `${Math.round(v.mins)}m` : `${(v.mins / 60).toFixed(1)}h`}` : 'time TBD'} &middot; {v.n} comparable rows &middot; {v.flagged} flagged</div>
           </div>
         ))}
       </div>

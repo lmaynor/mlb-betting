@@ -403,12 +403,71 @@ def _ev_mlb_rows(engine, min_ev, limit, days):
     return out
 
 
+# Sink A (a book/exchange quote beating the leave-self-out consensus of the OTHER books) rows are the one shape every
+# non-MLB sport shares in the feed: NFL `book_outliers` (ev/sweep_nfl_props.py) and the NHL/NBA rows
+# (ev/sweep_props_alerts.py). Frontend twin: EvBookOutlierRow in beezy-vip/lib/types.ts.
+_OUTLIER_MAX_EV = 0.15      # mirrors ev.sweep_nfl_props.SINK_A_EV_CAP: a bigger "edge" is usually reference error
+_OUTLIER_MIN_BOOKS = 4      # mirrors ev.sweep_nfl_props.SINK_A_MIN_BOOKS
+_NFL_OUTLIER_LIVE_MINUTES = 45   # outlier-only snapshot (Kalshi blocked on Cloud Run): the sweep cycles every ~15 min
+
+
+def _american_to_decimal(a):
+    a = float(a)
+    return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
+
+
+def _outlier_row(r, sport, now, age_min=None, credible=None):
+    """One raw Sink A row -> the public EvBookOutlierRow dict, or None when it cannot be shown: no usable EV/price, or
+    the game has started (the quote is dead). Kick-off comes from `commence`; rows written before that column existed
+    fall back to their stored minutes-to-kick minus the snapshot's age."""
+    ev, american = _f(r.get("ev")), _f(r.get("american"))
+    if ev is None or american is None or american == 0:
+        return None
+    mins_now = None
+    try:
+        mins_now = (_datetime.fromisoformat(str(r.get("commence"))) - now).total_seconds() / 60.0
+    except Exception:  # noqa: BLE001
+        stored = _f(r.get("mins_to_kick") if r.get("mins_to_kick") is not None else r.get("mins_to_start"))
+        if stored is not None:
+            mins_now = stored - (age_min or 0.0)
+    if mins_now is None or mins_now <= 0:
+        return None
+    gk = r.get("game_key")
+    teams = str(gk).split(":")[-1].split("@") if gk and "@" in str(gk) else []
+    n_books = r.get("n_books")
+    flag = r.get("flag")
+    if flag is None:     # NFL rows carry no flag: use the same credibility gates the sweep's Discord alert uses
+        flag = (credible if credible is not None
+                else (ev <= _OUTLIER_MAX_EV and (n_books or 0) >= _OUTLIER_MIN_BOOKS))
+    return {
+        "sport": sport, "venue": "book", "game_key": gk, "commence": r.get("commence"),
+        "mins_to_kick": round(mins_now, 1), "book": r.get("book"), "player": r.get("player"),
+        "player_norm": r.get("player_norm"), "player_id": r.get("player_id"), "team": r.get("team"),
+        "away_team": r.get("away") or r.get("away_team") or (teams[0] if len(teams) == 2 else None),
+        "home_team": r.get("home") or r.get("home_team") or (teams[1] if len(teams) == 2 else None),
+        "stat": r.get("stat"), "point": _f(r.get("point")), "side": r.get("side"),
+        "american": int(american), "decimal": _f(r.get("decimal")) or round(_american_to_decimal(american), 4),
+        "p_fair": _f(r.get("p_fair")), "ev": round(ev, 4), "n_books": n_books, "disp": _f(r.get("disp")),
+        "flag": bool(flag), "reason": r.get("reason"),
+    }
+
+
+def _outlier_rows(raw, sport, min_ev, limit, now, age_min):
+    rows = []
+    for r in raw or []:
+        row = _outlier_row(r, sport, now, age_min)
+        if row is not None and row["ev"] >= min_ev:
+            rows.append(row)
+    rows.sort(key=lambda x: (not x["flag"], -x["ev"]))
+    return rows[: int(limit)]
+
+
 def _nfl_feed(min_ev, limit):
     """Shadow NFL prop sweep (ev/sweep_nfl_props.py -> latest.json). Evidence only: the sweep's own
     contract says these signals are unvalidated, so the payload carries status + freshness."""
     from mlb_core import storage as _st
-    empty = {"rows": [], "count": 0, "status": "unavailable", "as_of": None, "age_minutes": None,
-             "stale": True, "summary": {}, "validated": False}
+    empty = {"rows": [], "count": 0, "book_outliers": [], "status": "unavailable", "as_of": None,
+             "age_minutes": None, "stale": True, "summary": {}, "validated": False}
     try:
         snap = _json.loads(_st.read_bytes(_NFL_PREFIX + "/latest.json"))
     except Exception:  # noqa: BLE001 -- no sweep output yet
@@ -454,8 +513,13 @@ def _nfl_feed(min_ev, limit):
         })
     rows.sort(key=lambda x: (not x["flag"], -x["net_ev"]))
     rows = rows[: int(limit)]
-    stale = age is None or age > _NFL_STALE_MINUTES
-    return {"rows": rows, "count": len(rows), "status": "idle" if stale else "shadow_live",
+    # Sink A: book/exchange outliers from the same pull. Present even when Kalshi blocked the cloud egress IP (rows == []).
+    outliers = _outlier_rows(snap.get("book_outliers"), "nfl", min_ev, limit, now, age)
+    # An outlier-only snapshot has no Kalshi leg to lean on, so hold it to the sweep's own ~15-minute cadence.
+    window = _NFL_STALE_MINUTES if (snap.get("rows") or not snap.get("book_outliers")) else _NFL_OUTLIER_LIVE_MINUTES
+    stale = age is None or age > window
+    return {"rows": rows, "count": len(rows), "book_outliers": outliers,
+            "status": "idle" if stale else "shadow_live",
             "as_of": ts, "age_minutes": None if age is None else round(age, 1), "stale": stale,
             "summary": snap.get("summary") or {}, "validated": False}
 
@@ -481,26 +545,7 @@ def _props_feed(sport, min_ev, limit):
         age = (now - _datetime.fromisoformat(str(ts))).total_seconds() / 60.0
     except Exception:  # noqa: BLE001
         pass
-    rows = []
-    for r in snap.get("rows") or []:
-        try:
-            commence = _datetime.fromisoformat(str(r.get("commence")))
-        except Exception:  # noqa: BLE001
-            continue
-        mins_now = (commence - now).total_seconds() / 60.0
-        ev = _f(r.get("ev"))
-        if mins_now <= 0 or ev is None or (not r.get("flag") and ev < min_ev):
-            continue
-        rows.append({
-            "sport": sport, "venue": "book", "book": r.get("book"), "game_key": r.get("game_key"),
-            "stat": r.get("stat"), "player": r.get("player"), "player_id": r.get("player_id"),
-            "strike": _f(r.get("point")), "side": r.get("side"), "american": r.get("american"),
-            "net_ev": round(ev, 4), "fair_prob": _f(r.get("p_fair")), "n_books": r.get("n_books"),
-            "disp": _f(r.get("disp")), "commence": r.get("commence"), "mins_to_kick": round(mins_now, 1),
-            "flag": bool(r.get("flag")), "reason": r.get("reason"),
-        })
-    rows.sort(key=lambda x: (not x["flag"], -x["net_ev"]))
-    rows = rows[: int(limit)]
+    rows = _outlier_rows(snap.get("rows"), sport, min_ev, limit, now, age)
     stale = age is None or age > _PROPS_STALE_MINUTES
     return {"rows": rows, "count": len(rows), "status": "idle" if stale else "shadow_live", "as_of": ts,
             "age_minutes": None if age is None else round(age, 1), "stale": stale,

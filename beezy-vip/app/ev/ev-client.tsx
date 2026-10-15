@@ -2,21 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { Bet, EvFeed, EvHeadline, EvMlbRow, EvNflRow } from '@/lib/types'
+import type { Bet, EvBookOutlierRow, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
 import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
 import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
-import { SPORT_PILLARS } from '@/lib/sports'
+import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
 
 type SportFilter = 'all' | 'mlb' | 'nfl' | 'nba' | 'nhl'
 type VenueFilter = 'all' | 'exchanges' | string
 
 interface Row {
   key: string
-  sport: 'mlb' | 'nfl'
+  sport: 'mlb' | 'nfl' | 'nhl' | 'nba'
   tag: string
   tagColor: string
   matchup: string
@@ -35,6 +36,9 @@ interface Row {
   shadow: boolean
   status: 'pending' | 'win' | 'loss' | 'push' | 'void'
   copy: string
+  /** league player id (NHL playerId / ESPN athlete id) when the feed resolved one: drives the headshot */
+  playerId?: number | string | null
+  team?: string | null
 }
 
 const HAIR = '#1e2230'
@@ -110,10 +114,10 @@ function nflRow(r: EvNflRow): Row {
     when,
     title,
     bookKey: r.venue.toLowerCase(),
-    priceMain: `${Math.round(r.ask * 100)}¢`,
+    priceMain: `${Math.round(r.ask * 100)}\u00a2`,
     priceSub: `ask on ${book.label}`,
     fairProb: r.fair_prob,
-    fairSub: `${r.n_books ?? 0} book${r.n_books === 1 ? '' : 's'}${r.reason && !r.flag ? ` · ${r.reason.replace(/_/g, ' ').toLowerCase()}` : ''}`,
+    fairSub: `${r.n_books ?? 0} book${r.n_books === 1 ? '' : 's'}${r.reason && !r.flag ? ` \u00b7 ${r.reason.replace(/_/g, ' ').toLowerCase()}` : ''}`,
     nBooks: r.n_books,
     anchored: false,
     ev: r.net_ev,
@@ -122,6 +126,44 @@ function nflRow(r: EvNflRow): Row {
     shadow: true,
     status: 'pending',
     copy: `${title} (${gm}) YES-side ask ${Math.round(r.ask * 100)}c on ${book.label} -- shadow signal, unvalidated`,
+  }
+}
+
+/** Sink A row (NFL book_outliers, NHL/NBA props): a book or exchange quote beating the consensus of the OTHER books.
+ * Always SHADOW: no Beezy score, no stake sizing (EvCard keys both off `shadow`). */
+function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row {
+  const book = bookDisplay(r.book)
+  const point = r.point ?? r.line
+  const gm = (r.game_key ?? '').split(':')[2]?.replace('@', ' @ ') ?? ''
+  const matchup = gm || (r.away_team && r.home_team ? `${r.away_team} @ ${r.home_team}` : '')
+  const mins = r.mins_to_kick
+  const lead = sport === 'nfl' ? 'kick in' : 'starts in'
+  const when = mins == null ? '' : mins < 90 ? `${lead} ${Math.round(mins)}m` : `${lead} ${(mins / 60).toFixed(1)}h`
+  const title = `${r.player} ${String(r.side).toUpperCase() === 'OVER' ? 'Over' : 'Under'} ${point ?? ''} ${propStatLabel(r.stat ?? r.market)}`.replace(/\s+/g, ' ').trim()
+  const priceMain = formatOdds(r.american)
+  const gate = r.flag === false ? ` \u00b7 ${r.reason ? r.reason.replace(/_/g, ' ').toLowerCase() : 'outside alert gates'}` : ''
+  return {
+    key: `${sport}-${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`,
+    sport,
+    tag: sport.toUpperCase(), tagColor: SPORT_PILLARS[sport].accent,
+    matchup,
+    when,
+    title,
+    bookKey: r.book.toLowerCase(),
+    priceMain,
+    priceSub: book.isExchange ? 'exchange (shadow)' : 'sportsbook (shadow)',
+    fairProb: r.p_fair,
+    fairSub: `${r.n_books} book${r.n_books === 1 ? '' : 's'}${gate}`,
+    nBooks: r.n_books,
+    anchored: false,
+    ev: r.ev,
+    decimal: r.decimal || americanToDecimal(r.american),
+    score: null,
+    shadow: true,
+    status: 'pending',
+    copy: `${title} (${matchup}) @ ${book.label} ${priceMain} -- shadow signal, unvalidated`,
+    playerId: r.player_id ?? null,
+    team: r.team ?? null,
   }
 }
 
@@ -155,7 +197,10 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = []
     for (const r of feed?.mlb.rows ?? []) out.push(mlbRow(r))
+    for (const r of feed?.nfl?.book_outliers ?? []) out.push(bookOutlierRow(r, 'nfl'))
     for (const r of feed?.nfl?.rows ?? []) out.push(nflRow(r))
+    for (const r of feed?.nhl?.rows ?? []) out.push(bookOutlierRow(r, 'nhl'))
+    for (const r of feed?.nba?.rows ?? []) out.push(bookOutlierRow(r, 'nba'))
     return out
       .filter(r => (sport === 'all' || r.sport === sport))
       .filter(r => (venue === 'all' ? true : venue === 'exchanges' ? !!BOOK_META[r.bookKey]?.isExchange : r.bookKey === venue))
@@ -183,7 +228,8 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
         </h1>
         <p className="times" style={{ color: 'var(--silver)', fontSize: '15px', maxWidth: '72ch', marginTop: '10px' }}>
           Every row is a sportsbook or exchange price beating the de-vigged consensus of other books. MLB rows are
-          tracked and settled publicly at the flagged price. NFL rows come from a shadow sweep and are evidence only.
+          tracked and settled publicly at the flagged price. NFL, NHL and NBA rows come from shadow sweeps: evidence only,
+          never sized or scored.
         </p>
       </header>
 
@@ -193,10 +239,9 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       <section style={{ ...CARD_STYLE, padding: '14px 16px', margin: '18px 0', display: 'grid', gap: '12px' }} aria-label="Filters">
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Label>SPORT</Label>
-          {(['all', 'mlb', 'nfl', 'nba', 'nhl'] as SportFilter[]).map(s => {
-            const off = s === 'nba' || s === 'nhl'
-            return <Pill key={s} active={sport === s} disabled={off} title={off ? 'No live feed for this sport yet' : undefined} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>
-          })}
+          {(['all', 'mlb', 'nfl', 'nhl', 'nba'] as SportFilter[]).map(s => (
+            <Pill key={s} active={sport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>
+          ))}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <Label>VENUE</Label>
@@ -222,7 +267,8 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
         </div>
       </section>
 
-      {nfl && sport !== 'mlb' && <NflBanner nfl={nfl} />}
+      {nfl && (sport === 'all' || sport === 'nfl') && <NflBanner nfl={nfl} />}
+      {(sport === 'nhl' || sport === 'nba') && feed?.[sport] && <PropsBanner sport={sport} block={feed[sport]!} />}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '6px 2px 10px' }}>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} ROWS &middot; UPDATED {ageLabel.toUpperCase()}</span>
@@ -293,7 +339,7 @@ function TrackRecord({ h }: { h: EvHeadline | null }) {
         PAPER TRACK RECORD &middot; FLAGGED PRICE AT FLAG TIME
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '12px' }}>
-        <Kpi label="TRACKED +EV ALERTS" value={`${h.graded.toLocaleString()} graded`} sub={`${h.wins.toLocaleString()} W · ${h.losses.toLocaleString()} L · ${h.pushes} push · ${h.voids.toLocaleString()} void · ${h.pending} pending`} />
+        <Kpi label="TRACKED +EV ALERTS" value={`${h.graded.toLocaleString()} graded`} sub={`${h.wins.toLocaleString()} W \u00b7 ${h.losses.toLocaleString()} L \u00b7 ${h.pushes} push \u00b7 ${h.voids.toLocaleString()} void \u00b7 ${h.pending} pending`} />
         <Kpi label={`FLAT STAKE ($${h.flat_stake_unit}) P&L`} value={fmtMoney(h.flat_pnl_dollars, true)} color={pos(h.flat_roi_pct)} sub={`${h.flat_roi_pct != null ? (h.flat_roi_pct > 0 ? '+' : '') + h.flat_roi_pct.toFixed(2) : '--'}% ROI, voids excluded`} />
         <Kpi label={`1/4 KELLY ON ${fmtMoney(h.bankroll)}`} value={fmtMoney(h.kelly_ending_bankroll)} color={pos(h.kelly_roi_pct)} sub={`${h.kelly_roi_pct != null ? (h.kelly_roi_pct > 0 ? '+' : '') + h.kelly_roi_pct.toFixed(2) : '--'}% ROI on staked, ${fmtPct(h.kelly_cap, 0)} per-bet cap, non-compounding`} />
         <Kpi label="EXCHANGE SWEEP" value="Kalshi + Novig" sub="NFL props, shadow mode: priced and logged, no orders placed. Novig pre-game fee is $0." />
@@ -308,18 +354,33 @@ function TrackRecord({ h }: { h: EvHeadline | null }) {
   )
 }
 
-function NflBanner({ nfl }: { nfl: NonNullable<EvFeed['nfl']> }) {
-  const idle = nfl.status !== 'shadow_live'
-  const hrs = nfl.age_minutes != null ? nfl.age_minutes / 60 : null
+function ShadowBanner({ label, body, status, ageMinutes }: { label: string; body: string; status: string; ageMinutes: number | null }) {
+  const idle = status !== 'shadow_live'
+  const hrs = ageMinutes != null ? ageMinutes / 60 : null
   return (
     <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.07)', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
-      <strong style={{ color: '#f59e0b' }}>NFL SHADOW SWEEP.</strong>{' '}
-      Kalshi asks vs a sportsbook consensus, net of fee. Evidence collection only: unvalidated, no stake sizing shown, and most
-      props have 1-2 reference books.{' '}
-      {idle
-        ? `The sweep is idle${hrs != null ? ` (last run ${hrs < 48 ? `${hrs.toFixed(1)}h` : `${Math.round(hrs / 24)}d`} ago)` : ''}; it runs around game windows.`
-        : 'Sweep is running.'}
+      <strong style={{ color: '#f59e0b' }}>{label} SHADOW SWEEP.</strong>{' '}
+      {body} Evidence collection only: unvalidated, no stake sizing or score shown.{' '}
+      {status === 'unavailable'
+        ? 'No sweep output is available yet.'
+        : idle
+          ? `The sweep is idle${hrs != null ? ` (last run ${hrs < 48 ? `${hrs.toFixed(1)}h` : `${Math.round(hrs / 24)}d`} ago)` : ''}; it runs around game windows.`
+          : 'Sweep is running.'}
     </div>
+  )
+}
+
+function NflBanner({ nfl }: { nfl: NonNullable<EvFeed['nfl']> }) {
+  return (
+    <ShadowBanner label="NFL" status={nfl.status} ageMinutes={nfl.age_minutes}
+      body="Sportsbook and exchange quotes beating the consensus of the other books, plus Kalshi asks vs that consensus (net of fee). Most props have 1-2 reference books." />
+  )
+}
+
+function PropsBanner({ sport, block }: { sport: 'nhl' | 'nba'; block: EvPropsBlock }) {
+  return (
+    <ShadowBanner label={sport.toUpperCase()} status={block.status} ageMinutes={block.age_minutes}
+      body="Sportsbook quotes beating the consensus of the other books at the same player, stat and line." />
   )
 }
 
@@ -365,7 +426,12 @@ function EvCard({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; cop
           <span className="dell-heading" style={{ fontSize: '9px', color: r.tagColor, border: `1px solid ${r.tagColor}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.tag}</span>
           <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fog)' }}>{r.matchup} &middot; {r.when}</span>
         </div>
-        <div style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--chalk)', lineHeight: 1.35 }}>{r.title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {(r.sport === 'nhl' || r.sport === 'nba' || r.sport === 'mlb') && r.playerId != null && (
+            <PlayerHeadshot sport={r.sport} id={r.playerId} name={r.title} size={36} />
+          )}
+          <div style={{ fontSize: '14.5px', fontWeight: 600, color: 'var(--chalk)', lineHeight: 1.35 }}>{r.title}</div>
+        </div>
       </Cell>
 
       <Cell label="TARGET PRICE" basis="150px">

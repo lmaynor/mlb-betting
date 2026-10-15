@@ -1,15 +1,16 @@
 """
-runners/monitor_ops.py — Infrastructure health monitor.
+runners/monitor_ops.py -- Infrastructure health monitor.
 
 Fires at 15:20 UTC daily (after all feature builds complete) via the
 mlb-monitor-ops Cloud Scheduler job. Posts to Discord ONLY when something
-is wrong — silent on a clean run.
+is wrong -- silent on a clean run.
 
 Checks:
   1. All 11 Cloud Scheduler jobs: last run status.code (0 = ok, 2 = error)
   2. SGO snapshot age: Odds/sgo/latest.json must be < 26 hrs old
   3. Feature CSV age: each system's model_features.csv must be < 26 hrs old
   4. Model artifact exists: each system's xgb_*.json must exist in GCS
+  5. NFL/last_refresh.json (when present) must not report status=error
 
 Called by main.py /monitor-ops.
 """
@@ -35,8 +36,8 @@ logger = logging.getLogger(__name__)
 # file's health check exists to catch. CONTEXT.md s9 corrected alongside
 # this deletion.
 
-# Derived from registry — OUTS shares K's feature CSV so deduplicate by value.
-# Use a dict comprehension; OUTS will map to the same path as K (that's correct —
+# Derived from registry -- OUTS shares K's feature CSV so deduplicate by value.
+# Use a dict comprehension; OUTS will map to the same path as K (that's correct --
 # both share one CSV, so the freshness check fires once per unique path).
 FEATURE_KEYS = {
     s: cfg.feature_csv
@@ -78,14 +79,14 @@ GCP_PROJECT        = os.getenv("GCP_PROJECT", "concrete-crow-445205-m4")
 SCHEDULER_LOCATION = os.getenv("SCHEDULER_LOCATION", "us-central1")
 
 
-# ── Scheduler checks ──────────────────────────────────────────────────────────
+# -- Scheduler checks ----------------------------------------------------------
 
 def _check_schedulers() -> list[str]:
     """Return failure messages for any scheduler job whose last run errored."""
     try:
         from google.cloud import scheduler_v1
     except ImportError:
-        logger.warning("monitor_ops: google-cloud-scheduler not installed — skipping")
+        logger.warning("monitor_ops: google-cloud-scheduler not installed -- skipping")
         return []
 
     client = scheduler_v1.CloudSchedulerClient()
@@ -96,18 +97,17 @@ def _check_schedulers() -> list[str]:
         return [f"Scheduler API error: {e}"]
 
     failures = []
+    paused = scheduler_v1.Job.State.PAUSED
     for job in jobs:
         name = job.name.split("/")[-1]
         # Check EVERY enabled scheduler, not an allowlist -- the hardcoded
         # SCHEDULER_JOBS filter silently ignored all newer jobs, which is how
         # PERMISSION_DENIED (code 7) and OOM 503s (code 14) ran for days
-        # unalerted. Paused jobs are deliberate; skip only those.
-        try:
-            from google.cloud import scheduler_v1 as _sv1
-            if job.state == _sv1.Job.State.PAUSED:
-                continue
-        except Exception:  # noqa: BLE001
-            pass
+        # unalerted. That covers every pillar's jobs (nfl-/nhl-/nba-refresh-data,
+        # odds-bank-*, props-alerts-*, props-grade-*, ev-nfl-props-sweep, ...).
+        # Paused jobs are deliberate (e.g. an off-season sport); skip only those.
+        if job.state == paused:
+            continue
         code = job.status.code if job.status else 0
         if code not in (0, -1):  # -1 = never run, 0 = ok
             last_run = (
@@ -142,7 +142,7 @@ def _check_odds_history_freshness() -> list[str]:
     return []
 
 
-# ── GCS freshness / existence checks ─────────────────────────────────────────
+# -- GCS freshness / existence checks -----------------------------------------
 
 def _gcs_age_hours(gcs_key: str) -> float | None:
     """Return age of a GCS object in hours. None if missing or GCS unavailable."""
@@ -170,6 +170,28 @@ def _check_data_masters() -> list[str]:
         elif age > DATA_STALE_HOURS:
             failures.append(f"`{name}` stale: {age:.1f}h old")
     return failures
+
+
+NFL_SENTINEL_KEY = "NFL/last_refresh.json"
+
+
+def _check_nfl_sentinel() -> list[str]:
+    """The NFL nflverse refresh (nfl.data.ingest.run) writes NFL/last_refresh.json with status ok | partial | error.
+    Only a hard `error` alerts here: `partial` means some files landed. A missing sentinel is silent (the pillar may
+    not have run yet) -- it is NOT a freshness check, nfl-refresh-data's scheduler status covers a dead job."""
+    import json
+    from mlb_core.storage import exists, read_bytes
+    try:
+        if not exists(NFL_SENTINEL_KEY):
+            return []
+        data = json.loads(read_bytes(NFL_SENTINEL_KEY).decode())
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"monitor_ops: NFL sentinel check failed: {e}")
+        return []
+    if data.get("status") != "error":
+        return []
+    detail = "; ".join(f"{f.get('item')}: {str(f.get('error'))[:80]}" for f in (data.get("failures") or [])[:3])
+    return [f"NFL refresh failed (status=error, at={data.get('timestamp', '?')})" + (f": {detail}" if detail else "")]
 
 
 def _check_snapshot_freshness() -> list[str]:
@@ -263,7 +285,7 @@ def _check_model_artifacts() -> list[str]:
     return failures
 
 
-# ── Discord ───────────────────────────────────────────────────────────────────
+# -- Discord -------------------------------------------------------------------
 
 def _post_ops_alert(failures: list[str], run_date: str) -> None:
     from mlb_core.notify.discord import _get_ops_webhook, _post
@@ -273,18 +295,18 @@ def _post_ops_alert(failures: list[str], run_date: str) -> None:
         logger.warning("monitor_ops: no webhook configured")
         return
 
-    bullet_list = "\n".join(f"• {f}" for f in failures)
+    bullet_list = "\n".join(f"\u2022 {f}" for f in failures)
     embed = {
-        "title":       f"🚨 Ops Alert | {run_date}",
+        "title":       f"\U0001F6A8 Ops Alert | {run_date}",
         "description": f"**{len(failures)} issue(s) detected:**\n{bullet_list}",
         "color":       0xED4245,
         "footer":      {"text": "mlb-betting ops monitor"},
     }
     _post(webhook_url, {"embeds": [embed]})
-    logger.warning(f"monitor_ops: alert posted — {len(failures)} failure(s)")
+    logger.warning(f"monitor_ops: alert posted -- {len(failures)} failure(s)")
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# -- Entry point ---------------------------------------------------------------
 
 def run(run_date: str = None) -> dict:
     """Run all infrastructure health checks. Post to Discord only on failure."""
@@ -298,6 +320,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_data_masters()
     failures += _check_snapshot_freshness()
     failures += _check_build_sentinels()
+    failures += _check_nfl_sentinel()
     failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()

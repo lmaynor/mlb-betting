@@ -547,3 +547,133 @@ def test_ev_feed_carries_nhl_nba_props_with_freshness_and_drops_started_games(mo
     assert nhl["count"] == 1 and nhl["rows"][0]["player"] == "Alex Ovechkin" and nhl["validated"] is False
     assert nhl["status"] == "shadow_live" and nhl["rows"][0]["venue"] == "book"
     assert api._props_feed("nba", 0.05, 50)["status"] == "unavailable"                # no sweep output yet
+
+
+# ---------------------------------------------------------------------------
+# Sink A rows across sports (2026-10-14): NFL book_outliers + NHL/NBA share one row shape
+# ---------------------------------------------------------------------------
+
+def _store(monkeypatch, files):
+    def read_bytes(key):
+        if key in files:
+            return json.dumps(files[key]).encode()
+        raise FileNotFoundError(key)
+    monkeypatch.setattr("mlb_core.storage.read_bytes", read_bytes)
+
+
+def _outlier(book="softbook", ev=0.07, n_books=5, hours=2, **over):
+    from datetime import datetime, timedelta, timezone
+    r = {"ts": datetime.now(timezone.utc).isoformat(), "game_key": "nfl:2026-10-18:IND@WAS",
+         "commence": (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat(), "mins_to_kick": hours * 60.0,
+         "book": book, "player": "Test Player", "player_norm": "test player", "player_id": None, "stat": "rec_yds",
+         "point": 63.5, "alt": False, "side": "OVER", "american": 115, "decimal": 2.15, "p_fair": 0.5, "ev": ev,
+         "n_books": n_books, "disp": 0.01}
+    r.update(over)
+    return r
+
+
+def test_nfl_feed_returns_book_outliers_when_kalshi_blocked_and_drops_started_games(monkeypatch):
+    from datetime import datetime, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+    snap = {"ts": now.isoformat(), "summary": {"kalshi_reachable": False}, "rows": [], "book_outliers": [
+        _outlier("fanduel", 0.05),
+        _outlier("started", 0.20, hours=-1),                    # kicked off: the quote is dead
+        _outlier("lowev", 0.01),                                # below min_ev
+        _outlier("huge", 0.30),                                 # > cap: reference error, listed but NOT flagged
+        _outlier("thin", 0.06, n_books=2)]}                     # thin reference: listed but NOT flagged
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": snap})
+    out = api._nfl_feed(0.02, 50)
+    assert out["rows"] == [] and out["count"] == 0
+    got = {r["book"]: r for r in out["book_outliers"]}
+    assert set(got) == {"fanduel", "huge", "thin"}
+    assert [r["book"] for r in out["book_outliers"]][0] == "fanduel"          # credible (flagged) rows sort first
+    assert got["fanduel"]["flag"] is True and got["huge"]["flag"] is False and got["thin"]["flag"] is False
+    f = got["fanduel"]
+    assert f["sport"] == "nfl" and f["ev"] == 0.05 and f["p_fair"] == 0.5 and f["point"] == 63.5 and f["decimal"] == 2.15
+    assert f["away_team"] == "IND" and f["home_team"] == "WAS" and f["mins_to_kick"] > 0
+    # Kalshi blocked + fresh outliers => the shadow sweep is LIVE, not idle
+    assert out["status"] == "shadow_live" and out["stale"] is False and out["validated"] is False
+
+
+def test_nfl_outlier_only_snapshot_must_be_fresh_but_kalshi_rows_keep_the_long_window(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+    old_ts = (now - timedelta(minutes=90)).isoformat()
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": {"ts": old_ts, "rows": [], "book_outliers": [_outlier()]}})
+    out = api._nfl_feed(0.02, 10)
+    assert out["status"] == "idle" and out["stale"] is True and out["age_minutes"] == pytest.approx(90, abs=1)
+    kalshi_row = {"ticker": "A", "stat": "rec_yds", "player": "P", "strike": 50.5, "p_over": 0.4, "ask_yes": 0.3,
+                  "ev_yes": 0.08, "ask_no": 0.7, "ev_no": -0.1, "n_books": 5, "flag": True,
+                  "commence": (now + timedelta(hours=2)).isoformat()}
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": {"ts": old_ts, "rows": [kalshi_row], "book_outliers": [_outlier()]}})
+    assert api._nfl_feed(0.02, 10)["status"] == "shadow_live"                # 90 min < the 180-min Kalshi window
+    # a pre-2026-10-14 snapshot has no book_outliers key at all
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": {"ts": now.isoformat(), "rows": [kalshi_row]}})
+    out = api._nfl_feed(0.02, 10)
+    assert out["book_outliers"] == [] and out["count"] == 1
+
+
+def test_outlier_row_without_commence_uses_stored_minutes_minus_snapshot_age():
+    from datetime import datetime, timezone
+    from mlb.runners.public_api import _outlier_row
+    r = _outlier()
+    del r["commence"]
+    now = datetime.now(timezone.utc)
+    assert _outlier_row(dict(r, mins_to_kick=30.0), "nfl", now, age_min=10.0)["mins_to_kick"] == 20.0
+    assert _outlier_row(dict(r, mins_to_kick=30.0), "nfl", now, age_min=45.0) is None      # already kicked off
+    assert _outlier_row(dict(r, american=None), "nfl", now) is None                        # no usable price
+
+
+def test_nhl_and_nba_blocks_parse_the_props_sweep_payload_into_the_shared_row_shape(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+
+    def sweep_row(sport, **over):
+        r = {"sport": sport, "ts": now.isoformat(), "game_key": f"{sport}:2026-10-14:MTL@WSH", "event_id": "e1",
+             "commence": (now + timedelta(hours=2)).isoformat(), "mins_to_start": 120.0, "away": "MTL", "home": "WSH",
+             "book": "fanduel", "player": "Alex Ovechkin", "player_norm": "alex ovechkin", "player_id": 8471214,
+             "stat": "sog", "point": 2.5, "alt": False, "side": "OVER", "american": -105, "decimal": 1.9524,
+             "p_fair": 0.55, "ev": 0.074, "n_books": 4, "disp": 0.01, "flag": True, "reason": "FLAG"}
+        r.update(over)
+        return r
+    _store(monkeypatch, {
+        "EVSweep/nhl_props/latest.json": {"ts": now.isoformat(), "summary": {"flagged": 1}, "rows": [
+            sweep_row("nhl"), sweep_row("nhl", player="Started", commence=(now - timedelta(minutes=5)).isoformat())]},
+        "EVSweep/nba_props/latest.json": {"ts": now.isoformat(), "summary": {}, "rows": [
+            sweep_row("nba", game_key="nba:2026-10-14:LAL@GSW", away="LAL", home="GSW", stat="pts", point=24.5,
+                      player="Test Guard", player_id=3975)]}})
+    nhl, nba = api._props_feed("nhl", 0.02, 50), api._props_feed("nba", 0.02, 50)
+    assert nhl["count"] == 1 and nhl["status"] == "shadow_live" and nhl["validated"] is False
+    r = nhl["rows"][0]
+    assert (r["sport"], r["player"], r["player_id"], r["book"], r["american"], r["decimal"]) == ("nhl", "Alex Ovechkin", 8471214, "fanduel", -105, 1.9524)
+    assert (r["point"], r["ev"], r["p_fair"], r["away_team"], r["home_team"], r["flag"]) == (2.5, 0.074, 0.55, "MTL", "WSH", True)
+    assert nba["count"] == 1 and nba["rows"][0]["sport"] == "nba" and nba["rows"][0]["stat"] == "pts"
+    assert nba["rows"][0]["away_team"] == "LAL" and nba["rows"][0]["home_team"] == "GSW"
+
+
+def test_nhl_nba_degrade_to_unavailable_then_idle_when_stale(monkeypatch):
+    from mlb.runners import public_api as api
+    _store(monkeypatch, {})
+    for sp in ("nhl", "nba"):
+        out = api._props_feed(sp, 0.02, 10)
+        assert out["status"] == "unavailable" and out["rows"] == [] and out["count"] == 0 and out["validated"] is False
+    _store(monkeypatch, {"EVSweep/nba_props/latest.json": {"ts": "2020-01-01T00:00:00+00:00", "rows": []}})
+    out = api._props_feed("nba", 0.02, 10)
+    assert out["status"] == "idle" and out["stale"] is True
+
+
+def test_ev_scanner_feed_returns_all_four_sport_blocks_or_just_the_requested_one(monkeypatch):
+    from datetime import datetime, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc).isoformat()
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": {"ts": now, "rows": [], "book_outliers": [_outlier()]}})
+    monkeypatch.setattr(api, "_ev_mlb_rows", lambda *a, **k: [])
+    allf = api.get_ev_scanner_feed(None, sport="all")
+    assert set(allf) >= {"mlb", "nfl", "nhl", "nba"}
+    assert allf["mlb"] == {"rows": [], "count": 0}
+    assert allf["nfl"]["book_outliers"] and allf["nhl"]["status"] == "unavailable" and allf["nba"]["status"] == "unavailable"
+    only = api.get_ev_scanner_feed(None, sport="nhl")
+    assert only["nhl"] is not None and only["nfl"] is None and only["nba"] is None and only["mlb"]["rows"] == []

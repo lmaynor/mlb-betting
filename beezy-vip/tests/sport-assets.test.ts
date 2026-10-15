@@ -21,7 +21,7 @@ describe('team vocabulary', () => {
   })
 
   it.each([
-    ['nhl', 'MTL', 'MTL'], ['nhl', 'Montréal Canadiens', 'MTL'], ['nhl', 'Montreal Canadiens', 'MTL'],
+    ['nhl', 'MTL', 'MTL'], ['nhl', 'Montr\u00e9al Canadiens', 'MTL'], ['nhl', 'Montreal Canadiens', 'MTL'],
     ['nhl', 'LA', 'LAK'], ['nhl', 'NJ', 'NJD'], ['nhl', 'TB', 'TBL'], ['nhl', 'St. Louis Blues', 'STL'],
     ['nhl', 'Canadiens', 'MTL'],
     ['nba', 'L.A. Clippers', 'LAC'], ['nba', 'LA Clippers', 'LAC'], ['nba', 'GS', 'GSW'],
@@ -39,7 +39,7 @@ describe('team vocabulary', () => {
   })
 
   it('folds accents, periods and hyphens', () => {
-    expect(fold('  Montréal  Canadiens ')).toBe('montreal canadiens')
+    expect(fold('  Montr\u00e9al  Canadiens ')).toBe('montreal canadiens')
     expect(fold('L.A. Clippers')).toBe('la clippers')
   })
 })
@@ -88,7 +88,7 @@ describe('headshots', () => {
   it('slug matches the Python build script', () => {
     expect(playerSlug('Alex Ovechkin')).toBe('alex_ovechkin')
     expect(playerSlug("Ja'Marr Chase Jr.")).toBe('jamarr_chase_jr')
-    expect(playerSlug('Nikola Jokić')).toBe('nikola_jokic')
+    expect(playerSlug('Nikola Joki\u0107')).toBe('nikola_jokic')
     expect(playerSlug('Karl-Anthony Towns')).toBe('karl_anthony_towns')
   })
 
@@ -96,7 +96,7 @@ describe('headshots', () => {
     expect(headshotUrlByName('nhl', 'Alex Ovechkin')).toBe('https://assets.nhle.com/mugs/nhl/latest/8471214.png')
     expect(headshotUrlByName('nhl', 'Alex Ovechkin', 'Washington Capitals')).toContain('8471214')
     expect(headshotUrlByName('nba', 'LeBron James')).toContain('players/full/1966.png')
-    expect(headshotUrlByName('nba', 'Nikola Jokić')).not.toBeNull()          // accent-folded
+    expect(headshotUrlByName('nba', 'Nikola Joki\u0107')).not.toBeNull()          // accent-folded
   })
 
   it('returns null for unknown players and empty names', () => {
@@ -118,7 +118,7 @@ describe('MLB headshots (MLB CDN silo variant)', () => {
   it('resolves names the way the pages used to (accent, hyphen, plain)', () => {
     expect(playerIdByName('mlb', 'Aaron Judge')).toBe((mlbMap as Record<string, number>)['aaron_judge'])
     expect(playerIdByName('mlb', 'Ha-Seong Kim')).toBe((mlbMap as Record<string, number>)['ha_seong_kim'])
-    expect(playerIdByName('mlb', 'Randy Vásquez')).toBe((mlbMap as Record<string, number>)['randy_vásquez'])
+    expect(playerIdByName('mlb', 'Randy V\u00e1squez')).toBe((mlbMap as Record<string, number>)['randy_v\u00e1squez'])
     expect(headshotUrlByName('mlb', 'Aaron Judge')).toContain('/people/592450/')
     expect(playerIdByName('mlb', 'Nobody McFake')).toBeNull()
     expect(playerIdByName('mlb', null)).toBeNull()
