@@ -1,0 +1,483 @@
+{
+ "timestamp": "2026-10-15T03:58:04Z",
+ "status": "success",
+ "season": {
+  "year": 2027,
+  "type": 1,
+  "name": "Preseason",
+  "displayName": "2026-27"
+ },
+ "injuries": [
+  {
+   "id": "1",
+   "displayName": "Atlanta Hawks",
+   "injuries": [
+    {
+     "id": "534140",
+     "longComment": "Gilbert continues to deal with patella tendinitis. His last chance to appear this preseason is Friday against the Mavericks.",
+     "shortComment": "Gilbert (knee) won't play in Monday's preseason game against the Thunder, per Brad Rowland of the Locked On Podcast Network.",
+     "status": "Day-To-Day",
+     "date": "2026-10-12T21:36Z",
+     "athlete": {
+      "firstName": "Keshon",
+      "lastName": "Gilbert",
+      "displayName": "Keshon Gilbert",
+      "shortName": "K. Gilbert",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/4585618/keshon-gilbert",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/4585618.png",
+       "alt": "Keshon Gilbert"
+      },
+      "position": {
+       "id": "3",
+       "name": "Guard",
+       "displayName": "Guard",
+       "abbreviation": "G",
+       "leaf": false
+      },
+      "team": {
+       "id": "1",
+       "slug": "atlanta-hawks",
+       "name": "Hawks",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Hawks"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "6",
+      "name": "INJURY_STATUS_DAYTODAY",
+      "description": "day-to-day",
+      "abbreviation": "DD"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "GTD",
+       "abbreviation": "GTD"
+      },
+      "type": "Knee",
+      "location": "Leg",
+      "detail": "Tendinitis",
+      "side": "Left",
+      "returnDate": "2026-10-16"
+     }
+    },
+    {
+     "id": "534138",
+     "longComment": "Wiggins and most of Atlanta's regulars won't play in the penultimate preseason game. He finished with 13 points (4-9 FG, 3-6 3Pt, 2-2 FT), two rebounds, an assist and two steals across 20 minutes off ",
+     "shortComment": "Wiggins (rest) won't play in Monday's preseason game against the Thunder, Brad Rowland of the Locked On Podcast Network reports.",
+     "status": "Day-To-Day",
+     "date": "2026-10-12T21:33Z",
+     "athlete": {
+      "firstName": "Aaron",
+      "lastName": "Wiggins",
+      "displayName": "Aaron Wiggins",
+      "shortName": "A. Wiggins",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/4397183/aaron-wiggins",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/4397183.png",
+       "alt": "Aaron Wiggins"
+      },
+      "position": {
+       "id": "3",
+       "name": "Guard",
+       "displayName": "Guard",
+       "abbreviation": "G",
+       "leaf": false
+      },
+      "team": {
+       "id": "1",
+       "slug": "atlanta-hawks",
+       "name": "Hawks",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Hawks"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "6",
+      "name": "INJURY_STATUS_DAYTODAY",
+      "description": "day-to-day",
+      "abbreviation": "DD"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "GTD",
+       "abbreviation": "GTD"
+      },
+      "type": "Rest",
+      "location": "Other",
+      "returnDate": "2026-10-16"
+     }
+    },
+    {
+     "id": "534137",
+     "longComment": "Okongwu is getting the night off Monday with Atlanta resting a number of starters. His next chance to play arrives Friday against Dallas.",
+     "shortComment": "Okongwu (rest) is out for Monday's preseason game against the Thunder, per Brad Rowland of the Locked On Podcast Network.",
+     "status": "Day-To-Day",
+     "date": "2026-10-12T21:33Z",
+     "athlete": {
+      "firstName": "Onyeka",
+      "lastName": "Okongwu",
+      "displayName": "Onyeka Okongwu",
+      "shortName": "O. Okongwu",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/4431680/onyeka-okongwu",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/4431680.png",
+       "alt": "Onyeka Okongwu"
+      },
+      "position": {
+       "id": "7",
+       "name": "Forward",
+       "displayName": "Forward",
+       "abbreviation": "F",
+       "leaf": false
+      },
+      "team": {
+       "id": "1",
+       "slug": "atlanta-hawks",
+       "name": "Hawks",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Hawks"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "6",
+      "name": "INJURY_STATUS_DAYTODAY",
+      "description": "day-to-day",
+      "abbreviation": "DD"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "GTD",
+       "abbreviation": "GTD"
+      },
+      "type": "Rest",
+      "location": "Other",
+      "returnDate": "2026-10-16"
+     }
+    },
+    {
+     "id": "-57577",
+     "longComment": "Veesaar suffered the injury during a workout on Sept. 15, and an MRI confirmed the diagnosis. The No. 52 overall pick in the 2026 NBA Draft, Veesaar was expected to spend a lot of time with Atlanta's ",
+     "shortComment": "Veesaar was diagnosed with a torn right ACL and is expected to miss the 2026-27 season, the Hawks announced Monday.",
+     "status": "Out",
+     "date": "2026-09-21T19:50Z",
+     "athlete": {
+      "firstName": "Henri",
+      "lastName": "Veesaar",
+      "displayName": "Henri Veesaar",
+      "shortName": "H. Veesaar",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/5105571/henri-veesaar",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/5105571.png",
+       "alt": "Henri Veesaar"
+      },
+      "position": {
+       "id": "9",
+       "name": "Center",
+       "displayName": "Center",
+       "abbreviation": "C",
+       "leaf": false
+      },
+      "team": {
+       "id": "1",
+       "slug": "atlanta-hawks",
+       "name": "Hawks",
+       "abbreviation": "ATL",
+       "displayName": "Atlanta Hawks"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "4",
+      "name": "INJURY_STATUS_OUT",
+      "description": "out",
+      "abbreviation": "O"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "OFS",
+       "abbreviation": "OFS"
+      },
+      "type": "Knee",
+      "location": "Leg",
+      "side": "Right",
+      "returnDate": "2027-07-01"
+     }
+    }
+   ]
+  },
+  {
+   "id": "2",
+   "displayName": "Boston Celtics",
+   "injuries": [
+    {
+     "id": "534456",
+     "longComment": "Carter will miss a second consecutive game due to an illness. His next chance to suit up could come Friday against Philadelphia.",
+     "shortComment": "Carter (illness) won't play in Wednesday's preseason game against Charlotte, Bobby Krivitsky of Forbes.com reports.",
+     "status": "Day-To-Day",
+     "date": "2026-10-14T23:43Z",
+     "athlete": {
+      "firstName": "Devin",
+      "lastName": "Carter",
+      "displayName": "Devin Carter",
+      "shortName": "D. Carter",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/4433188/devin-carter",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/4433188.png",
+       "alt": "Devin Carter"
+      },
+      "position": {
+       "id": "3",
+       "name": "Guard",
+       "displayName": "Guard",
+       "abbreviation": "G",
+       "leaf": false
+      },
+      "team": {
+       "id": "2",
+       "slug": "boston-celtics",
+       "name": "Celtics",
+       "abbreviation": "BOS",
+       "displayName": "Boston Celtics"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "6",
+      "name": "INJURY_STATUS_DAYTODAY",
+      "description": "day-to-day",
+      "abbreviation": "DD"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "GTD",
+       "abbreviation": "GTD"
+      },
+      "type": "Illness",
+      "location": "Other",
+      "returnDate": "2026-10-16"
+     }
+    }
+   ]
+  },
+  {
+   "id": "17",
+   "displayName": "Brooklyn Nets",
+   "injuries": [
+    {
+     "id": "534410",
+     "longComment": "The rookie first-rounder will now have been sidelined for the entire preseason with a back injury, costing him valuable reps this fall. His status is up in the air for Wednesday's regular-season opene",
+     "shortComment": "Jefferson (back) won't play in Wednesday's preseason game versus the Heat, per Erik Slater of ClutchPoints.com.",
+     "status": "Day-To-Day",
+     "date": "2026-10-14T19:24Z",
+     "athlete": {
+      "firstName": "Joshua",
+      "lastName": "Jefferson",
+      "displayName": "Joshua Jefferson",
+      "shortName": "J. Jefferson",
+      "links": [
+       {
+        "language": "en-US",
+        "rel": [
+         "playercard",
+         "desktop",
+         "athlete"
+        ],
+        "href": "https://www.espn.com/nba/player/_/id/4870564/joshua-jefferson",
+        "text": "Player Card",
+        "shortText": "Player Card",
+        "isExternal": false,
+        "isPremium": false
+       }
+      ],
+      "headshot": {
+       "href": "https://a.espncdn.com/i/headshots/nba/players/full/4870564.png",
+       "alt": "Joshua Jefferson"
+      },
+      "position": {
+       "id": "7",
+       "name": "Forward",
+       "displayName": "Forward",
+       "abbreviation": "F",
+       "leaf": false
+      },
+      "team": {
+       "id": "17",
+       "slug": "brooklyn-nets",
+       "name": "Nets",
+       "abbreviation": "BKN",
+       "displayName": "Brooklyn Nets"
+      },
+      "notes": {
+       "items": []
+      },
+      "status": {
+       "id": "1",
+       "name": "Active",
+       "type": "active",
+       "abbreviation": "Active"
+      }
+     },
+     "source": {
+      "id": "1",
+      "description": "basic/manual",
+      "state": "basic"
+     },
+     "type": {
+      "id": "6",
+      "name": "INJURY_STATUS_DAYTODAY",
+      "description": "day-to-day",
+      "abbreviation": "DD"
+     },
+     "details": {
+      "fantasyStatus": {
+       "description": "GTD",
+       "abbreviation": "GTD"
+      },
+      "type": "Back",
+      "location": "Torso",
+      "returnDate": "2026-10-21"
+     }
+    }
+   ]
+  }
+ ]
+}

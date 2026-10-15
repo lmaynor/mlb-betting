@@ -6,6 +6,7 @@ Canonical columns (one row per skater appearance):
     player_id (int)  game_id (int)  date ('YYYY-MM-DD', the ET game date)  team  opp  is_home (0/1)  position
     toi_sec (float)  sog (float)  attempts (float, NaN if unknown)  pp_attempts (float, NaN if unknown)
     goals  assists
+    sog_xg (float, NaN if no shot geometry)  hd_sog (float, NaN if no shot geometry)   -- from the pbp shots table only
 Only regular-season / playoff games (game_type 2, 3): preseason lineups are not representative.
 """
 from __future__ import annotations
@@ -16,7 +17,24 @@ import numpy as np
 import pandas as pd
 
 GAMELOG_COLS = ["player_id", "game_id", "date", "team", "opp", "is_home", "position", "toi_sec", "sog", "attempts",
-                "pp_attempts", "goals", "assists"]
+                "pp_attempts", "goals", "assists", "sog_xg", "hd_sog"]
+
+# ---- shot-quality PROXY. The shots master (nhl/data/flatten.py) carries x/y/dist_ft/angle_deg/shot_type but NO xG column,
+# so `sog_xg` is a FIXED, hand-set distance/angle function -- NOT a fitted or calibrated expected-goals model (fitting it
+# on the full history would leak the future into early rows, and nothing here claims calibration). It only has to rank
+# shots by danger so the SOG model can see "this player takes shots from the slot".
+XG_PROXY_SCALE_FT = 22.0
+HIGH_DANGER_MAX_DIST_FT = 25.0
+HIGH_DANGER_MAX_ANGLE_DEG = 45.0
+SOG_EVENTS = ("sog", "goal")           # shots that reached the net (blocks and misses are not SOG)
+
+
+def xg_proxy(dist_ft, angle_deg):
+    """PROXY expected-goal value of a shot: 0.45 * exp(-dist/22) * (1 - 0.55 * angle/90). Monotone in distance and angle,
+    ~0.27 from 10 ft in the slot, ~0.03 from 60 ft. NaN geometry -> NaN. Fixed constants; see the block comment above."""
+    d = np.clip(np.asarray(dist_ft, dtype=float), 3.0, 100.0)
+    a = np.clip(np.asarray(angle_deg, dtype=float), 0.0, 90.0)
+    return 0.45 * np.exp(-d / XG_PROXY_SCALE_FT) * (1.0 - 0.55 * a / 90.0)
 
 
 def game_type_from_id(game_id) -> int:
@@ -53,11 +71,37 @@ def from_masters(games: pd.DataFrame, skaters: pd.DataFrame, shots: pd.DataFrame
         agg = agg.rename(columns={"shooter_id": "player_id"})
         agg["player_id"] = agg["player_id"].astype("int64")
         s = s.merge(agg, on=["game_id", "player_id"], how="left")
+        s = _add_shot_quality(s, sh)
         # a skater who played but never shot has no shot rows: 0, not unknown -- but only where the game HAS pbp shots
         have = set(sh["game_id"].unique())
         in_have = s["game_id"].isin(have)
         s.loc[in_have, ["attempts", "pp_attempts"]] = s.loc[in_have, ["attempts", "pp_attempts"]].fillna(0)
     return _finish(s)
+
+
+def _add_shot_quality(s: pd.DataFrame, sh: pd.DataFrame) -> pd.DataFrame:
+    """Per (game, shooter): sog_xg = sum of xg_proxy over his shots ON GOAL (sog + goal; empty-net shots excluded) and
+    hd_sog = count of those inside the high-danger box. NaN where the game has no geometry at all (a missing season is
+    unknown, never zero); 0 where the game has geometry but this skater had no qualifying shot."""
+    if "dist_ft" not in sh.columns or "angle_deg" not in sh.columns:
+        s["sog_xg"], s["hd_sog"] = np.nan, np.nan
+        return s
+    q = sh[sh["event"].isin(SOG_EVENTS)].copy()
+    if "empty_net" in q.columns:
+        # CSV round-trips can leave this column as the strings 'True'/'False' (mixed dtype): never bool('False')
+        q = q[~q["empty_net"].map(lambda v: str(v).strip().lower() == "true")]
+    q["xg"] = xg_proxy(q["dist_ft"], q["angle_deg"])
+    q["hd"] = ((q["dist_ft"] <= HIGH_DANGER_MAX_DIST_FT) & (q["angle_deg"] <= HIGH_DANGER_MAX_ANGLE_DEG)).astype(float)
+    q.loc[q["dist_ft"].isna() | q["angle_deg"].isna(), "hd"] = np.nan
+    agg = q.groupby(["game_id", "shooter_id"]).agg(sog_xg=("xg", lambda x: x.sum(min_count=1)),
+                                                     hd_sog=("hd", lambda x: x.sum(min_count=1))).reset_index()
+    agg = agg.rename(columns={"shooter_id": "player_id"})
+    agg["player_id"] = agg["player_id"].astype("int64")
+    s = s.merge(agg, on=["game_id", "player_id"], how="left")
+    have_geo = set(sh.loc[sh["dist_ft"].notna() & sh["angle_deg"].notna(), "game_id"].unique())
+    m = s["game_id"].isin(have_geo)
+    s.loc[m, ["sog_xg", "hd_sog"]] = s.loc[m, ["sog_xg", "hd_sog"]].fillna(0.0)
+    return s
 
 
 def _ro(path: str) -> sqlite3.Connection:

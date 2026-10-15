@@ -6,7 +6,7 @@
 import fs from 'fs'
 import path from 'path'
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import type { EvBookOutlierRow, EvFeed, EvMlbRow } from '../lib/types'
 
 jest.mock('@/lib/betting-api', () => ({ apiGetEvFeed: jest.fn(() => new Promise(() => {})) }))
@@ -90,12 +90,68 @@ describe('EvClient shadow rows', () => {
   })
 })
 
+describe('Compare books drawer', () => {
+  const quotes = [
+    { book: 'draftkings', over: -130, under: 105, fair: 0.54 },
+    { book: 'fanduel', over: 112, under: -135, fair: 0.5 },
+    { book: 'betmgm', over: 110, under: null, fair: null },
+    { book: 'caesars', over: null, under: -120, fair: 0.512 },
+  ]
+  const withBooks = (side: string): EvFeed => ({
+    ...feed, mlb: { rows: [], count: 0 }, nfl: null, nba: null,
+    nhl: block([outlier({ side, all_books: quotes })]),
+  })
+
+  it('toggles the book strip behind Compare N books, best OVER price first and flagged, shadow rule intact', () => {
+    render(<EvClient initialFeed={withBooks('OVER')} headline={null} />)
+    const btn = screen.getByRole('button', { name: /Compare 4 books/ })
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(btn).toHaveTextContent('Compare 4 books')
+    expect(screen.queryByRole('group', { name: /All books/ })).toBeNull()      // collapsed hides the strip
+    expect(screen.queryByText('DraftKings')).toBeNull()
+
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'true')
+    const strip = screen.getByRole('group', { name: /All books/ })
+    for (const name of ['DraftKings', 'FanDuel', 'BetMGM', 'Caesars']) expect(within(strip).getByText(name)).toBeInTheDocument()
+    expect(within(strip).getByText('+112')).toBeInTheDocument()
+    expect(within(strip).getByText('-130')).toBeInTheDocument()
+    expect(within(strip).getByText('fair 54.0%')).toBeInTheDocument()
+    const cards = Array.from(strip.querySelectorAll('[data-best]')) as HTMLElement[]
+    expect(cards).toHaveLength(1)                                              // only the best OVER price is flagged
+    expect(cards[0]).toHaveTextContent('FanDuel')
+    expect(cards[0]).toHaveTextContent('BEST')
+    const order = Array.from(strip.children[1].children).map(c => c.textContent ?? '')
+    expect(order.map(t => ['FanDuel', 'BetMGM', 'DraftKings', 'Caesars'].findIndex(n => t.includes(n)))).toEqual([0, 1, 2, 3]) // +112, +110, -130, no over price
+    expect(strip.textContent).toContain('\u2013')                               // null prices render an en dash
+    expect(screen.queryByLabelText(/Beezy score/)).toBeNull()                  // shadow row: no 0-100 score
+    expect(screen.getByText('SHADOW')).toBeInTheDocument()                     // still a shadow row
+    expect(screen.getByText(/none \u2014 unvalidated/)).toBeInTheDocument()   // and still no Kelly stake
+    expect(screen.queryByText(/\$\d/)).toBeNull()                              // no dollar amount anywhere
+
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('group', { name: /All books/ })).toBeNull()
+  })
+
+  it('ranks by the UNDER price when the row targets the under, and hides the button for a single book', () => {
+    const { unmount } = render(<EvClient initialFeed={withBooks('UNDER')} headline={null} />)
+    fireEvent.click(screen.getByRole('button', { name: /Compare 4 books/ }))
+    const best = screen.getByRole('group', { name: /All books/ }).querySelector('[data-best]') as HTMLElement
+    expect(best).toHaveTextContent('DraftKings')                               // under +105 beats -120 / -135
+    unmount()
+    const one: EvFeed = { ...withBooks('OVER'), nhl: block([outlier({ all_books: [quotes[0]] })]) }
+    render(<EvClient initialFeed={one} headline={null} />)
+    expect(screen.queryByRole('button', { name: /Compare/ })).toBeNull()
+  })
+})
+
 describe('source files with typographic characters stay ASCII', () => {
   const root = path.resolve(__dirname, '..')
   const files = [
     'lib/sport-assets.ts', 'lib/sports.ts', 'lib/types.ts', 'components/ui/sport-assets.tsx',
     'app/ev/ev-client.tsx', 'app/sports/[sport]/sport-hub-client.tsx', 'app/sports/[sport]/page.tsx',
-    'app/api/og/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
+    'app/api/og/route.tsx', 'app/api/og/ev-recap-card/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
     'tests/sport-assets.test.ts', 'tests/tokens.test.ts', 'tests/ev-terminal-shadow.test.tsx',
   ]
   it.each(files)('%s', (f) => {

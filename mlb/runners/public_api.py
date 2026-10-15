@@ -416,6 +416,23 @@ def _american_to_decimal(a):
     return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
 
 
+def _book_strip(raw):
+    """Sink A `all_books` (ev.props._all_books) -> a clean [{book, over, under, fair}] list for the UI's line-shopping
+    drawer, or None. Untrusted shape (it round-trips through JSON in GCS): anything malformed is dropped, not raised."""
+    if not isinstance(raw, list):
+        return None
+    out = []
+    for b in raw:
+        if not isinstance(b, dict) or not b.get("book"):
+            continue
+        over, under, fair = _f(b.get("over")), _f(b.get("under")), _f(b.get("fair"))
+        ok = lambda x: x is not None and x == x and x != 0          # noqa: E731 -- finite, non-zero American price
+        out.append({"book": str(b["book"]), "over": int(over) if ok(over) else None,
+                    "under": int(under) if ok(under) else None,
+                    "fair": round(fair, 4) if fair is not None and fair == fair else None})
+    return out or None
+
+
 def _outlier_row(r, sport, now, age_min=None, credible=None):
     """One raw Sink A row -> the public EvBookOutlierRow dict, or None when it cannot be shown: no usable EV/price, or
     the game has started (the quote is dead). Kick-off comes from `commence`; rows written before that column existed
@@ -449,6 +466,7 @@ def _outlier_row(r, sport, now, age_min=None, credible=None):
         "american": int(american), "decimal": _f(r.get("decimal")) or round(_american_to_decimal(american), 4),
         "p_fair": _f(r.get("p_fair")), "ev": round(ev, 4), "n_books": n_books, "disp": _f(r.get("disp")),
         "flag": bool(flag), "reason": r.get("reason"),
+        "all_books": _book_strip(r.get("all_books")), "books": r.get("books"),
     }
 
 
@@ -508,6 +526,9 @@ def _nfl_feed(min_ev, limit):
             "fair_prob": None if p_over is None else round(p_over if side == "yes" else 1.0 - p_over, 4),
             "n_books": r.get("n_books"), "books": r.get("books"), "disp": _f(r.get("disp")),
             "spread": _f(r.get("spread")), "fee_mult": _f(r.get("fee_mult")),
+            # pooled (adjacent half-point) consensus is a TAGGED fallback: UNVALIDATED, shown as such
+            "consensus_src": r.get("consensus_src") or "exact", "interpolated": bool(r.get("interpolated")),
+            "exact_n_books": r.get("exact_n_books"),
             "commence": r.get("commence"), "mins_to_kick": round(mins_now, 1),
             "flag": flag, "reason": r.get("reason"),
         })

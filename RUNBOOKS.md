@@ -832,3 +832,20 @@ scheduled MLB job runs on its NEXT execution, including merged-but-undeployed co
 and pass `SKIP_PROD=1` when you only need the sport-feed images refreshed. The service is unaffected until you run
 `gcloud run services update mlb-betting --image=...@<digest>` (the script prints the digest).
 
+---
+
+## 9. One-pass multi-sport rollout script
+
+`deploy/rollout_multisport_live.sh` chains s7-s8 with gates: build (`build_all_images.sh`, its own clean-tree/origin-main guards),
+a READ-ONLY v4 check of every Cloud Run Job's latest execution digest + the serving revision (prints whether
+`DROP INDEX IF EXISTS idx_bets_dedup_v3;` is safe -- it NEVER runs the DROP), props-alerts provisioning if the
+`discord-webhook-alerts` secret exists (and mounts it on `ev-nfl-props-sweep`), optional NHL resume, optional BettingPros backfill.
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4 DRY_RUN=1 RESUME_NHL=1 START_BP_BACKFILL=1 bash deploy/rollout_multisport_live.sh   # print the plan
+PROJECT_ID=concrete-crow-445205-m4 SKIP_BUILD=1 bash deploy/rollout_multisport_live.sh                                  # checks + alerts only
+```
+
+Flags: `SKIP_BUILD`, `DRY_RUN`, `ASSUME_YES` (skip the one y/N prompt), `RESUME_NHL` (spends shared ParlayAPI credits),
+`START_BP_BACKFILL` (skips any `bp-backfill-*` job that already has a RUNNING execution), `V4_MIN_REVISION` (default 308),
+`V4_EXTRA_DIGESTS`. The v4 verdict proves only each job's LAST execution; a job re-resolves its tag on the next run.

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import type { Bet, EvBookOutlierRow, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
+import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
 import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
@@ -41,6 +41,10 @@ interface Row {
   team?: string | null
   /** shadow row that failed the sweep's credibility gates (thin reference / EV above the cap): listed, but after credible rows */
   lowConf?: boolean
+  /** target side of the flagged quote ('OVER' | 'UNDER'): decides which price the Compare books strip ranks by */
+  side?: string
+  /** every book quoting this line (line shopping); the Compare books drawer needs more than one */
+  allBooks?: EvBookQuote[]
 }
 
 const HAIR = '#1e2230'
@@ -167,7 +171,26 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     playerId: r.player_id ?? null,
     team: r.team ?? null,
     lowConf: r.flag === false,
+    side: String(r.side).toUpperCase(),
+    allBooks: r.all_books,
   }
+}
+
+/** Order two American prices (null = no quote) by payout: +150 > +110 > -105 > -130. Higher decimal payout is better. */
+function priceDecimal(american: number | null | undefined): number | null {
+  if (american == null || !isFinite(american) || american === 0) return null
+  return americanToDecimal(american)
+}
+
+/** Strip rows for the Compare books drawer: best price for the target side first, unpriced books last. */
+function rankBookQuotes(quotes: EvBookQuote[], side: string | undefined): { quote: EvBookQuote; best: boolean }[] {
+  const pick = (q: EvBookQuote) => priceDecimal(String(side).toUpperCase() === 'UNDER' ? q.under : q.over)
+  const known = side === 'OVER' || side === 'UNDER'
+  const top = known ? Math.max(...quotes.map(q => pick(q) ?? -Infinity)) : -Infinity
+  return quotes
+    .map((quote, i) => ({ quote, i, d: known ? pick(quote) : null }))
+    .sort((a, b) => (b.d ?? -Infinity) - (a.d ?? -Infinity) || a.i - b.i)
+    .map(({ quote, d }) => ({ quote, best: known && d != null && d === top }))
 }
 
 export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null; headline: EvHeadline | null }) {
@@ -405,7 +428,50 @@ function Cell({ label, children, basis, grow = 0 }: { label: string; children: R
   )
 }
 
+function BookStrip({ id, r }: { id: string; r: Row }) {
+  const ranked = rankBookQuotes(r.allBooks ?? [], r.side)
+  const price = (american: number | null, best: boolean) => (
+    <span className="mono" style={{ fontSize: '13px', fontWeight: best ? 800 : 600, color: best ? 'var(--signal)' : 'var(--chalk)' }}>
+      {american == null ? <>&ndash;</> : formatOdds(american)}
+    </span>
+  )
+  return (
+    <div id={id} role="group" aria-label={`All books for ${r.title}`} style={{ flex: '1 0 100%', gridColumn: '1 / -1', borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+      <div className="dell-heading" style={{ fontSize: '9px', color: 'var(--fog)', marginBottom: '8px' }}>
+        LINE SHOPPING &middot; FAIR = DE-VIGGED P(OVER) AT EACH BOOK
+      </div>
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        {ranked.map(({ quote, best }) => {
+          const b = bookDisplay(quote.book)
+          const bestSide = r.side === 'UNDER' ? 'under' : 'over'
+          return (
+            <div
+              key={quote.book} data-best={best ? 'true' : undefined}
+              style={{ flex: '0 0 auto', minWidth: '132px', background: 'var(--surface-elevated)', border: `1px solid ${best ? '#57F287' : HAIR}`, borderRadius: '8px', padding: '8px 10px', display: 'grid', gap: '6px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
+                {best && <span className="dell-heading" style={{ fontSize: '8.5px', color: '#57F287' }} aria-label={`Best ${bestSide} price`}>BEST</span>}
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>OVER</div>{price(quote.over, best && bestSide === 'over')}</div>
+                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>UNDER</div>{price(quote.under, best && bestSide === 'under')}</div>
+              </div>
+              <div className="mono" style={{ fontSize: '11px', color: 'var(--ash)' }}>
+                fair {quote.fair != null ? `${(quote.fair * 100).toFixed(1)}%` : <>&ndash;</>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function EvCard({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; copied: boolean; onCopy: () => void }) {
+  const [compare, setCompare] = useState(false)
+  const nQuotes = r.allBooks?.length ?? 0
+  const stripId = `compare-${r.key.replace(/[^A-Za-z0-9_-]/g, '-')}`
   const book = bookDisplay(r.bookKey)
   const tier = r.score != null ? scoreTier(r.score) : 'watch'
   const meta = TIER_META[tier]
@@ -471,8 +537,17 @@ function EvCard({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; cop
 
       <div style={{ flex: '0 0 auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
         {r.status !== 'pending' && <span className="dell-heading" style={{ fontSize: '10px', color: statusColor }}>{r.status.toUpperCase()}</span>}
+        {nQuotes > 1 && (
+          <button
+            onClick={() => setCompare(v => !v)} className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}
+            aria-expanded={compare} aria-controls={stripId} aria-label={`Compare ${nQuotes} books for ${r.title}`}
+          >
+            Compare {nQuotes} books
+          </button>
+        )}
         <button onClick={onCopy} className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>{copied ? 'Copied' : 'Copy bet'}</button>
       </div>
+      {compare && nQuotes > 1 && <BookStrip id={stripId} r={r} />}
     </article>
   )
 }

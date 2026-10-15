@@ -266,3 +266,14 @@ def test_report_renders_and_carries_the_no_lines_disclaimer():
                           {"partial_season": None, "pooled": {"receptions": res}, "pooled_seasons": "2022-2022"})
     assert "NO HISTORICAL NFL PROP LINES" in out and "receptions" in out and "Pooled" in out
     out.encode("ascii")                                   # ASCII-only convention
+
+
+def test_volume_count_specs_reuse_the_count_path():
+    spec_cols = {"pass_attempts": "y_pass_attempts", "completions": "y_completions", "rush_attempts": "y_rush_attempts"}
+    for stat, target in spec_cols.items():
+        sp = P.SPECS[stat]
+        assert sp.target == target and sp.kind == "count" and sp.objective == "count:poisson" and sp.family == "negbin"
+        assert sp.elig in F.ELIG_COLS and target in F.Y_COLS
+        po, pu, pp = P.p_over(stat, 33.0, 32.5, {"family": "negbin", "alpha": 0.05})
+        assert po + pu + pp == pytest.approx(1.0) and pp == 0.0
+    assert set(P.DEFAULT_STATS) <= set(P.SPECS) and not set(spec_cols) & set(P.DEFAULT_STATS)

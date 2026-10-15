@@ -518,6 +518,16 @@ def _load_tables(path: Path) -> dict:
     return {(k.split("|")[0], int(k.split("|")[1])): v for k, v in raw.items()}
 
 
+def market_report(ev: dict, X: pd.DataFrame, meta: pd.DataFrame, consensus: pd.DataFrame, tables: dict | None = None,
+                  min_books: int = 3) -> dict:
+    """OPTIONAL (not called unless a consensus frame is supplied): score the walk-forward projections against HISTORICAL
+    BettingPros per-book lines. Delegates to nba.props.history_join.market_report -- see that module for the identity
+    (fail-closed), selection-safety and coverage semantics. Returns {"by_stat": {stat: {coverage, scores, frame}},
+    "all": {...}}; the existing evaluate_predictions output is not touched."""
+    from nba.props import history_join as HJ
+    return HJ.market_report(ev, X, meta, consensus, tables=tables, min_books=min_books)
+
+
 def main(argv=None) -> int:
     from nba.props import data as D
     from nba.props.features import build_training_frame
@@ -529,6 +539,10 @@ def main(argv=None) -> int:
                                           "(a .tables.json and .oracle.json are kept beside it)")
     ap.add_argument("--seasons", nargs="*", type=int, default=[2022, 2023, 2024, 2025])
     ap.add_argument("--no-oracle", action="store_true")
+    ap.add_argument("--bettingpros-consensus", default=None,
+                    help="OPTIONAL: consensus parquet from scripts/join_bettingpros_history.py --sport nba; appends a "
+                         "model-vs-real-market section to the report (omitted = output unchanged)")
+    ap.add_argument("--market-min-books", type=int, default=3)
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     pb, gm = D.load_masters(a.local_dir)
@@ -565,6 +579,10 @@ def main(argv=None) -> int:
     desc = (f"{hist['n_rows']:,} played player-games through {hist['last_date']} (seasons 2019-20..2025-26, preseason "
             "excluded; 2019-20 is truncated at the COVID break)")
     md = render_markdown(ev, pooled, proxy, spread, evb, orc, a.seasons, headline, desc)
+    if a.bettingpros_consensus:
+        from nba.props import history_join as HJ
+        rep = market_report(ev, X, meta, pd.read_parquet(a.bettingpros_consensus), tables, a.market_min_books)
+        md += HJ.render_market_section(rep)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(md)
     if a.json_out:

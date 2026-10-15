@@ -348,8 +348,9 @@ def test_pooled_rows_log_exact_vs_pooled_without_touching_flags():
                                    bk("d", leg.strike + 1)]}}
     snap, _ = sw.consensus_snapshot([ev])
     legs = {leg.game_key: [(leg, mk)]}
-    rows, st = sw.rows_from_snapshot(snap, legs, NOW, cfg, 1.0)
+    rows, st = sw.rows_from_snapshot(snap, legs, NOW, cfg, 1.0, allow_pooled_fallback=False)
     assert len(rows) == 1 and rows[0]["n_books"] == 1 and rows[0]["flag"] is False       # exact path unchanged: thin
+    assert rows[0]["consensus_src"] == "exact" and rows[0]["interpolated"] is False and rows[0]["exact_n_books"] == 1
     prow, pst = sw.pooled_rows_from_snapshot(snap, legs, NOW, cfg, 1.0)
     assert len(prow) == 1 and pst == {"pool_legs": 1, "pool_ge_min": 1, "pool_recovered": 1}
     r = prow[0]
@@ -455,3 +456,87 @@ def test_sink_a_never_posts_to_the_member_channel(monkeypatch):
     monkeypatch.delenv("DISCORD_WEBHOOK_OPS", raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://example.invalid/picks")             # member channel
     assert sw.webhook_url() == ""                                                           # -> post_discord is a no-op
+
+
+# ---------------- pooled fallback promoted into rows_from_snapshot (tagged) ----------------
+def _split_event(leg, strikes=(-1, -1, 0, 1)):
+    away = {v: k for k, v in __import__("ev.sports.nfl", fromlist=["x"]).TEAM_NAMES.items()}
+
+    def bk(key, pt):
+        return {"key": key, "markets": [{"key": "player_reception_yds", "outcomes": [
+            {"name": f"Over {leg.player}", "description": leg.player, "price": -110, "point": pt},
+            {"name": f"Under {leg.player}", "description": leg.player, "price": -110, "point": pt}]}]}
+    return {"event": {"id": "e1", "away_team": away[leg.away], "home_team": away[leg.home],
+                      "commence_time": "2026-10-04T17:00:00Z"},
+            "props": {"bookmakers": [bk(k, leg.strike + d) for k, d in zip("abcd", strikes)]}}
+
+
+def test_pooled_fallback_fills_thin_exact_consensus_and_tags_the_row():
+    cfg = props_config(env={})
+    leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
+    snap, _ = sw.consensus_snapshot([_split_event(leg)])
+    legs = {leg.game_key: [(leg, mk)]}
+    rows, st = sw.rows_from_snapshot(snap, legs, NOW, cfg, 1.0)                      # default: fallback ON
+    r = rows[0]
+    assert r["consensus_src"] == "pooled" and r["interpolated"] is True
+    assert r["n_books"] == 4 and r["exact_n_books"] == 1 and r["reason"] != "THIN_CONS"
+    assert st["pooled_fallback_used"] == 1 and st["matched"] == 1
+    assert r["p_over"] == pytest.approx(0.5, abs=0.01)
+
+
+def test_pooled_fallback_env_switch_and_keeps_exact_rows_untouched():
+    assert sw.pooled_fallback_enabled({}) is True
+    for off in ("0", "false", "OFF", "no"):
+        assert sw.pooled_fallback_enabled({"KEXEC_ALLOW_POOLED_FALLBACK": off}) is False
+    cfg = props_config(env={})
+    leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
+    snap, _ = sw.consensus_snapshot([_split_event(leg, strikes=(0, 0, 0, 0))])         # 4 exact books: no fallback needed
+    rows, st = sw.rows_from_snapshot(snap, {leg.game_key: [(leg, mk)]}, NOW, cfg, 1.0)
+    assert rows[0]["consensus_src"] == "exact" and rows[0]["n_books"] == 4 and st["pooled_fallback_used"] == 0
+
+
+def test_pooled_fallback_never_pools_discrete_stats_or_dispersed_curves():
+    from types import SimpleNamespace
+    cfg = props_config(env={})
+    ev = {"points": [], "curves": [{"player_norm": "x", "stat": "receptions",
+                                     "pts": [["a", 4.5, 0.5], ["b", 5.5, 0.5], ["c", 5.5, 0.5]]}]}
+    leg = SimpleNamespace(player_norm="x", stat="receptions", strike=5.5)
+    assert sw._pooled_entry(ev, {("x", "receptions"): ev["curves"][0]["pts"]}, {}, leg, None, cfg) is None
+    leg = SimpleNamespace(player_norm="x", stat="rec_yds", strike=64.5)
+    wide = [["a", 63.5, 0.30], ["b", 64.5, 0.70], ["c", 65.5, 0.50], ["d", 64.5, 0.20]]
+    assert sw._pooled_entry(ev, {("x", "rec_yds"): wide}, {}, leg, None, cfg) is None   # MAD above disp_max
+
+
+# ---------------- per-book strip for the line-shopping drawer ----------------
+def test_consensus_carries_per_book_american_prices_sorted_by_book():
+    qs = [_q("fanduel", -120, 100), _q("draftkings", -110, -110), _q("underdog", -112, -112), _q("bovada", +130, None)]
+    c = build_consensus(qs)[("tyler warren", "rec_yds", 64.5)]
+    assert [(b, o, u) for b, o, u, _ in c.book_quotes] == [("draftkings", -110, -110), ("fanduel", -120, 100)]
+    assert all(0.0 < f < 1.0 for *_, f in c.book_quotes)                       # DFS and one-sided are not in the strip
+
+
+def test_outliers_expose_all_books_including_the_quoting_one_sided_book():
+    out = scan_book_outliers(_pack([_q("softbook", +110, -135)]))
+    ab = out[0]["all_books"]
+    assert [r["book"] for r in ab] == sorted(r["book"] for r in ab) and len(ab) == 6
+    soft = next(r for r in ab if r["book"] == "softbook")
+    assert soft["over"] == 110 and soft["under"] == -135 and 0.0 < soft["fair"] < 1.0
+    one = scan_book_outliers(_pack([_q("bovada", +130, None)]))[0]["all_books"]
+    assert {"book": "bovada", "over": 130, "under": None, "fair": None} in one and len(one) == 6
+
+
+def test_registry_covers_the_expanded_nfl_nba_nhl_prop_markets():
+    nfl = {"player_pass_attempts": "pass_attempts", "player_pass_completions": "pass_completions",
+           "player_rush_attempts": "rush_attempts", "player_interceptions": "interceptions",
+           "player_pass_tds": "pass_tds"}
+    for k, v in nfl.items():
+        assert stat_of(k, "nfl") == (v, False)
+    nba = {"player_points_rebounds": "pr", "player_points_assists": "pa", "player_rebounds_assists": "ra",
+           "player_steals": "steals", "player_blocks": "blocks", "player_turnovers": "turnovers"}
+    for k, v in nba.items():
+        assert stat_of(k, "nba") == (v, False)
+    nhl = {"player_shots_on_goal": "sog", "player_goal_scorer_anytime": "goals", "player_points": "points",
+           "player_assists": "assists", "player_total_saves": "saves"}
+    for k, v in nhl.items():
+        assert stat_of(k, "nhl") == (v, False)
+    assert stat_of("player_points", "nba") == ("points", False)       # same key, different sport table
