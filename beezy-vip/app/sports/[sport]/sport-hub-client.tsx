@@ -36,32 +36,29 @@ export function SportHubClient(props: Props) {
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 24px 64px' }}>
-      <section style={{ ...CARD_STYLE, borderRadius: '14px', padding: '28px', marginBottom: '22px', background: `linear-gradient(135deg, ${pillar.accentBg}, #11131a 60%)`, borderColor: `${pillar.accent}44` }}>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
-          <span className="dell-heading" style={{ fontSize: '10.5px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '3px 9px' }}>{pillar.seasonBadge}</span>
+      <header style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '16px 20px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }} title={`${pillar.description} Source: ${pillar.primarySource}`}>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>{pillar.name}</h1>
+          <span className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{pillar.seasonBadge}</span>
           <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>{STATUS_LABEL[pillar.status]}</span>
         </div>
-        <h1 className="dell-display" style={{ fontSize: 'clamp(26px, 4vw, 38px)', color: 'var(--chalk)' }}>{pillar.name}</h1>
-        <p className="times" style={{ color: 'var(--silver)', fontSize: '15px', maxWidth: '74ch', marginTop: '10px' }}>{pillar.description}</p>
-        <div className="mono" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>SOURCE &middot; {pillar.primarySource}</div>
-      </section>
-
-      <div role="tablist" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: '1px solid #1e2230', paddingBottom: '12px' }}>
-        {TABS.map(t => (
-          <button
-            key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            style={{
-              fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em',
-              padding: '8px 14px', borderRadius: '6px', cursor: 'pointer',
-              color: tab === t.id ? '#090a0f' : 'var(--silver)',
-              background: tab === t.id ? pillar.accent : 'var(--surface-elevated)',
-              border: `1px solid ${tab === t.id ? pillar.accent : '#1e2230'}`,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        <div role="tablist" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {TABS.map(t => (
+            <button
+              key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              style={{
+                fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em',
+                padding: '7px 12px', borderRadius: '6px', cursor: 'pointer',
+                color: tab === t.id ? '#090a0f' : 'var(--silver)',
+                background: tab === t.id ? pillar.accent : 'var(--surface-elevated)',
+                border: `1px solid ${tab === t.id ? pillar.accent : '#1e2230'}`,
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
 
       {tab === 'today' && <TodayTab {...props} />}
       {tab === 'models' && <ModelsTab {...props} />}
