@@ -179,6 +179,11 @@ mlb-betting/
 │   │   │                         (inning fallback). Primary live-odds path. See s8.
 │   │   └── utils.py              american_to_implied_prob, remove_vig, kelly_stake,
 │   │                             american_to_decimal, devig_two_way (shin/proportional).
+│   ├── social/
+│   │   └── gif_fetcher.py        fetch_celebration_gif(bet) -> {gif_url, mp4_url, preview_url, query, source}.
+│   │                             Tenor v2 (TENOR_API_KEY) / Giphy (GIPHY_API_KEY); NEVER raises or returns None --
+│   │                             no key/error => source="fallback", empty URLs + a Tenor search_url (no media URL
+│   │                             is ever invented). Used by tweet_drafter --mode settlement.
 │   ├── notify/
 │   │   └── discord.py            post_bets / post_error / post_all_systems_summary.
 │   │                             Webhook-based. post_summary() removed -- daily recap
@@ -1537,6 +1542,11 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
 | `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=picks) |
 | `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=recap) |
+
+`tweet_drafter.py` modes (`--mode` or `TWEET_MODE`): `picks` (alias `morning`), `recap`, `settlement` (added 2026-10-14, PR #56:
+deterministic #GamblingX text + `beezy-vip` `/api/og/settlement-card` PNG + celebration GIF -> Discord `DISCORD_WEBHOOK_TWEETS`
+else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `steam` (not built). Every Gemini draft passes `violates_voice()`
+(banned phrases, >1 emoji). Existing picks/recap Jobs are unchanged.
 
 ### Scoring paired to snapshots (2026-06-25)
 
