@@ -144,7 +144,7 @@ export async function GET() {
               {/* odds */}
               <span style={{ fontSize: "15px", color: "#9ca3af", minWidth: "65px", textAlign: "right" }}>{fmtOdds(pick.odds)}</span>
 
-              {/* edge — hero number */}
+              {/* edge -- hero number */}
               <div style={{ display: "flex", background: "#15241e", border: "1px solid #2f553b", borderRadius: "10px", padding: "8px 18px", minWidth: "96px", justifyContent: "center", alignItems: "center" }}>
                 <span style={{ fontSize: "22px", fontWeight: 900, color: "#57f287", letterSpacing: "-0.5px" }}>{fmtEdge(pick.edge)}</span>
               </div>
@@ -163,9 +163,9 @@ export async function GET() {
         {/* stats */}
         <div style={{ display: "flex", gap: "40px", alignItems: "center" }}>
           {[
-            { label: "SEASON ROI", value: roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—", color: roiNum !== null ? (roiNum >= 0 ? "#57f287" : "#ef4444") : "#ffffff" },
-            { label: "BETS TRACKED", value: String(ov.total_bets ?? "—"), color: "#ffffff" },
-            { label: "WIN RATE", value: ov.win_rate ? `${parseFloat(ov.win_rate).toFixed(1)}%` : "—", color: "#ffffff" },
+            { label: "SEASON ROI", value: roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "\u2014", color: roiNum !== null ? (roiNum >= 0 ? "#57f287" : "#ef4444") : "#ffffff" },
+            { label: "BETS TRACKED", value: String(ov.total_bets ?? "\u2014"), color: "#ffffff" },
+            { label: "WIN RATE", value: ov.win_rate ? `${parseFloat(ov.win_rate).toFixed(1)}%` : "\u2014", color: "#ffffff" },
           ].map((stat, i) => (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <span style={{ fontSize: "9px", color: "#7d8596", letterSpacing: "2px" }}>{stat.label}</span>

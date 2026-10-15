@@ -16,6 +16,8 @@ contradicts CONTEXT.md, CONTEXT.md wins -- update this file.
 4. [Social media content pipeline](#4-social-media-content-pipeline)
 5. [When to update this file](#5-when-to-update-this-file)
 6. [Odds provider (ParlayAPI / SGO)](#6-odds-provider-parlayapi-primary--sgo-inning-fallback)
+7. [Multi-sport rollout: drop `idx_bets_dedup_v3`, resume NHL](#7-multi-sport-rollout-drop-idx_bets_dedup_v3-resume-nhl)
+8. [Build every job image from one clean build](#8-build-every-job-image-from-one-clean-build)
 
 ---
 
@@ -696,6 +698,7 @@ curl -i https://beezy.fyi/api/stats/summary
 - Gemini API key rotated or provider changed -> §4 Cloud Run jobs
 - Domain/API wiring changes -> §4 Website domain wiring
 - Rationale wiring status changes -> §4 Rationale / notes wiring
+- New multi-sport job/image convention or rollout step -> §7 / §8
 
 **Don't put architecture or contracts here.** That belongs in CONTEXT.md.
 **Don't put point-in-time state here.** That belongs in `handoffs/`.
@@ -742,3 +745,90 @@ Gotchas:
 - Secret `parlay-api-key` must be bound (deploy_service.sh does this). ParlayAPI is
   reachable from Cloud Run only (office LAN blocks gambling sites).
 - To exclude a book from best-line: add it to `OFFSHORE_BOOKS` in `mlb_core/odds/sgo.py`.
+
+---
+
+## 7. Multi-sport rollout: drop `idx_bets_dedup_v3`, resume NHL
+
+Context: `bets.sport` landed 2026-10-14 with `idx_bets_dedup_v4` (= the v3 key + `sport`). v3 was kept only so a rolling deploy
+could not break old code whose `ON CONFLICT` targets it; while it exists, an identical key in another sport hits v3 and `log_bet`
+returns -1. Background: handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md. The odds-bank jobs are PAUSED on purpose
+(shared 20k/mo ParlayAPI pool) -- resuming them is a credit-spend decision, not routine.
+
+### 7a. Verify nothing still runs pre-v4 code, then drop v3
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4; REGION=us-central1
+
+# 1. Service: ONE revision at 100% and it must be the post-v4 one (mlb-betting-00308-tas or newer); no tagged old revisions.
+gcloud run services describe mlb-betting --region=$REGION --project=$PROJECT_ID --format='yaml(status.traffic)'
+
+# 2. Jobs resolve their image TAG at every execution (docs/solutions/conventions/cloud-run-job-image-tag-resolution.md), so the
+#    last execution's digest is what counts. Every job below must have executed at least once AFTER the v4 image was pushed
+#    (compare against the digest `gcloud container images describe gcr.io/$PROJECT_ID/mlb-betting:latest` reports).
+#    If a --format key comes back empty on your gcloud version, rerun with --format=yaml and read the `image:` line.
+for J in $(gcloud run jobs list --region=$REGION --project=$PROJECT_ID --format='value(metadata.name)'); do
+  E=$(gcloud run jobs executions list --job="$J" --region=$REGION --project=$PROJECT_ID --limit=1 --format='value(metadata.name)')
+  [ -n "$E" ] && echo "$J  $E  $(gcloud run jobs executions describe "$E" --region=$REGION --project=$PROJECT_ID --format=yaml | grep -m1 'image:')"
+done
+
+# 3. Drop it. Cloud SQL's socket only exists inside Cloud Run (CONTEXT.md s5), so use `gcloud sql connect` (public IP) or the
+#    Cloud SQL Auth Proxy. The user/database are in the mlb-db-url secret's DSN.
+gcloud sql connect mlb-betting-db --user=<user> --database=<db> --project=$PROJECT_ID
+```
+
+```sql
+SELECT indexname FROM pg_indexes WHERE tablename = 'bets' AND indexname LIKE 'idx_bets_dedup%';  -- expect v3 + v4
+DROP INDEX IF EXISTS idx_bets_dedup_v3;                                                          -- v4 already carries sport
+SELECT indexname FROM pg_indexes WHERE tablename = 'bets' AND indexname LIKE 'idx_bets_dedup%';  -- expect v4 only
+```
+
+Afterwards watch the next `mlb-settle` and the first runner for `ON CONFLICT` / `log_bet` errors. Rollback is recreating v3
+(`CREATE UNIQUE INDEX idx_bets_dedup_v3 ON bets(system, game_date, game_pk, player, bet_type, ...)` -- the exact column list is
+`LEGACY_V3` in tests/test_bet_tracker_sport.py).
+
+### 7b. Create the alerts webhook secret and resume NHL
+
+```bash
+# The NFL/NHL/NBA sweeps post to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS -- an ADMIN channel, never a member one
+# (these signals are unvalidated). Create the secret ONCE (rotate with `gcloud secrets versions add ... --data-file=-`).
+printf '%s' "$ALERTS_WEBHOOK_URL" | gcloud secrets create discord-webhook-alerts --replication-policy=automatic --data-file=- --project=$PROJECT_ID
+gcloud secrets add-iam-policy-binding discord-webhook-alerts --project=$PROJECT_ID --role=roles/secretmanager.secretAccessor \
+  --member="serviceAccount:mlb-betting-sa@${PROJECT_ID}.iam.gserviceaccount.com"      # skip if the SA already has it project-wide
+
+# Re-provision so the props-alerts jobs mount it (setup_props_alerts.sh adds DISCORD_WEBHOOK_ALERTS only when the secret exists;
+# `--set-secrets` REPLACES the list, which is why this goes through the script and not an ad-hoc update).
+PROJECT_ID=$PROJECT_ID bash deploy/setup_props_alerts.sh
+# Optional: the NFL sweep job (it falls back to the OPS webhook without this)
+gcloud run jobs update ev-nfl-props-sweep --region=$REGION --project=$PROJECT_ID --update-secrets=DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest
+
+# Resume NHL banking FIRST (the alerts sweep refuses a banked snapshot older than 45 min), then the NHL alerts. Spends ParlayAPI credits.
+for S in $(gcloud scheduler jobs list --location=$REGION --project=$PROJECT_ID --format='value(ID.basename())' | grep -E '^(odds-bank-nhl-|props-alerts-nhl-)'); do
+  gcloud scheduler jobs resume "$S" --location=$REGION --project=$PROJECT_ID
+done
+gcloud scheduler jobs list --location=$REGION --project=$PROJECT_ID | grep -E 'odds-bank-nhl|props-alerts-nhl'   # STATE must read ENABLED
+```
+
+Reverse (off-season / credit emergency): `PAUSE=1 PROJECT_ID=$PROJECT_ID bash deploy/setup_odds_banking.sh` and
+`PAUSE=1 PROJECT_ID=$PROJECT_ID bash deploy/setup_props_alerts.sh`. `monitor_ops` ignores PAUSED schedulers and alerts on any
+ENABLED one whose last run failed, so a resumed job that errors will page #ops-alerts.
+
+---
+
+## 8. Build every job image from one clean build
+
+`deploy/build_all_images.sh` builds the image ONCE (cloudbuild.yaml layer cache) and retags that digest onto all four repositories
+the service and jobs use, so no job runs a different build than the others:
+`mlb-betting:latest`, `mlb-betting-feeds:latest`, `mlb-betting-ev:shadow`, `mlb-betting-bp-crawl:latest`.
+
+```bash
+PROJECT_ID=concrete-crow-445205-m4 bash deploy/build_all_images.sh          # clean tree required (git status --porcelain)
+ALLOW_DIRTY=1 PROJECT_ID=... bash deploy/build_all_images.sh                # escape hatch: bakes local edits into PRODUCTION job images
+SKIP_PROD=1   PROJECT_ID=... bash deploy/build_all_images.sh                # leave mlb-betting:latest (every scheduled MLB job) alone
+```
+
+Blast radius: Cloud Run Jobs resolve their image tag at every execution, so retagging `mlb-betting:latest` changes what every
+scheduled MLB job runs on its NEXT execution, including merged-but-undeployed code. Run it from a clean checkout of origin/main,
+and pass `SKIP_PROD=1` when you only need the sport-feed images refreshed. The service is unaffected until you run
+`gcloud run services update mlb-betting --image=...@<digest>` (the script prints the digest).
+

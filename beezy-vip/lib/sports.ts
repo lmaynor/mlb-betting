@@ -100,23 +100,40 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     slug: 'nhl',
     name: 'National Hockey League',
     shortName: 'NHL',
-    seasonBadge: 'PLANNED',
-    navBadge: 'Planned',
-    status: 'planned',
+    seasonBadge: 'SHADOW SWEEP',
+    navBadge: 'Props Sweep',
+    status: 'shadow',
     accent: '#38bdf8',
     accentBg: 'rgba(56, 189, 248, 0.12)',
     description:
-      'Market adapters for Kalshi hockey contracts exist, but no sweep is running and nothing is tracked yet.',
-    primarySource: 'ParlayAPI + Kalshi (adapter only)',
+      'Sportsbook player-prop quotes (ParlayAPI) are banked and scanned against the consensus of the other books. Evidence collection only: nothing is validated, no orders are placed and no stakes are sized.',
+    primarySource: 'ParlayAPI books',
     markets: [
-      { key: 'goals', label: 'Anytime Goal Scorer', kind: 'prop', status: 'Planned' },
-      { key: 'sog', label: 'Shots on Goal O/U', kind: 'prop', status: 'Planned' },
-      { key: 'game_ml', label: 'Full Game Moneyline', kind: 'game', status: 'Planned' },
+      { key: 'sog', label: 'Shots on Goal O/U', kind: 'prop', status: 'Shadow' },
+      { key: 'goals', label: 'Player Goals O/U', kind: 'prop', status: 'Shadow' },
+      { key: 'points', label: 'Player Points O/U', kind: 'prop', status: 'Shadow' },
+      { key: 'assists', label: 'Player Assists O/U', kind: 'prop', status: 'Shadow' },
+      { key: 'saves', label: 'Goalie Saves O/U', kind: 'prop', status: 'Shadow' },
     ],
   },
 }
 
 export const SPORT_LIST: SportPillar[] = Object.values(SPORT_PILLARS)
+
+const PROP_STAT_LABEL: Record<string, string> = {
+  rec_yds: 'Rec Yds', rush_yds: 'Rush Yds', pass_yds: 'Pass Yds', receptions: 'Receptions', pass_tds: 'Pass TDs',
+  anytime_td: 'Anytime TD',
+  sog: 'Shots on Goal', goals: 'Goals', points: 'Points', assists: 'Assists', saves: 'Saves', pp_points: 'PP Points',
+  blocked_shots: 'Blocked Shots', hits: 'Hits', pim: 'Penalty Min',
+  rebounds: 'Rebounds', threes: '3-Pointers', pra: 'Pts+Reb+Ast', pr: 'Pts+Reb', pa: 'Pts+Ast', ra: 'Reb+Ast',
+  steals: 'Steals', blocks: 'Blocks', turnovers: 'Turnovers', stocks: 'Stl+Blk', minutes: 'Minutes',
+}
+
+/** Display label for a props-sweep `stat` key ('sog' -> 'Shots on Goal'); unknown keys degrade to 'some stat'. */
+export function propStatLabel(stat: string | null | undefined): string {
+  const k = (stat ?? '').toLowerCase()
+  return PROP_STAT_LABEL[k] ?? k.replace(/_/g, ' ')
+}
 
 export function isSportSlug(s: string): s is SportSlug {
   return s in SPORT_PILLARS

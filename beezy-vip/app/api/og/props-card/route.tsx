@@ -126,7 +126,7 @@ export async function GET() {
           const teamAbbrev = pick.home_team ?? pick.away_team ?? "NYY";
           const team = teamInfo(teamAbbrev);
           const sys  = SYS[pick.system] ?? { accent:"#9ca3af", bg:"#171a24", label:pick.system };
-          const bullets = (pick.notes ?? "").trim().split(" · ").filter(Boolean).slice(0, 3);
+          const bullets = (pick.notes ?? "").trim().split(" \u00b7 ").filter(Boolean).slice(0, 3);
           const playerName = (pick.player ?? "").toUpperCase();
           const mlbamId = pick.player
             ? playerMap[pick.player.toLowerCase().replace(/ /g,"_")]
@@ -135,7 +135,7 @@ export async function GET() {
           return (
             <div key={i} style={{ display:"flex", height:`${ROW_H}px`, borderRadius:"16px", overflow:"hidden", position:"relative", border:`1px solid ${sys.accent}28` }}>
 
-              {/* team color gradient — stronger left bleed */}
+              {/* team color gradient -- stronger left bleed */}
               <div style={{ display:"flex", position:"absolute", inset:0, background:`linear-gradient(120deg, rgba(${team.p},0.95) 0%, rgba(${team.p},0.5) 30%, rgba(${team.s},0.25) 55%, #090a0f 100%)` }} />
               {/* subtle glow on left edge */}
               <div style={{ display:"flex", position:"absolute", top:0, left:0, bottom:0, width:"4px", background:`linear-gradient(180deg, ${sys.accent}, transparent)` }} />
@@ -146,7 +146,7 @@ export async function GET() {
                 {/* rank */}
                 <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.3)", fontWeight:700, minWidth:"18px" }}>#{i+1}</span>
 
-                {/* headshot — large, prominent */}
+                {/* headshot -- large, prominent */}
                 {mlbamId ? (
                   <img
                     src={`${BASE}/headshots/${mlbamId}.jpg`}
@@ -175,14 +175,14 @@ export async function GET() {
                     )}
                   </div>
 
-                  {/* player name — big */}
+                  {/* player name -- big */}
                   <span style={{ fontSize:"32px", fontWeight:900, color:"#ffffff", letterSpacing:"-1px", lineHeight:"1" }}>
                     {playerName || fmtPick(pick.bet_type)}
                   </span>
 
                   {/* pick line + odds */}
                   <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.7)", fontWeight:600, letterSpacing:"0.3px" }}>
-                    {fmtPick(pick.bet_type)} · {fmtOdds(pick.odds)}
+                    {fmtPick(pick.bet_type)} &middot; {fmtOdds(pick.odds)}
                   </span>
 
                   {/* stat bullets */}
@@ -190,7 +190,7 @@ export async function GET() {
                     <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
                       {bullets.map((b: string, bi: number) => (
                         <div key={bi} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                          <span style={{ fontSize:"10px", color:sys.accent, fontWeight:800 }}>▸</span>
+                          <span style={{ fontSize:"10px", color:sys.accent, fontWeight:800 }}>&#9656;</span>
                           <span style={{ fontSize:"11px", color:"rgba(255,255,255,0.55)", letterSpacing:"0.2px" }}>{b}</span>
                         </div>
                       ))}
@@ -216,12 +216,12 @@ export async function GET() {
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#7d8596", letterSpacing:"2px" }}>SEASON ROI</span>
             <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#57f287" : "#ef4444") : "#ffffff" }}>
-              {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—"}
+              {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "\u2014"}
             </span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#7d8596", letterSpacing:"2px" }}>BETS TRACKED</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color:"#ffffff" }}>{ov.total_bets ?? "—"}</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color:"#ffffff" }}>{ov.total_bets ?? "\u2014"}</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>

@@ -107,7 +107,7 @@ export async function GET() {
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
           <span style={{ fontSize:"13px", color:"#4ea6f5", letterSpacing:"3px", fontWeight:700 }}>GAME PICKS</span>
-          <span style={{ fontSize:"13px", color:"#7d8596" }}>·</span>
+          <span style={{ fontSize:"13px", color:"#7d8596" }}>&middot;</span>
           <span style={{ fontSize:"13px", color:"#7d8596", letterSpacing:"1px" }}>{today}</span>
         </div>
       </div>
@@ -158,7 +158,7 @@ export async function GET() {
                     </span>
                   </div>
                   <span style={{ fontSize:"15px", color:"rgba(255,255,255,0.78)", fontWeight:600 }}>
-                    {fmtPick(pick.bet_type, pick.system)} · {fmtOdds(pick.odds)}
+                    {fmtPick(pick.bet_type, pick.system)} &middot; {fmtOdds(pick.odds)}
                   </span>
                   {notes !== "" && (
                     <span style={{ fontSize:"12px", color:"rgba(255,255,255,0.55)" }}>{notes}</span>
@@ -183,12 +183,12 @@ export async function GET() {
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#7d8596", letterSpacing:"2px" }}>SEASON ROI</span>
             <span style={{ fontSize:"20px", fontWeight:800, color: roiNum !== null ? (roiNum >= 0 ? "#57f287" : "#ef4444") : "#ffffff" }}>
-              {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "—"}
+              {roiNum !== null ? `${roiNum > 0 ? "+" : ""}${roiNum.toFixed(1)}%` : "\u2014"}
             </span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#7d8596", letterSpacing:"2px" }}>BETS TRACKED</span>
-            <span style={{ fontSize:"20px", fontWeight:800, color:"#ffffff" }}>{ov.total_bets ?? "—"}</span>
+            <span style={{ fontSize:"20px", fontWeight:800, color:"#ffffff" }}>{ov.total_bets ?? "\u2014"}</span>
           </div>
         </div>
         <div style={{ display:"flex", gap:"24px", alignItems:"center" }}>

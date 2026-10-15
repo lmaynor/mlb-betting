@@ -16,7 +16,7 @@ Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/book_outliers_{HHMMSS}.csv   Sink A: book quotes beating leave-self-out consensus
   EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
-  EVSweep/nfl_props/latest.json                    rows for the executor
+  EVSweep/nfl_props/latest.json                    rows (Kalshi join) + book_outliers (Sink A); public +EV feed
 Discord: DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin-only). NEVER the member channels:
 these signals are unvalidated.
 """
@@ -257,7 +257,8 @@ def book_outlier_rows(parlay_events: list, now: datetime, **kw) -> list:
         mins = round((start - now).total_seconds() / 60.0, 1)
         quotes, _ = parse_event_props(pe["props"])
         for r in scan_book_outliers(quotes, **kw):
-            rows.append({"ts": now.isoformat(), "game_key": gk, "mins_to_kick": mins, **r})
+            rows.append({"ts": now.isoformat(), "game_key": gk, "commence": start.isoformat(),
+                         "mins_to_kick": mins, **r})
     return sorted(rows, key=lambda r: -r["ev"])
 
 
@@ -327,6 +328,54 @@ def alert_embed(rows: list) -> list:
     return [{"title": f"NFL props: {len(rows)} Kalshi candidate(s) (SHADOW / unvalidated)",
              "description": "Net of Kalshi fee and shrinkage. Paper-tracked on a $1,000 notional bankroll; "
                             "NOT a recommendation.", "fields": fields, "color": 0xE6915D}]
+
+
+# Sink A alert gates (UNVALIDATED starting points, mirrors ev.sweep_props_alerts): an apparent edge above the cap is
+# far more often reference error than value (repo winner's-curse rule), and < 4 reference books is not credible.
+SINK_A_EV_CAP = 0.15
+SINK_A_MIN_BOOKS = 4
+
+
+def alert_embed_sink_a(outliers: list) -> list:
+    """Admin-channel embed for NFL Sink A book outliers: grouped by game (<= 20), best EV first (<= 8 per game)."""
+    by_game: dict = {}
+    for r in sorted(outliers, key=lambda r: -r["ev"]):
+        by_game.setdefault(r["game_key"], []).append(r)
+    fields = []
+    for gk, rs in list(by_game.items())[:20]:
+        lines = [f"**{r['player']}** {r['stat']} {r['side']} {r['point']:g} @ **{r['book']}** ({int(r['american']):+d})"
+                 f" | fair {r['p_fair']:.1%} | EV **{r['ev'] * 100:+.1f}%** ({r['n_books']} bks)" for r in rs[:8]]
+        fields.append({"name": str(gk).replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
+    return [{"title": f"NFL props Sink A: {len(outliers)} book outlier(s) (SHADOW / unvalidated)",
+             "description": "A book or exchange quote beating the leave-self-out consensus of the other books. "
+                            "Evidence only; NOT a recommendation.", "fields": fields, "color": 0x57F287}]
+
+
+def _sink_a_key(r: dict) -> str:
+    return f"sinkA|{r['game_key']}|{r['player_norm']}|{r['stat']}|{r['point']}|{r['side']}|{r['book']}"
+
+
+def post_new_sink_a(outliers: list, state: dict, day: str, cfg=None) -> int:
+    """Post credible Sink A outliers not yet notified today (admin webhook only; dedup persisted in GCS beside the
+    Kalshi keys). -> number of outliers actually posted."""
+    cfg = cfg or props_config()
+    notified = notified_set(state, day)
+    new = [r for r in outliers
+           if cfg.ev_min <= r["ev"] <= SINK_A_EV_CAP and r["n_books"] >= SINK_A_MIN_BOOKS
+           and _sink_a_key(r) not in notified]
+    if not new:
+        return 0
+    sent = 0
+    for i in range(0, len(new), 20):
+        batch = new[i:i + 20]
+        if post_discord(f"NFL props sweep (Sink A): {len(batch)} new book outlier(s)", alert_embed_sink_a(batch)):
+            notified.update(_sink_a_key(r) for r in batch)
+            sent += len(batch)
+    try:
+        _write(json.dumps(sorted(notified)).encode(), f"{PREFIX}/{day}/notified.json")
+    except Exception as e:                                                               # noqa: BLE001
+        log.warning("notified write failed: %r", e)
+    return sent
 
 
 def _write(data: bytes, key: str):
@@ -430,10 +479,15 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
         outliers = []
     flagged = [r for r in rows if r["flag"]]
     new = post_new(flagged, state, day) if flagged else 0
+    try:
+        new_sink_a = post_new_sink_a(outliers, state, day, cfg) if outliers else 0
+    except Exception:                                                                    # noqa: BLE001
+        log.exception("sink A alert failed")                        # evidence-only: never break the cycle
+        new_sink_a = 0
     bpm = jstats.pop("books_per_match", [])
     summary = {"cycle": cycle, "ts": now.isoformat(), "events_pulled": len(parlay_events),
                "slate_events": len(slate), "kalshi_reachable": kalshi_ok, "points_ge_min_books": sum(n_pts),
-               "rows": len(rows), "flagged": len(flagged), "new_alerts": new,
+               "rows": len(rows), "flagged": len(flagged), "new_alerts": new, "new_sink_a_alerts": new_sink_a,
                "credits_remaining": pc.credits_remaining,
                "books_per_match_hist": {str(n): bpm.count(n) for n in sorted(set(bpm))},
                "book_outliers": len(outliers), "book_outlier_books": sorted({r["book"] for r in outliers}),
@@ -447,8 +501,11 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
                 log.warning("%s write failed: %r", name, e)
     if rows:
         _write(pd.DataFrame(rows).to_csv(index=False).encode(), f"{PREFIX}/{day}/cycle_{hhmmss}.csv")
-        _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "summary": summary, "rows": rows},
-                          default=str).encode(), f"{PREFIX}/latest.json")
+    # latest.json feeds beezy.fyi/ev and /sports/nfl. Publish whenever ANYTHING was pulled: when Kalshi blocks this
+    # egress IP `rows` is empty but the Sink A outliers are real, and gating on `rows` alone let the file go stale.
+    if parlay_events or rows or outliers:
+        _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "summary": summary, "rows": rows,
+                           "book_outliers": outliers}, default=str).encode(), f"{PREFIX}/latest.json")
     return summary
 
 

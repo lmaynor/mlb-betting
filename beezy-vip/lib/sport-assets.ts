@@ -34,8 +34,13 @@ const TABLE = teams as unknown as Record<AssetSport, TeamRow[]>
 /** accent-fold, lowercase, drop periods/hyphens, collapse spaces: "L.A. Clippers" -> "la clippers". */
 export function fold(s: string | null | undefined): string {
   return (s ?? '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/\./g, '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 const BY_KEY: Record<AssetSport, Map<string, string>> = { nhl: new Map(), nba: new Map() }
@@ -48,7 +53,7 @@ for (const sport of ['nhl', 'nba'] as AssetSport[]) {
 }
 
 /**
- * Any of an abbreviation ('MTL'), an alias (Kalshi 'LA', ESPN 'GS'), or a full name ('Montréal Canadiens',
+ * Any of an abbreviation ('MTL'), an alias (Kalshi 'LA', ESPN 'GS'), or a full name ('Montr\u00e9al Canadiens',
  * 'L.A. Clippers') -> the canonical abbreviation, or null. Trailing-nickname match ("Canadiens") is attempted last
  * and only when exactly one team ends with it, so an ambiguous nickname never picks a team.
  */

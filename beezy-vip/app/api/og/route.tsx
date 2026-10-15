@@ -6,7 +6,7 @@ export const runtime = 'edge'
 export async function GET(req: NextRequest) {
   const sp    = req.nextUrl.searchParams
   const title = sp.get('title') ?? 'Beezy.FYI'
-  const sub   = sp.get('sub')   ?? 'MLB Picks · Backed by Machine Learning'
+  const sub   = sp.get('sub')   ?? 'MLB Picks \u00b7 Backed by Machine Learning'
   const stat1 = sp.get('stat1') ?? ''
   const stat2 = sp.get('stat2') ?? ''
   const stat3 = sp.get('stat3') ?? ''

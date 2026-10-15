@@ -38,8 +38,8 @@ export default async function SportHubPage({ params }: { params: Promise<{ sport
     const sys = s.map(x => x.system).filter(k => SPORT_PILLARS.mlb.markets.some(m => m.system === k))
     const results = await Promise.allSettled(sys.map(k => apiGetSparklineBySystem(k, 30)))
     sparklines = Object.fromEntries(sys.map((k, i) => [k, results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<SparklinePoint[]>).value : []]))
-  } else if (sport === 'nfl') {
-    feed = await apiGetEvFeed({ sport: 'nfl', minEv: 0.02, limit: 150 }).catch(() => null)
+  } else if (sport === 'nfl' || sport === 'nhl' || sport === 'nba') {
+    feed = await apiGetEvFeed({ sport, minEv: 0.02, limit: 150 }).catch(() => null)
   }
 
   return <SportHubClient sport={sport} picks={picks} stats={stats} sparklines={sparklines} slate={slate} feed={feed} />

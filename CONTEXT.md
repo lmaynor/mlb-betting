@@ -1121,6 +1121,8 @@ re-add them. Production deps only in `setup.py`.
 ### ASCII only in source files
 Use ASCII-only characters in all Python string literals, comments, log messages, and docstrings. No Unicode punctuation: use `->` not Unicode arrow, `--` not em-dash, `>=` not Unicode greater-equal. Em-dashes and Unicode arrows look identical to ASCII in the terminal but have different bytes, causing silent `str.replace()` assert failures. Enforced by convention; will be added to ruff config when linting is set up.
 
+**TypeScript/TSX in `beezy-vip/` follows the same rule via escapes** (2026-10-14): `\u00a2` (cent), `\u00b7` (middle dot), `\u2014` (em dash), `/[\u0300-\u036f]/g` (combining marks), `Montr\u00e9al` in tests -- never the raw character. A raw multibyte character in a Windows PowerShell / cp1252 edit round-trips into mojibake, and a mangled regex range silently stops accent-folding. In JSX TEXT a `\uXXXX` escape renders literally, so use an entity there (`&middot;`, `&mdash;`, `&cent;`); in JS strings/template literals use the escape. `beezy-vip/tests/ev-terminal-shadow.test.tsx` pins the files that were fixed. Legacy files (articles, legal pages, edge, cheat-sheet, model-specs) still carry raw characters -- do not mass-convert; fix a file when you touch it.
+
 ### Deploy script runs tests before building
 `./deploy/deploy_service.sh` runs `python3 -m compileall` + `pytest tests/` before
 `gcloud builds submit`. A failing test or syntax error aborts the deploy immediately.
@@ -1792,6 +1794,12 @@ Checks (all post-feature-build):
 - All data masters (scoring, statcast, weather, umpires) age < 26hrs
 - All model artifacts exist in GCS
 - Any bets pending > 3 days
+- `NFL/last_refresh.json` (when present) must not report `status=error` (`partial` is silent; a missing file is silent -- a dead
+  `nfl-refresh-data` job is caught by the scheduler check instead)
+
+The scheduler check covers EVERY enabled job in every pillar (`nfl-/nhl-/nba-refresh-data`, `odds-bank-*`, `props-alerts-*`,
+`props-grade-*`, `ev-nfl-props-sweep`, ...) and ignores PAUSED ones, so an intentionally paused sport never pages but a resumed
+job that fails does.
 
 Silent on clean run. Posts to #ops-alerts via DISCORD_WEBHOOK_OPS on failure.
 
@@ -1913,7 +1921,7 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/summary` | 300s | Overall + per-system stats |
 | `GET /api/public/stats/sparkline` | 300s | Daily cumulative P&L last 30 days |
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
-| `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow NFL sweep block read from `EVSweep/nfl_props/latest.json` (carries `status`/`age_minutes`/`stale`/`validated:false`; started games dropped) |
+| `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow sweep blocks: `nfl` (read from `EVSweep/nfl_props/latest.json`: Kalshi `rows` plus `book_outliers`, the Sink A book/exchange rows -- present even when Kalshi blocks the cloud egress IP and `rows` is empty), `nhl` / `nba` (`EVSweep/{sport}_props/latest.json`). Every shadow block carries `status`/`age_minutes`/`stale`/`validated:false`, started games are dropped, and Sink A rows share one shape (`EvBookOutlierRow`: `ev`, `p_fair`, `point`, `american`, `decimal`, `n_books`, `flag`). An outlier-only NFL snapshot counts as live for 45 min (Kalshi-backed snapshots for 180) |
 | `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
@@ -2021,10 +2029,10 @@ Satori OG routes -- use literal hex there.
   sport ribbon from `lib/sports.ts`. Bottom nav: Home | +EV | Sports | Analytics | Results.
 - **`/ev`** (`app/ev/`): +EV terminal. Track-record KPIs are computed live from
   `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
-  NFL rows are SHADOW: no stake sizing, no score, idle/stale banner -- the sweep's own contract
-  says its signals are unvalidated and never member-facing.
+  NFL / NHL / NBA rows are SHADOW (`Row.shadow`): no stake sizing, no Beezy score, idle/stale banner -- the sweeps' own
+  contract says their signals are unvalidated and never member-facing. All five sport filters are live.
 - **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
-  (mlb live, nfl shadow, nba data_only, nhl planned). Update that file when a pillar's real
+  (mlb live, nfl shadow, nhl shadow, nba data_only). Update that file when a pillar's real
   status changes -- do not write aspirational copy there.
 - **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
   per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
@@ -3347,6 +3355,12 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 - **Sink A** (`scan_book_outliers`): book/exchange quotes beating their leave-self-out consensus, from the same
   ParlayAPI pull (zero extra credits). The +7.56% paper figure behind it is MLB soft-book vs Pinnacle-anchored,
   not NFL -- treat NFL Sink A as unvalidated evidence.
+- **`latest.json` must publish whenever ANYTHING was pulled, not only when Kalshi rows exist (2026-10-14).** `run_cycle` used to write
+  `EVSweep/nfl_props/latest.json` only `if rows:`; when Kalshi's CDN blocks Cloud Run's egress IP `rows` is empty, so the file (and
+  beezy.fyi/ev, /sports/nfl) went stale even though the same cycle had just pulled fresh ParlayAPI props. It now writes on
+  `parlay_events or rows or outliers` and carries `book_outliers`. Credible Sink A rows (EV in [`ev_min`, 0.15], >= 4 reference books)
+  also post once per day per quote to the admin webhook (dedup key `sinkA|game|player|stat|point|side|book` in `notified.json`).
+  Still evidence-only: nothing here is sized or scored on the site.
 - Market-making on Kalshi NFL props is -EV (docs/analysis/market_making_2026-10-12.md); `mm_*` columns in
   `scripts/novig_kalshi_scan.py` measure the QUOTED hedged opportunity only, not realised P&L.
 - **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
@@ -3938,8 +3952,8 @@ backbone. Full detail in `nfl/README.md`.
 - **Ingest:** `python -m nfl.data.ingest --mode backfill|refresh [--datasets ..] [--seasons ..] [--dry-run|--probe]`.
   Validates each file, refuses bad/shrunk (<80% rows) files and keeps the old copy, skips frozen seasons and unchanged
   sha256. A 404 on the newest season is expected (participation lags until the season ends); any other 404 is a
-  failure. Nightly Cloud Run Job `nfl-refresh-data` via `deploy/setup_nfl_refresh.sh` (13:30 UTC; NOT wired into
-  `monitor_ops`).
+  failure. Nightly Cloud Run Job `nfl-refresh-data` via `deploy/setup_nfl_refresh.sh` (13:30 UTC; its
+  `NFL/last_refresh.json` sentinel is checked by `monitor_ops`: `status=error` alerts).
 - **Joins:** `nfl.data.keys.add_game_keys()` produces the `ev/` `game_key`; nflverse codes differ from Kalshi's only at
   `JAX/JAC` and `LA/LAR` (plus `OAK/SD/STL` relocations). A test pins the codes and format to `ev/`.
 - **GOTCHA:** the local-mode default `MLB_BASE_DATA` is a Windows path -- set it (or `GCS_BUCKET`) before any non-test run.
@@ -3985,6 +3999,8 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   `docs/solutions/integration-issues/parlayapi-nhl-nba-prop-shapes.md`.
 - **Image rule (verified):** a Cloud Run JOB resolves its image tag at every execution, so new feature jobs run from
   `gcr.io/<project>/mlb-betting-feeds`, NEVER `mlb-betting:latest` (`docs/solutions/conventions/cloud-run-job-image-tag-resolution.md`).
+  `deploy/build_all_images.sh` builds once and retags one digest onto all four repos (refuses a dirty tree or HEAD != origin/main; `SKIP_PROD=1`
+  leaves `mlb-betting:latest` alone) -- see RUNBOOKS.md s8 for its blast radius. The `idx_bets_dedup_v3` drop and the NHL resume steps are RUNBOOKS.md s7.
 - **Alerts (Sink A only, no Kalshi, no model):** `ev/sweep_props_alerts.py --sport nhl|nba` reads the banked snapshot (ZERO extra
   credits; refuses a snapshot older than 45 min), resolves players to league ids, and flags a book quote that beats the
   leave-self-out consensus of the other books (>=3 books, EV 3-15%, dispersion <= 0.06, >= 20 min before start). Admin webhook only

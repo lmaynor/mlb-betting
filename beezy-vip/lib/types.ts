@@ -138,8 +138,54 @@ export interface EvNflRow {
   reason:       string | null
 }
 
+/**
+ * Sink A: a sportsbook / exchange quote beating the leave-self-out consensus of the OTHER books. The one row shape for
+ * NFL `book_outliers` and the NHL/NBA props blocks (mlb/runners/public_api.py::_outlier_row). SHADOW / unvalidated:
+ * never render a stake or a Beezy score for these.
+ */
+export interface EvBookOutlierRow {
+  sport?:        'nfl' | 'nhl' | 'nba'
+  venue?:        string
+  game_key:      string | null
+  commence?:     string | null
+  mins_to_kick?: number | null
+  book:          string
+  player:        string
+  player_norm?:  string
+  player_id?:    number | string | null
+  team?:         string | null
+  away_team?:    string | null
+  home_team?:    string | null
+  stat?:         string
+  market?:       string
+  point?:        number
+  line?:         number
+  side:          'OVER' | 'UNDER' | string
+  american:      number
+  decimal:       number
+  p_fair:        number | null
+  ev:            number           // fraction, at the quote's own price
+  n_books:       number           // reference books (leave-self-out)
+  disp?:         number | null
+  flag?:         boolean          // passed the sweep's credibility gates (EV cap, >= min reference books)
+  reason?:       string | null
+}
+
 export interface EvNflBlock {
-  rows:        EvNflRow[]
+  rows:          EvNflRow[]       // Kalshi order-book rows (empty when Kalshi blocks the cloud egress IP)
+  book_outliers?: EvBookOutlierRow[]
+  count:         number
+  status:        'shadow_live' | 'idle' | 'unavailable'
+  as_of:         string | null
+  age_minutes:   number | null
+  stale:         boolean
+  summary:       Record<string, unknown>
+  validated:     boolean
+}
+
+/** NHL / NBA props sweep block (ev/sweep_props_alerts.py). Same freshness contract as EvNflBlock. */
+export interface EvPropsBlock {
+  rows:        EvBookOutlierRow[]
   count:       number
   status:      'shadow_live' | 'idle' | 'unavailable'
   as_of:       string | null
@@ -155,6 +201,8 @@ export interface EvFeed {
   as_of:  string
   mlb:    { rows: EvMlbRow[]; count: number }
   nfl:    EvNflBlock | null
+  nhl?:   EvPropsBlock | null
+  nba?:   EvPropsBlock | null
 }
 
 // -- Analytics deep dive (GET /api/public/analytics/deep-dive) -----------------

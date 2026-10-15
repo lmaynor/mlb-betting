@@ -82,9 +82,9 @@ def split_player(raw: str):
 
 
 def norm_name(name: str) -> str:
-    """Accent-fold, lowercase, drop punctuation and generational suffixes: 'Ja’Marr Chase Jr.' -> 'jamarr chase'."""
+    """Accent-fold, lowercase, drop punctuation and generational suffixes: "Ja'Marr Chase Jr." -> 'jamarr chase'."""
     s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
-    s = re.sub(r"[.'`’]", "", s)
+    s = re.sub(r"[.'`\u2019]", "", s)                       # \u2019 = typographic apostrophe
     s = re.sub(r"[-_]", " ", s)
     toks = [t for t in re.sub(r"[^a-z0-9 ]", " ", s).split() if t not in _SUFFIX_TOKENS]
     return " ".join(toks)
