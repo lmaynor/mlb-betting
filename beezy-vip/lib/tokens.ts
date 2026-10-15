@@ -29,8 +29,8 @@ export const TIER_COLOR: Record<ScoreTier, string> = {
   watch:  '#94a3b8',   // slate — neutral signal
 }
 export const TIER_LABEL: Record<ScoreTier, string> = {
-  strong: 'STRONG PLAY',
-  lean:   'LEAN PLAY',
+  strong: 'STRONG',
+  lean:   'LEAN',
   watch:  'WATCH',
 }
 

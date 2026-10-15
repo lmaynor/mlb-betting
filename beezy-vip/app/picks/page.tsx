@@ -8,6 +8,7 @@ import { PicksTable } from '@/components/picks/picks-table'
 import { apiGetPicks as getPicks } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
 import { collapseBooks } from '@/lib/dedupe'
+import { ScoreLegend } from '@/components/ui/score-legend'
 
 export const metadata: Metadata = {
   title: 'MLB Picks',
@@ -85,6 +86,7 @@ export default function PicksPage({ searchParams }: { searchParams: Promise<Reco
         }>
           <PicksContent searchParams={searchParams} />
         </Suspense>
+        <ScoreLegend />
       </div>
     </div>
   )

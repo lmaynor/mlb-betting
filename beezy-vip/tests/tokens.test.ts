@@ -182,9 +182,10 @@ describe('beezyscore / scoreTier', () => {
     expect(beezyscore(makeBet({ edge: 0.08 }))).toBe(beezyscore(makeBet({ edge: 8 })))
   })
   test('tier boundaries and metadata', () => {
-    expect(scoreTier(65)).toBe('strong')
-    expect(scoreTier(64)).toBe('lean')
-    expect(scoreTier(39)).toBe('watch')
+    expect(scoreTier(70)).toBe('strong')
+    expect(scoreTier(69)).toBe('lean')
+    expect(scoreTier(45)).toBe('lean')
+    expect(scoreTier(44)).toBe('watch')
     expect(TIER_META.strong.color).toBe('#57F287')
   })
 })

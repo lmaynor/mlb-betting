@@ -1,6 +1,6 @@
 'use client'
 
-import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { SYSTEM_PILL, systemLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
@@ -114,7 +114,7 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const tier  = scoreTier(score)
   const color = TIER_COLOR[tier]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+    <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
       <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>

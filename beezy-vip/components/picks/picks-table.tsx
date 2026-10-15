@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { beezyscore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
 import { Matchup } from '@/components/ui/matchup'
@@ -69,7 +69,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
   const color = TIER_COLOR[tier]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', gap: '2px' }}>
+    <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', gap: '2px' }}>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>
@@ -83,7 +83,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
         color,
         whiteSpace: 'nowrap',
       }}>
-        {TIER_LABEL[tier].replace(' PLAY', '')}
+        {TIER_LABEL[tier]}
       </span>
     </div>
   )
