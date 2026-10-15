@@ -478,8 +478,8 @@ a:focus-visible {
 .article-body a { color: var(--link); text-underline-offset: 3px; }
 
 /* ── Interactive card hover ─────────────────────────────────────── */
-.card-hover { transition: border-color var(--dur) var(--ease-out), transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
-.card-hover:hover { border-color: var(--steel) !important; transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.card-hover { transition: border-color 120ms ease, background-color 120ms ease; }
+.card-hover:hover { border-color: var(--steel) !important; background-color: var(--surface-elevated); }
 
 /* ── Picks/results responsive table swaps ───────────────────────── */
 .picks-desktop { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -547,16 +547,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 a { color: inherit; }
 
-/* ── /ev card: strict column grid on desktop, wrapping flex below 960px ─────────────────────────── */
-.ev-card-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-@media (min-width: 960px) {
-  .ev-card-grid {
-    display: grid;
-    grid-template-columns: 72px minmax(230px, 2.2fr) minmax(145px, 1.1fr) minmax(150px, 1.1fr) 88px 130px auto;
-    gap: 16px;
-    align-items: center;
-  }
-}
+/* ── /ev data table: one sticky header (clears the 96px two-tier nav), hairline rows, hover = background only ── */
+.ev-table th { position: sticky; top: 97px; z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
+.ev-table td { padding: 10px 12px; vertical-align: middle; border-bottom: 1px solid #151822; }
+.ev-table tbody tr { transition: background-color 120ms ease; }
+.ev-table tbody tr[data-row]:hover { background: #171a24; }
+.ev-table tbody tr:last-child td { border-bottom: none; }
+@media (max-width: 1100px) { .ev-table-wrap { overflow-x: auto; } .ev-table th { position: static; } }
 
 /* ── /edge cockpit master-detail: two columns >= 960px, full-screen inspector sheet below ───────── */
 .cockpit-grid   { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }

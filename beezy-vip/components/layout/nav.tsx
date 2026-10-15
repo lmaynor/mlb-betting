@@ -182,7 +182,6 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
               key={p.slug}
               href={`/sports/${p.slug}`}
               label={p.shortName}
-              badge={p.navBadge}
               active={pathname === `/sports/${p.slug}`}
               accent={p.accent}
             />
@@ -195,7 +194,7 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
   )
 }
 
-function SportLink({ href, label, badge, active, accent }: { href: string; label: string; badge?: string; active: boolean; accent?: string }) {
+function SportLink({ href, label, active, accent }: { href: string; label: string; active: boolean; accent?: string }) {
   const color = active ? (accent ?? 'var(--chalk)') : 'var(--silver)'
   return (
     <Link
@@ -209,11 +208,6 @@ function SportLink({ href, label, badge, active, accent }: { href: string; label
       }}
     >
       {label}
-      {badge && (
-        <span style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.02em', color: 'var(--fog)', border: '1px solid #1e2230', borderRadius: '4px', padding: '1px 5px' }}>
-          {badge}
-        </span>
-      )}
     </Link>
   )
 }

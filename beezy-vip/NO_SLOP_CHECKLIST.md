@@ -1,0 +1,31 @@
+# no-slop-ui checklist (beezy-vip)
+
+Hard rules for every work surface (`/ev`, `/analytics`, `/sports/[sport]`, `/edge`, and anything new). A page fails
+review if any item below is true. Static guards for most of these live in `tests/no-slop-ui.test.tsx`.
+
+1. **No eyebrow + mood headline + prose intro.** A page opens with one compact toolbar row: `<h1>` (20px / 700, plain
+   name such as "+EV Terminal") on the left, controls/tabs/row count on the right. Explanatory prose goes in a footnote,
+   a `title`, or a `<details>`, never above the tool.
+2. **No KPI-card grid above the work surface.** Headline numbers are one inline metric strip (about 38px: `#11131a`,
+   1px `#1e2230`, 8px radius), e.g. `7,546 graded · +$57,028 flat (+8.2% ROI) · $1,000 -> $14,300 1/4-Kelly`.
+3. **No coloured glows, no decorative gradients.** Surfaces are solid `#11131a`, border `1px solid #1e2230`, radius 8px,
+   shadow at most `0 1px 2px rgba(0,0,0,0.45)`. Tier/status is a left border or a text badge, never a neon box-shadow.
+   `TIER_META.*.glow` stays `'none'`.
+4. **No static decorative nav badges.** A badge appears only if it carries a live count; otherwise plain labels.
+5. **No card-per-row stacks for tabular data.** Lists of comparable records are a real `<table>`: one sticky `<thead>`,
+   hairline rows, tabular monospace numbers, expandable detail as a `<tr><td colSpan>` sub-row. Column labels never
+   repeat inside rows.
+6. **No transform animation on hover.** Hover changes background or border colour only (`120ms ease`). No
+   `translate`/`scale` on `:hover`.
+
+Also (from PRODUCT.md): no emoji or exclamation points in UI copy; SVG and Satori OG routes use literal hex, never
+`var()`; source files stay ASCII (use escapes for typographic characters).
+
+## Review log
+
+| Date | Surface | Result | Notes |
+|---|---|---|---|
+| 2026-10-14 | `/ev` | PASS | toolbar header, ledger strip, filter bar, table with Compare-books sub-row |
+| 2026-10-14 | `/analytics` | PASS | h1 + tabs on one row; paper-results caveat is a footnote |
+| 2026-10-14 | `/sports/[sport]` | PASS | solid header bar with title, status badge and tabs inline |
+| 2026-10-14 | `/edge` | PARTIAL | no glows/gradients/hover transforms/KPI grid/cards-per-row; FAILS rule 1 in part: `.edge-tagline` paragraph sits under the title row. Not changed here (file belongs to #54) |

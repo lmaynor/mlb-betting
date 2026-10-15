@@ -45,18 +45,9 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 24px 64px' }}>
-      <header style={{ marginBottom: '22px' }}>
-        <div className="dell-heading" style={{ color: 'var(--signal)', marginBottom: '8px' }}>ANALYTICS</div>
-        <h1 className="dell-display" style={{ fontSize: 'clamp(26px, 4vw, 36px)', color: 'var(--chalk)' }}>
-          What the settled bets actually say.
-        </h1>
-        <p className="times" style={{ color: 'var(--silver)', fontSize: '15px', maxWidth: '72ch', marginTop: '10px' }}>
-          Everything below is computed from graded bets in the public ledger. All results are paper: flagged price at flag
-          time, voids excluded from ROI, no slippage or limits.
-        </p>
-      </header>
-
-      <div role="tablist" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px', borderBottom: `1px solid ${GRID}`, paddingBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Performance &amp; Calibration Ledger</h1>
+      <div role="tablist" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
         {TABS.map(t => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
             style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer',
@@ -65,6 +56,7 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
           </button>
         ))}
         {loading && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', alignSelf: 'center' }}>updating...</span>}
+      </div>
       </div>
 
       {!data ? (
@@ -78,6 +70,9 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
       ) : (
         <Health stats={stats} />
       )}
+      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '8px 2px 0' }}>
+        Computed from graded bets in the public ledger. All results are paper: flagged price at flag time, voids excluded from ROI, no slippage or limits.
+      </p>
     </div>
   )
 }
