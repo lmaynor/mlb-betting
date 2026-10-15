@@ -7,6 +7,7 @@ a feature list.
 
 Per stat (see SPECS)
     receptions, pass_tds      count:poisson  -> NegBin(mu, alpha)           (var = mu + alpha*mu^2)
+    pass_attempts, completions, rush_attempts   same count:poisson -> NegBin path (added 2026-10-14, unvalidated)
     anytime_td                count:poisson on td_count (rush+rec TDs) -> NegBin; "anytime" = P(count >= 1) =
                               P(over 0.5)
     pass_yds, rush_yds,       reg:tweedie (variance power 1.5: compound Poisson-gamma -- exact zeros plus a
@@ -79,7 +80,13 @@ SPECS = {
     "receptions": StatSpec("receptions", "y_receptions", "count", *_POISSON, "elig_receptions", "negbin"),
     "pass_tds": StatSpec("pass_tds", "y_pass_tds", "count", *_POISSON, "elig_pass_tds", "negbin"),
     "anytime_td": StatSpec("anytime_td", "y_td_count", "count", *_POISSON, "elig_anytime_td", "negbin"),
+    # volume counts (added 2026-10-14; no walk-forward run yet). Same eligibility populations as the yardage markets.
+    "pass_attempts": StatSpec("pass_attempts", "y_pass_attempts", "count", *_POISSON, "elig_pass_yds", "negbin"),
+    "completions": StatSpec("completions", "y_completions", "count", *_POISSON, "elig_pass_yds", "negbin"),
+    "rush_attempts": StatSpec("rush_attempts", "y_rush_attempts", "count", *_POISSON, "elig_rush_yds", "negbin"),
 }
+# The stats the walk-forward CLI runs by default (the original six); the volume counts are opt-in via --stats.
+DEFAULT_STATS = ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td")
 
 XGB_PARAMS = {
     "max_depth": 3, "learning_rate": 0.03, "subsample": 0.8, "colsample_bytree": 0.5, "min_child_weight": 25,
@@ -369,7 +376,7 @@ def oof_predictions(tr: pd.DataFrame, spec: StatSpec, features: list, rounds: in
 
 
 def train_stat(df: pd.DataFrame, stat: str, family: Optional[str] = None, overrides: Optional[dict] = None,
-               oof_folds: int = 4) -> NFLPropModel:
+               oof_folds: int = 4, include_experimental: bool = False) -> NFLPropModel:
     """Fit the mean model on all eligible rows of `df` and the dispersion on walk-forward OOF residuals.
 
     Number of boosting rounds comes from early stopping on the LAST training season (trained on the earlier
@@ -383,7 +390,7 @@ def train_stat(df: pd.DataFrame, stat: str, family: Optional[str] = None, overri
     tr = training_rows(df, stat)
     if len(tr) < 300:
         raise ValueError(f"{stat}: only {len(tr)} eligible labelled rows -- not enough to train")
-    features = [f for f in feature_columns(df) if tr[f].notna().any()]
+    features = [f for f in feature_columns(df, include_experimental=include_experimental) if tr[f].notna().any()]
     seasons = sorted(tr["season"].unique())
     if len(seasons) >= 2:
         last = seasons[-1]

@@ -2037,6 +2037,9 @@ Satori OG routes -- use literal hex there.
   `/analytics/deep-dive`, labelled PAPER (flagged price, no slippage, correlated across books).
   NFL / NHL / NBA rows are SHADOW (`Row.shadow`): no stake sizing, no Beezy score, idle/stale banner -- the sweeps' own
   contract says their signals are unvalidated and never member-facing. All five sport filters are live.
+  Sink A rows with `all_books` show a "Compare N books" strip (each book's Over/Under + de-vigged fair P(over); best price for
+  the row's side highlighted, ranked by decimal payout). `/api/og/ev-recap-card` (1200x630, `?format=vertical` 1080x1350) is the
+  multi-sport recap card: PAPER labels, SHADOW tag on non-MLB rows, KPI tiles omitted when the data to back them is absent.
 - **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
   (mlb live, nfl shadow, nhl shadow, nba data_only). Update that file when a pillar's real
   status changes -- do not write aspirational copy there.
@@ -3354,10 +3357,15 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   is always rejected. Wide-book decisions carry `inputs.wide_book=true` in the ledger -- compare their paper fills
   to tight-book fills before trusting them (a cheap ask in a wide book is also the likeliest stale/adverse one).
 - **Exact-point consensus starves.** `build_consensus` keys on `(player_norm, stat, point)`; books split a main line
-  across adjacent half-points, so most matches have 1-2 books. Pooling (`ev.props.pooled_consensus`) is
-  EVIDENCE ONLY: yardage stats within 1.0 yd of the target, normal-model shift with unvalidated per-stat sd
-  (`POOL_SD_FRAC`); reception/TD stats are never pooled. It is logged beside the exact consensus
-  (`pooled_*.csv`) and never feeds flags or orders until shadow data supports it.
+  across adjacent half-points, so most matches have 1-2 books. Pooling (`ev.props.pooled_consensus`): yardage stats
+  within 1.0 yd of the target, normal-model shift with unvalidated per-stat sd (`POOL_SD_FRAC`); reception/TD stats are
+  never pooled. It is always logged beside the exact consensus (`pooled_*.csv`). **Contract change 2026-10-14:**
+  `rows_from_snapshot` now USES it as a TAGGED fallback when the exact consensus has < `n_min_books` books
+  (`allow_pooled_fallback`, env `KEXEC_ALLOW_POOLED_FALLBACK`, default ON, `0` restores exact-only). Fallback rows carry
+  `consensus_src='pooled'`, `interpolated`, `exact_n_books` and surface in `/api/public/ev/feed`. The shift model is still
+  UNVALIDATED, and the DEMO executor's `build_latest_local` inherits the same switch -- a pooled price is not a
+  measured one. `scan_book_outliers` rows and `latest.json` carry `all_books` (per-book American prices + de-vigged
+  fair P(over)) for the /ev "Compare N books" drawer; the flat evidence CSVs drop that nested column.
 - **Sink A** (`scan_book_outliers`): book/exchange quotes beating their leave-self-out consensus, from the same
   ParlayAPI pull (zero extra credits). The +7.56% paper figure behind it is MLB soft-book vs Pinnacle-anchored,
   not NFL -- treat NFL Sink A as unvalidated evidence.
@@ -3406,7 +3414,11 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   selections) -- it is not usable as a sharp anchor from BettingPros. Novig/ProphetX/Kalshi do quote (Kalshi must be
   excluded from any consensus; DFS books like PrizePicks/Underdog are mixed in and are not two-sided prices).
   `BOOK_ID_TO_NAME` is a trimmed US-book map that DROPS the Novig/ProphetX/Kalshi/Pinnacle ids, so a real ingest needs
-  a new book map. No BettingPros->`Quote` adapter exists yet.
+  a new book map. **`ev/bettingpros_live.py` (2026-10-14) is that adapter**: `fetch_bp_quotes(sport, date)` -> `Quote`s
+  (own `LIVE_BOOKS` map: 9 US books + Novig + ProphetX; DFS, the 'consensus' pseudo-book, open rows, Kalshi and anything
+  unmapped are dropped) and `merge_quotes(parlay, bp)` (ParlayAPI wins; BettingPros only fills missing book/point).
+  Zero ParlayAPI credits but SLOW (offers paginate 10/page with sleeps); NOT yet wired into any sweep or job.
+  Name-keyed only (no league-id resolver): do not merge it into a resolver-keyed (`id<ID>`) NHL/NBA quote set.
 - **Settled-tape studies need a selection-safe sample.** The Kalshi tapes were fetched by FINAL volume (3,000-4,000
   cutoffs), which is outcome-dependent (a YES-resolving longshot trades ~3.5x more in-game), so the raw tape overstates
   the longshot YES rate (12.9% -> 36.3% across final-volume quintiles at a flat ~11% price). Keep only markets whose
@@ -4029,5 +4041,17 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   NBA 2021-12+, NHL 2022-11+. (2) ParlayAPI `/v1/historical/.../closing-odds` -- Pinnacle/Novig prop closes but only `historical_hours` deep (Starter =
   7 days, rolling): `nba/odds/parlay_historical.py` (10 credits per call, metered), raw to `OddsAccum/{sport}/historical/`; re-run weekly. This
   corrects the earlier "no historical-props API at any tier" (it is true beyond the tier window).
+- **Historical BettingPros -> model-vs-market (2026-10-14, code only, NOT run on real data):** `mlb_core/odds/bettingpros_loader.py`
+  (`build_market_consensus` / `consensus_from_long`: two-sided real books + Novig/ProphetX only, Kalshi/DFS/consensus/open dropped, one
+  modal line per (date, player, stat), de-vigged median + best/Novig prices), CLI `scripts/join_bettingpros_history.py`, shared scorer
+  `mlb_core/odds/model_vs_market.py`, and opt-in hooks `nfl.models.walkforward.market_compare`, `nba.props.evaluate.market_report`,
+  `nhl.props.study.bettingpros_model_vs_market` (fail-closed identity; every consensus row is matched or counted in a `dropped` reason).
+  BettingPros keeps ONE last snapshot per day, so there is no closing-line/CLV series from it.
+- **Teammate-absence features (2026-10-14, opt-in, default feature lists UNCHANGED):** NFL `team_missing_{target,rush,pass_att}_share_l5`
+  (`include_experimental=True` / `--experimental-features`); NBA `team_missing_min_l10`, `team_missing_usg_proxy_l10`
+  (`availability="history"|{team: ids}`, live path via `nba/data/espn_injuries.py`); NHL `sog_xg_l10` (distance/angle PROXY, no xG column),
+  `high_danger_sog_l10`, `team_missing_sog_l10` (`FEATURES_V2`). Leakage/parity tests pin them. Local walk-forward on prior data: NBA MAE
+  -1.4% (points) / -2.0% (PRA), NHL SOG ~0 -- accuracy only, NOT edge; the NBA figure is an upper bound (training uses actual inactives,
+  live only has the Out list). New NFL count stats `pass_attempts`/`completions`/`rush_attempts` are in SPECS and the grader, opt-in via `--stats`.
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).

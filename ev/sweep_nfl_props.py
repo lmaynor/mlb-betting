@@ -155,18 +155,60 @@ def refresh_single_event_consensus(pc, sport: str, event_id: str, comm_iso: str,
     return entry
 
 
-def rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0):
+def pooled_fallback_enabled(env=None) -> bool:
+    """KEXEC_ALLOW_POOLED_FALLBACK (default ON): promote the adjacent-half-point pooled consensus to a TAGGED fallback
+    when the exact-point consensus has fewer than cfg.n_min_books books. Set 0/false/off to restore exact-only rows."""
+    v = str((os.environ if env is None else env).get("KEXEC_ALLOW_POOLED_FALLBACK", "1")).strip().lower()
+    return v not in ("0", "false", "no", "off", "")
+
+
+def _pooled_entry(ev: dict, curves: dict, hints: dict, leg, exact, cfg):
+    """Pooled consensus for one Kalshi strike, shaped like a snapshot `points` entry, or None when it cannot stand in
+    for the exact-point one (stat not poolable, no curve, < n_min_books pooled books, or too dispersed)."""
+    if leg.stat not in POOL_MAX_GAP:
+        return None
+    ents = curves.get((leg.player_norm, leg.stat))
+    if not ents:
+        return None
+    pc = pooled_consensus([tuple(e) for e in ents], leg.stat, leg.strike, min_books=cfg.n_min_books)
+    if pc is None or pc["n_books"] < cfg.n_min_books or pc["disp"] > cfg.disp_max:
+        return None
+    th = sorted(set(hints.get((leg.player_norm, leg.stat), ())) | set((exact or {}).get("team_hints") or ()))
+    return {"p_over": pc["p_over"], "n_books": pc["n_books"], "disp": pc["disp"], "books": list(pc["books"]),
+            "n_onesided": 0, "n_dfs": 0, "team_hints": th, "interpolated": pc["interpolated"]}
+
+
+def rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_mult: float = 1.0,
+                       allow_pooled_fallback: bool | None = None):
     """Join a consensus snapshot to Kalshi prop markets. One row per Kalshi market that has a book consensus at
-    the same point; (rows, stats)."""
+    the same point; (rows, stats).
+
+    allow_pooled_fallback (default: KEXEC_ALLOW_POOLED_FALLBACK, on): when the exact-point consensus is missing or has
+    < cfg.n_min_books books and the stat is poolable (yardage; POOL_MAX_GAP), use the adjacent-half-point POOLED
+    consensus instead. Those rows are tagged `consensus_src='pooled'`, `interpolated` (pooled used a shifted quote)
+    and `exact_n_books`. The pooled model is UNVALIDATED (normal shift, rough per-stat sd) -- the tag is the contract."""
+    if allow_pooled_fallback is None:
+        allow_pooled_fallback = pooled_fallback_enabled()
     rows, stats = [], {"kalshi_legs_seen": 0, "matched": 0, "unmatched_no_book": 0, "team_mismatch": 0,
-                       "books_per_match": []}
+                       "books_per_match": [], "pooled_fallback_used": 0}
     for ev in snap:
         gk, start = ev["game_key"], datetime.fromisoformat(ev["commence"])
         idx = {(p["player_norm"], p["stat"], p["point"]): p for p in ev["points"]}
+        curves = {(c["player_norm"], c["stat"]): c["pts"] for c in ev.get("curves", [])}
+        hints: dict = {}
+        for p in ev["points"]:
+            hints.setdefault((p["player_norm"], p["stat"]), set()).update(p.get("team_hints") or ())
         mins = (start - now).total_seconds() / 60.0
         for leg, mk in legs_by_game.get(gk, []):
             stats["kalshi_legs_seen"] += 1
             c = idx.get((leg.player_norm, leg.stat, leg.strike))
+            exact_n = 0 if c is None else c["n_books"]
+            src, interpolated = "exact", False
+            if allow_pooled_fallback and (c is None or exact_n < cfg.n_min_books):
+                pe = _pooled_entry(ev, curves, hints, leg, c, cfg)
+                if pe is not None:
+                    c, src, interpolated = pe, "pooled", pe["interpolated"]
+                    stats["pooled_fallback_used"] += 1
             if c is None:
                 stats["unmatched_no_book"] += 1
                 continue
@@ -190,7 +232,7 @@ def rows_from_snapshot(snap: list, legs_by_game: dict, now: datetime, cfg, fee_m
                 "ask_yes_size": _f(mk.get("yes_ask_size_fp")), "oi": _f(mk.get("open_interest_fp")),
                 "vol24": _f(mk.get("volume_24h_fp")),
                 "ev_yes": None if ey is None else round(ey[0], 5), "ev_no": None if ny is None else round(ny[0], 5),
-                "fee_mult": fee_mult,
+                "fee_mult": fee_mult, "consensus_src": src, "interpolated": interpolated, "exact_n_books": exact_n,
                 "ranges": json.dumps([[r.start, r.end, r.step] for r in leg.ranges]),
                 "exchange_index": leg.exchange_index,
             }
@@ -496,7 +538,8 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
     for name, evidence in (("book_outliers", outliers), ("pooled", pooled)):
         if evidence:
             try:
-                _write(pd.DataFrame(evidence).to_csv(index=False).encode(), f"{PREFIX}/{day}/{name}_{hhmmss}.csv")
+                _write(pd.DataFrame(evidence).drop(columns=["all_books"], errors="ignore").to_csv(index=False).encode(),
+                       f"{PREFIX}/{day}/{name}_{hhmmss}.csv")
             except Exception as e:                                                      # noqa: BLE001
                 log.warning("%s write failed: %r", name, e)
     if rows:

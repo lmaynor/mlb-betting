@@ -677,3 +677,38 @@ def test_ev_scanner_feed_returns_all_four_sport_blocks_or_just_the_requested_one
     assert allf["nfl"]["book_outliers"] and allf["nhl"]["status"] == "unavailable" and allf["nba"]["status"] == "unavailable"
     only = api.get_ev_scanner_feed(None, sport="nhl")
     assert only["nhl"] is not None and only["nfl"] is None and only["nba"] is None and only["mlb"]["rows"] == []
+
+
+def test_outlier_rows_pass_the_per_book_strip_through_and_sanitise_it(monkeypatch):
+    from datetime import datetime, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+    strip = [{"book": "draftkings", "over": -110, "under": -110, "fair": 0.5},
+             {"book": "bovada", "over": 130, "under": None, "fair": None},
+             {"book": "junk", "over": float("nan"), "under": 0, "fair": float("nan")},
+             {"over": 100, "under": -120},                                  # no book name: dropped
+             "not-a-dict"]
+    snap = {"ts": now.isoformat(), "summary": {}, "rows": [], "book_outliers": [
+        _outlier("fanduel", 0.05, all_books=strip), _outlier("nostrip", 0.04), _outlier("bad", 0.04, all_books="x")]}
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": snap})
+    got = {r["book"]: r for r in api._nfl_feed(0.02, 50)["book_outliers"]}
+    assert got["fanduel"]["all_books"] == [
+        {"book": "draftkings", "over": -110, "under": -110, "fair": 0.5},
+        {"book": "bovada", "over": 130, "under": None, "fair": None},
+        {"book": "junk", "over": None, "under": None, "fair": None}]
+    assert got["nostrip"]["all_books"] is None and got["bad"]["all_books"] is None
+
+
+def test_nfl_kalshi_rows_carry_the_pooled_fallback_tag(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from mlb.runners import public_api as api
+    now = datetime.now(timezone.utc)
+    base = {"ticker": "A", "stat": "rec_yds", "player": "P", "strike": 64.5, "p_over": 0.4, "ask_yes": 0.3,
+            "ev_yes": 0.08, "ask_no": 0.7, "ev_no": -0.1, "n_books": 4, "books": "a,b,c,d", "flag": True,
+            "commence": (now + timedelta(hours=2)).isoformat()}
+    snap = {"ts": now.isoformat(), "rows": [{**base, "consensus_src": "pooled", "interpolated": True, "exact_n_books": 1},
+                                            {**base, "ticker": "B"}], "book_outliers": []}
+    _store(monkeypatch, {"EVSweep/nfl_props/latest.json": snap})
+    rows = {r["ticker"]: r for r in api._nfl_feed(0.02, 10)["rows"]}
+    assert rows["A"]["consensus_src"] == "pooled" and rows["A"]["interpolated"] is True and rows["A"]["exact_n_books"] == 1
+    assert rows["B"]["consensus_src"] == "exact" and rows["B"]["interpolated"] is False and rows["B"]["books"] == "a,b,c,d"

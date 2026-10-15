@@ -368,3 +368,19 @@ def test_attach_gsis_maps_pfr_ids():
     players = pd.DataFrame({"gsis_id": ["00-1", "00-2"], "pfr_id": ["AbcdEf00", None]})
     out = G.attach_gsis(snaps, players)
     assert out.gsis_id.tolist()[0] == "00-1" and pd.isna(out.gsis_id.tolist()[1])
+
+
+# ---- volume-count stats (pass_attempts / completions / rush_attempts) ------------------------------------------
+def test_volume_stats_grade_from_nflverse_columns_and_keep_the_dnp_rule():
+    from nfl.props import grade as G
+    row = {"attempts": 35, "completions": 22, "carries": 4}
+    assert G.grade("pass_attempts", 34.5, "over", row, game_final=True) == G.WIN
+    assert G.grade("completions", 22, "over", row, game_final=True) == G.PUSH
+    assert G.grade("rush_attempts", 4.5, "over", row, game_final=True) == G.LOSS
+    # missing player_stats row is NOT a DNP: snaps decide (played -> zeros, not played -> void)
+    assert G.grade("rush_attempts", 0.5, "over", None, game_final=True, played=True) == G.LOSS
+    assert G.grade("pass_attempts", 0.5, "over", None, game_final=True, played=False) == G.VOID
+    # a stats row that lacks the column is ungradable, never a loss
+    assert G.grade("pass_attempts", 20.5, "under", {"carries": 1}, game_final=True) == G.UNGRADABLE
+    # older stat frames (no attempts/completions/carries) must still construct an Actuals
+    assert not {"attempts", "completions", "carries"} & set(G.STAT_ROW_COLUMNS)

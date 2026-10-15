@@ -34,7 +34,8 @@ from nfl.models import props as P
 logger = logging.getLogger(__name__)
 
 BASE_COL = {"pass_yds": "pass_yds", "rush_yds": "rush_yds", "rec_yds": "rec_yds", "receptions": "rec",
-            "pass_tds": "pass_tds", "anytime_td": "td_count"}
+            "pass_tds": "pass_tds", "anytime_td": "td_count",
+            "pass_attempts": "pass_att", "completions": "pass_cmp", "rush_attempts": "carries"}
 BASELINES = ("l5", "szn", "ewm")
 MIN_ROWS_FOR_TEST = 150
 
@@ -74,11 +75,12 @@ def _ece(p, o) -> float:
     return float(sum(r[1] * abs(r[2] - r[3]) for r in rel) / n) if n else float("nan")
 
 
-def eval_season(df: pd.DataFrame, stat: str, test_season: int, family: str = None, overrides: dict = None):
+def eval_season(df: pd.DataFrame, stat: str, test_season: int, family: str = None, overrides: dict = None,
+                include_experimental: bool = False):
     """Train on seasons < test_season, return (row-level result frame, model)."""
     spec = P.SPECS[stat]
     train = df[df["season"] < test_season]
-    model = P.train_stat(train, stat, family=family, overrides=overrides)
+    model = P.train_stat(train, stat, family=family, overrides=overrides, include_experimental=include_experimental)
     fam = model.dispersion["family"]
     bcol = BASE_COL[stat]
     te = P.training_rows(df[df["season"] == test_season], stat)
@@ -121,6 +123,55 @@ def eval_season(df: pd.DataFrame, stat: str, test_season: int, family: str = Non
 
 def _row_logscore(family, mu, y, params) -> np.ndarray:
     return P.row_logscore(family, mu, y, params)
+
+
+def market_compare(res: pd.DataFrame, df: pd.DataFrame, stat: str, consensus: pd.DataFrame, resolver,
+                   min_books: int = 3) -> dict:
+    """OPTIONAL model-vs-REAL-market hook (the default path never calls it). Joins one season's `eval_season` result to
+    the historical BettingPros consensus (mlb_core.odds.bettingpros_loader) and scores the model at the market's own line.
+
+    Returns {"coverage": {matched / dropped-by-reason, see nfl.props.history_join}, "scores": {Brier, log-loss for model
+    and market, blend c}, "joined": frame}. Identity is fail-closed (nfl.props.resolve); unresolved rows are dropped and
+    counted. Selection safety: the consensus is the last pre-start quote BettingPros held for the day, and `res` comes
+    from a model trained on earlier seasons only. Not an edge claim -- CLV is the go/no-go."""
+    from nfl.props import history_join as HJ
+    joined, cov = HJ.join_consensus(res, df, consensus, resolver, stat, min_books=min_books)
+    return {"coverage": cov, "scores": HJ.score(joined), "joined": joined}
+
+
+def eval_season_vs_market(df: pd.DataFrame, stat: str, test_season: int, consensus: pd.DataFrame, resolver,
+                          min_books: int = 3, family: str = None, overrides: dict = None) -> dict:
+    """eval_season + market_compare in one call ({"coverage": None, ...} when the season has too few eligible rows)."""
+    res, _ = eval_season(df, stat, test_season, family=family, overrides=overrides)
+    if res is None:
+        return {"coverage": None, "scores": None, "joined": None}
+    return market_compare(res, df, stat, consensus, resolver, min_books=min_books)
+
+
+def render_market_section(market: dict) -> str:
+    """Markdown for the optional section: market = {stat: {season: market_compare result or None}}."""
+    from mlb_core.odds import model_vs_market as MVM
+    from nfl.props import history_join as HJ
+    L = ["\n## Model vs historical BettingPros market (OPTIONAL; real per-book lines)\n",
+         "Consensus = median of de-vigged two-sided books (no Kalshi / DFS / BettingPros-consensus rows) at the modal "
+         "line, the LAST quote BettingPros held for the day. Model scored at that line; pushes removed. Brier / "
+         "log-loss lower = better; blend `c` > 0 (significant) = the model adds information beyond the market. This is "
+         "calibration vs a market, NOT CLV and NOT an edge claim.\n"]
+    for stat, by_season in market.items():
+        L.append(f"### {stat}")
+        frames = []
+        for s in sorted(by_season):
+            r = by_season[s]
+            if r is None or r["coverage"] is None:
+                L.append(f"- {s}: too few eligible model rows")
+                continue
+            L.append(MVM.render_coverage(str(s), r["coverage"]))
+            L.append(MVM.render_scores(str(s), r["scores"]))
+            frames.append(r["joined"])
+        if frames:
+            L.append(MVM.render_scores("pooled", HJ.score(pd.concat(frames, ignore_index=True))))
+        L.append("")
+    return "\n".join(L) + "\n"
 
 
 def summarize(res: pd.DataFrame, stat: str) -> dict:
@@ -258,11 +309,17 @@ def parse_seasons(spec: str) -> list:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--stats", default=",".join(P.SPECS))
+    ap.add_argument("--stats", default=",".join(P.DEFAULT_STATS), help="available: " + ",".join(P.SPECS))
+    ap.add_argument("--experimental-features", action="store_true",
+                    help="also feed the teammate-absence usage-share features to the models (default: off)")
     ap.add_argument("--seasons", default="2021-2026", help="test seasons; the newest is reported as to-date")
     ap.add_argument("--features-cache", default=None, help="parquet path: load if exists, else build + save")
     ap.add_argument("--out", default=None, help="write the markdown report here")
     ap.add_argument("--no-pbp", action="store_true")
+    ap.add_argument("--market-parquet", default=None,
+                    help="OPTIONAL: BettingPros consensus parquet (scripts/join_bettingpros_history.py --sport nfl). "
+                         "Adds a model-vs-real-market section; omitted = report unchanged")
+    ap.add_argument("--market-min-books", type=int, default=3)
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -281,15 +338,24 @@ def main(argv=None) -> int:
     full_weeks = df[df["season"] == last]["week"].max()
     partial = last if last in test_seasons and full_weeks < 17 else None
 
+    market, cons, resolver = {}, None, None
+    if args.market_parquet:
+        from nfl.props.resolve import PlayerResolver
+        cons = pd.read_parquet(args.market_parquet)
+        resolver = PlayerResolver.from_mirror(range(2018, max(test_seasons) + 1))
     results, pooled = {}, {}
     for stat in stats:
         results[stat] = {}
+        market[stat] = {}
         frames = []
         for s in test_seasons:
-            res, _ = eval_season(df, stat, s)
+            res, _ = eval_season(df, stat, s, include_experimental=args.experimental_features)
             if res is None:
                 results[stat][s] = None
+                market[stat][s] = None
                 continue
+            if cons is not None:
+                market[stat][s] = market_compare(res, df, stat, cons, resolver, min_books=args.market_min_books)
             results[stat][s] = summarize(res, stat)
             if s != partial:
                 frames.append(res)
@@ -299,6 +365,8 @@ def main(argv=None) -> int:
     report = render_report(results, {"train": "all seasons < test season", "test_seasons": test_seasons,
                                      "partial_season": partial, "pooled": pooled,
                                      "pooled_seasons": f"{full[0]}-{full[-1]}" if full else "-"})
+    if cons is not None:
+        report += render_market_section(market)
     print(report)
     if args.out:
         with open(args.out, "w") as fh:

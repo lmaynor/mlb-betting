@@ -14,6 +14,10 @@ Targets (columns `y_*`, the ONLY post-game columns in the output)
     y_anytime_td_all= same but also counting special-teams / defensive / fumble-recovery TDs (book rules vary;
                       the grader must pick the definition the book uses)
 
+Experimental team_missing_*_share_l5 columns (teammate-absence usage redistribution): built into every frame, but
+NOT in feature_columns() by default (pass include_experimental=True). See _attach_team_missing_shares.
+Extra targets y_pass_attempts / y_completions / y_rush_attempts back the volume-count stats in nfl.models.props.
+
 Leakage contract
     Every feature for a row at (season, week) is a function of data from STRICTLY EARLIER games, or of
     information that exists before kickoff (closing spread/total, roof/temp/wind, rest, injury report, the
@@ -110,8 +114,20 @@ DVP_POS = ["QB", "RB", "WR", "TE"]
 META_COLS = ["player_id", "player_name", "position", "pos_grp", "team", "opponent", "season", "week", "game_id",
              "gameday", "is_upcoming"]
 Y_COLS = ["y_pass_yds", "y_rush_yds", "y_rec_yds", "y_receptions", "y_pass_tds", "y_td_count", "y_anytime_td",
-          "y_anytime_td_all"]
+          "y_anytime_td_all", "y_pass_attempts", "y_completions", "y_rush_attempts"]
 ELIG_COLS = [f"elig_{s}" for s in STATS]
+
+# ---- teammate-absence usage redistribution (EXPERIMENTAL: excluded from the default model feature list)
+# Sum of the trailing-5-appearance usage share of same-team players the game-week injury report lists as absent.
+TEAM_MISSING_COLS = ["team_missing_target_share_l5", "team_missing_rush_share_l5", "team_missing_pass_att_share_l5"]
+EXPERIMENTAL_FEATURES = tuple(TEAM_MISSING_COLS)
+# report_status values (lower-cased, stripped) that count as ABSENT. Real nflverse `injuries.report_status` values
+# are Out / Doubtful / Questionable (or blank); Questionable is NOT absent. The IR-style aliases are defensive: the
+# weekly injury report does not normally carry injured-reserve players (they sit on rosters_weekly status RES, which
+# this builder does not read), so IR players are NOT captured unless an injuries frame happens to list them.
+MISSING_STATUS = frozenset({"out", "doubtful", "ir", "injured reserve", "reserve/injured"})
+MISSING_WINDOW = 5                 # appearances (same convention as the *_l5 columns: missed games are skipped)
+MISSING_TOLERANCE_WIDX = 20.0      # an absent player's last appearance must be within ~20 week-slots (~1 season)
 
 
 # ------------------------------------------------------------------------------------------------ frames
@@ -473,6 +489,7 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
 
     # ---- injuries: own status + teammates ruled out/doubtful (their last-known usage)
     pg = _attach_injuries(pg, fr.injuries)
+    pg = _attach_team_missing_shares(pg, fr.injuries)
 
     pg["pos_code"] = pg["pos_grp"].map(POS_CODE).astype(float)
 
@@ -488,6 +505,9 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
     pg["y_anytime_td"] = np.where(up, nan, (pg["y_td_count"] >= 1).astype(float))
     all_td = pg["y_td_count"] + pg["st_tds"] + pg["def_tds"] + pg["fr_tds"]
     pg["y_anytime_td_all"] = np.where(up, nan, (all_td >= 1).astype(float))
+    pg["y_pass_attempts"] = np.where(up, nan, pg["pass_att"])
+    pg["y_completions"] = np.where(up, nan, pg["pass_cmp"])
+    pg["y_rush_attempts"] = np.where(up, nan, pg["carries"])
 
     # ---- eligibility (PRE-GAME trailing usage only)
     for s, (col, thr) in ELIG.items():
@@ -516,9 +536,14 @@ _DROP_FROM_OUTPUT = set(STAT_COLS) | {
     "tg_szn_n", "game_type", "qb_id_f", "tgt_post", "carries_post", "rec_post", "team_game_type"}
 
 
-def feature_columns(df: pd.DataFrame) -> list:
-    """Model-input columns of a built frame (everything that is not meta / target / eligibility)."""
+def feature_columns(df: pd.DataFrame, include_experimental: bool = False) -> list:
+    """Model-input columns of a built frame (everything that is not meta / target / eligibility).
+
+    EXPERIMENTAL_FEATURES (teammate-absence usage shares) are built into every frame but are NOT model inputs
+    unless `include_experimental=True`: the default model feature list is unchanged by their addition."""
     skip = set(META_COLS) | set(Y_COLS) | set(ELIG_COLS)
+    if not include_experimental:
+        skip |= set(EXPERIMENTAL_FEATURES)
     return [c for c in df.columns if c not in skip]
 
 
@@ -584,6 +609,74 @@ def _attach_injuries(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -> pd.DataFr
     pg["tm_q_car"] = (pg["tm_q_car"] - own_q * pg["carries_ewm"].fillna(0)).clip(lower=0)
     pg["tm_out_n"] = (pg["tm_out_n"] - own_out).clip(lower=0)
     return pg
+
+
+def _post_window_mean(df: pd.DataFrame, key: str, col: str, window: int) -> np.ndarray:
+    """Mean of the entity's last `window` appearances INCLUDING the current row (NaN-aware). `df` sorted by (key, time).
+    Only ever used to value an ABSENT player from his last appearance strictly before the target week."""
+    g = df.groupby(key, sort=False)[col]
+    arr = np.column_stack([g.shift(k).to_numpy(dtype=float) for k in range(window)])
+    cnt = np.sum(~np.isnan(arr), axis=1)
+    return np.where(cnt > 0, np.nansum(arr, axis=1) / np.maximum(cnt, 1), np.nan)
+
+
+def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """team_missing_{target,rush,pass_att}_share_l5 = sum over TEAMMATES listed absent (MISSING_STATUS) on the
+    game-week injury report of that teammate's usage share over his last MISSING_WINDOW appearances STRICTLY BEFORE
+    the target week. Share = player stat / team total of that stat in that game (skill-position rows of the frame).
+
+    Leakage reasoning
+      * WHO is absent comes only from the injury report row keyed (season, week, team, gsis_id) for the target week:
+        the final game-status report, published before kickoff. Nothing outcome-derived (snaps, stat rows, whether a
+        player 'did play') decides absence; a player listed Out who nonetheless has a stat row stays 'absent'.
+      * HOW MUCH usage the absent player carries comes from his appearances with widx < target widx
+        (merge_asof backward, allow_exact_matches=False), so a stat outcome of the target week never enters.
+      * The player's own listing is removed from his own row (teammates only).
+      * No injury report for that team-week (e.g. seasons with gaps) -> NaN, never 0. A listed-absent player with no
+        prior appearance within MISSING_TOLERANCE_WIDX on the SAME team contributes 0 (unknown usage).
+    """
+    for c in TEAM_MISSING_COLS:
+        pg[c] = np.nan
+    if inj is None or len(inj) == 0 or "report_status" not in inj.columns:
+        return pg
+    i = inj[inj["gsis_id"].notna()].copy()
+    i["team"] = _alias(i["team"])
+    i = i.drop_duplicates(["season", "week", "gsis_id"], keep="last")
+    status = i["report_status"].astype("object").map(lambda v: str(v).strip().lower() if pd.notna(v) else "")
+    flagged = i[status.isin(MISSING_STATUS)][["gsis_id", "team", "season", "week"]].rename(
+        columns={"gsis_id": "player_id"}).copy()
+    flagged["widx"] = ((flagged["season"] - 2000) * 30 + flagged["week"]).astype(float)
+
+    # per player-game usage shares (played rows only; upcoming placeholder rows carry NaN outcomes)
+    hist = pg[~pg["is_upcoming"]][["player_id", "team", "game_id", "widx", "tgt", "carries", "pass_att"]].copy()
+    hist["widx"] = hist["widx"].astype(float)
+    spec = {"tgt": "target_share", "carries": "rush_share", "pass_att": "pass_att_share"}
+    for raw, name in spec.items():
+        tot = hist.groupby(["game_id", "team"])[raw].transform("sum")
+        hist[name] = np.where(tot > 0, hist[raw] / tot.where(tot > 0), np.nan)
+    hist = hist.sort_values(["player_id", "widx"], kind="mergesort").reset_index(drop=True)
+    for name in spec.values():
+        hist[f"{name}_l5"] = _post_window_mean(hist, "player_id", name, MISSING_WINDOW)
+    hist = hist.rename(columns={"team": "team_last"})
+    last = hist[["player_id", "widx", "team_last"] + [f"{n}_l5" for n in spec.values()]].sort_values("widx", kind="mergesort")
+
+    m = pd.merge_asof(flagged.sort_values("widx", kind="mergesort"), last, on="widx", by="player_id",
+                      direction="backward", allow_exact_matches=False, tolerance=MISSING_TOLERANCE_WIDX)
+    m = m[m["team_last"].notna() & (m["team_last"] == m["team"])]        # usage must have been earned on THIS team
+    out_cols = dict(zip((f"{n}_l5" for n in spec.values()), TEAM_MISSING_COLS))
+    for src in out_cols:
+        m[src] = m[src].fillna(0.0)
+    agg = m.groupby(["team", "season", "week"], as_index=False)[list(out_cols)].sum()
+    own = m[["player_id", "season", "week"] + list(out_cols)].rename(columns={k: f"own_{k}" for k in out_cols})
+    pg = pg.drop(columns=TEAM_MISSING_COLS)
+    pg = pg.merge(agg, on=["team", "season", "week"], how="left").merge(own, on=["player_id", "season", "week"],
+                                                                         how="left")
+    avail = pg["inj_report_available"] == 1.0
+    for src, dst in out_cols.items():
+        tot = pg[src].fillna(0.0) - pg[f"own_{src}"].fillna(0.0)          # teammates only
+        tot = np.where(np.abs(tot) < 1e-12, 0.0, tot)
+        pg[dst] = np.where(avail, tot, np.nan)
+    return pg.drop(columns=list(out_cols) + [f"own_{k}" for k in out_cols])
 
 
 # ------------------------------------------------------------------------------------------------ GCS wrapper
@@ -667,7 +760,7 @@ def leakage_check(fr: Frames, emit_seasons: Iterable[int], season: int, week: in
           empty), "n_changed_after": feature cells that moved AFTER the week (sanity: > 0 => the test has power)}."""
     base = build_from_frames(fr, emit_seasons, include_upcoming=include_upcoming)
     pert = build_from_frames(perturb_outcomes(fr, season, week, seed), emit_seasons, include_upcoming=include_upcoming)
-    feats = feature_columns(base)
+    feats = feature_columns(base, include_experimental=True)     # leakage-check EVERYTHING we build
     key = ["player_id", "game_id"]
     b = base.set_index(key)
     p = pert.set_index(key)

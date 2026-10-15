@@ -233,7 +233,9 @@ def run_once(spec: PropSport, now: datetime = None, max_age_min: float = MAX_AGE
                "resolver": resolver is not None, "validated": False}
     log.info("SWEEP %s", json.dumps(summary, default=str))
     if rows:
-        storage.write_bytes(pd.DataFrame(rows).to_csv(index=False).encode(), f"{spec.prefix}/{day}/book_outliers_{hhmmss}.csv")
+        # all_books (the per-book strip) is nested JSON: it rides latest.json for the UI, not the flat evidence CSV
+        storage.write_bytes(pd.DataFrame(rows).drop(columns=["all_books"], errors="ignore").to_csv(index=False).encode(),
+                            f"{spec.prefix}/{day}/book_outliers_{hhmmss}.csv")
     storage.write_bytes(json.dumps({"ts": now.isoformat(), "summary": summary, "rows": rows[:300]}, default=str).encode(),
                         f"{spec.prefix}/latest.json")
     return summary

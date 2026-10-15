@@ -143,6 +143,15 @@ export interface EvNflRow {
  * NFL `book_outliers` and the NHL/NBA props blocks (mlb/runners/public_api.py::_outlier_row). SHADOW / unvalidated:
  * never render a stake or a Beezy score for these.
  */
+/** One book's quote on the same player / stat / line (line shopping). over/under are American odds; fair is the
+ * de-vigged P(over) as a 0-1 fraction at that book's own two-sided quote. */
+export interface EvBookQuote {
+  book:  string
+  over:  number | null
+  under: number | null
+  fair:  number | null
+}
+
 export interface EvBookOutlierRow {
   sport?:        'nfl' | 'nhl' | 'nba'
   venue?:        string
@@ -169,6 +178,7 @@ export interface EvBookOutlierRow {
   disp?:         number | null
   flag?:         boolean          // passed the sweep's credibility gates (EV cap, >= min reference books)
   reason?:       string | null
+  all_books?:    EvBookQuote[]    // every book quoting this line (optional; drives the Compare books drawer)
 }
 
 export interface EvNflBlock {

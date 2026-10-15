@@ -62,7 +62,8 @@ WIN, LOSS, PUSH, VOID, NOT_YET_GRADED = "win", "loss", "push", "void", "not_yet_
 UNGRADABLE = "ungradable"
 RESULTS = (WIN, LOSS, PUSH, VOID, NOT_YET_GRADED)
 
-STATS = ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td")
+STATS = ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td",
+         "pass_attempts", "completions", "rush_attempts")
 
 # stat -> player_stats columns SUMMED to get the actual value
 STAT_COLUMNS = {
@@ -72,11 +73,18 @@ STAT_COLUMNS = {
     "receptions": ("receptions",),
     "pass_tds": ("passing_tds",),
     "anytime_td": ("rushing_tds", "receiving_tds"),
+    # volume counts (nflverse player_stats names: attempts, completions, carries)
+    "pass_attempts": ("attempts",),
+    "completions": ("completions",),
+    "rush_attempts": ("carries",),
 }
+_ORIGINAL_STATS = ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td")
 # UNVERIFIED broader scope for anytime_td (return / defensive / fumble-recovery scores)
 ANYTIME_TD_BROAD_EXTRA = ("special_teams_tds", "def_tds", "fumble_recovery_tds")
 TD_SCOPES = ("offense", "broad")
-STAT_ROW_COLUMNS = tuple(sorted({c for cols in STAT_COLUMNS.values() for c in cols} | set(ANYTIME_TD_BROAD_EXTRA)))
+# Columns every Actuals stats frame MUST carry. Only the original six stats' columns are mandatory so older frames
+# keep working; a frame lacking attempts/completions/carries grades the volume stats as "ungradable" (stat_value_missing).
+STAT_ROW_COLUMNS = tuple(sorted({c for s in _ORIGINAL_STATS for c in STAT_COLUMNS[s]} | set(ANYTIME_TD_BROAD_EXTRA)))
 
 _OVER = {"over", "o", "yes", "y"}
 _UNDER = {"under", "u", "no", "n"}
