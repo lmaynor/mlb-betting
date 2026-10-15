@@ -20,8 +20,8 @@ export async function Hero() {
           className="hero-left"
           style={{ padding: '52px 44px', borderRight: B, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'linear-gradient(180deg, color-mix(in oklab, var(--signal) 5%, var(--graphite)), var(--graphite))' }}
         >
-          <span className="dell-sticker" style={{ alignSelf: 'flex-start', marginBottom: '20px' }}>
-            Model picks + live +EV scanner
+          <span style={{ alignSelf: 'flex-start', marginBottom: '20px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#57F287', background: 'rgba(87, 242, 135, 0.10)', border: '1px solid rgba(87, 242, 135, 0.30)', borderRadius: '999px', padding: '5px 12px' }}>
+            MULTI-SPORT +EV SCANNER &amp; QUANTITATIVE MODELS
           </span>
 
           <h1 className="dell-display hero-h1" style={{ fontSize: '46px', lineHeight: 1.04, color: 'var(--chalk)', marginBottom: '18px', letterSpacing: '-0.025em' }}>
@@ -29,9 +29,9 @@ export async function Hero() {
           </h1>
 
           <p className="times" style={{ fontSize: '16.5px', color: 'var(--silver)', marginBottom: '28px', maxWidth: '52ch' }}>
-            Two engines, one public ledger. A 15-minute scanner flags sportsbook prices that lag the de-vigged consensus, with an
-            NFL prop sweep against Kalshi and Novig running in shadow. Alongside it, calibrated MLB models grade every game and
-            prop into a single 0&ndash;100 Beezy Score.
+            Two engines, one public ledger. Our 15-minute market scanner flags player props and lines across 14+ sportsbooks,
+            Kalshi, and Novig that lag the de-vigged consensus, while calibrated models grade every matchup into a single
+            0&ndash;100 Beezy Score.
           </p>
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '18px' }}>

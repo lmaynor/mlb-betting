@@ -1,18 +1,18 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
-import type { Bet, TodaySlate, SlateGame } from '@/lib/types'
+import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, apiGetEdgeCockpit, type EdgeAlert } from '@/lib/betting-api'
+import type { Bet, CockpitFeed, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { EdgeClient, type EdgePick } from './edge-client'
 import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
   title: 'The Edge - Beezy.FYI',
-  description: "Today's MLB picks with our model probability vs the market line -- see the edge behind every play. Updated hourly.",
+  description: 'Multi-sport prop research cockpit: MLB, NFL, NHL and NBA lines with last-10 game logs, volume trends and every book price side by side.',
   openGraph: {
     title: 'The Edge - Beezy.FYI',
-    description: 'Model probability vs market line, the edge on every pick. Updated hourly.',
+    description: 'Prop research across MLB, NFL, NHL and NBA: price, form and volume for every flagged line.',
   },
 }
 
@@ -48,12 +48,19 @@ function normName(name: string | null): string {
 
 export default async function EdgePage() {
   const date = siteDateKey()
-  const [raw, slate, enrichData, alerts] = await Promise.all([
+  const [raw, slate, enrichData, alerts, cockpitRaw] = await Promise.all([
     apiGetTodayAllPredictions().catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
     apiGetEdgeEnrich(date),
     apiGetTodayAlerts(date),
+    // fail-soft: until the backend serves /edge/cockpit the page falls back to the MLB model board
+    apiGetEdgeCockpit({ limit: 60 }).catch(() => null),
   ])
+
+  // MLB headshots resolve by name against the roster map, which is server-only: attach ids here (the client keeps them across refreshes)
+  const cockpit: CockpitFeed | null = cockpitRaw
+    ? { ...cockpitRaw, rows: cockpitRaw.rows.map(r => (r.sport === 'mlb' && r.player_id == null && r.player ? { ...r, player_id: playerIdByName('mlb', r.player) } : r)) }
+    : null
 
   const gameMap = new Map<number, SlateGame>((slate.games ?? []).map(g => [g.game_pk, g]))
   const players = enrichData.players ?? {}
@@ -112,5 +119,5 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} dateKey={date} />
+  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} />
 }

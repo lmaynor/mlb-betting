@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 
 function normalizeApiUrl(value: string) {
@@ -153,7 +153,7 @@ export async function apiGetTodaySlate(): Promise<TodaySlate> {
 // Lineup/active status for a player pick. confirmed = in today's posted lineup;
 // il = on the injured list; out = both lineups posted and he's in neither;
 // expected = projected but his lineup not posted yet; unknown = no data yet.
-// The cockpit never hides picks — it badges them.
+// The cockpit never hides picks -- it badges them.
 export type PlayerStatus = 'confirmed' | 'expected' | 'out' | 'il' | 'unknown'
 
 // A season stat line. realized = traditional (AVG/HR/OBP, ERA/K/IP);
@@ -251,6 +251,16 @@ export async function apiGetEvFeed(params?: { sport?: string; minEv?: number; li
   if (params?.limit)         sp.set('limit', String(params.limit))
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   return apiFetch<EvFeed>(`/api/public/ev/feed${qs}`, 60, `/api/ev${qs}`)
+}
+
+/** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */
+export async function apiGetEdgeCockpit(params?: { sport?: string; minEv?: number; limit?: number }): Promise<CockpitFeed> {
+  const sp = new URLSearchParams()
+  if (params?.sport)         sp.set('sport', params.sport)
+  if (params?.minEv != null) sp.set('min_ev', String(params.minEv))
+  if (params?.limit)         sp.set('limit', String(params.limit))
+  const qs = sp.toString() ? `?${sp.toString()}` : ''
+  return apiFetch<CockpitFeed>(`/api/public/edge/cockpit${qs}`, 60, `/api/edge-cockpit${qs}`)
 }
 
 export async function apiGetAnalyticsDeepDive(

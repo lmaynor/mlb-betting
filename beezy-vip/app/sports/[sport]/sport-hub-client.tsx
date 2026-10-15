@@ -92,8 +92,8 @@ function TodayTab({ sport, picks, feed }: Props) {
     <Empty
       title={`${p.shortName}: no open props rows`}
       body={sport === 'nba'
-        ? 'No NBA props quote is beating its consensus right now. NBA is evidence-only: box scores are ingested nightly, nothing is validated, and no picks are tracked. Rows appear here when the props sweep finds one before tip-off.'
-        : 'No NHL props quote is beating its consensus right now. The sweep is evidence-only (nothing is validated and no picks are tracked); rows appear here when it finds one before puck drop.'}
+        ? 'No NBA props quote is beating its consensus right now. Box scores are ingested nightly and picks are not yet tracked for NBA. Rows appear here when the props scanner finds one before tip-off.'
+        : 'No NHL props quote is beating its consensus right now. Rows appear here when the props scanner finds one before puck drop; NHL picks are not yet tracked in the public ledger.'}
       cta={{ href: '/ev', label: 'Open the +EV terminal' }}
     />
   )
@@ -155,8 +155,8 @@ function MlbToday({ picks, feed }: { picks: Bet[]; feed: EvFeed | null }) {
 
 function ShadowNote({ children }: { children: React.ReactNode }) {
   return (
-    <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.07)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
-      <strong style={{ color: '#f59e0b' }}>SHADOW DATA.</strong> {children}
+    <div role="note" style={{ border: '1px solid rgba(56,189,248,0.30)', background: 'rgba(56,189,248,0.06)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 }}>
+      <strong style={{ color: '#38bdf8' }}>MARKET SCANNER.</strong> {children}
     </div>
   )
 }
@@ -167,7 +167,7 @@ function sweepStatus(block: { status: string; age_minutes: number | null } | nul
   return 'No sweep output available.'
 }
 
-/** Sink A table (NFL book_outliers, NHL/NBA props): a book/exchange quote vs the consensus of the OTHER books. No stake, no score. */
+/** Sink A table (NFL book_outliers, NHL/NBA props): a book/exchange quote vs the consensus of the OTHER books. */
 function OutlierTable({ rows, sport }: { rows: EvBookOutlierRow[]; sport: 'nfl' | 'nhl' | 'nba' }) {
   return (
     <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
@@ -211,8 +211,8 @@ function PropsToday({ sport, block }: { sport: 'nhl' | 'nba'; block: EvPropsBloc
   return (
     <div style={{ display: 'grid', gap: '16px' }}>
       <ShadowNote>
-        {SPORT_PILLARS[sport].shortName} sportsbook quotes beating the consensus of the other books at the same player, stat and line. Nothing here is
-        validated, the sweep places no orders and no stake or score is shown. {sweepStatus(block)}
+        {SPORT_PILLARS[sport].shortName} sportsbook quotes beating the de-vigged consensus of the other books at the same player, stat and line. These are
+        market-consensus signals: no orders are placed and they are not yet part of the public track record. {sweepStatus(block)}
       </ShadowNote>
       <OutlierTable rows={block.rows} sport={sport} />
     </div>
@@ -226,8 +226,8 @@ function NflToday({ feed }: { feed: EvFeed | null }) {
   return (
     <div style={{ display: 'grid', gap: '26px' }}>
       <ShadowNote>
-        Sportsbook and exchange quotes versus a sportsbook consensus, plus Kalshi asks net of fee. Nothing here is validated and the sweep places no
-        orders. {sweepStatus(nfl)}
+        Sportsbook and exchange quotes versus a de-vigged sportsbook consensus, plus Kalshi asks net of fee. These are market-consensus signals: no
+        orders are placed and they are not yet part of the public track record. {sweepStatus(nfl)}
       </ShadowNote>
 
       <section>

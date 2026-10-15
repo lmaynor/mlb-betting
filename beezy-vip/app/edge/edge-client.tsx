@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Bet } from '@/lib/types'
+import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
+import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -30,12 +31,9 @@ export interface EdgePick extends Bet {
   zone?: Record<string, number> | null
 }
 
-// -- sport scaffolding (NBA slots in here once it has a model) ----------------
-type SportKey = 'mlb' | 'nba'
-const SPORTS: { key: SportKey; label: string; live: boolean }[] = [
-  { key: 'mlb', label: 'MLB', live: true },
-  { key: 'nba', label: 'NBA', live: false },
-]
+// -- sport switcher: ALL SPORTS | MLB | NFL | NHL | NBA (all five drive the prop cockpit; MLB also keeps the model board) --
+const SPORT_TAB_LABEL: Record<CockpitSport, string> = { all: 'ALL SPORTS', mlb: 'MLB', nfl: 'NFL', nhl: 'NHL', nba: 'NBA' }
+type View = 'cockpit' | 'board'
 
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
 const BATTER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K'])
@@ -450,11 +448,11 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
 // -- detail panel -------------------------------------------------------------
 // -- lineup/active status chip ------------------------------------------------
 const STATUS_CFG: Record<PlayerStatus, { label: string; color: string; mark: string }> = {
-  confirmed: { label: 'Confirmed',      color: 'var(--signal)', mark: '✓' },
-  expected:  { label: 'Expected',       color: 'var(--warn)',   mark: '∼' },
-  il:        { label: 'On IL',          color: 'var(--loss)',   mark: '✕' },
-  out:       { label: 'Not in lineup',  color: 'var(--loss)',   mark: '✕' },
-  unknown:   { label: 'Lineup TBD',     color: 'var(--fog)',    mark: '·' },
+  confirmed: { label: 'Confirmed',      color: 'var(--signal)', mark: '\u2713' },
+  expected:  { label: 'Expected',       color: 'var(--warn)',   mark: '\u223c' },
+  il:        { label: 'On IL',          color: 'var(--loss)',   mark: '\u2715' },
+  out:       { label: 'Not in lineup',  color: 'var(--loss)',   mark: '\u2715' },
+  unknown:   { label: 'Lineup TBD',     color: 'var(--fog)',    mark: '\u00b7' },
 }
 function StatusChip({ status, compact = false }: { status?: PlayerStatus; compact?: boolean }) {
   const s = STATUS_CFG[status ?? 'unknown']
@@ -512,7 +510,7 @@ function MatchupSelect({ value, matchups, onChange }: {
         {sel
           ? <span className="edge-matchsel-val"><Logo team={sel.away} />{sel.away}<span className="edge-matchsel-at">@</span><Logo team={sel.home} />{sel.home}</span>
           : <span>All games</span>}
-        <span className="edge-teamsel-caret" aria-hidden>{'▾'}</span>
+        <span className="edge-teamsel-caret" aria-hidden>{'\u25be'}</span>
       </button>
       {open && (
         <div className="edge-teamsel-menu edge-matchsel-menu" role="listbox">
@@ -666,7 +664,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
       {/* live line alert: a book is lagging the market on this pick RIGHT NOW */}
       {p.alert?.ev != null && (
         <div className="edge-alert">
-          <span className="edge-alert-flash" aria-hidden>⚡</span>
+          <span className="edge-alert-flash" aria-hidden>&#9889;</span>
           <div className="edge-alert-body">
             <div className="edge-alert-h">
               Live line alert &middot; <b>{p.alert.book}</b>
@@ -681,7 +679,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
         </div>
       )}
 
-      {/* THE EDGE block — live: model − implied(odds) = gap */}
+      {/* THE EDGE block -- live: model - implied(odds) = gap */}
       <div className="edge-block">
         <div className="edge-block-top">
           <div className="edge-hero" style={{ color: gap != null && gap < 0 ? 'var(--loss)' : color }}>
@@ -707,7 +705,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
                 aria-label="Live odds (American)"
                 className="edge-odds-field"
               />
-              <span className="edge-odds-imp">{oddsValid ? `${liveImplied.toFixed(1)}% implied` : '—'}</span>
+              <span className="edge-odds-imp">{oddsValid ? `${liveImplied.toFixed(1)}% implied` : '\u2014'}</span>
             </span>
           </div>
         </div>
@@ -715,8 +713,8 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
           <div className="edge-meta-cell">
             <span className="edge-meta-k">Kelly stake</span>
             <span className="edge-meta-v" style={{ color: 'var(--signal)' }}>
-              {kelly != null ? `$${kelly.toFixed(0)}` : '—'}
-              <span className="edge-meta-dim"> ¼K, capped 2.5%</span>
+              {kelly != null ? `$${kelly.toFixed(0)}` : '\u2014'}
+              <span className="edge-meta-dim"> &frac14;K, capped 2.5%</span>
             </span>
           </div>
           {fairOdds != null && (
@@ -729,7 +727,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
             <button className={`edge-slipbtn${inSlip ? ' is-in' : ''}`}
               onClick={() => onToggleSlip(kelly)}
               aria-pressed={inSlip}>
-              {inSlip ? '✓ On my slip' : `Track bet${kelly != null ? ` · $${kelly.toFixed(0)}` : ''}`}
+              {inSlip ? '\u2713 On my slip' : `Track bet${kelly != null ? ` \u00b7 $${kelly.toFixed(0)}` : ''}`}
             </button>
           )}
         </div>
@@ -790,8 +788,11 @@ function loadSlip(dateKey: string): Slip {
   } catch { return {} }
 }
 
-export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]; updated: string; dateKey?: string }) {
-  const [sport, setSport] = useState<SportKey>('mlb')
+export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { picks: EdgePick[]; updated: string; dateKey?: string; cockpit?: CockpitFeed | null }) {
+  // with no cockpit feed at first paint (API not reachable / not deployed yet) the page opens on the MLB model board, as before
+  const [sport, setSport] = useState<CockpitSport>(cockpit ? 'all' : 'mlb')
+  const [view, setView] = useState<View>(cockpit ? 'cockpit' : 'board')
+  const { feed, updated: feedUpdated, loading: feedLoading, refresh: refreshFeed } = useCockpitFeed(cockpit)
   const [mode, setMode] = useState<Mode>('players')
   const [matchup, setMatchup] = useState<string>('all')
   const [position, setPosition] = useState<string>('all')
@@ -934,6 +935,20 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
     if (visible[next]) setSelectedId(visible[next].id)
   }, [visible, selected])
 
+  const showCockpit = sport !== 'mlb' || (view === 'cockpit' && feed != null)
+  const renderMlbExtras = useCallback((r: CockpitRow) => {
+    const color = SYSTEM_COLOR[r.system ?? 'HR'] ?? '#57f287'
+    const hasEv = !!r.ev_la?.length
+    const hasSpray = !!r.spray?.length
+    if (!hasEv && !hasSpray) return null
+    return (
+      <div className="edge-viz-row">
+        {hasEv && <EvLaScatter points={r.ev_la!} color={color} />}
+        {hasSpray && <SprayChart points={r.spray!} color={color} />}
+      </div>
+    )
+  }, [])
+
   return (
     <main className="edge">
       <Styles />
@@ -944,20 +959,46 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
             <span className="edge-live-dot" /> UPDATED HOURLY <span className="edge-updated-time">{updated}</span>
           </span>
         </div>
-        <p className="edge-tagline">Our model probability vs the market line on every pick. The gap is your edge.</p>
-        <div className="edge-sports" role="tablist" aria-label="Sport">
-          {SPORTS.map(s => (
-            <button key={s.key} role="tab" aria-selected={sport === s.key}
-              disabled={!s.live}
-              onClick={() => s.live && setSport(s.key)}
-              className={`edge-sport${sport === s.key ? ' is-active' : ''}${s.live ? '' : ' is-soon'}`}>
-              {s.label}{!s.live && <span className="edge-soon">soon</span>}
-            </button>
-          ))}
+        <p className="edge-tagline">
+          {showCockpit
+            ? 'Multi-sport prop research: price, form and volume for every flagged line, in one cockpit.'
+            : 'Our model probability vs the market line on every pick. The gap is your edge.'}
+        </p>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '16px' }}>
+          <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
+            {COCKPIT_SPORTS.map(k => {
+              const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
+              const active = sport === k
+              return (
+                <button key={k} role="tab" aria-selected={active} onClick={() => setSport(k)}
+                  style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '7px', color: active ? '#ffffff' : 'var(--silver)', background: active ? '#1b1f2b' : 'transparent', border: `1px solid ${active ? '#3a4156' : 'transparent'}`, boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none' }}>
+                  {SPORT_TAB_LABEL[k]}
+                  {n != null && <span className="mono" style={{ fontSize: '10px', color: active ? '#d1d5db' : 'var(--fog)' }}>{n}</span>}
+                </button>
+              )
+            })}
+          </div>
+          {sport === 'mlb' && feed != null && (
+            <div role="group" aria-label="MLB view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
+              {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
+                const active = view === k
+                return (
+                  <button key={k} onClick={() => setView(k)} aria-pressed={active}
+                    style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em', padding: '6px 11px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', color: active ? '#ffffff' : 'var(--silver)', background: active ? '#1b1f2b' : 'transparent', border: `1px solid ${active ? '#3a4156' : 'transparent'}`, boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none' }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Slate HUD: the cockpit readout */}
+      {showCockpit ? (
+        <Cockpit feed={feed} sport={sport} updated={feedUpdated} loading={feedLoading} onRefresh={refreshFeed} renderMlbExtras={renderMlbExtras} />
+      ) : (
+      <>
+      {/* Slate HUD: the model-board readout */}
       {hud && (
         <div className="edge-hud" role="status" aria-label="Today's slate summary">
           <div className="edge-hud-cell">
@@ -984,7 +1025,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
           )}
           {hud.liveAlerts > 0 && (
             <div className="edge-hud-cell">
-              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>⚡ {hud.liveAlerts}</span>
+              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>&#9889; {hud.liveAlerts}</span>
               <span className="edge-hud-k">line alerts</span>
             </div>
           )}
@@ -1040,7 +1081,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
           <input type="number" min={0} step={50} value={bankroll}
             onChange={e => setBankroll(Math.max(0, Number(e.target.value) || 0))} aria-label="Bankroll" />
         </label>
-        <input className="edge-search" type="search" placeholder="Search player / team…"
+        <input className="edge-search" type="search" placeholder={'Search player / team\u2026'}
           value={query} onChange={e => setQuery(e.target.value)} aria-label="Search" />
         <button className={`edge-toggle${qualifiedOnly ? ' is-on' : ''}`} onClick={() => setQualifiedOnly(v => !v)}
           aria-pressed={qualifiedOnly}
@@ -1087,7 +1128,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
                 <li key={p.id}>
                   <button className={`edge-row${active ? ' is-active' : ''}`} onClick={() => selectPick(p.id)}
                     aria-current={active || undefined}>
-                    <span className="edge-row-rank">{inSlip ? <span className="edge-row-slipmark">✓</span> : i + 1}</span>
+                    <span className="edge-row-rank">{inSlip ? <span className="edge-row-slipmark">&#10003;</span> : i + 1}</span>
                     <span className="edge-row-thumb" style={{ background: `${color}14`, borderColor: `${color}38` }}>
                       {!isGame && p.headshotUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -1110,7 +1151,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
                         {p.matchup?.startTime && <span className="edge-row-time">{p.matchup.startTime}</span>}
                         {p.alert?.ev != null && (
                           <span className="edge-row-alert" title={`Live outlier: ${p.alert.book} ${p.alert.american != null ? fmtOdds(p.alert.american) : ''} = +${(p.alert.ev * 100).toFixed(1)}% EV vs consensus`}>
-                            ⚡ +{(p.alert.ev * 100).toFixed(1)}%
+                            &#9889; +{(p.alert.ev * 100).toFixed(1)}%
                           </span>
                         )}
                       </span>
@@ -1160,7 +1201,7 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
                     </button>
                     <span className="edge-slip-item-stake">${(slip[id] ?? 0).toFixed(0)}</span>
                     <button className="edge-slip-remove" onClick={() => toggleSlip(id, null)}
-                      aria-label="Remove from slip">✕</button>
+                      aria-label="Remove from slip">&#10005;</button>
                   </li>
                 )
               })}
@@ -1170,17 +1211,19 @@ export function EdgeClient({ picks, updated, dateKey = '' }: { picks: EdgePick[]
             <button className="edge-slip-expand" onClick={() => setSlipOpen(v => !v)}
               aria-expanded={slipOpen}>
               <span className="edge-slip-n">{slipIds.length} bet{slipIds.length === 1 ? '' : 's'} tracked</span>
-              <span aria-hidden style={{ fontSize: '10px' }}>{slipOpen ? '▾' : '▴'}</span>
+              <span aria-hidden style={{ fontSize: '10px' }}>{slipOpen ? '\u25be' : '\u25b4'}</span>
             </button>
             <span className="edge-slip-t">
               ${slipTotal.toFixed(0)}
               <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--fog)' }}>
-                {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' — heavy' : ''}
+                {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' \u2014 heavy' : ''}
               </span>
             </span>
             <button className="edge-slip-clear" onClick={() => { setSlip({}); setSlipOpen(false) }}>Clear all</button>
           </div>
         </div>
+      )}
+      </>
       )}
     </main>
   )

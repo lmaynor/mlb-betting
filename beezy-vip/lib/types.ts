@@ -245,3 +245,78 @@ export interface AnalyticsDeepDive {
   ev_headline: EvHeadline
   system: string | null
 }
+
+/** /edge cockpit: one game of the player's log against the prop line. `hit` = cleared the line (val > line), whichever
+ * side the flagged quote is on; null when the line is unknown. */
+export interface CockpitGame {
+  date:  string | null
+  opp:   string | null
+  val:   number | null
+  usage: number | null
+  hit:   boolean | null
+}
+
+/** Last-10 game log vs the prop line (mlb_core/data/cockpit_form.py). Rates are 0-1 fractions of games that cleared the line. */
+export interface CockpitForm {
+  line:        number | null
+  n_games:     number
+  games:       CockpitGame[]
+  l5_rate:     number | null
+  l10_rate:    number | null
+  szn_rate:    number | null
+  szn_avg:     number | null
+  szn_games:   number
+  usage_label: string | null     // 'Targets' | 'Carries' | 'Pass attempts' | 'TOI (min)' | 'Shots faced' | 'Minutes'
+  avg_val:     number | null
+  avg_usage:   number | null
+}
+
+/** One prop candidate in the cockpit (mlb/runners/public_api.py::get_multisport_cockpit). */
+export interface CockpitRow {
+  id:           string
+  sport:        'mlb' | 'nfl' | 'nhl' | 'nba'
+  source:       'model' | 'ev_alert' | 'sink_a' | 'kalshi'
+  shadow:       boolean          // sweep signal: evidence only, no stake sizing or Beezy score
+  player:       string | null
+  player_id:    number | string | null
+  team:         string | null
+  matchup:      string | null
+  commence:     string | null
+  mins_to_kick: number | null
+  stat:         string | null
+  side:         'OVER' | 'UNDER' | string
+  line:         number | null
+  book:         string | null
+  american:     number | null
+  decimal:      number | null
+  ev:           number | null    // fraction at the quote's own price
+  p_fair:       number | null    // consensus fair probability of the flagged side
+  n_books:      number | null
+  flag:         boolean          // passed the credibility gates
+  reason:       string | null
+  all_books:    EvBookQuote[] | null
+  recentForm:   CockpitForm | null
+  // MLB model rows only
+  system?:      string
+  bet_type?:    string
+  model_prob?:  number | null
+  spray?:       { x: number; y: number; hit: boolean; ev?: number | null }[] | null
+  ev_la?:       { ev: number; la: number; hit: boolean }[] | null
+}
+
+export interface CockpitSportMeta {
+  status:      string            // 'live' | 'idle' | 'shadow_live' | 'unavailable'
+  count:       number
+  as_of:       string | null
+  age_minutes: number | null
+  stale:       boolean
+  validated:   boolean
+}
+
+export interface CockpitFeed {
+  as_of:  string
+  sport:  string
+  min_ev: number
+  rows:   CockpitRow[]
+  sports: Partial<Record<'mlb' | 'nfl' | 'nhl' | 'nba', CockpitSportMeta>>
+}

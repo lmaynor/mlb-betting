@@ -14,7 +14,8 @@ const X_URL = 'https://x.com/beezy_fyi'
 const NAV_LINKS = [
   { label: 'Home',          href: '/' },
   { label: '+EV Terminal',  href: '/ev', live: true },
-  { label: 'Picks Blotter', href: '/picks' },
+  { label: 'The Edge',      href: '/edge' },
+  { label: 'Picks',         href: '/picks' },
   { label: 'Analytics',     href: '/analytics' },
   { label: 'Results',       href: '/results' },
   { label: 'Tools',         href: '/tools' },
@@ -176,7 +177,6 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
       <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
           <SportLink href="/" label="ALL SPORTS" active={pathname === '/'} />
-          <SportLink href="/ev" label="+EV OUTLIER FEED" active={pathname === '/ev'} accent="#57F287" />
           {SPORT_LIST.map(p => (
             <SportLink
               key={p.slug}
@@ -188,7 +188,6 @@ function NavShell({ isSignedIn, bankrollDefault, userButton, signIn }: {
             />
           ))}
           <span style={{ flex: 1 }} />
-          <SportLink href="/edge" label="THE EDGE" active={pathname.startsWith('/edge')} />
           <SportLink href="/cheat-sheet" label="DAILY CARD" active={pathname.startsWith('/cheat-sheet')} />
         </div>
       </div>
