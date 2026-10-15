@@ -5,6 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
 import { ClerkProvider } from '@clerk/nextjs'
+import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
@@ -33,12 +34,11 @@ export const metadata: Metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">
+  const shell = (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
         <div className="page-frame">
-          <Nav />
+          <Nav authDisabled={AUTH_DISABLED} />
           <LiveTicker />
           <main>{children}</main>
           <Footer />
@@ -46,6 +46,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
       </body>
     </html>
+  )
+  // AUTH_DISABLED (lib/auth-mode.ts): local review without Clerk keys. Never true on a Vercel production deployment.
+  return AUTH_DISABLED ? shell : (
+    <ClerkProvider afterSignOutUrl="/" signInUrl="/login" signUpUrl="/signup">
+      {shell}
     </ClerkProvider>
   )
 }

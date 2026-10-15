@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
+import { getUserId } from '@/lib/auth'
+import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { apiGetTodaySlate } from '@/lib/betting-api'
 import { SlateClient } from './slate-client'
 import type { Metadata } from 'next'
@@ -13,8 +14,8 @@ export const metadata: Metadata = {
 }
 
 export default async function SlatePage() {
-  const { userId } = await auth()
-  if (!userId) redirect('/login')
+  const userId = await getUserId()
+  if (!userId && !AUTH_DISABLED) redirect('/login')
 
   const slate = await apiGetTodaySlate().catch(() => ({
     games: [], run_date: '', as_of: '', total_picks: 0, total_games: 0,

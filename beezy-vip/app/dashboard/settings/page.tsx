@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { currentUser } from '@clerk/nextjs/server'
-import { getUserTier }  from '@/lib/auth'
+import { getCurrentUser, getUserTier }  from '@/lib/auth'
 import { BankrollInput } from '@/components/ui/bankroll-input'
 import type { Metadata } from 'next'
 
@@ -9,7 +8,7 @@ export const metadata: Metadata = { title: 'Settings — Dashboard' }
 
 export default async function DashboardSettingsPage() {
   const [user, tier] = await Promise.all([
-    currentUser().catch(() => null),
+    getCurrentUser(),
     getUserTier(),
   ])
 

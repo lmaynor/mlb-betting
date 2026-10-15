@@ -22,7 +22,7 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
   )
 }
 import { CopyBetButton }                        from '@/components/ui/copy-bet-button'
-import { currentUser }                         from '@clerk/nextjs/server'
+import { getCurrentUser }                      from '@/lib/auth'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +37,7 @@ export default async function DashboardPicksPage() {
   const [picks, stats, user] = await Promise.all([
     getTodayPicks().catch(() => []),
     apiGetStats().then(s => s.overall).catch(() => ({ total_bets: '0', win_rate: '0', roi: '0', avg_edge: '0' })),
-    currentUser().catch(() => null),
+    getCurrentUser(),
   ])
 
   const bankroll = (user?.publicMetadata?.bankroll as number) ?? DEFAULT_BANKROLL

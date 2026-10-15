@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth, clerkClient }         from '@clerk/nextjs/server'
+import { clerkClient }               from '@clerk/nextjs/server'
+import { getUserId }                 from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth()
+  const userId = await getUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { bankroll } = await req.json().catch(() => ({})) as { bankroll?: number }

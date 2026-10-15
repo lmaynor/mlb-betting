@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { AUTH_DISABLED } from '@/lib/auth-mode'
 
 export const runtime = 'nodejs'
 
@@ -42,32 +43,39 @@ function isGeoBlocked(req: NextRequest): { blocked: boolean; state: string; coun
   return { blocked: false, state: region, country }
 }
 
-export default clerkMiddleware(async (auth, req) => {
-  const { userId } = await auth()
-
+function geoRedirect(req: NextRequest): NextResponse | undefined {
   // Geo-check: applies to picks and dashboard pages only -- not legal, tools, or learn
   const path = req.nextUrl.pathname
   const isGatedPath = path.startsWith('/picks') || path.startsWith('/dashboard') || path.startsWith('/signup')
-  if (isGatedPath) {
-    const geo = isGeoBlocked(req)
-    if (geo.blocked) {
-      const url = req.nextUrl.clone()
-      url.pathname = '/blocked'
-      url.searchParams.set('state', geo.state)
-      return NextResponse.redirect(url)
-    }
-  }
+  if (!isGatedPath) return undefined
+  const geo = isGeoBlocked(req)
+  if (!geo.blocked) return undefined
+  const url = req.nextUrl.clone()
+  url.pathname = '/blocked'
+  url.searchParams.set('state', geo.state)
+  return NextResponse.redirect(url)
+}
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthRoute(req) && userId) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
-  }
+// AUTH_DISABLED (lib/auth-mode.ts): no Clerk at all, geo-blocking still applies. Only the chosen branch is evaluated, so
+// clerkMiddleware() is never constructed when it is off.
+export default AUTH_DISABLED
+  ? (req: NextRequest) => geoRedirect(req) ?? NextResponse.next()
+  : clerkMiddleware(async (auth, req) => {
+      const { userId } = await auth()
 
-  // Protect dashboard and member routes
-  if (isProtectedRoute(req) && !userId) {
-    return NextResponse.redirect(new URL('/login', req.url))
-  }
-})
+      const geo = geoRedirect(req)
+      if (geo) return geo
+
+      // Redirect authenticated users away from auth pages
+      if (isAuthRoute(req) && userId) {
+        return NextResponse.redirect(new URL('/dashboard', req.url))
+      }
+
+      // Protect dashboard and member routes
+      if (isProtectedRoute(req) && !userId) {
+        return NextResponse.redirect(new URL('/login', req.url))
+      }
+    })
 
 export const config = {
   matcher: [

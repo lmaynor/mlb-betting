@@ -4,7 +4,20 @@
     {
       "name": "beezy-vip",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd beezy-vip && npm run dev"],
+      "runtimeArgs": [
+        "-c",
+        "cd beezy-vip && npm run dev"
+      ],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "beezy-vip-noauth",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "cd beezy-vip && AUTH_DISABLED=1 npm run dev"
+      ],
       "port": 3000,
       "autoPort": false
     }
