@@ -20,6 +20,9 @@ def test_script_is_executable_and_names_all_four_images():
     assert "git status --porcelain" in text and "ALLOW_DIRTY" in text
     assert text.count("gcloud builds submit") == 1                      # built ONCE
     assert "add-tag" in text and "image_summary.digest" in text         # ...then retagged by digest
+    # the printed service command must reference the repo that actually holds the digest (BUILD_REPO), which is the only one
+    # that does under SKIP_PROD=1
+    assert "--image=${BUILD_REPO}@${DIGEST}" in text and "/mlb-betting@${DIGEST}" not in text
     SCRIPT.read_bytes().decode("ascii")                                  # shell scripts stay ASCII too
 
 
