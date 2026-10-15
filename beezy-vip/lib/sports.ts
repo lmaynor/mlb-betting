@@ -22,7 +22,6 @@ export interface SportPillar {
   name: string
   shortName: string
   seasonBadge: string
-  navBadge: string
   status: SportStatus
   accent: string
   accentBg: string
@@ -37,7 +36,6 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     name: 'Major League Baseball',
     shortName: 'MLB',
     seasonBadge: 'MODELS + +EV SCANNER',
-    navBadge: '10 Models',
     status: 'live',
     accent: '#57F287',
     accentBg: 'rgba(87, 242, 135, 0.10)',
@@ -62,7 +60,6 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     name: 'National Football League',
     shortName: 'NFL',
     seasonBadge: 'SHADOW SWEEP',
-    navBadge: 'Props Sweep',
     status: 'shadow',
     accent: '#f59e0b',
     accentBg: 'rgba(245, 158, 11, 0.12)',
@@ -82,7 +79,6 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     name: 'National Basketball Association',
     shortName: 'NBA',
     seasonBadge: 'DATA ONLY',
-    navBadge: 'Data Only',
     status: 'data_only',
     accent: '#818cf8',
     accentBg: 'rgba(129, 140, 248, 0.12)',
@@ -101,7 +97,6 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     name: 'National Hockey League',
     shortName: 'NHL',
     seasonBadge: 'SHADOW SWEEP',
-    navBadge: 'Props Sweep',
     status: 'shadow',
     accent: '#38bdf8',
     accentBg: 'rgba(56, 189, 248, 0.12)',

@@ -53,20 +53,20 @@ export const TIER_META: Record<ScoreTier, { label: string; color: string; bg: st
     color: '#57F287',
     bg: 'rgba(87, 242, 135, 0.10)',
     border: 'rgba(87, 242, 135, 0.35)',
-    glow: '0 0 0 1px rgba(87, 242, 135, 0.28), 0 4px 20px rgba(87, 242, 135, 0.08)',
+    glow: 'none',
   },
   lean: {
     label: 'LEAN',
     color: '#facc15',
     bg: 'rgba(250, 204, 21, 0.10)',
     border: 'rgba(250, 204, 21, 0.30)',
-    glow: '0 0 0 1px rgba(250, 204, 21, 0.20), 0 2px 12px rgba(0, 0, 0, 0.4)',
+    glow: 'none',
   },
   watch: {
     label: 'WATCH',
     color: '#94a3b8',
     bg: 'rgba(148, 163, 184, 0.08)',
     border: '#1e2230',
-    glow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+    glow: 'none',
   },
 }

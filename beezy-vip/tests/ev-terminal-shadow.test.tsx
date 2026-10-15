@@ -69,7 +69,7 @@ describe('EvClient shadow rows', () => {
 
   it('sizes consensus rows with 3+ reference books at 1/4 Kelly and shows Thin (<3 bks) below that', () => {
     render(<EvClient initialFeed={feed} headline={null} />)
-    expect(screen.getAllByText('1/4 KELLY STAKE')).toHaveLength(4)              // every row has a stake column now
+    expect(screen.getAllByText('1/4 KELLY STAKE')).toHaveLength(1)              // one column header, not a label repeated per row
     expect(screen.queryByText(/none/)).toBeNull()
     expect(screen.queryByText(/Thin/)).toBeNull()                               // all four rows are anchored by 3+ books
     fireEvent.click(screen.getByRole('button', { name: 'NHL' }))
@@ -94,13 +94,16 @@ describe('EvClient shadow rows', () => {
     expect(bankroll.previousElementSibling).toHaveTextContent('$')
   })
 
-  it('lays each card on the strict grid class and tucks the paper-results caveat behind a Methodology drawer', () => {
+  it('renders a real table (one thead, one row per play) and tucks the paper-results caveat behind a Methodology drawer', () => {
     const headline = {
       graded: 100, wins: 55, losses: 40, pushes: 1, voids: 4, pending: 3, unique_props_graded: 60, flat_stake_unit: 100,
       flat_pnl_dollars: 1200, flat_roi_pct: 12, bankroll: 1000, kelly_ending_bankroll: 1300, kelly_roi_pct: 9, kelly_cap: 0.05,
     } as unknown as Parameters<typeof EvClient>[0]['headline']
     const { container } = render(<EvClient initialFeed={feed} headline={headline} />)
-    expect(container.querySelectorAll('article.ev-card-grid')).toHaveLength(4)
+    expect(container.querySelectorAll('thead')).toHaveLength(1)
+    expect(container.querySelectorAll('tbody tr[data-row]')).toHaveLength(4)
+    expect(container.querySelector('article')).toBeNull()
+    expect(container.querySelector('.kpi-grid')).toBeNull()
     const drawer = container.querySelector('details') as HTMLDetailsElement
     expect(drawer).not.toBeNull()
     expect(drawer.open).toBe(false)
@@ -148,7 +151,7 @@ describe('Compare books drawer', () => {
     expect(btn).toHaveAttribute('aria-expanded', 'false')
     expect(btn).toHaveTextContent('Compare 4 books')
     expect(screen.queryByRole('group', { name: /All books/ })).toBeNull()      // collapsed hides the strip
-    expect(screen.queryByText('DraftKings')).toBeNull()
+    expect(screen.queryByText('DraftKings', { selector: 'span' })).toBeNull()   // the venue <option> also says DraftKings
 
     fireEvent.click(btn)
     expect(btn).toHaveAttribute('aria-expanded', 'true')
@@ -192,7 +195,7 @@ describe('source files with typographic characters stay ASCII', () => {
     'app/ev/ev-client.tsx', 'app/sports/[sport]/sport-hub-client.tsx', 'app/sports/[sport]/page.tsx',
     'app/api/og/route.tsx', 'app/api/og/ev-recap-card/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
     'app/edge/page.tsx', 'app/edge/edge-client.tsx', 'app/edge/cockpit.tsx', 'app/api/edge-cockpit/route.ts',
-    'components/layout/nav.tsx', 'components/landing/hero.tsx', 'lib/betting-api.ts',
+    'components/layout/nav.tsx', 'components/landing/hero.tsx', 'lib/betting-api.ts', 'app/analytics/analytics-client.tsx', 'lib/beezy-score.ts',
     'tests/sport-assets.test.ts', 'tests/tokens.test.ts', 'tests/ev-terminal-shadow.test.tsx', 'tests/edge-cockpit.test.tsx',
   ]
   it.each(files)('%s', (f) => {
