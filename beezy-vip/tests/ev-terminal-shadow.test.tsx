@@ -13,9 +13,10 @@ jest.mock('@/lib/betting-api', () => ({ apiGetEvFeed: jest.fn(() => new Promise(
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }))
 
 import { EvClient } from '../app/ev/ev-client'
+import { siteDateKey } from '../lib/dates'
 
 const mlb: EvMlbRow = {
-  sport: 'mlb', id: 7, game_date: '2026-10-14', game_pk: 1, player: 'Pat Pitcher', away_team: 'NYY', home_team: 'BOS',
+  sport: 'mlb', id: 7, game_date: siteDateKey(), game_pk: 1, player: 'Pat Pitcher', away_team: 'NYY', home_team: 'BOS',
   bet_type: 'K_OVER_6.5', model_prob: 0.58, market_prob: 0.5, edge: 0.06, kelly_pct: 0.02, odds: 110, stake: 100,
   book: 'draftkings', result: null, profit: null, notes: null, n_books: 5, anchored: true, created_at: '2026-10-14T12:00:00Z',
 }
@@ -206,5 +207,22 @@ describe('source files with typographic characters stay ASCII', () => {
   it('fold() strips combining marks via an escaped range', () => {
     const src = fs.readFileSync(path.join(root, 'lib/sport-assets.ts'), 'utf8')
     expect(src).toContain('.replace(/[\\u0300-\\u036f]/g, \'\')')
+  })
+})
+
+describe('EvClient stale and thin rows', () => {
+  it('drops a pending MLB alert from an earlier date (a finished game is not a live price)', () => {
+    const old: EvFeed = { sport: 'all', min_ev: 0.02, as_of: 'x', mlb: { rows: [{ ...mlb, game_date: '2020-01-01' }], count: 1 }, nfl: null }
+    render(<EvClient initialFeed={old} headline={null} />)
+    expect(screen.queryByText(/Pat Pitcher/)).toBeNull()
+  })
+
+  it('hides single-book Kalshi rows until THIN CONSENSUS is switched on', () => {
+    const kalshi = { ticker: 'KX-1', side: 'UNDER', player: 'Thin Guy', stat: 'rec_yds', strike: 49.5, ask: 0.17, fair_prob: 0.309, n_books: 1, net_ev: 0.688, flag: false, reason: 'THIN_CONS', venue: 'kalshi', game_key: 'nfl:2026-10-16:SEA@DEN', mins_to_kick: 600 }
+    const feed2 = { sport: 'all', min_ev: 0.02, as_of: 'x', mlb: { rows: [], count: 0 }, nfl: { rows: [kalshi], book_outliers: [], count: 1, status: 'shadow_live', as_of: null, age_minutes: 5, stale: false, summary: {}, validated: false } } as unknown as EvFeed
+    render(<EvClient initialFeed={feed2} headline={null} />)
+    expect(screen.queryByText(/Thin Guy/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /THIN CONSENSUS/ }))
+    expect(screen.getByText(/Thin Guy Under 49.5/)).toBeInTheDocument()
   })
 })

@@ -8,6 +8,7 @@ import { propStatLabel, SPORT_PILLARS, STATUS_LABEL, type SportSlug } from '@/li
 import { getPickSystemByKey } from '@/lib/pick-systems'
 import { beezyscore } from '@/lib/beezy-score'
 import { propKey } from '@/lib/dedupe'
+import { siteDateKey } from '@/lib/dates'
 import { bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { PicksTable } from '@/components/picks/picks-table'
@@ -99,7 +100,8 @@ function MlbToday({ picks, feed }: { picks: Bet[]; feed: EvFeed | null }) {
     .filter(p => market === 'ALL' || p.system === market)
     .sort((a, b) => beezyscore(b) - beezyscore(a)), [picks, market])
   const seenEv = new Set<string>()
-  const ev = (feed?.mlb.rows ?? []).filter(r => r.result == null).filter(r => {
+  const todayKey = siteDateKey()
+  const ev = (feed?.mlb.rows ?? []).filter(r => r.result == null && r.game_date >= todayKey).filter(r => {
     const k = propKey({ ...r, system: 'EV', game_pk: r.game_pk ?? 0 } as unknown as Bet)
     if (seenEv.has(k)) return false
     seenEv.add(k)
@@ -304,7 +306,7 @@ function ModelsTab({ sport, stats, sparklines }: Props) {
                     <span>Sample size</span><span className="mono">{Math.min(n, GATE)}/{GATE} bets</span>
                   </div>
                   <div style={{ height: '5px', background: '#1b1f2b', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(100, (n / GATE) * 100)}%`, height: '100%', background: n >= GATE ? 'var(--signal)' : color }} />
+                    <div style={{ width: `${Math.min(100, (n / GATE) * 100)}%`, height: '100%', background: roi != null && roi < 0 ? 'var(--loss)' : color }} />
                   </div>
                 </div>
                 <SystemSparkline data={sparklines[m.system!] ?? []} positive={(roi ?? 0) >= 0} />

@@ -17,8 +17,11 @@ export const metadata: Metadata = {
 async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams
 
-  const date = sp.date ?? siteDateKey()
-  const status = sp.status && sp.status !== 'ALL' ? sp.status.toLowerCase() : undefined
+  const explicitDate = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : undefined
+  const date = explicitDate ?? siteDateKey()
+  // The API knows pending|settled|won|lost; the chips say WIN/LOSS.
+  const STATUS_MAP: Record<string, string> = { win: 'won', loss: 'lost', pending: 'pending' }
+  const status = sp.status && sp.status !== 'ALL' ? STATUS_MAP[sp.status.toLowerCase()] : undefined
   const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
   const book = sp.book && sp.book !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
   const sort = (sp.sort ?? 'score') as 'date' | 'score' | 'edge' | 'odds'
@@ -37,7 +40,7 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
   // explicit date filter falls back to the latest card instead of a blank
   // page, clearly labeled.
   let shownDate = date
-  if (!sp.date && picks.length === 0) {
+  if (!explicitDate && picks.length === 0) {
     const yesterday = addDaysToDateKey(date, -1)
     const prior = await getPicks({ system: market, date: yesterday, status, book, limit: 200 }).catch(() => [])
     if (prior.length > 0) {
@@ -55,7 +58,8 @@ async function PicksContent({ searchParams }: { searchParams: Promise<Record<str
           </p>
         </div>
       )}
-      <PicksTable bets={book ? picks : collapseBooks(picks)} sort={sort} dir={dir} />
+      {/* keyed on the query so the table's local sort/page state resets whenever a filter changes */}
+      <PicksTable key={[date, market, status, book, sort, dir].join('|')} bets={book ? picks : collapseBooks(picks)} sort={sort} dir={dir} />
     </>
   )
 }

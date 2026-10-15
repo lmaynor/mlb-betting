@@ -587,3 +587,13 @@ a { color: inherit; }
   .cockpit-close { display: none !important; }
 }
 
+
+/* Article tables, quotes and lists (rendered by lib/markdown.ts) */
+.article-body .table-wrap { overflow-x: auto; margin: 16px 0; }
+.article-body table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.article-body th, .article-body td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #1e2230; white-space: nowrap; }
+.article-body th { color: var(--fog); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; background: #11131a; }
+.article-body blockquote { margin: 16px 0; padding: 8px 14px; border-left: 3px solid var(--iron); color: var(--silver); background: #11131a; }
+.article-body ol { padding-left: 22px; margin: 12px 0; }
+.article-body ol li, .article-body ul li { margin: 4px 0; }
+.article-body hr { border: 0; border-top: 1px solid #1e2230; margin: 24px 0; }

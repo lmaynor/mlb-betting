@@ -78,8 +78,9 @@ export function ResultPill({ result }: { result: string | null }) {
 }
 
 /** Per-bet P&L in units of that bet's own stake (1u = the amount risked). Falls back to a $10 unit when the stake is unknown. */
-export function PnL({ value, stake }: { value: number | null; stake?: number | null }) {
-  if (value === null) return <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>&mdash;</span>
+export function PnL({ value, stake, result }: { value: number | null; stake?: number | null; result?: string | null }) {
+  // A void or push refunds the stake: no profit to show, and a green +0.00u reads as a win.
+  if (value === null || result === 'void' || result === 'push') return <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>&mdash;</span>
   const pos = value >= 0
   const unit = stake != null && stake > 0 ? stake : 10
   return (

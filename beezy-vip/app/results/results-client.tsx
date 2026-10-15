@@ -250,7 +250,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
         ))}
         <div>
           <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>P&L</div>
-          <PnL value={bet.profit} stake={bet.stake} />
+          <PnL value={bet.profit} stake={bet.stake} result={bet.result} />
         </div>
       </div>
     </div>
@@ -666,7 +666,7 @@ export function ResultsClient({
                   {bet.book ?? '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
                 </div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
-                <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} stake={bet.stake} /></div>
+                <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} stake={bet.stake} result={bet.result} /></div>
               </div>
             )
           })}

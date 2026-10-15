@@ -9,6 +9,7 @@ import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LAB
 import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
+import { siteDateKey } from '@/lib/dates'
 import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 
@@ -45,6 +46,8 @@ interface Row {
   side?: string
   /** every book quoting this line (line shopping); the Compare books drawer needs more than one */
   allBooks?: EvBookQuote[]
+  /** number of books that flagged this same prop (MLB rows are collapsed to the best-priced one) */
+  bookCount?: number
 }
 
 const HAIR = '#1e2230'
@@ -66,15 +69,9 @@ const MIN_EDGE = [
   { label: '+5%+', v: 0.05 },
   { label: '+8%+', v: 0.08 },
 ]
-const VENUES: { id: VenueFilter; label: string }[] = [
+const FIXED_VENUES: { id: VenueFilter; label: string }[] = [
   { id: 'all', label: 'All venues' },
   { id: 'exchanges', label: 'Exchanges only (Kalshi / Novig)' },
-  { id: 'draftkings', label: 'DraftKings' },
-  { id: 'fanduel', label: 'FanDuel' },
-  { id: 'betmgm', label: 'BetMGM' },
-  { id: 'caesars', label: 'Caesars' },
-  { id: 'bet365', label: 'bet365' },
-  { id: 'hardrock', label: 'Hard Rock' },
 ]
 
 function toBet(r: EvMlbRow): Bet {
@@ -113,7 +110,7 @@ function mlbRow(r: EvMlbRow): Row {
     score,
     shadow: false,
     status: r.result ?? 'pending',
-    copy: `${title} ${matchup} @ ${book.label} ${formatOdds(r.odds)}`,
+    copy: `${title} @ ${book.label} ${formatOdds(r.odds)} (${matchup}, EV +${((r.edge ?? 0) * 100).toFixed(1)}%)`,
   }
 }
 
@@ -143,7 +140,10 @@ function nflRow(r: EvNflRow): Row {
     score: null,
     shadow: true,
     status: 'pending',
-    copy: `${title} (${gm}) YES-side ask ${Math.round(r.ask * 100)}c on ${book.label} -- preview signal, not yet tracked`,
+    // A Kalshi ask measured against a single reference book is not a consensus: list it, but after credible rows.
+    lowConf: !r.flag || (r.n_books ?? 0) < 3,
+    side: String(r.side).toUpperCase(),
+    copy: `${title} (${gm}) ${r.side === 'OVER' ? 'YES (Over)' : 'NO (Under)'} at ${Math.round(r.ask * 100)}c on ${book.label} -- preview signal, not yet tracked`,
   }
 }
 
@@ -214,6 +214,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
   const [venue, setVenue] = useState<VenueFilter>('all')
   const [minEdge, setMinEdge] = useState(0.02)
   const [includeSettled, setIncludeSettled] = useState(false)
+  const [showThin, setShowThin] = useState(false)
   const [bankroll, setBankroll] = useBankroll(1000)
   const [bankrollText, setBankrollText] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
@@ -232,24 +233,60 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
     return () => { clearInterval(id); clearInterval(tick) }
   }, [refresh])
 
-  const rows = useMemo<Row[]>(() => {
+  // Everything the feed carries, before any user filter: the venue list is built from it so every option has rows.
+  const allRows = useMemo<Row[]>(() => {
+    const today = siteDateKey()
     const out: Row[] = []
-    for (const r of feed?.mlb.rows ?? []) out.push(mlbRow(r))
+    // A pending MLB alert from an earlier date is a finished game awaiting grading, not a live price.
+    for (const r of feed?.mlb.rows ?? []) if (r.result != null || r.game_date >= today) out.push(mlbRow(r))
     for (const r of feed?.nfl?.book_outliers ?? []) out.push(bookOutlierRow(r, 'nfl'))
     for (const r of feed?.nfl?.rows ?? []) out.push(nflRow(r))
     for (const r of feed?.nhl?.rows ?? []) out.push(bookOutlierRow(r, 'nhl'))
     for (const r of feed?.nba?.rows ?? []) out.push(bookOutlierRow(r, 'nba'))
-    return out
+    // Pinnacle is the sharp reference, not a book a user can bet at.
+    return out.filter(r => r.bookKey !== 'pinnacle')
+  }, [feed])
+
+  const venueOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of allRows) counts.set(r.bookKey, (counts.get(r.bookKey) ?? 0) + 1)
+    const books = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ id: k, label: `${bookDisplay(k).label} (${n})` }))
+    return [...FIXED_VENUES, ...books]
+  }, [allRows])
+
+  const rows = useMemo<Row[]>(() => {
+    const filtered = allRows
       .filter(r => (sport === 'all' || r.sport === sport))
       .filter(r => (venue === 'all' ? true : venue === 'exchanges' ? !!BOOK_META[r.bookKey]?.isExchange : r.bookKey === venue))
       .filter(r => r.ev >= minEdge)
+      .filter(r => showThin || !r.lowConf)
       .filter(r => includeSettled || r.status === 'pending')
-      .sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || b.ev - a.ev)
-  }, [feed, sport, venue, minEdge, includeSettled])
+    // MLB: the same prop flagged at several books is one play (each book would otherwise be staked again).
+    const best = new Map<string, Row>()
+    const out: Row[] = []
+    for (const r of filtered) {
+      if (r.sport !== 'mlb') { out.push(r); continue }
+      const k = `${r.matchup}|${r.title}|${r.status}`
+      const cur = best.get(k)
+      if (!cur) { best.set(k, { ...r, bookCount: 1 }); out.push(best.get(k)!) }
+      else { cur.bookCount = (cur.bookCount ?? 1) + 1; if (r.ev > cur.ev) Object.assign(cur, { ...r, bookCount: cur.bookCount }) }
+    }
+    return out.sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || b.ev - a.ev)
+  }, [allRows, sport, venue, minEdge, includeSettled, showThin])
+
+  const thinHidden = useMemo(() => allRows.filter(r => r.lowConf && r.ev >= minEdge && (sport === 'all' || r.sport === sport)).length, [allRows, minEdge, sport])
 
   const nfl = feed?.nfl ?? null
-  const ageSecs = Math.max(0, Math.round((now - updated) / 1000))
-  const ageLabel = ageSecs < 90 ? `${ageSecs}s ago` : `${Math.round(ageSecs / 60)}m ago`
+  // Age of the data, not of the page: the newest alert logged or the freshest sweep block, whichever is later.
+  const lastScan = useMemo(() => {
+    const stamps = [
+      ...(feed?.mlb.rows ?? []).map(r => Date.parse(r.created_at)),
+      ...[feed?.nfl, feed?.nhl, feed?.nba].map(b => (b?.as_of ? Date.parse(b.as_of) : NaN)),
+    ].filter(n => isFinite(n))
+    return stamps.length ? Math.max(...stamps) : updated
+  }, [feed, updated])
+  const ageSecs = Math.max(0, Math.round((now - lastScan) / 1000))
+  const ageLabel = ageSecs < 5400 ? `${Math.max(1, Math.round(ageSecs / 60))}m ago` : ageSecs < 172800 ? `${(ageSecs / 3600).toFixed(1)}h ago` : `${Math.round(ageSecs / 86400)}d ago`
 
   async function copy(r: Row) {
     try { await navigator.clipboard.writeText(r.copy); setCopied(r.key); setTimeout(() => setCopied(c => (c === r.key ? null : c)), 1500) } catch { /* clipboard blocked */ }
@@ -260,7 +297,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '10px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>+EV Terminal</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} ROWS &middot; UPDATED {ageLabel.toUpperCase()}</span>
+          <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} ROWS &middot; LAST SCAN {ageLabel.toUpperCase()}</span>
           <Label htmlFor="ev-bankroll">BANKROLL</Label>
           <div style={{ background: '#090a0f', border: '1px solid #2e3446', borderRadius: '6px', padding: '0 10px', height: '34px', display: 'inline-flex', alignItems: 'center' }}>
             <span className="mono" style={{ color: 'var(--fog)', fontSize: '13px', marginRight: '4px' }}>$</span>
@@ -293,7 +330,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
             id="ev-venue" value={venue} onChange={e => setVenue(e.target.value)}
             style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 8px', fontSize: '12px' }}
           >
-            {VENUES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+            {venueOptions.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -303,6 +340,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
           </PillGroup>
           <PillGroup>
             <Pill active={includeSettled} onClick={() => setIncludeSettled(v => !v)}>INCLUDE SETTLED</Pill>
+            <Pill active={showThin} onClick={() => setShowThin(v => !v)}>{`THIN CONSENSUS${thinHidden ? ` (${thinHidden})` : ''}`}</Pill>
           </PillGroup>
         </div>
         <span style={{ fontSize: '11.5px', color: 'var(--fog)', marginLeft: 'auto' }}>1/4 Kelly, 5% cap</span>
@@ -436,7 +474,7 @@ function NflBanner({ nfl }: { nfl: NonNullable<EvFeed['nfl']> }) {
 
 function PropsBanner({ sport, block }: { sport: 'nhl' | 'nba'; block: EvPropsBlock }) {
   return (
-    <ShadowBanner label={sport.toUpperCase()} status={block.status} ageMinutes={block.age_minutes}
+    <ShadowBanner label={SPORT_PILLARS[sport].status === 'data_only' ? `${sport.toUpperCase()} COMING SOON` : sport.toUpperCase()} status={block.status} ageMinutes={block.age_minutes}
       body="Sportsbook prices beating the consensus of the other books on the same player, stat and line." />
   )
 }

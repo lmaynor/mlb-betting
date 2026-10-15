@@ -17,7 +17,7 @@ export function HeroPerfCard({ headline, curve, signals }: { headline: EvHeadlin
     <div style={{ padding: '24px 22px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--obsidian)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '8px' }}>SIMULATED BANKROLL &middot; 1/4 KELLY &middot; PAPER</div>
+          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '8px' }}>+EV SCANNER ONLY &middot; SIMULATED &middot; 1/4 KELLY &middot; PAPER</div>
           <div className="mono" style={{ fontSize: '30px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1 }}>
             {headline ? fmtMoney(headline.kelly_ending_bankroll) : '--'}
           </div>
@@ -25,7 +25,7 @@ export function HeroPerfCard({ headline, curve, signals }: { headline: EvHeadlin
         </div>
         {roi != null && (
           <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: tone, background: positive ? 'var(--brand-dim)' : 'var(--loss-wash)', border: `1px solid ${positive ? 'var(--brand-border)' : 'var(--loss-border)'}`, borderRadius: '6px', padding: '5px 9px', whiteSpace: 'nowrap' }}>
-            {roi > 0 ? '+' : ''}{roi.toFixed(1)}% KELLY ROI
+            {roi > 0 ? '+' : ''}{roi.toFixed(1)}% ON STAKED
           </span>
         )}
       </div>

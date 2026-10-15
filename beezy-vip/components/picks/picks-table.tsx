@@ -51,7 +51,7 @@ function ResultPill({ result }: { result: string | null }) {
 }
 
 function PnL({ profit, result, stake }: { profit: number | null; result: string | null; stake?: number | null }) {
-  if (profit === null || result === null || result === 'pending') {
+  if (profit === null || result === null || result === 'pending' || result === 'void' || result === 'push') {
     return <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>--</span>
   }
   const units = (profit / (stake != null && stake > 0 ? stake : 10)).toFixed(2)
@@ -229,7 +229,7 @@ function TableRow({ bet }: { bet: Bet }) {
 }
 
 function BetCard({ bet }: { bet: Bet }) {
-  const pill = SYSTEM_PILL[bet.system as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
+  const pill = SYSTEM_PILL[effectiveSystem(bet) as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
   const notes = splitNotes(bet.notes)
@@ -260,7 +260,7 @@ function BetCard({ bet }: { bet: Bet }) {
             background: pill.bg,
             border: pill.border,
           }}>
-            {systemDisplay(bet.system)}
+            {systemDisplay(effectiveSystem(bet))}
           </span>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{fmtDate(bet.game_date)}</span>
         </div>

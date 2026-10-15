@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Terms of Service' }
+
 export default function TermsPage() {
   return (
-    <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
+    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
 
       {/* Legal review banner */}
       <div style={{
@@ -213,6 +217,6 @@ export default function TermsPage() {
         </p>
 
       </div>
-    </main>
+    </div>
   );
 }

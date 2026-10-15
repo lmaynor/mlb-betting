@@ -31,3 +31,4 @@ Also (from PRODUCT.md): no emoji or exclamation points in UI copy; SVG and Sator
 | 2026-10-14 | `/edge` | PARTIAL | no glows/gradients/hover transforms/KPI grid/cards-per-row; FAILS rule 1 in part: `.edge-tagline` paragraph sits under the title row. Not changed here (file belongs to #54) |
 | 2026-10-15 | `/edge` | PASS | h1 is "Prop Research" on one toolbar row; `.edge-tagline` paragraph removed; sport tabs hidden when no cockpit feed |
 | 2026-10-15 | `/picks`, `/results`, `/models`, `/tools`, `/picks/mlb`, `/tools/clv-tracker` | PASS | one-row headers, inline metric strips, real tables; `/picks/mlb` and `/tools` converted from card grids to tables |
+| 2026-10-15 | `/tools/*`, `/login`, `/blocked`, `/dashboard`, `/learn/[slug]` | PARTIAL | one-row headers via `ToolHeader`; still failing rules 1/2/5: `/signup`, `/pricing` (gradient + glow), `/learn` index (tagline, card grid), `/models/[slug]` and `/picks/mlb/[system]` (30px h1 + KPI grids), `/cheat-sheet` |

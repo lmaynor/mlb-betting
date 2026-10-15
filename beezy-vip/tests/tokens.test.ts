@@ -9,7 +9,7 @@
  * bet_type strings matched any system's OVER/UNDER prefix check, so `side`
  * silently defaulted to 'Under' and the .replace() calls were no-ops --
  * producing genuinely broken user-facing text like
- * "Gerrit Cole (NYY) Under K_3PLUS_3.0 Strikeouts".
+ * "Gerrit Cole Under K_3PLUS_3.0 Strikeouts".
  */
 import { pickLabel, resolveEvUnderlying } from '../lib/tokens'
 import type { Bet } from '../lib/types'
@@ -57,24 +57,24 @@ describe('pickLabel threshold sub-markets (2+/3+)', () => {
 
   test('BATTER_TB_2PLUS renders as "2+ Total Bases", not "Under BATTER_TB_2PLUS_2.0"', () => {
     const label = pickLabel(makeBet({ system: 'BATTER_TB', bet_type: 'BATTER_TB_2PLUS_2.0' }))
-    expect(label).toBe('Gerrit Cole (NYY) 2+ Total Bases')
+    expect(label).toBe('Gerrit Cole 2+ Total Bases')
   })
 
   test('BATTER_HITS_2PLUS renders as "2+ Hits", not "Under BATTER_HITS_2PLUS_2.0"', () => {
     const label = pickLabel(makeBet({ system: 'BATTER_HITS', bet_type: 'BATTER_HITS_2PLUS_2.0' }))
-    expect(label).toBe('Gerrit Cole (NYY) 2+ Hits')
+    expect(label).toBe('Gerrit Cole 2+ Hits')
   })
 
   test('existing OVER/UNDER labels are unaffected by the fix', () => {
     expect(pickLabel(makeBet({ system: 'K', bet_type: 'K_OVER_7.5' })))
-      .toBe('Gerrit Cole (NYY) Over 7.5 Strikeouts')
+      .toBe('Gerrit Cole Over 7.5 Strikeouts')
     expect(pickLabel(makeBet({ system: 'BATTER_TB', bet_type: 'BATTER_TB_UNDER_1.5' })))
-      .toBe('Gerrit Cole (NYY) Under 1.5 Total Bases')
+      .toBe('Gerrit Cole Under 1.5 Total Bases')
   })
 
   test('SB_2PLUS renders as "2+ Stolen Bases" (same pattern as K/OUTS/BATTER_TB/BATTER_HITS)', () => {
     const label = pickLabel(makeBet({ system: 'SB', bet_type: 'SB_2PLUS_2.0' }))
-    expect(label).toBe('Gerrit Cole (NYY) 2+ Stolen Bases')
+    expect(label).toBe('Gerrit Cole 2+ Stolen Bases')
   })
 })
 
@@ -94,7 +94,7 @@ describe('pickLabel resolves pooled EV alert rows to their underlying market', (
     const label = pickLabel(makeBet({
       system: 'EV', bet_type: 'K_OVER_7.5_draftkings', book: 'draftkings',
     }))
-    expect(label).toBe('Gerrit Cole (NYY) Over 7.5 Strikeouts')
+    expect(label).toBe('Gerrit Cole Over 7.5 Strikeouts')
     expect(label).not.toContain('draftkings')
   })
 
@@ -102,22 +102,22 @@ describe('pickLabel resolves pooled EV alert rows to their underlying market', (
     const label = pickLabel(makeBet({
       system: 'EV', bet_type: 'BATTER_TB_2PLUS_2.0_fanduel', book: 'fanduel',
     }))
-    expect(label).toBe('Gerrit Cole (NYY) 2+ Total Bases')
+    expect(label).toBe('Gerrit Cole 2+ Total Bases')
   })
 
   test('EV row on a bare-word HR alert', () => {
     const label = pickLabel(makeBet({ system: 'EV', bet_type: 'HR_hardrock', book: 'hardrock' }))
-    expect(label).toBe('Gerrit Cole (NYY) to Hit a Home Run')
+    expect(label).toBe('Gerrit Cole to Hit a Home Run')
   })
 
   test('EV row on the No-HR side (Under 0.5) is labelled as the opposite bet', () => {
     const label = pickLabel(makeBet({ system: 'EV', bet_type: 'HR_NO_hardrock', book: 'hardrock' }))
-    expect(label).toBe('Gerrit Cole (NYY) to Not Hit a Home Run')
+    expect(label).toBe('Gerrit Cole to Not Hit a Home Run')
   })
 
   test('EV 1+ HR row on a book starting with "no" is NOT mistaken for the No side', () => {
     const label = pickLabel(makeBet({ system: 'EV', bet_type: 'HR_novig', book: 'novig' }))
-    expect(label).toBe('Gerrit Cole (NYY) to Hit a Home Run')
+    expect(label).toBe('Gerrit Cole to Hit a Home Run')
   })
 
   test('EV row on a bare-string F5 game-line alert (no player -- away/home only)', () => {
@@ -149,22 +149,22 @@ import { americanToDecimal, fairAmerican, fullKelly, kellySizing } from '../lib/
 describe('pickLabel on system="EV" rows strips the trailing book tag', () => {
   test('K over', () => {
     expect(pickLabel(makeBet({ system: 'EV', bet_type: 'K_OVER_6.5_draftkings', book: 'draftkings' })))
-      .toBe('Gerrit Cole (NYY) Over 6.5 Strikeouts')
+      .toBe('Gerrit Cole Over 6.5 Strikeouts')
   })
   test('HR No on an exchange', () => {
     expect(pickLabel(makeBet({ system: 'EV', bet_type: 'HR_NO_novig', book: 'novig' })))
-      .toBe('Gerrit Cole (NYY) to Not Hit a Home Run')
+      .toBe('Gerrit Cole to Not Hit a Home Run')
   })
   test('HR yes is not mistaken for HR No on book "novig"', () => {
     expect(pickLabel(makeBet({ system: 'EV', bet_type: 'HR_novig', book: 'novig' })))
-      .toBe('Gerrit Cole (NYY) to Hit a Home Run')
+      .toBe('Gerrit Cole to Hit a Home Run')
   })
   test('NRFI', () => {
     expect(pickLabel(makeBet({ system: 'EV', bet_type: 'NRFI_caesars', book: 'caesars' }))).toBe('No Run 1st Inning')
   })
   test('SB over', () => {
     expect(pickLabel(makeBet({ system: 'EV', bet_type: 'SB_OVER_0.5_betmgm', book: 'betmgm' })))
-      .toBe('Gerrit Cole (NYY) Over 0.5 Stolen Bases')
+      .toBe('Gerrit Cole Over 0.5 Stolen Bases')
   })
 })
 
@@ -227,5 +227,23 @@ describe('ev-math', () => {
     expect(fairAmerican(0.478)).toBe('+109')
     expect(fairAmerican(0.6)).toBe('-150')
     expect(fairAmerican(null)).toBe('--')
+  })
+})
+
+describe('learn links', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ARTICLES } = require('../lib/articles-static')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PICK_SYSTEMS } = require('../lib/pick-systems')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { MODEL_SPECS } = require('../lib/model-specs')
+  const slugs = new Set(ARTICLES.map((a: { slug: string }) => a.slug))
+  it('every learnSlug on a system or model page points at a real article', () => {
+    const used = [
+      ...PICK_SYSTEMS.map((s: { learnSlug?: string }) => s.learnSlug),
+      ...Object.values(MODEL_SPECS ?? {}).map((s) => (s as { learnSlug?: string }).learnSlug),
+    ].filter(Boolean)
+    expect(used.length).toBeGreaterThan(0)
+    for (const u of used) expect(slugs.has(u)).toBe(true)
   })
 })

@@ -106,7 +106,6 @@ function NavShell({ isSignedIn, userButton, signIn }: {
                     transition: 'color var(--dur) var(--ease-out), background var(--dur) var(--ease-out)',
                   }}
                 >
-                  {l.live && <span className="live-dot" style={{ width: '6px', height: '6px' }} />}
                   {l.label}
                 </Link>
               )

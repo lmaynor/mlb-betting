@@ -1,10 +1,11 @@
 import { ARTICLES } from '@/lib/articles-static'
+import { plainSummary } from '@/lib/markdown'
 import { LearnGrid, type LearnCard } from '@/components/learn/learn-grid'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title:       'Learn — MLB Betting Guides & Strategy',
-  description: 'Data-driven guides on NRFI, Kelly criterion, implied probability, strikeout props, and machine learning models for sports betting.',
+  title:       'Learn',
+  description: 'Guides on odds and vig, Kelly sizing, closing line value, and MLB markets like NRFI, F5, strikeouts and home runs.',
 }
 
 // ~200 wpm reading speed, min 1 minute.
@@ -19,7 +20,7 @@ export default function LearnPage() {
     title: a.title,
     category: a.category,
     keyword: a.keyword,
-    description: a.description,
+    description: plainSummary(a.description, 140),
     readTime: readTime(a.content),
   }))
 

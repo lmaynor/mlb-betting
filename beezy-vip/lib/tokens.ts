@@ -242,12 +242,12 @@ export function resolveEvUnderlying(bet: Bet): { system: string; bet_type: strin
 // of duplicating every branch below a second time.
 function formatPick(sys: string, bt: string, player: string, team: string, away: string, home: string): string {
   // -- Game Lines -------------------------------------------------------
-  if (sys === 'NRFI') {
+  if (sys === 'NRFI' || sys === '1I' || sys === '1IOU') {
     if (bt === 'NRFI')    return 'No Run 1st Inning'
     if (bt === 'YRFI')    return 'Run in 1st Inning'
     if (bt === '1I_HOME') return `${home} 1st Inning Moneyline`
     if (bt === '1I_AWAY') return `${away} 1st Inning Moneyline`
-    if (bt === '1I_DRAW') return 'Draw 1st Inning Moneyline'
+    if (bt === '1I_DRAW') return 'Draw after 1st Inning'
     return bt
   }
   if (sys === 'F5') {
@@ -271,57 +271,57 @@ function formatPick(sys: string, bt: string, player: string, team: string, away:
   // -- Pitcher Props ----------------------------------------------------
   if (sys === 'K') {
     const plus = plusLabel(bt)
-    if (plus) return `${player} (${team}) ${plus} Strikeouts`
+    if (plus) return `${player} ${plus} Strikeouts`
     const side = bt.startsWith('K_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('K_OVER_', '').replace('K_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Strikeouts`
+    return `${player} ${side} ${line} Strikeouts`
   }
   if (sys === 'OUTS') {
     const plus = plusLabel(bt)
-    if (plus) return `${player} (${team}) ${plus} Outs Recorded`
+    if (plus) return `${player} ${plus} Outs Recorded`
     const side = bt.startsWith('OUTS_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('OUTS_OVER_', '').replace('OUTS_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Outs Recorded`
+    return `${player} ${side} ${line} Outs Recorded`
   }
   if (sys === 'PITCHER_ER') {
     // bet_type: PITCHER_ER_OVER_2.5 / PITCHER_ER_UNDER_2.5
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('PITCHER_ER_OVER_', '').replace('PITCHER_ER_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Earned Runs`
+    return `${player} ${side} ${line} Earned Runs`
   }
 
   // -- Batter Props -----------------------------------------------------
   if (sys === 'HR') {
     // "HR_NO" (EV rows only): the Under 0.5 / No-HR side. Token match, not
     // startsWith('HR_NO') -- a 1+ HR row on book "novig" is "HR_novig".
-    if (bt.split('_')[1]?.toUpperCase() === 'NO') return `${player} (${team}) to Not Hit a Home Run`
-    return `${player} (${team}) to Hit a Home Run`
+    if (bt.split('_')[1]?.toUpperCase() === 'NO') return `${player} to Not Hit a Home Run`
+    return `${player} to Hit a Home Run`
   }
   if (sys === 'BATTER_K') {
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_K_OVER_', '').replace('BATTER_K_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Strikeouts`
+    return `${player} ${side} ${line} Strikeouts`
   }
   if (sys === 'BATTER_TB') {
     const plus = plusLabel(bt)
-    if (plus) return `${player} (${team}) ${plus} Total Bases`
+    if (plus) return `${player} ${plus} Total Bases`
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_TB_OVER_', '').replace('BATTER_TB_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Total Bases`
+    return `${player} ${side} ${line} Total Bases`
   }
   if (sys === 'BATTER_HITS') {
     const plus = plusLabel(bt)
-    if (plus) return `${player} (${team}) ${plus} Hits`
+    if (plus) return `${player} ${plus} Hits`
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('BATTER_HITS_OVER_', '').replace('BATTER_HITS_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Hits`
+    return `${player} ${side} ${line} Hits`
   }
   if (sys === 'SB') {
     const plus = plusLabel(bt)
-    if (plus) return `${player} (${team}) ${plus} Stolen Bases`
+    if (plus) return `${player} ${plus} Stolen Bases`
     const side = bt.includes('_OVER_') ? 'Over' : 'Under'
     const line = bt.replace('SB_OVER_', '').replace('SB_UNDER_', '')
-    return `${player} (${team}) ${side} ${line} Stolen Bases`
+    return `${player} ${side} ${line} Stolen Bases`
   }
 
   return bt

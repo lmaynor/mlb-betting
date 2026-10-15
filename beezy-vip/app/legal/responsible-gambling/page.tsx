@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Responsible Gambling' }
+
 export default function ResponsibleGamblingPage() {
   return (
-    <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
+    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
 
       {/* Legal review banner */}
       <div style={{
@@ -48,7 +52,7 @@ export default function ResponsibleGamblingPage() {
           <ul style={{ margin: 0, paddingLeft: '20px', color: '#7f1d1d' }}>
             <li>
               <strong>National Problem Gambling Helpline:</strong>{' '}
-              <a href="tel:18004264700">1-800-GAMBLER (1-800-426-2537)</a> — call or text
+              <a href="tel:18004262537">1-800-GAMBLER (1-800-426-2537)</a> — call or text
             </li>
             <li>
               <strong>Illinois Council on Problem Gambling:</strong>{' '}
@@ -169,6 +173,6 @@ export default function ResponsibleGamblingPage() {
         </p>
 
       </div>
-    </main>
+    </div>
   );
 }

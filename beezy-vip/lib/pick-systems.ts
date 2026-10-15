@@ -16,7 +16,7 @@ export const PICK_SYSTEMS: PickSystem[] = [
     name: 'No Run First Inning',
     shortName: 'NRFI',
     description: 'Starter form, umpire zone, park, and weather signals for scoreless first innings.',
-    learnSlug: 'what-is-nrfi',
+    learnSlug: 'what-is-nrfi-betting',
   },
   {
     key: '1I',
@@ -38,7 +38,7 @@ export const PICK_SYSTEMS: PickSystem[] = [
     name: 'First 5 Innings',
     shortName: 'F5',
     description: 'Starting pitcher SIERA, recent form, opponent wOBA, and umpire run context.',
-    learnSlug: 'f5-betting',
+    learnSlug: 'f5-betting-mlb',
   },
   {
     key: 'F1H',
@@ -67,7 +67,7 @@ export const PICK_SYSTEMS: PickSystem[] = [
     name: 'Home Run Props',
     shortName: 'HR',
     description: 'Barrels, exit velocity, launch angle, pitcher HR vulnerability, park, and platoon fit.',
-    learnSlug: 'home-run-props',
+    learnSlug: 'mlb-home-run-props',
   },
   {
     key: 'BATTER_TB',
@@ -103,7 +103,7 @@ export const PICK_SYSTEMS: PickSystem[] = [
     name: 'Pitcher Strikeouts',
     shortName: 'K',
     description: 'SwStr%, zone, chase, opponent lineup K rate, umpire tendency, and recent strikeouts.',
-    learnSlug: 'mlb-strikeout-props',
+    learnSlug: 'mlb-strikeout-props-guide',
   },
   {
     key: 'OUTS',

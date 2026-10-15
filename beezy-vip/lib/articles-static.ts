@@ -104,167 +104,54 @@ Start with 50–100 bets tracked in a spreadsheet. If you're hitting 55%+ at fai
     title:       "Kelly Criterion for Sports Betting",
     category:    "Theory",
     keyword:     "kelly criterion",
-    description: "The **Kelly Criterion** is a mathematical formula that tells you what *fraction* of your bankroll to wager on a bet, given your edge and the odds.",
+    description: "How the Kelly Criterion sizes a bet from your win probability and the price, with a worked example and why most bettors use a fraction of it.",
     content:     `# Kelly Criterion for Sports Betting
 
-## What Is It?
+## What it is
 
-The **Kelly Criterion** is a mathematical formula that tells you what *fraction* of your bankroll to wager on a bet, given your edge and the odds.
+The **Kelly Criterion** is a formula for what fraction of your bankroll to bet when you believe you have an edge. It maximizes long-run growth without risking ruin, but only if your win probability is right.
 
 \`\`\`
-kelly_fraction = (edge × odds_ratio - 1) / (odds_ratio - 1)
+f = (p x d - 1) / (d - 1)
 \`\`\`
 
 Where:
-- **edge** = your true win probability minus the implied probability from the odds
-- **odds_ratio** = (your payout on a win + stake) / stake
+- **f** = the fraction of your bankroll to bet
+- **p** = your estimated probability that the bet wins
+- **d** = the decimal odds (-110 is 1.909, +150 is 2.50, +100 is 2.00)
 
-In plain English: Kelly sizes your bet so your bankroll grows as fast as possible *without* risking ruin.
+If p x d is 1 or less, f is zero or negative and the answer is simply: do not bet.
 
-## Why It Matters
+## Worked example: 55% at -110
 
-The Kelly Criterion isn't just a formula—it's the **optimal growth rate** for repeated bets with edge. Bet too small and you're leaving money on the table. Bet too big and you risk catastrophic losses from normal variance.
+- Decimal odds: 1.909
+- p x d = 0.55 x 1.909 = 1.050
+- f = (1.050 - 1) / (1.909 - 1) = 0.055
 
-Underfunding good bets costs you money. Overfunding any bet—even with positive edge—can wipe you out in a bad streak.
+Full Kelly says bet 5.5% of your bankroll, which is $55 on $1,000. The book's price implies 52.4% (that is the break-even win rate at -110), so a 55% estimate is an edge of about 2.6 points.
 
-## The Math (Simple Version)
+## More examples
 
-Let's say you have a $1,000 bankroll and you find a bet where:
-- **You think it's 55% to hit** (your analysis)
-- **The book prices it at 52%** (the odds imply this)
-- **Odds are -110** (American format)
+- 52% at -110: p x d is 0.993, so f is -0.8%. No bet. A 52% win rate does not beat -110.
+- 55% at -110: f = 5.5%.
+- 60% at -110: f = 16.0%. This is why overestimating your probability is dangerous: five points of error triples the stake.
+- 45% at +150: f = 8.3%.
+- 55% at +100: f = 10.0%.
 
-First, convert to odds ratio:
-- At -110, you risk $1.10 to win $1
-- odds_ratio = 2.10 / 1.10 ≈ 1.909
+## Why most people bet a fraction
 
-Your edge in decimal:
-- 0.55 - 0.52 = 0.03 (3 percentage points)
+Full Kelly is the optimum only when your probability is exactly right. If you overestimate it, you overbet, and bankroll swings get large fast. Most bettors use a fraction, usually half or a quarter. At quarter Kelly the 55% / -110 example is 1.4%, or about $14 on $1,000. The +EV Terminal on this site sizes at quarter Kelly with a 5% cap per bet.
 
-Kelly fraction:
-\`\`\`
-(0.03 × 1.909 - 1) / (1.909 - 1)
-= (0.0572 - 1) / 0.909
-= -0.943 / 0.909
-≈ -1.04
-\`\`\`
+## Pitfalls
 
-Wait—that's *negative*. That means **don't bet**. Your edge isn't large enough to overcome -110 juice.
+- **Your probability is the whole game.** The formula is only as good as p. A model that is overconfident at high edges will oversize exactly the bets it is wrong about.
+- **Bets are not independent.** The same prop at three books, or several lines on one player, is one idea. Do not Kelly-size each separately.
+- **Stake limits.** Books limit winning accounts, so the Kelly number is sometimes more than you can place.
+- **Price matters as much as probability.** The same 55% is a 5.5% bet at -110 and a 10% bet at +100.
 
-Now let's say you find a 55% edge at -120 (better odds):
-- odds_ratio = 2.20 / 1.20 ≈ 1.833
-- edge = 0.05
+## Try it
 
-Kelly:
-\`\`\`
-(0.05 × 1.833 - 1) / (1.833 - 1)
-= (0.0917 - 1) / 0.833
-= -0.908 / 0.833
-≈ -1.09
-\`\`\`
-
-Still negative. You need a *bigger* edge or *better* odds.
-
-One more: 57% confidence, -110 odds:
-- edge = 0.57 - 0.52 = 0.05
-- odds_ratio = 1.909
-- Kelly = (0.05 × 1.909 - 1) / 0.909 = -0.9045 / 0.909 ≈ -0.995
-
-*Still* negative.
-
-Finally: 60% confidence, -110 odds:
-- edge = 0.60 - 0.52 = 0.08
-- odds_ratio = 1.909
-- Kelly = (0.08 × 1.909 - 1) / 0.909 = 0.0572 / 0.909 ≈ 0.063
-
-**6.3% of bankroll.** On $1,000, that's $63 per bet.
-
-## The Insights
-
-### 1. High Juice Kills Small Edges
-At -110 odds, you need roughly 5–6% edge to make Kelly positive. This is why casual bettors *feel* like they need huge edges—they do, because of the vig.
-
-At -105 (where sharp books operate), you need 4–5%. At -100 (a fair market with no vig), you need just over 2%.
-
-### 2. Kelly Scales with Bankroll
-If you have $10,000 instead of $1,000, Kelly tells you to bet $630 instead of $63. The *percentage* stays the same (6.3%), but the dollar amount grows with bankroll.
-
-### 3. You Can Never Overbett Kelly
-If Kelly says 6.3% and you bet 6.3%, the math guarantees the maximum expected value growth. If you bet 7%, you're slightly suboptimal but still profitable (if your edge is real). If you bet 10%, you're taking on more risk than necessary and your expected long-term growth *decreases*.
-
-## Full Kelly vs. Half Kelly vs. Quarter Kelly
-
-Pro bettors rarely use *full Kelly*. Here's why:
-
-- **Full Kelly (100%):** Theoretically optimal, but requires perfect edge estimation. One miscalibration and you can lose 25%+ of bankroll in a bad streak.
-- **Half Kelly (50%):** The practical choice. You keep most of Kelly's growth (roughly 75% of the optimal growth rate) while cutting max drawdown in half.
-- **Quarter Kelly (25%):** Conservative. For bettors new to a market or unsure of their model.
-
-Most professional bettors use **half Kelly** or **Kelly / 1.5** and adjust down further when uncertainty is high.
-
-## The Bankroll Growth Chart
-
-With full Kelly and consistent edge:
-
-| Bets Won | Bankroll Growth (full Kelly) | Bankroll Growth (half Kelly) |
-|---|---|---|
-| 100 | 1.4x | 1.2x |
-| 500 | 3.8x | 2.1x |
-| 1,000 | 14.4x | 4.6x |
-
-The exponential curve is why Kelly wins long-term. But the *downside* is dramatic too: a bad 100-bet stretch with miscalibrated edge can cut your bankroll 30%.
-
-## Common Mistakes
-
-### Mistake 1: Using Model Confidence as Edge
-Your model says 60% confidence. That's *not* your edge—that's your prediction. Your edge is how much better you are than the market.
-
-If the book also predicts 60% (at +100 odds), your edge is 0%. Kelly says bet 0.
-
-### Mistake 2: Overstating Edge
-Most bettors think they have 5–10% edge. Statistically, 85% of them don't. Be conservative. If you're new to a market, assume half the edge you think you have.
-
-### Mistake 3: Not Accounting for Model Error
-Kelly assumes your probability estimate is accurate. But models have calibration error (you say 60%, actual hit rate is 56%). If your model is off by 2%, your Kelly fraction should be cut in half.
-
-### Mistake 4: Forgetting Vig
-The house takes juice. At -110, that's 4.5% of the market's total probability mass. This is *already* in the odds. Don't "double-count" it.
-
-## The Real-World Formula
-
-For sports bettors, this is the practical version:
-
-\`\`\`
-kelly_fraction = (your_hit_rate - implied_hit_rate) / odds_ratio
-\`\`\`
-
-Then apply a haircut:
-
-\`\`\`
-bet_fraction = kelly_fraction / 2  (for half Kelly)
-\`\`\`
-
-If the result is negative, don't bet.
-
-## Bankroll Sizing Rule of Thumb
-
-- **If you're unsure of your edge:** Use 1–2% Kelly (very conservative).
-- **If you have 500+ bets of backtested data:** Use 2–4% Kelly.
-- **If you have 1000+ bets and your edge is proven:** Use 4–6% Kelly.
-- **If you're a professional with institutional capital:** Use 5–10% Kelly.
-
-Most retail bettors should never exceed 3% Kelly on a single bet.
-
-## The Bottom Line
-
-Kelly Criterion is the **mathematically optimal bet sizing formula**. But it only works if:
-1. You know your true edge (most people don't)
-2. You apply a conservative haircut (half Kelly minimum)
-3. You have a large sample of bets (100+) to validate your model
-
-If you're just starting out: **Use 1% Kelly.** On a $1,000 bankroll with a 60% edge at -110 odds, that's $0.63 per bet. Boring, but you'll still be in business after 100 bets.
-
-Once you've logged 500+ bets and proven your edge, you can scale up. The pros who blow up their bankroll are usually the ones who skipped this step.
+The free Kelly Calculator at /tools/kelly-calculator does this math for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
 `,
   },
   {
@@ -536,88 +423,54 @@ This is where vig removal becomes powerful:
 Which book is more confident in the home team?
 
 Remove vig from Book A:
-- Home: 52.38% / 1.0476 = 50%
+- Total: 52.38% + 52.38% = 104.76%
+- Home: 52.38% / 1.0476 = 50.00%
 
 Remove vig from Book B:
-- Home: 54.55% / 1.0545 = 51.71%
+- Total: 54.55% + 50.00% = 104.55%
+- Home: 54.55% / 1.0455 = 52.17%
 
-**Book B is more confident in the home team** (51.71% vs 50%). The -120 odds aren't just worse for you—they indicate the book actually thinks the home team is more likely.
+**Book B is more confident in the home team** (52.17% vs 50.00%, a gap of 2.17 points). The -120 price is not just worse for a home bettor; it says the book thinks the home team is more likely to win.
 
-## The CRA Method (Closing Line Algorithm)
+## Using vig-free prices to measure closing line value
 
-Professional bettors use vig removal to track **closing line value** (CLV)—how your win probability compares to where the market settled.
+Vig-free probabilities are how you compare a price you took with where the market finished.
 
-\`\`\`
-1. Get vig-free probability at time of bet
-2. Get vig-free probability at closing line (game time)
-3. If you bet higher than closing, you have CLV
-\`\`\`
+- You bet the home team when the market was -110 / -110 (50.00% vig-free).
+- The market closes at -120 / +100 (52.17% vig-free for the home team).
+- The market moved toward your side, so the price you took was better than the close. That is **positive closing line value**.
 
-Example:
-- You bet home team at -110 (52.38% implied, 50% vig-free)
-- Market closes at -120 (54.55% implied, 51.71% vig-free)
-- Your estimated prob: 52% (0.52 vig-free)
-- You bet at 50% vig-free, market closed at 51.71% vig-free
-- You got worse odds than the market eventually settled on—no CLV
+A simple rule: if the vig-free probability at the close is higher than the probability implied by the price you took, you beat the close. See the CLV guide for more.
 
-## Quick Vig Removal for -110 Both Sides
+## Quick vig removal for -110 on both sides
 
-When you see -110 on both sides, the vig-free breakdown is **50-50**.
+When you see -110 on both sides, the vig-free breakdown is **50-50**. The two implied probabilities add to 104.76%, so about 2.38 points of vig sits on each side.
 
-Just remember: **At -110/-110, remove 4.76% from each side.**
+- 52.38% becomes 50.00%
+- Any other pair of odds: use the full formula above
 
-- 52.38% → 50%
-- Any other odds: use the full formula above
+## Vig removal for moneyline pairs
 
-## Vig Removal for Moneyline Pairs
+**If the odds are symmetric (-115 / -115):** the fair price is still 50-50, and the vig is larger (the two sides add to 106.98%).
 
-DraftKings and FanDuel always show a sportsbook moneyline. Here's the fast way:
+**If the odds are asymmetric (for example -150 / +120):** use the formula. 60.00% + 45.45% = 105.45%, so the fair split is 56.90% / 43.10%. Do not skip this: asymmetric odds can hide real market disagreement.
 
-**If the odds are close to -110/-110:**
-- Just split the difference. If it's -110/-110, vig-free is 50-50.
-- If it's -115/-115, vig-free is roughly 49.5-50.5 (slightly higher vig).
+## The caveat: proportional removal is a simplification
 
-**If the odds are asymmetric (e.g., -150/+120):**
-- Use the formula above. Don't skip this—asymmetric odds can hide real market disagreement.
+Dividing each side by the total assumes the book spread its margin in proportion to each side's probability. Books often shade favorites and longshots differently, and thin markets (props) can be mispriced on both sides at once. Other methods exist, but proportional removal is the common default.
 
-## The Closing Line Value (CLV) Concept
+## Tools to help
 
-Track your bets against closing line:
-
-\`\`\`
-if vig_free_opening > vig_free_closing:
-    you_have_positive_clv = True
-\`\`\`
-
-Pros with consistent positive CLV are the ones who beat the market long-term. Your closing line value (not just hit rate) is the real measure of edge.
-
-Example:
-- You bet Pitcher K Over at -120 (54.55% implied, 51.71% vig-free)
-- You estimate 56% true probability
-- Market closes at -130 (56.86% implied, 54.0% vig-free)
-- You got a better deal than the market eventually agreed to
-- Positive CLV
-
-## The Caveat: Vig Removal Is Additive
-
-Vig removal assumes the book's probabilities are proportional. In reality, books sometimes misprice both sides (e.g., if a prop is illiquid, they might quote -120/-120 instead of -110/-110).
-
-Vig removal smooths this out *as if* both sides were mispriced equally. It's not perfect, but it's the industry standard.
-
-## Tools to Help
-
-Most modern sports betting apps show implied probability already. If you want to remove vig:
-
-1. Calculate implied probability for each side
+1. Calculate the implied probability for each side
 2. Add them together
 3. Divide each by the total
 4. Multiply by 100 to get percentages
 
-Or use an online calculator (search "vig removal calculator").
+Or let the free Odds & Vig Calculator at /tools/odds-calculator do it.
 
-## The Bottom Line
+## The bottom line
 
-Removing vig lets you compare how different books value the same bet. A book pricing -120 isn't just offering worse odds—it's saying the outcome is 1.71 percentage points more likely (in vig-free terms).
+Removing vig lets you compare how different books value the same bet. A book pricing the home team at -120 / +100 is saying the home team is 2.17 points more likely than a book at -110 / -110.
 
 For serious bettors:
 - **Remove vig from every pair of odds you compare**
@@ -1161,11 +1014,11 @@ The pros treat HR props as a side market, not their primary focus. They're usefu
   },
   {
     slug:        "machine-learning-sports-betting",
-    title:       "How Machine Learning Models Beat the Books",
+    title:       "Why Most Betting Models Lose to the Closing Line",
     category:    "Theory",
     keyword:     "machine learning",
     description: "Imagine a sports betting model trained on 5 years of data. It sees patterns humans miss\u2014park effects, weather correlations, pitcher fatigue cycles. It outputs p",
-    content:     `# How Machine Learning Models Beat the Books
+    content:     `# Why Most Betting Models Lose to the Closing Line
 
 ## The Promise and the Reality
 
@@ -1372,9 +1225,9 @@ You found a 2% edge. You bet 10% Kelly on every game. After 100 bets, you hit a 
 
 **Fix:** Use half Kelly (1% per bet). This cuts growth to 75% of optimal but also cuts drawdown risk in half.
 
-## Real-World Example: The Strikeout Model
+## A Hypothetical Example: A Strikeout Model
 
-Here's how a winner model beats the market on pitcher strikeouts:
+The numbers in this section are illustrative, not Beezy results. For our real, settled numbers see the Results and Models pages. Here is how a careful strikeout model might be built and judged:
 
 **Data sources:**
 - Pitching stats (Statcast, 5 years)
@@ -1395,13 +1248,12 @@ Here's how a winner model beats the market on pitcher strikeouts:
 - Walk-forward: Train on every month, test next month
 - Compare to DK opening and closing odds
 
-**Results:**
+**Illustrative results (hypothetical):**
 - Backtest accuracy: 53%
-- 2023 hold-out accuracy: 52.2%
-- CLV: +0.8% (for every 100 bets, bet 1 unit, get 0.8 units profit)
-- ROI at half Kelly: +1.6%
+- Hold-out accuracy: 52.2%, which is below the 52.4% needed to break even at -110, so it would not be profitable on its own
+- CLV: a positive average means you took better prices than the close; it is a price gain, not a profit figure
 
-This model works because:
+A model like this is only worth trusting if:
 1. Validation against realistic future data
 2. Conservative Kelly sizing
 3. Focus on a niche market (strikeouts) with less competition
@@ -1410,7 +1262,7 @@ This model works because:
 
 ## The Bottom Line
 
-Machine learning models *can* beat the books, but it requires:
+Machine learning models can sometimes find an edge, but most do not, and it requires:
 
 1. **Better data than the market** — real-time injury feeds, detailed umpire data
 2. **Or better analysis** — smarter feature engineering and validation
@@ -1745,41 +1597,25 @@ Sharps got -120 on Giants. Public got -115 on Dodgers. Closing settled -112.
 
 ## Closing Line Value (CLV)
 
-This is the **true measure of betting skill**.
+Closing line value compares the price you took with the price at the close. It is a better early read on skill than a short win-loss record.
 
 \`\`\`
-clv = (your_opening_odds - closing_odds)
+CLV: positive when the closing price is worse for a bettor than the price you took
 \`\`\`
 
-If you bet Dodgers at -110 opening and closing is -130:
-- You got -110 when the market eventually said -130
-- You got a *worse* deal than the sharps' consensus
-- Negative CLV
-
-If you bet Giants at +130 opening and closing is +112:
-- You got +130 when the market eventually said +112
-- You got a *better* deal than consensus
+If you bet the Dodgers at -110 and the line closes at -130:
+- You took -110 when the market finished at -130
+- The market moved toward your side, so you got the better price
 - Positive CLV
 
-**Professionals track CLV, not just hit rate.**
+If you bet the Giants at +130 and the line closes at +112:
+- You took +130 when the market finished at +112
+- The market moved toward your side, so you got the better price
+- Positive CLV
 
-Why? Because hit rate can be 50% but CLV positive (you're beating the market). Or 52% but CLV negative (you're getting bad odds).
+If you bet the Dodgers at -130 and the line closes at -110, the market moved away from you: negative CLV.
 
-### The Math:
-Over 100 bets:
-- Hit rate: 52% (you're winning 52 out of 100)
-- Closing line value: +1.5% (on average, you get 1.5% better odds than closing)
-- ROI: 52% × average_odds - 100% ≈ 2–3%
-
-That's professional territory.
-
-Without CLV:
-- Hit rate: 52%
-- Opening odds: You bet -110
-- Closing line: You got -115 (worse)
-- Effective ROI: nearly 0%
-
-Same hit rate, different skill.
+**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the CLV guide and the CLV Tracker at /tools/clv-tracker.
 
 ## Line Movement Signals
 
@@ -1882,11 +1718,11 @@ The pros don't see line movement as noise. They see it as the market confessing 
   },
   {
     slug:        "closing-line-value-clv",
-    title:       "Closing Line Value: The Only Metric That Proves Edge",
+    title:       "Closing Line Value: A Better Test Than ROI",
     category:    "Theory",
     keyword:     "closing line value",
     description: "A positive ROI over a few hundred bets can be pure luck -- or a soft-line artifact. Closing Line Value (CLV) is the leakage-proof test of whether you are actually beating the market.",
-    content:     `# Closing Line Value: The Only Metric That Proves Edge
+    content:     `# Closing Line Value: A Better Test Than ROI
 
 ## The problem with ROI
 
@@ -1904,13 +1740,13 @@ Sample size does not save you either. Betting outcomes have enormous variance: a
 
 If you bet a home run prop at +450 and it closes at +400, you beat the close by about 11%. If you bet +450 and it closes +500, the market moved against you.
 
-Why does this matter more than whether the bet won? Because the closing line is the sharpest number in the market -- it has absorbed every injury report, lineup card, weather update, and every dollar of informed money. Decades of research on betting markets converge on the same finding: **bettors who consistently beat the close win long-term; bettors who do not, do not** -- regardless of what their recent win-loss record says.
+Why does this matter more than whether the bet won? Because the closing line is the sharpest number in the market -- it has absorbed every injury report, lineup card, weather update, and every dollar of informed money. Beating the close is widely used as a test of skill: **bettors who consistently take better prices than the close tend to be profitable over time**, whatever their recent win-loss record says.
 
 ## Why CLV is leakage-proof
 
-ROI can be gamed by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV cannot be faked this way. Either the line moved toward your bet after you placed it, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
+ROI can be inflated by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV is much harder to fool this way, because it is measured on prices that moved after you bet. Either the line moved toward your bet, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
 
-That is why our promotion rule for any Beezy system is CLV-based, not ROI-based. A system that shows positive ROI but flat-or-negative CLV is beating a soft historical line, not the market -- and we treat it as unproven no matter how pretty the profit curve looks.
+That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode, and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven. Track it yourself in the CLV Tracker at /tools/clv-tracker.
 
 ## How to use CLV yourself
 
@@ -1940,7 +1776,7 @@ Every normal price a sportsbook posts carries vig -- typically 5-12% on props. T
 
 An **odds boost** flips the arithmetic. The book takes a market price, improves it as a marketing expense, and caps your stake so it cannot be exploited at scale. When the boosted price exceeds the market's fair price, the bet is +EV *by construction* -- no model, no handicapping skill, no inside information required. It is the single most dependable source of positive expected value available to a recreational bettor.
 
-The catch: not every boost clears the bar. A "boost" from -150 to -135 on a market whose fair price is -160 is still a losing bet. You have to do the math every time.
+The catch: not every boost clears the bar. A boost from -150 to -135 on a market whose fair price is -190 is a winning bet, but the same boost on a market whose fair price is -125 is a losing one. You have to do the math every time, or use the free Boost EV Calculator at /tools/boost-ev.
 
 ## The three-step calculation
 
@@ -1971,7 +1807,7 @@ Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boo
 
 Boosts are customer acquisition priced as marketing. Books know the average user cannot or will not compute fair value, taps the shiny number, and then gives back the EV on -EV bets later the same session. Refuse the second half of that trade and the boost program becomes a small, steady subsidy from the book to you.
 
-Free money is rare in betting. This is what it looks like.
+Free money is rare in betting, and boosts are the closest thing. Remember that accounts that only take boosts can be limited, stake caps apply, and none of this is financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
 `,
   },
 ]
