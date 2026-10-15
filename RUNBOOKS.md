@@ -562,6 +562,7 @@ script at all, see docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipe
 |---|---|---|---|
 | `mlb-tweet-picks` | 17:00 UTC (noon ET) | picks | Games card to Discord + tweet draft to Typefully |
 | `mlb-tweet-recap` | 10:00 UTC (5am ET) | recap | Recap tweet draft to Typefully |
+| _(not provisioned yet)_ | after `/settle` | settlement | #GamblingX receipt: tweet text + `/api/og/settlement-card` PNG + celebration GIF to Discord (`DISCORD_WEBHOOK_TWEETS`, else `DISCORD_WEBHOOK_OPS`). Optional `TENOR_API_KEY` / `GIPHY_API_KEY`; without one the GIF line carries a Tenor search link. `morning` = alias of `picks`; `steam` is not built. Also `python3 tweet_drafter.py --mode settlement`. |
 
 Script: `tweet_drafter.py` in repo root. Included in Docker image via
 `COPY tweet_drafter.py .` in Dockerfile.
