@@ -2,9 +2,14 @@
 # setup_nfl_refresh.sh -- provision the nightly nflverse mirror Job + Scheduler.
 #
 # Reuses the mlb-betting image, service account, and MLB_GCS_BUCKET secret. The job runs
-# `python -m nfl.data.ingest --mode refresh` (current season + every single-file dataset ->
-# NFL/nflverse/ in the shared bucket). Byte-identical files are not rewritten (sha256 vs
-# NFL/_manifest.json), so the offseason is a no-op. No DB, no secrets, no API key.
+# `python -m nfl.data.pipeline --mode refresh` = (1) nfl.data.ingest (current season + every single-file dataset ->
+# NFL/nflverse/ in the shared bucket; byte-identical files are not rewritten, so the offseason is a no-op),
+# (2) nfl.data.derived (team/player pbp context tables -> NFL/derived/, rebuilt only when the pbp sha changed) and
+# (3) nfl.data.contracts (-> NFL/contracts_latest.json, alerted by monitor_ops). No DB, no secrets, no API key.
+# Schedule: nflverse publishes stats/pbp at 09:00 UTC daily plus right after each game window (verified from the
+# nflverse-data workflows: TNF 05:30, Sunday 22:00 / 00:00, SNF-MNF 05:30 UTC), injuries/rosters at 07:00 UTC.
+# 13:30 UTC therefore always sees the previous day's finished games; contracts treat a game as overdue only from
+# 1 day (warn) / 2 days (fail) after its date.
 #
 # Idempotent: safe to re-run (create-or-update for both job and scheduler).
 #
@@ -18,12 +23,13 @@
 #
 # FIRST RUN is a backfill, not the nightly refresh (override the args for one execution):
 #   gcloud run jobs execute nfl-refresh-data --region=us-central1 --wait \
-#     --args="-m" --args="nfl.data.ingest" --args="--mode" --args="backfill"
+#     --args="-m" --args="nfl.data.pipeline" --args="--mode" --args="backfill"
 # (repeated --args, not a comma list -- CONTEXT s15.9. Verify the override took by reading the execution's args.)
 # Size it first from any machine:  python3 -m nfl.data.ingest --mode backfill --probe
 #
 # Check afterwards:  gs://<bucket>/NFL/last_refresh.json  (status ok|partial|error + per-file failures).
-# NOTE: not wired into monitor_ops (same as NBA) -- a failed execution shows in Cloud Run only.
+# monitor_ops alerts on a failed refresh (NFL/last_refresh.json status=error) AND on a failed data contract
+# (NFL/contracts_latest.json ok=false); a dead job is caught by the scheduler check.
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID env var}"
@@ -60,7 +66,7 @@ JOB_FLAGS=(
   --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
   --command="python"
   --args="-m"
-  --args="nfl.data.ingest"
+  --args="nfl.data.pipeline"
   --args="--mode"
   --args="refresh"
   --memory=4Gi

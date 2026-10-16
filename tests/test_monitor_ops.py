@@ -118,3 +118,30 @@ def test_run_includes_the_nfl_sentinel_and_posts_one_alert(monkeypatch):
 def test_monitor_ops_source_is_ascii_only():
     with open(mo.__file__, "rb") as fh:
         fh.read().decode("ascii")                                # raises UnicodeDecodeError on any raw multibyte char
+
+
+def _contracts(monkeypatch, payload):
+    monkeypatch.setattr("mlb_core.storage.exists", lambda key: key == mo.NFL_CONTRACTS_KEY and payload is not None)
+
+    def read_bytes(key):
+        if isinstance(payload, Exception):
+            raise payload
+        return json.dumps(payload).encode()
+    monkeypatch.setattr("mlb_core.storage.read_bytes", read_bytes)
+
+
+def test_nfl_contracts_failure_is_reported_with_the_failing_checks(monkeypatch):
+    _contracts(monkeypatch, {"ok": False, "season": 2026, "generated_at": "2026-10-16T13:40:00+00:00", "checks": [
+        {"name": "grain_schedules", "status": "pass", "detail": {}},
+        {"name": "coverage_pbp", "status": "fail", "detail": {"missing": 2, "missing_games": ["2026_05_X_Y"]}},
+        {"name": "schedule_lines_upcoming", "status": "warn", "detail": {}}]})
+    out = mo._check_nfl_contracts()
+    assert len(out) == 1 and "FAILED (1 check(s)" in out[0] and "coverage_pbp" in out[0]
+    assert "grain_schedules" not in out[0] and "schedule_lines_upcoming" not in out[0]
+
+
+@pytest.mark.parametrize("payload", [{"ok": True, "checks": [{"name": "x", "status": "warn"}]}, None,
+                                      RuntimeError("gcs down")])
+def test_nfl_contracts_are_silent_when_ok_missing_or_unreadable(monkeypatch, payload):
+    _contracts(monkeypatch, payload)
+    assert mo._check_nfl_contracts() == []
