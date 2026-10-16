@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 
 function normalizeApiUrl(value: string) {
@@ -251,6 +251,16 @@ export async function apiGetEvFeed(params?: { sport?: string; minEv?: number; li
   if (params?.limit)         sp.set('limit', String(params.limit))
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   return apiFetch<EvFeed>(`/api/public/ev/feed${qs}`, 60, `/api/ev${qs}`)
+}
+
+/**
+ * Daily NFL / NHL / NBA projection board: one row per player x stat with the projection, the market and the two engines'
+ * agreement. Every row is unvalidated. Callers that only need rows read `.rows`.
+ */
+export async function apiGetSportProjections(sport: 'nfl' | 'nhl' | 'nba', market?: string): Promise<SportProjections> {
+  const sp = new URLSearchParams({ sport })
+  if (market) sp.set('market', market)
+  return apiFetch<SportProjections>(`/api/public/projections?${sp.toString()}`, 60, `/api/projections?${sp.toString()}`)
 }
 
 /** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */

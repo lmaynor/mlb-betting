@@ -191,10 +191,17 @@ describe('beezyscore / scoreTier', () => {
 })
 
 describe('sport registry and tokens', () => {
-  test('SPORT_PILLARS has the four pillars and only MLB is live', () => {
+  test('SPORT_PILLARS has the four pillars and none is a placeholder', () => {
     expect(Object.keys(SPORT_PILLARS).sort()).toEqual(['mlb', 'nba', 'nfl', 'nhl'])
-    expect(SPORT_LIST.filter(p => p.status === 'live').map(p => p.slug)).toEqual(['mlb'])
-    expect(SPORT_PILLARS.nfl.status).toBe('shadow')
+    expect(SPORT_LIST.map(p => p.status)).toEqual(['live', 'live', 'live', 'live'])
+    for (const p of SPORT_LIST) {
+      expect(['data_only', 'planned']).not.toContain(p.status)
+      for (const m of p.markets) expect(m.status).not.toMatch(/soon|preview|planned/i)
+    }
+    expect(SPORT_PILLARS.mlb.seasonBadge).toBe('10 MODELS + +EV SCANNER')
+    expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['rec_yds', 'rush_yds', 'pass_yds', 'receptions', 'pass_tds', 'anytime_td'])
+    expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'points', 'assists', 'saves'])
+    expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['pts', 'reb', 'ast', 'threes', 'pra'])
   })
   test('BOOK_META marks exchanges and bookDisplay falls back for unknown books', () => {
     expect(BOOK_META.kalshi.isExchange).toBe(true)

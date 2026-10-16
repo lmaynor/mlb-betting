@@ -215,6 +215,70 @@ export interface EvFeed {
   nba?:   EvPropsBlock | null
 }
 
+// -- Daily projection board (GET /api/public/projections; ev/daily_projections.py) ----------------------------
+/** One player x stat. `has_line: false` rows are rotation projections with no market yet (line/side fields are null). */
+export interface SportProjectionRow {
+  sport: 'nfl' | 'nhl' | 'nba'
+  stat: string
+  stat_label: string
+  player: string
+  player_norm: string
+  team: string | null
+  opp: string | null
+  game_key: string
+  commence: string | null
+  mins_to_start: number | null
+  has_line: boolean
+  line: number | null
+  consensus_line: number | null
+  /** the side the model prefers vs the market ('over' | 'under'); null when there is no model probability */
+  side: 'over' | 'under' | null
+  proj_mean: number | null
+  p_over_model: number | null
+  p_model_side: number | null
+  p_mkt_side: number | null
+  l5_hit_rate: number | null
+  l10_hit_rate: number | null
+  szn_rate: number | null
+  szn_avg: number | null
+  avg_l10: number | null
+  usage_label: string
+  n_games: number
+  best_over_odds: number | null
+  best_over_book: string | null
+  best_under_odds: number | null
+  best_under_book: string | null
+  p_over_market: number | null
+  n_books: number | null
+  model_edge: number | null
+  market_ev: number | null
+  confluence: boolean
+  edge_capped: boolean
+  beezy_score: number
+  score_basis: 'confluence' | 'market' | 'model' | 'capped' | 'none'
+  validated: false
+  engine: string
+  /** resolved server-side by name (NHL / NBA only); null when unknown */
+  headshot_id?: number | null
+}
+
+export interface SportProjections {
+  sport: 'nfl' | 'nhl' | 'nba'
+  engine: string | null
+  validated: false
+  status: 'live' | 'awaiting_lines' | 'idle' | 'unavailable'
+  stale: boolean
+  as_of: string | null
+  age_minutes: number | null
+  lines_age_minutes: number | null
+  gamelog_latest: string | null
+  stale_gamelog: boolean | null
+  stats: string[]
+  count: number
+  rows: SportProjectionRow[]
+  summary: Record<string, unknown>
+}
+
 // -- Analytics deep dive (GET /api/public/analytics/deep-dive) -----------------
 export interface EdgeBucket {
   bucket: string; n: number; wins: number; losses: number

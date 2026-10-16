@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import {
-  apiGetEvFeed, apiGetStats, apiGetSparklineBySystem, apiGetTodayPicks, apiGetTodaySlate,
+  apiGetEvFeed, apiGetSportProjections, apiGetStats, apiGetSparklineBySystem, apiGetTodayPicks, apiGetTodaySlate,
   type SparklinePoint,
 } from '@/lib/betting-api'
 import { isSportSlug, SPORT_PILLARS } from '@/lib/sports'
-import type { Bet, EvFeed, SystemStats, TodaySlate } from '@/lib/types'
+import type { Bet, EvFeed, SportProjections, SystemStats, TodaySlate } from '@/lib/types'
+import { playerIdByName } from '@/lib/sport-assets.server'
 import { SportHubClient } from './sport-hub-client'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,7 @@ export default async function SportHubPage({ params }: { params: Promise<{ sport
   let sparklines: Record<string, SparklinePoint[]> = {}
   let slate: TodaySlate | null = null
   let feed: EvFeed | null = null
+  let projections: SportProjections | null = null
 
   if (sport === 'mlb') {
     const [p, s, sl, f] = await Promise.all([
@@ -39,8 +41,16 @@ export default async function SportHubPage({ params }: { params: Promise<{ sport
     const results = await Promise.allSettled(sys.map(k => apiGetSparklineBySystem(k, 30)))
     sparklines = Object.fromEntries(sys.map((k, i) => [k, results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<SparklinePoint[]>).value : []]))
   } else if (sport === 'nfl' || sport === 'nhl' || sport === 'nba') {
-    feed = await apiGetEvFeed({ sport, minEv: 0.02, limit: 150 }).catch(() => null)
+    const [f, pr] = await Promise.all([
+      apiGetEvFeed({ sport, minEv: 0.02, limit: 150 }).catch(() => null),
+      apiGetSportProjections(sport).catch(() => null),
+    ])
+    feed = f
+    // Headshots resolve by name on the server (NHL / NBA only; there is no NFL headshot source).
+    projections = pr && sport !== 'nfl'
+      ? { ...pr, rows: pr.rows.map(r => ({ ...r, headshot_id: playerIdByName(sport, r.player, r.team) })) }
+      : pr
   }
 
-  return <SportHubClient sport={sport} picks={picks} stats={stats} sparklines={sparklines} slate={slate} feed={feed} />
+  return <SportHubClient sport={sport} picks={picks} stats={stats} sparklines={sparklines} slate={slate} feed={feed} projections={projections} />
 }

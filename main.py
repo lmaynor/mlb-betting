@@ -891,7 +891,7 @@ from mlb.runners.public_api import (
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, _require_api_key,
     get_clv_data, get_today_slate,
-    get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit,
+    get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1160,6 +1160,32 @@ def public_edge_cockpit():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_edge_cockpit failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/projections", methods=["GET", "OPTIONS"])
+def public_projections():
+    """Daily NFL / NHL / NBA projection board (ev/daily_projections.py): model projection + market lines + edge +
+    confluence + Beezy Score per player x stat. Unvalidated; status/freshness travel with the payload."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_sport_projections(
+            request.args.get("sport", ""),
+            market=request.args.get("market") or None,
+            limit=int(request.args.get("limit", 300)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # unknown sport / bad limit
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_projections failed")
         return jsonify({"error": str(exc)}), 500
 
 

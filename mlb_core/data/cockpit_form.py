@@ -55,6 +55,8 @@ NFL_STATS = {
     "rec_yds":    (("receiving_yards",), ("targets",), "Targets"),
     "receptions": (("receptions",), ("targets",), "Targets"),
     "pass_tds":   (("passing_tds",), ("attempts",), "Pass attempts"),
+    # rush + receiving TDs only (return / defensive TDs are not in these columns); the books' own scope is UNVERIFIED
+    "anytime_td": (("rushing_tds", "receiving_tds"), ("carries", "targets"), "Touches"),
 }
 NHL_SKATER_STATS = {
     "sog":           (("sog",), ("toi_min",), "TOI (min)"),
@@ -179,7 +181,7 @@ def _season_year_now() -> int:
 def _load_nfl() -> dict | None:
     cols = ["player_id", "player_display_name", "player_name", "team", "recent_team", "season", "week", "season_type",
             "opponent_team", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
-            "receiving_yards", "receptions", "targets"]
+            "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "position"]
     frames = []
     y = _season_year_now()
     for season in (y + 1, y, y - 1):       # newest first; stop after KEEP_SEASONS found
@@ -194,7 +196,7 @@ def _load_nfl() -> dict | None:
     df = pd.concat(frames, ignore_index=True)
     name_col = "player_display_name" if "player_display_name" in df.columns else "player_name"
     for c in ("season", "week", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
-              "receiving_yards", "receptions", "targets"):
+              "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds"):
         if c in df.columns:
             df[c] = _num(df[c])
     df = df.dropna(subset=["season", "week"]).sort_values(["season", "week"], kind="stable")

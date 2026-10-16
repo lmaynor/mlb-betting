@@ -349,6 +349,7 @@ def get_summary_stats(engine, sport="mlb"):
 # ---------------------------------------------------------------------------
 import json as _json
 import re as _re
+import threading as _threading
 from datetime import datetime as _datetime, timezone as _timezone
 
 _NFL_PREFIX = "EVSweep/nfl_props"
@@ -773,6 +774,71 @@ def get_multisport_cockpit(sport="all", limit=60, engine=None, min_ev=0.02):
         out["sports"][sp] = meta
         out["rows"].extend(rows)
     out["rows"].sort(key=lambda x: (not x.get("flag"), -(x.get("ev") or 0.0)))
+    return out
+
+
+# -- daily multi-sport projection board (ev/daily_projections.py) ----------------------------------------------------
+# GET /api/public/projections?sport=nfl|nhl|nba[&market=<stat>][&limit=N]: one row per player x stat joining the
+# sport's game-log projection to the market (consensus line, best prices, edge, confluence, Beezy Score). Read from
+# EVSweep/{sport}_props/projections_latest.json; when that file is missing or older than _PROJ_STALE_MINUTES the
+# board is computed on demand (at most once per _PROJ_RECOMPUTE_SEC per sport per process, success or not).
+_PROJ_SPORTS = ("nfl", "nhl", "nba")
+_PROJ_STALE_MINUTES = 90
+_PROJ_RECOMPUTE_SEC = 600
+_PROJ_LOCK = _threading.Lock()
+_PROJ_LAST_TRY: dict = {}
+_PROJ_MARKET_ALIAS = {"pts": "points", "reb": "rebounds", "ast": "assists", "3pm": "threes", "td": "anytime_td"}
+
+
+def _read_projections(sport):
+    from mlb_core import storage as _st
+    try:
+        return _json.loads(_st.read_bytes(f"EVSweep/{sport}_props/projections_latest.json"))
+    except Exception:  # noqa: BLE001 -- not produced yet
+        return None
+
+
+def _payload_age_min(payload, now):
+    try:
+        return (now - _datetime.fromisoformat(str(payload.get("ts")))).total_seconds() / 60.0
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def get_sport_projections(sport, market=None, limit=300):
+    """Daily projection board for one of nfl / nhl / nba (ValueError otherwise). Never raises on missing data: the
+    payload then carries status 'unavailable' with no rows. Every row is `validated: false` (see ev/daily_projections)."""
+    import time as _time
+    sport = (sport or "").lower()
+    if sport not in _PROJ_SPORTS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {_PROJ_SPORTS}")
+    limit = max(1, min(int(limit), 700))
+    now = _datetime.now(_timezone.utc)
+    payload = _read_projections(sport)
+    age = _payload_age_min(payload, now) if payload else None
+    if payload is None or age is None or age > _PROJ_STALE_MINUTES:
+        with _PROJ_LOCK:
+            if _time.monotonic() - _PROJ_LAST_TRY.get(sport, -1e9) >= _PROJ_RECOMPUTE_SEC:
+                _PROJ_LAST_TRY[sport] = _time.monotonic()
+                try:
+                    from ev import daily_projections as _dp
+                    fresh = _dp.run_sport(sport, now=now, write=True)
+                    if fresh.get("status") != "unavailable" or payload is None:
+                        payload, age = fresh, 0.0
+                except Exception:  # noqa: BLE001 -- serve whatever exists
+                    logger.exception("on-demand projections failed for %s", sport)
+    if not payload:
+        return {"sport": sport, "engine": None, "validated": False, "status": "unavailable", "stale": True,
+                "as_of": None, "age_minutes": None, "stats": [], "count": 0, "rows": [], "summary": {},
+                "gamelog_latest": None, "stale_gamelog": None, "lines_age_minutes": None}
+    rows = payload.get("rows") or []
+    if market:
+        m = _PROJ_MARKET_ALIAS.get(str(market).lower(), str(market).lower())
+        rows = [r for r in rows if r.get("stat") == m]
+    out = {k: payload.get(k) for k in ("sport", "engine", "validated", "status", "stats", "summary", "gamelog_latest",
+                                       "stale_gamelog", "lines_age_minutes")}
+    out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
+               stale=age is None or age > _PROJ_STALE_MINUTES, count=len(rows), rows=rows[:limit], validated=False)
     return out
 
 
