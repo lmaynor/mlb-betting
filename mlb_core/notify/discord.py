@@ -13,9 +13,13 @@ Webhook URLs read from environment variables:
     DISCORD_WEBHOOK_OPS         — ops/error webhook (#ops-alerts)
     DISCORD_WEBHOOK_PERFORMANCE — perf webhook (#performance); read directly by
                                   monitor_performance.py / weekly_survival_report.py
-    DISCORD_WEBHOOK_ALERTS      — intraday +EV pager (mlb.runners.fast_alert_loop);
-                                  falls back to DISCORD_WEBHOOK_URL if unset
+    DISCORD_WEBHOOK_ALERTS      -- shared +EV fallback (see below); NEVER falls back to
+                                  DISCORD_WEBHOOK_URL
+    DISCORD_WEBHOOK_EV_BOOKS / _EV_EXCHANGES / _CARD_<SPORT> / _RECAP / _TWEETS
+                                -- #ev-sportsbooks, #ev-exchanges, per-sport daily cards, recap, tweet queue
     DISCORD_WEBHOOK_<SYSTEM>    — per-system override (e.g. DISCORD_WEBHOOK_NRFI)
+
+Fallback chains live in ONE place: mlb_core.alerts.discord_routes.webhook_for().
 
 If no webhook is configured, calls are no-ops and a warning is logged.
 """
@@ -27,6 +31,7 @@ from typing import Optional
 import requests
 import pandas as pd
 
+from mlb_core.alerts.discord_routes import webhook_for
 from mlb_core.registry import SYSTEMS, CANONICAL_ORDER
 
 logger = logging.getLogger(__name__)
@@ -288,7 +293,7 @@ def _get_webhook(system: str) -> Optional[str]:
     """Return picks webhook URL for this system."""
     url = (
         os.getenv(f"DISCORD_WEBHOOK_{system.upper()}")
-        or os.getenv("DISCORD_WEBHOOK_URL")
+        or webhook_for("card", sport="mlb")      # DISCORD_WEBHOOK_CARD_MLB -> DISCORD_WEBHOOK_URL
     )
     if not url:
         logger.warning(
@@ -299,11 +304,8 @@ def _get_webhook(system: str) -> Optional[str]:
 
 
 def _get_ops_webhook() -> Optional[str]:
-    """Return ops webhook URL (#ops-alerts). Falls back to main webhook."""
-    url = (
-        os.getenv("DISCORD_WEBHOOK_OPS")
-        or os.getenv("DISCORD_WEBHOOK_URL")
-    )
+    """Return ops webhook URL (#ops-alerts). Ops noise never falls back to a member channel."""
+    url = webhook_for("ops")
     if not url:
         logger.warning("No Discord ops webhook configured. Set DISCORD_WEBHOOK_OPS.")
     return url
@@ -493,10 +495,7 @@ def post_all_systems_summary(
     settle_date: str = None,
 ) -> None:
     """Post a daily recap embed after settlement (#daily-recap)."""
-    webhook_url = (
-        os.getenv("DISCORD_WEBHOOK_SUMMARY")
-        or os.getenv("DISCORD_WEBHOOK_URL")
-    )
+    webhook_url = webhook_for("recap")
     if not webhook_url:
         logger.warning("No Discord webhook configured for summary.")
         return

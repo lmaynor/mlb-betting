@@ -419,7 +419,8 @@ def build_settlement(settled, stats):
 
 def post_settlement_to_discord(summary, gif):
     """Post tweet text + receipt PNG + GIF to the tweet-queue webhook so the operator can post both to X in one go."""
-    hook = os.environ.get("DISCORD_WEBHOOK_TWEETS") or os.environ.get("DISCORD_WEBHOOK_OPS")
+    from mlb_core.alerts.discord_routes import webhook_for
+    hook = webhook_for("tweets")          # DISCORD_WEBHOOK_TWEETS -> DISCORD_WEBHOOK_OPS
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
     content = f"**Settlement tweet draft ({summary['date']})**\n```\n{summary['text']}\n```"

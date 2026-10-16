@@ -347,8 +347,9 @@ class TestGroupedFields:
         assert "notes" not in sig.parameters
 
     def test_notify_no_webhook_prints_grouped_not_raw_alert_list(self, monkeypatch, capsys):
-        monkeypatch.delenv("DISCORD_WEBHOOK_ALERTS", raising=False)
-        monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+        for _name in ("DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS",
+                      "DISCORD_WEBHOOK_URL"):
+            monkeypatch.delenv(_name, raising=False)
         rows = [_fal_alert(book="draftkings"), _fal_alert(book="fanduel", player_id=2, ev=0.30)]
         fal.notify(pd.DataFrame(rows), set(), today_str="2026-08-19")
         out = capsys.readouterr().out
@@ -372,5 +373,9 @@ class TestGroupedFields:
         fal.notify(pd.DataFrame(rows), set(), today_str="2026-08-19")
 
         embed = captured["payload"]["embeds"][0]
-        assert "description" not in embed
+        # 2026-10-15: the embed carries ONLY the action links as its description (deep links to /ev + /edge),
+        # never the old explanatory sentence.
+        from mlb_core.alerts.discord_routes import ACTION_LINKS
+        assert embed["description"] == ACTION_LINKS
+        assert embed["url"] == "https://beezy.fyi/ev"
         assert "lagging" not in str(embed).lower()

@@ -54,6 +54,9 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from mlb_core import storage
+from mlb_core.alerts.discord_routes import (
+    EXCLUDE_ALERT_BOOKS, drop_kambi_clones, is_exchange_book, webhook_for, with_deep_links,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("fast_alert_loop")
@@ -143,9 +146,10 @@ def resolve_player_names(ids) -> dict:
 
 # -- 4. notify ----------------------------------------------------------------
 
-def _alert_webhook() -> str | None:
-    return (os.getenv("DISCORD_WEBHOOK_ALERTS")
-            or os.getenv("DISCORD_WEBHOOK_URL"))
+def _alert_webhook(kind: str = "ev_sportsbooks") -> str | None:
+    """+EV pager webhook: #ev-sportsbooks (soft books) or #ev-exchanges (Novig/ProphetX/Kalshi). Never
+    falls back to #daily-picks -- see mlb_core.alerts.discord_routes."""
+    return webhook_for(kind)
 
 
 def _fmt_american(a) -> str:
@@ -243,26 +247,31 @@ def notify(new: pd.DataFrame, hot: set, today_str: str = '',
     from mlb_core.notify.discord import (
         _post, book_display, market_label, ev_alert_emoji, TEAM_NICKNAME,
     )
-    url = _alert_webhook()
 
-    fields = _grouped_fields(new, hot, today_str, anchor, book_display, market_label,
-                             ev_alert_emoji, TEAM_NICKNAME)
-
-    if not url:
-        log.warning("no Discord webhook -- printing alerts only")
-        for f in fields:
-            print(f"{f['name']}\n  {f['value']}")
-        return
-
+    # Sportsbook alerts and exchange alerts go to different channels. Each embed is a double group-by on its
+    # own, so splitting first keeps the per-book fields intact.
+    is_exch = new["book"].map(is_exchange_book) if "book" in new.columns else pd.Series(False, index=new.index)
     anchor_disp = book_display(anchor) if anchor else "consensus only"
-    embed = {
-        "title": f"📡 +EV Alerts -- {len(new)} new",
-        "color": 0xE3B261,
-        "fields": fields[:25],
-        "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
-                           f"anchor: {anchor_disp} | fast_alert_loop"},
-    }
-    _post(url, {"embeds": [embed]})
+    for kind, label, sub in (("ev_sportsbooks", "+EV Alerts", new[~is_exch]),
+                             ("ev_exchanges", "Exchange +EV Alerts", new[is_exch])):
+        if not len(sub):
+            continue
+        fields = _grouped_fields(sub, hot, today_str, anchor, book_display, market_label,
+                                 ev_alert_emoji, TEAM_NICKNAME)
+        url = _alert_webhook(kind)
+        if not url:
+            log.warning("no Discord webhook for %s -- printing alerts only", kind)
+            for f in fields:
+                print(f"{f['name']}\n  {f['value']}")
+            continue
+        embed = with_deep_links({
+            "title": f"\U0001F4E1 {label} -- {len(sub)} new",
+            "color": 0xE3B261,
+            "fields": fields[:25],
+            "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
+                               f"anchor: {anchor_disp} | fast_alert_loop"},
+        })
+        _post(url, {"embeds": [embed]})
 
 
 # -- 5. EV bet tracking (profitability) ---------------------------------------
@@ -498,6 +507,13 @@ def run(run_date: str | None = None) -> dict:
                              anchor_book=anchor)
     if not len(found):
         log.info("scan: no +EV outliers")
+        return {"status": "ok", "day": day, "new_alerts": 0, "hot_games": len(hot)}
+
+    # Kambi clones (sugarhouse == betrivers) quote identical lines: alert and log the betrivers row only
+    # (a double post, and a double-counted `bets` row, otherwise).
+    found = drop_kambi_clones(found, [k for k in _QUOTE_KEYS if k != "book"])
+    if not len(found):
+        log.info("scan: only Kambi-clone duplicates (%s)", ",".join(sorted(EXCLUDE_ALERT_BOOKS)))
         return {"status": "ok", "day": day, "new_alerts": 0, "hot_games": len(hot)}
 
     # 4) dedup vs already-notified, notify, persist

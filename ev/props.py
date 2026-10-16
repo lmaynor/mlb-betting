@@ -25,6 +25,7 @@ import numpy as np
 
 from statistics import NormalDist
 
+from mlb_core.alerts.discord_routes import BOOK_ALIASES, canonical_book
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
 DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
@@ -137,8 +138,15 @@ def parse_event_props(event_obj: dict, sport: str = "nfl", resolver=None, team_f
     within = None
     if resolver is not None and team_fn is not None:
         within = [c for c in (team_fn(event_obj.get("away_team")), team_fn(event_obj.get("home_team"))) if c]
-    for book in (event_obj or {}).get("bookmakers", []) or []:
-        bkey = book.get("key", "")
+    books = (event_obj or {}).get("bookmakers", []) or []
+    present = {str(b.get("key", "")).strip().lower() for b in books}
+    for book in books:
+        raw_key = str(book.get("key", "")).strip().lower()
+        # Kambi clones quote identical lines: when the original (betrivers) is in the payload the clone
+        # (sugarhouse) is skipped; alone, it is folded into the original so it counts as ONE book either way.
+        if raw_key in BOOK_ALIASES and BOOK_ALIASES[raw_key] in present:
+            continue
+        bkey = canonical_book(book.get("key", "")) if raw_key in BOOK_ALIASES else book.get("key", "")
         for market in book.get("markets", []) or []:
             mkey = market.get("key", "")
             stat, alt = stat_of(mkey, sport)

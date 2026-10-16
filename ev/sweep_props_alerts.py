@@ -35,6 +35,7 @@ import pandas as pd
 import requests
 
 from ev.props import parse_event_props, scan_book_outliers
+from mlb_core.alerts.discord_routes import with_deep_links
 
 log = logging.getLogger("ev.sweep_props_alerts")
 _ET = ZoneInfo("America/New_York")
@@ -155,6 +156,7 @@ def outlier_rows(spec: PropSport, events: list, now: datetime, resolver=None, co
 
 # ----------------------------------------------------------------------------- discord (admin channels only)
 def webhook_url() -> str:
+    # Admin-only on purpose (unvalidated shadow rows) -- not the member-facing discord_routes chain.
     return os.environ.get("DISCORD_WEBHOOK_ALERTS") or os.environ.get("DISCORD_WEBHOOK_OPS") or ""
 
 
@@ -183,9 +185,9 @@ def alert_embed(spec: PropSport, rows: list) -> list:
                          f"({book_display(r['book'])}) | fair {r['p_fair']:.2f} | EV {r['ev'] * 100:+.1f}% | "
                          f"{r['n_books']} bk")
         fields.append({"name": gk.split(":", 1)[1], "value": "\n".join(lines)[:1000]})
-    return [{"title": f"{spec.label} props: {len(rows)} soft-line candidate(s) (UNVALIDATED)",
-             "description": "A book quote beating the consensus of the other books. Evidence-tracked and graded; "
-                            "NOT a recommendation.", "fields": fields, "color": 0x38BDF8}]
+    return [with_deep_links({"title": f"{spec.label} props: {len(rows)} soft-line candidate(s) (UNVALIDATED)",
+                             "description": "A book quote beating the consensus of the other books. Evidence-tracked and graded; "
+                                            "NOT a recommendation.", "fields": fields, "color": 0x38BDF8})]
 
 
 def _key(r: dict) -> str:

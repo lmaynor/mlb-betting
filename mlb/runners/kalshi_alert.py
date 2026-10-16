@@ -51,6 +51,10 @@ from datetime import date as _date
 
 import pandas as pd
 
+from mlb_core.alerts.discord_routes import (
+    drop_kambi_clones, is_exchange_book, webhook_for, with_deep_links,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("kalshi_alert")
 
@@ -72,13 +76,10 @@ def _fmt_american(a) -> str:
 _SEL_WORDS = {"OVER": "Over", "UNDER": "Under", "YES": "Yes", "NO": "No"}
 
 
-def _alert_webhook() -> str | None:
-    # Same fallback convention as fast_alert_loop: a dedicated ALERTS webhook
-    # if one's ever provisioned, otherwise the main picks webhook. Neither
-    # deploy script sets DISCORD_WEBHOOK_ALERTS today (see CONTEXT.md s14) --
-    # this just means both live alert jobs land in #daily-picks until/unless
-    # a dedicated channel+secret gets provisioned.
-    return os.getenv("DISCORD_WEBHOOK_ALERTS") or os.getenv("DISCORD_WEBHOOK_URL")
+def _alert_webhook(kind: str = "ev_sportsbooks") -> str | None:
+    # A Kalshi-vs-book alert is a +EV book price: #ev-sportsbooks (or #ev-exchanges when the cheap side is an
+    # exchange venue). Same chain as fast_alert_loop; never #daily-picks. See mlb_core.alerts.discord_routes.
+    return webhook_for(kind)
 
 
 def _alert_fields(new: pd.DataFrame, names: dict) -> list[dict]:
@@ -191,27 +192,30 @@ def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
 def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> None:
     from mlb_core.notify.discord import _post
 
-    url = _alert_webhook()
-    fields = _alert_fields(new, names)
-
-    if not url:
-        log.warning("no Discord webhook -- printing alerts only")
-        for f in fields:
-            print(f"{f['name']}\n  {f['value']}")
-        return
-
-    embed = {
-        "title": f"📡 Kalshi +EV Alerts -- {len(new)} new",
-        "description": (
-            f"Soft-book price diverges from Kalshi's no-vig mid by >= {min_ev:.0%}, "
-            f"corroborated by the book pack (not a lone-wolf Kalshi mid)."
-        ),
-        "color": 0x00D2A0,  # Kalshi-adjacent teal, distinct from fast_alert_loop's amber
-        "fields": fields[:25],
-        "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
-                           f"verdict=check only | kalshi_alert"},
-    }
-    _post(url, {"embeds": [embed]})
+    is_exch = new["book"].map(is_exchange_book) if "book" in new.columns else pd.Series(False, index=new.index)
+    for kind, label, sub in (("ev_sportsbooks", "Kalshi +EV Alerts", new[~is_exch]),
+                             ("ev_exchanges", "Kalshi Exchange +EV Alerts", new[is_exch])):
+        if not len(sub):
+            continue
+        fields = _alert_fields(sub, names)
+        url = _alert_webhook(kind)
+        if not url:
+            log.warning("no Discord webhook for %s -- printing alerts only", kind)
+            for f in fields:
+                print(f"{f['name']}\n  {f['value']}")
+            continue
+        embed = with_deep_links({
+            "title": f"\U0001F4E1 {label} -- {len(sub)} new",
+            "description": (
+                f"Soft-book price diverges from Kalshi's no-vig mid by >= {min_ev:.0%}, "
+                f"corroborated by the book pack (not a lone-wolf Kalshi mid)."
+            ),
+            "color": 0x00D2A0,  # Kalshi-adjacent teal, distinct from fast_alert_loop's amber
+            "fields": fields[:25],
+            "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
+                               f"verdict=check only | kalshi_alert"},
+        })
+        _post(url, {"embeds": [embed]})
 
 
 def run(run_date: str | None = None) -> dict:
@@ -244,6 +248,9 @@ def run(run_date: str | None = None) -> dict:
         log.info("scan: %d divergences, none credible (verdict=check%s)",
                  len(found), " + soft" if soft_only else "")
         return {"status": "ok", "day": day, "new_alerts": 0}
+
+    # Kambi clones (sugarhouse == betrivers) quote identical lines: keep the betrivers row only.
+    credible = drop_kambi_clones(credible, [k for k in _QUOTE_KEYS if k != "book"])
 
     # dedup vs already-notified quotes for today
     notified_key = f"Alerts/{day}/kalshi_notified.parquet"

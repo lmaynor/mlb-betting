@@ -35,6 +35,7 @@ import pandas as pd
 import requests
 
 from ev.kalshi_map import game_key
+from mlb_core.alerts.discord_routes import with_deep_links
 from ev.kalshi_props import PROP_SERIES, PropLeg, map_prop_market
 from ev.props import (POOL_MAX_GAP, book_points, build_consensus, parse_event_props, pooled_consensus,
                       scan_book_outliers)
@@ -335,6 +336,8 @@ def fetch_kalshi_legs(client: KalshiClient):
 
 
 def webhook_url():
+    # Deliberately NOT mlb_core.alerts.discord_routes.webhook_for("ev_sportsbooks"): that chain starts at the
+    # member-facing #ev-sportsbooks channel, and these shadow rows are unvalidated (admin channels only).
     return os.environ.get("DISCORD_WEBHOOK_ALERTS") or os.environ.get("DISCORD_WEBHOOK_OPS") or ""
 
 
@@ -367,9 +370,9 @@ def alert_embed(rows: list) -> list:
                          f"fair {fair:.2f} | net EV {r['ev_' + side] * 100:+.1f}% | {r['n_books']} bk | "
                          f"spr {r['spread']} | OI {int(r['oi'] or 0)}" + (" | ZERO pre-game fee" if r.get("venue") == "novig" else ""))
         fields.append({"name": gk.replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
-    return [{"title": f"NFL props: {len(rows)} Kalshi candidate(s) (SHADOW / unvalidated)",
-             "description": "Net of Kalshi fee and shrinkage. Paper-tracked on a $1,000 notional bankroll; "
-                            "NOT a recommendation.", "fields": fields, "color": 0xE6915D}]
+    return [with_deep_links({"title": f"NFL props: {len(rows)} Kalshi candidate(s) (SHADOW / unvalidated)",
+                             "description": "Net of Kalshi fee and shrinkage. Paper-tracked on a $1,000 notional bankroll; "
+                                            "NOT a recommendation.", "fields": fields, "color": 0xE6915D})]
 
 
 # Sink A alert gates (UNVALIDATED starting points, mirrors ev.sweep_props_alerts): an apparent edge above the cap is
@@ -388,9 +391,9 @@ def alert_embed_sink_a(outliers: list) -> list:
         lines = [f"**{r['player']}** {r['stat']} {r['side']} {r['point']:g} @ **{r['book']}** ({int(r['american']):+d})"
                  f" | fair {r['p_fair']:.1%} | EV **{r['ev'] * 100:+.1f}%** ({r['n_books']} bks)" for r in rs[:8]]
         fields.append({"name": str(gk).replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
-    return [{"title": f"NFL props Sink A: {len(outliers)} book outlier(s) (SHADOW / unvalidated)",
-             "description": "A book or exchange quote beating the leave-self-out consensus of the other books. "
-                            "Evidence only; NOT a recommendation.", "fields": fields, "color": 0x57F287}]
+    return [with_deep_links({"title": f"NFL props Sink A: {len(outliers)} book outlier(s) (SHADOW / unvalidated)",
+                             "description": "A book or exchange quote beating the leave-self-out consensus of the other books. "
+                                            "Evidence only; NOT a recommendation.", "fields": fields, "color": 0x57F287})]
 
 
 def _sink_a_key(r: dict) -> str:
