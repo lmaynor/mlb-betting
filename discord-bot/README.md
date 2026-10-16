@@ -5,8 +5,9 @@ dependencies. Runtime deps: `discord.js` and `dotenv` only.
 
 What it does:
 
-- Slash commands: `/ev`, `/proj`, `/edge`, `/record`, `/ask`, `/link`, and
-  owner-only `/setup-server`.
+- Public slash commands: `/ev`, `/proj`, `/edge`, `/record`, `/ask`, `/link`.
+- Owner-only management commands (see below): `/setup-server`, `/cleanup`,
+  `/channel`, `/category`, `/role`, `/purge`, `/server`.
 - `/setup-server` idempotently builds the roles, categories, channels,
   permission overwrites and per-channel "Beezy Terminal" webhooks, then replies
   (ephemeral) with `gcloud secrets` commands to wire the webhook URLs.
@@ -71,6 +72,37 @@ gcloud run deploy beezy-discord-bot --source . --region REGION \
 SQLite lives on the container filesystem by default, which is ephemeral on Cloud
 Run. `member_links` is re-populated by the site's sync calls; mount a volume and
 set `DB_PATH` if you want moderation history to survive restarts.
+
+## Owner-only management commands
+
+All of these check `interaction.user.id === OWNER_ID` in one shared guard
+(`ownerGuard` in `src/commandUtils.js`; an unset `OWNER_ID` authorises nobody),
+reply ephemerally, default to Administrator-only visibility, and are guild-only.
+Anything destructive shows Confirm / Cancel buttons that only the invoking owner
+can press and that expire after 60 seconds.
+
+| Command | What it does |
+| --- | --- |
+| `/setup-server` | Create or update the Beezy roles, channels, permissions and webhooks (idempotent). |
+| `/cleanup plan` | Dry run: legacy channels to ARCHIVE, empty legacy categories to DELETE-EMPTY, what is KEPT. |
+| `/cleanup apply` | After confirm: moves legacy channels into a hidden `ARCHIVE` category (history kept), then deletes legacy categories that are empty. Re-running finds nothing. |
+| `/cleanup roles-plan [force]` | Dry run: legacy roles with member counts. A role with members is flagged. |
+| `/cleanup roles-apply [force]` | After confirm: deletes legacy roles. Roles with members are removed only with `force:true`. |
+| `/channel create \| delete \| rename \| topic \| move \| lock \| unlock \| slowmode \| access` | Channel primitives. `delete` asks to confirm. `access` takes a role and `view \| hide \| read-only \| reset`. |
+| `/category create \| delete \| rename` | Category primitives. `delete` asks to confirm and only works on an empty category. |
+| `/role create \| delete \| rename \| color \| give \| take` | Role primitives. `delete` asks to confirm. |
+| `/purge count` | Bulk-delete the last 1-100 messages in the current channel (asks to confirm; messages older than 14 days are skipped). |
+| `/server status` | Read-only: counts, new-layout items missing or misplaced, legacy leftovers, and whether the bot role is above every paid role (tier sync needs that). |
+
+What counts as legacy lives in one editable constant, `LEGACY` in `src/legacy.js`
+(plus `ARCHIVE_CATEGORY` and `PROTECTED_ROLE_NAMES`). `/cleanup` never touches a
+channel, category or role that is not listed there.
+
+Never touched by any of them: `@everyone`, `Admin`, `Moderator`, `Bot`,
+`GamblyBot`, `carl-bot`, `beezy-bot`, any managed (bot/integration) role, any
+role with Administrator, any role at or above the bot's highest role, and every
+role, category and channel in the new Beezy layout (including `ARCHIVE`). The
+primitives refuse them with a plain message before any confirm prompt.
 
 ## Sync endpoint
 

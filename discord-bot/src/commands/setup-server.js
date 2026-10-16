@@ -1,8 +1,7 @@
 import { PermissionFlagsBits, SlashCommandBuilder, InteractionContextType } from 'discord.js';
 import { buildGcloudCommands, provisionBeezyServer } from '../serverSetup.js';
 import { errorEmbed, noticeEmbed } from '../embed.js';
-import { EPHEMERAL, logFailure } from '../commandUtils.js';
-import { isOwner } from '../utils.js';
+import { EPHEMERAL, logFailure, ownerGuard } from '../commandUtils.js';
 
 export const data = new SlashCommandBuilder()
   .setName('setup-server')
@@ -12,15 +11,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction, deps = {}) {
   // Everything here is ephemeral: the reply contains webhook URLs (secrets).
-  await interaction.deferReply(EPHEMERAL);
-  if (!isOwner(interaction.user.id, deps.ownerId ?? process.env.OWNER_ID)) {
-    await interaction.editReply({ embeds: [errorEmbed('Owner-only command.', 'Not allowed')] });
-    return;
-  }
-  if (!interaction.guild) {
-    await interaction.editReply({ embeds: [errorEmbed('Run this inside the server you want to set up.')] });
-    return;
-  }
+  if (!(await ownerGuard(interaction, deps))) return;
   try {
     const provision = deps.provision ?? provisionBeezyServer;
     const result = await provision(interaction.guild, {

@@ -38,9 +38,9 @@ function fakeInteraction({ options = {}, userId = '1', isPublic = false } = {}) 
   };
 }
 
-test('all seven slash commands load with valid builders', async () => {
+test('all slash commands load with valid builders', async () => {
   const commands = await loadCommands();
-  assert.deepEqual([...commands.keys()].sort(), ['ask', 'edge', 'ev', 'link', 'proj', 'record', 'setup-server']);
+  assert.deepEqual([...commands.keys()].sort(), ['ask', 'category', 'channel', 'cleanup', 'edge', 'ev', 'link', 'proj', 'purge', 'record', 'role', 'server', 'setup-server']);
   for (const mod of commands.values()) {
     const json = mod.data.toJSON();
     assert.ok(json.description.length > 0 && json.description.length <= 100);
