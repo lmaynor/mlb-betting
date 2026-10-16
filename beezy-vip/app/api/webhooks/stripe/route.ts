@@ -3,16 +3,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { clerkClient } from '@clerk/nextjs/server'
+import { isLeague, priceToTierMap } from '@/lib/tiers'
+import { syncUserRoles } from '@/lib/discord-sync'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!)
-}
-
-const PRICE_TO_TIER: Record<string, string> = {
-  // Set these to your actual Stripe price IDs
-  [process.env.STRIPE_PRICE_STARTER  ?? 'price_starter']:  'starter',
-  [process.env.STRIPE_PRICE_PRO      ?? 'price_pro']:      'pro',
-  [process.env.STRIPE_PRICE_SEASON   ?? 'price_season']:   'season',
 }
 
 export async function POST(req: NextRequest) {
@@ -32,6 +27,18 @@ export async function POST(req: NextRequest) {
   }
 
   const clerk = await clerkClient()
+  const PRICE_TO_TIER = priceToTierMap()
+
+  // Best-effort Discord role push: a Discord outage must never fail (and so retry-storm) a Stripe webhook.
+  const pushRoles = async (clerkId: string, tier: string, sport?: unknown) => {
+    try {
+      const user = await clerk.users.getUser(clerkId)
+      const r = await syncUserRoles(user, clerkId, tier, sport)
+      if (!r.ok && !r.skipped) console.warn('[stripe-webhook] discord role sync failed:', r.reason)
+    } catch (err) {
+      console.warn('[stripe-webhook] discord role sync error:', String(err))
+    }
+  }
 
   switch (event.type) {
     case 'checkout.session.completed': {
@@ -40,10 +47,13 @@ export async function POST(req: NextRequest) {
       const priceId    = session.metadata?.priceId
       const tier       = PRICE_TO_TIER[priceId ?? '']
 
+      const sport      = isLeague(session.metadata?.sport) ? session.metadata?.sport : null
+
       if (clerkId && tier) {
         await clerk.users.updateUserMetadata(clerkId, {
-          privateMetadata: { tier, stripeCustomerId: session.customer },
+          privateMetadata: { tier, stripeCustomerId: session.customer, sportChoice: sport },
         })
+        await pushRoles(clerkId, tier, sport)
       }
       break
     }
@@ -54,8 +64,9 @@ export async function POST(req: NextRequest) {
 
       if (clerkId) {
         await clerk.users.updateUserMetadata(clerkId, {
-          privateMetadata: { tier: 'public' },
+          privateMetadata: { tier: 'public', sportChoice: null },
         })
+        await pushRoles(clerkId, 'public', null)
       }
       break
     }
@@ -66,10 +77,13 @@ export async function POST(req: NextRequest) {
       const priceId  = sub.items.data[0]?.price.id
       const tier     = PRICE_TO_TIER[priceId ?? '']
 
+      const sport    = isLeague(sub.metadata?.sport) ? sub.metadata?.sport : null
+
       if (clerkId && tier) {
         await clerk.users.updateUserMetadata(clerkId, {
-          privateMetadata: { tier },
+          privateMetadata: { tier, ...(sport ? { sportChoice: sport } : {}) },
         })
+        await pushRoles(clerkId, tier, sport)
       }
       break
     }

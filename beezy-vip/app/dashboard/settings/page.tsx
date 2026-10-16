@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { getCurrentUser, getUserTier }  from '@/lib/auth'
+import { tierLabel } from '@/lib/tiers'
 import { BankrollInput } from '@/components/ui/bankroll-input'
 import type { Metadata } from 'next'
 import { DISCORD_URL } from '@/lib/links'
@@ -12,13 +13,6 @@ export default async function DashboardSettingsPage() {
     getCurrentUser(),
     getUserTier(),
   ])
-
-  const tierLabel: Record<string, string> = {
-    pro:     'Pro · $79/mo',
-    season:  'Season · $499',
-    starter: 'Starter · $29/mo',
-    public:  'Free',
-  }
 
   return (
     <div className="max-w-lg">
@@ -35,7 +29,7 @@ export default async function DashboardSettingsPage() {
           <div className="flex justify-between items-center">
             <span className="text-xs text-muted">Plan</span>
             <span className="mono text-xs text-accent font-semibold">
-              {tierLabel[tier] ?? 'Free'}
+              {tierLabel(tier)}
             </span>
           </div>
         </div>

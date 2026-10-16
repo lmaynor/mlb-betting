@@ -12,15 +12,11 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe                        from 'stripe'
 import { clerkClient }               from '@clerk/nextjs/server'
+import { priceToTierMap }            from '@/lib/tiers'
+import { syncUserRoles }             from '@/lib/discord-sync'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!)
-}
-
-const PRICE_TO_TIER: Record<string, string> = {
-  [process.env.STRIPE_PRICE_STARTER ?? 'price_starter']: 'starter',
-  [process.env.STRIPE_PRICE_PRO     ?? 'price_pro']:     'pro',
-  [process.env.STRIPE_PRICE_SEASON  ?? 'price_season']:  'season',
 }
 
 function isAuthorized(req: NextRequest): boolean {
@@ -72,7 +68,7 @@ export async function POST(req: NextRequest) {
     let correctTier = 'public'
     if (sub && (sub.status === 'active' || sub.status === 'trialing')) {
       const priceId = sub.items.data[0]?.price.id ?? ''
-      correctTier   = PRICE_TO_TIER[priceId] ?? 'public'
+      correctTier   = priceToTierMap()[priceId] ?? 'public'
     }
 
     // Find Clerk user ID
@@ -94,6 +90,8 @@ export async function POST(req: NextRequest) {
     await clerk.users.updateUserMetadata(resolvedClerkId, {
       privateMetadata: { tier: correctTier },
     })
+
+    await syncUserRoles(user, resolvedClerkId, correctTier).catch(() => undefined)   // best-effort
 
     return NextResponse.json({
       clerk_user_id:      resolvedClerkId,

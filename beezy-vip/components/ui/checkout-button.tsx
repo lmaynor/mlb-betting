@@ -6,10 +6,13 @@ const B = '1px solid var(--basalt)'
 
 export function CheckoutButton({
   tier,
+  sport,
   label,
   featured = false,
 }: {
-  tier:      'starter' | 'pro' | 'season'
+  tier:      'single_sport' | 'pro_monthly' | 'pro_annual' | 'starter' | 'pro' | 'season'
+  /** required for single_sport: the one league the pass covers */
+  sport?:    'mlb' | 'nfl' | 'nba' | 'nhl'
   label:     string
   featured?: boolean
 }) {
@@ -23,7 +26,7 @@ export function CheckoutButton({
       const res  = await fetch('/api/stripe/checkout', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ tier }),
+        body:    JSON.stringify({ tier, sport }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Checkout failed')

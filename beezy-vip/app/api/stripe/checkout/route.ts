@@ -4,15 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe                        from 'stripe'
 import { currentUser }               from '@clerk/nextjs/server'
 import { getUserId }                 from '@/lib/auth'
+import { isLeague, priceIdFor }      from '@/lib/tiers'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!)
-}
-
-const PRICE_MAP: Record<string, string | undefined> = {
-  starter: process.env.STRIPE_PRICE_STARTER,
-  pro:     process.env.STRIPE_PRICE_PRO,
-  season:  process.env.STRIPE_PRICE_SEASON,
 }
 
 export async function POST(req: NextRequest) {
@@ -21,15 +16,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { tier } = await req.json().catch(() => ({})) as { tier?: string }
-  const priceId  = tier ? PRICE_MAP[tier] : undefined
+  const { tier, sport } = await req.json().catch(() => ({})) as { tier?: string; sport?: string }
+  const priceId  = tier ? priceIdFor(tier) : undefined
 
   if (!priceId) {
     return NextResponse.json(
-      { error: 'Invalid tier. Must be starter | pro | season' },
+      { error: 'Invalid tier. Must be single_sport | pro_monthly | pro_annual (legacy: starter | pro | season)' },
       { status: 400 }
     )
   }
+  // A Single-Sport Pass is for ONE league; the choice rides on the subscription so the webhook can grant that league's role.
+  if (tier === 'single_sport' && !isLeague(sport)) {
+    return NextResponse.json({ error: 'single_sport needs sport = mlb | nfl | nba | nhl' }, { status: 400 })
+  }
+  const sportMeta: Record<string, string> = tier === 'single_sport' ? { sport: sport as string } : {}
 
   const user     = await currentUser()
   const email    = user?.emailAddresses[0]?.emailAddress
@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
     customer:           existingCustomerId,
     customer_email:     existingCustomerId ? undefined : email,
     success_url:        `${base}/dashboard/picks?checkout=success`,
-    cancel_url:         `${base}/signup`,
-    metadata:           { clerkUserId: userId, priceId },
-    subscription_data:  { metadata: { clerkUserId: userId } },
+    cancel_url:         `${base}/pricing`,
+    metadata:           { clerkUserId: userId, priceId, tier: tier as string, ...sportMeta },
+    subscription_data:  { metadata: { clerkUserId: userId, tier: tier as string, ...sportMeta } },
     allow_promotion_codes: true,
   })
 

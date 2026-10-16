@@ -8,21 +8,17 @@ export const dynamic = 'force-dynamic'
 import { NextResponse }  from 'next/server'
 import Stripe            from 'stripe'
 import { clerkClient }   from '@clerk/nextjs/server'
+import { priceToTierMap } from '@/lib/tiers'
+import { syncUserRoles } from '@/lib/discord-sync'
 
 function getStripe() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!)
 }
 
-const PRICE_TO_TIER: Record<string, string> = {
-  [process.env.STRIPE_PRICE_STARTER ?? 'price_starter']: 'starter',
-  [process.env.STRIPE_PRICE_PRO     ?? 'price_pro']:     'pro',
-  [process.env.STRIPE_PRICE_SEASON  ?? 'price_season']:  'season',
-}
-
 function tierForSubscription(sub: Stripe.Subscription): string {
   if (sub.status !== 'active' && sub.status !== 'trialing') return 'public'
   const priceId = sub.items.data[0]?.price.id ?? ''
-  return PRICE_TO_TIER[priceId] ?? 'public'
+  return priceToTierMap()[priceId] ?? 'public'
 }
 
 export async function GET(req: Request) {
@@ -60,6 +56,7 @@ export async function GET(req: Request) {
           await clerk.users.updateUserMetadata(clerkId, {
             privateMetadata: { tier: stripeTier },
           })
+          await syncUserRoles(user, clerkId, stripeTier).catch(() => undefined)   // best-effort, never throws
           fixed.push(`${clerkId}: ${clerkTier} -> ${stripeTier}`)
           console.log(`[stripe-reconcile] fixed ${clerkId}: ${clerkTier} -> ${stripeTier}`)
         }

@@ -6,6 +6,7 @@ import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, 
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
 import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
+import { matchesMyBooks, useMyBooks } from '@/lib/use-my-books'
 import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
@@ -216,6 +217,8 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
   const [minEdge, setMinEdge] = useState(0.02)
   const [includeSettled, setIncludeSettled] = useState(false)
   const [showThin, setShowThin] = useState(false)
+  const [showMyBooks, setShowMyBooks] = useState(false)
+  const myBooks = useMyBooks()
   const [bankroll, setBankroll] = useBankroll(1000)
   const [bankrollText, setBankrollText] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
@@ -255,10 +258,18 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
     return [...FIXED_VENUES, ...books]
   }, [allRows])
 
+  // Every book that could be listed: the ones in this feed plus the known ones, never the sharp reference book.
+  const myBookOptions = useMemo(() => {
+    const keys = new Set<string>([...Object.keys(BOOK_META), ...allRows.map(r => r.bookKey), ...myBooks.books])
+    keys.delete('pinnacle'); keys.delete('espnbet')
+    return [...keys].filter(Boolean).sort((a, b) => bookDisplay(a).label.localeCompare(bookDisplay(b).label))
+  }, [allRows, myBooks.books])
+
   const rows = useMemo<Row[]>(() => {
     const filtered = allRows
       .filter(r => (sport === 'all' || r.sport === sport))
       .filter(r => (venue === 'all' ? true : venue === 'exchanges' ? !!BOOK_META[r.bookKey]?.isExchange : r.bookKey === venue))
+      .filter(r => matchesMyBooks(r.bookKey, myBooks.books))
       .filter(r => r.ev >= minEdge)
       .filter(r => showThin || !r.lowConf)
       .filter(r => includeSettled || r.status === 'pending')
@@ -273,7 +284,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
       else { cur.bookCount = (cur.bookCount ?? 1) + 1; if (r.ev > cur.ev) Object.assign(cur, { ...r, bookCount: cur.bookCount }) }
     }
     return out.sort((a, b) => Number(a.shadow) - Number(b.shadow) || Number(!!a.lowConf) - Number(!!b.lowConf) || (b.score ?? 0) - (a.score ?? 0) || b.ev - a.ev)
-  }, [allRows, sport, venue, minEdge, includeSettled, showThin])
+  }, [allRows, sport, venue, minEdge, includeSettled, showThin, myBooks.books])
 
   const thinHidden = useMemo(() => allRows.filter(r => r.lowConf && r.ev >= minEdge && (sport === 'all' || r.sport === sport)).length, [allRows, minEdge, sport])
 
@@ -342,10 +353,32 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
           <PillGroup>
             <Pill active={includeSettled} onClick={() => setIncludeSettled(v => !v)}>INCLUDE SETTLED</Pill>
             <Pill active={showThin} onClick={() => setShowThin(v => !v)}>{`THIN CONSENSUS${thinHidden ? ` (${thinHidden})` : ''}`}</Pill>
+            <Pill active={showMyBooks || myBooks.enabled} onClick={() => setShowMyBooks(v => !v)}>{`MY BOOKS${myBooks.enabled ? ` (${myBooks.books.length})` : ''}`}</Pill>
           </PillGroup>
         </div>
         <span style={{ fontSize: '11.5px', color: 'var(--fog)', marginLeft: 'auto' }}>1/4 Kelly, 5% cap</span>
       </section>
+
+      {showMyBooks && (
+        <section aria-label="My books" style={{ ...BAR_STYLE, padding: '10px 14px', margin: '0 0 10px', display: 'flex', gap: '8px 12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <Label>MY BOOKS</Label>
+          <span style={{ fontSize: '11.5px', color: 'var(--fog)' }}>Pick the books you can bet at in your state. None selected shows every book. Saved in this browser.</span>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%' }}>
+            {myBookOptions.map(k => {
+              const on = myBooks.books.includes(k)
+              const b = bookDisplay(k)
+              return (
+                <button key={k} role="checkbox" aria-checked={on} onClick={() => myBooks.toggle(k)}
+                  style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', cursor: 'pointer',
+                    color: on ? '#090a0f' : 'var(--silver)', background: on ? b.color : '#090a0f', border: `1px solid ${on ? b.color : HAIR}`, transition: 'background 120ms ease, border-color 120ms ease' }}>
+                  {b.label}
+                </button>
+              )
+            })}
+            {myBooks.enabled && <button onClick={myBooks.clear} className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: '11.5px' }}>Clear</button>}
+          </div>
+        </section>
+      )}
 
       {nfl && (sport === 'all' || sport === 'nfl') && <NflBanner nfl={nfl} />}
       {(sport === 'nhl' || sport === 'nba') && feed?.[sport] && <PropsBanner sport={sport} block={feed[sport]!} />}
