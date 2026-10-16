@@ -31,7 +31,7 @@ from typing import Optional
 import requests
 import pandas as pd
 
-from mlb_core.alerts.discord_routes import webhook_for
+from mlb_core.alerts.discord_routes import bot_configured, post_via_bot, slip_text, webhook_for
 from mlb_core.registry import SYSTEMS, CANONICAL_ORDER
 
 logger = logging.getLogger(__name__)
@@ -391,7 +391,10 @@ def post_bets(
     sportsbook (2026-08-20: double group-by, see _grouped_bet_fields),
     rather than one field per bet."""
     webhook_url = _get_webhook(system)
-    if not webhook_url:
+    # A per-system webhook override is an explicit routing choice: honour it. Otherwise the daily card is posted as a
+    # real bot-user message (other bots, e.g. one-click slip bots, cannot read webhook text), webhook as fallback.
+    use_bot = bot_configured() and not os.getenv(f"DISCORD_WEBHOOK_{system.upper()}")
+    if not webhook_url and not use_bot:
         return
 
     run_date = run_date or date.today().isoformat()
@@ -399,14 +402,18 @@ def post_bets(
     if isinstance(bets, pd.DataFrame):
         bets = bets.to_dict("records")
 
+    def _send(content, embeds):
+        if use_bot and post_via_bot("card", content, embeds, sport="mlb"):
+            return
+        if webhook_url:
+            _post(webhook_url, {"embeds": embeds})
+
     if not bets:
-        _post(webhook_url, {
-            "embeds": [{
-                "title": f"{system} | {run_date}",
-                "description": "No qualifying bets today.",
-                "color": _DEFAULT_COLOR,
-            }]
-        })
+        _send(None, [{
+            "title": f"{system} | {run_date}",
+            "description": "No qualifying bets today.",
+            "color": _DEFAULT_COLOR,
+        }])
         return
 
     color  = _SYSTEM_COLORS.get(system.upper(), _DEFAULT_COLOR)
@@ -420,7 +427,9 @@ def post_bets(
         "footer":      {"text": "mlb-betting | paper mode" if bets[0].get("paper") else "mlb-betting | LIVE"},
     }
 
-    _post(webhook_url, {"embeds": [embed]})
+    slip = slip_text(f"{_format_bet_headline(b, system)} @ {_bet_book(b)} {_odds_str(b.get('odds'))}"
+                     for b in sorted(bets, key=lambda r: r.get("edge") if r.get("edge") is not None else float("-inf"), reverse=True))
+    _send(slip, [embed])
 
 
 def post_summary(stats: dict, system: str, run_date: str = None) -> None:

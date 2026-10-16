@@ -9,6 +9,56 @@ import {
 } from './serverSetup.js';
 
 export const MAX_BODY_BYTES = 16 * 1024;
+export const MAX_POST_BODY_BYTES = 96 * 1024;
+
+/**
+ * Channels the site/jobs may post to, key -> channel name. A fixed allowlist: the endpoint can never be pointed at an
+ * arbitrary channel. Messages go out as the BOT USER (not a webhook), because other bots (GamblyBot, Playbook) read
+ * real message text but ignore webhook messages.
+ */
+export const POST_CHANNELS = {
+  ev_sportsbooks: 'ev-sportsbooks',
+  ev_exchanges: 'ev-exchanges',
+  mlb_card: 'mlb-card',
+  nfl_card: 'nfl-card',
+  nba_card: 'nba-card',
+  nhl_card: 'nhl-card',
+  daily_recap: 'daily-recap',
+  ops_alerts: 'ops-alerts',
+  tweet_queue: 'tweet-queue',
+};
+
+/** Validate a post-message payload. @returns {{ok: true, value: object} | {ok: false, error: string}} */
+export function validatePostPayload(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, error: 'body must be a JSON object' };
+  const { channel, content, embeds } = body;
+  if (typeof channel !== 'string' || !Object.hasOwn(POST_CHANNELS, channel)) {
+    return { ok: false, error: `channel must be one of ${Object.keys(POST_CHANNELS).join('|')}` };
+  }
+  if (content !== undefined && (typeof content !== 'string' || content.length > 2000)) {
+    return { ok: false, error: 'content must be a string of at most 2000 characters' };
+  }
+  if (embeds !== undefined && (!Array.isArray(embeds) || embeds.length > 10 || !embeds.every((e) => e && typeof e === 'object' && !Array.isArray(e)))) {
+    return { ok: false, error: 'embeds must be an array of at most 10 objects' };
+  }
+  if (!content && !(embeds && embeds.length)) return { ok: false, error: 'content or embeds required' };
+  return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined } };
+}
+
+/** Send one message to an allowlisted channel as the bot. Never pings anyone. */
+export async function postMessage(client, guildId, value) {
+  let guild = client.guilds?.cache?.get(guildId);
+  if (!guild) {
+    try { guild = await client.guilds.fetch(guildId); } catch { return { status: 'no_guild' }; }
+  }
+  if (!guild) return { status: 'no_guild' };
+  const channels = await guild.channels.fetch();
+  const name = POST_CHANNELS[value.channel];
+  const target = [...channels.values()].find((c) => c && c.name === name && typeof c.send === 'function');
+  if (!target) return { status: 'no_channel' };
+  const sent = await target.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
+  return { status: 'ok', id: sent?.id ?? null };
+}
 export const TIERS = ['public', 'single_sport', 'pro_monthly', 'pro_annual', 'starter', 'pro', 'season'];
 export const SPORT_CHOICES = Object.keys(SPORT_PASS_ROLES);
 const PRO_TIERS = new Set(['pro_monthly', 'pro_annual', 'pro', 'season']);
@@ -226,6 +276,41 @@ export function createHttpServer({ client, secret, guildId } = {}) {
           applied: outcome.applied,
           missing_roles: outcome.missing_roles,
         });
+      }
+
+      if (url.pathname === '/internal/post-message') {
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        const expected = currentSecret();
+        if (!expected) return sendJson(res, 503, { ok: false, error: 'not configured' });
+        if (!secretsMatch(String(req.headers['x-beezy-secret'] ?? ''), expected)) {
+          return sendJson(res, 401, { ok: false, error: 'unauthorized' });
+        }
+        let raw;
+        try {
+          raw = await readBody(req, MAX_POST_BODY_BYTES);
+        } catch (err) {
+          if (err.code === 'TOO_LARGE') {
+            res.setHeader('Connection', 'close');
+            return sendJson(res, 413, { ok: false, error: 'payload too large' });
+          }
+          return sendJson(res, 400, { ok: false, error: 'could not read body' });
+        }
+        let body;
+        try { body = JSON.parse(raw); } catch { return sendJson(res, 400, { ok: false, error: 'invalid JSON' }); }
+        const parsed = validatePostPayload(body);
+        if (!parsed.ok) return sendJson(res, 400, { ok: false, error: parsed.error });
+        const gid = currentGuild();
+        if (!gid) return sendJson(res, 503, { ok: false, error: 'guild not configured' });
+        let outcome;
+        try {
+          outcome = await postMessage(client, gid, parsed.value);
+        } catch (err) {
+          console.error(`[http] post-message failed: ${String(err?.message || err).slice(0, 200)}`);
+          return sendJson(res, 502, { ok: false, error: 'discord rejected the message' });
+        }
+        if (outcome.status === 'no_guild') return sendJson(res, 503, { ok: false, error: 'guild unavailable' });
+        if (outcome.status === 'no_channel') return sendJson(res, 404, { ok: false, error: 'channel not found' });
+        return sendJson(res, 200, { ok: true, id: outcome.id });
       }
 
       return sendJson(res, 404, { ok: false, error: 'not found' });

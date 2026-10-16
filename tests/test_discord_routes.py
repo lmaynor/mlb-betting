@@ -210,3 +210,79 @@ def test_props_outlier_not_double_posted_for_clone():
     quotes, _ = parse_event_props(ev, sport="nba")
     hits = [r for r in scan_book_outliers(quotes, min_books=4) if r["book"] == "betrivers"]
     assert len(hits) == 1
+
+
+# ---------------------------------------------------------------------------------------- bot-authored messages
+def test_bot_channel_keys():
+    assert dr.bot_channel_key("ev_sportsbooks") == "ev_sportsbooks"
+    assert dr.bot_channel_key("card", "nfl") == "nfl_card"
+    assert dr.bot_channel_key("card") == "mlb_card"
+    assert dr.bot_channel_key("recap") == "daily_recap"
+    with pytest.raises(ValueError):
+        dr.bot_channel_key("card", "cricket")
+
+
+def test_slip_text_is_plain_capped_and_drops_whole_lines():
+    lines = ["Jo Doe Over 24.5 Points @ FanDuel +120", "  ", "Max   Celtic  Under 18.5 Points @ BetMGM -110"]
+    assert dr.slip_text(lines) == "Jo Doe Over 24.5 Points @ FanDuel +120\nMax Celtic Under 18.5 Points @ BetMGM -110"
+    out = dr.slip_text(["x" * 900, "y" * 900, "z" * 900], limit=2000)
+    assert out.count("\n") == 1 and len(out) <= 2000
+
+
+def test_post_via_bot_off_without_config_and_never_raises(monkeypatch):
+    monkeypatch.delenv("BEEZY_BOT_URL", raising=False)
+    monkeypatch.delenv("BEEZY_BOT_SECRET", raising=False)
+    assert dr.bot_configured() is False and dr.post_via_bot("ev_sportsbooks", "x", None) is False
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test/")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s3")
+    import requests
+    seen = {}
+
+    def ok(url, json=None, timeout=None, headers=None):
+        seen.update(url=url, json=json, headers=headers)
+        return type("R", (), {"status_code": 200})()
+    monkeypatch.setattr(requests, "post", ok)
+    assert dr.post_via_bot("ev_exchanges", "slip", [{"title": "t"}]) is True
+    assert seen["url"] == "https://bot.test/internal/post-message"
+    assert seen["json"] == {"channel": "ev_exchanges", "content": "slip", "embeds": [{"title": "t"}]}
+    assert seen["headers"] == {"X-Beezy-Secret": "s3"}
+    monkeypatch.setattr(requests, "post", lambda *a, **k: type("R", (), {"status_code": 404})())
+    assert dr.post_via_bot("ev_exchanges", "slip", None) is False
+
+    def boom(*a, **k):
+        raise requests.ConnectionError("down")
+    monkeypatch.setattr(requests, "post", boom)
+    assert dr.post_via_bot("ev_exchanges", "slip", None) is False
+
+
+def test_notify_prefers_bot_message_with_slip_lines_then_falls_back(monkeypatch):
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s3")
+    monkeypatch.setenv("DISCORD_WEBHOOK_EV_BOOKS", "https://hook.test/books")
+    hooks, bots = [], []
+    monkeypatch.setattr(discord_mod, "_post", lambda url, payload: hooks.append(url) or True)
+    monkeypatch.setattr(fal, "post_via_bot", lambda kind, content, embeds, **k: bots.append((kind, content, embeds)) or True)
+    fal.notify(pd.DataFrame([_alert("draftkings"), _alert("fanduel", player_id=2, player_name="Two", ev=0.2)]), set(), "2026-10-15")
+    assert hooks == [] and len(bots) == 1
+    kind, content, embeds = bots[0]
+    assert kind == "ev_sportsbooks"
+    assert content.splitlines()[0].startswith("Two ") and "@ FanDuel" in content and "@ DraftKings" in content
+    assert "**" not in content and embeds[0]["url"] == "https://beezy.fyi/ev"
+    # bot refuses -> webhook fallback
+    bots.clear()
+    monkeypatch.setattr(fal, "post_via_bot", lambda *a, **k: False)
+    fal.notify(pd.DataFrame([_alert("draftkings")]), set(), "2026-10-15")
+    assert hooks == ["https://hook.test/books"]
+
+
+def test_kalshi_alert_slip_lines():
+    import mlb.runners.kalshi_alert as ka
+    df = pd.DataFrame([
+        dict(market="k_ou", game_pk=1, player_id=7, line=5.5, selection="OVER", book="draftkings", american=110, ev_pct=0.05,
+             away_team="NYY", home_team="BOS"),
+        dict(market="k_ou", game_pk=2, player_id=8, line=6.5, selection="UNDER", book="fanduel", american=-105, ev_pct=0.09,
+             away_team="NYY", home_team="BOS"),
+    ])
+    lines = ka._slip_lines(df, {7: "Pat One", 8: "Sam Two"})
+    assert lines[0] == "Sam Two Under 6.5 Strikeouts @ FanDuel -105"
+    assert lines[1] == "Pat One Over 5.5 Strikeouts @ DraftKings +110"

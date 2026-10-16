@@ -52,7 +52,7 @@ from datetime import date as _date
 import pandas as pd
 
 from mlb_core.alerts.discord_routes import (
-    drop_kambi_clones, is_exchange_book, webhook_for, with_deep_links,
+    bot_configured, drop_kambi_clones, is_exchange_book, post_via_bot, slip_text, webhook_for, with_deep_links,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -189,6 +189,30 @@ def _log_ev_bets(posted: pd.DataFrame, names: dict, run_date: str) -> int:
     return logged
 
 
+def _slip_lines(new: pd.DataFrame, names: dict) -> list[str]:
+    """One plain pick per line for slip bots: '<player> <what> @ <book> <american>', best EV first."""
+    from mlb_core.notify.discord import book_display, market_label, TEAM_NICKNAME
+    out = []
+    for _, r in new.sort_values("ev_pct", ascending=False).iterrows():
+        sel = str(r.get("selection", "")).upper()
+        sel_word = _SEL_WORDS.get(sel, sel.title())
+        line, label = r.get("line"), market_label(r["market"])
+        away, home = r.get("away_team"), r.get("home_team")
+        pid = r.get("player_id")
+        who = names.get(int(pid)) if pd.notna(pid) else None
+        if sel in ("HOME", "AWAY") and not who:
+            team = TEAM_NICKNAME.get(home, home) if sel == "HOME" else TEAM_NICKNAME.get(away, away)
+            what = f"{team} {label}"
+        elif sel in ("YES", "NO"):
+            what = f"{label} ({sel_word})"
+        elif pd.notna(line):
+            what = f"{sel_word} {line:g} {label}"
+        else:
+            what = f"{sel_word} {label}"
+        out.append(f"{(who + ' ') if who else ''}{what} @ {book_display(r.get('book'))} {_fmt_american(r.get('american'))}")
+    return out
+
+
 def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> None:
     from mlb_core.notify.discord import _post
 
@@ -199,7 +223,7 @@ def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> Non
             continue
         fields = _alert_fields(sub, names)
         url = _alert_webhook(kind)
-        if not url:
+        if not url and not bot_configured():
             log.warning("no Discord webhook for %s -- printing alerts only", kind)
             for f in fields:
                 print(f"{f['name']}\n  {f['value']}")
@@ -215,7 +239,13 @@ def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> Non
             "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
                                f"verdict=check only | kalshi_alert"},
         })
-        _post(url, {"embeds": [embed]})
+        # Real bot-user message first (other bots can read its text, not a webhook's); webhook is the fallback.
+        if bot_configured() and post_via_bot(kind, slip_text(_slip_lines(sub, names)), [embed]):
+            continue
+        if url:
+            _post(url, {"embeds": [embed]})
+        else:
+            log.warning("bot post failed and no webhook for %s -- alerts not posted", kind)
 
 
 def run(run_date: str | None = None) -> dict:

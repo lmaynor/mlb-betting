@@ -113,3 +113,62 @@ def with_deep_links(embed: dict) -> dict:
     if ACTION_LINKS not in desc:
         embed["description"] = f"{desc}\n\n{ACTION_LINKS}" if desc else ACTION_LINKS
     return embed
+
+
+# -- bot-authored messages -----------------------------------------------------------------------------------------
+# Webhook messages are invisible to other Discord bots (GamblyBot, Playbook ignore them), so the one-click-slip bots
+# cannot read an alert posted through a webhook. beezy-bot (discord-bot/, POST /internal/post-message) posts the SAME
+# alert as a real bot-user message, with the plain-text slip lines in `content`. Webhooks stay as the fallback.
+#   env: BEEZY_BOT_URL (service base URL, no path) + BEEZY_BOT_SECRET (header X-Beezy-Secret)
+
+BOT_CHANNEL = {
+    "ev_sportsbooks": "ev_sportsbooks", "ev_exchanges": "ev_exchanges", "recap": "daily_recap",
+    "tweets": "tweet_queue", "ops": "ops_alerts",
+}
+
+
+def bot_channel_key(kind: str, sport: str | None = None) -> str:
+    if kind == "card":
+        sp = (sport or "mlb").lower()
+        if sp not in SPORTS:
+            raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
+        return f"{sp}_card"
+    return BOT_CHANNEL[kind]
+
+
+def bot_configured() -> bool:
+    return bool((os.environ.get("BEEZY_BOT_URL") or "").strip() and (os.environ.get("BEEZY_BOT_SECRET") or "").strip())
+
+
+def slip_text(lines, limit: int = 2000) -> str:
+    """Plain-text slip lines (one pick per line, no markdown) that other bots can parse. Never longer than `limit`;
+    whole lines are dropped rather than cut mid-line."""
+    out, size = [], 0
+    for ln in lines:
+        ln = " ".join(str(ln).split())
+        if not ln:
+            continue
+        if size + len(ln) + 1 > limit:
+            break
+        out.append(ln)
+        size += len(ln) + 1
+    return "\n".join(out)
+
+
+def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str | None = None, timeout: float = 15.0) -> bool:
+    """Post as the bot user. True only when the bot accepted it; False (never raises) so callers fall back to a webhook."""
+    if not bot_configured():
+        return False
+    import requests
+    base = os.environ["BEEZY_BOT_URL"].strip().rstrip("/")
+    body = {"channel": bot_channel_key(kind, sport)}
+    if content:
+        body["content"] = content
+    if embeds:
+        body["embeds"] = embeds
+    try:
+        r = requests.post(f"{base}/internal/post-message", json=body, timeout=timeout,
+                          headers={"X-Beezy-Secret": os.environ["BEEZY_BOT_SECRET"].strip()})
+        return r.status_code == 200
+    except Exception:  # noqa: BLE001 -- a bot outage must fall back to the webhook, not break the pager
+        return False
