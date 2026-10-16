@@ -2,8 +2,8 @@
  * Who sees how much of the picks product. Pure (no Clerk, no Next) so pages, API proxies and tests share one policy.
  *
  *   free         Top 10 player picks, picks history, every PAST day's card, and a short preview of today's boards
- *   single_sport everything for the ONE league chosen at checkout (its player board, its game picks)
- *   all-access   everything
+ *   single_sport everything for the ONE league chosen at checkout (its player board, its game picks, its prop-research cockpit)
+ *   all-access   everything, including the +EV Terminal (the Pro plan's feature; a Single-Sport Pass does not include it)
  *
  * Today's boards are the paid surface: the player board per league (MLB card, NFL / NHL / NBA projections and prices)
  * and game picks (MLB only so far). Settled history is public so the record stays checkable.
@@ -15,12 +15,12 @@
 import { PRE_LAUNCH } from '@/lib/launch'
 import { isAllAccess, type League, type Tier } from '@/lib/tiers'
 
-export type Surface = 'player_board' | 'game_picks'
+export type Surface = 'player_board' | 'game_picks' | 'cockpit' | 'ev_terminal'
 
 export interface Viewer { tier: Tier; sport: League | null }
 
 /** Rows of a player board a free viewer sees (the highest-scoring ones). Game picks have no free rows. */
-export const FREE_PREVIEW_ROWS: Record<Surface, number> = { player_board: 5, game_picks: 0 }
+export const FREE_PREVIEW_ROWS: Record<Surface, number> = { player_board: 5, game_picks: 0, cockpit: 5, ev_terminal: 5 }
 
 export type Env = Record<string, string | undefined>
 
@@ -30,9 +30,9 @@ export function gatingOn(env: Env = process.env): boolean {
 
 /** Can this viewer see the whole of today's `surface` for `sport`? */
 export function canViewFull(viewer: Viewer, surface: Surface, sport: League, env: Env = process.env): boolean {
-  void surface // both surfaces unlock the same way today; kept in the signature so a plan can split them later
   if (!gatingOn(env)) return true
   if (isAllAccess(viewer.tier)) return true
+  if (surface === 'ev_terminal') return false // Pro only
   return viewer.tier === 'single_sport' && viewer.sport === sport
 }
 

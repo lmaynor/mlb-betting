@@ -2074,12 +2074,15 @@ Satori OG routes -- use literal hex there.
   tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. The section tab strip only shows on
   /picks, /picks/games, /picks/history, /cheat-sheet (`Section.exact`).
   **Access tiers (2026-10-16, `lib/access.ts`, OFF until launch)**: free = Top 10 + history + every PAST day's card + a 5-row
-  preview of today's player boards and prices; game picks have no free rows; Single-Sport Pass = everything for its chosen league;
-  all-access = everything. Enforced SERVER-SIDE so withheld rows are never in the payload: `getViewer()` (lib/auth.ts) ->
-  `limitRows` / `limitBets` (per PROP, not per book row) in the hub page (`shapeHub`), `picks-card`, system pages, /cheat-sheet and
-  the `/api/picks`, `/api/picks/today`, `/api/projections` proxies. Gating is on when `PRE_LAUNCH` is false OR server env
-  `ENFORCE_TIERS=1`; local review: `AUTH_DISABLED_TIER` / `AUTH_DISABLED_SPORT` (only honoured under AUTH_DISABLED). NOT gated yet:
-  /ev, /edge (model board), /dashboard, the home page / ticker teasers, and the legacy `starter` tier gets no board access.
+  preview of today's player boards, prices, +EV rows and prop-research rows; game picks have no free rows; Single-Sport Pass =
+  everything for its chosen league (player board, game picks, /edge cockpit) but NOT the +EV Terminal; all-access = everything
+  (the +EV Terminal is Pro only). Enforced SERVER-SIDE so withheld rows are never in the payload: `getViewer()` (lib/auth.ts) ->
+  `limitRows` / `limitBets` (per PROP, not per book row) / `limitEvFeed` / `limitCockpit` (lib/access-feeds.ts) in the hub page
+  (`shapeHub`), `picks-card`, system pages, /cheat-sheet, /ev, /edge and the `/api/picks`, `/api/picks/today`, `/api/projections`,
+  `/api/ev`, `/api/edge-cockpit` proxies. Only LIVE rows are cut: settled / past +EV rows are the public record. Gating is on when
+  `PRE_LAUNCH` is false OR server env `ENFORCE_TIERS=1`; local review: `AUTH_DISABLED_TIER` / `AUTH_DISABLED_SPORT` (only honoured
+  under AUTH_DISABLED). NOT gated yet: /dashboard, the home page / ticker / slate-strip teasers, `/api/edge-enrich`, and the legacy
+  `starter` tier gets no board access.
   `/tools/edge-finder|nrfi-conditions|
   pitcher-matchups` are 308s. `tests/ia.test.ts` fails if a nav or tab link points at a page that does not exist.
   The bankroll (`lib/use-bankroll.ts`) is set on /ev and the Kelly calculator, which share it. Nav + ticker sit in one sticky

@@ -4,6 +4,9 @@ import type { Metadata } from 'next'
 import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, apiGetEdgeCockpit, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, CockpitFeed, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
+import { limitCockpit } from '@/lib/access-feeds'
+import { limitBets } from '@/lib/access-bets'
+import { getViewer } from '@/lib/auth'
 import { EdgeClient, type EdgePick } from './edge-client'
 import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
@@ -48,7 +51,7 @@ function normName(name: string | null): string {
 
 export default async function EdgePage() {
   const date = siteDateKey()
-  const [raw, slate, enrichData, alerts, cockpitRaw] = await Promise.all([
+  const [rawAll, slate, enrichData, alerts, cockpitAll, viewer] = await Promise.all([
     // The model board is model predictions only; pooled +EV rows (system EV) belong to the +EV Terminal.
     apiGetTodayAllPredictions().then(r => r.filter(b => b.system !== 'EV')).catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
@@ -56,7 +59,15 @@ export default async function EdgePage() {
     apiGetTodayAlerts(date),
     // fail-soft: until the backend serves /edge/cockpit the page falls back to the MLB model board
     apiGetEdgeCockpit({ limit: 60 }).catch(() => null),
+    getViewer(),
   ])
+
+  // Prop research is paid per league (lib/access.ts). Cut here so withheld rows are never in the payload; the client only
+  // refreshes through /api/edge-cockpit, which applies the same cut.
+  const board = limitBets(rawAll, viewer, date)
+  const raw = board.bets
+  const cut = cockpitAll ? limitCockpit(cockpitAll.rows, viewer) : null
+  const cockpitRaw = cockpitAll && cut ? { ...cockpitAll, rows: cut.rows, locked: cut.locked } : null
 
   // MLB headshots resolve by name against the roster map, which is server-only: attach ids here (the client keeps them across refreshes)
   const cockpit: CockpitFeed | null = cockpitRaw
@@ -120,5 +131,5 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} />
+  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} lockedBoard={board.locked} />
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { LockedNotice } from '@/components/picks/locked-notice'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
@@ -788,7 +789,7 @@ function loadSlip(dateKey: string): Slip {
   } catch { return {} }
 }
 
-export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { picks: EdgePick[]; updated: string; dateKey?: string; cockpit?: CockpitFeed | null }) {
+export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, lockedBoard = 0 }: { picks: EdgePick[]; updated: string; dateKey?: string; cockpit?: CockpitFeed | null; lockedBoard?: number }) {
   // with no cockpit feed at first paint (API not reachable / not deployed yet) the page opens on the MLB model board, as before
   const [sport, setSport] = useState<CockpitSport>(cockpit ? 'all' : 'mlb')
   const [view, setView] = useState<View>(cockpit ? 'cockpit' : 'board')
@@ -988,6 +989,8 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null }: { p
           )}
         </div>
       </header>
+
+      <LockedNotice locked={(feed?.locked ?? 0) + lockedBoard} shown={1} what="prop research rows and model picks" plan="Prop research covers one league on a Single-Sport Pass, or every league on All-Access Pro." />
 
       {showCockpit ? (
         <Cockpit feed={feed} sport={sport} updated={feedUpdated} loading={feedLoading} onRefresh={refreshFeed} renderMlbExtras={renderMlbExtras} />

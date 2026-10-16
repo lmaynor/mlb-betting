@@ -24,10 +24,10 @@ Verified: `tsc --noEmit` clean, jest 238 passed / 7 skipped, browser check again
 Free = Top 10 + history; paid = full player boards per league, all game picks. Build now, enforcement off until launch.
 
 ## Not done / needs a decision
-- **Not gated**: /ev (the +EV terminal the Pro plan advertises), /edge model board, /dashboard picks, home page + ticker + slate strip + landing
-  teasers, `/api/edge-*`, `/api/ev`. Turning the flag on without gating these leaves today's picks readable elsewhere.
+- **/ev and /edge are now gated** (third pass): /ev is Pro only (live rows cut to the best 5 across sports; settled rows stay public);
+  /edge cockpit + model board follow the single-sport rule. Proxies `/api/ev` and `/api/edge-cockpit` apply the same cut.
+- **Still not gated**: /dashboard picks, home page + ticker + slate strip + landing teasers, `/api/edge-enrich`.
 - Legacy `starter` tier (existing Clerk metadata) gets no board access under the current matrix; confirm before launch.
-- The pricing copy says Single-Sport includes the `/edge` cockpit for one league; `/edge` is not per-league gated.
 - Preview size is 5 rows (`FREE_PREVIEW_ROWS`); game picks have 0 free rows. Tune after launch data.
 - Past days are public everywhere (record stays checkable). Gating keys on `game_date >= today` (CT).
 - Verified only against fixtures. Look at the Vercel preview once with real data, signed in and signed out.

@@ -213,6 +213,8 @@ export interface EvFeed {
   nfl:    EvNflBlock | null
   nhl?:   EvPropsBlock | null
   nba?:   EvPropsBlock | null
+  /** live rows withheld by the access policy (lib/access-feeds.ts); absent when nothing was cut */
+  locked?: number
 }
 
 // -- Daily projection board (GET /api/public/projections; ev/daily_projections.py) ----------------------------
@@ -383,4 +385,6 @@ export interface CockpitFeed {
   min_ev: number
   rows:   CockpitRow[]
   sports: Partial<Record<'mlb' | 'nfl' | 'nhl' | 'nba', CockpitSportMeta>>
+  /** rows withheld by the access policy (lib/access-feeds.ts); absent when nothing was cut */
+  locked?: number
 }

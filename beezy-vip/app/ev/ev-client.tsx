@@ -14,6 +14,7 @@ import { siteDateKey } from '@/lib/dates'
 import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import { ScoreLegend } from '@/components/ui/score-legend'
+import { LockedNotice } from '@/components/picks/locked-notice'
 
 type SportFilter = 'all' | 'mlb' | 'nfl' | 'nba' | 'nhl'
 type VenueFilter = 'all' | 'exchanges' | string
@@ -406,6 +407,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
           </table>
         </div>
       )}
+      <LockedNotice locked={feed?.locked ?? 0} shown={rows.length} what="live +EV prices" plan="The +EV Terminal is part of All-Access Pro." />
 
       <ScoreLegend />
 
