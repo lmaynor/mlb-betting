@@ -1103,6 +1103,13 @@ onshore book name (`draftkings`, `fanduel`, `caesars`, `betmgm`, `thescore`,
 `pointsbet`). NULL for bets logged before multi-book support. Auto-migrated
 by `_MIGRATE_BOOK_SQL` in `bet_tracker.py` on first init.
 
+**`bets.proj_mean REAL` (2026-10-16)**: the model's expected value for the player stat the market is on, in the market's unit -- mean Ks (K),
+outs (OUTS; the K runner's `proj_k` is projected IP there, so outs = IP * 3), total bases, hits, stolen bases, earned runs (`mu_er`). NULL for HR
+and the game markets (probability models with no expected count) and for rows logged before this date, EXCEPT K / OUTS rows, which the public API
+back-fills from `proj_k`. Written by `log_bet(proj_mean=...)` in run_k / run_batter_tb / run_batter_hits / run_sb; NaN is stored as NULL (the API
+serves it as JSON). Added by `_MIGRATE_PROJ_MEAN_SQL` AND `ensure_proj_mean_column()` (called from `_make_engine` and by the public readers, so
+the API can be the first process after a deploy). `/api/public/picks*` now return `proj_mean`; `/picks/today` also returns `book`.
+
 `bets` also has `closing_odds REAL`, `closing_implied_prob REAL`, `clv_pct REAL`
 (T08), `morning_odds INTEGER`, `line_move_pct REAL` (E10). All auto-migrated.
 
@@ -2071,7 +2078,10 @@ Satori OG routes -- use literal hex there.
   1IOU, F3, F5, F1H, F7, GAME; an EV row is classified by the market it alerted on). Player picks live on /picks, /picks/mlb and the
   sport hubs; game picks (MLB only so far) on /picks/games. `components/picks/picks-card.tsx` renders both MLB cards.
   /picks/history = each past day's top 10 tracked PLAYER picks graded at a flat 1u (no staking; MLB only -- other sports are not
-  tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. The section tab strip only shows on
+  tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. **MLB projections (2026-10-16)**: `/picks/mlb/projections` is the MLB player board -- the
+  model's `proj_mean` beside the line, the side it prefers, model P, best price, edge, score and a PICK marker for tracked plays (`lib/mlb-projections.ts`,
+  one row per player x count market; HR / game markets / +EV rows / 2+ thresholds are excluded). MLB's own two-view strip is `MlbTabs` (Picks |
+  Projections). The player board is a gated surface like the others. Needs the backend deployed first; rows fill in from the next model run. The section tab strip only shows on
   /picks, /picks/games, /picks/history, /cheat-sheet (`Section.exact`).
   **Access tiers (2026-10-16, `lib/access.ts`, OFF until launch)**: free = Top 10 + history + every PAST day's card + a 5-row
   preview of today's player boards, prices, +EV rows and prop-research rows; game picks have no free rows; Single-Sport Pass =

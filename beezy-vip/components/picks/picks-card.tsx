@@ -6,6 +6,7 @@ import { PicksTable } from '@/components/picks/picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
+import { MlbTabs } from '@/components/picks/mlb-tabs'
 import { SystemsFooter } from '@/components/picks/systems-footer'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
@@ -90,6 +91,7 @@ export async function PicksCard({ kind, searchParams }: { kind: PickKind; search
   const stats = await apiGetStats().then(r => r.bySystem).catch(() => [])
   return (
     <div>
+      {kind === 'player' && <MlbTabs active="picks" />}
       <DateBar />
       <FilterBar kind={kind} />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>

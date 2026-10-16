@@ -24,11 +24,36 @@ def _sport(sport) -> str:
     return norm_sport(sport)
 
 
+def _ensure_proj_col(engine) -> None:
+    """The readers below SELECT bets.proj_mean; the API can be the first process to run after a deploy."""
+    from mlb_core.tracking.bet_tracker import ensure_proj_mean_column
+    ensure_proj_mean_column(engine)
+
+
 def _require_api_key(request_headers: dict, site_api_key: str) -> bool:
     """Return True if the X-API-Key header matches the configured key."""
     # HTTP/2 lowercases headers -- check both forms
     key = request_headers.get("X-API-Key", "") or request_headers.get("x-api-key", "")
     return key.strip() == site_api_key
+
+
+def _with_projection(rows) -> list:
+    """Row dicts with `proj_mean` filled in for K / OUTS rows logged before the column existed.
+
+    proj_k is the simulated mean strikeouts for a K row and the projected INNINGS for an OUTS row (outs = IP * 3). It is
+    read only to back-fill and is not part of the response. Every other system has no stored projection before
+    proj_mean, so those stay None (HR and the game markets have none at all)."""
+    out = []
+    for r in rows:
+        d = dict(r)
+        pk = d.pop("proj_k", None)
+        if d.get("proj_mean") is None and pk is not None and pk == pk:
+            if d.get("system") == "K":
+                d["proj_mean"] = float(pk)
+            elif d.get("system") == "OUTS":
+                d["proj_mean"] = float(pk) * 3.0
+        out.append(d)
+    return out
 
 
 def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
@@ -38,6 +63,7 @@ def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
     qualified card."""
     gate = "" if include_all else "AND kelly_triggered = true "
     sport = _sport(sport)
+    _ensure_proj_col(engine)
     with engine.connect() as conn:
         rows = conn.execute(text(
             "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
@@ -47,12 +73,15 @@ def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
             # closing_odds/clv_pct/morning_odds/line_move_pct covered
             # get_picks and get_clv_data below but missed this third query
             # function -- the endpoint backing The Edge cockpit itself.
-            "closing_odds, clv_pct, morning_odds, line_move_pct "
+            "closing_odds, clv_pct, morning_odds, line_move_pct, "
+            # book + the model projection (added 2026-10-16 for the MLB projections board). proj_k is read only to
+            # back-fill proj_mean for K / OUTS rows logged before proj_mean existed, and is not returned.
+            "book, proj_mean, proj_k "
             "FROM bets "
             f"WHERE sport = :_sport AND game_date = :_today {gate}"
             "ORDER BY system, created_at DESC"
         ), {"_today": _ct_today(), "_sport": sport}).mappings().all()
-    return [dict(r) for r in rows]
+    return _with_projection(rows)
 
 
 def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None, sport="mlb"):
@@ -99,35 +128,37 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
     # pattern was known but never applied here.
     params["limit"] = min(int(limit), 200)
     params["offset"] = int(offset)
+    _ensure_proj_col(engine)
 
     sql = text(
         "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
         "away_team, home_team, odds, stake, model_prob, market_prob, "
         "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
-        "closing_odds, clv_pct, morning_odds, line_move_pct "
+        "closing_odds, clv_pct, morning_odds, line_move_pct, proj_mean, proj_k "
         f"FROM bets {where} "
         "ORDER BY game_date DESC, created_at DESC "
         "LIMIT :limit OFFSET :offset"
     )
     with engine.connect() as conn:
         rows = conn.execute(sql, params).mappings().all()
-    return [dict(r) for r in rows]
+    return _with_projection(rows)
 
 
 def get_recent_settled(engine, limit=20, sport="mlb"):
     sport = _sport(sport)
+    _ensure_proj_col(engine)
     with engine.connect() as conn:
         rows = conn.execute(text(
             "SELECT id, system, sport, game_date, game_pk, bet_type, player, "
             "away_team, home_team, odds, stake, model_prob, market_prob, "
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
-            "closing_odds, clv_pct, morning_odds, line_move_pct "
+            "closing_odds, clv_pct, morning_odds, line_move_pct, proj_mean, proj_k "
             "FROM bets "
             "WHERE sport = :_sport AND result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
             "ORDER BY game_date DESC, created_at DESC "
             "LIMIT :limit"
         ), {"limit": int(limit), "_sport": sport}).mappings().all()
-    return [dict(r) for r in rows]
+    return _with_projection(rows)
 
 
 def get_pnl_sparkline(engine, days=30, system=None, sport="mlb"):

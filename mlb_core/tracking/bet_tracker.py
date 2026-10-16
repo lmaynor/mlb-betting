@@ -111,7 +111,8 @@ CREATE TABLE IF NOT EXISTS bets (
     closing_prob     REAL,
     clv_pct          REAL,
     morning_odds     INTEGER,
-    line_move_pct    REAL
+    line_move_pct    REAL,
+    proj_mean        REAL
 )
 """
 
@@ -136,6 +137,9 @@ ALTER TABLE bets ADD COLUMN book TEXT
 # Migration: add line movement columns (E10, 2026-05-21).
 _MIGRATE_MORNING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN morning_odds INTEGER"
 _MIGRATE_LINE_MOVE_SQL    = "ALTER TABLE bets ADD COLUMN line_move_pct REAL"
+# The model's own expected value for the player stat the market is on, in the market's unit (strikeouts, outs, total
+# bases, hits, stolen bases, earned runs). NULL for older rows and for systems with no count model (HR, game markets).
+_MIGRATE_PROJ_MEAN_SQL    = "ALTER TABLE bets ADD COLUMN proj_mean REAL"
 _MIGRATE_CLOSING_ODDS_SQL = "ALTER TABLE bets ADD COLUMN closing_odds REAL"
 _MIGRATE_CLOSING_PROB_SQL = "ALTER TABLE bets ADD COLUMN closing_prob REAL"
 _MIGRATE_CLV_PCT_SQL      = "ALTER TABLE bets ADD COLUMN clv_pct REAL"
@@ -238,6 +242,31 @@ def ensure_sport_column(engine: sa.Engine) -> None:
     _SPORT_COL_READY.add(key)
 
 
+_PROJ_COL_READY: set = set()
+
+
+def ensure_proj_mean_column(engine: sa.Engine) -> None:
+    """Idempotently add bets.proj_mean if it is missing (once per process per database).
+
+    The public API now SELECTs proj_mean, and it can be the first process to run after a deploy (before any runner has
+    constructed a BetTracker, which is the only other place the column is added). Same reasoning as ensure_sport_column."""
+    key = str(engine.url)
+    if key in _PROJ_COL_READY:
+        return
+    try:
+        cols = {c["name"] for c in sa.inspect(engine).get_columns("bets")}
+    except Exception:  # noqa: BLE001 -- table does not exist yet (fresh DB): BetTracker._init_db creates it with the column
+        return
+    if "proj_mean" not in cols:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(_MIGRATE_PROJ_MEAN_SQL))
+            logger.info("bet_tracker: added bets.proj_mean column")
+        except Exception as e:  # noqa: BLE001 -- a concurrent process may have added it first
+            logger.info(f"bet_tracker: bets.proj_mean add skipped ({e})")
+    _PROJ_COL_READY.add(key)
+
+
 def _make_engine(db_path: str) -> sa.Engine:
     url = DB_URL or ""
     if url:
@@ -247,6 +276,7 @@ def _make_engine(db_path: str) -> sa.Engine:
         sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         engine = sa.create_engine(f"sqlite:///{sqlite_path}")
     ensure_sport_column(engine)
+    ensure_proj_mean_column(engine)
     return engine
 
 
@@ -327,7 +357,7 @@ class BetTracker:
             pass
         # Migrate CLV columns (T08, 2026-05-19).
         for clv_sql in (_MIGRATE_CLOSING_ODDS_SQL, _MIGRATE_CLOSING_PROB_SQL, _MIGRATE_CLV_PCT_SQL,
-                       _MIGRATE_MORNING_ODDS_SQL, _MIGRATE_LINE_MOVE_SQL):
+                       _MIGRATE_MORNING_ODDS_SQL, _MIGRATE_LINE_MOVE_SQL, _MIGRATE_PROJ_MEAN_SQL):
             try:
                 with self.engine.begin() as conn:
                     conn.execute(text(clv_sql))
@@ -430,6 +460,7 @@ class BetTracker:
         proj_k: float = None,
         book: str = None,
         morning_odds: int = None,
+        proj_mean: float = None,
     ) -> int:
         """Log a prediction. Returns bet_id, or -1 if duplicate."""
         # Sanitize INTEGER-column values before EITHER the dedup SELECT or the
@@ -438,6 +469,11 @@ class BetTracker:
         game_pk = _safe_int(game_pk)
         odds = _safe_int(odds)
         morning_odds = _safe_int(morning_odds)
+        # NaN is not valid JSON and the public API serves this column: store a missing projection as NULL.
+        try:
+            proj_mean = None if proj_mean is None or proj_mean != proj_mean else float(proj_mean)
+        except (TypeError, ValueError):
+            proj_mean = None
 
         if (game_pk is not None and bet_type is not None
                 and game_date is not None and player is not None):
@@ -448,7 +484,8 @@ class BetTracker:
         try:
             return self._insert_bet(
                 game_date, game_pk, player, away_team, home_team, bet_type, model_prob, market_prob, edge,
-                kelly_pct, odds, stake, kelly_triggered, paper, notes, lambda_k, proj_k, book, morning_odds)
+                kelly_pct, odds, stake, kelly_triggered, paper, notes, lambda_k, proj_k, book, morning_odds,
+                proj_mean=proj_mean)
         except sa.exc.IntegrityError as e:
             # Only reachable while the legacy idx_bets_dedup_v3 still exists (its key has no `sport`): an
             # identical (system, date, game_pk, player, bet_type) in ANOTHER sport. Game-id ranges are disjoint
@@ -459,7 +496,7 @@ class BetTracker:
 
     def _insert_bet(self, game_date, game_pk, player, away_team, home_team, bet_type, model_prob, market_prob,
                     edge, kelly_pct, odds, stake, kelly_triggered, paper, notes, lambda_k, proj_k, book,
-                    morning_odds) -> int:
+                    morning_odds, proj_mean=None) -> int:
         with self.engine.begin() as conn:
             # ON CONFLICT ... DO NOTHING + RETURNING id (finding B3.3): the
             # is_duplicate() check above is a separate SELECT on a separate
@@ -476,11 +513,11 @@ class BetTracker:
                     INSERT INTO bets
                         (system, sport, game_date, game_pk, player, away_team, home_team,
                          bet_type, model_prob, market_prob, edge, kelly_pct,
-                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book, morning_odds)
+                         odds, stake, kelly_triggered, paper, notes, created_at, lambda_k, proj_k, book, morning_odds, proj_mean)
                     VALUES
                         (:system, :sport, :game_date, :game_pk, :player, :away_team, :home_team,
                          :bet_type, :model_prob, :market_prob, :edge, :kelly_pct,
-                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book, :morning_odds)
+                         :odds, :stake, :kelly_triggered, :paper, :notes, :created_at, :lambda_k, :proj_k, :book, :morning_odds, :proj_mean)
                     ON CONFLICT (sport, system, game_date, game_pk, player, bet_type, kelly_triggered)
                     DO NOTHING
                     RETURNING id
@@ -500,6 +537,7 @@ class BetTracker:
                     "proj_k": proj_k,
                     "book": book,
                     "morning_odds": morning_odds,
+                    "proj_mean": proj_mean,
                 },
             )
             row = result.fetchone()
