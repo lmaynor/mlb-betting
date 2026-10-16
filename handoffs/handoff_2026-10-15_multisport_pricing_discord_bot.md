@@ -35,3 +35,18 @@ Four parts from one spec. Nothing is deployed. Python 1,925 tests, jest 211 (+7 
 - discord-bot untested on Node 22 and against a live Discord. `/setup-server` resets channel permission overwrites on every run.
 - No Cloud Run job/scheduler runs `python -m ev.daily_projections`; the endpoint computes on demand instead (first request after 90 min is slow).
 - `fast_alert_loop`'s scan still counts sugarhouse + betrivers as two books in its consensus (`outlier_scan`); only the alert/log rows are deduped.
+
+## Addendum 2026-10-16 -- deployed state (after the first write-up)
+DEPLOYED: backend `mlb-betting` rev 00310-n2j (rolled from the clean main worktree, Cloud SQL binding kept), bot `beezy-discord-bot` rev 00003-crm
+(Cloud Run, min/max 1, always-on CPU; needs the Server Members + Message Content intents, which are now enabled), `mlb-fast-alert` / `mlb-kalshi-alert`
+jobs (run `mlb-betting:latest`). Vercel envs: `BEEZY_BOT_SECRET`, `BEEZY_BOT_SYNC_URL` (prod+preview); the three sandbox `STRIPE_PRICE_*` ids on PREVIEW only.
+Secrets created: `beezy-bot-secret`, `discord-webhook-{ev-books,ev-exchanges,card-mlb|nfl|nba|nhl,recap,tweets}`.
+- Bot admin commands (owner-only): /cleanup plan|apply|roles-plan|roles-apply, /channel, /category, /role, /purge, /server status. `/cleanup apply` NOT run yet.
+  Do not archive #performance until its webhook is replaced (the performance report still posts via the old webhook).
+- `POST /internal/post-message` (bot): allowlisted channel keys, shared secret, optional `thread`. The +EV pagers and the daily MLB card post as bot-user messages,
+  one per alert with a thread that @mentions GamblyBot/Playbook (SLIP_BOT_NAMES), webhook fallback. **It does not trigger them: those bots ignore bot-authored
+  messages** (verified by test 2026-10-16). Next step is a human-sendable copy line (+ QuickPick web link); real automation needs a partner/API route from
+  Gambly / Pikkit (QuickPickBot) / Action Network (Playbook). ParlayAPI carries no deep links or book ids; The Odds API (`includeLinks`/`includeSids`) does.
+- deploy_service.sh now mounts the new secrets and BEEZY_BOT_URL (it uses --set-secrets: anything not listed there is dropped on the next deploy).
+- Shell gotcha: in zsh `$P:us-central1` expands as a modifier; use `${P}:us-central1`.
+- Branch note: commit d486b5c (admin commands) also sits on `chore/og-headshots-cdn` (PR #66) from a shared-checkout branch switch; the same change is on main as 10bf153.

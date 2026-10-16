@@ -2368,7 +2368,8 @@ in `ev/props.parse_event_props`, so a pair counts as ONE book in consensus, Disc
 
 `discord-bot/` (Node 22, discord.js 14, `node:sqlite`, no voice/native deps; own tests via `npm test`) is the persistent beezy-bot: `/ev /proj
 /edge /record /ask /link`, owner-only `/setup-server` (idempotent roles/channels/webhooks + gcloud secret commands), antispam/automod,
-welcome, and `POST /internal/sync-role`. NOT deployed; needs a Cloud Run service/secrets (see its README).
+welcome, `POST /internal/sync-role` and `POST /internal/post-message` (bot-authored alerts + threads), plus owner-only admin commands. DEPLOYED to Cloud Run
+(`beezy-discord-bot`); see handoffs/handoff_2026-10-15_multisport_pricing_discord_bot.md addendum.
 
 `post_error()` previously routed to the main picks webhook. It now uses
 `DISCORD_WEBHOOK_OPS`, keeping errors out of member-facing channels.
