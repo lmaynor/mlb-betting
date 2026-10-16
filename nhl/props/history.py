@@ -19,7 +19,9 @@ import pandas as pd
 from mlb_core.data.player_names import PlayerResolver, norm_name
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
-TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA"}
+# BettingPros writes LA / NJ / SJ / TB where the NHL API writes LAK / NJD / SJS / TBL (found 2026-10-16 on the real 2022-26 feed);
+# without them every game involving those four clubs falls out of a BettingPros join as `no_game`.
+TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA", "LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
 
 
 def _ro(path: str) -> sqlite3.Connection:

@@ -107,6 +107,24 @@ gcloud builds submit --config=cloudbuild.yaml \
 
 NHL jobs spend no ParlayAPI credits and are deliberately NOT named `odds-bank-*`.
 
+## xG and the saves / goals / assists / points research models (2026-10-16, research only)
+
+`nhl/xg/` fits expected goals on OUR shots (no MoneyPuck / NST / Evolving Hockey: their terms bar commercial or automated use,
+see docs/solutions/conventions/nhl-data-source-licensing.md). `nhl/props/{xgfeat,countmodel,bp_eval,eval_xg}.py` turn that into
+leakage-safe rolling features, a generic walk-forward count model, and a scorer against the historical BettingPros lines.
+NOTHING here is wired to a job, a scheduler, the `bets` table or Discord; output is local files only.
+
+```bash
+# 1) walk-forward xG for every shot + per skater / goalie / team game tables (needs local copies of NHL/shots/*.csv)
+PYTHONPATH=. python -m nhl.xg.build --data-dir <dir with NHL/> --out-dir <dir>
+PYTHONPATH=. python -m nhl.xg.evaluate --data-dir <dir with NHL/>            # temporal holdout report
+# 2) walk-forward models + BettingPros scoring (needs <data-dir>/bp/{saves,goals,points,assists}/*.parquet)
+PYTHONPATH=. python -m nhl.props.eval_xg --data-dir <dir> --xg-dir <xg out> --out-dir <dir> --json report.json
+```
+
+Pull the inputs with `gcloud storage cp` (NOT `gsutil -m`, see docs/solutions/runtime-errors/gsutil-m-silent-hang-python-3-14.md).
+Verdicts and numbers: docs/analysis/nhl_xg_saves_goals_validation_2026-10-16.md.
+
 ## Not done yet
 
 No `monitor_ops` wiring (the sentinel `NHL/last_refresh.json` is the health signal for now: `status` is `ok`,
