@@ -1,6 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
+import { LockedNotice } from '@/components/picks/locked-notice'
+import { limitBets } from '@/lib/access-bets'
+import { getViewer } from '@/lib/auth'
 import { apiGetTodayPicks, apiGetRecentSettled } from '@/lib/betting-api'
 import type { Bet } from '@/lib/types'
 import { beezyscore } from '@/lib/beezy-score'
@@ -73,7 +76,9 @@ function enrich(bet: Bet): EnrichedBet {
 }
 
 export default async function CheatSheetPage() {
-  const raw = await apiGetTodayPicks().catch(() => [] as Bet[])
+  // Today's card is the paid surface (lib/access.ts); the cut happens here so withheld picks are not in the page payload.
+  const [rawAll, viewer] = await Promise.all([apiGetTodayPicks().catch(() => [] as Bet[]), getViewer()])
+  const { bets: raw, locked } = limitBets(rawAll, viewer, siteDateKey())
   const picks = raw
     // The Daily Card showcases model picks -- exclude pooled +EV alerts
     // (system="EV", a cross-market soft-line/Kalshi scanner, not a model
@@ -92,6 +97,11 @@ export default async function CheatSheetPage() {
     .sort((a, b) => beezyscore(b) - beezyscore(a))
 
   return (
-    <CheatSheetClient picks={picks} today={dateLabel()} yesterdayPicks={yesterdayPicks} />
+    <>
+      <CheatSheetClient picks={picks} today={dateLabel()} yesterdayPicks={yesterdayPicks} />
+      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 16px 24px' }}>
+        <LockedNotice locked={locked} shown={picks.length} what="picks" plan="The full card is on the MLB Pass or All-Access Pro." />
+      </div>
+    </>
   )
 }

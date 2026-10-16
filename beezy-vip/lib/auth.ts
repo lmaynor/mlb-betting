@@ -1,5 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { AUTH_DISABLED } from './auth-mode'
+import { viewerOf, type Viewer } from './access'
 import { ALL_ACCESS, normalizeTier, type Tier } from './tiers'
 
 export type { Tier }
@@ -21,25 +22,30 @@ export async function getCurrentUser() {
 }
 
 /**
- * Get the current user's access tier from Clerk metadata.
- * Metadata is set by the Stripe webhook after successful subscription.
+ * The current user's tier and (for a Single-Sport Pass) chosen league, from Clerk metadata set by the Stripe webhook.
+ * Anyone not signed in, or on any error, is a free viewer. While AUTH_DISABLED the viewer is `pro` so tier-gated UI can be
+ * reviewed locally; set `AUTH_DISABLED_TIER` (e.g. `public`, `single_sport`) and `AUTH_DISABLED_SPORT` to review the gates.
  */
-export async function getUserTier(): Promise<Tier> {
-  if (AUTH_DISABLED) return 'pro'      // local review: show tier-gated UI (see lib/auth-mode.ts)
+export async function getViewer(): Promise<Viewer> {
+  if (AUTH_DISABLED) return viewerOf(normalizeTier(process.env.AUTH_DISABLED_TIER ?? 'pro'), process.env.AUTH_DISABLED_SPORT)
   try {
     const { userId } = await auth()
-    if (!userId) return 'public'
+    if (!userId) return viewerOf('public', null)
 
     const user = await currentUser()
-    if (!user) return 'public'
+    if (!user) return viewerOf('public', null)
 
     const tier = normalizeTier(user.privateMetadata?.tier)
     // legacy pro / season stay collapsed to 'pro' (existing behaviour); the new plan names are returned as they are
-    if (tier === 'season') return 'pro'
-    return tier
+    return viewerOf(tier === 'season' ? 'pro' : tier, user.privateMetadata?.sportChoice)
   } catch {
-    return 'public'
+    return viewerOf('public', null)
   }
+}
+
+/** The current user's access tier (see getViewer). */
+export async function getUserTier(): Promise<Tier> {
+  return (await getViewer()).tier
 }
 
 export function canAccessFeature(

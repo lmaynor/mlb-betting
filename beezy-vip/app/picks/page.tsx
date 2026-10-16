@@ -1,93 +1,72 @@
 export const dynamic = 'force-dynamic'
 
-import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { DateBar } from '@/components/picks/date-bar'
-import { FilterBar } from '@/components/picks/filter-bar'
-import { PicksTable } from '@/components/picks/picks-table'
-import { apiGetPicks as getPicks } from '@/lib/betting-api'
-import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
-import { collapseBooks } from '@/lib/dedupe'
+import Link from 'next/link'
+import { TopPicksTable } from '@/components/picks/top-picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
+import { apiGetPicks, apiGetSportProjections } from '@/lib/betting-api'
+import { siteDateKey, formatDateKey } from '@/lib/dates'
+import { sportHref } from '@/lib/ia'
+import { SPORT_PILLARS } from '@/lib/sports'
+import { fromProjection, rankTopPicks, TOP_N, topFromBets, type TopPick } from '@/lib/top-picks'
+import type { Bet, SportProjections } from '@/lib/types'
 
 export const metadata: Metadata = {
-  title: 'MLB Picks',
-  description: 'Model picks and +EV alerts for today\'s MLB slate, ranked by Beezy Score.',
+  title: 'Top 10 Player Picks',
+  description: 'The ten highest-scoring player picks across MLB, NFL, NHL and NBA right now, ranked by Beezy Score. Free.',
 }
 
-async function PicksContent({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const sp = await searchParams
+const OTHER = ['nfl', 'nhl', 'nba'] as const
 
-  const explicitDate = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : undefined
-  const date = explicitDate ?? siteDateKey()
-  // The API knows pending|settled|won|lost; the chips say WIN/LOSS.
-  const STATUS_MAP: Record<string, string> = { win: 'won', loss: 'lost', pending: 'pending' }
-  const status = sp.status && sp.status !== 'ALL' ? STATUS_MAP[sp.status.toLowerCase()] : undefined
-  const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
-  const book = sp.book && sp.book !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
-  const sort = (sp.sort ?? 'score') as 'date' | 'score' | 'edge' | 'odds'
-  const dir = (sp.dir ?? 'desc') as 'asc' | 'desc'
+export default async function TopPicksPage() {
+  const date = siteDateKey()
+  const [mlb, ...boards] = await Promise.all([
+    apiGetPicks({ date, limit: 200 }).catch(() => [] as Bet[]),
+    ...OTHER.map(s => apiGetSportProjections(s).catch(() => null as SportProjections | null)),
+  ])
 
-  let picks = await getPicks({
-    system: market,
-    date,
-    status,
-    book,
-    limit: 200,
-  }).catch(() => [])
+  const mlbTop = topFromBets(mlb, TOP_N)
+  const otherTop = boards.flatMap(b => (b?.rows ?? []).map(fromProjection).filter((p): p is TopPick => p != null))
+  const top = rankTopPicks([...mlbTop, ...otherTop], TOP_N)
 
-  // Overnight gap: the site date rolls at midnight CT but today's card only
-  // publishes after the ~11:00 CT morning run. An empty "today" with no
-  // explicit date filter falls back to the latest card instead of a blank
-  // page, clearly labeled.
-  let shownDate = date
-  if (!explicitDate && picks.length === 0) {
-    const yesterday = addDaysToDateKey(date, -1)
-    const prior = await getPicks({ system: market, date: yesterday, status, book, limit: 200 }).catch(() => [])
-    if (prior.length > 0) {
-      picks = prior
-      shownDate = yesterday
-    }
-  }
+  const showResult = top.some(p => p.result != null)
 
   return (
-    <>
-      {shownDate !== date && (
-        <div style={{ marginBottom: '16px', padding: '10px 14px', border: '1px solid var(--iron)', borderRadius: 'var(--radius)', background: 'var(--obsidian)' }}>
-          <p className="mono" style={{ fontSize: '11px', color: 'var(--warn)', margin: 0 }}>
-            Showing {formatDateKey(shownDate, { weekday: 'short', month: 'short', day: 'numeric' })}. Today&rsquo;s model card publishes after the ~11:00 AM CT run; +EV alerts post through the day.
-          </p>
-        </div>
-      )}
-      {/* keyed on the query so the table's local sort/page state resets whenever a filter changes */}
-      <PicksTable key={[date, market, status, book, sort, dir].join('|')} bets={book ? picks : collapseBooks(picks)} sort={sort} dir={dir} />
-    </>
-  )
-}
-
-export default function PicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  return (
-    <div>
-      <DateBar />
-      <FilterBar />
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
-        <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Today&rsquo;s picks</h1>
-          <span style={{ display: 'flex', gap: '16px', alignItems: 'baseline', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Model picks + +EV alerts &middot; one row per prop, ranked by Beezy Score</span>
-            <a href="/ev" style={{ fontSize: '12.5px', color: 'var(--link)' }}>+EV Terminal &rarr;</a>
-            <a href="/cheat-sheet" style={{ fontSize: '12.5px', color: 'var(--link)' }}>Share card &rarr;</a>
-          </span>
-        </div>
-        <Suspense fallback={
-          <div style={{ padding: '48px', textAlign: 'center', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
-            <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Loading picks...</p>
-          </div>
-        }>
-          <PicksContent searchParams={searchParams} />
-        </Suspense>
-        <ScoreLegend />
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top 10 player picks</h1>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>
+          {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
+        </span>
       </div>
+
+      {top.length === 0 ? (
+        <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center' }}>
+          <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>Nothing scored yet</div>
+          <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
+            The MLB card publishes after the ~11:00 AM CT model run, and the other sports fill in once sportsbook lines post.
+            See <Link href="/picks/history" style={{ color: 'var(--link)' }}>past days</Link> in the meantime.
+          </div>
+        </div>
+      ) : (
+        <TopPicksTable picks={top} showResult={showResult} />
+      )}
+
+      <div style={{ display: 'flex', gap: '8px 20px', flexWrap: 'wrap', alignItems: 'baseline', margin: '12px 2px 0', fontSize: '12.5px' }}>
+        <span style={{ color: 'var(--fog)' }}>Full boards</span>
+        {(['mlb', ...OTHER] as const).map(s => (
+          <Link key={s} href={sportHref(s)} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName} &rarr;</Link>
+        ))}
+        <Link href="/picks/games" style={{ color: 'var(--link)' }}>Game picks &rarr;</Link>
+        <Link href="/picks/history" style={{ color: 'var(--link)' }}>Picks history &rarr;</Link>
+      </div>
+
+      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+        MLB rows are the tracked model card and +EV alerts: every one is logged at the flagged price and settled on the Results ledger.
+        NFL, NHL and NBA rows come from the daily projection boards and are unvalidated: they are not tracked in the public results yet.
+        One row per prop, at the best available book. Odds can move before you bet.
+      </p>
+      <ScoreLegend />
     </div>
   )
 }

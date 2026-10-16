@@ -6,7 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import type { SportProjectionRow, SportProjections } from '../lib/types'
+import type { EvBookOutlierRow, SportProjectionRow, SportProjections } from '../lib/types'
 
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }))
 jest.mock('next/dynamic', () => ({ __esModule: true, default: () => () => <button>checkout</button> }))
@@ -84,18 +84,39 @@ describe('projection board', () => {
   })
 })
 
-const hubProps = (sport: 'nfl' | 'nhl' | 'nba', projections: SportProjections | null) => ({
-  sport, picks: [], stats: [], sparklines: {}, slate: null, feed: null, projections,
+const hubProps = (sport: 'nfl' | 'nhl' | 'nba', projections: SportProjections | null, outliers: EvBookOutlierRow[] = []) => ({
+  sport, projections, outliers, block: null,
 })
 
+const outlier = (player: string) => ({
+  game_key: 'x:2026-10-15:AAA@BBB', player, player_norm: player.toLowerCase(), stat: 'sog', point: 2.5, side: 'over', book: 'fanduel',
+  american: 110, p_fair: 0.5, n_books: 5, ev: 0.06, flag: true, reason: null, player_id: null,
+}) as unknown as EvBookOutlierRow
+
 describe('NFL / NHL / NBA hubs', () => {
-  it.each(['nfl', 'nhl', 'nba'] as const)('%s Today tab has the dislocation section and the projection board, never a coming-soon empty state', (sport) => {
+  it.each(['nfl', 'nhl', 'nba'] as const)('%s hub opens on its own projection board with the same three tabs, never a coming-soon empty state', (sport) => {
     render(<SportHubClient {...hubProps(sport, data([row({ sport })]))} />)
-    expect(screen.getByText(/Live market dislocations/i)).toBeInTheDocument()
-    expect(screen.getByText(/Daily model projections and hit-rate board/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['PROJECTIONS', 'MARKET PRICES', 'MODELS'])
+    expect(screen.getByRole('tab', { name: 'PROJECTIONS' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('Jo Doe')).toBeInTheDocument()
     expect(screen.queryByText(/coming soon/i)).toBeNull()
     expect(screen.getByText('LIVE')).toBeInTheDocument()
+  })
+  it.each(['nfl', 'nhl', 'nba'] as const)('%s market prices tab has one layout: a preview note and either the outlier table or the same empty state', (sport) => {
+    const { unmount } = render(<SportHubClient {...hubProps(sport, null)} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'MARKET PRICES' }))
+    expect(screen.getByText('PREVIEW.')).toBeInTheDocument()
+    expect(screen.getByText('No prices beating the market')).toBeInTheDocument()
+    unmount()
+    render(<SportHubClient {...hubProps(sport, null, [outlier('Pat Mahomes')])} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'MARKET PRICES' }))
+    expect(screen.getByText('Pat Mahomes', { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText(/Kalshi vs sportsbooks/i)).toBeNull()
+  })
+  it('a cut board says how many rows are withheld and links to plans', () => {
+    render(<SportHubClient {...hubProps('nba', data([row({ sport: 'nba' })]))} lockedProjections={12} />)
+    expect(screen.getByRole('note')).toHaveTextContent(/12 more NBA projections today/)
+    expect(screen.getByRole('link', { name: /plans/i })).toHaveAttribute('href', '/pricing')
   })
   it.each(['nfl', 'nhl', 'nba'] as const)('%s Models tab shows real specification and validation, not "not tracked yet"', (sport) => {
     render(<SportHubClient {...hubProps(sport, null)} />)

@@ -2056,9 +2056,27 @@ Satori OG routes -- use literal hex there.
   `section-tabs.tsx` read it), revised 2026-10-15: five top-level items for five questions -- Home | +EV Terminal | Picks |
   Results | Tools (+ Discord/X + auth + "JOIN WAITLIST" while `lib/launch.ts` PRE_LAUNCH is true). Everything else is a
   tab strip under the nav (`SectionTabs`, only on pages of a multi-page section): **Scanner** = /ev + /edge (Prop Research);
-  **Picks** = /picks (Today) + /picks/mlb (Systems) + /cheat-sheet (Daily Card); **Results** = /results (Ledger) +
-  /analytics?tab=bankroll|calibration|books|health + /models. `/sports/mlb` is retired (308 -> /picks, `next.config.ts`);
-  NFL/NHL/NBA keep status pages; the sport ribbon's MLB link goes to /picks. `/tools/edge-finder|nrfi-conditions|
+  **Picks** = /picks (Top 10 PLAYER picks, all sports) + /picks/games (game picks) + /picks/history + /cheat-sheet (Daily
+  Card); **Results** = /results (Ledger) +
+  /analytics?tab=bankroll|calibration|books|health + /models. **Sport ribbon (2026-10-16)**: ALL SPORTS = /picks (the Top 10:
+  tracked MLB player picks + NFL/NHL/NBA projection-board rows, one Beezy Score scale, `lib/top-picks.ts`; non-MLB rows are
+  labelled UNVALIDATED), MLB = /picks/mlb (its own section: Player picks + Systems tabs via `app/picks/mlb/layout.tsx`; per-system
+  pages stay under /picks/mlb/[system]), NFL/NHL/NBA = /sports/[sport] (ONE shared template: PROJECTIONS | MARKET PRICES | MODELS;
+  each hub reads only its own sport's data -- siloed, nothing blended (`lib/hub-data.ts` `shapeHub`); the old Kalshi table and
+  GAMES tab are gone, Kalshi is on /ev). **Player vs game picks**: `lib/pick-systems.ts` `kindOfSystem`/`betKind` (game = NRFI, 1I,
+  1IOU, F3, F5, F1H, F7, GAME; an EV row is classified by the market it alerted on). Player picks live on /picks, /picks/mlb and the
+  sport hubs; game picks (MLB only so far) on /picks/games. `components/picks/picks-card.tsx` renders both MLB cards.
+  /picks/history = each past day's top 10 tracked PLAYER picks graded at a flat 1u (no staking; MLB only -- other sports are not
+  tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. The section tab strip only shows on
+  /picks, /picks/games, /picks/history, /cheat-sheet (`Section.exact`).
+  **Access tiers (2026-10-16, `lib/access.ts`, OFF until launch)**: free = Top 10 + history + every PAST day's card + a 5-row
+  preview of today's player boards and prices; game picks have no free rows; Single-Sport Pass = everything for its chosen league;
+  all-access = everything. Enforced SERVER-SIDE so withheld rows are never in the payload: `getViewer()` (lib/auth.ts) ->
+  `limitRows` / `limitBets` (per PROP, not per book row) in the hub page (`shapeHub`), `picks-card`, system pages, /cheat-sheet and
+  the `/api/picks`, `/api/picks/today`, `/api/projections` proxies. Gating is on when `PRE_LAUNCH` is false OR server env
+  `ENFORCE_TIERS=1`; local review: `AUTH_DISABLED_TIER` / `AUTH_DISABLED_SPORT` (only honoured under AUTH_DISABLED). NOT gated yet:
+  /ev, /edge (model board), /dashboard, the home page / ticker teasers, and the legacy `starter` tier gets no board access.
+  `/tools/edge-finder|nrfi-conditions|
   pitcher-matchups` are 308s. `tests/ia.test.ts` fails if a nav or tab link points at a page that does not exist.
   The bankroll (`lib/use-bankroll.ts`) is set on /ev and the Kelly calculator, which share it. Nav + ticker sit in one sticky
   `.site-chrome`; the section tabs are outside it and scroll away. Status vocabulary: LIVE / PREVIEW / COMING SOON; never

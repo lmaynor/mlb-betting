@@ -1,8 +1,8 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
-import { PICK_SYSTEMS } from '@/lib/pick-systems'
+import { kindOfSystem, PICK_SYSTEMS, type PickKind } from '@/lib/pick-systems'
 import { SYSTEM_COLOR } from '@/lib/tokens'
 import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 
@@ -47,8 +47,9 @@ const SORT_OPTIONS = [
   { value: 'odds',  label: 'Odds' },
 ]
 
-export function FilterBar() {
+export function FilterBar({ kind }: { kind?: PickKind } = {}) {
   const router = useRouter()
+  const pathname = usePathname()
   const sp = useSearchParams()
   const [open, setOpen] = useState(false)
 
@@ -66,8 +67,8 @@ export function FilterBar() {
     } else {
       params.set(key, value)
     }
-    router.push('/picks?' + params.toString())
-  }, [router, sp])
+    router.push(`${pathname}?${params.toString()}`)
+  }, [router, sp, pathname])
 
   const toggleSort = useCallback((value: string) => {
     const params = new URLSearchParams(sp.toString())
@@ -78,10 +79,10 @@ export function FilterBar() {
       params.set('sort', value)
       params.delete('dir') // reset to default desc
     }
-    router.push('/picks?' + params.toString())
-  }, [router, sp, sort, dir])
+    router.push(`${pathname}?${params.toString()}`)
+  }, [router, sp, sort, dir, pathname])
 
-  const SYSTEMS = ['ALL', 'EV', ...PICK_SYSTEMS.map(system => system.key)]
+  const SYSTEMS = ['ALL', 'EV', ...PICK_SYSTEMS.filter(system => !kind || kindOfSystem(system.key) === kind).map(system => system.key)]
   const RESULTS = ['ALL', 'WIN', 'LOSS', 'PENDING']
   // Removed 'ALL' (All Time) — results page handles full history
   const DATES   = ['today', 'yesterday']

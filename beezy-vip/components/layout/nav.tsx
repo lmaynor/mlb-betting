@@ -6,7 +6,7 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 import { SPORT_LIST } from '@/lib/sports'
-import { NAV, navActive, sportHref } from '@/lib/ia'
+import { NAV, navActive, sportActive, sportHref } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { PRE_LAUNCH } from '@/lib/launch'
@@ -149,13 +149,13 @@ function NavShell({ isSignedIn, userButton, signIn }: {
       {/* TIER 2 -- multi-sport context bar */}
       <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
-          <SportLink href="/" label="ALL SPORTS" active={pathname === '/'} />
+          <SportLink href={sportHref('all')} label="ALL SPORTS" active={sportActive(pathname, 'all')} />
           {SPORT_LIST.map(p => (
             <SportLink
               key={p.slug}
               href={sportHref(p.slug)}
               label={p.shortName}
-              active={pathname === sportHref(p.slug) && p.slug !== 'mlb'}
+              active={sportActive(pathname, p.slug)}
               accent={p.accent}
             />
           ))}

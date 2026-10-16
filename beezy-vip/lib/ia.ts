@@ -3,17 +3,18 @@
  * the same section. Five questions, five nav items; everything else is a tab inside one of them.
  *
  *   Scanner  what is mispriced right now?     /ev (table)            + /edge (prop research view)
- *   Picks    what does the model say today?   /picks (today)         + /picks/mlb (systems) + /cheat-sheet (share card)
+ *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games + /picks/history + /cheat-sheet
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
  *   Home     proof, nothing else
  *
- * /sports/mlb is retired (it duplicated Picks); NFL, NHL and NBA keep status pages at /sports/[sport].
+ * Sport ribbon (under the nav): ALL SPORTS = /picks, MLB = /picks/mlb (its own section: card + systems), NFL / NHL / NBA =
+ * /sports/[sport] (one shared template: projection board, market prices, methodology). /sports/mlb redirects to /picks/mlb.
  */
 import type { SportSlug } from '@/lib/sports'
 
 export interface SectionTab { label: string; href: string; /** extra path prefixes that keep this tab active */ also?: string[] }
-export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string[]; tabs: SectionTab[] }
+export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string[]; /** paths that belong to the section only when they match exactly */ exact?: string[]; tabs: SectionTab[] }
 
 export const SECTIONS: Section[] = [
   {
@@ -21,10 +22,12 @@ export const SECTIONS: Section[] = [
     tabs: [{ label: '+EV Terminal', href: '/ev' }, { label: 'Prop Research', href: '/edge' }],
   },
   {
-    id: 'picks', prefixes: ['/picks', '/cheat-sheet'],
+    // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.
+    id: 'picks', prefixes: ['/picks/history', '/picks/games', '/cheat-sheet'], exact: ['/picks'],
     tabs: [
-      { label: 'Today', href: '/picks' },
-      { label: 'Systems', href: '/picks/mlb' },
+      { label: 'Top 10', href: '/picks' },
+      { label: 'Game picks', href: '/picks/games' },
+      { label: 'History', href: '/picks/history' },
       { label: 'Daily Card', href: '/cheat-sheet' },
     ],
   },
@@ -46,7 +49,7 @@ export interface NavItem { label: string; href: string; live?: boolean; prefixes
 export const NAV: NavItem[] = [
   { label: 'Home',         href: '/',        prefixes: [] },
   { label: '+EV Terminal', href: '/ev',      prefixes: ['/ev', '/edge'], live: true },
-  { label: 'Picks',        href: '/picks',   prefixes: ['/picks', '/cheat-sheet'] },
+  { label: 'Picks',        href: '/picks',   prefixes: ['/picks', '/cheat-sheet', '/sports'] },
   { label: 'Results',      href: '/results', prefixes: ['/results', '/analytics', '/models'] },
   { label: 'Tools',        href: '/tools',   prefixes: ['/tools'] },
 ]
@@ -58,7 +61,7 @@ export function navActive(pathname: string, item: NavItem): boolean {
 }
 
 export function sectionFor(pathname: string): Section | null {
-  return SECTIONS.find(s => s.prefixes.some(p => under(pathname, p))) ?? null
+  return SECTIONS.find(s => s.prefixes.some(p => under(pathname, p)) || (s.exact ?? []).includes(pathname)) ?? null
 }
 
 /** Which tab of a section is current. Tabs may carry a ?tab= query (analytics); compare path first, then that param. */
@@ -67,11 +70,17 @@ export function tabActive(pathname: string, tabParam: string | null, tab: Sectio
   const want = query ? new URLSearchParams(query).get('tab') : null
   if (path === '/analytics') return pathname === '/analytics' && (tabParam ?? 'bankroll') === want
   if (path === '/picks') return pathname === '/picks'
-  if (path === '/picks/mlb') return under(pathname, '/picks/mlb')
   return under(pathname, path)
 }
 
-/** Sport ribbon target: MLB is just Picks now; the other sports have their own status pages. */
-export function sportHref(slug: SportSlug): string {
-  return slug === 'mlb' ? '/picks' : `/sports/${slug}`
+/** Sport ribbon target: ALL SPORTS is the cross-sport Top 10, MLB is its own section, the rest share the /sports template. */
+export function sportHref(slug: SportSlug | 'all'): string {
+  if (slug === 'all') return '/picks'
+  return slug === 'mlb' ? '/picks/mlb' : `/sports/${slug}`
+}
+
+/** Which ribbon item is current. Pages outside the Picks family (home, /ev, /results) light none. */
+export function sportActive(pathname: string, slug: SportSlug | 'all'): boolean {
+  if (slug === 'all') return pathname === '/picks' || under(pathname, '/picks/history') || under(pathname, '/picks/games') || under(pathname, '/cheat-sheet')
+  return under(pathname, sportHref(slug))
 }

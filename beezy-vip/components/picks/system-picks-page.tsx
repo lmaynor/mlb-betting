@@ -1,3 +1,6 @@
+import { LockedNotice } from '@/components/picks/locked-notice'
+import { limitBets } from '@/lib/access-bets'
+import { getViewer } from '@/lib/auth'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { PicksTable }   from '@/components/picks/picks-table'
 import { SystemBadge }  from '@/components/ui/primitives'
@@ -29,10 +32,13 @@ export async function SystemPicksPage({ system }: { system: string }) {
   }
   const systemColor = SYSTEM_COLOR[system] ?? 'var(--silver)'
 
-  const [picks, allStats] = await Promise.all([
+  const [allToday, allStats, viewer] = await Promise.all([
     getPicks({ system, date: siteDateKey(), limit: 50 }).catch(() => []),
     apiGetStats().then(s => s.bySystem).catch(() => []),
+    getViewer(),
   ])
+  // Today's picks are the paid surface (lib/access.ts); the record below it stays public.
+  const { bets: picks, locked } = limitBets(allToday, viewer, siteDateKey())
 
   const stats     = allStats.find(s => s.system === system)
   const winRate   = stats ? parseFloat(String(stats.win_rate)).toFixed(1) : '--'
@@ -50,7 +56,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
 
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-        <Link href="/picks/mlb" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
+        <Link href="/picks/mlb/systems" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           MLB Picks
         </Link>
         <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
@@ -113,7 +119,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         <h2 className="dell-display" style={{ fontSize: '20px', color: 'var(--chalk)', marginBottom: '16px' }}>
           Today&rsquo;s {meta.shortName} picks
         </h2>
-        {picks.length === 0 ? (
+        {picks.length === 0 && locked > 0 ? null : picks.length === 0 ? (
           <div style={{ border: B, padding: '40px', textAlign: 'center' as const }}>
             <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>No qualifying {meta.shortName} picks today.</p>
             <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '6px' }}>Model runs in Central Time after lineups post.</p>
@@ -121,6 +127,7 @@ export async function SystemPicksPage({ system }: { system: string }) {
         ) : (
           <PicksTable bets={picks} />
         )}
+        <LockedNotice locked={locked} shown={picks.length} what={`${meta.shortName} picks`} plan="The full card is on the MLB Pass or All-Access Pro." />
       </div>
 
       {/* Recent history */}

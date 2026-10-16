@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { limitBets } from '@/lib/access-bets'
+import { getViewer } from '@/lib/auth'
+import { siteDateKey } from '@/lib/dates'
+import type { Bet } from '@/lib/types'
 
 const API_URL = process.env.BETTING_API_URL ?? ''
 const API_KEY = process.env.BETTING_API_KEY ?? ''
@@ -12,5 +16,10 @@ export async function GET(req: NextRequest) {
     cache: 'no-store',
   })
   const data = await res.json()
+  // Today's picks are the paid surface (lib/access.ts); this public proxy must not hand out what the pages withhold.
+  if (Array.isArray(data?.picks)) {
+    const { bets, locked } = limitBets(data.picks as Bet[], await getViewer(), siteDateKey())
+    return NextResponse.json({ ...data, picks: bets, count: bets.length, locked })
+  }
   return NextResponse.json(data)
 }

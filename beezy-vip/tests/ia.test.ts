@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { NAV, SECTIONS, navActive, sectionFor, sportHref, tabActive } from '../lib/ia'
+import { NAV, SECTIONS, navActive, sectionFor, sportActive, sportHref, tabActive } from '../lib/ia'
 
 const app = path.resolve(__dirname, '..', 'app')
 const routeExists = (href: string) => {
@@ -35,14 +35,37 @@ describe('information architecture', () => {
     expect(tabActive('/analytics', 'books', bankroll)).toBe(false)
   })
 
-  it('/picks/mlb is the Systems tab and does not also light up Today', () => {
-    const [today, systems] = SECTIONS[1].tabs
-    expect(tabActive('/picks/mlb/hr', null, systems)).toBe(true)
-    expect(tabActive('/picks/mlb/hr', null, today)).toBe(false)
+  it('Picks tabs are the all-sports views only: Top 10 player picks, Game picks, History, Daily Card', () => {
+    const picks = SECTIONS.find(x => x.id === 'picks')!
+    expect(picks.tabs.map(t => t.label)).toEqual(['Top 10', 'Game picks', 'History', 'Daily Card'])
+    expect(sectionFor('/picks')?.id).toBe('picks')
+    expect(sectionFor('/picks/games')?.id).toBe('picks')
+    expect(sectionFor('/picks/history')?.id).toBe('picks')
+    // MLB and the other sports are chosen in the ribbon and carry their own headers, not the strip
+    expect(sectionFor('/picks/mlb')).toBeNull()
+    expect(sectionFor('/picks/mlb/hr')).toBeNull()
+    expect(sectionFor('/sports/nfl')).toBeNull()
+    expect(tabActive('/picks', null, picks.tabs[0])).toBe(true)
+    expect(tabActive('/picks/history', null, picks.tabs[0])).toBe(false)
+    expect(tabActive('/picks/games', null, picks.tabs[1])).toBe(true)
+    expect(tabActive('/picks/history', null, picks.tabs[2])).toBe(true)
   })
 
-  it('MLB has no hub of its own any more', () => {
-    expect(sportHref('mlb')).toBe('/picks')
+  it('Picks stays lit in the top nav on MLB and the other sport pages', () => {
+    for (const p of ['/picks', '/picks/mlb', '/picks/mlb/systems', '/picks/history', '/sports/nhl', '/cheat-sheet']) expect(navActive(p, NAV[2])).toBe(true)
+  })
+
+  it('the sport ribbon: ALL SPORTS is the Top 10, MLB is its own section, the rest share /sports', () => {
+    expect(sportHref('all')).toBe('/picks')
+    expect(sportHref('mlb')).toBe('/picks/mlb')
     expect(sportHref('nfl')).toBe('/sports/nfl')
+    expect(routeExists(sportHref('all'))).toBe(true)
+    expect(routeExists(sportHref('mlb'))).toBe(true)
+    expect(sportActive('/', 'all')).toBe(false)
+    expect(sportActive('/picks/history', 'all')).toBe(true)
+    expect(sportActive('/picks/mlb', 'all')).toBe(false)
+    expect(sportActive('/picks/mlb/hr', 'mlb')).toBe(true)
+    expect(sportActive('/sports/nba', 'nba')).toBe(true)
+    expect(sportActive('/sports/nba', 'nhl')).toBe(false)
   })
 })
