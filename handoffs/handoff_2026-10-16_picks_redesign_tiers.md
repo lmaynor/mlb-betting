@@ -8,10 +8,15 @@ Verified: `tsc --noEmit` clean, jest 238 passed / 7 skipped, browser check again
 - **/picks = Top 10 player picks across sports** (`lib/top-picks.ts`): tracked MLB player picks + NFL/NHL/NBA projection rows on one Beezy
   Score scale; non-MLB rows carry UNVALIDATED. Free, ungated, by design.
 - **/picks/games** (new): MLB game picks (NRFI, 1I, F3, F5, F1H, F7, GAME) separate from player picks. `components/picks/picks-card.tsx`
-  renders both MLB cards; `/picks/mlb` is now player picks only; Systems tab is `/picks/mlb/systems`.
+  renders both MLB cards; `/picks/mlb` is now player picks only.
 - **/picks/history** (new): last 7/14/30 days, each day's top 10 player picks, flat 1u grading, day rows expand.
-- **NFL/NHL/NBA hubs** share one template (PROJECTIONS | MARKET PRICES | MODELS), siloed per sport (`lib/hub-data.ts`). Removed: the NFL
-  Kalshi table, the GAMES tab, and the dead MLB branches of the hub.
+- **NFL/NHL/NBA hubs** share one template (PROJECTIONS | MARKET PRICES tabs), siloed per sport (`lib/hub-data.ts`). Removed: the NFL
+  Kalshi table, the GAMES tab, the MODELS tab and the dead MLB branches of the hub.
+- **Systems are a footer on each sport page** (second pass, same PR): MLB player/game systems footers with each system's record
+  (`systems-footer.tsx`), the per-market model table as the hub footer. The MLB Systems tab and `/picks/mlb/systems` are gone (308 to
+  `/picks/mlb#systems`). The per-system detail page was rebuilt to the no-slop layout.
+- **Daily Card revamped**: the shareable Top 10 player picks (shared loader `lib/top-picks-data.ts`), Players | Games toggle (games are
+  paid), per-sport chips, UNVALIDATED tag on projections, tweet text from the same list. The public OG image is player picks only.
 - **Tier gating, behind a flag** (`lib/access.ts`, `lib/access-bets.ts`, `lib/auth.ts` `getViewer`): see CONTEXT.md s13. Off while
   `PRE_LAUNCH` is true; `ENFORCE_TIERS=1` turns it on for testing, `AUTH_DISABLED_TIER=public` previews a free viewer locally.
 

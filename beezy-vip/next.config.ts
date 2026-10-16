@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/sports/mlb', destination: '/picks/mlb', permanent: true },
+      { source: '/picks/mlb/systems', destination: '/picks/mlb#systems', permanent: true },
       { source: '/tools/edge-finder', destination: '/tools/kelly-calculator', permanent: true },
       { source: '/tools/nrfi-conditions', destination: '/tools/slate', permanent: true },
       { source: '/tools/pitcher-matchups', destination: '/tools/slate', permanent: true },

@@ -26,6 +26,8 @@ const SYS_NAME: Record<string, string> = {
 const sysName = (sys: string) => SYS_NAME[sys] ?? sys;
 const s = (sys: string) => SYS[sys] ?? { bg: "#171a24", accent: "#9ca3af" };
 
+const GAME_SYSTEMS = new Set(["NRFI", "1I", "1IOU", "F3", "F5", "F1H", "F7", "GAME"]);
+
 const fmtOdds = (o: number) => o > 0 ? `+${o}` : `${o}`;
 const fmtEdge = (e: any) => `+${parseFloat(e).toFixed(1)}%`;
 const fmtGame = (p: any) => {
@@ -69,7 +71,8 @@ export async function GET() {
   // cross-market soft-line/Kalshi scanner, not a model prediction; see
   // lib/tokens.ts resolveEvUnderlying for the equivalent exclusion on the
   // Daily Card).
-  const top = all.filter(p => p.kelly_triggered && p.system !== "EV").sort((a, b) => parseFloat(b.edge) - parseFloat(a.edge)).slice(0, 5);
+  // Player picks only: game picks are a separate, paid set (lib/access.ts), so this public image must not carry them.
+  const top = all.filter(p => p.kelly_triggered && p.system !== "EV" && !GAME_SYSTEMS.has(p.system)).sort((a, b) => parseFloat(b.edge) - parseFloat(a.edge)).slice(0, 5);
   const ov = sd?.overall ?? {};
   const roi = ov.roi ?? null;
   const roiNum = roi !== null ? parseFloat(roi) : null;

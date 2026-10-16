@@ -14,12 +14,14 @@ import { ProjectionsBoard } from './projections-board'
 
 import type { HubSport } from '@/lib/hub-data'
 
-/** NFL, NHL and NBA share this one template: the projection board, live prices that beat the market, and the methodology. */
-type Tab = 'projections' | 'prices' | 'models'
+/**
+ * NFL, NHL and NBA share this one template: the projection board and the live prices that beat the market as tabs, and the
+ * systems behind them (what we project, how, and how it validated) as the page footer.
+ */
+type Tab = 'projections' | 'prices'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'projections', label: 'PROJECTIONS' },
   { id: 'prices', label: 'MARKET PRICES' },
-  { id: 'models', label: 'MODELS' },
 ]
 
 /** Everything arrives already cut by the access policy (app/sports/[sport]/page.tsx); `locked*` count the withheld rows. */
@@ -78,7 +80,10 @@ export function SportHubClient({ sport, projections, lockedProjections = 0, outl
           <LockedNotice locked={lockedPrices} shown={outliers.length} what={`${pillar.shortName} market prices`} plan={`All of them are on the ${pillar.shortName} Pass or All-Access Pro.`} />
         </>
       )}
-      {tab === 'models' && <PropModelsTable sport={sport} />}
+      <section id="systems" aria-labelledby="systems-h" style={{ marginTop: '36px' }}>
+        <h2 id="systems-h" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 10px' }}>{pillar.shortName} systems</h2>
+        <PropModelsTable sport={sport} />
+      </section>
     </div>
   )
 }

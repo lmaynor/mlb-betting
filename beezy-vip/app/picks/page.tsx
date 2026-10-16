@@ -4,12 +4,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { TopPicksTable } from '@/components/picks/top-picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
-import { apiGetPicks, apiGetSportProjections } from '@/lib/betting-api'
 import { siteDateKey, formatDateKey } from '@/lib/dates'
 import { sportHref } from '@/lib/ia'
 import { SPORT_PILLARS } from '@/lib/sports'
-import { fromProjection, rankTopPicks, TOP_N, topFromBets, type TopPick } from '@/lib/top-picks'
-import type { Bet, SportProjections } from '@/lib/types'
+import { loadTopPlayerPicks } from '@/lib/top-picks-data'
 
 export const metadata: Metadata = {
   title: 'Top 10 Player Picks',
@@ -20,14 +18,7 @@ const OTHER = ['nfl', 'nhl', 'nba'] as const
 
 export default async function TopPicksPage() {
   const date = siteDateKey()
-  const [mlb, ...boards] = await Promise.all([
-    apiGetPicks({ date, limit: 200 }).catch(() => [] as Bet[]),
-    ...OTHER.map(s => apiGetSportProjections(s).catch(() => null as SportProjections | null)),
-  ])
-
-  const mlbTop = topFromBets(mlb, TOP_N)
-  const otherTop = boards.flatMap(b => (b?.rows ?? []).map(fromProjection).filter((p): p is TopPick => p != null))
-  const top = rankTopPicks([...mlbTop, ...otherTop], TOP_N)
+  const { top } = await loadTopPlayerPicks(date)
 
   const showResult = top.some(p => p.result != null)
 

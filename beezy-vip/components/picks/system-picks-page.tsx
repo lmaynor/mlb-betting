@@ -1,149 +1,85 @@
+import Link from 'next/link'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { PicksTable } from '@/components/picks/picks-table'
 import { limitBets } from '@/lib/access-bets'
 import { getViewer } from '@/lib/auth'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
-import { PicksTable }   from '@/components/picks/picks-table'
-import { SystemBadge }  from '@/components/ui/primitives'
-import { siteDateKey }  from '@/lib/dates'
-import { getPickSystemByKey } from '@/lib/pick-systems'
+import { siteDateKey } from '@/lib/dates'
+import { getPickSystemByKey, kindOfSystem } from '@/lib/pick-systems'
+import { SPORT_PILLARS } from '@/lib/sports'
 import { SYSTEM_COLOR } from '@/lib/tokens'
-import Link             from 'next/link'
 
-const B = '1px solid var(--basalt)'
-const B_INNER = '1px solid var(--basalt)'
+const finite = (v: unknown) => { const n = parseFloat(String(v ?? '')); return Number.isFinite(n) ? n : null }
+const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px' } as const
 
-function StatBlock({ label, value, sub, accent, isLast }: { label: string; value: string; sub?: string; accent?: boolean; isLast?: boolean }) {
-  return (
-    <div style={{ padding: '20px', borderRight: isLast ? undefined : B_INNER }}>
-      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '24px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--chalk)' }}>{value}</div>
-      {sub && <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</div>}
-    </div>
-  )
-}
-
+/** One MLB system: its record, today's picks (access policy applies) and recent settled picks. Reached from the systems footer. */
 export async function SystemPicksPage({ system }: { system: string }) {
   const meta = getPickSystemByKey(system) ?? {
-    key: system,
-    slug: system.toLowerCase(),
-    name: system,
-    shortName: system,
-    description: 'Today\'s model-qualified picks from Beezy.FYI.',
+    key: system, slug: system.toLowerCase(), name: system, shortName: system, description: 'Today\'s model-qualified picks from Beezy.FYI.',
   }
-  const systemColor = SYSTEM_COLOR[system] ?? 'var(--silver)'
+  const kind = kindOfSystem(system)
+  const color = SYSTEM_COLOR[system] ?? 'var(--silver)'
+  const today = siteDateKey()
 
-  const [allToday, allStats, viewer] = await Promise.all([
-    getPicks({ system, date: siteDateKey(), limit: 50 }).catch(() => []),
+  const [allToday, allStats, viewer, history] = await Promise.all([
+    getPicks({ system, date: today, limit: 50 }).catch(() => []),
     apiGetStats().then(s => s.bySystem).catch(() => []),
     getViewer(),
+    getPicks({ system, status: 'settled', limit: 20 }).catch(() => []),
   ])
-  // Today's picks are the paid surface (lib/access.ts); the record below it stays public.
-  const { bets: picks, locked } = limitBets(allToday, viewer, siteDateKey())
+  // Today's picks are the paid surface (lib/access.ts); the record below stays public.
+  const { bets: picks, locked } = limitBets(allToday, viewer, today)
 
-  const stats     = allStats.find(s => s.system === system)
-  const winRate   = stats ? parseFloat(String(stats.win_rate)).toFixed(1) : '--'
-  const finite = (v: unknown) => { const n = parseFloat(String(v ?? '')); return isFinite(n) ? n : null }
-  const roi       = stats ? finite(stats.roi) : null
-  const totalBets = stats ? parseInt(String(stats.total_bets)) : 0
-  const avgEdgeN  = stats ? finite(stats.avg_edge) : null
-  const avgEdge   = avgEdgeN !== null ? avgEdgeN.toFixed(1) : '--'
-
-  const history = await getPicks({ system, status: 'settled', limit: 20 }).catch(() => [])
-  const gatePct = Math.min(100, (totalBets / 200) * 100)
+  const stats = allStats.find(s => s.system === system)
+  const bets = stats ? Math.round(finite(stats.total_bets) ?? 0) : 0
+  const winRate = stats ? finite(stats.win_rate) : null
+  const roi = stats ? finite(stats.roi) : null
+  const avgEdge = stats ? finite(stats.avg_edge) : null
+  const status = SPORT_PILLARS.mlb.markets.find(m => m.key === system)?.status ?? null
+  const back = kind === 'player' ? { href: '/picks/mlb#systems', label: 'MLB player picks' } : { href: '/picks/games#systems', label: 'Game picks' }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-        <Link href="/picks/mlb/systems" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
-          MLB Picks
-        </Link>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
-        <SystemBadge system={system} />
-      </div>
-
-      {/* Header */}
-      <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-        <span style={{ width: '4px', alignSelf: 'stretch', borderRadius: 'var(--radius-pill)', background: systemColor, flexShrink: 0, minHeight: '52px' }} />
-        <div>
-          <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)', marginBottom: '8px' }}>
-            {meta.name}
-          </h1>
-          <p className="times" style={{ fontSize: '15px', color: 'var(--silver)', lineHeight: 1.6, maxWidth: '54ch', marginBottom: '10px' }}>
-            {meta.description}
-          </p>
-          {meta.learnSlug && (
-            <Link href={`/learn/${meta.learnSlug}`} className="times" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}>
-              Learn about {meta.shortName} betting &rarr;
-            </Link>
-          )}
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{meta.name}</h1>
+          <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
+            {kind === 'player' ? 'PLAYER' : 'GAME'}{status ? ` / ${status.toUpperCase()}` : ''}
+          </span>
         </div>
+        <Link href={back.href} style={{ fontSize: '12.5px', color: 'var(--link)' }}>&larr; {back.label}</Link>
       </div>
 
-      {/* Stats grid */}
-      <div className="stats-4up" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden', marginBottom: '20px', gap: 0 }}>
-        <StatBlock label="Season ROI"  value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} />
-        <StatBlock label="Win Rate"    value={winRate !== '--' ? `${winRate}%` : '--'} sub="W / (W+L)" />
-        <StatBlock label="Total Bets"  value={String(totalBets)} sub="Paper mode" />
-        <div style={{ padding: '20px' }}>
-          <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Avg Edge</div>
-          <div className="mono" style={{ fontSize: '24px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdgeN === null ? 'var(--fog)' : avgEdgeN >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{avgEdgeN === null ? '--' : `${avgEdgeN >= 0 ? '+' : ''}${avgEdge}%`}</div>
-          <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>Model vs implied</div>
+      {/* one inline metric strip, not a grid of cards */}
+      <div className="mono" style={{ ...SURFACE, padding: '9px 14px', marginBottom: '16px', fontSize: '12.5px', color: 'var(--silver)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+        <span>{bets} settled</span>
+        <span>{winRate != null ? `${winRate.toFixed(1)}% win` : '-- win'}</span>
+        <span style={{ color: roi == null ? 'var(--fog)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '-- ROI' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
+        <span>{avgEdge != null ? `${avgEdge.toFixed(1)}% avg edge` : '-- avg edge'}</span>
+        <span style={{ color: bets >= 200 ? 'var(--signal)' : 'var(--fog)' }}>{bets >= 200 ? '200+ bets, paper' : `${bets}/200 bets, paper`}</span>
+      </div>
+
+      <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 10px' }}>Today</h2>
+      {picks.length === 0 && locked === 0 ? (
+        <div style={{ ...SURFACE, padding: '28px 20px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+          No qualifying {meta.shortName} picks today. The model card publishes after the ~11:00 AM CT run.
         </div>
-      </div>
+      ) : picks.length > 0 ? (
+        <PicksTable bets={picks} />
+      ) : null}
+      <LockedNotice locked={locked} shown={picks.length} what={`${meta.shortName} picks`} plan="The full card is on the MLB Pass or All-Access Pro." />
 
-      {/* 200-bet gate */}
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '18px 20px', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)' }}>200-Bet Gate</span>
-            <span className="mono" style={{ fontSize: '10px', color: 'var(--silver)' }}>{totalBets}/200</span>
-          </div>
-          <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
-            <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: systemColor, width: `${gatePct}%`, transition: 'width 0.4s var(--ease-out)' }} />
-          </div>
-        </div>
-        <span className="dell-heading" style={{
-          fontSize: '9px', letterSpacing: '0.08em', padding: '5px 11px', borderRadius: 'var(--radius-pill)',
-          border: totalBets >= 200 ? '1px solid var(--win-border)' : '1px solid var(--basalt)',
-          color: totalBets >= 200 ? 'var(--signal)' : 'var(--fog)',
-          background: totalBets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
-        }}>
-          {totalBets >= 200 ? '200+ BETS, PAPER' : 'PAPER MODE'}
-        </span>
-      </div>
-
-      {/* Today's picks */}
-      <div style={{ marginBottom: '40px' }}>
-        <h2 className="dell-display" style={{ fontSize: '20px', color: 'var(--chalk)', marginBottom: '16px' }}>
-          Today&rsquo;s {meta.shortName} picks
-        </h2>
-        {picks.length === 0 && locked > 0 ? null : picks.length === 0 ? (
-          <div style={{ border: B, padding: '40px', textAlign: 'center' as const }}>
-            <p className="times" style={{ fontSize: '13px', color: 'var(--fog)' }}>No qualifying {meta.shortName} picks today.</p>
-            <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '6px' }}>Model runs in Central Time after lineups post.</p>
-          </div>
-        ) : (
-          <PicksTable bets={picks} />
-        )}
-        <LockedNotice locked={locked} shown={picks.length} what={`${meta.shortName} picks`} plan="The full card is on the MLB Pass or All-Access Pro." />
-      </div>
-
-      {/* Recent history */}
       {history.length > 0 && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 className="dell-display" style={{ fontSize: '20px', color: 'var(--chalk)' }}>
-              Recent results
-            </h2>
-            <Link href={`/results?system=${system}`} className="times" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}>
-              Full history &rarr;
-            </Link>
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', margin: '28px 0 10px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Recent results</h2>
+            <Link href={`/results?system=${system}`} style={{ fontSize: '12.5px', color: 'var(--link)' }}>Full history &rarr;</Link>
           </div>
           <PicksTable bets={history} />
-        </div>
+        </>
       )}
+
+      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '16px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>{meta.description}</p>
     </div>
   )
 }

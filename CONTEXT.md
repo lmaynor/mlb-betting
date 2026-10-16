@@ -2060,10 +2060,14 @@ Satori OG routes -- use literal hex there.
   Card); **Results** = /results (Ledger) +
   /analytics?tab=bankroll|calibration|books|health + /models. **Sport ribbon (2026-10-16)**: ALL SPORTS = /picks (the Top 10:
   tracked MLB player picks + NFL/NHL/NBA projection-board rows, one Beezy Score scale, `lib/top-picks.ts`; non-MLB rows are
-  labelled UNVALIDATED), MLB = /picks/mlb (its own section: Player picks + Systems tabs via `app/picks/mlb/layout.tsx`; per-system
-  pages stay under /picks/mlb/[system]), NFL/NHL/NBA = /sports/[sport] (ONE shared template: PROJECTIONS | MARKET PRICES | MODELS;
+  labelled UNVALIDATED), MLB = /picks/mlb (its own page: player picks; per-system detail pages stay under /picks/mlb/[system]), NFL/NHL/NBA = /sports/[sport] (ONE shared template: PROJECTIONS | MARKET PRICES | MODELS;
   each hub reads only its own sport's data -- siloed, nothing blended (`lib/hub-data.ts` `shapeHub`); the old Kalshi table and
-  GAMES tab are gone, Kalshi is on /ev). **Player vs game picks**: `lib/pick-systems.ts` `kindOfSystem`/`betKind` (game = NRFI, 1I,
+  GAMES tab are gone, Kalshi is on /ev). **Systems are a footer, not a tab (2026-10-16)**: every sport page ends with its systems --
+  /picks/mlb the player systems and /picks/games the game systems (`components/picks/systems-footer.tsx`, each system's settled
+  record, linking to /picks/mlb/[system]); NFL/NHL/NBA hubs end with the per-market model table (`#systems`). `/picks/mlb/systems`
+  redirects to /picks/mlb#systems. **Daily Card** (/cheat-sheet) is the shareable Top 10 player picks (same loader as /picks,
+  `lib/top-picks-data.ts`) with a Players | Games toggle (games follow the game-picks access policy) and per-sport chips; the public
+  OG card (`/api/og/picks-card`) is player picks only. **Player vs game picks**: `lib/pick-systems.ts` `kindOfSystem`/`betKind` (game = NRFI, 1I,
   1IOU, F3, F5, F1H, F7, GAME; an EV row is classified by the market it alerted on). Player picks live on /picks, /picks/mlb and the
   sport hubs; game picks (MLB only so far) on /picks/games. `components/picks/picks-card.tsx` renders both MLB cards.
   /picks/history = each past day's top 10 tracked PLAYER picks graded at a flat 1u (no staking; MLB only -- other sports are not

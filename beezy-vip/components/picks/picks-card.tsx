@@ -6,7 +6,8 @@ import { PicksTable } from '@/components/picks/picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
-import { apiGetPicks as getPicks } from '@/lib/betting-api'
+import { SystemsFooter } from '@/components/picks/systems-footer'
+import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
 import { collapseBooks } from '@/lib/dedupe'
 import { beezyscore } from '@/lib/beezy-score'
@@ -84,8 +85,9 @@ async function PicksContent({ kind, searchParams }: { kind: PickKind; searchPara
 }
 
 /** MLB's tracked card, split by what is being picked: a player's stat (`player`) or a game outcome (`game`). */
-export function PicksCard({ kind, searchParams }: { kind: PickKind; searchParams: Promise<Record<string, string>> }) {
+export async function PicksCard({ kind, searchParams }: { kind: PickKind; searchParams: Promise<Record<string, string>> }) {
   const copy = COPY[kind]
+  const stats = await apiGetStats().then(r => r.bySystem).catch(() => [])
   return (
     <div>
       <DateBar />
@@ -95,6 +97,7 @@ export function PicksCard({ kind, searchParams }: { kind: PickKind; searchParams
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{copy.h1}</h1>
           <span style={{ display: 'flex', gap: '16px', alignItems: 'baseline', flexWrap: 'wrap' }}>
             <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{copy.sub}</span>
+            <a href={kind === 'player' ? '/picks/games' : '/picks/mlb'} style={{ fontSize: '12.5px', color: 'var(--link)' }}>{kind === 'player' ? 'Game picks' : 'Player picks'} &rarr;</a>
             <a href="/ev" style={{ fontSize: '12.5px', color: 'var(--link)' }}>+EV Terminal &rarr;</a>
           </span>
         </div>
@@ -106,6 +109,7 @@ export function PicksCard({ kind, searchParams }: { kind: PickKind; searchParams
           <PicksContent kind={kind} searchParams={searchParams} />
         </Suspense>
         <ScoreLegend />
+        <SystemsFooter kind={kind} stats={stats} />
       </div>
     </div>
   )

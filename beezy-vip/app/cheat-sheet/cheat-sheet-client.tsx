@@ -1,64 +1,28 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Bet } from '@/lib/types'
-import { beezyscore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
-import { pickLabel, resolveEvUnderlying, SYSTEM_COLOR, SYSTEM_LABEL_SHORT as SYSTEM_LABEL } from '@/lib/tokens'
-import { SPORT_PILLARS } from '@/lib/sports'
-import { ScoreBadge } from '@/components/ui/primitives'
+import Link from 'next/link'
+import { LockedNotice } from '@/components/picks/locked-notice'
+import { sportHref } from '@/lib/ia'
+import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { SPORT_PILLARS, type SportSlug } from '@/lib/sports'
+import { SYSTEM_COLOR } from '@/lib/tokens'
+import type { TopPick } from '@/lib/top-picks'
 
-
-
-const GAME_SYSTEMS = new Set(['NRFI', 'F5'])
-const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
-const PLAYER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K', 'SB'])
-
-type FilterKey = 'all' | 'game' | 'pitcher' | 'player'
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'game', label: 'Game' },
-  { key: 'pitcher', label: 'Pitchers' },
-  { key: 'player', label: 'Players' },
-]
-
-const DEFAULT_LIMIT = 5
-
-export interface EnrichedBet extends Bet {
+/** A top pick plus the images the card shows. */
+export interface CardPick extends TopPick {
   headshotUrl: string | null
   awayLogoUrl: string | null
   homeLogoUrl: string | null
 }
 
-// A pooled +EV row's own system is "EV"; filter on the market it actually alerted on.
-const effSystem = (b: Bet) => (b.system === 'EV' ? resolveEvUnderlying(b).system : b.system)
+type Mode = 'players' | 'games'
+type SportFilter = 'all' | SportSlug
 
-function filterBets(bets: EnrichedBet[], key: FilterKey): EnrichedBet[] {
-  if (key === 'game') return bets.filter(b => GAME_SYSTEMS.has(effSystem(b)))
-  if (key === 'pitcher') return bets.filter(b => PITCHER_SYSTEMS.has(effSystem(b)))
-  if (key === 'player') return bets.filter(b => PLAYER_SYSTEMS.has(effSystem(b)))
-  return bets
-}
+const DEFAULT_LIMIT = 5
 
-function fmtOdds(o: number) {
-  return o > 0 ? `+${o}` : String(o)
-}
-
-function fmtEdge(e: number | null) {
-  if (e == null) return null
-  const pct = Math.abs(e) < 2 ? e * 100 : e
-  return `+${pct.toFixed(1)}%`
-}
-
-function fmtBetType(betType: string | null | undefined, system: string): string | null {
-  if (!betType) return null
-  // Strip the system prefix (e.g. "PITCHER_ER_UNDER_2.5" → "UNDER 2.5")
-  const prefix = system + '_'
-  const cleaned = betType.toUpperCase().startsWith(prefix)
-    ? betType.slice(prefix.length)
-    : betType
-  return cleaned.replace(/_/g, ' ')
-}
+const fmtOdds = (o: number | null) => (o == null ? null : o > 0 ? `+${o}` : String(o))
+const fmtEdge = (e: number | null) => (e == null || e <= 0 ? null : `+${(e * 100).toFixed(1)}%`)
 
 function splitNotes(notes: string | null | undefined) {
   if (!notes) return []
@@ -70,150 +34,61 @@ function splitNotes(notes: string | null | undefined) {
     .filter(Boolean)
 }
 
-function PickCard({ bet, rank, expanded, onToggle }: {
-  bet: EnrichedBet
-  rank: number
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const color = SYSTEM_COLOR[bet.system] ?? 'var(--fog)'
-  const isProp = PLAYER_SYSTEMS.has(bet.system) || PITCHER_SYSTEMS.has(bet.system)
-  const isGame = GAME_SYSTEMS.has(bet.system)
-  const edge = fmtEdge(bet.edge)
-  const bullets = splitNotes(bet.notes)
-  const tier = scoreTier(beezyscore(bet))
-  const tierColor = TIER_COLOR[tier]
-  const title = isProp
-    ? (bet.player ?? bet.bet_type ?? 'No player listed')
-    : `${bet.away_team ?? '?'} @ ${bet.home_team ?? '?'}`
-  const sub = [fmtBetType(bet.bet_type, bet.system), fmtOdds(bet.odds), bet.book].filter(Boolean).join(' / ')
+function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: number; expanded: boolean; onToggle: () => void }) {
+  const pillar = SPORT_PILLARS[pick.sport]
+  const color = pick.bet?.system ? (SYSTEM_COLOR[pick.bet.system] ?? pillar.accent) : pillar.accent
+  const tierColor = TIER_COLOR[scoreTier(pick.score)]
+  const edge = fmtEdge(pick.edge)
+  const bullets = splitNotes(pick.bet?.notes)
+  const isGame = !pick.what // game picks carry the matchup, not a player
+  const sub = [isGame ? pick.game : pick.what, fmtOdds(pick.odds), pick.book].filter(Boolean).join(' / ')
 
   return (
     <div
       onClick={onToggle}
-      className="card-hover"
       style={{
-        background: 'var(--graphite)',
-        borderBottom: '1px solid var(--basalt)',
-        borderLeft: `3px solid ${tierColor}`,
-        display: 'flex',
-        alignItems: 'stretch',
-        minHeight: '104px',
-        overflow: 'hidden',
-        position: 'relative',
-        cursor: 'pointer',
+        background: 'var(--graphite)', borderBottom: '1px solid var(--basalt)', borderLeft: `3px solid ${tierColor}`,
+        display: 'flex', alignItems: 'stretch', minHeight: '96px', overflow: 'hidden', position: 'relative', cursor: 'pointer',
       }}
     >
-      <div style={{
-        width: '86px',
-        minWidth: '86px',
-        position: 'relative',
-        overflow: 'hidden',
-        background: `${color}18`,
-        borderRight: `1px solid ${color}44`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <span className="mono" style={{
-          position: 'absolute',
-          top: '6px',
-          left: '7px',
-          fontSize: '8px',
-          color: `${color}99`,
-          fontWeight: 800,
-        }}>
-          #{rank}
-        </span>
-
-        {isProp && bet.headshotUrl ? (
+      <div style={{ width: '80px', minWidth: '80px', position: 'relative', overflow: 'hidden', background: `${color}18`, borderRight: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="mono" style={{ position: 'absolute', top: '6px', left: '7px', fontSize: '8px', color: `${color}99`, fontWeight: 800 }}>#{rank}</span>
+        {pick.headshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={bet.headshotUrl}
-            alt={bet.player ?? ''}
-            width={72}
-            height={88}
+            src={pick.headshotUrl} alt={pick.who} width={68} height={84}
             onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-            style={{
-              objectFit: 'contain',
-              objectPosition: 'bottom center',
-              width: '72px',
-              height: '88px',
-              position: 'absolute',
-              bottom: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-            }}
+            style={{ objectFit: 'contain', objectPosition: 'bottom center', width: '68px', height: '84px', position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)' }}
           />
-        ) : isGame && (bet.awayLogoUrl || bet.homeLogoUrl) ? (
+        ) : isGame && (pick.awayLogoUrl || pick.homeLogoUrl) ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}>
-            {bet.awayLogoUrl && (
+            {pick.awayLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={bet.awayLogoUrl} alt={bet.away_team ?? ''} width={32} height={32} style={{ objectFit: 'contain' }} />
+              <img src={pick.awayLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
             )}
             <span className="mono" style={{ fontSize: '7px', color: `${color}66` }}>@</span>
-            {bet.homeLogoUrl && (
+            {pick.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={bet.homeLogoUrl} alt={bet.home_team ?? ''} width={32} height={32} style={{ objectFit: 'contain' }} />
+              <img src={pick.homeLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
             )}
           </div>
         ) : (
-          <span className="mono" style={{ fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>
-            {SYSTEM_LABEL[bet.system] ?? bet.system}
-          </span>
+          <span className="mono" style={{ fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>{pillar.shortName}</span>
         )}
       </div>
 
-      <div style={{
-        flex: 1,
-        padding: '10px 12px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        minWidth: 0,
-      }}>
+      <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
         <div style={{ marginBottom: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <span className="dell-heading" style={{
-            fontSize: '8px',
-            letterSpacing: '0.1em',
-            padding: '2px 6px',
-            background: `${color}20`,
-            color,
-            border: `1px solid ${color}`,
-          }}>
-            {SYSTEM_LABEL[bet.system] ?? bet.system}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+            <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
+            {!pick.tracked && (
+              <span className="dell-heading" title="Projections are not tracked in the public results yet." style={{ fontSize: '8px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED</span>
+            )}
           </span>
-          {edge && (
-            <span className="mono" style={{ fontSize: '10px', fontWeight: 800, color: tierColor, letterSpacing: '0.04em' }}>
-              {edge} EDGE
-            </span>
-          )}
+          {edge && <span className="mono" style={{ fontSize: '10px', fontWeight: 800, color: tierColor, letterSpacing: '0.04em' }}>{edge} EDGE</span>}
         </div>
-
-        <div style={{
-          fontSize: '15px',
-          fontWeight: 800,
-          color: 'var(--ash)',
-          lineHeight: 1.12,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginBottom: '3px',
-        }}>
-          {title}
-        </div>
-
-        <div className="mono" style={{
-          fontSize: '10px',
-          color: 'var(--fog)',
-          marginBottom: (expanded && bullets.length) ? '6px' : 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {sub}
-        </div>
-
+        <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '3px' }}>{pick.who}</div>
+        <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: expanded && bullets.length ? '6px' : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>
         {expanded && bullets.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {bullets.slice(0, 3).map((b, i) => (
@@ -226,500 +101,231 @@ function PickCard({ bet, rank, expanded, onToggle }: {
         )}
       </div>
 
-      <div style={{
-        minWidth: '68px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderLeft: `1px solid ${color}18`,
-        padding: '8px 6px',
-        background: `${tierColor}08`,
-      }}>
-        <ScoreBadge bet={bet} />
+      <div title={`${TIER_LABEL[scoreTier(pick.score)]}. Beezy Score is a 0-100 strength score, not a win probability.`}
+        style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
+        <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
+        <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '999px', border: `1px solid ${tierColor}`, color: tierColor }}>{TIER_LABEL[scoreTier(pick.score)]}</span>
       </div>
     </div>
   )
 }
 
-function YesterdayRow({ bet }: { bet: EnrichedBet }) {
-  const isWin = bet.result === 'win'
-  const label = pickLabel(bet)
+function YesterdayRow({ pick }: { pick: CardPick }) {
+  const win = pick.result === 'win'
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px 0',
-      borderBottom: '1px solid var(--basalt)',
-    }}>
-      <span className="dell-heading" style={{
-        fontSize: '8px',
-        letterSpacing: '0.06em',
-        padding: '2px 5px',
-        background: isWin ? 'var(--signal)20' : 'var(--loss)20',
-        color: isWin ? 'var(--signal)' : 'var(--loss)',
-        border: `1px solid ${isWin ? 'var(--signal)' : 'var(--loss)'}`,
-        flexShrink: 0,
-      }}>
-        {isWin ? 'W' : 'L'}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--basalt)' }}>
+      <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
+        {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
       <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {label}
+        {pick.who}{pick.what ? ` / ${pick.what}` : ''}
       </span>
     </div>
   )
 }
 
-export function CheatSheetClient({
-  picks,
-  today,
-  yesterdayPicks = [],
-}: {
-  picks: EnrichedBet[]
+const chip = (on: boolean): React.CSSProperties => ({
+  padding: '5px 10px', fontSize: '9px', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase',
+  border: `1px solid ${on ? 'var(--steel)' : 'var(--basalt)'}`, background: on ? '#131a1e' : 'transparent', color: on ? 'var(--chalk)' : 'var(--fog)',
+})
+
+/**
+ * The shareable Daily Card. It is the free Top 10 player picks (same list as /picks), with a Game picks toggle that follows the
+ * game-picks access policy. Players can be narrowed to one sport; sports are never blended inside a sport filter.
+ */
+export function CheatSheetClient({ players, games, gamesLocked, today, yesterday }: {
+  players: CardPick[]
+  games: CardPick[]
+  gamesLocked: number
   today: string
-  yesterdayPicks?: EnrichedBet[]
+  yesterday: CardPick[]
 }) {
-  const [filter, setFilter] = useState<FilterKey>('all')
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
+  const [mode, setMode] = useState<Mode>('players')
+  const [sport, setSport] = useState<SportFilter>('all')
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [copied, setCopied] = useState(false)
-
-  const sorted = useMemo(() => [...picks].sort((a, b) => beezyscore(b) - beezyscore(a)), [picks])
-  const filtered = filterBets(sorted, filter)
-  const displayed = filtered.slice(0, DEFAULT_LIMIT)
-  const allExpanded = filtered.length > 0 && filtered.every(b => expandedIds.has(b.id))
-  const strongCount = filtered.filter(b => scoreTier(beezyscore(b)) === 'strong').length
-  const leanCount = filtered.filter(b => scoreTier(beezyscore(b)) === 'lean').length
-  const topEdgePct = filtered.length > 0
-    ? Math.max(...filtered.map(b => b.edge != null ? (Math.abs(b.edge) < 2 ? b.edge * 100 : b.edge) : 0))
-    : 0
-
-  const ydayWins = yesterdayPicks.filter(b => b.result === 'win').length
-  const ydayLosses = yesterdayPicks.filter(b => b.result === 'loss').length
-
-  function toggleCard(id: number) {
-    setExpandedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    setExpandedIds(allExpanded ? new Set() : new Set(displayed.map(b => b.id)))
-  }
-
-  // Tweet text for X: no external links (the algo deprioritizes them --
-  // the card link lives in bio), MLB keywords up front, under 280 chars.
   const [tweetCopied, setTweetCopied] = useState(false)
+
+  const sports = useMemo(() => (['mlb', 'nfl', 'nhl', 'nba'] as SportSlug[]).filter(s => players.some(p => p.sport === s)), [players])
+  const list = mode === 'games' ? games : players.filter(p => sport === 'all' || p.sport === sport)
+  const shown = list.slice(0, DEFAULT_LIMIT)
+  const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
+  const strong = list.filter(p => scoreTier(p.score) === 'strong').length
+  const lean = list.filter(p => scoreTier(p.score) === 'lean').length
+  const best = list.reduce((m, p) => Math.max(m, (p.edge ?? 0) * 100), 0)
+  const ydayWins = yesterday.filter(p => p.result === 'win').length
+  const ydayLosses = yesterday.filter(p => p.result === 'loss').length
+
+  const toggle = (key: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
+
+  // Tweet text for X: no external links (the algo deprioritizes them -- the card link lives in bio), under 280 chars.
   const tweetText = useMemo(() => {
-    const top = sorted.filter(b => scoreTier(beezyscore(b)) !== 'watch').slice(0, 4)
-    const use = top.length ? top : sorted.slice(0, 3)
-    const header = `MLB model card — ${today}`
-    const lines = use.map(b => {
-      const label = SYSTEM_LABEL[b.system] ?? b.system
-      const who = b.player ?? `${b.away_team ?? ''}@${b.home_team ?? ''}`
-      const bet = pickLabel(b)
-      const odds = b.odds > 0 ? `+${b.odds}` : `${b.odds}`
-      const e = b.edge != null ? (Math.abs(b.edge) < 2 ? b.edge * 100 : b.edge) : null
-      const ev = e != null ? ` (+${e.toFixed(1)}% edge)` : ''
-      return `${label}: ${who} ${bet} ${odds}${ev}`
+    const ranked = players.filter(p => scoreTier(p.score) !== 'watch')
+    const use = (ranked.length ? ranked : players).slice(0, 4)
+    const header = `Top player picks - ${today}`
+    const lines = use.map(p => {
+      const e = fmtEdge(p.edge)
+      return `${SPORT_PILLARS[p.sport].shortName}: ${p.who} ${p.what} ${fmtOdds(p.odds) ?? ''}${e ? ` (${e} edge)` : ''}`.replace(/\s+/g, ' ').trim()
     })
-    const rec = ydayWins + ydayLosses > 0 ? `\nYesterday: ${ydayWins}-${ydayLosses}.` : ''
-    const footer = `\nModel probability vs the market line on every play.${rec}\nFull card + record in bio.`
+    const rec = ydayWins + ydayLosses > 0 ? `\nYesterday (MLB): ${ydayWins}-${ydayLosses}.` : ''
+    const footer = `\nModel vs the market line on every play.${rec}\nFull card + record in bio.`
     let text = `${header}\n\n${lines.join('\n')}${footer}`
     while (text.length > 278 && lines.length > 2) {
       lines.pop()
       text = `${header}\n\n${lines.join('\n')}${footer}`
     }
     return text
-  }, [sorted, today, ydayWins, ydayLosses])
+  }, [players, today, ydayWins, ydayLosses])
 
   async function copyTweet() {
-    try {
-      await navigator.clipboard.writeText(tweetText)
-      setTweetCopied(true)
-      setTimeout(() => setTweetCopied(false), 2000)
-    } catch { /* clipboard unavailable */ }
+    try { await navigator.clipboard.writeText(tweetText); setTweetCopied(true); setTimeout(() => setTweetCopied(false), 2000) } catch { /* clipboard unavailable */ }
   }
 
   async function handleShare() {
     const url = 'https://beezy.fyi/cheat-sheet'
     if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({ title: 'Beezy.FYI MLB Daily Card', url })
-      } catch {
-        // user cancelled — no-op
-      }
+      try { await navigator.share({ title: 'Beezy.FYI Daily Card', url }) } catch { /* cancelled */ }
     } else {
-      try {
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      } catch {
-        // clipboard not available
-      }
+      try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* clipboard not available */ }
     }
   }
 
   return (
-    <div style={{
-      background: 'var(--carbon)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      padding: '18px 12px 40px',
-    }}>
+    <div style={{ background: 'var(--carbon)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '18px 12px 40px' }}>
       <div className="cheat-sheet-layout">
-        {/* ── Card ─────────────────────────────────────────────────── */}
-        <div style={{
-          width: '100%',
-          maxWidth: '390px',
-          border: '1px solid var(--basalt)',
-          background: 'var(--carbon)',
-          borderRadius: 'var(--radius)',
-          overflow: 'hidden',
-          flexShrink: 0,
-        }}>
+        <div style={{ width: '100%', maxWidth: '390px', border: '1px solid var(--basalt)', background: 'var(--carbon)', borderRadius: 'var(--radius)', overflow: 'hidden', flexShrink: 0 }}>
           {/* Header */}
-          <div style={{
-            background: 'var(--graphite)',
-            padding: '16px 16px 12px',
-            borderBottom: '1px solid var(--basalt)',
-          }}>
+          <div style={{ background: 'var(--graphite)', padding: '16px 16px 12px', borderBottom: '1px solid var(--basalt)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
               <div>
-                <div className="dell-display" style={{ fontSize: '22px', color: 'var(--ash)', lineHeight: 1 }}>
-                  BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>
-                  MLB Daily Card
-                </div>
-                <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>
-                  {today}
-                </div>
+                <div className="dell-display" style={{ fontSize: '22px', color: 'var(--ash)', lineHeight: 1 }}>BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span></div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
+                <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>{today}</div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                <div className="dell-heading" style={{
-                  fontSize: '8px',
-                  letterSpacing: '0.12em',
-                  color: 'var(--signal)',
-                  padding: '4px 8px',
-                  border: '1px solid var(--basalt)',
-                  background: '#000',
-                }}>
-                  DAILY CARD
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: 800,
-                    letterSpacing: '0.08em',
-                    color: 'var(--ash)',
-                    background: 'var(--graphite)',
-                    border: '1px solid var(--basalt)',
-                    borderRadius: 'var(--radius)',
-                    padding: '5px 9px',
-                  }}
-                >
-                  beezy.fyi
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
-              {filtered.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                  <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
-                    TOP PLAY
-                  </span>
-                  <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 700, lineHeight: 1.25, maxWidth: '245px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {pickLabel(filtered[0])}
-                  </span>
-                </div>
-              ) : (
-                <p style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.45, maxWidth: '245px' }}>
-                  No card posted yet.
-                </p>
-              )}
-              <button
-                onClick={toggleAll}
-                className="mono"
-                style={{
-                  fontSize: '8px',
-                  letterSpacing: '0.08em',
-                  color: allExpanded ? 'var(--chalk)' : 'var(--fog)',
-                  background: 'transparent',
-                  border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`,
-                  padding: '4px 7px',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
+                style={{ fontSize: '8px', letterSpacing: '0.08em', color: allExpanded ? 'var(--chalk)' : 'var(--fog)', background: 'transparent', border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`, padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 {allExpanded ? 'COLLAPSE' : 'EXPAND'}
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => { setFilter(f.key); setExpandedIds(new Set()) }}
-                  className="mono"
-                  style={{
-                    padding: '5px 10px',
-                    fontSize: '9px',
-                    cursor: 'pointer',
-                    border: `1px solid ${filter === f.key ? 'var(--steel)' : 'var(--basalt)'}`,
-                    background: filter === f.key ? '#131a1e' : 'transparent',
-                    color: filter === f.key ? 'var(--chalk)' : 'var(--fog)',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
+            <div role="group" aria-label="Pick type" style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+              <button className="mono" aria-pressed={mode === 'players'} onClick={() => { setMode('players'); setExpanded(new Set()) }} style={chip(mode === 'players')}>Player picks</button>
+              <button className="mono" aria-pressed={mode === 'games'} onClick={() => { setMode('games'); setExpanded(new Set()) }} style={chip(mode === 'games')}>Game picks</button>
             </div>
+            {mode === 'players' && sports.length > 1 && (
+              <div role="group" aria-label="Sport" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {(['all', ...sports] as SportFilter[]).map(s => (
+                  <button key={s} className="mono" aria-pressed={sport === s} onClick={() => { setSport(s); setExpanded(new Set()) }} style={chip(sport === s)}>
+                    {s === 'all' ? 'All' : SPORT_PILLARS[s].shortName}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Stats bar */}
-          {filtered.length > 0 && (
-            <div style={{
-              padding: '7px 16px',
-              background: 'var(--carbon)',
-              borderBottom: '1px solid var(--basalt)',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '10px',
-              alignItems: 'center',
-            }}>
-              <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
-                {filtered.length} PICKS
-              </span>
-              {strongCount > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
-                  {strongCount} STRONG
-                </span>
-              )}
-              {leanCount > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
-                  {leanCount} LEAN
-                </span>
-              )}
-              {topEdgePct > 0 && (
-                <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>
-                  BEST EDGE +{topEdgePct.toFixed(1)}%
-                </span>
-              )}
+          {list.length > 0 && (
+            <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--basalt)', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+              <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{list.length} PICKS</span>
+              {strong > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{strong} STRONG</span>}
+              {lean > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{lean} LEAN</span>}
+              {best > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
-          {/* Column header */}
-          <div style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--basalt)',
-            background: 'var(--carbon)',
-            padding: '5px 0',
-          }}>
-            <div style={{ width: '86px', minWidth: '86px' }} />
-            <div className="mono" style={{ flex: 1, paddingLeft: '12px', fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em' }}>
-              PICK / TAP FOR WHY
-            </div>
-            <div className="mono" style={{ minWidth: '68px', textAlign: 'center', fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em' }}>
-              SCORE
-            </div>
-          </div>
-
-          {/* Picks or empty state */}
-          {filtered.length === 0 ? (
+          {list.length === 0 ? (
             <div style={{ padding: '20px 16px' }}>
-              <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
-                {filter === 'all' ? 'NO PICKS YET' : `NO ${filter.toUpperCase()} PICKS YET`} &mdash; MODEL CARD PUBLISHES ~11:00 AM CT
-              </div>
-              {yesterdayPicks.length > 0 && (
+              {mode === 'games' && gamesLocked > 0 ? (
+                <LockedNotice locked={gamesLocked} what="MLB game picks" plan="Game picks are on the MLB Pass or All-Access Pro." />
+              ) : (
                 <>
-                  <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>
-                    YESTERDAY&apos;S RESULTS
+                  <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
+                    NOTHING SCORED YET &mdash; MLB CARD PUBLISHES ~11:00 AM CT
                   </div>
-                  {yesterdayPicks.slice(0, 3).map(bet => (
-                    <YesterdayRow key={bet.id} bet={bet} />
-                  ))}
-                  {(ydayWins > 0 || ydayLosses > 0) && (
-                    <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', textAlign: 'center', marginTop: '10px', letterSpacing: '0.06em' }}>
-                      {ydayWins}–{ydayLosses} yesterday
-                    </div>
+                  {yesterday.length > 0 && (
+                    <>
+                      <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>YESTERDAY&apos;S RESULTS</div>
+                      {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
+                      {ydayWins + ydayLosses > 0 && (
+                        <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', textAlign: 'center', marginTop: '10px' }}>{ydayWins}-{ydayLosses} yesterday</div>
+                      )}
+                    </>
                   )}
                 </>
               )}
             </div>
           ) : (
             <>
-              {displayed.map((bet, i) => (
-                <PickCard
-                  key={bet.id}
-                  bet={bet}
-                  rank={i + 1}
-                  expanded={expandedIds.has(bet.id)}
-                  onToggle={() => toggleCard(bet.id)}
-                />
-              ))}
-
-              {filtered.length > DEFAULT_LIMIT && (
-                <div className="mono" style={{
-                  padding: '8px 16px',
-                  fontSize: '9px',
-                  letterSpacing: '0.08em',
-                  color: 'var(--fog)',
-                  borderTop: '1px solid var(--basalt)',
-                  textAlign: 'center',
-                }}>
-                  +{filtered.length - DEFAULT_LIMIT} MORE ON THE PICKS PAGE
+              {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
+              {list.length > DEFAULT_LIMIT && (
+                <div className="mono" style={{ padding: '8px 16px', fontSize: '9px', letterSpacing: '0.08em', color: 'var(--fog)', borderTop: '1px solid var(--basalt)', textAlign: 'center' }}>
+                  +{list.length - DEFAULT_LIMIT} MORE ON <Link href={mode === 'games' ? '/picks/games' : '/picks'} style={{ color: 'var(--link)' }}>THE PICKS PAGE</Link>
                 </div>
               )}
+              {mode === 'games' && <div style={{ padding: '0 12px 12px' }}><LockedNotice locked={gamesLocked} shown={games.length} what="MLB game picks" plan="The full set is on the MLB Pass or All-Access Pro." /></div>}
             </>
           )}
 
-          {/* Footer */}
-          <div style={{
-            borderTop: '1px solid var(--basalt)',
-            padding: '11px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            background: 'var(--carbon)',
-          }}>
-            <button
-              onClick={handleShare}
-              className="dell-heading"
-              style={{
-                fontSize: '9px',
-                letterSpacing: '0.08em',
-                padding: '6px 12px',
-                background: 'var(--signal)',
-                color: '#000',
-                border: '1px solid var(--basalt)',
-                borderRadius: 'var(--radius)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {copied ? 'COPIED!' : 'SHARE CARD'}
+          <div style={{ borderTop: '1px solid var(--basalt)', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--carbon)' }}>
+            <button onClick={handleShare} className="dell-heading"
+              style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.08em' }}>
-              BEEZY.FYI
-            </span>
+            <span className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.08em' }}>BEEZY.FYI</span>
           </div>
-
         </div>
 
-        {/* ── Desktop sidebar ──────────────────────────────────────── */}
+        {/* Desktop sidebar */}
         <aside className="cheat-sheet-sidebar">
-          {/* tweet composer: support tool for posting the card to X */}
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
               <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}>POST TO X</span>
               <span className="mono" style={{ fontSize: '9px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
               <div style={{ flex: 1 }} />
               <button onClick={copyTweet} className="mono" style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
-                {tweetCopied ? 'COPIED!' : 'COPY'}
+                {tweetCopied ? 'COPIED' : 'COPY'}
               </button>
             </div>
-            <textarea readOnly value={tweetText} rows={Math.min(12, tweetText.split('\n').length + 1)}
-              onFocus={e => e.currentTarget.select()}
-              aria-label="Tweet text"
-              className="mono"
+            <textarea readOnly value={tweetText} rows={Math.min(12, tweetText.split('\n').length + 1)} onFocus={e => e.currentTarget.select()} aria-label="Tweet text" className="mono"
               style={{ width: '100%', background: 'var(--carbon)', color: 'var(--silver)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-sm)', fontSize: '11px', lineHeight: 1.5, padding: '10px 12px', resize: 'vertical' }} />
-            <p className="times" style={{ fontSize: '11px', color: 'var(--fog)', margin: '8px 0 0' }}>
-              No links in the text (X deprioritizes them) &mdash; the card link stays in your bio. Attach the card screenshot for reach.
-            </p>
+            <p style={{ fontSize: '11px', color: 'var(--fog)', margin: '8px 0 0' }}>No links in the text (X deprioritizes them); the card link stays in your bio. Attach the card screenshot for reach.</p>
           </div>
 
-          <div style={{
-            border: '1px solid var(--basalt)',
-            background: 'var(--graphite)',
-            padding: '20px',
-            marginBottom: '16px',
-          }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--signal)', marginBottom: '12px' }}>
-              WHAT IS THIS?
+          <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>WHAT IS THIS</div>
+            <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: '0 0 10px' }}>
+              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in public; NFL, NHL and NBA rows are projections and are marked UNVALIDATED. Game picks are a separate, paid set.
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: 0 }}>
+              Tap a pick to see why it made the card. Each sport&apos;s systems and record are at the bottom of its page:
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: '8px', fontSize: '12.5px' }}>
+              <Link href="/picks/mlb#systems" style={{ color: 'var(--link)' }}>MLB players</Link>
+              <Link href="/picks/games#systems" style={{ color: 'var(--link)' }}>MLB games</Link>
+              {(['nfl', 'nhl', 'nba'] as const).map(s => <Link key={s} href={`${sportHref(s)}#systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
             </div>
-            <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65, marginBottom: '12px' }}>
-              The Daily Card is a share-ready image of today&apos;s top MLB model picks, ranked by Beezy Score (edge, how many books agree, and hit probability in one 0-100 number). It is the model slice of the Picks page, sized for posting. +EV alerts are not on the card; they live in the +EV Terminal.
-            </p>
-            <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.65 }}>
-              The card publishes after the ~11:00 AM CT model run. Tap any pick to see why it made the card.
-            </p>
           </div>
 
-          <div style={{
-            border: '1px solid var(--basalt)',
-            background: 'var(--graphite)',
-            padding: '20px',
-            marginBottom: '16px',
-          }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '12px' }}>
-              SCORE LEGEND
-            </div>
+          <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', borderRadius: 'var(--radius)' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>SCORE LEGEND</div>
             {[
-              { tier: 'strong', color: '#57f287', label: 'STRONG', desc: 'Score 70+: large edge, many books agree' },
-              { tier: 'lean',   color: '#facc15', label: 'LEAN',   desc: 'Score 45-69: positive edge, moderate confidence' },
-              { tier: 'watch',  color: '#94a3b8', label: 'WATCH',  desc: 'Score under 45: small edge, listed for reference' },
-            ].map(row => (
-              <div key={row.tier} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <span className="dell-heading" style={{
-                  fontSize: '8px',
-                  letterSpacing: '0.08em',
-                  padding: '2px 6px',
-                  background: `${row.color}20`,
-                  color: row.color,
-                  border: `1px solid ${row.color}`,
-                  flexShrink: 0,
-                }}>
-                  {row.label}
-                </span>
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{
-            border: '1px solid var(--basalt)',
-            background: 'var(--graphite)',
-            padding: '20px',
-          }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '12px' }}>
-              SYSTEMS
-            </div>
-            {[
-              ...SPORT_PILLARS.mlb.markets.map(m => ({ key: m.key, color: SYSTEM_COLOR[m.key] ?? '#9ca3af', desc: m.label })),
-            ].map(row => (
-              <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '7px' }}>
-                <span className="mono" style={{ fontSize: '9px', color: row.color, width: '96px', flexShrink: 0 }}>{row.key}</span>
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
-              </div>
-            ))}
+              { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
+              { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
+              { tier: 'watch', desc: 'Score under 45: small edge, listed for reference' },
+            ].map(row => {
+              const t = row.tier as 'strong' | 'lean' | 'watch'
+              return (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
+                  <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
+                </div>
+              )
+            })}
           </div>
         </aside>
       </div>
 
-      <a
-        href="/picks"
-        className="mono cheat-sheet-picks-link"
-        style={{
-          marginTop: '16px',
-          fontSize: '10px',
-          color: 'var(--fog)',
-          textDecoration: 'none',
-          letterSpacing: '0.06em',
-        }}
-      >
-        ALL PICKS &rarr;
-      </a>
+      <Link href="/picks" className="mono cheat-sheet-picks-link" style={{ marginTop: '16px', fontSize: '10px', color: 'var(--fog)', textDecoration: 'none', letterSpacing: '0.06em' }}>ALL PICKS &rarr;</Link>
     </div>
   )
 }

@@ -7,7 +7,6 @@ const STATIC_ROUTES = [
   { path: '/',               priority: '1.0', changefreq: 'daily'   },
   { path: '/picks',          priority: '0.9', changefreq: 'daily'   },
   { path: '/picks/mlb',      priority: '0.9', changefreq: 'daily'   },
-  { path: '/picks/mlb/systems', priority: '0.7', changefreq: 'daily' },
   { path: '/picks/games',   priority: '0.7', changefreq: 'daily'   },
   { path: '/picks/history',  priority: '0.6', changefreq: 'daily'   },
   { path: '/ev',             priority: '0.9', changefreq: 'hourly'  },

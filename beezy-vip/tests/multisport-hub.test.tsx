@@ -96,7 +96,7 @@ const outlier = (player: string) => ({
 describe('NFL / NHL / NBA hubs', () => {
   it.each(['nfl', 'nhl', 'nba'] as const)('%s hub opens on its own projection board with the same three tabs, never a coming-soon empty state', (sport) => {
     render(<SportHubClient {...hubProps(sport, data([row({ sport })]))} />)
-    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['PROJECTIONS', 'MARKET PRICES', 'MODELS'])
+    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['PROJECTIONS', 'MARKET PRICES'])
     expect(screen.getByRole('tab', { name: 'PROJECTIONS' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('Jo Doe')).toBeInTheDocument()
     expect(screen.queryByText(/coming soon/i)).toBeNull()
@@ -118,9 +118,12 @@ describe('NFL / NHL / NBA hubs', () => {
     expect(screen.getByRole('note')).toHaveTextContent(/12 more NBA projections today/)
     expect(screen.getByRole('link', { name: /plans/i })).toHaveAttribute('href', '/pricing')
   })
-  it.each(['nfl', 'nhl', 'nba'] as const)('%s Models tab shows real specification and validation, not "not tracked yet"', (sport) => {
+  it.each(['nfl', 'nhl', 'nba'] as const)('%s systems footer is on every tab: real specification and validation, not "not tracked yet"', (sport) => {
     render(<SportHubClient {...hubProps(sport, null)} />)
-    fireEvent.click(screen.getByRole('tab', { name: 'MODELS' }))
+    expect(screen.queryByRole('tab', { name: 'MODELS' })).toBeNull()
+    expect(screen.getByRole('heading', { name: new RegExp(`${sport} systems`, 'i') })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'MARKET PRICES' }))
+    expect(screen.getByRole('heading', { name: new RegExp(`${sport} systems`, 'i') })).toBeInTheDocument()
     expect(screen.queryByText(/not tracked yet/i)).toBeNull()
     for (const m of SPORT_MODEL_SPECS[sport].models) expect(screen.getByText(m.label)).toBeInTheDocument()
     expect(screen.getByText(/What the daily board runs/i)).toBeInTheDocument()
