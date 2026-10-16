@@ -57,8 +57,8 @@ gcloud run services update "$SERVICE" \
   --image="$IMAGE" \
   --add-cloudsql-instances="$INSTANCE" \
   --memory=4Gi --cpu=2 \
-  --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,PARLAY_API_KEY=parlay-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest" \
-  --update-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-parlay}" \
+  --set-secrets="MLB_DB_URL=mlb-db-url:latest,MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_URL=discord-webhook-url:latest,DISCORD_WEBHOOK_SUMMARY=discord-webhook-summary:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest,SGO_API_KEY=sgo-api-key:latest,PARLAY_API_KEY=parlay-api-key:latest,SITE_API_KEY=site-api-key:latest,SITE_ORIGIN=site-origin:latest,DISCORD_WEBHOOK_EV_BOOKS=discord-webhook-ev-books:latest,DISCORD_WEBHOOK_EV_EXCHANGES=discord-webhook-ev-exchanges:latest,DISCORD_WEBHOOK_CARD_MLB=discord-webhook-card-mlb:latest,DISCORD_WEBHOOK_RECAP=discord-webhook-recap:latest,BEEZY_BOT_SECRET=beezy-bot-secret:latest" \
+  --update-env-vars="ODDS_PRIMARY=${ODDS_PRIMARY:-parlay},BEEZY_BOT_URL=https://beezy-discord-bot-628109313129.us-central1.run.app" \
   --project="$PROJECT_ID"
 # --memory=4Gi (was 2Gi): /refresh-data and /build-features were hitting the
 # 2Gi ceiling and getting OOM-killed (Cloud Run returns 503, Cloud Scheduler
