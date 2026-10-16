@@ -1,4 +1,19 @@
-import { SYSTEM_PILL } from '@/lib/tokens'
+import { resolveEvUnderlying, SYSTEM_PILL } from '@/lib/tokens'
+import type { Bet } from '@/lib/types'
+
+/** Player picks (a named player's stat) and game picks (a team or game outcome) are separate products and separate access. */
+export type PickKind = 'player' | 'game'
+
+const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME'])
+
+export function kindOfSystem(system: string): PickKind {
+  return GAME_SYSTEMS.has(system.toUpperCase()) ? 'game' : 'player'
+}
+
+/** An EV row is classified by the market it actually alerted on, not by its pooled `EV` tag. */
+export function betKind(bet: Bet): PickKind {
+  return kindOfSystem(bet.system === 'EV' ? resolveEvUnderlying(bet).system : bet.system)
+}
 
 export type PickSystem = {
   key: string

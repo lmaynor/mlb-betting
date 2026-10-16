@@ -8,7 +8,7 @@ import { Home, Trophy, Wrench, Zap, ListChecks } from 'lucide-react'
 const TABS = [
   { label: 'Home',    href: '/',        Icon: Home,       prefixes: [] as string[] },
   { label: '+EV',     href: '/ev',      Icon: Zap,        prefixes: ['/ev', '/edge'] },
-  { label: 'Picks',   href: '/picks',   Icon: ListChecks, prefixes: ['/picks', '/cheat-sheet'] },
+  { label: 'Picks',   href: '/picks',   Icon: ListChecks, prefixes: ['/picks', '/cheat-sheet', '/sports'] },
   { label: 'Results', href: '/results', Icon: Trophy,     prefixes: ['/results', '/analytics', '/models'] },
   { label: 'Tools',   href: '/tools',   Icon: Wrench,     prefixes: ['/tools'] },
 ]
