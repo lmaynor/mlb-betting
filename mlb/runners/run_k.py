@@ -953,6 +953,13 @@ def _score_pitcher_er(predictions_df, cfg: dict, run_date: str) -> list:
     return results
 
 
+def _proj_mean(market: str, proj_k) -> float | None:
+    """Expected value of the stat the market is on: Ks for K, outs for OUTS (proj_k holds projected IP there)."""
+    if proj_k is None or proj_k != proj_k:
+        return None
+    return float(proj_k) * 3.0 if market == "OUTS" else float(proj_k)
+
+
 def run(run_type: str = "morning", run_date: str = None) -> dict:
     run_date = run_date or date.today().isoformat()
     logger.info(f"K run | type={run_type} | date={run_date}")
@@ -996,6 +1003,8 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             paper            = cfg["PAPER"],
             lambda_k         = row.get("lambda_k"),
             proj_k           = row.get("proj_k"),
+            # the projection in the market's own unit: proj_k is mean Ks for K and projected IP for OUTS (outs = IP * 3)
+            proj_mean        = _proj_mean(market, row.get("proj_k")),
             book             = row.get("bookmaker"),
             morning_odds     = row.get("morning_odds"),
             notes            = build_rationale(dict(row), market),
@@ -1033,6 +1042,7 @@ def run(run_type: str = "morning", run_date: str = None) -> dict:
             kelly_triggered  = bet["kelly_triggered"],
             paper            = cfg["PAPER"],
             book             = bet.get("bookmaker"),
+            proj_mean        = bet.get("mu_er"),
         )
         if ret == -1:
             continue

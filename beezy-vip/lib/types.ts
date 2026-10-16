@@ -26,6 +26,8 @@ export interface Bet {
   book:            string | null
   notes:           string | null
   created_at:      string
+  /** the model's expected value for the player stat, in the market's unit (Ks, outs, TB, hits, SB, ER); null for HR and game markets */
+  proj_mean?:      number | null
 }
 
 export interface SystemStats {
