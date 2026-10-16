@@ -1819,6 +1819,7 @@ RETRAIN_JOBS = [
     "mlb-retrain-game-v1",    # GAME Pro v1
     "mlb-retrain-batter-hits",
     "mlb-retrain-batter-tb",
+    "mlb-retrain-sb-v1",      # SB (LOG_ONLY); was missing from this list until 2026-10-15
 ]
 CALIBRATE_JOBS = [
     "mlb-calibrate-nrfi",
@@ -1828,6 +1829,7 @@ CALIBRATE_JOBS = [
     "mlb-calibrate-game",
     "mlb-calibrate-batter-hits",
     "mlb-calibrate-batter-tb",
+    "mlb-calibrate-sb",
 ]
 
 
@@ -1889,7 +1891,7 @@ def calibrate_weekly():
     """
     Trigger weekly calibrate for trained model systems.
     Called by mlb-calibrate-weekly scheduler every Monday ~06:35 UTC -- 35
-    minutes after /retrain-weekly, enough for the 8 retrain jobs (each
+    minutes after /retrain-weekly, enough for the 9 retrain jobs (each
     ~2-8 min per observed execution history) to finish. Split out from
     /retrain-weekly 2026-08-19 -- see the module comment above
     _jobs_get_token for why the old single-route + sleeping-thread design
