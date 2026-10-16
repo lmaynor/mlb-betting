@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-14 CST_
+_Last updated: 2026-10-15 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -359,6 +359,9 @@ mlb-betting/
 │                                 (KEXEC_* env). allow_wide_book_on_consensus (default False) lets an exchange
 │                                 taker judge the ASK vs an EXTERNAL consensus instead of the venue mid -- on only
 │                                 for Novig (see 15.11). Reused unchanged by ev/novig/exec.py.
+├── ev/daily_projections.py       Daily NFL/NHL/NBA projection board (GET /api/public/projections); empirical_ewm_v1 engine, unvalidated
+├── mlb_core/alerts/              discord_routes.py: webhook fallback chains, Kambi clone dedup, deep links
+├── discord-bot/                  beezy-bot service (Node); see s14
 ├── ev/                           Multi-sport +EV sweep (shadow/paper only, NFL props first): props.py (ParlayAPI
 │   │                             props -> per-book devig -> consensus; scan_book_outliers = Sink A; pooled
 │   │                             adjacent-half-point consensus), sweep_nfl_props.py (cycle: consensus ->
@@ -1933,6 +1936,7 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
 | `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow sweep blocks: `nfl` (read from `EVSweep/nfl_props/latest.json`: Kalshi `rows` plus `book_outliers`, the Sink A book/exchange rows -- present even when Kalshi blocks the cloud egress IP and `rows` is empty), `nhl` / `nba` (`EVSweep/{sport}_props/latest.json`). Every shadow block carries `status`/`age_minutes`/`stale`/`validated:false`, started games are dropped, and Sink A rows share one shape (`EvBookOutlierRow`: `ev`, `p_fair`, `point`, `american`, `decimal`, `n_books`, `flag`). An outlier-only NFL snapshot counts as live for 45 min (Kalshi-backed snapshots for 180) |
 | `GET /api/public/edge/cockpit` | 60s | `/edge` multi-sport prop cockpit (`sport`, `limit`, `min_ev`): MLB (today's model predictions + `system='EV'` alerts, with the Statcast enrichment) + NFL / NHL / NBA sweep rows in ONE row shape (`CockpitRow`), each with `recentForm` = the player's last-10 game log vs the line (`mlb_core/data/cockpit_form.py`; reads `NFL/nflverse/player_stats/`, `NHL/{skater,goalie}_boxscores_master.csv`, `NBA/player_boxscores_master`, cached 10 min, `null` when a master is absent) and `all_books` for line shopping. Per-sport `status`/freshness like `/ev/feed`. Next.js proxy `/api/edge-cockpit`; `/edge` falls back to the MLB model board when this endpoint is unreachable |
+| `GET /api/public/projections` | 60s | Daily NFL / NHL / NBA projection board (`sport` required, `market`, `limit`): one row per player x stat from `ev/daily_projections.py` -- `proj_mean`, `p_over_model`, `l5/l10_hit_rate`, `szn_avg`, `consensus_line`, best over/under price + book, `p_over_market`, `model_edge`, `market_ev`, `confluence`, `beezy_score`; rows with `has_line:false` are rotation projections (lines not posted). Read from `EVSweep/{sport}_props/projections_latest.json`, computed on demand when missing/older than 90 min (throttled 10 min/sport). ENGINE is `empirical_ewm_v1` (EWM + usage + opponent factor on the game-log masters), NOT the trained XGBoost research models (their artifacts are local-only). Every row `validated:false`. Next.js proxy `/api/projections` |
 | `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
@@ -1986,6 +1990,14 @@ empty -- blocks nothing. Applies to `/picks/**`, `/dashboard/**`,
 `/signup/**` only. Legal pages and tools remain accessible everywhere.
 
 ### Stripe
+
+**Plans (2026-10-15, `lib/tiers.ts`):** Single-Sport Pass $19/mo (one league, chosen at checkout; `sport` rides on the Checkout session and
+subscription metadata and is stored as Clerk `sportChoice`), All-Access Pro Monthly $39/mo, All-Access Pro Annual $299/yr (-36%). Legacy
+`starter`/`pro`/`season` stay valid. Stripe env: `STRIPE_PRICE_SINGLE_SPORT`, `STRIPE_PRICE_PRO_MONTHLY` (falls back to `STRIPE_PRICE_PRO`),
+`STRIPE_PRICE_PRO_ANNUAL`. Webhook + both reconcilers share `priceToTierMap()`. Discord roles: `lib/discord-sync.ts` POSTs
+`BEEZY_BOT_SYNC_URL` with `X-Beezy-Secret: BEEZY_BOT_SECRET` (best-effort, never fails the webhook); the Discord id comes ONLY from Clerk's
+verified Discord OAuth account (`POST /api/user/discord-link`), never from a request body. `/ev` has a persistent "My books" filter
+(`lib/use-my-books.ts`, localStorage `beezy_my_books`, empty = all books).
 
 Stripe is wired but NOT active. `PRE_LAUNCH = true` lives in ONE place, `beezy-vip/lib/launch.ts`
 (imported by `app/signup/page.tsx`, `components/landing/pricing.tsx` and the nav CTA, which reads JOIN WAITLIST
@@ -2066,9 +2078,11 @@ Satori OG routes -- use literal hex there.
   master-detail list + inspector (`cockpit.tsx`: L10 game log vs line `FormSparkline`, opportunity/volume `UsageSparkline`,
   multi-book `OddsMatrix`; MLB shows the existing `EvLaScatter` + `SprayChart`). Below 960px the inspector is a full-screen
   sheet. The old MLB model board (players/games, bet slip) is the `MODEL BOARD` view under the MLB tab.
-- **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts`
-  (mlb live, nfl shadow, nhl shadow, nba data_only). Update that file when a pillar's real
-  status changes -- do not write aspirational copy there.
+- **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts` (2026-10-15: all four `live`, every
+  NFL/NHL/NBA market `Active`). NFL/NHL/NBA Today tab = live market dislocations (with a MODEL + MARKET badge when the projection
+  board agrees) + the daily projection board (`projections-board.tsx`); Models tab = `lib/prop-model-specs.ts` (real study numbers,
+  `--` where no study produced one; separates the trained research model from the live empirical engine). Update the files when
+  reality changes -- do not write aspirational copy there.
 - **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
   per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
 
@@ -2342,6 +2356,18 @@ service as an environment variable:
 | `discord-ops-webhook-url` | `DISCORD_WEBHOOK_OPS` | `#ops-alerts` | `post_error()`, `post_ops_alert()` |
 | `discord-webhook-performance` | `DISCORD_WEBHOOK_PERFORMANCE` | `#performance` | `monitor_performance.py` (rolling perf alerts + Monday digest), `weekly_survival_report.py` |
 | `discord-webhook-alerts` (secret not created yet; both jobs' `--set-secrets` already reference it) | `DISCORD_WEBHOOK_ALERTS` | recommended: new `#soft-line-alerts` channel (2026-08-16 recommendation, not yet built) -- falls back to `#daily-picks` via `DISCORD_WEBHOOK_URL` until then | `mlb.runners.fast_alert_loop`, `mlb.runners.kalshi_alert` (both intraday +EV pagers) |
+
+**Routing is centralised (2026-10-15):** `mlb_core/alerts/discord_routes.py::webhook_for(kind, sport=None)` -- `ev_sportsbooks` (EV_BOOKS -> ALERTS -> OPS),
+`ev_exchanges` (EV_EXCHANGES -> ALERTS -> OPS), `card` (CARD_<SPORT> -> URL), `recap` (RECAP -> legacy SUMMARY -> URL), `tweets` (TWEETS -> OPS),
+`ops` (OPS only). +EV pagers (`fast_alert_loop`, `kalshi_alert`) no longer fall back to #daily-picks (unset chain = print only) and split
+exchange vs sportsbook rows into their own channels; every +EV embed carries `url` + deep links to /ev and /edge. The NFL/NHL/NBA
+sweeps (`ev/sweep_nfl_props.py`, `ev/sweep_props_alerts.py`) deliberately keep their admin-only webhook (unvalidated rows) and only gained the
+links. Kambi clones: `sugarhouse` is dropped when `betrivers` quotes the same proposition (`drop_kambi_clones`) and folded into `betrivers`
+in `ev/props.parse_event_props`, so a pair counts as ONE book in consensus, Discord and `bets`.
+
+`discord-bot/` (Node 22, discord.js 14, `node:sqlite`, no voice/native deps; own tests via `npm test`) is the persistent beezy-bot: `/ev /proj
+/edge /record /ask /link`, owner-only `/setup-server` (idempotent roles/channels/webhooks + gcloud secret commands), antispam/automod,
+welcome, and `POST /internal/sync-role`. NOT deployed; needs a Cloud Run service/secrets (see its README).
 
 `post_error()` previously routed to the main picks webhook. It now uses
 `DISCORD_WEBHOOK_OPS`, keeping errors out of member-facing channels.
