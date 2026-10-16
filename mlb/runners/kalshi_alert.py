@@ -52,7 +52,7 @@ from datetime import date as _date
 import pandas as pd
 
 from mlb_core.alerts.discord_routes import (
-    bot_configured, drop_kambi_clones, is_exchange_book, post_via_bot, slip_text, webhook_for, with_deep_links,
+    bot_configured, drop_kambi_clones, is_exchange_book, post_via_bot, webhook_for, with_deep_links,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -240,8 +240,18 @@ def notify(new: pd.DataFrame, names: dict, min_ev: float, min_books: int) -> Non
                                f"verdict=check only | kalshi_alert"},
         })
         # Real bot-user message first (other bots can read its text, not a webhook's); webhook is the fallback.
-        if bot_configured() and post_via_bot(kind, slip_text(_slip_lines(sub, names)), [embed]):
-            continue
+        if bot_configured():
+            # one bot message per alert + a thread where the slip bots are @mentioned (webhook text is invisible to them)
+            fields_by_row = _alert_fields(sub.sort_values("ev_pct", ascending=False), names)
+            lines = _slip_lines(sub, names)
+            posted_n = 0
+            for line, f in zip(lines, fields_by_row):
+                emb = with_deep_links({"title": f["name"], "description": f["value"], "color": 0x00D2A0,
+                                       "footer": {"text": "kalshi_alert"}})
+                if post_via_bot(kind, line, [emb], thread={"name": line[:100], "content": line}):
+                    posted_n += 1
+            if posted_n:
+                continue
         if url:
             _post(url, {"embeds": [embed]})
         else:

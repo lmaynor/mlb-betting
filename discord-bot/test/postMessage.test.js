@@ -84,3 +84,68 @@ test('every allowlisted key maps to a plain channel name', () => {
   assert.equal(Object.keys(http.POST_CHANNELS).length, 9);
   for (const name of Object.values(http.POST_CHANNELS)) assert.match(name, /^[a-z0-9-]+$/);
 });
+
+// ---- threads with @slip-bot mentions --------------------------------------------------------------------------
+function makeThreadClient({ botNames = ['GamblyBot', 'Playbook'], failThread = false } = {}) {
+  const threads = [];
+  const members = new Collection([
+    ['111111111111111111', { id: '111111111111111111', displayName: 'GamblyBot', nickname: null, user: { bot: true, username: 'GamblyBot' } }],
+    ['222222222222222222', { id: '222222222222222222', displayName: 'Playbook', nickname: null, user: { bot: true, username: 'Playbook' } }],
+    ['333333333333333333', { id: '333333333333333333', displayName: 'Playbook', nickname: null, user: { bot: false, username: 'Playbook' } }],
+  ]);
+  const channel = {
+    id: 'c1', name: 'ev-sportsbooks',
+    send: async () => ({
+      id: 'm1',
+      startThread: async (opts) => {
+        if (failThread) throw new Error('Missing Permissions');
+        const t = { opts, sent: [], send: async (m) => { t.sent.push(m); } };
+        threads.push(t);
+        return t;
+      },
+    }),
+  };
+  const guild = {
+    id: GUILD,
+    channels: { fetch: async () => new Collection([['c1', channel]]) },
+    members: { fetch: async ({ query }) => new Collection([...members].filter(([, m]) => m.displayName.toLowerCase().includes(query.toLowerCase()) && botNames.includes(m.displayName))) },
+  };
+  return { threads, client: { user: { tag: 'b#1' }, guilds: { cache: new Collection([[GUILD, guild]]), fetch: async () => guild } } };
+}
+
+test('thread payload validation', () => {
+  const ok = { channel: 'ev_sportsbooks', content: 'x', thread: { name: '  Jo   Doe Over 24.5  ', content: 'slip' } };
+  assert.deepEqual(http.validatePostPayload(ok).value.thread, { name: 'Jo Doe Over 24.5', content: 'slip' });
+  assert.equal(http.validatePostPayload({ ...ok, thread: 'x' }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, thread: { name: '', content: 'slip' } }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, thread: { name: 'n'.repeat(101), content: 'slip' } }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, thread: { name: 'n', content: '' } }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, thread: { name: 'n', content: 'c'.repeat(1801) } }).ok, false);
+});
+
+test('opens a thread and @mentions only the real slip bots (never a human with the same name)', async () => {
+  http.resetSlipBotCache();
+  const { client, threads } = makeThreadClient();
+  const out = await http.postMessage(client, GUILD, { channel: 'ev_sportsbooks', content: 'Jo Doe Over 24.5 Points @ FanDuel +120',
+    thread: { name: 'Jo Doe Over 24.5 Points', content: 'Jo Doe Over 24.5 Points @ FanDuel +120' } });
+  assert.deepEqual([out.status, out.thread, out.mentioned], ['ok', true, 2]);
+  const t = threads[0];
+  assert.equal(t.opts.name, 'Jo Doe Over 24.5 Points');
+  assert.equal(t.sent[0].content, '<@111111111111111111> <@222222222222222222> Jo Doe Over 24.5 Points @ FanDuel +120');
+  assert.deepEqual(t.sent[0].allowedMentions, { users: ['111111111111111111', '222222222222222222'] });
+});
+
+test('a thread failure does not fail the alert', async () => {
+  http.resetSlipBotCache();
+  const { client } = makeThreadClient({ failThread: true });
+  const out = await http.postMessage(client, GUILD, { channel: 'ev_sportsbooks', content: 'x', thread: { name: 'n', content: 'c' } });
+  assert.deepEqual([out.status, out.thread], ['ok', false]);
+});
+
+test('no slip bots in the guild: thread still posts, nobody mentioned', async () => {
+  http.resetSlipBotCache();
+  const { client, threads } = makeThreadClient({ botNames: [] });
+  const out = await http.postMessage(client, GUILD, { channel: 'ev_sportsbooks', content: 'x', thread: { name: 'n', content: 'slip' } });
+  assert.equal(out.mentioned, 0);
+  assert.equal(threads[0].sent[0].content, 'slip');
+});

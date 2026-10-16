@@ -255,24 +255,37 @@ def test_post_via_bot_off_without_config_and_never_raises(monkeypatch):
     assert dr.post_via_bot("ev_exchanges", "slip", None) is False
 
 
-def test_notify_prefers_bot_message_with_slip_lines_then_falls_back(monkeypatch):
+def test_notify_posts_one_bot_message_and_thread_per_alert_then_falls_back(monkeypatch):
     monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
     monkeypatch.setenv("BEEZY_BOT_SECRET", "s3")
     monkeypatch.setenv("DISCORD_WEBHOOK_EV_BOOKS", "https://hook.test/books")
     hooks, bots = [], []
     monkeypatch.setattr(discord_mod, "_post", lambda url, payload: hooks.append(url) or True)
-    monkeypatch.setattr(fal, "post_via_bot", lambda kind, content, embeds, **k: bots.append((kind, content, embeds)) or True)
+    monkeypatch.setattr(fal, "post_via_bot", lambda kind, content, embeds, **k: bots.append((kind, content, embeds, k)) or True)
     fal.notify(pd.DataFrame([_alert("draftkings"), _alert("fanduel", player_id=2, player_name="Two", ev=0.2)]), set(), "2026-10-15")
-    assert hooks == [] and len(bots) == 1
-    kind, content, embeds = bots[0]
-    assert kind == "ev_sportsbooks"
-    assert content.splitlines()[0].startswith("Two ") and "@ FanDuel" in content and "@ DraftKings" in content
-    assert "**" not in content and embeds[0]["url"] == "https://beezy.fyi/ev"
-    # bot refuses -> webhook fallback
+    assert hooks == [] and len(bots) == 2                      # one message per alert, best EV first
+    kind, content, embeds, kw = bots[0]
+    assert kind == "ev_sportsbooks" and content.startswith("Two ") and "@ FanDuel" in content and "**" not in content
+    assert kw["thread"] == {"name": content, "content": content}
+    assert embeds[0]["url"] == "https://beezy.fyi/ev" and "EV **+20.0%**" in embeds[0]["description"]
+    assert bots[1][1].startswith("P One ") and "@ DraftKings" in bots[1][1]
+    # bot refuses everything -> the grouped webhook embed is the fallback
     bots.clear()
     monkeypatch.setattr(fal, "post_via_bot", lambda *a, **k: False)
     fal.notify(pd.DataFrame([_alert("draftkings")]), set(), "2026-10-15")
     assert hooks == ["https://hook.test/books"]
+
+
+def test_post_via_bot_sends_thread_payload(monkeypatch):
+    import requests
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s3")
+    seen = {}
+    monkeypatch.setattr(requests, "post", lambda url, json=None, **k: seen.update(json=json) or type("R", (), {"status_code": 200})())
+    assert dr.post_via_bot("ev_sportsbooks", "slip", [{"title": "t"}], thread={"name": "n" * 150, "content": "c"}) is True
+    assert seen["json"]["thread"] == {"name": "n" * 100, "content": "c"}
+    dr.post_via_bot("ev_sportsbooks", "slip", None)
+    assert "thread" not in seen["json"]
 
 
 def test_kalshi_alert_slip_lines():

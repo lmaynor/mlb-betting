@@ -155,8 +155,12 @@ def slip_text(lines, limit: int = 2000) -> str:
     return "\n".join(out)
 
 
-def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str | None = None, timeout: float = 15.0) -> bool:
-    """Post as the bot user. True only when the bot accepted it; False (never raises) so callers fall back to a webhook."""
+def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str | None = None, timeout: float = 15.0,
+                 thread: dict | None = None) -> bool:
+    """Post as the bot user. True only when the bot accepted it; False (never raises) so callers fall back to a webhook.
+
+    `thread` = {"name": ..., "content": ...}: the bot opens a thread under the message and posts `content` there with the
+    slip bots (GamblyBot, Playbook) @mentioned -- they only react to a mention on a real message."""
     if not bot_configured():
         return False
     import requests
@@ -166,6 +170,8 @@ def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str
         body["content"] = content
     if embeds:
         body["embeds"] = embeds
+    if thread:
+        body["thread"] = {"name": str(thread["name"])[:100], "content": str(thread["content"])[:1800]}
     try:
         r = requests.post(f"{base}/internal/post-message", json=body, timeout=timeout,
                           headers={"X-Beezy-Secret": os.environ["BEEZY_BOT_SECRET"].strip()})

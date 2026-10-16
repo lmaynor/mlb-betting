@@ -402,8 +402,8 @@ def post_bets(
     if isinstance(bets, pd.DataFrame):
         bets = bets.to_dict("records")
 
-    def _send(content, embeds):
-        if use_bot and post_via_bot("card", content, embeds, sport="mlb"):
+    def _send(content, embeds, thread=None):
+        if use_bot and post_via_bot("card", content, embeds, sport="mlb", thread=thread):
             return
         if webhook_url:
             _post(webhook_url, {"embeds": embeds})
@@ -429,7 +429,8 @@ def post_bets(
 
     slip = slip_text(f"{_format_bet_headline(b, system)} @ {_bet_book(b)} {_odds_str(b.get('odds'))}"
                      for b in sorted(bets, key=lambda r: r.get("edge") if r.get("edge") is not None else float("-inf"), reverse=True))
-    _send(slip, [embed])
+    # one "slips" thread under the card, with the slip bots @mentioned, so a member can get the whole card as slips
+    _send(slip, [embed], thread={"name": f"{system} slips {run_date}", "content": slip} if slip else None)
 
 
 def post_summary(stats: dict, system: str, run_date: str = None) -> None:

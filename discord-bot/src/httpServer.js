@@ -31,7 +31,7 @@ export const POST_CHANNELS = {
 /** Validate a post-message payload. @returns {{ok: true, value: object} | {ok: false, error: string}} */
 export function validatePostPayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, error: 'body must be a JSON object' };
-  const { channel, content, embeds } = body;
+  const { channel, content, embeds, thread } = body;
   if (typeof channel !== 'string' || !Object.hasOwn(POST_CHANNELS, channel)) {
     return { ok: false, error: `channel must be one of ${Object.keys(POST_CHANNELS).join('|')}` };
   }
@@ -42,10 +42,44 @@ export function validatePostPayload(body) {
     return { ok: false, error: 'embeds must be an array of at most 10 objects' };
   }
   if (!content && !(embeds && embeds.length)) return { ok: false, error: 'content or embeds required' };
+  if (thread !== undefined && thread !== null) {
+    if (typeof thread !== 'object' || Array.isArray(thread)) return { ok: false, error: 'thread must be an object' };
+    const name = typeof thread.name === 'string' ? thread.name.replace(/\s+/g, ' ').trim() : '';
+    if (!name || name.length > 100) return { ok: false, error: 'thread.name must be 1-100 characters' };
+    if (typeof thread.content !== 'string' || !thread.content.trim() || thread.content.length > 1800) {
+      return { ok: false, error: 'thread.content must be a non-empty string of at most 1800 characters' };
+    }
+    return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined, thread: { name, content: thread.content } } };
+  }
   return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined } };
 }
 
-/** Send one message to an allowlisted channel as the bot. Never pings anyone. */
+/**
+ * Slip bots (GamblyBot, Playbook) only act when they are @mentioned, and only on real messages. Names come from
+ * SLIP_BOT_NAMES (comma list, default "GamblyBot,Playbook"); they resolve to guild members once and are cached.
+ */
+const SLIP_CACHE_MS = 10 * 60 * 1000;
+let slipCache = { at: 0, ids: [] };
+export function resetSlipBotCache() { slipCache = { at: 0, ids: [] }; }
+
+export async function resolveSlipBotIds(guild, names = (process.env.SLIP_BOT_NAMES || 'GamblyBot,Playbook').split(',')) {
+  if (Date.now() - slipCache.at < SLIP_CACHE_MS) return slipCache.ids;
+  const wanted = names.map((n) => n.trim().toLowerCase()).filter(Boolean);
+  const ids = [];
+  for (const name of wanted) {
+    let found;
+    try {
+      const hits = await guild.members.fetch({ query: name, limit: 10 });
+      found = [...hits.values()].find((m) => m.user?.bot && [m.user.username, m.displayName, m.nickname]
+        .filter(Boolean).some((x) => String(x).toLowerCase() === name));
+    } catch { found = undefined; }
+    if (found) ids.push(found.id);
+  }
+  slipCache = { at: Date.now(), ids };
+  return ids;
+}
+
+/** Send one message to an allowlisted channel as the bot. Never pings anyone, except the slip bots inside a thread. */
 export async function postMessage(client, guildId, value) {
   let guild = client.guilds?.cache?.get(guildId);
   if (!guild) {
@@ -57,7 +91,21 @@ export async function postMessage(client, guildId, value) {
   const target = [...channels.values()].find((c) => c && c.name === name && typeof c.send === 'function');
   if (!target) return { status: 'no_channel' };
   const sent = await target.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
-  return { status: 'ok', id: sent?.id ?? null };
+  const out = { status: 'ok', id: sent?.id ?? null, thread: false, mentioned: 0 };
+  if (value.thread && typeof sent?.startThread === 'function') {
+    // The thread is best-effort: the alert itself is already posted, so a thread failure must not fail the request.
+    try {
+      const thread = await sent.startThread({ name: value.thread.name, autoArchiveDuration: 1440, reason: 'beezy.fyi alert slip' });
+      const ids = await resolveSlipBotIds(guild);
+      const mentions = ids.map((id) => `<@${id}>`).join(' ');
+      await thread.send({ content: `${mentions} ${value.thread.content}`.trim(), allowedMentions: { users: ids } });
+      out.thread = true;
+      out.mentioned = ids.length;
+    } catch (err) {
+      console.error(`[http] thread failed: ${String(err?.message || err).slice(0, 200)}`);
+    }
+  }
+  return out;
 }
 export const TIERS = ['public', 'single_sport', 'pro_monthly', 'pro_annual', 'starter', 'pro', 'season'];
 export const SPORT_CHOICES = Object.keys(SPORT_PASS_ROLES);
@@ -310,7 +358,7 @@ export function createHttpServer({ client, secret, guildId } = {}) {
         }
         if (outcome.status === 'no_guild') return sendJson(res, 503, { ok: false, error: 'guild unavailable' });
         if (outcome.status === 'no_channel') return sendJson(res, 404, { ok: false, error: 'channel not found' });
-        return sendJson(res, 200, { ok: true, id: outcome.id });
+        return sendJson(res, 200, { ok: true, id: outcome.id, thread: outcome.thread, mentioned: outcome.mentioned });
       }
 
       return sendJson(res, 404, { ok: false, error: 'not found' });

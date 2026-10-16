@@ -55,7 +55,7 @@ import pandas as pd
 
 from mlb_core import storage
 from mlb_core.alerts.discord_routes import (
-    EXCLUDE_ALERT_BOOKS, bot_configured, drop_kambi_clones, is_exchange_book, post_via_bot, slip_text, webhook_for,
+    EXCLUDE_ALERT_BOOKS, bot_configured, drop_kambi_clones, is_exchange_book, post_via_bot, webhook_for,
     with_deep_links,
 )
 
@@ -243,13 +243,25 @@ def _grouped_fields(new: pd.DataFrame, hot: set, today_str: str, anchor_book: st
     return fields
 
 
-def _slip_lines(new: pd.DataFrame, hot: set, today_str: str, anchor_book, book_display, market_label,
-                ev_alert_emoji, team_nickname: dict) -> list[str]:
-    """One plain pick per line for slip bots: '<who> <what> @ <book> <american>', best EV first."""
-    rows = [_alert_parts(r, hot, today_str, anchor_book, book_display, market_label, ev_alert_emoji, team_nickname)
-            for _, r in new.iterrows()]
-    return [f"{p['who']} {p['what']} @ {p['book']} {p['american']}"
-            for p in sorted(rows, key=lambda p: p["ev"], reverse=True)]
+def _alert_items(new: pd.DataFrame, hot: set, today_str: str, anchor_book, book_display, market_label,
+                 ev_alert_emoji, team_nickname: dict, min_ev: float, min_books: int) -> list[dict]:
+    """One bot message per alert (best EV first): plain slip line as content, a compact embed, and the thread the slip
+    bots are @mentioned in."""
+    parts = sorted((_alert_parts(r, hot, today_str, anchor_book, book_display, market_label, ev_alert_emoji, team_nickname)
+                    for _, r in new.iterrows()), key=lambda p: p["ev"], reverse=True)
+    items = []
+    for p in parts:
+        slip = " ".join(f"{p['who']} {p['what']} @ {p['book']} {p['american']}".split())
+        fair = f"{p['fair']:.1%}" if p["fair"] is not None else "N/A"
+        embed = with_deep_links({
+            "title": f"{p['emoji']} {p['badge']}{p['who']} {p['what']}"[:256],
+            "description": f"@ **{p['book']} {p['american']}** -> EV **{p['ev']:+.1%}** (fair {fair}, {p['n_books']} bks)"
+                           f"{p['matchup_tag']}",
+            "color": 0xE3B261,
+            "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | fast_alert_loop"},
+        })
+        items.append({"content": slip, "embed": embed, "thread": {"name": slip[:100], "content": slip}})
+    return items
 
 
 def notify(new: pd.DataFrame, hot: set, today_str: str = '',
@@ -275,10 +287,16 @@ def notify(new: pd.DataFrame, hot: set, today_str: str = '',
             "footer": {"text": f"min EV {min_ev:.0%} | min {min_books} books | "
                                f"anchor: {anchor_disp} | fast_alert_loop"},
         })
-        # Real bot-user message first (other bots can read its text, not a webhook's); webhook is the fallback.
-        slip = slip_text(_slip_lines(sub, hot, today_str, anchor, book_display, market_label, ev_alert_emoji, TEAM_NICKNAME))
-        if bot_configured() and post_via_bot(kind, slip, [embed]):
-            continue
+        # Real bot-user messages first (other bots cannot read a webhook's): ONE message per alert, each with a thread
+        # where the slip bots are @mentioned. Webhook (grouped embed above) is the fallback when none could be posted.
+        if bot_configured():
+            posted_n = sum(
+                1 for it in _alert_items(sub, hot, today_str, anchor, book_display, market_label, ev_alert_emoji,
+                                         TEAM_NICKNAME, min_ev, min_books)
+                if post_via_bot(kind, it["content"], [it["embed"]], thread=it["thread"]))
+            if posted_n:
+                log.info("%s: %d alert thread(s) posted by the bot", kind, posted_n)
+                continue
         url = _alert_webhook(kind)
         if not url:
             log.warning("no Discord webhook for %s -- printing alerts only", kind)
