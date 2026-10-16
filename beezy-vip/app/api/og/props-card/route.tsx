@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { headshotUrlById } from "@/lib/sport-assets";
 export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
@@ -149,7 +150,7 @@ export async function GET() {
                 {/* headshot -- large, prominent */}
                 {mlbamId ? (
                   <img
-                    src={`${BASE}/headshots/${mlbamId}.jpg`}
+                    src={headshotUrlById("mlb", mlbamId)!}
                     width={130} height={130}
                     style={{ objectFit:"cover", borderRadius:"50%", border:`3px solid ${sys.accent}80`, flexShrink:0 }}
                   />
