@@ -48,20 +48,53 @@ def test_default_tracker_is_mlb_and_unchanged(db):
         assert c.execute(text("SELECT sport FROM bets")).scalar() == "mlb"
 
 
+def _index_names(tracker):
+    with tracker.engine.connect() as c:
+        return {r[1] for r in c.execute(text("PRAGMA index_list(bets)")).fetchall()}
+
+
+def _add_legacy_v3(tracker):
+    """Simulate production, where idx_bets_dedup_v3 was created by an earlier revision and has not been dropped yet."""
+    with tracker.engine.begin() as c:
+        c.execute(text(LEGACY_V3))
+
+
 def test_same_key_two_sports_transitional_v3_is_handled_not_crashed(db, caplog):
     """While legacy idx_bets_dedup_v3 exists, an identical key in another sport conflicts on v3. It must be
     reported as a duplicate (-1) with an ERROR log -- never an unhandled IntegrityError in a runner."""
     mlb, nhl = BetTracker(db, "EV"), BetTracker(db, "EV", sport="nhl")
+    _add_legacy_v3(mlb)
     assert _bet(mlb) > 0
     with caplog.at_level("ERROR"):
         assert _bet(nhl) == -1
     assert "legacy v3 dedup index" in caplog.text
 
 
-def test_same_key_in_two_sports_coexists_once_v3_is_dropped(db):
+def test_fresh_database_never_gets_v3(db):
+    """_init_db used to run CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3 on every construction."""
+    idx = _index_names(BetTracker(db, "HR"))
+    assert "idx_bets_dedup_v4" in idx and "idx_bets_dedup_v3" not in idx
+
+
+def test_dropping_v3_by_hand_sticks_across_tracker_constructions(db):
+    """Regression: a manual `DROP INDEX idx_bets_dedup_v3` was silently undone by the next runner's BetTracker init."""
+    t = BetTracker(db, "HR")
+    _add_legacy_v3(t)
+    assert "idx_bets_dedup_v3" in _index_names(t)
+    with t.engine.begin() as c:
+        c.execute(text("DROP INDEX IF EXISTS idx_bets_dedup_v3"))
+    for sport in ("mlb", "nhl", "nba"):
+        assert "idx_bets_dedup_v3" not in _index_names(BetTracker(db, "HR" if sport == "mlb" else "EV", sport=sport))
+
+
+def test_existing_v3_is_left_alone_by_a_new_tracker(db):
+    t = BetTracker(db, "HR")
+    _add_legacy_v3(t)
+    assert "idx_bets_dedup_v3" in _index_names(BetTracker(db, "HR"))     # not dropped behind the operator's back
+
+
+def test_same_key_in_two_sports_coexists_without_v3(db):
     mlb, nhl = BetTracker(db, "EV"), BetTracker(db, "EV", sport="nhl")
-    with mlb.engine.begin() as c:
-        c.execute(text("DROP INDEX IF EXISTS idx_bets_dedup_v3"))      # the post-rollout cleanup step
     assert _bet(mlb) > 0
     assert _bet(nhl) > 0                       # identical (system, date, pk, player, type): different sport
     assert _bet(nhl) == -1                     # a true duplicate inside one sport is still caught
@@ -88,7 +121,7 @@ def test_legacy_table_migrates_in_place_and_keeps_old_index(db):
     with t.engine.connect() as c:
         assert c.execute(text("SELECT sport FROM bets WHERE game_pk=555")).scalar() == "mlb"
         idx = {r[1] for r in c.execute(text("PRAGMA index_list(bets)")).fetchall()}
-    assert {"idx_bets_dedup_v3", "idx_bets_dedup_v4"} <= idx      # v3 kept for rolling-deploy compatibility
+    assert {"idx_bets_dedup_v3", "idx_bets_dedup_v4"} <= idx      # an existing v3 is left in place (dropped by hand)
     assert len(t.all_bets()) == 1
     assert _bet(t, bet_type="HR", game_pk=556) > 0               # new rows still insert
     assert _bet(t, bet_type="HR", game_pk=555, player="Aaron Judge", game_date="2026-09-01") == -1
@@ -101,8 +134,9 @@ def test_migration_is_idempotent(db):
 
 
 def test_old_revision_insert_still_works_after_migration(db):
-    """A still-running OLD revision inserts without `sport` and conflicts on v3's columns: both must keep working."""
-    BetTracker(db, "HR")
+    """A still-running OLD revision inserts without `sport` and conflicts on v3's columns: both must keep working
+    for as long as production still has v3 (it is no longer created by new code, so the test adds it)."""
+    _add_legacy_v3(BetTracker(db, "HR"))
     eng = sa.create_engine(f"sqlite:///{db}")
     old_sql = text("INSERT INTO bets (system, game_date, game_pk, player, bet_type, kelly_triggered) "
                    "VALUES ('HR','2026-10-01',9,'X','HR',1) "

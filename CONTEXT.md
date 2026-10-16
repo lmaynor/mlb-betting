@@ -739,7 +739,7 @@ Both live in `_init_db()` in `mlb_core/tracking/bet_tracker.py`, each in its own
 takes `?sport=` (default `mlb`, 400 on unknown). `game_pk` stays INTEGER and holds the sport's native numeric id (NHL ids fit
 int32; NBA ids lose their leading `00`). `bet_tracker.ensure_sport_column()` runs from `_make_engine`, so a reader that builds a
 bare engine can never hit a missing column. The v3 index is deliberately KEPT until no old revision can be running (an old
-revision's `ON CONFLICT` targets it); drop it afterwards with `DROP INDEX idx_bets_dedup_v3`. See s21.
+revision's `ON CONFLICT` targets it); drop it afterwards with `DROP INDEX idx_bets_dedup_v3`. See s21. **`BetTracker._init_db` no longer CREATES v3 (2026-10-15)** -- before that it re-ran `CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3` on every construction, which undid any manual drop; an existing v3 is left alone. The drop only holds once that code is on the service AND every job image (RUNBOOKS.md s7a).
 
 ### Exposure cap contract
 

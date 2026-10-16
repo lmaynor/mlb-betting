@@ -9,6 +9,9 @@ Changes from v3 (2026-10-14, NHL/NBA expansion):
   - New UNIQUE index idx_bets_dedup_v4 = v3's key + `sport`. v3 is deliberately KEPT (not dropped): a rolling
     deploy leaves old revisions running whose `ON CONFLICT (system, game_date, game_pk, player, bet_type,
     kelly_triggered)` needs v3 to exist. Drop v3 in a later cleanup once no old revision can be live.
+  - (2026-10-15) _init_db no longer CREATES v3. It used to run `CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3`
+    on every construction, so a manual `DROP INDEX idx_bets_dedup_v3` was silently undone by the next runner. A
+    fresh database now gets v4 only; an existing v3 is left alone (drop it by hand, RUNBOOKS.md s7a).
   - `game_pk` stays INTEGER and holds the sport's native numeric game id: MLB gamePk, NHL gameId
     (2026020001 fits int32), NBA gameId as an int (the leading "00" of "0022600001" is not stored).
 
@@ -189,13 +192,11 @@ ALTER TABLE bets ADD COLUMN kelly_triggered BOOLEAN DEFAULT TRUE
 # predecessors anyway.
 _DROP_OLD_DEDUP_IDX_SQL    = "DROP INDEX IF EXISTS idx_bets_dedup"
 _DROP_OLD_DEDUP_IDX_V2_SQL = "DROP INDEX IF EXISTS idx_bets_dedup_v2"
-_IDX_DEDUP_SQL = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3
-  ON bets(system, game_date, game_pk, player, bet_type, kelly_triggered)
-"""
+# The v3 index (idx_bets_dedup_v3, the same key WITHOUT `sport`) is no longer created here (2026-10-15) -- see the module
+# docstring. Production still has it until it is dropped by hand.
 
 # v4 (2026-10-14): v3's key + sport, so the SAME (system, game_date, game_pk, player, bet_type) in two sports
-# (e.g. system="EV") can never collide. v3 above is intentionally left in place -- see the module docstring.
+# (e.g. system="EV") can never collide.
 _IDX_DEDUP_V4_SQL = """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v4
   ON bets(sport, system, game_date, game_pk, player, bet_type, kelly_triggered)
@@ -332,26 +333,14 @@ class BetTracker:
                     conn.execute(text(clv_sql))
             except Exception:
                 pass  # Column already exists.
-        # Composite UNIQUE index for is_duplicate() + the log_bet() race
-        # safety net (finding B3.3) -- idempotent, but a real (not
-        # silently-swallowed) warning on failure: unlike every other
-        # migration above, CREATE UNIQUE INDEX can genuinely fail if
-        # pre-existing duplicate rows already violate it (this project has
-        # a history of manual re-triggers and backfills). A silent `pass`
-        # here would mean the safety net never gets installed with zero
-        # visibility -- the OLD non-unique index (if DROP also failed)
-        # keeps working, just without the new protection.
+        # Drop the superseded dedup indexes (v1 non-unique, v2 without `player`). The live unique dedup index
+        # (v4) is created below -- v3 is deliberately NOT created here any more (module docstring, 2026-10-15).
         try:
             with self.engine.begin() as conn:
                 conn.execute(text(_DROP_OLD_DEDUP_IDX_SQL))
                 conn.execute(text(_DROP_OLD_DEDUP_IDX_V2_SQL))
-                conn.execute(text(_IDX_DEDUP_SQL))
         except Exception as e:
-            logger.warning(
-                f"bet_tracker: unique dedup index migration failed (likely "
-                f"pre-existing duplicate (system,game_date,game_pk,player,"
-                f"bet_type,kelly_triggered) rows) -- {e}"
-            )
+            logger.warning(f"bet_tracker: dropping the superseded dedup indexes failed -- {e}")
         # v4 dedup index (sport-aware) + sport/date lookup index. Failure here is NOT silent: log_bet()'s
         # ON CONFLICT targets v4's columns, so without it every insert would error -- surface it loudly.
         for idx_sql, label in ((_IDX_DEDUP_V4_SQL, "idx_bets_dedup_v4"), (_IDX_SPORT_SQL, "idx_bets_sport_date")):

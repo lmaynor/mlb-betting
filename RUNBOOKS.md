@@ -758,6 +758,16 @@ returns -1. Background: handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md. T
 
 ### 7a. Verify nothing still runs pre-v4 code, then drop v3
 
+**Prerequisite (added 2026-10-15): the code that no longer CREATES v3 must be live everywhere first.** Before this change,
+`BetTracker._init_db()` ran `CREATE UNIQUE INDEX IF NOT EXISTS idx_bets_dedup_v3` on every construction, i.e. on every runner,
+alert pager and settle run -- so a `DROP INDEX idx_bets_dedup_v3` was silently undone by the next run. Order of operations:
+1. Merge the PR that removes that statement from `mlb_core/tracking/bet_tracker.py`.
+2. Ship it to BOTH consumers: the service (`gcloud run services update mlb-betting --image=...@<digest>`) AND every scheduled MLB job
+   (they resolve `mlb-betting:latest` per execution, so this needs `build_all_images.sh` WITHOUT `SKIP_PROD=1`; see s8 for the blast radius).
+3. Only then run the checks below and the DROP. A job still on an older image will recreate v3 the next time it constructs a tracker.
+4. After the DROP, confirm it stuck: re-run the `pg_indexes` query after the next `mlb-fast-alert` / `mlb-kalshi-alert` run (hourly-ish);
+   v3 must still be absent. If it reappears, some job is still on a pre-change image.
+
 ```bash
 PROJECT_ID=concrete-crow-445205-m4; REGION=us-central1
 
