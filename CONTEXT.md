@@ -2252,9 +2252,10 @@ WITH a background -- do not use it. Implementation: `beezy-vip/lib/sport-assets.
 - Refresh: `python scripts/refresh_mlb_player_map.py [--dry-run] [--check-photos]` merges this season's active roster from the MLB
   Stats API without dropping entries (TLS verified). `--check-photos` flags NEW ids that only have the generic placeholder.
 
-**Still local:** `beezy-vip/public/headshots/{mlbamId}.jpg` (1,315 files, ~23MB) are used ONLY by the OG image route
-`app/api/og/props-card/route.tsx` (`/headshots/{id}.jpg`). Moving the OG route to the CDN needs its own visual check; it was not part
-of the move. The 1,272 rembg `{slug}.png` files, `scripts/process_headshots.py`, `scripts/fetch_missing_headshots.sh` and the
+**No local images (2026-10-15):** the OG image route `app/api/og/props-card/route.tsx` now hotlinks the same CDN via
+`headshotUrlById('mlb', id)`, and the 1,315 `{mlbamId}.jpg` files (~23MB, shipped in every Vercel deployment) were deleted --
+`public/headshots/` is now just the three `*player_map.json` files. Verified the `silo` PNGs are transparent (tRNS, ~50% alpha-0 pixels)
+and rendered the card before/after. The 1,272 rembg `{slug}.png` files, `scripts/process_headshots.py`, `scripts/fetch_missing_headshots.sh` and the
 manual `rembg` install step were removed (git history keeps them; the repo's pack size is unchanged).
 
 **Max Muncy duplicate:** Two players named Max Muncy (IDs 571970 and 691777).

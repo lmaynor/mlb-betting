@@ -528,7 +528,7 @@ Props card: Shows team logo + circular player headshot. Headshot lookup:
 1. player field from API (e.g. "Gerrit Cole")
 2. Convert to key: `.toLowerCase().replace(/ /g, "_")` -> "gerrit_cole"
 3. Look up MLBAM ID in player_map.json
-4. Render `img src="/headshots/{id}.jpg"`
+4. Render `headshotUrlById("mlb", id)` (MLB CDN `silo` transparent PNG, hotlinked)
 
 Pick label convention (must match `lib/tokens.ts` at all times):
 - NRFI -> "No Run 1st Inning"
@@ -546,7 +546,7 @@ Downloaded from cdn.ssref.net. Abbrevs: ari, atl, bal, bos, chc, cws, cin,
 cle, col, det, hou, kc, laa, lad, mia, mil, min, nym, nyy, oak, phi, pit,
 sd, sf, sea, stl, tb, tex, tor, wsh.
 
-Player headshots are hotlinked from MLB's CDN (`silo`, transparent); only `player_map.json` and the OG-card `{mlbamId}.jpg` files live in the repo.
+Player headshots are hotlinked from MLB's CDN (`silo`, transparent); only the `player_map.json` name->id maps live in the repo (the OG card hotlinks too; the local `{mlbamId}.jpg` files were removed 2026-10-15).
 Keys are normalized slugs (see CONTEXT.md §13 Headshot system).
 `player_map.json` maps slug -> MLBAM integer ID (1272 entries, full 2026 roster).
 To refresh: see "Refresh the MLB player map" in §3 above.
