@@ -19,7 +19,9 @@ import pandas as pd
 from mlb_core.data.player_names import PlayerResolver, norm_name
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
-TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA"}      # legacy map; see canon_team for the dated one
+# BettingPros writes LA / NJ / SJ / TB where the NHL API writes LAK / NJD / SJS / TBL (found 2026-10-16 on the real 2022-26 feed);
+# without them every game involving those four clubs falls out of a BettingPros join as `no_game`.
+TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA", "LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
 UTAH_FIRST_GAME = "2024-07-01"        # the game log spells the Coyotes ARI through 2024-04 and the Utah club UTA from 2024-09
 
 
@@ -119,6 +121,8 @@ def attach_outcomes(pairs: pd.DataFrame, games: pd.DataFrame, gamelog: pd.DataFr
     """
     g = games.rename(columns={"date": "game_date", "home_team": "home_abbrev", "away_team": "away_abbrev"})
     g = g[["game_id", "game_date", "home_abbrev", "away_abbrev"]].assign(game_date=lambda x: x["game_date"].astype(str).str[:10])
+    g = g.assign(home_abbrev=[canon_team(t, d) for t, d in zip(g["home_abbrev"], g["game_date"])],
+                 away_abbrev=[canon_team(t, d) for t, d in zip(g["away_abbrev"], g["game_date"])])    # idempotent; dated ARI/UTA
     pairs = pairs.assign(
         home_abbrev=[canon_team(t, d) for t, d in zip(pairs["home_abbrev"], pairs["game_date"])],
         away_abbrev=[canon_team(t, d) for t, d in zip(pairs["away_abbrev"], pairs["game_date"])])

@@ -188,7 +188,10 @@ def dpos_series(rows: pd.DataFrame) -> pd.DataFrame:
 class FeatureContext:
     """Everything needed to featurise any query row against a fixed history. Build once, call .features(queries)."""
 
-    def __init__(self, rows: pd.DataFrame, tg: pd.DataFrame):
+    def __init__(self, rows: pd.DataFrame, tg: pd.DataFrame, scratches: pd.DataFrame | None = None):
+        """scratches (optional): frame with game_id, team, player_id of players LISTED as healthy scratches (ESPN
+        "COACH'S DECISION") in that game -- nba.props.espn_data.scratch_frame(inactives(box)). Enables
+        availability="history_excl_scratch"."""
         rows = rows.assign(date=_ns(rows["date"]))          # one datetime resolution everywhere (see _ns)
         tg = tg.assign(date=_ns(tg["date"]))
         self.tg = team_index(tg)
@@ -211,6 +214,11 @@ class FeatureContext:
         self._pt_tgn = {k: np.sort(v.to_numpy()) for k, v in r.groupby(["player_id", "team"])["tgn"]}
         # (team, tgn) -> player ids who PLAYED that team game (availability features)
         self._tg_players = {k: v.to_numpy(object) for k, v in r.groupby(["team", "tgn"])["player_id"]}
+        # (team, tgn) -> player ids listed as healthy scratches in that game (history_excl_scratch)
+        self._tg_scratch = None
+        if scratches is not None:
+            sc = scratches.merge(t[["game_id", "team", "tgn"]], on=["game_id", "team"], how="inner")
+            self._tg_scratch = {k: set(v) for k, v in sc.groupby(["team", "tgn"])["player_id"]}
         self.last_date = rows["date"].max()
         self.last_season = int(rows.loc[rows["date"] == self.last_date, "season_year"].max())
 
@@ -244,6 +252,8 @@ class FeatureContext:
         availability=None (default): the v1 feature set, exactly as before.
         availability="history": ALSO emit C.AVAILABILITY_FEATURES from who dressed in each row's own game (training; the
             game must be in this context's history, else NaN).
+        availability="history_excl_scratch": as "history" minus rotation players listed as healthy scratches (needs
+            FeatureContext(scratches=...)); closer to what the live injury list can supply.
         availability={team: iterable of SportsBlaze player ids on the injury list}: ALSO emit them live (absent =
             rotation players on the list). A team missing from the mapping -> NaN (unknown is not 'healthy')."""
         q = q[ID_COLS].copy()
@@ -368,14 +378,24 @@ class FeatureContext:
             return None
         tb = int(tb)
         if isinstance(availability, str):
-            if availability != "history":
-                raise ValueError(f"availability must be None, 'history' or a mapping, got {availability!r}")
+            if availability not in ("history", "history_excl_scratch"):
+                raise ValueError("availability must be None, 'history', 'history_excl_scratch' or a mapping, "
+                                 f"got {availability!r}")
+            if availability == "history_excl_scratch" and self._tg_scratch is None:
+                raise ValueError("availability='history_excl_scratch' needs FeatureContext(..., scratches=...)")
             days = self._team_days[team]
             active = self._tg_players.get((team, tb + 1))
             if active is None or tb >= len(days) or int(days[tb]) != qd:
                 return None                                   # this game is not in the history: cannot know who dressed
             act = set(active)
             absent = {p: 1.0 for p in rot if p not in act}
+            if availability == "history_excl_scratch":
+                # closer to the live definition (the injury list's "Out"): a listed healthy scratch (COACH'S DECISION) is a
+                # benching the public injury list can never contain, so it is not an absence. Unlisted absences stay: ESPN's
+                # box lists only dressed/some inactive players (53% of rotation absences are unlisted), and those are
+                # overwhelmingly inactive-for-injury/rest, i.e. what the live list reports.
+                for p in self._tg_scratch.get((team, tb + 1), set()):
+                    absent.pop(p, None)
         else:
             inj = availability.get(team)
             if inj is None:
@@ -404,6 +424,12 @@ class FeatureContext:
 
     def _availability(self, pids: np.ndarray, teams: np.ndarray, qday: np.ndarray, tgn_before: np.ndarray,
                       availability) -> dict:
+        if isinstance(availability, str):
+            if availability not in ("history", "history_excl_scratch"):
+                raise ValueError("availability must be None, 'history', 'history_excl_scratch' or a mapping, "
+                                 f"got {availability!r}")
+            if availability == "history_excl_scratch" and self._tg_scratch is None:
+                raise ValueError("availability='history_excl_scratch' needs FeatureContext(..., scratches=...)")
         n = len(pids)
         names = C.AVAILABILITY_FEATURES
         out = {k: np.full(n, np.nan) for k in names}

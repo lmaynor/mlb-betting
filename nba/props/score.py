@@ -283,21 +283,43 @@ def score_events(events: list, now: datetime, res: Resources, allow_rollover: bo
 
 
 # ----------------------------------------------------------------------------- I/O wrappers
-def load_resources(local_dir: str | None, models_dir: str, xwalk: pd.DataFrame | None = None) -> Resources:
+ESPN_HISTORY_SEASONS = 4          # hoopR seasons of ESPN history loaded (rolling windows span season boundaries)
+
+
+def load_resources(local_dir: str | None, models_dir: str, xwalk: pd.DataFrame | None = None,
+                   source: str = "sportsblaze") -> Resources:
     """Box-score history + feature context + models + ESPN crosswalk/bridge. `local_dir` reads masters from disk;
     default is mlb_core.storage (GCS when GCS_BUCKET is set). Raises when a required model/history file is missing --
-    a scorer that cannot load its inputs must refuse, not guess."""
+    a scorer that cannot load its inputs must refuse, not guess.
+
+    source="sportsblaze" (default, unchanged): NBA/*_master.csv + the UUID<->ESPN name bridge.
+    source="espn": the hoopR mirror (nba/data/hoopr.py, ESPN athlete ids, real ET tip times, has the new season);
+    the bridge is an identity map over players with history. Read from <local_dir>/{dataset}/ or NBA/hoopr/ in GCS."""
     from mlb_core import storage
     from nba.data import espn_players as ep
     from nba.props.identity import build_bridge
     from nba.props.train import StatModel
-    pb, gm = D.load_masters(local_dir)
-    rows, tg = D.prepare(pb, gm, D.gather_tips(gm, local_dir))
+    if source not in ("sportsblaze", "espn"):
+        raise ValueError(f"unknown history source {source!r}")
+    if source == "espn":
+        from nba.data import hoopr
+        from nba.props import espn_data as ED
+        top = hoopr.current_season()
+        rows, tg = ED.prepare_espn(ED.load_espn(range(top - ESPN_HISTORY_SEASONS + 1, top + 1), local_dir))
+        if rows.empty:
+            raise RuntimeError("no ESPN history mirrored (run python -m nba.data.hoopr --mode backfill)")
+    else:
+        pb, gm = D.load_masters(local_dir)
+        rows, tg = D.prepare(pb, gm, D.gather_tips(gm, local_dir))
     ctx = FeatureContext(rows, tg)
     models = {s: StatModel.load(s, models_dir) for s in C.STATS}
     if xwalk is None:
         xwalk = pd.read_csv(f"{local_dir}/players_xwalk.csv") if local_dir else storage.read_csv(ep.PLAYERS_XWALK)
-    bridge = build_bridge(rows, xwalk)
+    if source == "espn":
+        from nba.props.espn_data import identity_bridge
+        bridge = identity_bridge(rows, xwalk)
+    else:
+        bridge = build_bridge(rows, xwalk)
     return Resources(ctx, models, bridge, ep.build_resolver(xwalk),
                      {int(r.espn_id): r.team for r in xwalk.itertuples(index=False)}, set(xwalk["team"].dropna()),
                      D.history_status(rows))
@@ -346,6 +368,8 @@ def main(argv=None) -> int:
     ap.add_argument("--gcs", action="store_true", help="also write evidence to GCS (explicit; off by default)")
     ap.add_argument("--events-file", help="score this JSON list of ParlayAPI events instead of the banked snapshot")
     ap.add_argument("--max-age-min", type=float, default=C.MAX_SNAPSHOT_AGE_MIN)
+    ap.add_argument("--history-source", choices=("sportsblaze", "espn"), default="sportsblaze",
+                    help="espn = the hoopR/ESPN mirror (ESPN ids, has the 2026-27 season); default unchanged")
     ap.add_argument("--allow-rollover", action="store_true",
                     help="force rollover on regardless of the date (default: automatic only in the season's opening "
                          "window, see nba.props.config.ROLLOVER_AUTO_DAYS); rolled-over rows are tagged ROLLOVER_HISTORY")
@@ -357,7 +381,7 @@ def main(argv=None) -> int:
         import tempfile
         from nba.props.train import fetch_models
         models_dir = str(fetch_models(tempfile.mkdtemp(prefix="nba_props_models_")))
-    res = load_resources(a.local_dir, models_dir)
+    res = load_resources(a.local_dir, models_dir, source=a.history_source)
     events = json.load(open(a.events_file)) if a.events_file else None
     rollover = True if a.allow_rollover else (False if a.no_auto_rollover else "auto")
     out = run_once(res, max_age_min=a.max_age_min, allow_rollover=rollover, events=events, out_dir=a.out_dir,
