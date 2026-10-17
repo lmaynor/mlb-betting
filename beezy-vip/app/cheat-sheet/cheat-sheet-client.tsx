@@ -297,12 +297,10 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
               The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in public; NFL, NHL and NBA rows are projections and are marked UNVALIDATED. Game picks are a separate, paid set.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: 0 }}>
-              Tap a pick to see why it made the card. Each sport&apos;s systems and record are at the bottom of its page:
+              Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: '8px', fontSize: '12.5px' }}>
-              <Link href="/picks/mlb#systems" style={{ color: 'var(--link)' }}>MLB players</Link>
-              <Link href="/picks/games#systems" style={{ color: 'var(--link)' }}>MLB games</Link>
-              {SPORT_SLUGS.filter(s => s !== 'mlb').map(s => <Link key={s} href={`${sportHref(s)}#systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
+              {SPORT_SLUGS.map(s => <Link key={s} href={`${sportHref(s)}/systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
             </div>
           </div>
 

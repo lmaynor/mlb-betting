@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-16 23:11 CST_
+_Last updated: 2026-10-17 02:00 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -359,7 +359,12 @@ mlb-betting/
 │                                 (KEXEC_* env). allow_wide_book_on_consensus (default False) lets an exchange
 │                                 taker judge the ASK vs an EXTERNAL consensus instead of the venue mid -- on only
 │                                 for Novig (see 15.11). Reused unchanged by ev/novig/exec.py.
-├── ev/daily_projections.py       Daily NFL/NHL/NBA projection board (GET /api/public/projections); empirical_ewm_v2 engine (NFL: walk-forward-validated per-stat params + mean calibration, accuracy only), unvalidated vs prices
+├── ev/daily_projections.py       Daily NFL/NHL/NBA projection board (GET /api/public/projections); empirical_ewm_v2 engine (NFL: walk-forward-validated per-stat params + mean calibration, accuracy only), unvalidated vs prices.
+│                                 Lines = union of the banked ParlayAPI events and the BettingPros live feed (union_events); teams from the active
+│                                 roster (ev/rosters.py); payload carries `games`, `lines_source`; every compute merges into the Central-day archive
+├── ev/bettingpros_events.py      LIVE BettingPros crawl (events + offers, free API) -> ParlayAPI-shaped events -> Odds/bettingpros_live/{sport}/latest.json
+│                                 (mlb/runners/bettingpros_live_props.py, jobs bp-live-{nfl,nhl,nba}); ev/bettingpros_live.py = the offers -> Quote adapter it reuses
+├── ev/rosters.py                 Active roster per sport {player_norm: team} (NHL API / ESPN / nflverse), cached Rosters/{sport}.json; used by the board only
 ├── mlb_core/alerts/              discord_routes.py: webhook fallback chains, Kambi clone dedup, deep links
 ├── discord-bot/                  beezy-bot service (Node); see s14
 ├── ev/                           Multi-sport +EV sweep (shadow/paper only, NFL props first): props.py (ParlayAPI
@@ -447,6 +452,11 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   ├── {date}/{kind}_{HHMM}.csv         best-book flattened rows
 │   ├── latest.json                     pointer + status
 │   └── _credits/{YYYY-MM}.json         implicit monthly credit tally (guard)
+├── Odds/bettingpros_live/{sport}/latest.json   LIVE BettingPros props (nfl|nhl|nba), ParlayAPI event shape, overwritten hourly by
+│                                       bp-live-{sport}; {fetched_at, window, events, counts}. NOT the historical Odds/bettingpros_{sport}/ crawl.
+├── Rosters/{sport}.json                Active-roster cache for the picks boards {fetched_at, source, partial, teams, players, ambiguous}
+├── EVSweep/{sport}_props/projections_latest.json   the board payload (rewritten every 30 min by the daily-projections job)
+├── EVSweep/{sport}_props/archive/{YYYY-MM-DD}.json one file per America/Chicago GAME day: each row's last pre-game state + that day's games
 ├── Alerts/{YYYY-MM-DD}/                Per-day state for the intraday +EV pagers
 │   │                                   (fast_alert_loop.py, kalshi_alert.py). Not
 │   │                                   read by anything else -- pure notify-dedup.
@@ -1553,6 +1563,11 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=picks) |
 | `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=recap) |
 
+**Picks-board jobs (2026-10-17, Cloud Run Jobs on the `mlb-betting-feeds` image, schedulers in America/Chicago):** `daily-projections` (scheduler
+`daily-projections-30m`, `25,55 * * * *`; `deploy/setup_daily_projections_job.sh`), `bp-live-nhl` (`5 * * 10-12,1-6 *`), `bp-live-nfl` (`10 * * 9-12,1-2 1-6`
+plus Sunday `10,40 6-12` / `10 0-5,13-23`), `bp-live-nba` (`15 * * 10-12,1-6 *`) via `deploy/setup_bettingpros_live.sh`. Both scripts refuse without
+`CONFIRM_IMAGE_HAS_LIVE_LINES=1` (the feeds image must carry this code) and take `PAUSE=1`.
+
 `tweet_drafter.py` modes (`--mode` or `TWEET_MODE`): `picks` (alias `morning`), `recap`, `settlement` (added 2026-10-14, PR #56:
 deterministic #GamblingX text + `beezy-vip` `/api/og/settlement-card` PNG + celebration GIF -> Discord `DISCORD_WEBHOOK_TWEETS`
 else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `steam` (not built). Every Gemini draft passes `violates_voice()`
@@ -1945,7 +1960,7 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
 | `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow sweep blocks: `nfl` (read from `EVSweep/nfl_props/latest.json`: Kalshi `rows` plus `book_outliers`, the Sink A book/exchange rows -- present even when Kalshi blocks the cloud egress IP and `rows` is empty), `nhl` / `nba` (`EVSweep/{sport}_props/latest.json`). Every shadow block carries `status`/`age_minutes`/`stale`/`validated:false`, started games are dropped, and Sink A rows share one shape (`EvBookOutlierRow`: `ev`, `p_fair`, `point`, `american`, `decimal`, `n_books`, `flag`). An outlier-only NFL snapshot counts as live for 45 min (Kalshi-backed snapshots for 180) |
 | `GET /api/public/edge/cockpit` | 60s | `/edge` multi-sport prop cockpit (`sport`, `limit`, `min_ev`): MLB (today's model predictions + `system='EV'` alerts, with the Statcast enrichment) + NFL / NHL / NBA sweep rows in ONE row shape (`CockpitRow`), each with `recentForm` = the player's last-10 game log vs the line (`mlb_core/data/cockpit_form.py`; reads `NFL/nflverse/player_stats/`, `NHL/{skater,goalie}_boxscores_master.csv`, `NBA/player_boxscores_master`, cached 10 min, `null` when a master is absent) and `all_books` for line shopping. Per-sport `status`/freshness like `/ev/feed`. Next.js proxy `/api/edge-cockpit`; `/edge` falls back to the MLB model board when this endpoint is unreachable |
-| `GET /api/public/projections` | 60s | Daily NFL / NHL / NBA projection board (`sport` required, `market`, `limit`): one row per player x stat from `ev/daily_projections.py` -- `proj_mean`, `p_over_model`, `l5/l10_hit_rate`, `szn_avg`, `consensus_line`, best over/under price + book, `p_over_market`, `model_edge`, `market_ev`, `confluence`, `beezy_score`; rows with `has_line:false` are rotation projections (lines not posted). Read from `EVSweep/{sport}_props/projections_latest.json`, computed on demand when missing/older than 90 min (throttled 10 min/sport). ENGINE is `empirical_ewm_v2` (EWM + usage + opponent factor on the game-log masters; NFL adds the validated per-stat params and `nfl/props/projection_calibration.json`, see s20), NOT the trained XGBoost research models (their artifacts are local-only). Rows also carry `proj_raw` (pre-calibration mean), `calib_mult`, and `proj_p10`/`proj_p90` (the model's own 10/90% quantiles; not a validated interval). Every row `validated:false`. Next.js proxy `/api/projections` |
+| `GET /api/public/projections` | 60s | Daily NFL / NHL / NBA projection board (`sport` required, `market`, `limit`): one row per player x stat from `ev/daily_projections.py` -- `proj_mean`, `p_over_model`, `l5/l10_hit_rate`, `szn_avg`, `consensus_line`, best over/under price + book, `p_over_market`, `model_edge`, `market_ev`, `confluence`, `beezy_score`; rows with `has_line:false` are rotation projections (lines not posted). Read from `EVSweep/{sport}_props/projections_latest.json`, which the `daily-projections` job rewrites every 30 min (the web path only starts a background recompute when it is >90 min stale). **Contract additions 2026-10-17:** `games` = `[{game_key, away, home, start (ISO UTC), n_rows, n_priced}]` for every upcoming game in the window (schedule + games only the lines know); `lines_source` = `['parlayapi','bettingpros']` (the feeds used; a feed that is down or outside the live window is only in `summary.sources`); `lines_age_minutes` / `lines_stale` now describe the NEWEST used feed; `archive: false`. Extra params: `day=YYYY-MM-DD` keeps one Central game day's rows/games; `date=YYYY-MM-DD` serves that day's ARCHIVED board (same shape + `archive: true`, `date`; `status:'unavailable'`, `rows:[]` when none; `date=<today>` works and includes games already under way); `limit` max 1200 (default 300; rows are ordered nearest Central game day first, then priced before rotation, so a cut drops the farthest games). Bad `date`/`day` -> 400. ENGINE is `empirical_ewm_v2` (EWM + usage + opponent factor on the game-log masters; NFL adds the validated per-stat params and `nfl/props/projection_calibration.json`, see s20), NOT the trained XGBoost research models (their artifacts are local-only). Rows also carry `proj_raw` (pre-calibration mean), `calib_mult`, and `proj_p10`/`proj_p90` (the model's own 10/90% quantiles; not a validated interval). Every row `validated:false`. Next.js proxy `/api/projections` |
 | `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
@@ -2081,7 +2096,7 @@ Satori OG routes -- use literal hex there.
   string, parsed by `lib/picks-filters.ts`; `sport='all'` is /picks). `board: 'tracked'` (MLB) renders the settled-bets card;
   `board: 'projection'` renders projection rows + market prices (`lib/sport-board-data.ts` loads either, with the access cut applied
   server-side). `/sports/:sport` is a 308 to `/picks/:sport`. The retired `app/sports/[sport]` hub, `MlbTabs` and
-  `MlbProjectionsBoard` are gone. **Systems are a footer, not a tab**: `SystemsFooter` lists every registered system of the sport
+  `MlbProjectionsBoard` are gone. **Systems are their own tab (changed 2026-10-17; it was a footer)**: `SystemsTable` on `/picks/[sport]/systems` lists every registered system of the sport
   (MLB: 10 listed; shelved F3/F7/1I/F1H/BATTER_K keep their URL but are not listed unless they have bets); `kind` narrows MLB to
   player or game (/picks/games). Tracked sports show bets / hit % / ROI, projection sports show the study MAE / Brier / blend c or `--`. **Daily Card** (/cheat-sheet) is the shareable Top 10 player picks (same loader as /picks,
   `lib/top-picks-data.ts`) with a Players | Games toggle (games follow the game-picks access policy) and per-sport chips; the public
@@ -2289,10 +2304,17 @@ Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
 
 ### Picks-page wiring (2026-10-17, PR `fix/picks-wiring`)
 
-- **Day strip** (`components/picks/day-scroller.tsx`, `lib/board-days.ts`): NFL / NHL / NBA pages get the counterpart of MLB's DateBar --
-  ALL DAYS + one chip per game day on the board (site clock = Central), `?date=YYYY-MM-DD|all`, default = first game day. It lists days
-  from the whole feed, so a day with no priced pick yet is still openable. Feed horizon (`ev/daily_projections.py` `HORIZON_HOURS`): NFL
-  7 days, NHL / NBA 48 h (was a flat 36 h).
+- **One shell for every sport (2026-10-17, PR `feat/picks-ia`)**: MLB, NFL, NHL and NBA render the SAME page: tabs `PICKS & +EV | PROJECTIONS | SYSTEMS`
+  (`SportTabs`), then one control stack -- `DayToggle` (TODAY | YESTERDAY, `?day=`; nothing older, that is Results / Picks history), `GamesStrip` (every game of
+  the day as a card with both logos and the start time, `?game=`, counts include games with no rows) and ONE `FilterBar` (search, market, show, book, sort; for
+  settled MLB also result) -- then `SportProjectionsBoard`, a purely presentational table (no controls of its own; a column nothing fills is left out).
+  `components/picks/sport-board-page.tsx` is the page; `lib/sport-board-data.ts` `loadSportBoard(sport, viewer, {day, view, kind})` loads either source into
+  `BoardRow`s (`lib/board-rows.ts`): MLB bets via `lib/mlb-board.ts` `fromBets`, the others via `fromSportProjections`; `applyPickFilters` is the ONE filter.
+  Yesterday = the settled MLB card, or the projection sports' archived board (`/api/public/projections?date=`). There is no TIME sort. Search matches the
+  player's OWN team by abbreviation, city or nickname (`lib/team-directory.ts`); MLB bets carry no team, so MLB falls back to both teams of the game.
+- **Systems are tabs, not a footer**: `/picks/[sport]/systems` is the index (`SystemsTable`: record or live accuracy + today's rows) and every system's page
+  (`SystemPage`, same shell narrowed to the market + prices + methodology) carries `SystemStrip`, a tab per system. No `#systems` anchors remain.
+- **Feed horizon** (`ev/daily_projections.py` `HORIZON_HOURS`): NFL 7 days, NHL 72 h, NBA 7 days (2026-10-17: NBA was 48 h, which left the board empty until the night before the season opener). The picks pages no longer have a per-day chip strip: the games strip lists the whole window.
 - **Stale lines are carried, not hidden**: the NHL / NBA odds bankers run twice a day (17:30 / 22:30 UTC), so every banked line was older
   than `MAX_AGE_MIN` (240) for ~15 h a day and the boards were empty of prices. Lines up to `CARRY_MAX_AGE_MIN` (1200 min) are now shown with
   payload `lines_stale: true` and `lines_age_minutes`; the page prints "Lines are N h old ... check the price at the book". The +EV pagers
@@ -2300,6 +2322,25 @@ Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
   firing (`--max-credits 150`, no retries): Mon-Sat every 2 h, Sun every 30 min 06:00-11:30 CT then hourly 12-20 + 00/02/04/22 (America/Chicago;
   schedulers `ev-nfl-props-sweep-{weekly,sun-am,sun-rest}`; `PAUSE=1` pauses them). Cost = 1 + 5 x games inside the 40 h horizon (~56-76 per firing
   Fri night-Sun, ~1-6 otherwise): ~10k credits a month from the shared ParlayAPI pool. Before 2026-10-17 it was a manual job and every NFL row was no-line.
+- **Live lines, rosters, games, archive (2026-10-17, branch `feat/live-lines`; handoffs/handoff_2026-10-17_live_lines.md)** -- why the boards were
+  empty: NFL / NHL had no priced rows (ParlayAPI is banked twice a day / by a manual sweep), NBA had none at all, nothing recomputed the file on a
+  schedule, and the team of a player came from his LAST game-log row (a retired Kopitar was an NHL rotation row; offseason NBA movers were dropped
+  as `ambiguous_team`).
+  1. **BettingPros live feed** (free): `ev/bettingpros_events.py` + `mlb/runners/bettingpros_live_props.py`, jobs `bp-live-{nhl,nfl,nba}` hourly via
+     `deploy/setup_bettingpros_live.sh` -> `Odds/bettingpros_live/{sport}/latest.json` in ParlayAPI event shape (real two-sided books + Novig /
+     ProphetX; DFS, Kalshi, the consensus pseudo-book, open rows dropped; BP team codes UTH / NOR fixed). Cycle measured 61-145 s / 75-121 requests per
+     sport. NFL anytime TD needed its own row builder (BettingPros files ONE offer per GAME with a selection per player; the generic parser loses it).
+  2. **Union** (`union_events`): feeds inside the live window (240 min) only, else all inside the carry window (1200); a (book, stat) in both goes to the
+     strictly fresher feed (tie / unknown age = ParlayAPI), never doubled; BP-only games are added whole; one feed down = the other alone.
+  3. **Scheduled recompute**: job `daily-projections` (`python -m ev.daily_projections --all --write-gcs`) at :25 / :55 CT via
+     `deploy/setup_daily_projections_job.sh`; `monitor_ops` pages when a board is >3 h old or a BP file >6 h (in season).
+  4. **Rosters** (`ev/rosters.py`): rotation rows only for rostered players, projected against the ROSTER team's game; a quoted player's team is the roster
+     team when it is one of the two clubs in the quoted game; players on no roster (or a partial pull) keep the last-game-log behaviour. NHL's roster API
+     omits injured-reserve players, so absence is not proof of retirement (it removes IR players from rotation rows, which is wanted).
+  5. **Order / size**: rows sorted nearest Central game day first, priced before rotation within a day, cut at `MAX_ROWS` 2400 (farthest games drop first);
+     rotation filler is per sport (`ROTATION_PER_TEAM`) and counts priced players toward each team's quota.
+  6. **Archive**: every compute merges rows into `EVSweep/{sport}_props/archive/{CT start day}.json` (newer replaces older, rows of started games are
+     kept, a priced row is never replaced by a no-line one); served by `date=`.
 - **Search is team-aware** (`lib/team-directory.ts`): every text filter (board, FilterBar, MLB card, Top 10) goes through
   `searchHaystack` / `matchesSearch`, so "houston", "texans", "habs", "sixers" and "HOU" all work; every word must match. Sport-keyed
   because HOU is the Astros and the Texans.
@@ -3558,7 +3599,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-16 23:11 CST_
+_Last updated: 2026-10-17 02:00 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
@@ -4211,6 +4252,9 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   NBA 2021-12+, NHL 2022-11+. (2) ParlayAPI `/v1/historical/.../closing-odds` -- Pinnacle/Novig prop closes but only `historical_hours` deep (Starter =
   7 days, rolling): `nba/odds/parlay_historical.py` (10 credits per call, metered), raw to `OddsAccum/{sport}/historical/`; re-run weekly. This
   corrects the earlier "no historical-props API at any tier" (it is true beyond the tier window).
+- **LIVE BettingPros (2026-10-17):** the historical crawl above is not the live feed -- see s13 "Live lines, rosters, games, archive". Gotcha: the
+  historical `touchdown-scored` (NFL anytime TD) partitions are CORRUPT (`player` = the first player of the game, every row of the game; the real player's
+  name sits lowercased in `side`; `docs/solutions/integration-issues/bettingpros-anytime-td-per-game-offer-shape.md`).
 - **Historical BettingPros -> model-vs-market (2026-10-14, code only, NOT run on real data):** `mlb_core/odds/bettingpros_loader.py`
   (`build_market_consensus` / `consensus_from_long`: two-sided real books + Novig/ProphetX only, Kalshi/DFS/consensus/open dropped, one
   modal line per (date, player, stat), de-vigged median + best/Novig prices), CLI `scripts/join_bettingpros_history.py`, shared scorer

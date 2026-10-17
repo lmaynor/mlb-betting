@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { buildMlbProjections, parseSideLine, toProjectionRow } from '../lib/mlb-projections'
 import type { Bet } from '../lib/types'
 
@@ -10,7 +10,9 @@ jest.mock('next/link', () => ({
 
 import { SportProjectionsBoard } from '../components/picks/sport-projections-board'
 import { SportTabs } from '../components/picks/sport-tabs'
-import { fromMlbProjections } from '../lib/board-rows'
+import { applyPickFilters, fromMlbProjections } from '../lib/board-rows'
+import { fromBets } from '../lib/mlb-board'
+import { parsePickFilters } from '../lib/picks-filters'
 
 let id = 0
 const bet = (o: Partial<Bet>): Bet => ({
@@ -91,20 +93,20 @@ describe('MLB projections on the unified board', () => {
     expect(document.querySelectorAll('thead').length).toBe(1)
   })
 
-  it('has no UNVALIDATED badge (MLB is the tracked card) and no hit-rate columns to fill: dashes, not numbers', () => {
+  it('has no UNVALIDATED badge (MLB is the tracked card) and no form column, since MLB has no hit rates to fill', () => {
     render(board())
     expect(screen.queryByText('UNVALIDATED')).toBeNull()
-    const cole = within(screen.getByText('Gerrit Cole').closest('tr')!)
-    expect(cole.queryByText(/L5:/)).toBeNull()
-    expect(cole.getAllByText('--').length).toBeGreaterThan(0)
+    const heads = screen.getAllByRole('columnheader').map(h => h.textContent)
+    expect(heads).toContain('MARKET FAIR')
+    expect(heads).not.toContain('FORM')
+    expect(screen.queryByText(/L5 /)).toBeNull()
   })
 
-  it('market chips are the MLB systems and filter the board; an empty board is explained', () => {
-    const { rerender } = render(board())
-    fireEvent.click(screen.getByRole('button', { name: 'TB' }))
-    expect(screen.queryByText('Gerrit Cole')).toBeNull()
-    expect(screen.getByText('Mookie Betts')).toBeInTheDocument()
-    rerender(<SportProjectionsBoard sport="mlb" rows={[]} emptyBody="Today's projections publish with the ~11:00 AM CT model run." />)
+  it('the shared filter cuts MLB rows by market and by the player\'s game; an empty board is explained', () => {
+    const all = fromMlbProjections(rows)
+    expect(applyPickFilters(all, parsePickFilters({ market: 'BATTER_TB' })).map(r => r.player)).toEqual(['Mookie Betts'])
+    expect(applyPickFilters(all, parsePickFilters({ game: 'mlb:2' })).map(r => r.player)).toEqual(['Mookie Betts'])
+    render(<SportProjectionsBoard sport="mlb" rows={[]} emptyBody="Today's projections publish with the ~11:00 AM CT model run." />)
     expect(screen.getByText(/publish with the ~11:00 AM CT model run/)).toBeInTheDocument()
   })
 
@@ -113,5 +115,47 @@ describe('MLB projections on the unified board', () => {
     expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', '/picks/mlb')
+  })
+})
+
+describe('MLB picks on the same board (bets as rows)', () => {
+  const picks = [
+    bet({ id: 901 }),
+    bet({ id: 902, system: 'HR', bet_type: 'HR', player: 'Aaron Judge', odds: 320, edge: 0.04, proj_mean: null }),
+    bet({ id: 903, system: 'EV', bet_type: 'K_UNDER_2.5_betrivers', book: 'betrivers', player: 'Nick Martinez', away_team: 'TB', home_team: 'CLE', game_pk: 849817, odds: -122, model_prob: 0.58, market_prob: 0.55, edge: 0.056, proj_mean: null }),
+    bet({ id: 904, system: 'F5', bet_type: 'HOME', player: null, away_team: 'TB', home_team: 'CLE', game_pk: 849817, odds: -105, result: 'win' }),
+    bet({ id: 905, game_pk: 1, odds: 115, edge: 0.02, book: 'betmgm' }),                    // the same prop as 901 at another book
+  ]
+  const rows = fromBets(picks)
+
+  it('adapts every kind of pick: prop, HR, +EV alert and game market, one row per prop (the best-edge book wins)', () => {
+    expect(rows.map(r => r.key)).toEqual(['901', '902', '903', '904'])
+    const cole = rows[0]
+    expect(cole).toMatchObject({ sport: 'mlb', system: 'K', player: 'Gerrit Cole', marketLabel: 'Strikeouts', side: 'over', line: 5.5, odds: 110, book: 'fanduel', gameKey: 'mlb:1', away: 'NYY', home: 'BOS', isPick: true, proj: 6.4, nBooks: 2 })
+    expect(cole.pModel).toBeCloseTo(0.6)
+    expect(cole.pFair).toBeCloseTo(0.5)
+    expect(rows[1]).toMatchObject({ system: 'HR', marketLabel: 'to Hit a Home Run', side: null, line: null, hasLine: true })
+    // an EV alert is labelled through the market it resolved to, and keeps the EV system for the market filter
+    expect(rows[2]).toMatchObject({ system: 'EV', marketLabel: 'Strikeouts', side: 'under', line: 2.5, gameKey: 'mlb:849817' })
+    // a game market has no player: the matchup is the subject
+    expect(rows[3]).toMatchObject({ system: 'F5', player: 'TB @ CLE', marketLabel: 'CLE First 5 Innings Moneyline', result: 'win' })
+  })
+
+  it('renders on the shared table with a RESULT column only when something is settled', () => {
+    const { rerender } = render(<SportProjectionsBoard sport="mlb" rows={rows.slice(0, 3)} />)
+    expect(screen.queryByRole('columnheader', { name: 'RESULT' })).toBeNull()
+    expect(within(screen.getByText('Gerrit Cole').closest('tr')!).getByText('PICK')).toBeInTheDocument()
+    rerender(<SportProjectionsBoard sport="mlb" rows={rows} />)
+    expect(screen.getByRole('columnheader', { name: 'RESULT' })).toBeInTheDocument()
+    expect(screen.getByText('WIN')).toBeInTheDocument()
+  })
+
+  it('the shared filters work on them: market, EV alerts, result and a game', () => {
+    const f = (o: Record<string, string>) => applyPickFilters(rows, parsePickFilters(o)).map(r => r.key)
+    expect(f({ market: 'EV' })).toEqual(['903'])
+    expect(f({ market: 'HR' })).toEqual(['902'])
+    expect(f({ game: 'mlb:849817' }).sort()).toEqual(['903', '904'])
+    expect(f({ result: 'win' })).toEqual(['904'])
+    expect(f({ result: 'pending' }).sort()).toEqual(['901', '902', '903'])
   })
 })

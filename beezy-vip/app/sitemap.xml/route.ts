@@ -34,6 +34,7 @@ export async function GET() {
   const sportRoutes = SPORT_SLUGS.flatMap(sport => [
     { path: `/picks/${sport}`, priority: '0.8', changefreq: 'daily' },
     { path: `/picks/${sport}/projections`, priority: '0.7', changefreq: 'daily' },
+    { path: `/picks/${sport}/systems`, priority: '0.6', changefreq: 'weekly' },
   ])
   const systemRoutes = PICK_SYSTEMS.map(s => ({ path: `/picks/${s.sport}/${s.slug}`, priority: '0.7', changefreq: 'daily' }))
   const allRoutes = [...STATIC_ROUTES, ...sportRoutes, ...systemRoutes, ...learnRoutes]
