@@ -49,4 +49,18 @@ against the repo and real GCS data before coding; what held, what did not, and w
    history does not advance until SportsBlaze (or a fallback) supplies 2026-27 box scores. `ev/grade_props.nba_actuals` already parses ESPN summaries.
 3. **Real-data runs**: NBA/NHL consensus rebuild with `--grace-minutes auto`, the blend price test on each, the NFL full rebuild, and the outcome-based
    `POOL_SD_FRAC` fit across the whole history (a first pass is in the PR description).
-4. `POOL_SD_FRAC` in `ev/props.py` was not edited; see the PR for the measured numbers before changing it.
+4. `POOL_SD_FRAC` in `ev/props.py` was NOT edited (see below).
+
+## Outcome-based sd fraction (`pooled_shift_probe.py --mode outcome`, 2023-09..2026-02, grace 10 min, 14,899 consensus rows joined to nflverse)
+RMS of (actual - modal line) / line, by line tercile (low / mid / high), against the production constant:
+| stat | n | bias | RMS | MAD-based | terciles | production |
+|---|---|---|---|---|---|---|
+| pass_yds | 1,199 | +0.003 | 0.336 | 0.321 | 0.40 / 0.30 / 0.30 | 0.22 |
+| rush_yds | 3,902 | +0.171 | 1.057 | 0.773 | 1.53 / 0.83 / 0.57 | 0.65 |
+| rec_yds | 8,875 | +0.270 | 1.254 | 0.904 | 1.77 / 1.04 / 0.71 | 0.55 |
+
+Read this before changing anything: (1) the form `sd = frac * line` does NOT fit -- the fraction falls 2-2.5x from the low to the high tercile for rush/rec, so no
+single constant is right; (2) rush/rec are right-skewed (mean above the median line: bias +17% / +27%), so a total-sd number overstates the LOCAL density around the
+line, which is what `shift_p_over` needs (dP/dpoint near the line); (3) pass_yds has only 1,199 rows, so the QB population is thin (resolution/stat-row drops were
+not broken out). The right follow-up is to fit the local slope directly (e.g. isotonic/logistic P(over) vs distance from the modal line on these rows) or let the
+pooled shift use a line-dependent sd, then A/B pooled vs exact consensus on outcomes. Production stays as is until then.
