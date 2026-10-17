@@ -67,7 +67,7 @@ export default async function ModelsPage() {
         <div className="models-table-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', background: 'var(--obsidian)', borderBottom: B_INNER }}>
             {['System', 'What it prices', 'Metric', 'Training', 'Detail'].map(h => (
-              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
+              <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
             ))}
           </div>
           {ACTIVE_MODELS.map((model, i) => {
@@ -77,13 +77,13 @@ export default async function ModelsPage() {
             return (
               <div key={model.system} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', borderBottom: i < ACTIVE_MODELS.length - 1 ? B : undefined, alignItems: 'center' }}>
                 <div style={{ padding: '12px' }}>
-                  <span className="mono" style={{ fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
-                  <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{model.version}</div>
+                  <span className="mono" style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
+                  <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{model.version}</div>
                 </div>
                 <div style={{ padding: '12px', fontSize: '12px', color: 'var(--silver)', lineHeight: 1.55 }}>{model.desc}</div>
                 <div style={{ padding: '12px' }}>
                   <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ash)' }}>{model.metric}</div>
-                  <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
+                  <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
                   {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
                 </div>
                 <div className="mono" style={{ padding: '12px', fontSize: '11px', color: 'var(--silver)' }}>{model.range}</div>
@@ -124,7 +124,7 @@ export default async function ModelsPage() {
             const pill = PILL[model.system]
             return (
               <div key={model.system} style={{ background: 'var(--graphite)', padding: '14px' }}>
-                <span className="mono" style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
+                <span className="mono" style={{ display: 'inline-block', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ash)', marginBottom: '5px' }}>{model.label}</div>
                 <p style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>{model.note}</p>
               </div>

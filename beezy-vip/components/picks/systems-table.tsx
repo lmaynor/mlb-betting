@@ -3,10 +3,11 @@ import { getSystemsBySport, kindOfSystem, PICK_SYSTEMS, systemPill, type PickKin
 import { liveAccuracy, SPORT_MODEL_SPECS, type PropModelSpec } from '@/lib/prop-model-specs'
 import type { SystemToday } from '@/lib/board-rows'
 import { SPORT_PILLARS, type ProjectionSport, type SportSlug } from '@/lib/sports'
+import { TABLE_TD, TABLE_TH } from '@/lib/tokens'
 import type { SystemStats } from '@/lib/types'
 
-const TH = { textAlign: 'left', padding: '9px 12px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.06em', color: 'var(--fog)', background: '#11131a', borderBottom: '1px solid #1e2230', whiteSpace: 'nowrap', position: 'sticky', top: 0 } as const
-const TD = { padding: '10px 12px', borderBottom: '1px solid #151822', whiteSpace: 'nowrap' } as const
+const TH = { ...TABLE_TH, textAlign: 'left', padding: '9px 12px', whiteSpace: 'nowrap', position: 'sticky', top: 0 } as const
+const TD = { ...TABLE_TD, padding: '10px 12px', whiteSpace: 'nowrap' } as const
 const R = { textAlign: 'right' } as const
 
 const num = (v: unknown) => { const n = parseFloat(String(v ?? '')); return Number.isFinite(n) ? n : null }
@@ -88,7 +89,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                 <tr key={s.key} className="sys-row">
                   <td style={TD}>
                     <Link href={href} style={{ textDecoration: 'none' }}>
-                      <span className="dell-heading" style={{ fontSize: '9.5px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
+                      <span className="dell-heading" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
                     </Link>
                   </td>
                   <td style={{ ...TD, fontSize: '13.5px', fontWeight: 600 }}>

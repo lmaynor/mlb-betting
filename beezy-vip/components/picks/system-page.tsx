@@ -18,10 +18,10 @@ import { liveAccuracy } from '@/lib/prop-model-specs'
 import { parsePickFilters } from '@/lib/picks-filters'
 import { dayKey, loadSportBoard } from '@/lib/sport-board-data'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
-import { SYSTEM_COLOR } from '@/lib/tokens'
+import { SURFACE_CARD, SYSTEM_COLOR } from '@/lib/tokens'
 
 const finite = (v: unknown) => { const n = parseFloat(String(v ?? '')); return Number.isFinite(n) ? n : null }
-const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px' } as const
+const SURFACE = SURFACE_CARD
 
 /**
  * One system of any sport: the same shell as the picks board (day, games, filters, table) narrowed to that market, a one-line

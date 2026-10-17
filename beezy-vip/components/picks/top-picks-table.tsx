@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import { SPORT_PILLARS } from '@/lib/sports'
 import { scoreTier, TIER_META } from '@/lib/beezy-score'
-import { bookDisplay } from '@/lib/tokens'
+import { bookDisplay, SURFACE_CARD, TABLE_TD, TABLE_TH } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { sportHref } from '@/lib/ia'
 import type { PickBasis, TopPick } from '@/lib/top-picks'
 
-const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' } as const
-const TH = { textAlign: 'left', padding: '9px 10px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230', background: '#11131a', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
-const TD = { padding: '10px', borderBottom: '1px solid #151822', verticalAlign: 'middle' } as const
+const SURFACE = SURFACE_CARD
+const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
+const TD = { ...TABLE_TD, padding: '10px', verticalAlign: 'middle' } as const
 
 const BASIS_LABEL: Record<PickBasis, string> = { model: 'Model', ev: '+EV alert', projection: 'Projection', confluence: 'Model + market' }
 
@@ -65,7 +65,7 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td style={{ ...TD, whiteSpace: 'nowrap', color: 'var(--silver)' }}>
                   {BASIS_LABEL[p.basis]}
                   {!p.tracked && (
-                    <span className="dell-heading" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet." style={{ marginLeft: '8px', fontSize: '9px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED</span>
+                    <span className="dell-heading" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>
                 {showResult && (

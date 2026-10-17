@@ -35,7 +35,7 @@ const IMPORTANCE: Record<string, { color: string; border: string; bg: string }> 
 function StatBlock({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <div style={{ padding: '18px', borderRight: B }}>
-      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
+      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--ash)' }}>{value}</div>
       {sub && <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</div>}
     </div>
@@ -117,7 +117,7 @@ export default async function ModelDetailPage({ params }: Props) {
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
         <div style={{ padding: '18px' }}>
-          <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Avg Edge</div>
+          <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Avg Edge</div>
           <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--fog)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
@@ -186,7 +186,7 @@ export default async function ModelDetailPage({ params }: Props) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', background: 'var(--obsidian)', borderBottom: B }}>
           {['Feature', 'Description', 'Importance'].map(h => (
-            <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', padding: '9px 14px' }}>{h}</div>
+            <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', padding: '9px 14px' }}>{h}</div>
           ))}
         </div>
         {spec.features.map((f, i) => (
@@ -195,7 +195,7 @@ export default async function ModelDetailPage({ params }: Props) {
             <div style={{ fontSize: '11px', color: 'var(--silver)', padding: '10px 14px' }}>{f.description}</div>
             <div style={{ padding: '10px 14px' }}>
               <span className="mono" style={{
-                fontSize: '9px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
+                fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
                 color: IMPORTANCE[f.importance]?.color ?? 'var(--fog)',
                 border: `1px solid ${IMPORTANCE[f.importance]?.border ?? 'var(--iron)'}`,
                 background: IMPORTANCE[f.importance]?.bg ?? 'transparent',
@@ -209,15 +209,15 @@ export default async function ModelDetailPage({ params }: Props) {
       <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '18px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)' }}>200-Bet Gate Progress</span>
-            <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{bets}/200</span>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)' }}>200-Bet Gate Progress</span>
+            <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{bets}/200</span>
           </div>
           <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
             <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: spec.color, width: `${gatePct}%` }} />
           </div>
         </div>
         <span className="mono" style={{
-          fontSize: '9px', letterSpacing: '0.08em', padding: '5px 11px', borderRadius: 'var(--radius-pill)',
+          fontSize: '10px', letterSpacing: '0.08em', padding: '5px 11px', borderRadius: 'var(--radius-pill)',
           border: bets >= 200 ? '1px solid var(--win-border)' : B,
           color: bets >= 200 ? 'var(--signal)' : 'var(--fog)',
           background: bets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
@@ -233,7 +233,7 @@ export default async function ModelDetailPage({ params }: Props) {
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
           <div style={{ padding: '18px' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Sample Size</div>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Sample Size</div>
             <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--ash)' }}>{bets}</div>
             <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>Settled bets</div>
           </div>

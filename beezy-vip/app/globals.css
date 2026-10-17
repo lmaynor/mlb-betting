@@ -100,7 +100,7 @@ img, video { max-width: 100%; height: auto; }
   --border-subtle: #151822;
   --border-strong: var(--iron);
   --font-text: var(--font-inter);
-  --font-display: var(--font-inter);
+  /* --font-display and --font-mono are set by next/font on <html> (app/layout.tsx); do not alias them here. */
 
   /* ── Per-system identity colors (Discord-style taxonomy) ──
      Solid = system hue (text/markers/accents).
@@ -137,7 +137,6 @@ img, video { max-width: 100%; height: auto; }
   --shadow-lg:      0 18px 50px -12px rgba(0,0,0,0.65);
   --shadow-card:    0 2px 8px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
   --shadow-elevated:0 8px 24px rgba(0,0,0,0.65), 0 0 0 1px rgba(87,242,135,0.18);
-  --glow-signal:    0 0 24px -6px color-mix(in oklab, var(--signal) 55%, transparent);
 
   /* ── Layout rhythm ─────────────────────────────────────── */
   --page-max: 1200px;
@@ -180,20 +179,38 @@ body {
   letter-spacing: 0;
 }
 
-/* ── Typography classes (names retained from prior system) ──────────
-   Display/Heading/Body = Inter. Mono (odds, EV%, stakes, times) = JetBrains Mono. */
+/* -- Typography ---------------------------------------------------
+   Three faces (app/layout.tsx):
+     --font-display  Space Grotesk       h1, h2, display classes, the wordmark
+     --font-inter    Plus Jakarta Sans   dense UI and body copy (the variable name is historical: ~1,600 inline styles read it)
+     --font-mono     IBM Plex Mono       every odd, probability, EV%, stake, timestamp, and every uppercase micro-label
+   Canonical classes are .ui-display / .ui-heading. The .dell-* names are deprecated aliases of the same rules. */
+h1, h2,
+.display-xl, .display-lg {
+  font-family: var(--font-display), var(--font-inter), sans-serif;
+}
+.ui-display,
 .dell-display {
-  font-family: var(--font-display), var(--font-text), system-ui, sans-serif;
-  font-weight: 800;
+  font-family: var(--font-display), var(--font-inter), sans-serif;
+  font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.05;
   text-transform: none;
   color: var(--chalk);
 }
+.ui-heading,
 .dell-heading {
-  font-family: var(--font-text), system-ui, sans-serif;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* Table headers read as terminal column labels. 10px is the floor for any text in the app. */
+th {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.06em;
 }
 .times {
@@ -204,8 +221,8 @@ body {
 }
 .mono {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum" 1, "zero" 1;
 }
 
 /* Display tracking loosens slightly at very large sizes via clamp helpers */
@@ -234,10 +251,12 @@ body {
 }
 
 /* ── Card components ────────────────────────────────────────────── */
+/* Same surface spec as SURFACE_CARD in lib/tokens.ts. */
 .ribbon-card-wrap {
   border: 1px solid var(--basalt);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: var(--graphite);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 .ribbon-title {
@@ -292,19 +311,19 @@ body {
               transform var(--dur-fast) var(--ease-out),
               box-shadow var(--dur) var(--ease-out);
 }
+/* .btn-primary is canonical; .dell-btn-primary and .dell-btn-red are deprecated aliases. Hover is a flat colour shift, no glow. */
+.btn-primary,
 .dell-btn-primary,
-.dell-btn-red,
-.btn-primary {
+.dell-btn-red {
   background: var(--signal);
   color: var(--carbon);
   border-color: var(--signal-led);
   box-shadow: var(--shadow-inset);
 }
+.btn-primary:hover,
 .dell-btn-primary:hover,
-.dell-btn-red:hover,
-.btn-primary:hover {
-  background: color-mix(in oklab, var(--signal) 88%, white);
-  box-shadow: var(--glow-signal), var(--shadow-inset);
+.dell-btn-red:hover {
+  background: #6bf596;
 }
 .btn-ghost {
   background: transparent;
