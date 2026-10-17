@@ -89,3 +89,22 @@ Use the repo `.venv` (the system python lacks pyarrow / google-cloud-storage). T
   thresholds, date-clustered CIs) before treating the signal as anything more than calibration. A follow-up session was proposed.
 - Test a 10-minute grace window for the postgame filter to recover the dropped near-close quotes.
 - Diagnose the NFL 2025 `no_model_row` hole.
+
+## Addendum 2026-10-16 -- coverage diagnosis (code in PR `feat/quant-audit-fixes`; no new model-vs-market numbers)
+Measured on real GCS partitions (small samples, not a rerun of the full builds above):
+- **`postgame_quote` is a timestamp-semantics issue, not an offset.** NFL passing-yards, 2024-10-06/07: `updated` is the last genuine quote change
+  (median ~6.5 h and 4 h before the scheduled start, 0% after it). 2025-10-05/06 and 2025-11-30: 90-94% of stamps are AFTER the scheduled start,
+  clustered 1-5 minutes after it (q50 0.03-0.05 h, q90 0.06-0.09 h; 24% of the 2025-10-05 rows are > 5 min). So the strict filter drops nearly the whole 2025
+  close. `consensus_from_long(..., grace_minutes=)` / `join_bettingpros_history.py --grace-minutes N|auto` widens "pregame" to scheduled + N min
+  (`auto` = 10 for NBA/NHL/NFL; default 0 keeps old results reproducible). Whether stamps after the start are ever in-play is unverified: compare scores
+  with and without the grace before trusting the recovered rows.
+- **NFL 2025 `no_model_row`:** on the sampled days every resolved consensus row matched a model row on `(gsis_id, ET game date)` (2024: 19/19, 2025: 46/46),
+  so the join key is not the cause there; with the 2025 rows previously dropped as post-start, the full-build figure above was likely a mix of both effects.
+  Rebuild NFL with `--grace-minutes auto` for the real coverage.
+- **NHL `no_game`:** BettingPros uses `LA/NJ/SJ/TB` (and `ARI` in 2022-24); the game log uses `LAK/NJD/SJS/TBL` with `ARI` through 2024-04 and `UTA` after.
+  `nhl.props.history.canon_team` maps them (ARI/UTA by date) and `attach_outcomes` retries a unique +-1 day match. The old blanket `ARI -> UTA` mislabelled
+  411 Coyotes games.
+- **Blend price test:** `mlb_core.odds.model_vs_market.blend_price_test` (walk-forward by season, flat 1u at the best price at >=3/4/5% over the price,
+  date-clustered bootstrap CIs, `market` line-shopping and `model` standalone as controls) is wired into `nba.props.history_join.market_report` and
+  `scripts/nhl_sog_market_eval.py`. **It has not been run on the real NBA/NHL consensus yet** (multi-hour builds); the c values in
+  `mlb_core.risk.calibration.BLEND_C` are the table above, not a tradability result.

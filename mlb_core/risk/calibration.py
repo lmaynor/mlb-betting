@@ -82,6 +82,68 @@ def apply(system: str, prob: float) -> tuple[float, bool]:
         return float(prob), False
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Edge shrinkage and market-anchored blend (2026-10-16 quant audit).
+# ---------------------------------------------------------------------------------------------------------------------
+SHRINK_KNEE = 0.06
+SHRINK_TAIL_SLOPE = 0.35
+SHRINK_MAX_EFF_EDGE = 0.10
+
+
+def shrink_edge(edge: float, knee: float = SHRINK_KNEE, tail_slope: float = SHRINK_TAIL_SLOPE,
+                max_eff_edge: float = SHRINK_MAX_EFF_EDGE) -> float:
+    """Concave shrinkage of a CLAIMED edge (fraction) before Kelly sizing: identity up to `knee`, `tail_slope` per unit
+    above it, capped at `max_eff_edge`. Odd in `edge` (a negative edge is shrunk symmetrically, never amplified).
+
+    Evidence: graded +EV alerts in the 12%+ edge bucket claimed 61.6% but hit 49.9% (n=2,474, ui_consistency_sweep
+    handoff item 10), i.e. the biggest gaps are partly adverse selection. This only SIZES smaller; it does not drop bets.
+    Mirror of beezy-vip/lib/ev-math.ts shrinkEdge()."""
+    if edge is None or edge != edge:
+        return 0.0
+    mag = abs(float(edge))
+    eff = mag if mag <= knee else knee + tail_slope * (mag - knee)
+    eff = min(eff, max_eff_edge)
+    return eff if edge >= 0 else -eff
+
+
+# Blend weight c on (logit(p_model) - logit(p_market)), from the 2026-10-15 BettingPros walk-forward study
+# (docs/analysis/bettingpros_model_vs_market_2026-10-15.md). c is a fit on the same test rows it describes (one parameter,
+# date-clustered t in brackets) and is NOT a tradability result: NHL SOG priced at the best Under was ROI -0.08%.
+# Anything not listed (every NFL stat, every unlisted stat) gets c=0, i.e. the market itself.
+BLEND_C = {
+    ("nba", "points"): 0.07,      # t=+2.99
+    ("nba", "rebounds"): 0.19,    # t=+7.71
+    ("nba", "assists"): 0.18,     # t=+7.65
+    ("nba", "threes"): 0.28,      # t=+8.32
+    ("nba", "pra"): 0.05,         # t=+2.52
+    ("nhl", "sog"): 0.30,         # t=+4.9
+}
+BLEND_MAX_SHIFT = 0.08
+
+
+def _logit(p: float) -> float:
+    import math
+    p = min(max(float(p), 1e-6), 1 - 1e-6)
+    return math.log(p / (1 - p))
+
+
+def market_blend_prob(p_mkt: float, p_model: float, sport: str, stat: str, a: float = 0.0, b: float = 1.0,
+                      c: float | None = None, max_shift: float = BLEND_MAX_SHIFT) -> float:
+    """Posterior P(over): logit(p) = a + b*logit(p_mkt) + c*(logit(p_model) - logit(p_mkt)), clamped to
+    p_mkt +/- max_shift. c defaults to BLEND_C[(sport, stat)], else 0 (returns the market). Missing or non-finite model
+    or market probability returns the market (or NaN if that is missing too) -- never a model-only price."""
+    import math
+    if p_mkt is None or not math.isfinite(float(p_mkt)):
+        return float("nan")
+    if p_model is None or not math.isfinite(float(p_model)):
+        return float(p_mkt)
+    if c is None:
+        c = BLEND_C.get((str(sport).lower(), str(stat).lower()), 0.0)
+    z = a + b * _logit(p_mkt) + c * (_logit(p_model) - _logit(p_mkt))
+    p = 1.0 / (1.0 + math.exp(-z))
+    return min(max(p, float(p_mkt) - max_shift), float(p_mkt) + max_shift)
+
+
 def reset_cache() -> None:
     """Clear the process-local calibrator cache (tests)."""
     _CACHE.clear()

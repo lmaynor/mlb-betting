@@ -69,8 +69,22 @@ def season_of(day: pd.Timestamp) -> int:
     return int(day.year if day.month >= 8 else day.year - 1)
 
 
-def check_history(history: dict, event_day: pd.Timestamp, allow_rollover: bool = False) -> tuple[bool, bool, str | None]:
-    """-> (ok, rollover, reason). Refuses when the newest box score is too far behind the event."""
+def in_rollover_window(event_day: pd.Timestamp) -> bool:
+    """True for ET event days in the opening ROLLOVER_AUTO_DAYS after Oct 1 of the event's season."""
+    d = event_day.normalize().tz_localize(None) if event_day.tzinfo else event_day.normalize()
+    since = (d - pd.Timestamp(year=season_of(d), month=10, day=1)).days
+    return 0 <= since <= C.ROLLOVER_AUTO_DAYS
+
+
+def check_history(history: dict, event_day: pd.Timestamp, allow_rollover: bool | str = False) -> tuple[bool, bool, str | None]:
+    """-> (ok, rollover, reason). Refuses when the newest box score is too far behind the event.
+
+    allow_rollover: False (default, direct callers) never rolls over; True always may (subject to the gap and
+    new-season checks); "auto" may only inside the season's opening window (in_rollover_window). Rolled-over rows are
+    scored from last season's trailing windows, which roll toward the new season as its games accrue, and are always
+    tagged ROLLOVER_HISTORY by score_events."""
+    if allow_rollover == "auto":
+        allow_rollover = in_rollover_window(event_day)
     last = history.get("last_date")
     if not last or not history.get("n_rows"):
         return False, False, "NO_HISTORY"
@@ -144,7 +158,7 @@ def _refuse(stats: dict, reason: str, n: int = 1):
     stats["refused"][key] = stats["refused"].get(key, 0) + n
 
 
-def score_events(events: list, now: datetime, res: Resources, allow_rollover: bool = False,
+def score_events(events: list, now: datetime, res: Resources, allow_rollover: bool | str = False,
                  snapshot_meta: dict | None = None) -> tuple[pd.DataFrame, dict]:
     """Score every banked event. Pure function of (events, history, models, crosswalk): no I/O."""
     from nba.teams import team_code
@@ -290,7 +304,7 @@ def load_resources(local_dir: str | None, models_dir: str, xwalk: pd.DataFrame |
 
 
 def run_once(res: Resources, now: datetime | None = None, max_age_min: float = C.MAX_SNAPSHOT_AGE_MIN,
-             allow_rollover: bool = False, events: list | None = None, out_dir: str | None = None,
+             allow_rollover: bool | str = "auto", events: list | None = None, out_dir: str | None = None,
              write_gcs: bool = False) -> dict:
     """One pass over the newest banked NBA props snapshot (or `events` supplied directly). Returns a summary dict."""
     from ev.sweep_props_alerts import SPORTS, read_latest_props
@@ -333,7 +347,9 @@ def main(argv=None) -> int:
     ap.add_argument("--events-file", help="score this JSON list of ParlayAPI events instead of the banked snapshot")
     ap.add_argument("--max-age-min", type=float, default=C.MAX_SNAPSHOT_AGE_MIN)
     ap.add_argument("--allow-rollover", action="store_true",
-                    help="score the first days of a new season from last season's history (rows are never flagged)")
+                    help="force rollover on regardless of the date (default: automatic only in the season's opening "
+                         "window, see nba.props.config.ROLLOVER_AUTO_DAYS); rolled-over rows are tagged ROLLOVER_HISTORY")
+    ap.add_argument("--no-auto-rollover", action="store_true", help="never roll over: refuse STALE_HISTORY as before")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     models_dir = a.models_dir
@@ -343,7 +359,8 @@ def main(argv=None) -> int:
         models_dir = str(fetch_models(tempfile.mkdtemp(prefix="nba_props_models_")))
     res = load_resources(a.local_dir, models_dir)
     events = json.load(open(a.events_file)) if a.events_file else None
-    out = run_once(res, max_age_min=a.max_age_min, allow_rollover=a.allow_rollover, events=events, out_dir=a.out_dir,
+    rollover = True if a.allow_rollover else (False if a.no_auto_rollover else "auto")
+    out = run_once(res, max_age_min=a.max_age_min, allow_rollover=rollover, events=events, out_dir=a.out_dir,
                    write_gcs=a.gcs)
     print(json.dumps({k: v for k, v in out.items() if k != "history"}, indent=1, default=str))
     return 0

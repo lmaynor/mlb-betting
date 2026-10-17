@@ -19,7 +19,25 @@ import pandas as pd
 from mlb_core.data.player_names import PlayerResolver, norm_name
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
-TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA"}
+TEAM_FIX = {"Utah Mammoth": "UTA", "Utah Hockey Club": "UTA", "ARI": "UTA"}      # legacy map; see canon_team for the dated one
+UTAH_FIRST_GAME = "2024-07-01"        # the game log spells the Coyotes ARI through 2024-04 and the Utah club UTA from 2024-09
+
+
+def canon_team(code, game_date=None):
+    """Any feed spelling -> the NHL-API tricode the game log uses (nhl.config.TEAMS). BettingPros emits Kalshi-style
+    LA/NJ/SJ/TB (verified on 2023-25 partitions: 4 of 32 teams, the bulk of the `no_game` drops) where the log has
+    LAK/NJD/SJS/TBL. ARI/UTA are one franchise under two codes: dated, so a pre-2024-07 ARI game stays ARI and a later
+    one is UTA (the old blanket ARI->UTA mislabelled 411 real Coyotes games). Unknown codes pass through unchanged."""
+    from nhl import config as NC
+    c = str(code or "").strip()
+    if not c:
+        return c
+    if c in TEAM_FIX and c != "ARI":
+        return TEAM_FIX[c]
+    if c.upper() in ("ARI", "UTA"):
+        late = str(game_date or "9999")[:10] >= UTAH_FIRST_GAME
+        return "UTA" if late else "ARI"
+    return NC.team_abbrev(c) or c
 
 
 def _ro(path: str) -> sqlite3.Connection:
@@ -100,8 +118,25 @@ def attach_outcomes(pairs: pd.DataFrame, games: pd.DataFrame, gamelog: pd.DataFr
         'unresolved' name not resolved / ambiguous
     """
     g = games.rename(columns={"date": "game_date", "home_team": "home_abbrev", "away_team": "away_abbrev"})
-    out = pairs.merge(g[["game_id", "game_date", "home_abbrev", "away_abbrev"]],
-                      on=["game_date", "home_abbrev", "away_abbrev"], how="left")
+    g = g[["game_id", "game_date", "home_abbrev", "away_abbrev"]].assign(game_date=lambda x: x["game_date"].astype(str).str[:10])
+    pairs = pairs.assign(
+        home_abbrev=[canon_team(t, d) for t, d in zip(pairs["home_abbrev"], pairs["game_date"])],
+        away_abbrev=[canon_team(t, d) for t, d in zip(pairs["away_abbrev"], pairs["game_date"])])
+    out = pairs.merge(g, on=["game_date", "home_abbrev", "away_abbrev"], how="left")
+    # +-1 day fallback (UTC-vs-ET stamping): the SAME ordered (home, away) pair a day either side. A team pair meets at most
+    # once in any 3-day window, so a unique hit is the game; ambiguous or absent stays no_game.
+    miss = out["game_id"].isna()
+    if miss.any():
+        shifted = []
+        for off in (-1, 1):
+            t = out.loc[miss, ["home_abbrev", "away_abbrev", "game_date"]].copy()
+            t["game_date"] = (pd.to_datetime(t["game_date"]) + pd.Timedelta(days=off)).dt.strftime("%Y-%m-%d")
+            t = t.reset_index().merge(g, on=["game_date", "home_abbrev", "away_abbrev"], how="inner")
+            shifted.append(t[["index", "game_id", "game_date"]])
+        alt = pd.concat(shifted, ignore_index=True)
+        alt = alt[~alt["index"].duplicated(keep=False)]                  # two candidate days -> ambiguous, leave unmatched
+        out.loc[alt["index"].to_numpy(), "game_id"] = alt["game_id"].to_numpy()
+        out.loc[alt["index"].to_numpy(), "game_date"] = alt["game_date"].to_numpy()
     gl = gamelog[["game_id", "player_id", "sog"]].rename(columns={"sog": "sog_actual"})
     gl = gl.assign(player_id=gl["player_id"].astype("Int64"))
     out = out.merge(gl, on=["game_id", "player_id"], how="left")

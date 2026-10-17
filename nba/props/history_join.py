@@ -37,7 +37,7 @@ from nba.props import dist as Dd
 STAT_MAP = {"pts": "points", "reb": "rebounds", "ast": "assists", "threes": "threes", "pra": "pra"}
 
 JOINED_COLUMNS = ["player_id", "game_id", "game_date", "season", "line", "y", "over", "mu", "p_model", "p_market",
-                  "n_books"]
+                  "n_books", "best_over_odds", "best_under_odds"]
 
 
 def _date_str(s) -> pd.Series:
@@ -152,7 +152,8 @@ def market_report(ev: dict, X: pd.DataFrame, meta: pd.DataFrame, consensus: pd.D
         joined, cov = join_stat(ev, meta, consensus, stat, tables, min_books, _by_date=by_date)
         scores = MVM.score_model_vs_market(joined["over"], joined["p_model"], joined["p_market"], joined["game_id"]) \
             if len(joined) else MVM.score_model_vs_market([], [], [], [])
-        out["by_stat"][stat] = {"coverage": cov, "scores": scores, "frame": joined}
+        out["by_stat"][stat] = {"coverage": cov, "scores": scores, "frame": joined,
+                                "price_test": MVM.blend_price_test(joined) if len(joined) else None}
         frames.append(joined)
         tot_in += cov["consensus_rows"]
         tot_matched += cov["matched"]
@@ -162,6 +163,7 @@ def market_report(ev: dict, X: pd.DataFrame, meta: pd.DataFrame, consensus: pd.D
     out["all"] = {"coverage": MVM.coverage(tot_in, tot_matched, tot_dropped),
                   "scores": MVM.score_model_vs_market(allj["over"], allj["p_model"], allj["p_market"], allj["game_id"])
                   if len(allj) else MVM.score_model_vs_market([], [], [], [])}
+    out["all"]["price_test"] = MVM.blend_price_test(allj) if len(allj) else None
     return out
 
 
@@ -176,7 +178,11 @@ def render_market_section(rep: dict) -> str:
         L.append(f"### {stat}")
         L.append(MVM.render_coverage(stat, r["coverage"]))
         L.append(MVM.render_scores(stat, r["scores"]))
+        if r.get("price_test"):
+            L.append(MVM.render_price_test(f"{stat} blend price test", r["price_test"]))
     L.append("### all stats")
     L.append(MVM.render_coverage("all", rep["all"]["coverage"]))
     L.append(MVM.render_scores("all", rep["all"]["scores"]))
+    if rep["all"].get("price_test"):
+        L.append(MVM.render_price_test("all stats blend price test", rep["all"]["price_test"]))
     return "\n".join(L) + "\n"

@@ -300,3 +300,17 @@ def test_scorer_never_touches_discord_or_the_bets_table(monkeypatch):
     src = Path(S.__file__).read_text()
     for banned in ("BetTracker", "bet_tracker", "log_bet", "post_discord", "webhook", "DISCORD_WEBHOOK"):
         assert banned not in src.replace("NEVER posts to Discord", ""), banned
+
+
+def test_check_history_auto_rollover_only_in_opening_window():
+    hist = {"n_rows": 5, "last_date": "2026-06-13", "last_season": 2025}
+    ok, roll, why = S.check_history(hist, pd.Timestamp("2026-10-20"), allow_rollover="auto")      # Opening Night
+    assert ok and roll and why is None
+    ok, roll, why = S.check_history(hist, pd.Timestamp("2026-10-20"))                             # direct default: unchanged
+    assert not ok and "STALE_HISTORY" in why
+    ok, _, why = S.check_history(hist, pd.Timestamp("2026-11-20"), allow_rollover="auto")        # past the window
+    assert not ok and "STALE_HISTORY" in why
+    ok, _, why = S.check_history({"n_rows": 5, "last_date": "2026-03-01", "last_season": 2025}, pd.Timestamp("2026-10-22"),
+                                 allow_rollover="auto")                                           # gap > ROLLOVER_MAX_GAP_DAYS
+    assert not ok and "STALE_HISTORY" in why
+    assert S.in_rollover_window(pd.Timestamp("2026-10-20")) and not S.in_rollover_window(pd.Timestamp("2026-07-01"))
