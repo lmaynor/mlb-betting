@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { OgBrandBadge } from "@/lib/og-brand";
 export const runtime = "edge";
 
 // Nightly settlement receipt: every graded bet for one slate, wins AND losses,
@@ -85,10 +86,7 @@ export async function GET(req: Request) {
   return new ImageResponse((
     <div style={{ width: `${W}px`, height: `${H}px`, background: "#090a0f", display: "flex", flexDirection: "column", fontFamily: "monospace" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 44px", height: "76px", borderBottom: "1px solid #1e2230" }}>
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span style={{ fontSize: "30px", fontWeight: 800, color: "#ffffff" }}>BEEZY</span>
-          <span style={{ fontSize: "30px", fontWeight: 800, color: WIN }}>.FYI</span>
-        </div>
+        <OgBrandBadge size={44} />
         <span style={{ fontSize: "15px", color: "#9ca3af", letterSpacing: "2px" }}>{`DAILY SETTLEMENT RECEIPT \u00b7 ${date}`}</span>
         <span style={{ fontSize: "12px", color: "#7d8596", letterSpacing: "2px" }}>PUBLIC LEDGER</span>
       </div>

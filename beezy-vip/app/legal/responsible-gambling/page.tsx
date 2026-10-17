@@ -1,178 +1,86 @@
 import type { Metadata } from 'next'
+import { ContactLine, LegalPage } from '@/components/legal/legal-page'
 
 export const metadata: Metadata = { title: 'Responsible Gambling' }
 
 export default function ResponsibleGamblingPage() {
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
-
-      {/* Legal review banner */}
-      <div style={{
-        background: '#1c1207',
-        color: '#f59e0b',
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        letterSpacing: '0.1em',
-        padding: '10px 14px',
-        marginBottom: '28px',
-        borderRadius: '4px',
-      }}>
-        ⚠ THIS DOCUMENT IS CURRENTLY IN LEGAL REVIEW AND MAY BE REVISED. USE IS PROVISIONAL.
+    <LegalPage title="Responsible Gambling">
+      <div style={{ background: '#11131a', border: '1px solid #1e2230', borderLeft: '3px solid #f87171', borderRadius: '8px', padding: '16px 20px', marginBottom: '28px' }}>
+        <p style={{ fontWeight: 700, margin: '0 0 8px' }}>If you or someone you know has a gambling problem, help is available 24/7:</p>
+        <ul style={{ margin: 0, paddingLeft: '20px' }}>
+          <li>
+            <strong>National Problem Gambling Helpline:</strong> <a href="tel:18004262537">1-800-GAMBLER (1-800-426-2537)</a>, call or text
+          </li>
+          <li>
+            <strong>National Council on Problem Gambling:</strong>{' '}
+            <a href="https://www.ncpgambling.org" target="_blank" rel="noopener noreferrer">ncpgambling.org</a>
+          </li>
+          <li>
+            <strong>Gamblers Anonymous:</strong>{' '}
+            <a href="https://www.gamblersanonymous.org" target="_blank" rel="noopener noreferrer">gamblersanonymous.org</a>
+          </li>
+          <li>
+            <strong>Illinois Self-Exclusion (Illinois Gaming Board):</strong>{' '}
+            <a href="https://www.igb.illinois.gov" target="_blank" rel="noopener noreferrer">igb.illinois.gov</a>
+          </li>
+          <li>
+            <strong>Crisis Text Line:</strong> text HOME to 741741
+          </li>
+        </ul>
       </div>
 
-      <div style={{ marginBottom: '8px' }}>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: '#6b7280',
-          background: '#f3f4f6',
-          padding: '3px 10px',
-          borderRadius: '99px',
-        }}>LEGAL</span>
-      </div>
+      <h2>1. beezy.fyi is not a sportsbook</h2>
+      <p>
+        beezy.fyi publishes statistical analysis for informational and educational purposes. We never accept, hold, or
+        facilitate wagers. Any wager you place is your own decision, made independently with a third party.
+      </p>
 
-      <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>Responsible Gambling</h1>
-      <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '36px' }}>Last updated: 2026-05-21</p>
+      <h2>2. Age requirement</h2>
+      <p>
+        You must be 21 or older to wager in most U.S. jurisdictions (18 or older where local law permits). Do not use any
+        content on this site to inform wagering if you are under the legal age where you are.
+      </p>
 
-      <div className="article-body">
+      <h2>3. Gambling involves risk</h2>
+      <p>
+        Every wager can lose. Models, including ours, cannot predict the future, and paper-tracked results are simulations
+        that do not guarantee future performance.
+      </p>
 
-        {/* Crisis resources — front and prominent */}
-        <div style={{
-          background: '#fef2f2',
-          border: '1px solid #fca5a5',
-          borderRadius: '6px',
-          padding: '16px 20px',
-          marginBottom: '28px',
-        }}>
-          <p style={{ fontWeight: 700, marginBottom: '8px', color: '#991b1b' }}>
-            If you or someone you know has a gambling problem, help is available 24/7:
-          </p>
-          <ul style={{ margin: 0, paddingLeft: '20px', color: '#7f1d1d' }}>
-            <li>
-              <strong>National Problem Gambling Helpline:</strong>{' '}
-              <a href="tel:18004262537">1-800-GAMBLER (1-800-426-2537)</a> — call or text
-            </li>
-            <li>
-              <strong>Illinois Council on Problem Gambling:</strong>{' '}
-              <a href="https://www.icpg.org" target="_blank" rel="noopener noreferrer">icpg.org</a>
-              {' '}| <a href="tel:18006330025">1-800-GAMBLER</a>
-            </li>
-            <li>
-              <strong>National Council on Problem Gambling:</strong>{' '}
-              <a href="https://www.ncpgambling.org" target="_blank" rel="noopener noreferrer">ncpgambling.org</a>
-            </li>
-            <li>
-              <strong>Gamblers Anonymous:</strong>{' '}
-              <a href="https://www.gamblersanonymous.org" target="_blank" rel="noopener noreferrer">gamblersanonymous.org</a>
-            </li>
-            <li>
-              <strong>Crisis Text Line:</strong> Text HOME to <strong>741741</strong>
-            </li>
-          </ul>
-        </div>
+      <h2>4. Bankroll management</h2>
+      <ul>
+        <li>Only stake money you can afford to lose. Never use rent, bills, savings, or borrowed money.</li>
+        <li>Set a budget and a time limit before you start, and stop when you reach either.</li>
+        <li>Size every stake as a small fraction of your bankroll. The Kelly calculators on this site are a sizing aid, not a guarantee; fractional Kelly is safer than full Kelly.</li>
+        <li>Never chase losses by raising stakes.</li>
+      </ul>
 
-        <h2>1. Our Service Is Not a Sportsbook</h2>
-        <p>
-          Beezy.FYI is a <strong>subscription content service</strong>. We publish
-          machine-learning-generated statistical analyses of MLB games for entertainment and
-          educational purposes. We do not accept wagers, facilitate gambling transactions, or
-          provide legally regulated financial or betting advice. Any decision to place a wager
-          with a licensed sportsbook is entirely your own, made independently of this Service.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Verify this characterization is consistent with the Illinois
-              Sports Wagering Act (230 ILCS 45/) and any FTC guidance on sports pick services.
-              If the Service is later deemed a "sports pick service" under any state law, separate
-              licensing obligations may apply. */}
-        </p>
+      <h2>5. Warning signs</h2>
+      <ul>
+        <li>Spending more time or money than you intended.</li>
+        <li>Chasing losses.</li>
+        <li>Gambling that affects work, school, or relationships.</li>
+        <li>Hiding your activity or borrowing to fund it.</li>
+        <li>Feeling restless or irritable when you try to stop.</li>
+      </ul>
+      <p>If any of these sound familiar, use the resources at the top of this page.</p>
 
-        <h2>2. Gambling Involves Risk</h2>
-        <p>
-          Sports wagering is a form of gambling. All gambling involves risk of financial loss.
-          Statistical models—including ours—cannot predict the future. No pick, analysis, or
-          model output on this Service should be treated as a guarantee of any outcome, and
-          past model performance does not guarantee future results.
-        </p>
-        <p>
-          Never gamble with money you cannot afford to lose. Never use borrowed funds, rent,
-          bill payments, savings, or money earmarked for necessities to place wagers.
-        </p>
+      <h2>6. Tools at licensed sportsbooks</h2>
+      <p>
+        Licensed operators offer deposit limits, wager limits, loss limits, cool-off periods, and self-exclusion. State
+        programs, such as the Illinois Gaming Board self-exclusion program, can exclude you from all licensed operators in
+        the state.
+      </p>
 
-        <h2>3. Signs of Problem Gambling</h2>
-        <p>
-          Problem gambling can affect anyone. Warning signs include:
-        </p>
-        <ul>
-          <li>Spending more time or money gambling than intended.</li>
-          <li>Chasing losses — increasing bets to recover previous losses.</li>
-          <li>Gambling interfering with work, school, relationships, or daily responsibilities.</li>
-          <li>Hiding gambling activity from family or friends.</li>
-          <li>Feeling restless or irritable when attempting to stop gambling.</li>
-          <li>Borrowing money or selling possessions to fund gambling.</li>
-          <li>Repeated unsuccessful efforts to cut back or stop gambling.</li>
-        </ul>
-        <p>
-          If any of these signs apply to you, we encourage you to seek help immediately
-          using the resources listed at the top of this page.
-        </p>
+      <h2>7. Our commitments</h2>
+      <ul>
+        <li>We do not market the Service as a guaranteed path to profit.</li>
+        <li>We will cancel a subscription immediately, with a refund of any prepaid period not yet started, if you tell us you are a problem gambler.</li>
+      </ul>
 
-        <h2>4. Tools Available Through Licensed Sportsbooks</h2>
-        <p>
-          Licensed sports wagering operators in Illinois are required under the Illinois Sports
-          Wagering Act (230 ILCS 45/) to provide responsible gambling tools. If you use a
-          licensed sportsbook, these tools are available to you:
-        </p>
-        <ul>
-          <li><strong>Deposit limits:</strong> set daily, weekly, or monthly deposit caps.</li>
-          <li><strong>Wager limits:</strong> limit the size of individual bets.</li>
-          <li><strong>Loss limits:</strong> cap total losses over a defined period.</li>
-          <li><strong>Cool-off periods:</strong> temporary suspension of your account.</li>
-          <li><strong>Self-exclusion:</strong> permanent or long-term exclusion from a platform.</li>
-        </ul>
-        <p>
-          Illinois also operates a statewide <strong>Self-Exclusion Program</strong> through the
-          Illinois Gaming Board, which allows individuals to exclude themselves from all
-          licensed gambling facilities and sports wagering platforms in Illinois. Information is
-          available at{' '}
-          <a href="https://www.igb.illinois.gov" target="_blank" rel="noopener noreferrer">igb.illinois.gov</a>.
-        </p>
-
-        <h2>5. Beezy.FYI Commitments</h2>
-        <p>
-          Although we are not a licensed gambling operator, we voluntarily commit to the
-          following:
-        </p>
-        <ul>
-          <li>We do not market to individuals who have self-excluded from gambling platforms.</li>
-          <li>We do not market the Service as a guaranteed path to profit.</li>
-          <li>We will cancel the subscription of any user who informs us they are a problem
-            gambler and requests cancellation, with a pro-rated refund of any prepaid unused
-            subscription period.</li>
-          <li>We prominently display responsible gambling resources on this page and in our
-            onboarding communications.</li>
-        </ul>
-        <p>
-          {/* {LAWYER_REVIEW} — Confirm that the voluntary commitments above are accurate,
-              achievable operationally, and do not create unintended legal obligations. */}
-        </p>
-
-        <h2>6. Age Restrictions</h2>
-        <p>
-          You must be 18 or older to use this Service. Sports wagering in Illinois is legal
-          only for individuals 21 years of age or older. If you are between 18 and 20, you may
-          not legally wager in Illinois and should not use any content on this Service to
-          inform wagering decisions.
-        </p>
-
-        <h2>7. Contact</h2>
-        <p>
-          To report a responsible gambling concern or request account cancellation for
-          problem gambling reasons, contact us at <strong>[legal@beezy.fyi]</strong>.
-        </p>
-
-      </div>
-    </div>
-  );
+      <h2>8. Contact</h2>
+      <ContactLine />
+    </LegalPage>
+  )
 }

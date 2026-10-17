@@ -1,9 +1,11 @@
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/ui/brand-mark'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 
 import { DISCORD_URL } from '@/lib/links'
 import { X_URL } from '@/lib/links'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 const socialBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -18,11 +20,8 @@ export function Footer() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
         <div className="footer-grid" style={{ marginBottom: '40px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--signal)', boxShadow: '0 0 8px var(--signal)' }} />
-              <span className="dell-display" style={{ fontSize: '17px', fontWeight: 800, color: 'var(--chalk)' }}>
-                BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
-              </span>
+            <div style={{ marginBottom: '12px' }}>
+              <BrandWordmark size="sm" showDomain />
             </div>
             <p className="times" style={{ fontSize: '14px', color: 'var(--fog)', lineHeight: 1.65, marginBottom: '16px', maxWidth: '34ch' }}>
               Model picks and a live +EV scanner, with every result public.
@@ -41,7 +40,7 @@ export function Footer() {
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
             { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
-            { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds']] },
+            { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>
               <div
@@ -78,10 +77,9 @@ export function Footer() {
         </div>
 
         <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '20px' }}>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>All figures are paper-mode results. Past performance is not indicative of future results. This is not financial advice.</p>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>Sports betting availability varies by jurisdiction. Verify legality in your location. Must be 21+ to bet. If gambling is a problem, call 1-800-GAMBLER.</p>
+          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>{SITE_CONFIG.riskDisclaimer}</p>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>
-            &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> <Link href="/" style={{ color: 'var(--link)', textDecoration: 'none' }}>Beezy.FYI</Link> &middot; All rights reserved
+            &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> beezy.fyi. Independent quantitative sports analytics.
           </p>
         </div>
       </div>

@@ -33,6 +33,7 @@ export const metadata: Metadata = {
     siteName: 'Beezy.FYI',
     type:     'website',
   },
+  twitter: { card: 'summary_large_image', site: '@beezy_fyi', creator: '@beezy_fyi' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

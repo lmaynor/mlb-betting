@@ -1,222 +1,135 @@
 import type { Metadata } from 'next'
+import { ContactLine, LegalPage } from '@/components/legal/legal-page'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export const metadata: Metadata = { title: 'Terms of Service' }
 
 export default function TermsPage() {
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
+    <LegalPage title="Terms of Service">
+      <h2>1. Who operates beezy.fyi</h2>
+      <p>
+        beezy.fyi (&quot;beezy.fyi,&quot; &quot;Beezy,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) is operated by an
+        independent individual creator and sole proprietor. It is not a registered limited liability company,
+        corporation, sportsbook, or financial institution. By accessing or using beezy.fyi, its API, or its Discord
+        server (together, the &quot;Service&quot;) you agree to these Terms. If you do not agree, do not use the Service.
+      </p>
+      <p>
+        We may revise these Terms at any time by posting the revised version with a new &quot;Last updated&quot; date.
+        Continued use after a change is acceptance of the revised Terms.
+      </p>
 
-      {/* Legal review banner */}
-      <div style={{
-        background: '#1c1207',
-        color: '#f59e0b',
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        letterSpacing: '0.1em',
-        padding: '10px 14px',
-        marginBottom: '28px',
-        borderRadius: '4px',
-      }}>
-        ⚠ THIS DOCUMENT IS CURRENTLY IN LEGAL REVIEW AND MAY BE REVISED. USE IS PROVISIONAL.
-      </div>
+      <h2>2. Eligibility</h2>
+      <p>
+        You must be at least 18 years old, and you must be old enough to wager legally where you are (21 or older in most
+        U.S. jurisdictions). You are solely responsible for knowing and following the laws that apply to you. Some content
+        is unavailable in regions where local rules restrict it, and attempting to circumvent those restrictions is a
+        breach of these Terms.
+      </p>
 
-      <div style={{ marginBottom: '8px' }}>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: '#6b7280',
-          background: '#f3f4f6',
-          padding: '3px 10px',
-          borderRadius: '99px',
-        }}>LEGAL</span>
-      </div>
+      <h2>3. Informational and educational purpose only</h2>
+      <p>
+        beezy.fyi publishes statistical model projections, market-consensus odds comparisons, and hypothetical
+        paper-tracked performance records (1/4 Kelly and flat-stake simulations). All of it is for informational and
+        educational purposes. We do not book, accept, hold, or transmit bets or wagers of any kind, and we are not a
+        tipster, broker, or exchange.
+      </p>
+      <p>
+        Paper-tracked results are simulations. They do not reflect real stakes, fills, limits, or line movement, and past
+        model or paper-ledger performance does not guarantee future results.
+      </p>
 
-      <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>Terms of Service</h1>
-      <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '36px' }}>Last updated: 2026-05-21</p>
+      <h2>4. No financial, investment, tax, or wagering advice</h2>
+      <p>
+        Nothing on beezy.fyi, in our API, or in our Discord server is financial, investment, legal, tax, or wagering
+        advice. Model outputs are statistical estimates and may be wrong.
+      </p>
 
-      <div className="article-body">
+      <h2>5. Assumption of risk</h2>
+      <p>
+        Sports wagering and prediction-market trading involve a high degree of risk, including the loss of everything you
+        stake. You are solely responsible for every decision you make at a third-party sportsbook or exchange, including
+        DraftKings, FanDuel, BetMGM, Caesars, Kalshi, and Novig. The operator of beezy.fyi has no liability for wagering
+        losses, account limits or restrictions, missed lines, or delayed or stale odds data.
+      </p>
 
-        <h2>1. Acceptance of Terms</h2>
-        <p>
-          By accessing or using Beezy.FYI (the "Service"), operated by <strong>[Operator Name]</strong>
-          ("we," "us," or "our"), you agree to be bound by these Terms of Service ("Terms").
-          If you do not agree, do not use the Service. These Terms constitute a binding legal
-          agreement between you and <strong>[Operator Name]</strong> under the laws of the
-          State of Illinois.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Confirm governing law and operator legal entity before launch. */}
-          We reserve the right to modify these Terms at any time. Continued use of the Service
-          after changes are posted constitutes your acceptance of the revised Terms. We will
-          provide reasonable notice of material changes via email or prominent notice on the site.
-        </p>
+      <h2>6. Subscriptions and billing</h2>
+      <p>
+        Paid plans (Single-Sport Pass and All-Access Pro) are billed in advance on a recurring basis through Stripe, in U.S.
+        dollars. We will give at least 30 days&apos; notice of a price change to active subscribers, effective at your next
+        billing cycle. Subscriptions renew automatically until cancelled.
+      </p>
+      <p>
+        You can cancel at any time from <a href="/dashboard/settings">account settings</a> (Stripe customer portal) or by
+        emailing <a href={`mailto:${SITE_CONFIG.supportEmail}`}>{SITE_CONFIG.supportEmail}</a>. Access continues through the
+        end of the current paid period. See the <a href="/legal/refunds">Refund Policy</a>.
+      </p>
 
-        <h2>2. Eligibility</h2>
-        <p>
-          You must be at least 18 years of age to use the Service. By using the Service, you
-          represent and warrant that you are 18 or older and have the legal capacity to enter
-          into a binding contract. If you are accessing the Service on behalf of a business entity,
-          you represent that you have authority to bind that entity to these Terms.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Review state-level age requirements and geo-blocking obligations. */}
-          It is your sole responsibility to ensure that your use of the Service complies with
-          all applicable laws in your jurisdiction. The Service does not accept subscriptions
-          from jurisdictions where such a service is prohibited by law. We use automated
-          geo-restriction tools; circumventing them constitutes a material breach of these Terms.
-        </p>
+      <h2>7. Acceptable use</h2>
+      <p>You agree not to:</p>
+      <ul>
+        <li>Resell, redistribute, or sublicense Service content without written consent.</li>
+        <li>Scrape, crawl, or bulk-extract content from the Service.</li>
+        <li>Share a paid login or Discord role with other people.</li>
+        <li>Use the Service to build a competing product.</li>
+        <li>Circumvent geographic restrictions or authentication.</li>
+        <li>Use the Service in violation of applicable law.</li>
+      </ul>
 
-        <h2>3. Description of Service</h2>
-        <p>
-          Beezy.FYI is a <strong>paid subscription content service</strong>. We publish
-          machine-learning-generated statistical analyses and model outputs related to Major
-          League Baseball ("MLB") games. All content is provided <strong>for entertainment
-          and educational purposes only</strong>. The Service is not a sportsbook, sports
-          wagering operator, betting exchange, tipster service, or financial advisory service.
-          We do not accept wagers, facilitate gambling transactions, or provide legally regulated
-          financial advice.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Confirm this characterization survives scrutiny under the Illinois
-              Sports Wagering Act (230 ILCS 45/) and any applicable FTC endorsement guidance. */}
-          Past model performance is not indicative of future results. Statistical models carry
-          inherent uncertainty. No output from the Service should be construed as a guarantee
-          of any outcome.
-        </p>
+      <h2>8. Intellectual property</h2>
+      <p>
+        The Service&apos;s models, methodology descriptions, text, graphics, and code are owned by or licensed to the
+        operator. Your subscription grants a limited, non-exclusive, non-transferable license to use the content for
+        personal, non-commercial purposes. Third-party team names, logos, and data remain the property of their owners and
+        are used for identification only.
+      </p>
 
-        <h2>4. Subscription Plans and Payment</h2>
-        <p>
-          Access to premium features requires a paid subscription. Subscription fees are
-          charged in advance on a recurring basis (monthly or seasonal, depending on the
-          selected plan) via our payment processor, Stripe. You authorize us to charge your
-          designated payment method for all applicable fees.
-        </p>
-        <p>
-          All fees are stated in U.S. dollars. We reserve the right to change subscription
-          pricing upon at least 30 days' written notice to active subscribers. Price changes
-          take effect at the start of your next billing cycle following the notice period.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Confirm auto-renewal disclosure satisfies Illinois Automatic
-              Contract Renewal Act (815 ILCS 601/) — requires clear disclosure before purchase
-              and reminder before renewal. */}
-          Subscriptions renew automatically unless cancelled. You may cancel at any time
-          through your account settings or by contacting support; cancellation takes effect
-          at the end of the current paid period.
-        </p>
+      <h2>9. Disclaimer of warranties</h2>
+      <p>
+        THE SERVICE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE,&quot; WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED,
+        INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT, TO THE MAXIMUM EXTENT PERMITTED BY
+        LAW. WE DO NOT WARRANT THAT THE SERVICE OR ITS DATA WILL BE UNINTERRUPTED, TIMELY, ACCURATE, OR ERROR-FREE.
+      </p>
 
-        <h2>5. Refund Policy</h2>
-        <p>
-          New subscribers may request a full refund within <strong>7 days</strong> of their
-          initial purchase ("money-back guarantee"). Refunds requested after 7 days from the
-          initial purchase date are not available except as required by applicable law. Renewal
-          charges are non-refundable. See our <a href="/legal/refunds">Refund Policy</a> for
-          full details.
-        </p>
+      <h2>10. Limitation of liability</h2>
+      <p>
+        TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OPERATOR OF BEEZY.FYI IS NOT LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL,
+        CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR FOR LOST WAGERS OR PROFITS. THE OPERATOR&apos;S TOTAL CUMULATIVE LIABILITY FOR ANY
+        CLAIM ARISING OUT OF OR RELATING TO THE SERVICE IS CAPPED AT THE GREATER OF (A) $0.00 FOR FREE-TIER USERS, OR (B) THE
+        SUBSCRIPTION FEES YOU ACTUALLY PAID TO BEEZY.FYI IN THE THIRTY (30) DAYS BEFORE THE EVENT GIVING RISE TO THE CLAIM.
+        Some jurisdictions do not allow certain limitations, so parts of this section may not apply to you.
+      </p>
 
-        <h2>6. Prohibited Conduct</h2>
-        <p>You agree not to:</p>
-        <ul>
-          <li>Resell, redistribute, or sublicense Service content without prior written consent.</li>
-          <li>Scrape, crawl, or programmatically extract content from the Service in bulk.</li>
-          <li>Use the Service to develop a competing product or service.</li>
-          <li>Circumvent geographic restrictions or authentication mechanisms.</li>
-          <li>Use the Service in any manner that violates applicable law.</li>
-          <li>Impersonate another person or entity, or misrepresent your affiliation.</li>
-        </ul>
+      <h2>11. Indemnification</h2>
+      <p>
+        You agree to indemnify and hold harmless the operator of beezy.fyi from claims, losses, and expenses (including
+        reasonable attorneys&apos; fees) arising from your use of the Service, your breach of these Terms, or your violation of
+        any law or third-party right.
+      </p>
 
-        <h2>7. Intellectual Property</h2>
-        <p>
-          All content on the Service—including model outputs, methodology descriptions,
-          text, graphics, and code—is owned by or licensed to <strong>[Operator Name]</strong>
-          and is protected by U.S. copyright law (17 U.S.C. § 101 et seq.) and applicable
-          intellectual property laws. Your subscription grants you a limited, non-exclusive,
-          non-transferable license to access and use content for personal, non-commercial
-          purposes only.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — If any MLB statistical data is used, confirm compliance with
-              MLB Advanced Media data licensing terms. */}
-        </p>
+      <h2>12. Governing law and venue</h2>
+      <p>
+        These Terms are governed by the laws of the {SITE_CONFIG.governingState}, without regard to conflict-of-law rules.
+        Disputes will be brought exclusively in the state or federal courts located in {SITE_CONFIG.governingVenue}, and you
+        consent to personal jurisdiction there.
+      </p>
 
-        <h2>8. Disclaimers</h2>
-        <p>
-          THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND,
-          EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
-          FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE
-          SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Illinois does not allow disclaimer of implied warranty for
-              consumer goods in some contexts; confirm scope. */}
-          MODEL OUTPUTS ARE STATISTICAL ESTIMATES. WE MAKE NO REPRESENTATION THAT ANY
-          PREDICTION WILL BE ACCURATE OR PROFITABLE. ANY FINANCIAL DECISIONS YOU MAKE
-          BASED ON SERVICE CONTENT ARE MADE AT YOUR OWN RISK.
-        </p>
+      <h2>13. Termination</h2>
+      <p>
+        We may suspend or end your access for breach of these Terms. Sections that by their nature should survive
+        termination (including 3 through 5 and 8 through 12) will survive.
+      </p>
 
-        <h2>9. Limitation of Liability</h2>
-        <p>
-          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL
-          <strong> [OPERATOR NAME]</strong>, ITS OFFICERS, DIRECTORS, EMPLOYEES, OR AGENTS
-          BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-          ARISING OUT OF OR RELATED TO YOUR USE OF THE SERVICE, EVEN IF WE HAVE BEEN ADVISED
-          OF THE POSSIBILITY OF SUCH DAMAGES. OUR TOTAL CUMULATIVE LIABILITY TO YOU FOR ALL
-          CLAIMS ARISING OUT OF THESE TERMS SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE
-          12 MONTHS PRECEDING THE CLAIM.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Illinois consumer fraud statutes (815 ILCS 505/) may limit the
-              enforceability of certain liability caps for consumer-facing services. Review. */}
-        </p>
+      <h2>14. Entire agreement</h2>
+      <p>
+        These Terms, with the <a href="/legal/privacy">Privacy Policy</a>, <a href="/legal/refunds">Refund Policy</a>, and{' '}
+        <a href="/legal/responsible-gambling">Responsible Gambling</a> page, are the entire agreement between you and the
+        operator regarding the Service.
+      </p>
 
-        <h2>10. Indemnification</h2>
-        <p>
-          You agree to indemnify, defend, and hold harmless <strong>[Operator Name]</strong> and
-          its affiliates from and against any claims, liabilities, damages, losses, and expenses
-          (including reasonable attorneys' fees) arising out of or in any way connected with
-          your use of the Service, your violation of these Terms, or your violation of any
-          third-party rights.
-        </p>
-
-        <h2>11. Governing Law and Dispute Resolution</h2>
-        <p>
-          These Terms are governed by and construed in accordance with the laws of the State
-          of Illinois, without regard to its conflict-of-law provisions. Any dispute arising
-          under these Terms shall be resolved exclusively in the state or federal courts located
-          in Illinois, and you consent to personal jurisdiction in those courts.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — If you intend to add an arbitration clause, it must comply with
-              Illinois consumer protection standards. AAA or JAMS rules recommended. Evaluate
-              class action waiver enforceability under Illinois law before adding one. */}
-        </p>
-
-        <h2>12. Termination</h2>
-        <p>
-          We may suspend or terminate your access to the Service at any time for material
-          breach of these Terms, with or without notice. Upon termination, your license to use
-          the Service ceases immediately. Provisions that by their nature should survive
-          termination (including Sections 7–11) will survive.
-        </p>
-
-        <h2>13. Entire Agreement</h2>
-        <p>
-          These Terms, together with our Privacy Policy, Refund Policy, and Responsible
-          Gambling Policy, constitute the entire agreement between you and
-          <strong> [Operator Name]</strong> with respect to the Service and supersede all
-          prior agreements and understandings.
-        </p>
-
-        <h2>14. Contact</h2>
-        <p>
-          {/* {LAWYER_REVIEW} — Add legal mailing address before launch (required for GDPR,
-              CAN-SPAM, and Illinois disclosure requirements). */}
-          Questions regarding these Terms may be directed to: <strong>[legal@beezy.fyi]</strong>
-        </p>
-
-      </div>
-    </div>
-  );
+      <h2>15. Contact</h2>
+      <p>Send notices and support requests through any of these routes.</p>
+      <ContactLine />
+    </LegalPage>
+  )
 }

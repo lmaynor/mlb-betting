@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
+import { BrandWordmark } from '@/components/ui/brand-mark'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 import { LIVE_SPORTS } from '@/lib/sports'
@@ -11,16 +12,6 @@ import { NAV, navActive, sportActive, sportHref } from '@/lib/ia'
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { PRE_LAUNCH } from '@/lib/launch'
 
-
-function Emblem() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <rect x="0.5" y="0.5" width="27" height="27" rx="7" fill="#11131a" stroke="#1e2230" />
-      <path d="M14 4.5 23.5 14 14 23.5 4.5 14Z" fill="none" stroke="#57F287" strokeOpacity="0.35" strokeWidth="1.2" />
-      <path d="M9.5 18.5 18.5 9.5" stroke="#57F287" strokeWidth="2.4" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 const iconBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -72,11 +63,8 @@ function NavShell({ isSignedIn, userButton, signIn }: {
       <nav style={{ background: '#090a0f', borderBottom: '1px solid #1e2230', overflow: 'hidden' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '56px', gap: '20px' }}>
 
-          <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-            <Emblem />
-            <span className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', letterSpacing: '-0.01em', lineHeight: 1 }}>
-              BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span>
-            </span>
+          <Link href="/" aria-label="beezy.fyi home" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <BrandWordmark size="md" showDomain />
           </Link>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flex: 1, justifyContent: 'center' }} className="nav-desktop">
