@@ -285,7 +285,7 @@ export interface SportProjections {
   /** where the lines came from, e.g. ['parlayapi', 'bettingpros'] */
   lines_source?: string[]
   /** every scheduled game in the window, with or without rows: what the games strip lists */
-  games?: { game_key: string; away: string; home: string; start: string | null }[]
+  games?: { game_key: string; away: string; home: string; start: string | null; n_rows?: number; n_priced?: number }[]
   /** true on a past day's archived board */
   archive?: boolean
   gamelog_latest: string | null

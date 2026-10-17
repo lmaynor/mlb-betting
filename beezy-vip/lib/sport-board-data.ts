@@ -49,6 +49,9 @@ export interface SportBoard {
   today: Record<string, SystemToday>
 }
 
+/** The most rows the API serves in one page: the whole board (a week of NFL, three days of NHL), nearest game day first. */
+const BOARD_LIMIT = 1200
+
 export const dayKey = (day: PickDay) => (day === 'yesterday' ? addDaysToDateKey(siteDateKey(), -1) : siteDateKey())
 
 const EMPTY: Omit<SportBoard, 'day' | 'date' | 'rows' | 'games' | 'locked'> = { outliers: [], lockedPrices: 0, block: null, confluenceKeys: [], today: {} }
@@ -98,7 +101,7 @@ export async function loadSportBoard(
   const [feed, pr] = await Promise.all([
     // market prices exist for today only; yesterday's prices are history
     day === 'today' ? apiGetEvFeed({ sport: ps, minEv: 0.02, limit: 150 }).catch(() => null) : Promise.resolve(null),
-    apiGetSportProjections(ps, day === 'yesterday' ? { date } : {}).catch(() => null),
+    apiGetSportProjections(ps, { limit: BOARD_LIMIT, ...(day === 'yesterday' ? { date } : {}) }).catch(() => null),
   ])
   // Headshots resolve by name on the server, for the sports that have a source.
   const withHeads = pr && hasHeadshots(sport)
