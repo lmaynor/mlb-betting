@@ -3,6 +3,7 @@ import { SystemStrip } from '@/components/picks/system-strip'
 import { SystemsTable } from '@/components/picks/systems-table'
 import { SportEvidenceNote } from '@/components/picks/system-methodology'
 import { apiGetSportProjections, apiGetStats } from '@/lib/betting-api'
+import { slateRows } from '@/lib/board-days'
 import { systemTodayCounts } from '@/lib/board-rows'
 import { SPORT_PILLARS, type ProjectionSport, type SportSlug } from '@/lib/sports'
 
@@ -15,7 +16,7 @@ export async function SystemsPage({ sport }: { sport: SportSlug }) {
   const tracked = pillar.board === 'tracked'
   const [stats, today] = await Promise.all([
     tracked ? apiGetStats().then(r => r.bySystem).catch(() => []) : Promise.resolve([]),
-    tracked ? Promise.resolve({}) : apiGetSportProjections(sport as ProjectionSport).then(p => systemTodayCounts(p.rows)).catch(() => ({})),
+    tracked ? Promise.resolve({}) : apiGetSportProjections(sport as ProjectionSport).then(p => systemTodayCounts(slateRows(p.rows))).catch(() => ({})),
   ])
   return (
     <div>

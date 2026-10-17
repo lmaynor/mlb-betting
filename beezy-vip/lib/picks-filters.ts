@@ -40,6 +40,8 @@ export const bookParam = (name: string) => name.toLowerCase().replace(/ /g, '')
 
 export interface PickFilters {
   day: PickDay
+  /** an upcoming game day (YYYY-MM-DD) of today's board: a view, like `day`, not a filter */
+  date?: string
   game?: string
   market?: string
   signal?: SignalFilter
@@ -65,6 +67,7 @@ export function parsePickFilters(sp: Record<string, string | undefined>): PickFi
   const result = (sp.result ?? sp.status ?? '').toLowerCase()
   return {
     day: sp.day === 'yesterday' ? 'yesterday' : 'today',
+    date: sp.day !== 'yesterday' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? sp.date : undefined,
     game: sp.game ? sp.game.slice(0, 80) : undefined,
     market: sp.market && sp.market !== 'ALL' ? sp.market : undefined,
     signal: SIGNALS.has(sig) ? (sig as SignalFilter) : undefined,

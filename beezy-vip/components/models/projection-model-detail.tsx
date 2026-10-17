@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { SystemBadge } from '@/components/ui/primitives'
+import { slateRows } from '@/lib/board-days'
 import { systemTodayCounts } from '@/lib/board-rows'
 import { apiGetSportProjections } from '@/lib/betting-api'
 import type { PickSystem } from '@/lib/pick-systems'
@@ -56,7 +57,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
   const v = model?.validation ?? null
   const live = liveAccuracy(sport, system.statKey)
   const color = SYSTEM_COLOR[system.key] ?? pillar.accent
-  const today = await apiGetSportProjections(sport, { limit: 1200 }).then(p => systemTodayCounts(p.rows)[system.key] ?? null).catch(() => null)
+  const today = await apiGetSportProjections(sport, { limit: 1200 }).then(p => systemTodayCounts(slateRows(p.rows))[system.key] ?? null).catch(() => null)
   const gap = Boolean(system.gap)
 
   return (

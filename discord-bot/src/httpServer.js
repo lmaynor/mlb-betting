@@ -2,6 +2,7 @@
 //   GET  /health              -> 200 {"ok":true,"bot":<tag>}
 //   POST /internal/sync-role  -> authenticated tier -> role sync (called by the site)
 import http from 'node:http';
+import { ChannelType } from 'discord.js';
 import crypto from 'node:crypto';
 import * as db from './db.js';
 import {
@@ -32,6 +33,7 @@ export const POST_CHANNELS = {
 export function validatePostPayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, error: 'body must be a JSON object' };
   const { channel, content, embeds, thread } = body;
+  const dailyThread = body.daily_thread;
   if (typeof channel !== 'string' || !Object.hasOwn(POST_CHANNELS, channel)) {
     return { ok: false, error: `channel must be one of ${Object.keys(POST_CHANNELS).join('|')}` };
   }
@@ -42,6 +44,13 @@ export function validatePostPayload(body) {
     return { ok: false, error: 'embeds must be an array of at most 10 objects' };
   }
   if (!content && !(embeds && embeds.length)) return { ok: false, error: 'content or embeds required' };
+  if (dailyThread !== undefined && dailyThread !== null) {
+    if (thread !== undefined && thread !== null) return { ok: false, error: 'thread and daily_thread cannot be combined' };
+    if (typeof dailyThread !== 'object' || Array.isArray(dailyThread)) return { ok: false, error: 'daily_thread must be an object' };
+    const name = typeof dailyThread.name === 'string' ? dailyThread.name.replace(/\s+/g, ' ').trim() : '';
+    if (!name || name.length > 100) return { ok: false, error: 'daily_thread.name must be 1-100 characters' };
+    return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined, dailyThread: { name } } };
+  }
   if (thread !== undefined && thread !== null) {
     if (typeof thread !== 'object' || Array.isArray(thread)) return { ok: false, error: 'thread must be an object' };
     const name = typeof thread.name === 'string' ? thread.name.replace(/\s+/g, ' ').trim() : '';
@@ -79,6 +88,28 @@ export async function resolveSlipBotIds(guild, names = (process.env.SLIP_BOT_NAM
   return ids;
 }
 
+/**
+ * Post into the channel's active thread named `value.dailyThread.name`, creating that thread first when there is none. One
+ * thread per day keeps a busy, unvalidated feed out of the channel itself (the card stays on top, access follows the channel).
+ * A thread failure fails the request: the caller falls back to a webhook, so nothing is silently dropped.
+ */
+export async function postToDailyThread(channel, value) {
+  if (!channel.threads || typeof channel.threads.create !== 'function') return { status: 'no_threads' };
+  const name = value.dailyThread.name;
+  let thread;
+  try {
+    const { threads } = await channel.threads.fetchActive();
+    thread = [...threads.values()].find((t) => t.name === name && !t.archived);
+  } catch { thread = undefined; }
+  let created = false;
+  if (!thread) {
+    thread = await channel.threads.create({ name, autoArchiveDuration: 1440, type: ChannelType.PublicThread, reason: 'beezy.fyi daily signals thread' });
+    created = true;
+  }
+  const sent = await thread.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
+  return { status: 'ok', id: sent?.id ?? null, thread: true, created, mentioned: 0 };
+}
+
 /** Send one message to an allowlisted channel as the bot. Never pings anyone, except the slip bots inside a thread. */
 export async function postMessage(client, guildId, value) {
   let guild = client.guilds?.cache?.get(guildId);
@@ -90,6 +121,7 @@ export async function postMessage(client, guildId, value) {
   const name = POST_CHANNELS[value.channel];
   const target = [...channels.values()].find((c) => c && c.name === name && typeof c.send === 'function');
   if (!target) return { status: 'no_channel' };
+  if (value.dailyThread) return postToDailyThread(target, value);
   const sent = await target.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
   const out = { status: 'ok', id: sent?.id ?? null, thread: false, mentioned: 0 };
   if (value.thread && typeof sent?.startThread === 'function') {
@@ -358,7 +390,8 @@ export function createHttpServer({ client, secret, guildId } = {}) {
         }
         if (outcome.status === 'no_guild') return sendJson(res, 503, { ok: false, error: 'guild unavailable' });
         if (outcome.status === 'no_channel') return sendJson(res, 404, { ok: false, error: 'channel not found' });
-        return sendJson(res, 200, { ok: true, id: outcome.id, thread: outcome.thread, mentioned: outcome.mentioned });
+        if (outcome.status === 'no_threads') return sendJson(res, 502, { ok: false, error: 'channel cannot hold threads' });
+        return sendJson(res, 200, { ok: true, id: outcome.id, thread: outcome.thread, created: outcome.created, mentioned: outcome.mentioned });
       }
 
       return sendJson(res, 404, { ok: false, error: 'not found' });

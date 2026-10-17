@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FilterBar } from '@/components/picks/filter-bar'
+import { AlignedBar } from '@/components/picks/aligned-bar'
+import { DayToggle } from '@/components/picks/day-toggle'
 import { GamesStrip } from '@/components/picks/games-strip'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { ResearchTabs } from '@/components/picks/research-tabs'
@@ -12,7 +14,7 @@ import { withCounts } from '@/lib/board-games'
 import { applyPickFilters } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { loadSportBoard } from '@/lib/sport-board-data'
+import { dayKey, loadSportBoard } from '@/lib/sport-board-data'
 import { isSportSlug, LIVE_SPORTS, SPORT_PILLARS, type SportSlug } from '@/lib/sports'
 
 export const metadata: Metadata = {
@@ -32,7 +34,7 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
   const league: SportSlug = sp.league && isSportSlug(sp.league) ? sp.league : 'mlb'
   const pillar = SPORT_PILLARS[league]
   const f = parsePickFilters(sp)
-  const board = await loadSportBoard(league, await getViewer(), { day: 'today', view: 'projections', kind: league === 'mlb' ? 'player' : undefined })
+  const board = await loadSportBoard(league, await getViewer(), { day: f.day, date: f.date, view: 'projections', kind: league === 'mlb' ? 'player' : undefined })
   const rows = applyPickFilters(board.rows, f)
   const games = withCounts(board.games, board.rows)
   const filtered = activeFilterCount(f) > 0
@@ -57,6 +59,9 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
           </nav>
         </div>
       </header>
+      <AlignedBar>
+        <DayToggle day={board.day} today={siteDateKey()} yesterday={dayKey('yesterday')} upcoming={board.days} viewDate={board.date} />
+      </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={siteDateKey()} total={board.rows.length} />
       <FilterBar sport={league} kind={league === 'mlb' ? 'player' : undefined} />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>

@@ -149,3 +149,57 @@ test('no slip bots in the guild: thread still posts, nobody mentioned', async ()
   assert.equal(out.mentioned, 0);
   assert.equal(threads[0].sent[0].content, 'slip');
 });
+
+// ---- daily thread: find-or-create one thread per day under a channel ----------------------------------------------
+function makeDailyClient({ existing = [], noThreads = false, failCreate = false } = {}) {
+  const posts = [];
+  const created = [];
+  const mkThread = (name, archived = false) => ({ name, archived, send: async (m) => { posts.push({ thread: name, m }); return { id: `t${posts.length}` }; } });
+  const active = new Collection(existing.map((e, i) => [`th${i}`, mkThread(e.name, e.archived)]));
+  const channel = {
+    id: 'c1', name: 'nfl-card',
+    send: async () => ({ id: 'm1' }),
+    threads: noThreads ? undefined : {
+      fetchActive: async () => ({ threads: active }),
+      create: async (opts) => { if (failCreate) throw new Error('Missing Permissions'); created.push(opts); const t = mkThread(opts.name); active.set(`n${created.length}`, t); return t; },
+    },
+  };
+  const guild = { id: GUILD, channels: { fetch: async () => new Collection([['c1', channel]]) } };
+  return { posts, created, client: { user: { tag: 'b#1' }, guilds: { cache: new Collection([[GUILD, guild]]), fetch: async () => guild } } };
+}
+
+test('daily_thread payload validation', () => {
+  const ok = { channel: 'nfl_card', embeds: [{ title: 'x' }], daily_thread: { name: '  NFL props   signals - Sat Oct 18 ' } };
+  assert.deepEqual(http.validatePostPayload(ok).value.dailyThread, { name: 'NFL props signals - Sat Oct 18' });
+  assert.equal(http.validatePostPayload({ ...ok, daily_thread: 'x' }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, daily_thread: { name: '' } }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, daily_thread: { name: 'n'.repeat(101) } }).ok, false);
+  assert.equal(http.validatePostPayload({ ...ok, thread: { name: 'n', content: 'c' } }).ok, false, 'cannot combine with thread');
+});
+
+test('creates the day thread once, then keeps posting into it', async () => {
+  const { client, posts, created } = makeDailyClient();
+  const value = { channel: 'nfl_card', embeds: [{ title: 'a' }], dailyThread: { name: 'NFL props signals - Sat Oct 18' } };
+  const first = await http.postMessage(client, GUILD, value);
+  assert.deepEqual([first.status, first.thread, first.created], ['ok', true, true]);
+  const second = await http.postMessage(client, GUILD, { ...value, embeds: [{ title: 'b' }] });
+  assert.deepEqual([second.status, second.created], ['ok', false]);
+  assert.equal(created.length, 1, 'one thread for the day');
+  assert.equal(created[0].autoArchiveDuration, 1440);
+  assert.deepEqual(posts.map((p) => p.m.embeds[0].title), ['a', 'b']);
+  assert.deepEqual(posts[0].m.allowedMentions, { parse: [] });
+});
+
+test('reuses an existing active thread of that name and makes a new one for a new day', async () => {
+  const { client, posts, created } = makeDailyClient({ existing: [{ name: 'NFL props signals - Sat Oct 18' }, { name: 'NFL props signals - Fri Oct 17', archived: true }] });
+  await http.postMessage(client, GUILD, { channel: 'nfl_card', content: 'x', dailyThread: { name: 'NFL props signals - Sat Oct 18' } });
+  assert.equal(created.length, 0);
+  await http.postMessage(client, GUILD, { channel: 'nfl_card', content: 'y', dailyThread: { name: 'NFL props signals - Sun Oct 19' } });
+  assert.equal(created.length, 1);
+  assert.deepEqual(posts.map((p) => p.thread), ['NFL props signals - Sat Oct 18', 'NFL props signals - Sun Oct 19']);
+});
+
+test('a channel without threads is a 502 and a failed create propagates, so the caller can fall back (nothing silently dropped)', async () => {
+  assert.equal((await http.postMessage(makeDailyClient({ noThreads: true }).client, GUILD, { channel: 'nfl_card', content: 'x', dailyThread: { name: 'n' } })).status, 'no_threads');
+  await assert.rejects(http.postMessage(makeDailyClient({ failCreate: true }).client, GUILD, { channel: 'nfl_card', content: 'x', dailyThread: { name: 'n' } }), /Missing Permissions/);
+});
