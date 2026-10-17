@@ -228,6 +228,8 @@ def parse_words(pages: list) -> pd.DataFrame:
                 continue
             parsed.append({"y": ln["y"] + 10000.0 * k, **txt})
     players = [p for p in parsed if p.get("player")]
+    if not players:
+        raise ReportParseError("no player rows found (layout changed, empty report, or wrong file)")
     reason_lines = [p for p in parsed if p.get("reason")]
     carry = {k: [p for p in parsed if p.get(k)] for k in ("date", "time", "matchup")}
     merged_team: list = []                         # wrapped team-name lines (adjacent < 16pt apart) are one name

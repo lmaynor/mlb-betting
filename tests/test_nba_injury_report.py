@@ -115,6 +115,11 @@ def test_long_player_name_overrunning_into_the_status_column_is_repaired():
     assert out.attrs["n_bad_status"] == 0
 
 
+def test_orphan_reason_words_without_any_player_row_raise_cleanly():
+    with pytest.raises(R.ReportParseError):
+        R.parse_words([TITLE + header() + [w("reason", 140, "Injury/Illness"), w("team", 140, "Orphan")]])
+
+
 def test_a_report_with_no_player_rows_raises():
     with pytest.raises(R.ReportParseError):
         R.parse_words([TITLE + header()])
