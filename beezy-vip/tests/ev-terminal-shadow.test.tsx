@@ -193,7 +193,9 @@ describe('source files with typographic characters stay ASCII', () => {
   const root = path.resolve(__dirname, '..')
   const files = [
     'lib/sport-assets.ts', 'lib/sports.ts', 'lib/types.ts', 'components/ui/sport-assets.tsx',
-    'app/ev/ev-client.tsx', 'app/sports/[sport]/sport-hub-client.tsx', 'app/sports/[sport]/page.tsx',
+    'app/ev/ev-client.tsx', 'components/picks/market-prices.tsx', 'components/picks/sport-projections-board.tsx', 'components/picks/sport-tabs.tsx',
+    'components/picks/projection-picks-page.tsx', 'components/picks/projection-system-page.tsx', 'components/picks/system-methodology.tsx',
+    'app/sports/[sport]/page.tsx',
     'app/api/og/route.tsx', 'app/api/og/ev-recap-card/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
     'app/edge/page.tsx', 'app/edge/edge-client.tsx', 'app/edge/cockpit.tsx', 'app/api/edge-cockpit/route.ts',
     'components/layout/nav.tsx', 'components/landing/hero.tsx', 'lib/betting-api.ts', 'app/analytics/analytics-client.tsx', 'lib/beezy-score.ts',

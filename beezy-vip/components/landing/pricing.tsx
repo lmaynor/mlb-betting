@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { DISCORD_URL } from '@/lib/links'
+import { SPORT_PILLARS } from '@/lib/sports'
 import { LEAGUES, type League } from '@/lib/tiers'
 
 const CheckoutButton = dynamic(
@@ -22,8 +23,10 @@ export const PLANS = {
 export const ANNUAL_PER_MONTH = PLANS.annual.price / 12                                   // 24.92
 export const ANNUAL_SAVINGS_PCT = Math.round((1 - PLANS.annual.price / (PLANS.monthly.price * 12)) * 100)   // 36
 
-const LEAGUE_LABEL: Record<League, string> = { nfl: 'NFL', nba: 'NBA', nhl: 'NHL', mlb: 'MLB' }
-const PICKER: League[] = ['nfl', 'nba', 'nhl', 'mlb']
+const LEAGUE_LABEL = Object.fromEntries(LEAGUES.map(l => [l, SPORT_PILLARS[l].shortName])) as Record<League, string>
+// Existing display order first; a league added to lib/sports.ts is appended, so it appears in the picker without an edit here.
+const PICKER_ORDER: League[] = ['nfl', 'nba', 'nhl', 'mlb']
+const PICKER: League[] = [...PICKER_ORDER.filter(l => LEAGUES.includes(l)), ...LEAGUES.filter(l => !PICKER_ORDER.includes(l))]
 
 const ENGINES = [
   { n: '1', title: 'Market Consensus Engine', body: 'Scans 14+ books, Kalshi and Novig every 15 minutes for off-market prices.' },

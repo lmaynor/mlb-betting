@@ -4,10 +4,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  // Retired routes. The three /tools redirects were page-level before; /sports/mlb is the MLB section under Picks (see lib/ia.ts).
+  // Retired routes. The three /tools redirects were page-level before; /sports/[sport] became /picks/[sport] for every sport (see lib/ia.ts).
   async redirects() {
     return [
-      { source: '/sports/mlb', destination: '/picks/mlb', permanent: true },
+      { source: '/sports/:sport', destination: '/picks/:sport', permanent: true },
       { source: '/picks/mlb/systems', destination: '/picks/mlb#systems', permanent: true },
       { source: '/tools/edge-finder', destination: '/tools/kelly-calculator', permanent: true },
       { source: '/tools/nrfi-conditions', destination: '/tools/slate', permanent: true },

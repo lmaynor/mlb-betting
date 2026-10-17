@@ -1,22 +1,18 @@
 import { ARTICLES } from '@/lib/articles-static'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
+import { SPORT_SLUGS } from '@/lib/sports'
 
 const BASE = 'https://beezy.fyi'
 
 const STATIC_ROUTES = [
   { path: '/',               priority: '1.0', changefreq: 'daily'   },
   { path: '/picks',          priority: '0.9', changefreq: 'daily'   },
-  { path: '/picks/mlb',      priority: '0.9', changefreq: 'daily'   },
-  { path: '/picks/mlb/projections', priority: '0.7', changefreq: 'daily' },
   { path: '/picks/games',   priority: '0.7', changefreq: 'daily'   },
   { path: '/picks/history',  priority: '0.6', changefreq: 'daily'   },
   { path: '/ev',             priority: '0.9', changefreq: 'hourly'  },
   { path: '/edge',           priority: '0.7', changefreq: 'hourly'  },
   { path: '/analytics',      priority: '0.7', changefreq: 'daily'   },
   { path: '/cheat-sheet',    priority: '0.5', changefreq: 'daily'   },
-  { path: '/sports/nfl',     priority: '0.6', changefreq: 'daily'   },
-  { path: '/sports/nhl',     priority: '0.5', changefreq: 'daily'   },
-  { path: '/sports/nba',     priority: '0.4', changefreq: 'weekly'  },
   { path: '/pricing',        priority: '0.5', changefreq: 'weekly'  },
   { path: '/tools/boost-ev', priority: '0.7', changefreq: 'monthly' },
   { path: '/results',        priority: '0.8', changefreq: 'daily'   },
@@ -35,10 +31,12 @@ export async function GET() {
   }))
 
   // Pick-system and model pages come from the registry so a new system is listed automatically.
-  const systemRoutes = PICK_SYSTEMS.flatMap(s => [
-    { path: `/picks/mlb/${s.slug}`, priority: '0.7', changefreq: 'daily' },
+  const sportRoutes = SPORT_SLUGS.flatMap(sport => [
+    { path: `/picks/${sport}`, priority: '0.8', changefreq: 'daily' },
+    { path: `/picks/${sport}/projections`, priority: '0.7', changefreq: 'daily' },
   ])
-  const allRoutes = [...STATIC_ROUTES, ...systemRoutes, ...learnRoutes]
+  const systemRoutes = PICK_SYSTEMS.map(s => ({ path: `/picks/${s.sport}/${s.slug}`, priority: '0.7', changefreq: 'daily' }))
+  const allRoutes = [...STATIC_ROUTES, ...sportRoutes, ...systemRoutes, ...learnRoutes]
   const now       = new Date().toISOString()
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

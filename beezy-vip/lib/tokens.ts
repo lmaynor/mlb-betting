@@ -8,7 +8,7 @@
  */
 import type { Bet } from '@/lib/types'
 
-// Hairline border — replaces the old hard 1px-black Dell frame.
+// Hairline border -- replaces the old hard 1px-black Dell frame.
 export const B = '1px solid var(--basalt)'
 // Subtler inner border for table rows and nested dividers.
 export const B_INNER = '1px solid #151822'
@@ -21,12 +21,12 @@ export const CARD_STYLE = {
   boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
 } as const
 
-// ── Confidence tiers (mirror --strong / --lean / --watch in globals.css) ──
+// -- Confidence tiers (mirror --strong / --lean / --watch in globals.css) --
 export type ScoreTier = 'strong' | 'lean' | 'watch'
 export const TIER_COLOR: Record<ScoreTier, string> = {
-  strong: '#57f287',   // beezy emerald — high confidence
-  lean:   '#facc15',   // amber — worth a look
-  watch:  '#94a3b8',   // slate — neutral signal
+  strong: '#57f287',   // beezy emerald -- high confidence
+  lean:   '#facc15',   // amber -- worth a look
+  watch:  '#94a3b8',   // slate -- neutral signal
 }
 export const TIER_LABEL: Record<ScoreTier, string> = {
   strong: 'STRONG',
@@ -34,7 +34,7 @@ export const TIER_LABEL: Record<ScoreTier, string> = {
   watch:  'WATCH',
 }
 
-// ── Per-system identity hues (must match --sys-* vars in globals.css) ──
+// -- Per-system identity hues (must match --sys-* vars in globals.css) --
 export const SYSTEM_COLOR: Record<string, string> = {
   // Game Lines
   NRFI:        '#5fd0a0',   // mint
@@ -62,6 +62,14 @@ export const SYSTEM_COLOR: Record<string, string> = {
   REC_YDS:     '#facc15',
   RECEPTIONS:  '#34d399',
   PASS_TDS:    '#f472b6',
+  // Multi-sport systems (lib/pick-systems.ts keys). One hue family per sport so a badge reads as its league first:
+  // NFL warm (amber / orange / pink / lime), NHL cool (sky / cyan / teal), NBA violet (indigo / purple / fuchsia).
+  NFL_PASS_YDS: '#f59e0b', NFL_PASS_TDS: '#f472b6', NFL_PASS_COMP: '#fcd34d', NFL_PASS_ATT: '#d6a24a', NFL_INT: '#fb7185',
+  NFL_RUSH_YDS: '#fb923c', NFL_RUSH_ATT: '#e8895a', NFL_REC_YDS: '#facc15', NFL_RECEPTIONS: '#34d399', NFL_ANYTIME_TD: '#a3e635',
+  NHL_SOG: '#38bdf8', NHL_GOALS: '#22d3ee', NHL_ASSISTS: '#60a5fa', NHL_POINTS: '#7dd3fc', NHL_PP_POINTS: '#67e8f9',
+  NHL_SAVES: '#2dd4bf', NHL_BLOCKS: '#8fb3d9',
+  NBA_PTS: '#818cf8', NBA_REB: '#a78bfa', NBA_AST: '#c4b5fd', NBA_3PM: '#e879f9', NBA_PRA: '#6366f1',
+  NBA_PR: '#8b5cf6', NBA_PA: '#a855f7', NBA_RA: '#c084fc', NBA_STL: '#f0abfc', NBA_BLK: '#7c83e8',
   // Meta
   KALSHI_EV:   '#00d2a0',   // Kalshi-vs-books mirror alerts (rolled into EV in the DB)
   EV:          '#d97ee0',   // orchid -- new 2026-08-20 (fast_alert_loop +
@@ -107,6 +115,13 @@ export const SYSTEM_LABEL: Record<string, string> = {
   PITCHER_ER: 'Earned Runs', EV: 'EV', KALSHI_EV: 'Kalshi EV',
   PASS_YDS: 'Pass Yds', RUSH_YDS: 'Rush Yds', REC_YDS: 'Rec Yds',
   RECEPTIONS: 'Receptions', PASS_TDS: 'Pass TDs',
+  NFL_PASS_YDS: 'Pass Yds', NFL_PASS_TDS: 'Pass TDs', NFL_PASS_COMP: 'Completions', NFL_PASS_ATT: 'Pass Attempts',
+  NFL_INT: 'Interceptions', NFL_RUSH_YDS: 'Rush Yds', NFL_RUSH_ATT: 'Carries', NFL_REC_YDS: 'Rec Yds',
+  NFL_RECEPTIONS: 'Receptions', NFL_ANYTIME_TD: 'Anytime TD',
+  NHL_SOG: 'Shots on Goal', NHL_GOALS: 'Goals', NHL_ASSISTS: 'Assists', NHL_POINTS: 'Points', NHL_PP_POINTS: 'PP Points',
+  NHL_SAVES: 'Saves', NHL_BLOCKS: 'Blocked Shots',
+  NBA_PTS: 'Points', NBA_REB: 'Rebounds', NBA_AST: 'Assists', NBA_3PM: '3-Pointers', NBA_PRA: 'Pts+Reb+Ast',
+  NBA_PR: 'Pts+Reb', NBA_PA: 'Pts+Ast', NBA_RA: 'Reb+Ast', NBA_STL: 'Steals', NBA_BLK: 'Blocks',
 }
 
 // Tighter variant for narrow table cells / chips.
@@ -114,6 +129,13 @@ export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   ...SYSTEM_LABEL,
   BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K', SB: 'SB',
   PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME',
+  // compact chip / table-pill wording for the multi-sport systems
+  NFL_PASS_YDS: 'PASS YDS', NFL_PASS_TDS: 'PASS TDS', NFL_PASS_COMP: 'COMP', NFL_PASS_ATT: 'ATT', NFL_INT: 'INT',
+  NFL_RUSH_YDS: 'RUSH YDS', NFL_RUSH_ATT: 'CARRIES', NFL_REC_YDS: 'REC YDS', NFL_RECEPTIONS: 'REC', NFL_ANYTIME_TD: 'ANYTIME TD',
+  NHL_SOG: 'SOG', NHL_GOALS: 'GOALS', NHL_ASSISTS: 'ASSISTS', NHL_POINTS: 'POINTS', NHL_PP_POINTS: 'PP PTS',
+  NHL_SAVES: 'SAVES', NHL_BLOCKS: 'BLOCKS',
+  NBA_PTS: 'PTS', NBA_REB: 'REB', NBA_AST: 'AST', NBA_3PM: '3PM', NBA_PRA: 'PRA', NBA_PR: 'PR', NBA_PA: 'PA', NBA_RA: 'RA',
+  NBA_STL: 'STL', NBA_BLK: 'BLK',
 }
 
 export function systemLabel(sys: string | null | undefined, short = false): string {
@@ -135,7 +157,7 @@ export const TEAM_ABBREV: Record<string, string> = {
 }
 
 // Known team logo slugs (public/logos/{slug}.png). Derived from TEAM_ABBREV
-// so we only ever render a logo we actually ship — server components can't
+// so we only ever render a logo we actually ship -- server components can't
 // use onError, so gating on this set avoids broken <img>s.
 const TEAM_SLUGS = new Set(Object.values(TEAM_ABBREV).map(a => a.toLowerCase()))
 

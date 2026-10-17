@@ -1878,7 +1878,7 @@ beezy-vip/
 ├── app/                          Next.js App Router pages
 │   ├── page.tsx                  Landing page (hero + daily command center)
 │   ├── ev/                       +EV terminal (page.tsx server, ev-client.tsx)
-│   ├── sports/[sport]/           Sport hubs (mlb/nfl/nba/nhl)
+│   ├── picks/[sport]/            Every sport's pages (2026-10-16): index, projections/, [system]/. /sports/[sport] only redirects here
 │   ├── analytics/                Deep-dive analytics
 │   ├── picks/                    Pick browser pages
 │   ├── results/                  Results history
@@ -2069,21 +2069,29 @@ Satori OG routes -- use literal hex there.
   Card); **Results** = /results (Ledger) +
   /analytics?tab=bankroll|calibration|books|health + /models. **Sport ribbon (2026-10-16)**: ALL SPORTS = /picks (the Top 10:
   tracked MLB player picks + NFL/NHL/NBA projection-board rows, one Beezy Score scale, `lib/top-picks.ts`; non-MLB rows are
-  labelled UNVALIDATED), MLB = /picks/mlb (its own page: player picks; per-system detail pages stay under /picks/mlb/[system]), NFL/NHL/NBA = /sports/[sport] (ONE shared template: PROJECTIONS | MARKET PRICES | MODELS;
-  each hub reads only its own sport's data -- siloed, nothing blended (`lib/hub-data.ts` `shapeHub`); the old Kalshi table and
-  GAMES tab are gone, Kalshi is on /ev). **Systems are a footer, not a tab (2026-10-16)**: every sport page ends with its systems --
-  /picks/mlb the player systems and /picks/games the game systems (`components/picks/systems-footer.tsx`, each system's settled
-  record, linking to /picks/mlb/[system]); NFL/NHL/NBA hubs end with the per-market model table (`#systems`). `/picks/mlb/systems`
-  redirects to /picks/mlb#systems. **Daily Card** (/cheat-sheet) is the shareable Top 10 player picks (same loader as /picks,
+  labelled UNVALIDATED), then ONE item per live sport, every sport at `/picks/[sport]`.
+  **Unified sport pages (2026-10-16, PR `feat/unified-sport-picks`)**: MLB, NFL, NHL and NBA share one route tree and one set of
+  components, all resolved from three registries -- `lib/sports.ts` (`SPORT_SLUGS`, `SPORT_PILLARS`, `board`), `lib/pick-systems.ts`
+  (`PICK_SYSTEMS`, `getSystemsBySport`, `getSportSystemBySlug`, `getSystemByStat`) and `lib/tokens.ts` -- so a new sport adds no
+  page and no component (docs/ADDING_A_NEW_SPORT.md; `tests/sport-onboarding.test.ts` is the contract). Routes: `/picks/[sport]` = the
+  PICKS & +EV board, `/picks/[sport]/projections` = the full projection board, `/picks/[sport]/[system]` = one system. Slugs repeat
+  across sports ('blocks' is NHL and NBA), so a slug only resolves WITH its sport. `SportTabs` (`PICKS & +EV | PROJECTIONS | SYSTEMS`,
+  `NFL . 10 Systems`) replaced `MlbTabs`; `SportProjectionsBoard` (one row model, `lib/board-rows.ts`) replaced both the MLB and the
+  NFL/NHL/NBA board; `FilterBar` takes `sport` (market chips from the registry, TIER, BOOK incl. MY BOOKS, search, sort, all in the query
+  string, parsed by `lib/picks-filters.ts`; `sport='all'` is /picks). `board: 'tracked'` (MLB) renders the settled-bets card;
+  `board: 'projection'` renders projection rows + market prices (`lib/sport-board-data.ts` loads either, with the access cut applied
+  server-side). `/sports/:sport` is a 308 to `/picks/:sport`. The retired `app/sports/[sport]` hub, `MlbTabs` and
+  `MlbProjectionsBoard` are gone. **Systems are a footer, not a tab**: `SystemsFooter` lists every registered system of the sport
+  (MLB: 10 listed; shelved F3/F7/1I/F1H/BATTER_K keep their URL but are not listed unless they have bets); `kind` narrows MLB to
+  player or game (/picks/games). Tracked sports show bets / hit % / ROI, projection sports show the study MAE / Brier / blend c or `--`. **Daily Card** (/cheat-sheet) is the shareable Top 10 player picks (same loader as /picks,
   `lib/top-picks-data.ts`) with a Players | Games toggle (games follow the game-picks access policy) and per-sport chips; the public
   OG card (`/api/og/picks-card`) is player picks only. **Player vs game picks**: `lib/pick-systems.ts` `kindOfSystem`/`betKind` (game = NRFI, 1I,
   1IOU, F3, F5, F1H, F7, GAME; an EV row is classified by the market it alerted on). Player picks live on /picks, /picks/mlb and the
-  sport hubs; game picks (MLB only so far) on /picks/games. `components/picks/picks-card.tsx` renders both MLB cards.
+  /picks/[sport] pages; game picks (MLB only so far) on /picks/games. `components/picks/picks-card.tsx` renders both MLB cards.
   /picks/history = each past day's top 10 tracked PLAYER picks graded at a flat 1u (no staking; MLB only -- other sports are not
-  tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. **MLB projections (2026-10-16)**: `/picks/mlb/projections` is the MLB player board -- the
+  tracked so they have no history). `/sports/mlb` redirects (308) to /picks/mlb. **MLB projections (2026-10-16)**: `/picks/mlb/projections` is the MLB player board (same unified board as the other sports; no consensus / L5 / L10 columns filled -- `--`) -- the
   model's `proj_mean` beside the line, the side it prefers, model P, best price, edge, score and a PICK marker for tracked plays (`lib/mlb-projections.ts`,
-  one row per player x count market; HR / game markets / +EV rows / 2+ thresholds are excluded). MLB's own two-view strip is `MlbTabs` (Picks |
-  Projections). The player board is a gated surface like the others. Needs the backend deployed first; rows fill in from the next model run. The section tab strip only shows on
+  one row per player x count market; HR / game markets / +EV rows / 2+ thresholds are excluded). The player board is a gated surface like the others. Needs the backend deployed first; rows fill in from the next model run. The section tab strip only shows on
   /picks, /picks/games, /picks/history, /cheat-sheet (`Section.exact`).
   **Access tiers (2026-10-16, `lib/access.ts`, OFF until launch)**: free = Top 10 + history + every PAST day's card + a 5-row
   preview of today's player boards, prices, +EV rows and prop-research rows; game picks have no free rows; Single-Sport Pass =
@@ -2115,11 +2123,18 @@ Satori OG routes -- use literal hex there.
   master-detail list + inspector (`cockpit.tsx`: L10 game log vs line `FormSparkline`, opportunity/volume `UsageSparkline`,
   multi-book `OddsMatrix`; MLB shows the existing `EvLaScatter` + `SprayChart`). Below 960px the inspector is a full-screen
   sheet. The old MLB model board (players/games, bet slip) is the `MODEL BOARD` view under the MLB tab.
-- **`/sports/[sport]`**: hubs for mlb/nfl/nba/nhl; statuses come from `lib/sports.ts` (2026-10-15: all four `live`, every
-  NFL/NHL/NBA market `Active`). NFL/NHL/NBA Today tab = live market dislocations (with a MODEL + MARKET badge when the projection
-  board agrees) + the daily projection board (`projections-board.tsx`); Models tab = `lib/prop-model-specs.ts` (real study numbers,
-  `--` where no study produced one; separates the trained research model from the live empirical engine). Update the files when
-  reality changes -- do not write aspirational copy there.
+- **`/picks/[sport]`** (was `/sports/[sport]`): statuses come from `lib/sports.ts` (all four `live`; every NFL/NHL/NBA market `Active`
+  except NHL power-play points = `Data gap`). Projection sports: the picks board (rows with a line and a positive Beezy Score, filtered by
+  the FilterBar) + market prices (a MODEL + MARKET badge when the projection board agrees) + the systems footer + a sport-level evidence
+  note; each system page ends with `SystemMethodology` fed by `lib/prop-model-specs.ts` (real study numbers incl. the model-vs-market
+  blend `c`, `--` where no study produced one; separates the trained research model from the live empirical engine). Update the files
+  when reality changes -- do not write aspirational copy there. **Stat depth (2026-10-16)**: NFL 10 (pass yds/TDs/completions/attempts,
+  interceptions, rush yds/attempts, rec yds, receptions, anytime TD), NHL 6 projectable + 1 data gap (SOG, goals, assists, points, saves,
+  blocked shots; **PP points cannot be projected -- the skater master has `power_play_goals` but no PP-assists column**), NBA 10 (+ pr, pa,
+  ra, steals, blocks). The new stats are in `ev/daily_projections.py` `PROJECT_STATS` and `cockpit_form` only: odds BANKING for them is
+  unchanged (the NFL sweep's `PARLAY_MARKETS` and the NHL/NBA core markets were NOT widened -- every market is 1 shared-pool credit per
+  event per run); NBA pr/pa/ra were added to the opt-in `PARLAY_PROP_MARKETS_ALT` tier. Until lines are banked, those stats show as
+  rotation (no-line) rows. `p_over_blend` = a market-anchored logit blend (`BLEND_C = 0.10`, an unvalidated prior; display only).
 - **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
   per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
 
@@ -2152,12 +2167,11 @@ protected by OIDC tokens from the schedulers -- they just aren't blocked at
 the IAM level anymore.
 
 ### Dynamic system route
-Per-system pick pages (`/picks/mlb/nrfi`, `/picks/mlb/hr`,
-`/picks/mlb/batter-tb`, etc.) are served by a single dynamic route at
-`app/picks/mlb/[system]/page.tsx`. `lib/pick-systems.ts` is the source of
-truth for valid slug -> system mappings and powers the all-model grid at
-`/picks/mlb`, the filter bar, and per-system metadata. Invalid slugs return
-404 via `notFound()`. Do not create individual static page files per system.
+Per-system pick pages for EVERY sport (`/picks/mlb/nrfi`, `/picks/nfl/rec-yds`, `/picks/nba/pra`, ...) are served by a single dynamic route at
+`app/picks/[sport]/[system]/page.tsx`. `lib/pick-systems.ts` is the source of
+truth for valid (sport, slug) -> system mappings and powers the systems footer,
+the filter bar's market chips, the sitemap and per-system metadata. Invalid
+sports or slugs return 404 via `notFound()`. Do not create individual static page files per system or per sport.
 
 As of 2026-08-27, the public all-model route covers:
 `NRFI`, `1I`, `F3`, `F5`, `F1H`, `F7`, `GAME`, `HR`, `BATTER_TB`,
@@ -2182,12 +2196,13 @@ P&L chart: cumulative units per system + ALL line + drawdown shading.
 Edge chart: 7-day rolling model edge vs realized ROI.
 Both use `ResponsiveContainer` with inline-styled tooltips matching design system.
 
-### Filter bar (picks page)
-Single FILTERS toggle button collapses/expands all four filter rows (Market,
-Date, Result, Book). Collapsed state shows active filter summary pills inline.
-Sort buttons (Date / Edge / Odds with direction toggle) always visible in the
-toggle bar. URL-param driven via useSearchParams/useRouter -- no props needed.
-Component: `components/picks/filter-bar.tsx`.
+### Filter bar (picks pages)
+One component for /picks and every /picks/[sport] (`components/picks/filter-bar.tsx`, props `sport` + MLB's `kind`). A single toolbar row:
+FILTERS toggle (+ active summary pills), player/team search, sort (SCORE | EDGE % | MODEL PROB | ODDS | TIME, direction toggle). The panel
+has MARKET (registry systems of the sport) or SPORT (on /picks), TIER (STRONG 70+ / LEAN 45-69 / WATCH <45), BOOK (ALL BOOKS | MY BOOKS +
+chips) and, for the tracked MLB card only, DATE and RESULT. All state is in the query string; `lib/picks-filters.ts` parses it for the
+server pages (`market`, `tier`, `book`, `books` = the "my books" csv, `q`, `sort`, `dir`, `sport`). MY BOOKS copies the browser's saved
+list (`lib/use-my-books.ts`) into `?books=` when clicked, so the server can filter without knowing the browser.
 
 ### Results page features
 

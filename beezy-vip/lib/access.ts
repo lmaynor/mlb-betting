@@ -13,7 +13,7 @@
  * env `ENFORCE_TIERS=1` to exercise the gates before launch.
  */
 import { PRE_LAUNCH } from '@/lib/launch'
-import { isAllAccess, type League, type Tier } from '@/lib/tiers'
+import { isAllAccess, isLeague, type League, type Tier } from '@/lib/tiers'
 
 export type Surface = 'player_board' | 'game_picks' | 'cockpit' | 'ev_terminal'
 
@@ -51,6 +51,6 @@ export function limitRows<T>(rows: T[], viewer: Viewer, surface: Surface, sport:
 
 /** Viewer from raw Clerk metadata values. Unknown / missing -> free. */
 export function viewerOf(tier: Tier, sportChoice: unknown): Viewer {
-  const sport = typeof sportChoice === 'string' && ['mlb', 'nfl', 'nba', 'nhl'].includes(sportChoice) ? (sportChoice as League) : null
+  const sport = isLeague(sportChoice) ? sportChoice : null
   return { tier, sport }
 }

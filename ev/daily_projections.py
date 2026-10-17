@@ -72,15 +72,24 @@ OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 
 # stat -> distribution family
 PROJECT_STATS = {
-    "nfl": {"pass_yds": "normal", "rush_yds": "normal", "rec_yds": "normal", "receptions": "negbin",
-            "pass_tds": "negbin", "anytime_td": "anytime"},
-    "nhl": {"sog": "negbin", "goals": "negbin", "points": "negbin", "assists": "negbin", "saves": "normal"},
-    "nba": {"points": "normal", "rebounds": "negbin", "assists": "negbin", "threes": "negbin", "pra": "normal"},
+    "nfl": {"pass_yds": "normal", "pass_tds": "negbin", "pass_completions": "normal", "pass_attempts": "normal",
+            "interceptions": "negbin", "rush_yds": "normal", "rush_attempts": "normal", "rec_yds": "normal",
+            "receptions": "negbin", "anytime_td": "anytime"},
+    # pp_points is NOT here: the NHL skater master carries power_play_goals but no power-play assists, so a PP-points
+    # projection cannot be built from it (see CONTEXT s21). It is registered on the site as a data gap, not faked.
+    "nhl": {"sog": "negbin", "goals": "negbin", "assists": "negbin", "points": "negbin", "saves": "normal",
+            "blocked_shots": "negbin"},
+    "nba": {"points": "normal", "rebounds": "negbin", "assists": "negbin", "threes": "negbin", "pra": "normal",
+            "pr": "normal", "pa": "normal", "ra": "normal", "steals": "negbin", "blocks": "negbin"},
 }
 STAT_LABEL = {
     "pass_yds": "Pass Yds", "rush_yds": "Rush Yds", "rec_yds": "Rec Yds", "receptions": "Receptions",
-    "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
-    "assists": "Assists", "saves": "Saves", "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast",
+    "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "pass_completions": "Completions",
+    "pass_attempts": "Pass Attempts", "rush_attempts": "Carries", "interceptions": "Interceptions",
+    "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
+    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots",
+    "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast", "pr": "Pts+Reb", "pa": "Pts+Ast",
+    "ra": "Reb+Ast", "steals": "Steals", "blocks": "Blocks",
 }
 
 HALFLIFE = {"nfl": 3.0, "nhl": 8.0, "nba": 8.0}      # games
@@ -109,19 +118,24 @@ ALPHA_RANGE = (0.01, 1.5)
 MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of mu
 
 CONFLUENCE_MIN_BOOKS = 3
+BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
 MAX_AGE_MIN = 240.0                                  # banked lines older than this are not shown as live lines
 STALE_GAMELOG_DAYS = 150
 ROTATION_PER_TEAM = 6
-MAX_ROWS = 700
+MAX_ROWS = 1200
 
 # usage thresholds that define a "rotation" player (avg over the last 10 games)
-ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0},
-                      "nhl": {"sog": 14.0, "goals": 14.0, "points": 14.0, "assists": 14.0, "saves": 10.0},
-                      "nba": {"points": 20.0, "rebounds": 20.0, "assists": 20.0, "threes": 20.0, "pra": 20.0}}
-ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds"),
-                  "nhl": ("sog", "points", "saves"),
-                  "nba": ("points", "rebounds", "assists", "pra")}
+ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0,
+                              "pass_attempts": 15.0, "pass_completions": 15.0, "rush_attempts": 8.0},
+                      "nhl": {"sog": 14.0, "goals": 14.0, "points": 14.0, "assists": 14.0, "saves": 10.0,
+                              "blocked_shots": 14.0},
+                      "nba": {"points": 20.0, "rebounds": 20.0, "assists": 20.0, "threes": 20.0, "pra": 20.0,
+                              "pr": 20.0, "pa": 20.0, "ra": 20.0, "steals": 20.0, "blocks": 20.0}}
+ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds", "pass_attempts", "pass_completions",
+                          "rush_attempts"),
+                  "nhl": ("sog", "points", "saves", "blocked_shots"),
+                  "nba": ("points", "rebounds", "assists", "pra", "pr", "pa", "ra", "steals", "blocks")}
 
 _NFL_CANON = {"JAX": "JAC", "LA": "LAR", "STL": "LAR", "OAK": "LV", "SD": "LAC", "WSH": "WAS"}
 
@@ -380,6 +394,23 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
     return float(1.0 - norm.cdf((line - mu) / sd))
 
 
+def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float = BLEND_C) -> float | None:
+    """Market-anchored posterior: logit(p) = logit(market) + c * (logit(model) - logit(market)).
+
+    This is the form the repo's own model-vs-market studies test (blend coefficient `c`; docs/analysis/
+    bettingpros_model_vs_market_2026-10-15.md): c = 0 trusts the market entirely, c = 1 trusts the model entirely. Those
+    studies measured c = +0.02 .. +0.30 for the TRAINED research models; nothing has been measured for this empirical
+    engine, so BLEND_C is a deliberately small, UNVALIDATED shrinkage prior. It is display-only: it feeds neither the
+    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability."""
+    if p_model_over is None or p_mkt_over is None:
+        return None
+    lo, hi = 0.01, 0.99
+    pm = min(max(float(p_model_over), lo), hi)
+    pk = min(max(float(p_mkt_over), lo), hi)
+    z = math.log(pk / (1 - pk)) + c * (math.log(pm / (1 - pm)) - math.log(pk / (1 - pk)))
+    return 1.0 / (1.0 + math.exp(-z))
+
+
 def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
                sd_mu: float | None = None):
     """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
@@ -570,6 +601,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
+        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over)),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
