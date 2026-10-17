@@ -92,7 +92,7 @@ def run(X: dict, meta: pd.DataFrame, stats, test_seasons, progress=print) -> pd.
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=cols)
 
 
-def summarize(preds: pd.DataFrame, meta: pd.DataFrame) -> pd.DataFrame:
+def summarize(preds: pd.DataFrame, meta: pd.DataFrame, variants=VARIANTS) -> pd.DataFrame:
     recs = []
     dates = meta["date"].to_numpy()
     for (stat, season), g in preds.groupby(["stat", "season"]):
@@ -100,7 +100,7 @@ def summarize(preds: pd.DataFrame, meta: pd.DataFrame) -> pd.DataFrame:
         y = target_of(meta, stat)[piv.index.to_numpy()]
         grp = dates[piv.index.to_numpy()]
         base = piv["v1"].to_numpy()
-        for v in VARIANTS:
+        for v in variants:
             mu = piv[v].to_numpy()
             pm = point_metrics(y, mu)
             rec = {"stat": stat, "season": season, "variant": v, "n": len(y), **pm}
@@ -120,7 +120,7 @@ def _md_table(df: pd.DataFrame) -> str:
     return "\n".join(out)
 
 
-def render(summary: pd.DataFrame, info: dict, seasons: list) -> str:
+def render(summary: pd.DataFrame, info: dict, seasons: list, variants=VARIANTS) -> str:
     L = ["# NBA availability-definition study (ESPN history)\n",
          "Mean-model MAE only, rolling origin (train <= T-2, early-stop T-1, refit <= T-1), regular-season rows of the test",
          "season. ACCURACY, not edge: no NBA prop odds history exists to price against.\n",
@@ -131,7 +131,7 @@ def render(summary: pd.DataFrame, info: dict, seasons: list) -> str:
          "| stat | variant | MAE (all test seasons, row-weighted) | gain vs v1 | 95% CI (date-cluster) |", "|---|---|---|---|---|"]
     for stat, g in summary.groupby("stat", sort=False):
         w = g.groupby("variant").apply(lambda d: np.average(d["mae"], weights=d["n"]), include_groups=False)
-        for v in VARIANTS:
+        for v in variants:
             gv = g[g["variant"] == v]
             if v == "v1":
                 L.append(f"| {stat} | v1 | {w[v]:.4f} | - | - |")
