@@ -133,7 +133,13 @@ if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quie
     warn "job ev-nfl-props-sweep not found; skipped mounting the secret on it"
   fi
 else
-  echo "  secret not found: skipped (create it per RUNBOOKS.md s7b; alerts then fall back to the OPS webhook)"
+  echo "  secret not found: skipped (create it per RUNBOOKS.md s7b; until then the sweeps log instead of posting -- never to #ops-alerts)"
+fi
+# NFL's own channel (#nfl-props-alerts): when its secret exists the sweep posts there instead of the shared alerts hook.
+if gcloud secrets describe discord-webhook-props-nfl --project="$PROJECT_ID" --quiet >/dev/null 2>&1 \
+   && gcloud run jobs describe ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
+  run gcloud run jobs update ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" \
+    --update-secrets=DISCORD_WEBHOOK_PROPS_NFL=discord-webhook-props-nfl:latest
 fi
 
 # ---- 4. resume NHL --------------------------------------------------------------------------------------------------------

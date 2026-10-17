@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback } from 'react'
 import Link from 'next/link'
+import { AlignedBar } from '@/components/picks/aligned-bar'
 import { BOOK_CHIPS, bookParam, SIGNAL_OPTIONS, SORT_OPTIONS } from '@/lib/picks-filters'
 import { getSystemsBySport, kindOfSystem, type PickKind } from '@/lib/pick-systems'
 import { LIVE_SPORTS, type SportSlug } from '@/lib/sports'
@@ -63,7 +64,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
   const clear = () => push(p => { for (const k of ['market', 'signal', 'book', 'books', 'sport', 'result', 'q', 'game', 'tier']) { if (!(fixedMarket && k === 'market')) p.delete(k) } })
 
   return (
-    <div role="search" style={{ display: 'flex', alignItems: 'center', gap: '8px 14px', flexWrap: 'wrap', padding: '10px 16px', borderBottom: B, background: 'var(--carbon)' }}>
+    <AlignedBar role="search" style={{ display: 'flex', alignItems: 'center', gap: '8px 14px', flexWrap: 'wrap' }}>
       <input key={qParam} type="search" aria-label="Search player, team or city" placeholder="Player, team or city" defaultValue={qParam}
         onKeyDown={e => { if (e.key === 'Enter') set('q', e.currentTarget.value.trim(), '') }}
         onBlur={e => { if (e.currentTarget.value.trim() !== qParam) set('q', e.currentTarget.value.trim(), '') }}
@@ -132,6 +133,6 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
       {my.books.length === 0 && bookValue === 'MY' && (
         <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>+EV terminal</Link> first.</span>
       )}
-    </div>
+    </AlignedBar>
   )
 }

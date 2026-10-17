@@ -67,6 +67,11 @@ export const LAYOUT = [
         topic: `Zero-fee Novig & Kalshi order-book dislocations -> ${SITE}/ev`,
       },
       {
+        name: 'nfl-props-alerts',
+        visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nfl],
+        topic: `NFL props sweep: book prices beating the consensus. Shadow mode, unvalidated, not in the public results -> ${SITE}/edge`,
+      },
+      {
         name: 'daily-free-plays',
         visibleTo: [EVERYONE],
         topic: `2 free daily Watch/Confluence plays + public audit -> ${SITE}`,
@@ -123,6 +128,7 @@ export const WEBHOOK_TARGETS = [
   { channel: 'nhl-card', secret: 'discord-webhook-card-nhl', env: 'DISCORD_WEBHOOK_CARD_NHL' },
   { channel: 'daily-recap', secret: 'discord-webhook-recap', env: 'DISCORD_WEBHOOK_RECAP' },
   { channel: 'ops-alerts', secret: 'discord-ops-webhook-url', env: 'DISCORD_WEBHOOK_OPS' },
+  { channel: 'nfl-props-alerts', secret: 'discord-webhook-props-nfl', env: 'DISCORD_WEBHOOK_PROPS_NFL' },
   { channel: 'tweet-queue', secret: 'discord-webhook-tweets', env: 'DISCORD_WEBHOOK_TWEETS' },
 ];
 

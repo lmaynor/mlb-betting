@@ -2,6 +2,7 @@
 
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ResearchTabs } from '@/components/picks/research-tabs'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
@@ -961,6 +962,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           </span>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '16px' }}>
+          <ResearchTabs active="cockpit" />
           {feed != null && <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count

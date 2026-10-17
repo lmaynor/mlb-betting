@@ -12,6 +12,15 @@ falls back to a channel that belongs to a different audience (an +EV alert never
     webhook_for("recap")           DISCORD_WEBHOOK_RECAP        -> (legacy _SUMMARY) -> DISCORD_WEBHOOK_URL
     webhook_for("tweets")          DISCORD_WEBHOOK_TWEETS       -> _OPS
     webhook_for("ops")             DISCORD_WEBHOOK_OPS
+    webhook_for("props_alerts", sport="nfl")
+                                   DISCORD_WEBHOOK_PROPS_NFL    -> DISCORD_WEBHOOK_ALERTS   (nothing after it: see below)
+
+`props_alerts` is the unvalidated NFL / NHL / NBA props sweeps (ev/sweep_nfl_props.py, ev/sweep_props_alerts.py). Each sport
+has its own channel (#nfl-props-alerts -> DISCORD_WEBHOOK_PROPS_NFL; the same pattern for NHL / NBA when they get one) and
+a shared admin fallback, DISCORD_WEBHOOK_ALERTS. The rows are unvalidated, so they never fall back into the +EV channels,
+a daily card or #ops-alerts (that channel is for failures; a signal feed buried the real pages there). #nfl-props-alerts is
+the one member-visible home, gated to All-Access Pro + NFL Pass (discord-bot/src/serverSetup.js). With nothing in the chain
+set the sweep logs instead of posting.
 
 Returns None when nothing in the chain is set (callers print instead of posting). Blank / whitespace-only
 values count as unset.
@@ -34,6 +43,7 @@ _CHAINS = {
     "recap": ("DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_URL"),
     "tweets": ("DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"),
     "ops": ("DISCORD_WEBHOOK_OPS",),
+    "props_alerts": ("DISCORD_WEBHOOK_ALERTS",),   # the sport-less chain; a sport puts its own PROPS_<SPORT> hook in front
 }
 KINDS = tuple(sorted(set(_CHAINS) | {"card"}))
 
@@ -53,6 +63,11 @@ def webhook_for(kind: str, sport: str | None = None) -> str | None:
         if sp not in SPORTS:
             raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
         return _first_set((f"DISCORD_WEBHOOK_CARD_{sp.upper()}", "DISCORD_WEBHOOK_URL"))
+    if kind == "props_alerts" and sport:
+        sp = sport.lower()
+        if sp not in SPORTS:
+            raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
+        return _first_set((f"DISCORD_WEBHOOK_PROPS_{sp.upper()}",) + _CHAINS["props_alerts"])
     chain = _CHAINS.get(kind)
     if chain is None:
         raise ValueError(f"unknown webhook kind {kind!r}; expected one of {KINDS}")

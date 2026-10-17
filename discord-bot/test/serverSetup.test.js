@@ -26,7 +26,7 @@ test('six roles with the specified colors', () => {
 test('categories and channels match the specified layout', () => {
   assert.deepEqual(setup.LAYOUT.map((c) => [c.name, c.channels.map((ch) => ch.name)]), [
     ['START HERE', ['welcome', 'announcements', 'link-account']],
-    ['LIVE +EV & EXCHANGE ALERTS', ['ev-sportsbooks', 'ev-exchanges', 'daily-free-plays']],
+    ['LIVE +EV & EXCHANGE ALERTS', ['ev-sportsbooks', 'ev-exchanges', 'nfl-props-alerts', 'daily-free-plays']],
     ['DAILY MODEL CARDS', ['mlb-card', 'nfl-card', 'nba-card', 'nhl-card']],
     ['PUBLIC LEDGER & RECAPS', ['daily-recap']],
     ['SHARP COMMUNITY', ['general-sweat', 'betting-theory']],
@@ -61,8 +61,8 @@ test('visibility matrix: +EV channels are All-Access Pro only, free plays are pu
   assert.deepEqual(access('daily-free-plays'), { view: true, send: false });
 });
 
-test('visibility matrix: each model card is All-Access Pro + that sport pass only', () => {
-  const passes = { 'mlb-card': 'MLB Pass', 'nfl-card': 'NFL Pass', 'nba-card': 'NBA Pass', 'nhl-card': 'NHL Pass' };
+test('visibility matrix: each model card (and the NFL props alerts) is All-Access Pro + that sport pass only', () => {
+  const passes = { 'mlb-card': 'MLB Pass', 'nfl-card': 'NFL Pass', 'nba-card': 'NBA Pass', 'nhl-card': 'NHL Pass', 'nfl-props-alerts': 'NFL Pass' };
   for (const [channel, pass] of Object.entries(passes)) {
     assert.equal(access(channel).view, false, `${channel} hidden from everyone`);
     assert.deepEqual(access(channel, ['All-Access Pro']), { view: true, send: false }, channel);
@@ -117,6 +117,7 @@ test('webhook targets map to the Python-side secret names and env vars', () => {
     ['nhl-card', 'discord-webhook-card-nhl', 'DISCORD_WEBHOOK_CARD_NHL'],
     ['daily-recap', 'discord-webhook-recap', 'DISCORD_WEBHOOK_RECAP'],
     ['ops-alerts', 'discord-ops-webhook-url', 'DISCORD_WEBHOOK_OPS'],
+    ['nfl-props-alerts', 'discord-webhook-props-nfl', 'DISCORD_WEBHOOK_PROPS_NFL'],
     ['tweet-queue', 'discord-webhook-tweets', 'DISCORD_WEBHOOK_TWEETS'],
   ]);
   const names = new Set(allChannels.map((x) => x.channel.name));
@@ -202,9 +203,9 @@ const OPTS = { ownerId: '900000000000000001', botUserId: '900000000000000002' };
 test('provision on an empty guild creates everything', async () => {
   const guild = makeFakeGuild();
   const result = await setup.provisionBeezyServer(guild, OPTS);
-  assert.deepEqual(guild.created, { roles: 6, categories: 6, channels: 16, webhooks: 9 });
+  assert.deepEqual(guild.created, { roles: 6, categories: 6, channels: 17, webhooks: 10 });
   assert.ok(result.roles.every((r) => r.status === 'created'));
-  assert.equal(result.webhooks.length, 9);
+  assert.equal(result.webhooks.length, 10);
   assert.ok(result.webhooks.every((w) => /^https:\/\/discord\.com\/api\/webhooks\/\d+\/tok\d+$/.test(w.url)));
   assert.deepEqual(result.warnings, []);
 
@@ -247,7 +248,7 @@ test('running provision twice creates nothing the second time', async () => {
   // same webhook URLs are returned both times
   assert.deepEqual(second.webhooks.map((w) => w.url), first.webhooks.map((w) => w.url));
   assert.equal(guild.roles.cache.size, 6);
-  assert.equal(guild.channels.cache.size, 22);
+  assert.equal(guild.channels.cache.size, 23);
 });
 
 test('rerun repairs drifted topics, parents, role colors and overwrites on existing objects', async () => {

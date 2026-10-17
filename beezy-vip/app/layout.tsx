@@ -22,15 +22,15 @@ export const viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default:  'Beezy.FYI \u2014 +EV Scanner and MLB Models',
-    template: '%s — Beezy.FYI',
+    default:  'beezy.fyi \u2014 Quantitative Sports Analytics',
+    template: '%s \u2014 beezy.fyi',
   },
   description:
-    'A 15-minute +EV scanner across sportsbooks, Kalshi and Novig, plus MLB models graded daily. Paper-tracked, every result public.',
+    'Quantitative models, prop research and a live +EV terminal across MLB, NFL, NHL and NBA. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
-    images: [{ url: '/api/og?title=%2BEV+Scanner+%2F+MLB+Models&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
-    siteName: 'Beezy.FYI',
+    images: [{ url: '/api/og?title=Quantitative+Models+%26+%2BEV+Terminal&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
+    siteName: 'beezy.fyi',
     type:     'website',
   },
   twitter: { card: 'summary_large_image', site: '@beezy_fyi', creator: '@beezy_fyi' },

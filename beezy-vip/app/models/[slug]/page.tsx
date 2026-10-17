@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!spec) return { title: 'Model Not Found' }
   return {
     title:       `${spec.name} Model -- Methodology & Results`,
-    description: `${spec.name} XGBoost model methodology, feature list, OOS metric, and full settled bet history. Beezy.FYI ${spec.system} system.`,
+    description: `${spec.name} model methodology, feature list, out-of-sample metric, and full settled bet history. beezy.fyi ${spec.system} system.`,
   }
 }
 
@@ -132,7 +132,7 @@ export default async function ModelDetailPage({ params }: Props) {
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '20px' }}>
           <div className="dell-display" style={{ fontSize: '16px', color: 'var(--chalk)', marginBottom: '16px' }}>Model configuration</div>
           {[
-            { label: 'Algorithm',      value: 'XGBoost (gradient boosted trees)' },
+            { label: 'Algorithm',      value: spec.algorithm ?? 'XGBoost (gradient boosted trees)' },
             { label: 'Training Data',  value: spec.dataRange },
             { label: 'Validation',     value: 'Walk-forward cross-validation' },
             { label: 'Edge Threshold', value: `+${(spec.edgeThreshold * 100).toFixed(0)}% minimum` },

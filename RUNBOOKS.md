@@ -801,8 +801,11 @@ Afterwards watch the next `mlb-settle` and the first runner for `ON CONFLICT` / 
 ### 7b. Create the alerts webhook secret and resume NHL
 
 ```bash
-# The NFL/NHL/NBA sweeps post to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS -- an ADMIN channel, never a member one
-# (these signals are unvalidated). Create the secret ONCE (rotate with `gcloud secrets versions add ... --data-file=-`).
+# The NFL/NHL/NBA sweeps post to DISCORD_WEBHOOK_ALERTS -- an ADMIN channel, never a member one and never #ops-alerts
+# (these signals are unvalidated; with the secret unset they log instead of posting). NFL has its own channel:
+# #nfl-props-alerts -> DISCORD_WEBHOOK_PROPS_NFL (secret discord-webhook-props-nfl), which wins over the shared hook for NFL.
+# The bot's /setup-server creates the channel and webhook and prints the gcloud secret commands; or create the secret by hand below.
+# Create the secret ONCE (rotate with `gcloud secrets versions add ... --data-file=-`).
 printf '%s' "$ALERTS_WEBHOOK_URL" | gcloud secrets create discord-webhook-alerts --replication-policy=automatic --data-file=- --project=$PROJECT_ID
 gcloud secrets add-iam-policy-binding discord-webhook-alerts --project=$PROJECT_ID --role=roles/secretmanager.secretAccessor \
   --member="serviceAccount:mlb-betting-sa@${PROJECT_ID}.iam.gserviceaccount.com"      # skip if the SA already has it project-wide
@@ -810,8 +813,9 @@ gcloud secrets add-iam-policy-binding discord-webhook-alerts --project=$PROJECT_
 # Re-provision so the props-alerts jobs mount it (setup_props_alerts.sh adds DISCORD_WEBHOOK_ALERTS only when the secret exists;
 # `--set-secrets` REPLACES the list, which is why this goes through the script and not an ad-hoc update).
 PROJECT_ID=$PROJECT_ID bash deploy/setup_props_alerts.sh
-# Optional: the NFL sweep job (it falls back to the OPS webhook without this)
-gcloud run jobs update ev-nfl-props-sweep --region=$REGION --project=$PROJECT_ID --update-secrets=DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest
+# The NFL sweep job: its own channel (preferred) and/or the shared admin hook. Without either it logs instead of posting.
+gcloud run jobs update ev-nfl-props-sweep --region=$REGION --project=$PROJECT_ID \
+  --update-secrets=DISCORD_WEBHOOK_PROPS_NFL=discord-webhook-props-nfl:latest,DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest
 
 # Resume NHL banking FIRST (the alerts sweep refuses a banked snapshot older than 45 min), then the NHL alerts. Spends ParlayAPI credits.
 for S in $(gcloud scheduler jobs list --location=$REGION --project=$PROJECT_ID --format='value(ID.basename())' | grep -E '^(odds-bank-nhl-|props-alerts-nhl-)'); do

@@ -26,7 +26,7 @@ export function BrandMark({ size = 28, color = BRAND_EMERALD, style, title }: {
   )
 }
 
-/** The mark on a dark obsidian badge. `size` is the badge edge in px. */
+/** The mark on a dark obsidian badge, for square placements (app icon, avatar). The site chrome uses the bare fin. `size` is the badge edge in px. */
 export function BrandTile({ size = 32, radius = 7 }: { size?: number; radius?: number }) {
   return (
     <span
@@ -42,12 +42,12 @@ export function BrandTile({ size = 32, radius = 7 }: { size?: number; radius?: n
 }
 
 const WORDMARK = {
-  sm: { tile: 24, radius: 6, font: 14, gap: 8 },
-  md: { tile: 30, radius: 7, font: 18, gap: 10 },
-  lg: { tile: 40, radius: 9, font: 26, gap: 12 },
+  sm: { mark: 22, font: 14, gap: 8 },
+  md: { mark: 28, font: 18, gap: 9 },
+  lg: { mark: 38, font: 26, gap: 12 },
 } as const
 
-/** Tile plus the lowercase "beezy.fyi" wordmark. `showDomain={false}` drops the ".fyi" suffix. */
+/** The bare fin plus the lowercase "beezy.fyi" wordmark. `showDomain={false}` drops the ".fyi" suffix. */
 export function BrandWordmark({ size = 'md', showDomain = true }: {
   size?: keyof typeof WORDMARK
   showDomain?: boolean
@@ -55,7 +55,7 @@ export function BrandWordmark({ size = 'md', showDomain = true }: {
   const m = WORDMARK[size]
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: `${m.gap}px`, lineHeight: 1 }}>
-      <BrandTile size={m.tile} radius={m.radius} />
+      <BrandMark size={m.mark} color={BRAND_EMERALD} />
       <span style={{ fontSize: `${m.font}px`, letterSpacing: '-0.03em', whiteSpace: 'nowrap' }}>
         <span style={{ color: BRAND_MONO, fontWeight: 800 }}>beezy</span>
         {showDomain && <span style={{ color: BRAND_EMERALD, fontWeight: 700 }}>.fyi</span>}
