@@ -12,9 +12,11 @@ import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
 import { collapseBooks } from '@/lib/dedupe'
 import { beezyscore } from '@/lib/beezy-score'
+import { teamAbbrev } from '@/lib/tokens'
 import { betKind, type PickKind } from '@/lib/pick-systems'
 import type { SportSlug } from '@/lib/sports'
-import { matchesBook, matchesQuery, matchesTier, parsePickFilters } from '@/lib/picks-filters'
+import { matchesBook, matchesTier, parsePickFilters } from '@/lib/picks-filters'
+import { matchesSearch, searchHaystack } from '@/lib/team-directory'
 import type { Bet } from '@/lib/types'
 
 const COPY: Record<PickKind, { h1: string; sub: string; what: string; plan: string }> = {
@@ -46,7 +48,7 @@ async function PicksContent({ kind, searchParams }: { kind: PickKind; searchPara
 
   // Tier, "my books" and the text search are cut here after the fetch (the API filters on system, date, status and one book).
   const keep = (p: Bet) => matchesTier(beezyscore(p), f.tier) && matchesBook(p.book, { book: undefined, books: f.books })
-    && matchesQuery(`${p.player ?? ''} ${p.away_team ?? ''} ${p.home_team ?? ''}`, f.q)
+    && matchesSearch(searchHaystack('mlb', p.player, `${teamAbbrev(p.away_team)} @ ${teamAbbrev(p.home_team)}`), f.q)
   const load = (d: string) => getPicks({ system: market, date: d, status, book, limit: 200 })
     .then(rows => rows.filter(p => betKind(p) === kind && keep(p)))
     .catch(() => [] as Bet[])

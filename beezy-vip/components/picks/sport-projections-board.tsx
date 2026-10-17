@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { hasHeadshots } from '@/lib/sport-assets'
 import { BOARD_SORT_LABEL, fairAmerican, filterBoard, type BoardRow, type BoardSort } from '@/lib/board-rows'
 import { scoreTier, TIER_META } from '@/lib/beezy-score'
 import { formatOdds } from '@/lib/odds'
@@ -52,8 +53,8 @@ function Seg<T extends string>({ label, value, options, onChange, accent }: {
  * hit rate and the best price. Rows arrive already shaped (lib/board-rows.ts) and already cut by the access policy.
  * `status` is an optional one-line freshness note from the feed; `children` is rendered under the table (notices).
  */
-export function SportProjectionsBoard({ sport, rows, status, emptyBody, note, controls = true, marketChips = true }: {
-  sport: SportSlug; rows: BoardRow[]; status?: string; emptyBody?: string; note?: React.ReactNode
+export function SportProjectionsBoard({ sport, rows, status, statusWarn = false, emptyBody, note, controls = true, marketChips = true }: {
+  sport: SportSlug; rows: BoardRow[]; status?: string; statusWarn?: boolean; emptyBody?: string; note?: React.ReactNode
   /** false on a system page, where every row is already one market */
   marketChips?: boolean
   /** false on the picks pages: the FilterBar above has already filtered and sorted `rows`, so the board only renders them */
@@ -97,7 +98,7 @@ export function SportProjectionsBoard({ sport, rows, status, emptyBody, note, co
         </div>}
         <Seg label="Side" value={side} options={SIDES.map(s => ({ id: s, label: s }))} onChange={v => { setSide(v); reset() }} accent={accent} />
         <Seg label="Signal" value={signal} options={SIGNALS} onChange={v => { setSignal(v); reset() }} accent={accent} />
-        <input type="search" aria-label="Search player or team" placeholder="Player or team" value={q} onChange={e => { setQ(e.target.value); reset() }}
+        <input type="search" aria-label="Search player, team or city" placeholder="Player, team or city" value={q} onChange={e => { setQ(e.target.value); reset() }}
           style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', padding: '5px 9px', borderRadius: '6px', border: '1px solid #1e2230', background: '#090a0f', color: 'var(--chalk)', width: '150px' }} />
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.06em' }}>
           SORT
@@ -111,7 +112,7 @@ export function SportProjectionsBoard({ sport, rows, status, emptyBody, note, co
           <span className="dell-heading" title="Projections come from an empirical estimator on game logs and have not been validated against prices." style={{ fontSize: '9px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 6px' }}>UNVALIDATED</span>
         )}
       </div>}
-      {status && <div style={{ fontSize: '11.5px', color: 'var(--fog)', marginBottom: '8px' }}>{status}</div>}
+      {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--fog)', marginBottom: '8px' }}>{status}</div>}
 
       <div style={{ ...SURFACE, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1040px', fontSize: '13px' }}>
@@ -137,7 +138,7 @@ export function SportProjectionsBoard({ sport, rows, status, emptyBody, note, co
                   </td>
                   <td style={{ ...TD, whiteSpace: 'nowrap' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      {r.headshotId != null && (r.sport === 'nhl' || r.sport === 'nba') && <PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={28} />}
+                      {r.headshotId != null && hasHeadshots(r.sport) && <PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} />}
                       <span>
                         <span style={{ color: 'var(--chalk)', fontWeight: 600 }}>{r.player}</span>
                         <span className="mono" style={{ display: 'block', fontSize: '11px', color: 'var(--fog)' }}>{r.matchup || '--'}{when ? ` \u00b7 ${when} CT` : ''}</span>

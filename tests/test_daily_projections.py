@@ -268,6 +268,42 @@ def test_run_sport_status_transitions():
     assert idle["status"] == "idle" and idle["rows"] == []
 
 
+def test_run_sport_flags_carried_lines_stale_and_keeps_them():
+    """Lines older than MAX_AGE_MIN (the twice-daily bankers leave a 15 h gap) are shown, flagged, not hidden."""
+    logs = nba_logs()
+    games = [{"away": "BOS", "home": "LAL", "start": START}]
+    fresh = dp.run_sport("nba", NOW, logs=logs, events=[event(FAIR)], meta={"age_min": 12.0}, games=games, write=False)
+    assert fresh["lines_stale"] is False
+    old = dp.run_sport("nba", NOW, logs=logs, events=[event(FAIR)], meta={"age_min": 600.0}, games=games, write=False)
+    assert old["status"] == "live" and old["lines_stale"] is True and old["lines_age_minutes"] == 600.0
+    assert old["rows"][0]["has_line"]
+    none = dp.run_sport("nba", NOW, logs=logs, events=[], meta={"age_min": 600.0}, games=games, write=False)
+    assert none["lines_stale"] is False                                 # no line rows: nothing to call stale
+
+
+def test_run_sport_loads_events_with_the_carry_window(monkeypatch):
+    seen = {}
+
+    def fake(sport, now, max_age_min=dp.MAX_AGE_MIN):
+        seen["max_age"] = max_age_min
+        return None, {"reason": "x"}
+    monkeypatch.setattr(dp, "load_events", fake)
+    dp.run_sport("nba", NOW, logs=nba_logs(), games=[], write=False)
+    assert seen["max_age"] == dp.CARRY_MAX_AGE_MIN and dp.CARRY_MAX_AGE_MIN > dp.MAX_AGE_MIN
+
+
+def test_schedule_games_fetches_every_day_of_a_week_long_horizon():
+    urls = []
+
+    def fetch(url):
+        urls.append(url)
+        return {"events": []}
+    dp.schedule_games("nfl", NOW, hours=dp.HORIZON_HOURS["nfl"], fetch=fetch)
+    days = {u.rsplit("dates=", 1)[1] for u in urls}
+    assert len(days) >= 7                                                # one scoreboard call per calendar day, no gaps
+    assert dp.HORIZON_HOURS["nfl"] > dp.HORIZON_HOURS["nhl"] >= 36
+
+
 def test_run_sport_unavailable_without_game_log(monkeypatch):
     monkeypatch.setattr(dp.GameLogs, "load", classmethod(lambda cls, sport: None))
     out = dp.run_sport("nfl", NOW, events=[], write=False)

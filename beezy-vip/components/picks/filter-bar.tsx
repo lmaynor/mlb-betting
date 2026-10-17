@@ -82,7 +82,7 @@ export function FilterBar({ sport = 'mlb', kind, defaultOpen = false }: { sport?
   const mineActive = books !== '' && books === mineKey
 
   const activeCount = [
-    market !== 'ALL', sportParam !== 'ALL', date !== 'today', status !== 'ALL', book !== 'ALL', books !== '', tier !== 'ALL', qParam !== '',
+    market !== 'ALL', sportParam !== 'ALL', tracked && date !== 'today', status !== 'ALL', book !== 'ALL', books !== '', tier !== 'ALL', qParam !== '',
   ].filter(Boolean).length
 
   function chip(label: string, active: boolean, onClick: () => void, dot?: string) {
@@ -121,7 +121,7 @@ export function FilterBar({ sport = 'mlb', kind, defaultOpen = false }: { sport?
               {market !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{SYSTEM_LABEL_SHORT[market] ?? market}</span>}
               {sportParam !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{sportParam.toUpperCase()}</span>}
               {tier !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{tier}</span>}
-              {date !== 'today' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[dateChoice] ?? date}</span>}
+              {tracked && date !== 'today' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[dateChoice] ?? date}</span>}
               {status !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{RESULT_LABELS[status] ?? status}</span>}
               {book !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{book}</span>}
               {books !== '' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>MY BOOKS</span>}
@@ -130,7 +130,7 @@ export function FilterBar({ sport = 'mlb', kind, defaultOpen = false }: { sport?
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <form onSubmit={e => { e.preventDefault(); set('q', q.trim(), '') }} role="search" style={{ display: 'inline-flex' }}>
-            <input type="search" aria-label="Search player or team" placeholder="Player or team" value={q} onChange={e => setQ(e.target.value)}
+            <input type="search" aria-label="Search player, team or city" placeholder="Player, team or city" value={q} onChange={e => setQ(e.target.value)}
               onBlur={() => { if (q.trim() !== qParam) set('q', q.trim(), '') }}
               style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '5px 9px', borderRadius: 'var(--radius-pill)', border: B, background: 'var(--graphite)', color: 'var(--chalk)', width: '150px' }} />
           </form>

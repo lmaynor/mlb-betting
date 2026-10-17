@@ -121,7 +121,14 @@ MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of
 CONFLUENCE_MIN_BOOKS = 3
 BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
-MAX_AGE_MIN = 240.0                                  # banked lines older than this are not shown as live lines
+MAX_AGE_MIN = 240.0                                  # banked lines older than this are not live: they are flagged stale
+# The odds bankers run twice a day (17:30 / 22:30 UTC), so between the evening snapshot and the next afternoon one every
+# line is older than MAX_AGE_MIN. Hiding them left every row empty for ~15 hours a day; lines up to this age are still
+# shown, with payload `lines_stale: true` and the age, so the page says plainly how old the price is. Older than this
+# (a missed banking run) they are dropped again.
+CARRY_MAX_AGE_MIN = 1200.0
+# How far ahead the rotation (no-line) rows reach. NFL is a weekly slate, so a week; NHL / NBA play most nights.
+HORIZON_HOURS = {"nfl": 168.0, "nhl": 48.0, "nba": 48.0}
 STALE_GAMELOG_DAYS = 150
 ROTATION_PER_TEAM = 6
 MAX_ROWS = 1200
@@ -633,7 +640,8 @@ def schedule_games(sport: str, now: datetime, hours: float = 36.0, fetch=None) -
     import requests
     fetch = fetch or (lambda u: requests.get(u, timeout=10, headers={"User-Agent": "beezy-fyi/1.0"}).json())
     out = []
-    days = sorted({(now + timedelta(hours=h)).astimezone(_ET).strftime("%Y%m%d") for h in (0, 12, 24, 36)})
+    days = sorted({(now + timedelta(hours=h)).astimezone(_ET).strftime("%Y%m%d")
+                   for h in range(0, int(hours) + 12, 12)})
     for d in days:
         try:
             data = fetch(f"https://site.api.espn.com/apis/site/v2/sports/{ESPN_PATH[sport]}/scoreboard?dates={d}")
@@ -766,7 +774,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
     logs = logs or GameLogs.load(sport)
     base = {"sport": sport, "engine": ENGINE, "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
-            "stats": list(PROJECT_STATS[sport]), "status": "unavailable", "lines_age_minutes": None,
+            "stats": list(PROJECT_STATS[sport]), "status": "unavailable", "lines_age_minutes": None, "lines_stale": False,
             "gamelog_latest": None, "stale_gamelog": None, "summary": {}}
     if logs is None:
         base["summary"] = {"reason": f"{sport} game-log master unavailable"}
@@ -780,7 +788,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
             pass
     if events is None:
         try:
-            events, meta = load_events(sport, now)
+            events, meta = load_events(sport, now, CARRY_MAX_AGE_MIN)
         except Exception as exc:                                                       # noqa: BLE001
             log.warning("%s lines unavailable: %s", sport, exc)
             events, meta = None, {"reason": str(exc)[:200]}
@@ -791,12 +799,14 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     covered = {(r["player_norm"], r["stat"]) for r in line_rows}
     rot, rstats = [], {}
     try:
-        g = games if games is not None else schedule_games(sport, now)
+        g = games if games is not None else schedule_games(sport, now, HORIZON_HOURS[sport])
         rot, rstats = rotation_rows(sport, logs, g, now, covered)
     except Exception as exc:                                                           # noqa: BLE001
         log.warning("%s rotation fallback failed: %s", sport, exc)
     rows = (line_rows + rot)[:MAX_ROWS]
-    base.update(rows=rows, count=len(rows), lines_age_minutes=meta.get("age_min"),
+    age = meta.get("age_min")
+    base.update(rows=rows, count=len(rows), lines_age_minutes=age,
+                lines_stale=bool(line_rows) and age is not None and age > MAX_AGE_MIN,
                 status=_status(bool(line_rows), bool(rot), True),
                 summary={**{k: v for k, v in meta.items() if k != "age_min"}, **lstats, **rstats,
                          "line_rows": len(line_rows), "confluence": sum(1 for r in line_rows if r["confluence"])})

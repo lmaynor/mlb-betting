@@ -2287,6 +2287,27 @@ lower -> space->_ -> hyphen->_ -> strip [^\wÀ-ɏ] (dots, apostrophes, etc.)
 
 Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
 
+### Picks-page wiring (2026-10-17, PR `fix/picks-wiring`)
+
+- **Day strip** (`components/picks/day-scroller.tsx`, `lib/board-days.ts`): NFL / NHL / NBA pages get the counterpart of MLB's DateBar --
+  ALL DAYS + one chip per game day on the board (site clock = Central), `?date=YYYY-MM-DD|all`, default = first game day. It lists days
+  from the whole feed, so a day with no priced pick yet is still openable. Feed horizon (`ev/daily_projections.py` `HORIZON_HOURS`): NFL
+  7 days, NHL / NBA 48 h (was a flat 36 h).
+- **Stale lines are carried, not hidden**: the NHL / NBA odds bankers run twice a day (17:30 / 22:30 UTC), so every banked line was older
+  than `MAX_AGE_MIN` (240) for ~15 h a day and the boards were empty of prices. Lines up to `CARRY_MAX_AGE_MIN` (1200 min) are now shown with
+  payload `lines_stale: true` and `lines_age_minutes`; the page prints "Lines are N h old ... check the price at the book". The +EV pagers
+  keep their own 45-min gate. **NFL has NO scheduler**: `ev-nfl-props-sweep` is a manual job with a hard-coded `--until`, last run
+  2026-10-15, so every NFL row is a no-line rotation row until someone runs it (credits: shared 20k/mo pool).
+- **Search is team-aware** (`lib/team-directory.ts`): every text filter (board, FilterBar, MLB card, Top 10) goes through
+  `searchHaystack` / `matchesSearch`, so "houston", "texans", "habs", "sixers" and "HOU" all work; every word must match. Sport-keyed
+  because HOU is the Astros and the Texans.
+- **NFL headshots**: nfl.com image tokens from the nflverse rosters' `headshot_url` (`python scripts/build_sport_assets.py --nfl-players`
+  -> `public/headshots/nfl_player_map.json`, QB/RB/WR/TE only, `slug__team` keys, bare slug only when unique). The ESPN id covers only ~70%
+  of players, the token 97%. Re-run each preseason / after roster moves.
+- **Systems statistics**: footer columns TODAY (rows / priced, counted from the UNCUT feed) and LIVE MAE (engine / trailing-5 mean) from
+  `lib/engine-accuracy.json`. NFL = full serving replay (opponent factor included, 2021-2025); NHL / NBA = `scripts/engine_accuracy.py`
+  (opponent factor NOT applied, 2024-2025 seasons). MAE only: nothing here is edge against a price.
+
 ### Headshot system
 
 **MLB headshots are hotlinked (2026-10-14)** from MLB's CDN `silo` variant -- a TRANSPARENT cutout -- so there is no local

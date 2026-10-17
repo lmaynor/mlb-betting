@@ -1,0 +1,200 @@
+{
+ "about": "Out-of-sample accuracy of the mean the live projection board uses, against the trailing-5 average, per stat. MAE only: none of this is edge against a price. Regenerate: python -m nfl.props.engine_eval --no-grid (NFL) and python -m scripts.engine_accuracy --sport nhl|nba.",
+ "nfl": {
+  "method": "Full serving-code replay (nfl.props.engine_eval), opponent factor included, as of each regular-season week, 2021-2025",
+  "sample": "2021-2025 regular seasons",
+  "generated": "2026-10-16",
+  "stats": {
+   "pass_yds": {
+    "n": 2626,
+    "mae": 66.097,
+    "baselineMae": 68.8,
+    "bias": null,
+    "dMae": -2.703,
+    "dMaeSe": 0.351
+   },
+   "rush_yds": {
+    "n": 3387,
+    "mae": 27.051,
+    "baselineMae": 28.24,
+    "bias": null,
+    "dMae": -1.189,
+    "dMaeSe": 0.156
+   },
+   "rec_yds": {
+    "n": 8539,
+    "mae": 25.892,
+    "baselineMae": 27.083,
+    "bias": null,
+    "dMae": -1.191,
+    "dMaeSe": 0.102
+   },
+   "receptions": {
+    "n": 8539,
+    "mae": 1.82,
+    "baselineMae": 1.887,
+    "bias": null,
+    "dMae": -0.067,
+    "dMaeSe": 0.006
+   },
+   "pass_tds": {
+    "n": 2626,
+    "mae": 0.904,
+    "baselineMae": 0.932,
+    "bias": null,
+    "dMae": -0.028,
+    "dMaeSe": 0.004
+   },
+   "anytime_td": {
+    "n": 11109,
+    "mae": 0.486,
+    "baselineMae": 0.492,
+    "bias": null,
+    "dMae": -0.006,
+    "dMaeSe": 0.002
+   }
+  }
+ },
+ "nhl": {
+  "method": "empirical_ewm mean, no opponent factor; as-of history (strictly earlier games); baseline = trailing-5 mean",
+  "sample": "2024 and 2025 seasons in the game-log master",
+  "generated": "2026-10-17",
+  "stats": {
+   "sog": {
+    "n": 33874,
+    "mae": 1.1053,
+    "baselineMae": 1.1673,
+    "bias": -0.0176,
+    "dMae": -0.062,
+    "dMaeSe": 0.0022
+   },
+   "goals": {
+    "n": 33874,
+    "mae": 0.3015,
+    "baselineMae": 0.3033,
+    "bias": -0.0038,
+    "dMae": -0.0018,
+    "dMaeSe": 0.0007
+   },
+   "assists": {
+    "n": 33874,
+    "mae": 0.4607,
+    "baselineMae": 0.4656,
+    "bias": -0.005,
+    "dMae": -0.0049,
+    "dMaeSe": 0.001
+   },
+   "points": {
+    "n": 33874,
+    "mae": 0.5845,
+    "baselineMae": 0.6019,
+    "bias": -0.0088,
+    "dMae": -0.0174,
+    "dMaeSe": 0.0012
+   },
+   "saves": {
+    "n": 2588,
+    "mae": 6.0556,
+    "baselineMae": 6.3884,
+    "bias": -0.3094,
+    "dMae": -0.3328,
+    "dMaeSe": 0.0414
+   },
+   "blocked_shots": {
+    "n": 33874,
+    "mae": 0.7779,
+    "baselineMae": 0.8074,
+    "bias": -0.0105,
+    "dMae": -0.0295,
+    "dMaeSe": 0.0016
+   }
+  }
+ },
+ "nba": {
+  "method": "empirical_ewm mean, no opponent factor; as-of history (strictly earlier games); baseline = trailing-5 mean",
+  "sample": "2024 and 2025 seasons in the game-log master",
+  "generated": "2026-10-17",
+  "stats": {
+   "points": {
+    "n": 33416,
+    "mae": 5.2614,
+    "baselineMae": 5.5204,
+    "bias": 0.028,
+    "dMae": -0.2589,
+    "dMaeSe": 0.0117
+   },
+   "rebounds": {
+    "n": 33416,
+    "mae": 2.0408,
+    "baselineMae": 2.1501,
+    "bias": -0.0247,
+    "dMae": -0.1094,
+    "dMaeSe": 0.0046
+   },
+   "assists": {
+    "n": 33416,
+    "mae": 1.5608,
+    "baselineMae": 1.6324,
+    "bias": 0.0143,
+    "dMae": -0.0716,
+    "dMaeSe": 0.0036
+   },
+   "threes": {
+    "n": 33416,
+    "mae": 1.0472,
+    "baselineMae": 1.1079,
+    "bias": -0.0052,
+    "dMae": -0.0607,
+    "dMaeSe": 0.0023
+   },
+   "pra": {
+    "n": 33416,
+    "mae": 6.668,
+    "baselineMae": 6.9368,
+    "bias": 0.0176,
+    "dMae": -0.2688,
+    "dMaeSe": 0.0153
+   },
+   "pr": {
+    "n": 33416,
+    "mae": 6.1546,
+    "baselineMae": 6.4343,
+    "bias": 0.0033,
+    "dMae": -0.2798,
+    "dMaeSe": 0.0139
+   },
+   "pa": {
+    "n": 33416,
+    "mae": 5.7462,
+    "baselineMae": 5.9967,
+    "bias": 0.0423,
+    "dMae": -0.2505,
+    "dMaeSe": 0.0131
+   },
+   "ra": {
+    "n": 33416,
+    "mae": 2.8426,
+    "baselineMae": 2.9721,
+    "bias": -0.0104,
+    "dMae": -0.1295,
+    "dMaeSe": 0.0065
+   },
+   "steals": {
+    "n": 33416,
+    "mae": 0.8116,
+    "baselineMae": 0.8573,
+    "bias": -0.0056,
+    "dMae": -0.0457,
+    "dMaeSe": 0.0017
+   },
+   "blocks": {
+    "n": 33416,
+    "mae": 0.5758,
+    "baselineMae": 0.5912,
+    "bias": -0.0085,
+    "dMae": -0.0155,
+    "dMaeSe": 0.0013
+   }
+  }
+ }
+}

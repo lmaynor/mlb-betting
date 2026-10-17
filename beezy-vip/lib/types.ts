@@ -165,6 +165,8 @@ export interface EvBookOutlierRow {
   player:        string
   player_norm?:  string
   player_id?:    number | string | null
+  /** resolved server-side by name for sports whose feed carries no id (NFL: nfl.com image token) */
+  headshot_id?:  number | string | null
   team?:         string | null
   away_team?:    string | null
   home_team?:    string | null
@@ -265,8 +267,8 @@ export interface SportProjectionRow {
   score_basis: 'confluence' | 'market' | 'model' | 'capped' | 'none'
   validated: false
   engine: string
-  /** resolved server-side by name (NHL / NBA only); null when unknown */
-  headshot_id?: number | null
+  /** resolved server-side by name (NHL / NBA: a league player id; NFL: nfl.com image token); null when unknown */
+  headshot_id?: number | string | null
 }
 
 export interface SportProjections {
@@ -278,6 +280,8 @@ export interface SportProjections {
   as_of: string | null
   age_minutes: number | null
   lines_age_minutes: number | null
+  /** the lines are older than the live window (the odds bankers run twice a day): shown, not hidden */
+  lines_stale?: boolean
   gamelog_latest: string | null
   stale_gamelog: boolean | null
   stats: string[]
