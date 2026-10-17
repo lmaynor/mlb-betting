@@ -33,7 +33,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   const pillar = SPORT_PILLARS[sport]
   const tracked = pillar.board === 'tracked'
   const f = parsePickFilters(await searchParams)
-  const board = await loadSportBoard(sport, await getViewer(), { day: f.day, view, kind })
+  const board = await loadSportBoard(sport, await getViewer(), { day: f.day, date: f.date, view, kind })
   const copy = COPY[view]
   const today = siteDateKey()
 
@@ -55,7 +55,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
     <div>
       <SportTabs sport={sport} active={tab} />
       <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
-        <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} />
+        <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} upcoming={board.days} viewDate={board.date} />
         {tracked && view === 'picks' && (
           <nav aria-label="Pick type" style={{ display: 'flex', gap: '14px', fontSize: '12.5px' }}>
             <Link href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--chalk)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400, textDecoration: 'none' }}>Player picks</Link>

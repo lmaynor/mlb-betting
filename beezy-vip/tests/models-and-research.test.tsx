@@ -108,7 +108,7 @@ describe('brand and copy cleanup', () => {
 
   it('the new files are ASCII', () => {
     for (const f of ['components/models/projection-model-detail.tsx', 'app/models/page.tsx', 'app/models/[slug]/[system]/page.tsx', 'app/edge/projections/page.tsx',
-      'components/picks/research-tabs.tsx', 'components/picks/aligned-bar.tsx', 'components/picks/games-strip.tsx', 'lib/board-games.ts', 'scripts/build-brand-kit.mjs']) {
+      'components/picks/research-tabs.tsx', 'components/picks/aligned-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'lib/board-games.ts', 'lib/board-days.ts', 'lib/sport-board-data.ts', 'scripts/build-brand-kit.mjs']) {
       expect([...read(f)].filter(c => c.charCodeAt(0) > 127)).toEqual([])
     }
   })

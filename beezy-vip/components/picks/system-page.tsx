@@ -37,7 +37,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
   const f = parsePickFilters(await searchParams)
   const today = siteDateKey()
   const [board, allStats] = await Promise.all([
-    system.gap ? null : getViewer().then(v => loadSportBoard(sport, v, { day: f.day, view: 'picks' })),
+    system.gap ? null : getViewer().then(v => loadSportBoard(sport, v, { day: f.day, date: f.date, view: 'picks' })),
     tracked ? apiGetStats().then(s => s.bySystem).catch(() => []) : Promise.resolve([]),
   ])
   const base = board ? board.rows.filter(r => r.system === system.key) : []
@@ -59,7 +59,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       {board && (
         <>
           <AlignedBar>
-            <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} />
+            <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} upcoming={board.days} viewDate={board.date} />
           </AlignedBar>
           <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />

@@ -25,3 +25,13 @@ Branch `feat/brand-fin-models-prop-research`, stacked on `feat/brand-kit-solo-le
   recorded 0.5565 OOS AUC. Thresholds and Kelly fractions are copied from each system's config.
 - Prop Research all-projections needs the real API: it showed the empty state locally (no API reachable), so the table with data was not eyeballed here.
   The strip, models pages and icon were checked in a browser.
+
+## Addendum -- props signals in a daily thread, and game days (branch feat/props-signals-thread-and-game-days)
+- **No per-sport props-alerts channels** (they would clutter the server; #nfl-props-alerts was deleted by hand). NFL/NHL/NBA sweep alerts post through beezy-bot
+  into ONE thread per sport per day under #nfl-card / #nhl-card / #nba-card (bot `daily_thread`, `post_props_signal`). Needs BEEZY_BOT_URL + BEEZY_BOT_SECRET on the
+  sweep jobs (`deploy/setup_props_alerts.sh`, `deploy/rollout_multisport_live.sh`). Threads do not push-notify unless followed. Bot AND the feeds image must be
+  redeployed; until then the old image still posts the old way. Members could in principle start threads in the read-only card channels (SendMessagesInThreads /
+  CreatePublicThreads are not denied by `/setup-server`): pre-existing, not changed here.
+- **Game days:** the live feed is a rolling window (a week of NBA), and all of it landed on TODAY. `lib/board-days.ts` assigns each row to the day in its game key
+  (else its start in site time); the board shows one day (today, `?date=`, or the next day with games when today has none) and DayToggle gets one chip per upcoming
+  day. The day cut runs before the access cut, so a free preview is today's best rows. Systems counts and model pages count the same day.
