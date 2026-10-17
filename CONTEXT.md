@@ -4157,5 +4157,15 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   `high_danger_sog_l10`, `team_missing_sog_l10` (`FEATURES_V2`). Leakage/parity tests pin them. Local walk-forward on prior data: NBA MAE
   -1.4% (points) / -2.0% (PRA), NHL SOG ~0 -- accuracy only, NOT edge; the NBA figure is an upper bound (training uses actual inactives,
   live only has the Out list). New NFL count stats `pass_attempts`/`completions`/`rush_attempts` are in SPECS and the grader, opt-in via `--stats`.
+- **NHL xG + goalie-saves / skater goals-assists-points research models (2026-10-16, branch `feat/nhl-xg-goalie-props`, LOCAL output only):**
+  `nhl/xg/` fits expected goals on OUR shots master (two populations: unblocked attempts, on target; context-only features; every shot is
+  scored by a model trained on EARLIER seasons -- `walk_forward`; `build` writes skater/goalie/team-game parquet locally). `nhl/props/{xgfeat,
+  countmodel,bp_eval,eval_xg}.py` = prior-only rolling features, a generic count:poisson + NegBin walk-forward model, and a per-season scorer
+  against `Odds/bettingpros_nhl/{saves,goals,points,assists}`. **No MoneyPuck / Natural Stat Trick / Evolving Hockey data is read**: their
+  terms bar commercial or automated use (`docs/solutions/conventions/nhl-data-source-licensing.md`). Gotchas: BettingPros' strict `pregame`
+  flag drops the true closing quotes (use `bp_eval.apply_slack`, 10 min) and its `LA/NJ/SJ/TB` differ from the API's `LAK/NJD/SJS/TBL`
+  (`docs/solutions/integration-issues/bettingpros-nhl-pregame-flag-and-team-codes.md`); score BettingPros results PER SEASON (saves lines
+  lagged a falling shot volume in 2023-24); pull data with `gcloud storage cp`, not `gsutil -m` (hangs). Verdicts + numbers:
+  `docs/analysis/nhl_xg_saves_goals_validation_2026-10-16.md`. Not deployed; no job, scheduler, bets-table write or Discord post.
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).
