@@ -9,11 +9,20 @@ today's scheduled teams) it produces ONE row joining:
                                                                    p_over_market (median de-vigged P(over))
   * the two engines' agreement                                     model_edge, market_ev, confluence, beezy_score
 
-    PYTHONPATH=. python -m ev.daily_projections --sport nfl|nhl|nba|all [--local] [--no-write]
+    PYTHONPATH=. python -m ev.daily_projections --sport nfl|nhl|nba|all [--all] [--write-gcs | --no-write]
 
 Served by mlb/runners/public_api.py::get_sport_projections() at GET /api/public/projections?sport=nfl|nhl|nba via
 get_daily_projections(): process cache -> EVSweep/{sport}_props/projections_latest.json; a missing/stale file triggers a
-BACKGROUND recompute, never an inline one. The CLI below (`--write-gcs`) is the scheduled precompute.
+BACKGROUND recompute, never an inline one. The CLI (`--all --write-gcs`) is the scheduled precompute: the Cloud Run job
+`daily-projections` runs it every 30 min (deploy/setup_daily_projections_job.sh).
+
+Inputs beyond the game-log masters (2026-10-17):
+  lines    load_events = union of the banked ParlayAPI events and the BettingPros live feed (Odds/bettingpros_live/{sport}/
+           latest.json, ev/bettingpros_events.py); see union_events for the freshness / dedup rules. Payload `lines_source`.
+  teams    ev.rosters (the CURRENT roster) decides a player's team and who is a rotation player; without it the team is the
+           last game-log row's, which is wrong after a trade / retirement.
+  games    payload `games` lists every upcoming game of the window, priced or not.
+  archive  every compute merges its rows into EVSweep/{sport}_props/archive/{Central game day}.json (the Yesterday board).
 
 WHAT THE ENGINE IS (and is not). The trained research models (nfl/models/props.py, nhl/props/train.py,
 nba/props/train.py) keep their artifacts LOCAL (never in GCS, never in the Cloud Run image), so the live board cannot
@@ -59,6 +68,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 from scipy.stats import nbinom, norm
 
+from ev import rosters as _rosters
 from ev.props import DFS_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
@@ -66,10 +76,12 @@ from nfl.props import env_adjust as _ea
 
 log = logging.getLogger("ev.daily_projections")
 _ET = ZoneInfo("America/New_York")
+_CT = ZoneInfo("America/Chicago")               # the site clock: archive days and the Today / Yesterday split are Central
 
 ENGINE = "empirical_ewm_v2"
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
+ARCHIVE_KEY = "EVSweep/{sport}_props/archive/{day}.json"      # {day} = the game's America/Chicago start date
 
 # stat -> distribution family
 PROJECT_STATS = {
@@ -127,11 +139,15 @@ MAX_AGE_MIN = 240.0                                  # banked lines older than t
 # shown, with payload `lines_stale: true` and the age, so the page says plainly how old the price is. Older than this
 # (a missed banking run) they are dropped again.
 CARRY_MAX_AGE_MIN = 1200.0
-# How far ahead the rotation (no-line) rows reach. NFL is a weekly slate, so a week; NHL / NBA play most nights.
-HORIZON_HOURS = {"nfl": 168.0, "nhl": 48.0, "nba": 48.0}
+# How far ahead the rotation (no-line) rows and the `games` list reach. NFL is a weekly slate, so a week; NHL plays most
+# nights but the books price ~2 days out, so 3 days; the NBA season opens ~4 days after this was written (2026-10-20) and the
+# books already post its props, so a 48 h window left an empty board until the night before: 7 days.
+HORIZON_HOURS = {"nfl": 168.0, "nhl": 72.0, "nba": 168.0}
 STALE_GAMELOG_DAYS = 150
-ROTATION_PER_TEAM = 6
-MAX_ROWS = 1200
+# Rotation rows per team per stat, counting the team's PRICED players in that stat toward the quota (a team the books
+# already cover well gets no rotation filler). A 7-day NBA window is ~40 games: 9 stats x 4 x 2 teams = 72 rows a game.
+ROTATION_PER_TEAM = {"nfl": 5, "nhl": 4, "nba": 4}
+MAX_ROWS = 2400                                      # stored payload cap; rows are ordered so the cut drops the FARTHEST games
 
 # usage thresholds that define a "rotation" player (avg over the last 10 games)
 ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0,
@@ -527,11 +543,33 @@ def score_inputs(ef: dict, n_books, p_model_side, p_mkt_side) -> tuple[int, str]
     return beezy_score(edge, n_books, p_hit), basis
 
 
-def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime) -> tuple[list, dict]:
-    """Pure core: banked book events + game logs -> projection rows (one per player x stat at its main line)."""
+def resolve_team(sport: str, rows: list, pn: str, logs: "GameLogs", roster, teams: tuple | None = None) -> tuple:
+    """-> (team code | None, how). `how` says where the team came from, for the payload's roster counters:
+    'roster' (the roster names it), 'log' (last game-log team, the old behaviour), 'none' (no usable team code).
+
+    With `teams` (the two clubs of the game the player is quoted in) the roster team is used only when it is one of them,
+    else the game-log team when it is: a quote on THIS game is the ground truth that the player is on one of these two
+    clubs, so a stale roster must not drag him off it. A player on no roster (retired, a partial pull, an ambiguous name)
+    keeps the last-game-log team exactly as before."""
+    log_team = logs.team_of(rows) if rows else None
+    if roster is None:
+        return log_team, ("log" if log_team else "none")
+    state, rteam = roster.lookup(pn, log_team)
+    if state == "on" and (teams is None or rteam in teams):
+        return rteam, "roster"
+    return log_team, ("log" if log_team else "none")
+
+
+def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, roster=None) -> tuple[list, dict]:
+    """Pure core: banked book events + game logs -> projection rows (one per player x stat at its main line).
+
+    `roster` (ev.rosters.Roster | None) supplies each player's CURRENT team. Without it the team is the last game-log
+    row's, which is wrong after a trade and dropped quoted players as `ambiguous_team` (an offseason NBA problem).
+    `roster_recovered` counts rows that the roster saved from that drop; `roster_team_changed` counts rows whose team
+    differs from the game-log team; `ambiguous_team` is what is still dropped."""
     stats_cfg = PROJECT_STATS[sport]
     out, st = [], {"events": 0, "events_started": 0, "players_quoted": 0, "no_log": 0, "thin_history": 0,
-                   "ambiguous_team": 0, "rows": 0}
+                   "ambiguous_team": 0, "roster_recovered": 0, "roster_team_changed": 0, "rows": 0}
     for ev in events:
         try:
             start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
@@ -559,7 +597,12 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime) -> 
             if not rows:
                 st["no_log"] += 1
                 continue
-            team = logs.team_of(rows)
+            log_team = logs.team_of(rows)
+            team, how = resolve_team(sport, rows, pn, logs, roster, (away, home))
+            if how == "roster" and team != log_team:
+                st["roster_team_changed"] += 1
+                if log_team is not None and log_team not in (away, home):
+                    st["roster_recovered"] += 1
             if team is not None and team not in (away, home):
                 st["ambiguous_team"] += 1
                 continue                                   # traded / stale roster: do not project against a guess
@@ -664,10 +707,23 @@ def schedule_games(sport: str, now: datetime, hours: float = 36.0, fetch=None) -
     return out
 
 
-def rotation_rows(sport: str, logs: GameLogs, games: list, now: datetime, skip: set) -> tuple[list, dict]:
+def game_key_of(sport: str, start: datetime, away: str, home: str) -> str:
+    return f"{sport}:{start.astimezone(_ET).date().isoformat()}:{away}@{home}"
+
+
+def rotation_rows(sport: str, logs: GameLogs, games: list, now: datetime, skip: set, roster=None,
+                  priced: dict | None = None) -> tuple[list, dict]:
     """Projection-only rows (no line yet) for the highest-usage players of teams that play soon. `skip` holds
-    (player_norm, stat) pairs that already have a line row."""
-    out, st = [], {"rotation_games": len(games), "rotation_rows": 0}
+    (player_norm, stat) pairs that already have a line row; `priced` = {(team, stat): n priced players} counts toward each
+    team's ROTATION_PER_TEAM quota so a team the books already cover gets no filler.
+
+    `roster` (ev.rosters.Roster | None): only players the roster carries are projected, against the ROSTER team and its
+    game. A player a COMPLETE roster does not carry (retired, released) is skipped and counted in `rotation_off_roster`;
+    one the roster cannot judge (partial pull) keeps the last-game-log team. No roster = the old behaviour."""
+    out, st = [], {"rotation_games": len(games), "rotation_rows": 0, "rotation_off_roster": 0,
+                   "rotation_team_changed": 0}
+    priced = priced or {}
+    quota_per_team = ROTATION_PER_TEAM[sport]
     team_game = {}
     for g in games:
         team_game[g["away"]] = (g, g["home"])
@@ -679,26 +735,39 @@ def rotation_rows(sport: str, logs: GameLogs, games: list, now: datetime, skip: 
         threshold = ROTATION_MIN_USAGE[sport][stat]
         per_team: dict = {}
         for name, rows in table.items():
-            if str(name).startswith("id:") or len(rows) < MIN_GAMES:
+            if str(name).startswith("id:") or len(rows) < MIN_GAMES or (name, stat) in skip:
                 continue
-            team = logs.team_of(rows)
-            if team not in team_game or (name, stat) in skip:
+            log_team = logs.team_of(rows)
+            team, off = log_team, False
+            if roster is not None:
+                state, rteam = roster.lookup(name, log_team)
+                off = state == "off"
+                if state == "on":
+                    team = rteam
+            if team not in team_game:
                 continue
             h = _hist(rows, sdef)
             usage = [g[1] for g in h[-10:] if g[1] is not None]
             if len(h) < MIN_GAMES or not usage or sum(usage) / len(usage) < threshold:
                 continue
-            per_team.setdefault(team, []).append((sum(usage) / len(usage), name, rows))
+            if off:
+                st["rotation_off_roster"] += 1                 # would have been listed without the roster
+                continue
+            per_team.setdefault(team, []).append((sum(usage) / len(usage), name, rows, team != log_team))
         for team, cands in per_team.items():
+            room = quota_per_team - priced.get((team, stat), 0)
+            if room <= 0:
+                continue
             g, opp = team_game[team]
-            gk = f"{sport}:{g['start'].astimezone(_ET).date().isoformat()}:{g['away']}@{g['home']}"
+            gk = game_key_of(sport, g["start"], g["away"], g["home"])
             mins = (g["start"] - now).total_seconds() / 60.0
-            for _, name, rows in sorted(cands, key=lambda c: -c[0])[:ROTATION_PER_TEAM]:
+            for _, name, rows, moved in sorted(cands, key=lambda c: -c[0])[:room]:
                 row = make_row(sport, stat, _display_name(rows, name), name, rows, sdef, logs, None, None, [], team, opp,
                                gk, g["start"], mins, has_line=False)
                 if row is not None:
                     out.append(row)
-    out.sort(key=lambda r: (r["game_key"], r["stat"], -(r["proj_mean"] or 0)))
+                    st["rotation_team_changed"] += int(moved)
+    out.sort(key=lambda r: (r["commence"] or "", r["game_key"], r["stat"], -(r["proj_mean"] or 0)))
     st["rotation_rows"] = len(out)
     return out, st
 
@@ -713,7 +782,7 @@ def _display_name(rows: list, fallback: str) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------ IO
-def load_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
+def load_parlay_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
     """Newest banked/live ParlayAPI prop events -> (events | None, meta).
 
     nhl / nba : the odds banker's pointer (OddsAccum/{parlay_key}/latest_props.json) -> raw snapshot
@@ -757,6 +826,136 @@ def load_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
     return out, {"age_min": None if age is None else round(age, 1), "banked_events": len(out)}
 
 
+# ---- the second line source: BettingPros live (ev.bettingpros_events; free, hourly crawl, ParlayAPI event shape) ----------
+def load_bp_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
+    from ev import bettingpros_events as be
+    return be.read_latest(sport, now, max_age_min)
+
+
+def _event_identity(sport: str, ev: dict) -> tuple | None:
+    """(canonical away, canonical home, ET start date): the same game across feeds, whatever the team spelling."""
+    try:
+        start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    away, home = canon_team(sport, ev.get("away_team")), canon_team(sport, ev.get("home_team"))
+    if not away or not home:
+        return None
+    return away, home, start.astimezone(_ET).date().isoformat()
+
+
+def _book_stat_markets(sport: str, book: dict) -> dict:
+    """{stat | market key (unmapped): [market dict]} for one bookmaker (main and alternate keys of a stat together)."""
+    from ev.props import stat_of
+    out: dict = {}
+    for m in book.get("markets") or []:
+        stat, _alt = stat_of(str(m.get("key", "")), sport)
+        out.setdefault(stat or m.get("key"), []).append(m)
+    return out
+
+
+def merge_event_pair(sport: str, parlay_ev: dict, bp_ev: dict, parlay_age: float | None, bp_age: float | None,
+                     counts: dict) -> dict:
+    """One game seen by both feeds -> a copy of the ParlayAPI event whose bookmakers also carry what only BettingPros
+    has. A (book, stat) present in BOTH goes to the FRESHER feed (strictly fresher BettingPros wins; a tie or an unknown
+    age goes to ParlayAPI) and is never doubled, so a book is counted once per stat in every consensus."""
+    from mlb_core.alerts.discord_routes import canonical_book
+    books: dict = {}                                     # canonical key -> bookmaker dict (copies)
+    for b in parlay_ev.get("bookmakers") or []:
+        key = canonical_book(b.get("key", ""))
+        books[key] = {**b, "markets": list(b.get("markets") or [])}
+    bp_wins = bp_age is not None and parlay_age is not None and bp_age < parlay_age       # unknown age: ParlayAPI
+    for b in bp_ev.get("bookmakers") or []:
+        key = canonical_book(b.get("key", ""))
+        mine = books.get(key)
+        if mine is None:
+            books[key] = {**b, "markets": list(b.get("markets") or [])}
+            counts["books_added"] += 1
+            continue
+        have = _book_stat_markets(sport, mine)
+        for stat, mkts in _book_stat_markets(sport, b).items():
+            if stat in have:
+                if bp_wins:
+                    drop = {id(m) for m in have[stat]}
+                    mine["markets"] = [m for m in mine["markets"] if id(m) not in drop] + list(mkts)
+                    counts["book_stats_from_bp"] += 1
+                else:
+                    counts["book_stats_from_parlay"] += 1
+            else:
+                mine["markets"].extend(mkts)
+                counts["book_stats_added"] += 1
+    return {**parlay_ev, "bookmakers": list(books.values()), "sources": ["parlayapi", "bettingpros"]}
+
+
+def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
+    """(events, meta) of the two feeds, each `(events | None, meta)`.
+
+    Which feeds count: those inside the LIVE window (MAX_AGE_MIN); only when none is, every feed inside the carry window
+    (the board then flags `lines_stale`). That keeps a 10-hour-old banked snapshot from diluting a fresh feed's
+    consensus. Games are matched on (canonical away, canonical home, ET start date); a game only one feed has is taken
+    whole. `lines_source` lists the feeds used, `age_min` is the NEWEST used feed's age, and a feed that is down or too
+    old only shows up under `sources` with its reason: one outage never blanks the board."""
+    sources = {"parlayapi": parlay, "bettingpros": bp}
+    detail = {name: {**(meta or {}), "used": False, "events": len(evs or [])} for name, (evs, meta) in sources.items()}
+    avail = {name: evs for name, (evs, _m) in sources.items() if evs}
+    if not avail:
+        reasons = "; ".join(f"{n}: {(detail[n].get('reason') or 'no events')}" for n in detail)
+        return None, {"reason": reasons, "lines_source": [], "sources": detail}
+
+    def age_of(n):
+        return detail[n].get("age_min")
+
+    live = [n for n in avail if age_of(n) is None or age_of(n) <= MAX_AGE_MIN]
+    used = live or list(avail)
+    for n in used:
+        detail[n]["used"] = True
+    ages = [age_of(n) for n in used if age_of(n) is not None]
+    meta = {"age_min": min(ages) if ages else None, "lines_source": [n for n in ("parlayapi", "bettingpros") if n in used],
+            "sources": detail}
+    if len(used) == 1:
+        return avail[used[0]], meta
+    counts = {"games_matched": 0, "games_bp_only": 0, "games_parlay_only": 0, "books_added": 0, "book_stats_added": 0,
+              "book_stats_from_bp": 0, "book_stats_from_parlay": 0}
+    by_id: dict = {}
+    out: list = []
+    for ev in avail["parlayapi"]:
+        out.append(ev)
+        ident = _event_identity(sport, ev)
+        if ident is not None:
+            by_id[ident] = len(out) - 1
+    matched: set = set()
+    for ev in avail["bettingpros"]:
+        ident = _event_identity(sport, ev)
+        i = by_id.get(ident) if ident is not None else None
+        if i is None:
+            out.append(ev)
+            counts["games_bp_only"] += 1
+            continue
+        out[i] = merge_event_pair(sport, out[i], ev, age_of("parlayapi"), age_of("bettingpros"), counts)
+        matched.add(i)
+        counts["games_matched"] += 1
+    counts["games_parlay_only"] = len(avail["parlayapi"]) - len(matched)
+    meta["merge"] = counts
+    return out, meta
+
+
+def load_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
+    """Prop events from EVERY line source -> (events | None, meta); see union_events. Each feed is read inside its own
+    guard: an exception or a missing file in one never costs the other."""
+    parlay, bp = (None, {"reason": "not loaded"}), (None, {"reason": "not loaded"})
+    try:
+        parlay = load_parlay_events(sport, now, max_age_min)
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("%s ParlayAPI lines unavailable: %s", sport, exc)
+        parlay = (None, {"reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
+    try:
+        bp = load_bp_events(sport, now, max_age_min)
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("%s BettingPros lines unavailable: %s", sport, exc)
+        bp = (None, {"reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
+    return union_events(sport, parlay, bp)
+
+
 def _status(has_lines: bool, has_rotation: bool, logs_ok: bool) -> str:
     if not logs_ok:
         return "unavailable"
@@ -765,20 +964,71 @@ def _status(has_lines: bool, has_rotation: bool, logs_ok: bool) -> str:
     return "awaiting_lines" if has_rotation else "idle"
 
 
+_AUTO = object()
+
+
+def ct_day(iso) -> str | None:
+    """ISO start time -> its America/Chicago calendar date 'YYYY-MM-DD' (the site clock), None when unparseable."""
+    try:
+        d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    return d.astimezone(_CT).date().isoformat()
+
+
+def order_and_cut(rows: list, limit: int = MAX_ROWS) -> tuple[list, int]:
+    """Rows -> (the first `limit` in board order, number cut).
+
+    Board order = nearest game day first (Central), and inside a day priced rows before rotation rows, then the
+    display order (_sort_key). The cut therefore drops the FARTHEST games' rotation rows first, then their priced rows;
+    it never removes a priced row of a near game to keep a rotation row of a far one. (Before 2026-10-17 the order was
+    priced-first across ALL days, so a long window could cut a whole near day's rotation rows while keeping far days'.)"""
+    ordered = sorted(rows, key=lambda r: (ct_day(r.get("commence")) or "9999-99-99", _sort_key(r)))
+    return ordered[:limit], max(len(ordered) - limit, 0)
+
+
+def build_games(sport: str, sched: list, events: list | None, now: datetime) -> list:
+    """Every upcoming game the board knows: the schedule's games plus the ones only the lines know, deduplicated on
+    game_key. -> [{game_key, away, home, start (ISO UTC)}] by start time. An event's own start time wins over the
+    schedule's (it is the time the rows carry)."""
+    out: dict = {}
+
+    def put(away, home, start, prefer):
+        if not away or not home or start is None or start <= now:
+            return
+        gk = game_key_of(sport, start, away, home)
+        if gk not in out or prefer:
+            out[gk] = {"game_key": gk, "away": away, "home": home, "start": start.astimezone(timezone.utc).isoformat()}
+
+    for g in sched or []:
+        put(g.get("away"), g.get("home"), g.get("start"), False)
+    for ev in events or []:
+        try:
+            start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        put(canon_team(sport, ev.get("away_team")), canon_team(sport, ev.get("home_team")), start, True)
+    return sorted(out.values(), key=lambda g: (g["start"], g["game_key"]))
+
+
 def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = None, events=None, meta=None,
-              games=None, write: bool = True) -> dict:
-    """Compute one sport's board. `logs` / `events` / `games` are injectable (tests, local runs). -> the payload dict
-    that is also written to EVSweep/{sport}_props/projections_latest.json."""
+              games=None, write: bool = True, roster=_AUTO) -> dict:
+    """Compute one sport's board. `logs` / `events` / `games` / `roster` are injectable (tests, local runs; roster=None
+    means "no roster layer"). -> the payload dict that is also written to EVSweep/{sport}_props/projections_latest.json
+    (and merged into that day's archive)."""
     now = now or datetime.now(timezone.utc)
     if sport not in PROJECT_STATS:
         raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
     logs = logs or GameLogs.load(sport)
     base = {"sport": sport, "engine": ENGINE, "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
             "stats": list(PROJECT_STATS[sport]), "status": "unavailable", "lines_age_minutes": None, "lines_stale": False,
+            "lines_source": [], "games": [], "horizon_hours": HORIZON_HOURS[sport],
             "gamelog_latest": None, "stale_gamelog": None, "summary": {}}
     if logs is None:
         base["summary"] = {"reason": f"{sport} game-log master unavailable"}
-        return _finish(base, sport, write)
+        return _finish(base, sport, write, now)
     base["gamelog_latest"] = logs.latest_date()
     gl = base["gamelog_latest"]
     if sport != "nfl" and gl:
@@ -793,34 +1043,166 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
             log.warning("%s lines unavailable: %s", sport, exc)
             events, meta = None, {"reason": str(exc)[:200]}
     meta = meta or {}
+    if roster is _AUTO:
+        try:
+            roster = _rosters.load(sport, now, write=write)
+        except Exception as exc:                                                       # noqa: BLE001
+            log.warning("%s roster layer unavailable: %s", sport, exc)
+            roster = None
     line_rows, lstats = ([], {})
     if events:
-        line_rows, lstats = build_line_rows(sport, events, logs, now)
+        line_rows, lstats = build_line_rows(sport, events, logs, now, roster)
     covered = {(r["player_norm"], r["stat"]) for r in line_rows}
-    rot, rstats = [], {}
+    priced: dict = {}
+    for r in line_rows:
+        priced[(r["team"], r["stat"])] = priced.get((r["team"], r["stat"]), 0) + 1
+    rot, rstats, sched = [], {}, []
     try:
-        g = games if games is not None else schedule_games(sport, now, HORIZON_HOURS[sport])
-        rot, rstats = rotation_rows(sport, logs, g, now, covered)
+        sched = games if games is not None else schedule_games(sport, now, HORIZON_HOURS[sport])
+        rot, rstats = rotation_rows(sport, logs, sched, now, covered, roster, priced)
     except Exception as exc:                                                           # noqa: BLE001
         log.warning("%s rotation fallback failed: %s", sport, exc)
-    rows = (line_rows + rot)[:MAX_ROWS]
+    rows, cut = order_and_cut(line_rows + rot)
+    game_list = build_games(sport, sched, events, now)
+    per_game: dict = {}
+    for r in rows:
+        n = per_game.setdefault(r["game_key"], [0, 0])
+        n[0] += 1
+        n[1] += int(bool(r["has_line"]))
+    for g in game_list:
+        g["n_rows"], g["n_priced"] = per_game.get(g["game_key"], (0, 0))
     age = meta.get("age_min")
-    base.update(rows=rows, count=len(rows), lines_age_minutes=age,
+    source = meta.get("lines_source")
+    if source is None:
+        source = ["parlayapi"] if events else []
+    base.update(rows=rows, count=len(rows), lines_age_minutes=age, lines_source=list(source), games=game_list,
                 lines_stale=bool(line_rows) and age is not None and age > MAX_AGE_MIN,
                 status=_status(bool(line_rows), bool(rot), True),
-                summary={**{k: v for k, v in meta.items() if k != "age_min"}, **lstats, **rstats,
-                         "line_rows": len(line_rows), "confluence": sum(1 for r in line_rows if r["confluence"])})
-    return _finish(base, sport, write)
+                summary={**{k: v for k, v in meta.items() if k not in ("age_min", "lines_source")}, **lstats, **rstats,
+                         "line_rows": len(line_rows), "confluence": sum(1 for r in line_rows if r["confluence"]),
+                         "rows_cut": cut, "games": len(game_list),
+                         "roster": None if roster is None else roster.summary()})
+    return _finish(base, sport, write, now)
 
 
-def _finish(payload: dict, sport: str, write: bool) -> dict:
+# ------------------------------------------------------------------------------------------------- yesterday archive
+# EVSweep/{sport}_props/archive/{YYYY-MM-DD}.json, one file per America/Chicago GAME day (the day of the game's start,
+# not of the compute). Every compute merges its rows in, so the day's file ends up holding each row's FINAL pre-game state:
+# a row replaces its older version, and a row the live payload no longer carries (its game started) is KEPT. The one
+# exception: a priced row is never replaced by a no-line rotation row (a book pulling a prop must not erase the price
+# that was posted for hours). Writes are best-effort (a compute never fails on them). `date=YYYY-MM-DD` on
+# GET /api/public/projections reads a day back; today's own file also works and includes games already under way.
+def row_key(r: dict) -> str:
+    return f"{r.get('game_key')}|{r.get('player_norm')}|{r.get('stat')}"
+
+
+def merge_archive(existing: dict | None, rows: list, games: list, payload: dict, day: str, now: datetime) -> dict:
+    """Pure: the archive file for `day` after merging `rows` / `games` (all of them that day's) into `existing`."""
+    arch = existing if isinstance(existing, dict) else {}
+    cur_rows = dict(arch.get("rows") or {})
+    for r in rows:
+        k = row_key(r)
+        old = cur_rows.get(k)
+        if old is not None and old.get("has_line") and not r.get("has_line"):
+            continue
+        cur_rows[k] = r
+    cur_games = dict(arch.get("games") or {})
+    for g in games:
+        cur_games[g["game_key"]] = {**cur_games.get(g["game_key"], {}), **g}
+    return {"sport": payload["sport"], "day": day, "engine": payload.get("engine"), "updated_at": now.isoformat(),
+            "stats": payload.get("stats"), "gamelog_latest": payload.get("gamelog_latest"),
+            "lines_source": payload.get("lines_source"), "lines_age_minutes": payload.get("lines_age_minutes"),
+            "rows": cur_rows, "games": cur_games}
+
+
+def write_archive(payload: dict, now: datetime) -> list:
+    """Merge a computed payload into the per-day archive files. -> the days written. Never raises."""
+    written = []
+    try:
+        from mlb_core import storage
+        sport = payload["sport"]
+        by_day: dict = {}
+        for r in payload.get("rows") or []:
+            d = ct_day(r.get("commence"))
+            if d:
+                by_day.setdefault(d, ([], []))[0].append(r)
+        for g in payload.get("games") or []:
+            d = ct_day(g.get("start"))
+            if d:
+                by_day.setdefault(d, ([], []))[1].append(g)
+        for day, (rows, games) in sorted(by_day.items()):
+            key = ARCHIVE_KEY.format(sport=sport, day=day)
+            try:
+                try:
+                    existing = json.loads(storage.read_bytes(key)) if storage.exists(key) else None
+                except Exception:                                                      # noqa: BLE001
+                    existing = None
+                merged = merge_archive(existing, rows, games, payload, day, now)
+                storage.write_bytes(json.dumps(merged, default=str).encode(), key)
+                written.append(day)
+            except Exception as exc:                                                   # noqa: BLE001
+                log.warning("archive write failed for %s %s: %s", sport, day, exc)
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("archive write failed: %s", exc)
+    return written
+
+
+def archive_to_payload(arch: dict) -> dict:
+    """A stored archive file -> the board payload shape (+ archive: true, date)."""
+    rows = sorted((arch.get("rows") or {}).values(), key=lambda r: (r.get("commence") or "", _sort_key(r)))
+    games = sorted((arch.get("games") or {}).values(), key=lambda g: (g.get("start") or "", g.get("game_key") or ""))
+    per_game: dict = {}
+    for r in rows:
+        n = per_game.setdefault(r["game_key"], [0, 0])
+        n[0] += 1
+        n[1] += int(bool(r.get("has_line")))
+    for g in games:
+        g["n_rows"], g["n_priced"] = per_game.get(g["game_key"], (0, 0))
+    has_lines = any(r.get("has_line") for r in rows)
+    return {"sport": arch.get("sport"), "engine": arch.get("engine"), "validated": False,
+            "status": _status(has_lines, bool(rows), True), "ts": arch.get("updated_at"), "rows": rows, "count": len(rows),
+            "games": games, "stats": arch.get("stats") or [], "gamelog_latest": arch.get("gamelog_latest"),
+            "stale_gamelog": None, "lines_age_minutes": None, "lines_stale": False,
+            "lines_source": arch.get("lines_source") or [], "archive": True, "date": arch.get("day"),
+            "summary": {"archive_day": arch.get("day"), "rows": len(rows), "line_rows": sum(1 for r in rows if r.get("has_line")),
+                        "games": len(games)}}
+
+
+_ARCHIVE_CACHE: dict = {}                   # (sport, day) -> (time.monotonic(), payload | None)
+ARCHIVE_CACHE_SEC = 300
+
+
+def get_archive(sport: str, day: str) -> dict | None:
+    """The archived board for a Central game day, or None when there is none. Cached 5 minutes per (sport, day)."""
+    from mlb_core import storage
+    sport = (sport or "").lower()
+    if sport not in PROJECT_STATS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
+    k = (sport, day)
+    with _PROJ_LOCK:
+        hit = _ARCHIVE_CACHE.get(k)
+    if hit and time.monotonic() - hit[0] < ARCHIVE_CACHE_SEC:
+        return hit[1]
+    payload = None
+    try:
+        payload = archive_to_payload(json.loads(storage.read_bytes(ARCHIVE_KEY.format(sport=sport, day=day))))
+    except Exception:                                                                  # noqa: BLE001
+        payload = None
+    with _PROJ_LOCK:
+        _ARCHIVE_CACHE[k] = (time.monotonic(), payload)
+    return payload
+
+
+def _finish(payload: dict, sport: str, write: bool, now: datetime | None = None) -> dict:
     if write and payload["status"] != "unavailable":
         try:
             from mlb_core import storage
             storage.write_bytes(json.dumps(payload, default=str).encode(), OUT_KEY.format(sport=sport))
         except Exception as exc:                                                       # noqa: BLE001
             log.warning("projections write failed for %s: %s", sport, exc)
-    log.info("PROJECTIONS %s", json.dumps({k: payload[k] for k in ("sport", "status", "count", "summary")}, default=str))
+        write_archive(payload, now or datetime.now(timezone.utc))
+    log.info("PROJECTIONS %s", json.dumps({k: payload[k] for k in ("sport", "status", "count", "lines_source", "summary")},
+                                          default=str))
     return payload
 
 
@@ -830,7 +1212,7 @@ def _finish(payload: dict, sport: str, write: bool) -> dict:
 # that is missing or stale, kick ONE background recompute and answer immediately with whatever exists (stale-while-
 # revalidate). Only the CLI / scheduled job passes allow_compute=True. NOTE: the background thread only makes progress
 # while Cloud Run has CPU allocated; the scheduled job (deploy/setup_daily_projections_job.sh) is the dependable path.
-PROJ_CACHE_TTL_SEC = 30 * 60
+PROJ_CACHE_TTL_SEC = 5 * 60            # the scheduled job rewrites the file every 30 min; a 30-min process cache doubled the lag
 PROJ_STALE_MINUTES = 90
 PROJ_RECOMPUTE_SEC = 600
 _PROJ_CACHE: dict = {}                      # sport -> (time.monotonic() loaded, payload)
@@ -912,6 +1294,7 @@ def get_daily_projections(sport: str, limit: int = MAX_ROWS, allow_compute: bool
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--sport", choices=[*SPORTS, "all"], default="all")
+    ap.add_argument("--all", action="store_true", help="every sport (the default; spelled out for the scheduled job)")
     ap.add_argument("--write-gcs", action="store_true",
                     help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
     ap.add_argument("--no-write", action="store_true", help="print the summary, do not write to GCS/local storage")
@@ -919,11 +1302,22 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.write_gcs and a.no_write:
         ap.error("--write-gcs and --no-write are mutually exclusive")
-    for sp in (SPORTS if a.sport == "all" else (a.sport,)):
-        p = run_sport(sp, write=not a.no_write)               # the job path: synchronous compute (allow_compute=True)
-        print(f"{sp}: status={p['status']} rows={p['count']} lines_age={p['lines_age_minutes']} "
+    sports = SPORTS if (a.all or a.sport == "all") else (a.sport,)
+    failed = []
+    for sp in sports:
+        # the job path: synchronous compute, one sport at a time; a failing sport never costs the others their refresh
+        try:
+            p = run_sport(sp, write=not a.no_write)
+        except Exception:                                                              # noqa: BLE001
+            log.exception("projections compute failed for %s", sp)
+            failed.append(sp)
+            continue
+        print(f"{sp}: status={p['status']} rows={p['count']} games={len(p.get('games') or [])} "
+              f"lines_source={p.get('lines_source')} lines_age={p['lines_age_minutes']} "
               f"gamelog_latest={p['gamelog_latest']} summary={json.dumps(p['summary'], default=str)}")
-    return 0
+        if p["status"] == "unavailable":
+            failed.append(sp)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

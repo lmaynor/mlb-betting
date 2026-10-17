@@ -10,6 +10,15 @@ from mlb_core.data import cockpit_form as cf
 
 NOW = datetime(2026, 10, 15, 16, 0, tzinfo=timezone.utc)
 START = NOW + timedelta(hours=5)
+REAL_WRITE_ARCHIVE = dp.write_archive
+
+
+@pytest.fixture(autouse=True)
+def _no_network_or_storage(monkeypatch):
+    """run_sport reaches for the roster layer and the day archive by default; no test here may touch the network or a
+    bucket unless it injects its own stand-in (the tests of those two layers do)."""
+    monkeypatch.setattr(dp._rosters, "load", lambda sport, now=None, **k: None)
+    monkeypatch.setattr(dp, "write_archive", lambda payload, now: [])
 
 
 # ----------------------------------------------------------------------------------------------- fixtures
@@ -336,7 +345,7 @@ def test_load_events_nfl_newest_payload_per_event(monkeypatch):
     monkeypatch.setattr(st, "list_keys", lambda prefix: [k for k in store if k.startswith(prefix)])
     monkeypatch.setattr(st, "read_bytes", lambda k: store[k].encode())
     monkeypatch.setattr(st, "stat", lambda k: {"mtime_utc": NOW - timedelta(minutes=10), "size": 1})
-    events, meta = dp.load_events("nfl", NOW)
+    events, meta = dp.load_parlay_events("nfl", NOW)
     assert {(e["id"], e["v"]) for e in events} == {("abc", 2), ("def", 1)}
     assert meta["age_min"] == pytest.approx(10.0) and meta["banked_events"] == 2
 
@@ -344,11 +353,11 @@ def test_load_events_nfl_newest_payload_per_event(monkeypatch):
 def test_load_events_nfl_stale_and_empty(monkeypatch):
     import mlb_core.storage as st
     monkeypatch.setattr(st, "list_keys", lambda prefix: [])
-    assert dp.load_events("nfl", NOW)[0] is None
+    assert dp.load_parlay_events("nfl", NOW)[0] is None
     monkeypatch.setattr(st, "list_keys", lambda prefix: [prefix + "abc_101010.json"] if "2026-10-15" in prefix else [])
     monkeypatch.setattr(st, "read_bytes", lambda k: b"{}")
     monkeypatch.setattr(st, "stat", lambda k: {"mtime_utc": NOW - timedelta(hours=9), "size": 1})
-    events, meta = dp.load_events("nfl", NOW)
+    events, meta = dp.load_parlay_events("nfl", NOW)
     assert events is None and "old" in meta["reason"]
 
 

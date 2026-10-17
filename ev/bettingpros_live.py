@@ -49,7 +49,8 @@ LABEL_TO_STAT = {
     "nfl": {"pass_yds": "pass_yds", "pass_tds": "pass_tds", "pass_att": "pass_attempts", "pass_cmp": "pass_completions",
             "pass_int": "interceptions", "rec_yds": "rec_yds", "receptions": "receptions", "rush_yds": "rush_yds",
             "rush_att": "rush_attempts", "anytime_td": "anytime_td"},
-    "nhl": {"goals": "goals", "points": "points", "assists": "assists", "sog": "sog", "saves": "saves"},
+    "nhl": {"goals": "goals", "points": "points", "assists": "assists", "sog": "sog", "saves": "saves",
+            "blocks": "blocked_shots"},
     "nba": {"pts": "points", "reb": "rebounds", "ast": "assists", "threes": "threes", "pra": "pra", "pr": "pr",
             "pa": "pa", "ra": "ra", "stl": "steals", "blk": "blocks"},
 }

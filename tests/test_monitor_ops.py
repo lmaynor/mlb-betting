@@ -104,7 +104,7 @@ def test_nfl_sentinel_is_silent_unless_status_is_error(monkeypatch, payload):
 def test_run_includes_the_nfl_sentinel_and_posts_one_alert(monkeypatch):
     for name in ("_check_schedulers", "_check_odds_history_freshness", "_check_data_masters",
                  "_check_snapshot_freshness", "_check_build_sentinels", "_check_stuck_bets",
-                 "_check_feature_freshness", "_check_model_artifacts"):
+                 "_check_feature_freshness", "_check_model_artifacts", "_check_board_feeds"):
         monkeypatch.setattr(mo, name, lambda: [])
     posted = []
     monkeypatch.setattr(mo, "_post_ops_alert", lambda failures, run_date: posted.append(failures))
@@ -145,3 +145,13 @@ def test_nfl_contracts_failure_is_reported_with_the_failing_checks(monkeypatch):
 def test_nfl_contracts_are_silent_when_ok_missing_or_unreadable(monkeypatch, payload):
     _contracts(monkeypatch, payload)
     assert mo._check_nfl_contracts() == []
+
+
+def test_board_feed_check_flags_stale_files_only_and_skips_the_offseason(monkeypatch):
+    ages = {mo.PROJECTION_KEYS["nfl"]: 0.5, mo.PROJECTION_KEYS["nhl"]: 9.0, mo.PROJECTION_KEYS["nba"]: None,
+            mo.BP_LIVE_KEYS["nfl"]: 40.0, mo.BP_LIVE_KEYS["nhl"]: 1.0, mo.BP_LIVE_KEYS["nba"]: 7.5}
+    monkeypatch.setattr(mo, "_gcs_age_hours", lambda key: ages[key])
+    out = mo._check_board_feeds(month=10)
+    assert len(out) == 3 and any("NHL picks board stale" in f for f in out)           # nhl board + nfl / nba BP lines
+    assert not any("NBA picks board" in f for f in out)                                # a missing file is silent
+    assert mo._check_board_feeds(month=7) == [f for f in out if "picks board" in f]     # July: no BP live check
