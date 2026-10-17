@@ -17,8 +17,9 @@ Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
   EVSweep/nfl_props/latest.json                    rows (Kalshi join) + book_outliers (Sink A); public +EV feed
-Discord: alerts to DISCORD_WEBHOOK_PROPS_NFL (#nfl-props-alerts), else DISCORD_WEBHOOK_ALERTS (log-only when both unset); run notices to DISCORD_WEBHOOK_OPS. NEVER the member channels:
-these signals are unvalidated.
+Discord: alerts go into the daily 'NFL props signals' thread under #nfl-card via the bot (the admin DISCORD_WEBHOOK_ALERTS hook if
+the bot is down; log-only if neither); run notices go to DISCORD_WEBHOOK_OPS. NEVER the +EV channels or #ops-alerts for signals:
+these rows are unvalidated.
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ import pandas as pd
 import requests
 
 from ev.kalshi_map import game_key
-from mlb_core.alerts.discord_routes import webhook_for, with_deep_links
+from mlb_core.alerts.discord_routes import post_props_signal, webhook_for, with_deep_links
 from ev.kalshi_props import PROP_SERIES, PropLeg, map_prop_market
 from ev.props import (POOL_MAX_GAP, book_points, build_consensus, parse_event_props, pooled_consensus,
                       scan_book_outliers)
@@ -336,10 +337,9 @@ def fetch_kalshi_legs(client: KalshiClient):
 
 
 def webhook_url():
-    # The signal feed goes to #nfl-props-alerts (DISCORD_WEBHOOK_PROPS_NFL), else the shared admin alerts hook
-    # (DISCORD_WEBHOOK_ALERTS). It never falls back to #ops-alerts (failures only) nor to a member channel: these shadow
-    # rows are unvalidated.
-    return webhook_for("props_alerts", sport="nfl") or ""
+    # Only the bot-down fallback for signals: the shared admin hook (DISCORD_WEBHOOK_ALERTS). Never #ops-alerts (failures only),
+    # a +EV channel or a member channel: these shadow rows are unvalidated.
+    return webhook_for("props_alerts") or ""
 
 
 def ops_webhook_url():
@@ -348,9 +348,15 @@ def ops_webhook_url():
 
 
 def post_discord(text: str, embeds=None, *, ops: bool = False) -> bool:
-    url = ops_webhook_url() if ops else webhook_url()
+    """Signals (the default) go to the NFL daily thread under #nfl-card (post_props_signal); run notices go to #ops-alerts."""
+    if not ops:
+        ok = post_props_signal("nfl", text, embeds)
+        if not ok:
+            log.warning("NFL props signal not posted (no bot, no admin hook): %s", text[:120])
+        return ok
+    url = ops_webhook_url()
     if not url:
-        log.warning("no Discord webhook configured for %s; message not posted: %s", "ops" if ops else "nfl props alerts", text[:120])
+        log.warning("no Discord webhook configured for ops; message not posted: %s", text[:120])
         return False
     try:
         r = requests.post(url, json={"content": text[:1900], "embeds": embeds or []}, timeout=20)
