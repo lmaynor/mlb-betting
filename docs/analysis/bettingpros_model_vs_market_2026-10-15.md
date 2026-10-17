@@ -19,10 +19,10 @@ line. Rebuild with `scripts/join_bettingpros_history.py --sport <sport> --out <p
 - **`postgame_quote` drops 28-36% of rows.** The dropped quotes were last updated a median of **1-2 minutes after the
   scheduled start** (quantiles 10/90: 0.01 / 0.06-0.10 hours, all three sports). There is no timezone offset (an offset would be
   hours). So the filter removes near-close quotes, and the surviving rows are earlier pre-start snapshots (median 0.1-0.3 h
-  before start). A short grace window (about 10 minutes) would recover most of them; not tested.
+  before start). A short grace window (about 10 minutes) would recover most of them -- **tested 2026-10-16: it does, 36% -> 2% dropped for SOG; see the follow-up at the bottom.**
 - **NFL scored only 6-20% of consensus rows in 2022-24 and about 0 in 2025** (`no_model_row` dominates 2025; cause not
   diagnosed). NFL results below are therefore thin and should not be read as a verdict.
-- NHL: 41% of consensus rows matched (36% postgame_quote, 17% no_game -- team-code/date mismatches not investigated).
+- NHL: 41% of consensus rows matched (36% postgame_quote, 17% no_game). **Follow-up 2026-10-16: the `no_game` rows were the `LA/NJ/SJ/TB` and ARI/UTA code mismatches (0 after the fix); coverage is now 98%.**
 - NBA: 55% scored (29% postgame_quote, 13% no_model_row, 3% unresolved).
 
 ## Results
@@ -87,5 +87,76 @@ Use the repo `.venv` (the system python lacks pyarrow / google-cloud-storage). T
 ## Next
 - NBA: price the blend (flat stake at best price when the blended probability beats the price by a threshold, walk-forward
   thresholds, date-clustered CIs) before treating the signal as anything more than calibration. A follow-up session was proposed.
-- Test a 10-minute grace window for the postgame filter to recover the dropped near-close quotes.
+- ~~Test a 10-minute grace window for the postgame filter~~ (done 2026-10-16, follow-up below).
 - Diagnose the NFL 2025 `no_model_row` hole.
+
+
+## Follow-up 2026-10-16: NHL SOG re-run with the grace window, team-code fix and full-history names
+
+Branch `analysis/sog-bettingpros-slack-rerun` (stacked on PR #70). The coverage caveats above had three causes, all now fixed and
+measured on the SAME consensus (74,222 rows, identical to the first run):
+(1) the strict `pregame` flag (`updated_max <= scheduled`) dropped 27,028 rows (36%): near-close quotes, not stale ones;
+(2) BettingPros `LA/NJ/SJ/TB` did not match the API's `LAK/NJD/SJS/TBL`, and Arizona is `ARI` in our game log until 2023-24 but `UTA` on the
+quote side (the earlier 17% `no_game`; it is 0 after the fix); (3) names were resolved through `players_master.csv`, which holds only the
+~790 CURRENT roster players (4,905 rows unresolved); `--names-from-masters` uses every skater who ever dressed (5,051 names).
+Change: `study.bettingpros_model_vs_market(..., slack_min=10)` (default `None` = old behaviour), game-side team mapping, and the
+result frame now carries the best / Novig prices so the fragile price re-join in the script is not needed for the new path. See
+`docs/solutions/integration-issues/bettingpros-nhl-pregame-flag-and-team-codes.md`.
+
+| config | consensus rows | scored | % | postgame_quote | unresolved | ambiguous | void | no_game | pooled n | log-loss model / market | blend c (t) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A. strict flag, current-roster names (original setup + team-code fix) | 74,222 | 41,525 | 56% | 27,028 | 4,905 | 238 | 486 | 0 | 41,525 | 0.6830 / 0.6822 | +0.32 (+5.8) |
+| B. strict flag, full-history names | 74,222 | 46,222 | 62% | 27,028 | 45 | 280 | 605 | 0 | 46,222 | 0.6828 / 0.6822 | +0.30 (+5.7) |
+| C. 10-minute grace window, full-history names | 74,222 | 72,485 | 98% | 100 | 83 | 403 | 1,015 | 0 | 72,485 | 0.6832 / 0.6824 | +0.34 (+8.2) |
+
+A is the first run's setup PLUS the team-code fix (so its 56% already includes the 17% `no_game` recovered); the original run scored 41%.
+
+Per season, config C. 10-minute grace window, full-history names:
+
+| season | n | over rate | mkt P(over) | model P(over) | logloss model / market | c (t) | ROI5 (n) | vs-ref (t) | blind Under ROI (t) |
+|---|---|---|---|---|---|---|---|---|---|
+| ALL | 72,485 | 0.490 | 0.507 | 0.483 | 0.6832 / 0.6824 | 0.34 (8.2) | +2.2% (22,356) | +5.9% (9.0) | -0.6% (-1.4) |
+| 2022 | 12,136 | 0.487 | 0.499 | 0.484 | 0.6833 / 0.6829 | 0.41 (4.0) | +1.0% (3,377) | +5.2% (3.1) | -1.5% (-1.6) |
+| 2023 | 18,845 | 0.483 | 0.510 | 0.486 | 0.6814 / 0.6815 | 0.29 (3.2) | +2.8% (5,575) | +6.9% (5.3) | +1.2% (1.5) |
+| 2024 | 19,096 | 0.487 | 0.509 | 0.477 | 0.6845 / 0.6830 | 0.25 (3.3) | +2.4% (7,184) | +6.3% (5.5) | +0.5% (0.6) |
+| 2025 | 20,758 | 0.502 | 0.507 | 0.487 | 0.6831 / 0.6819 | 0.40 (5.0) | +1.8% (5,548) | +4.9% (3.7) | -2.6% (-3.6) |
+| 2026 | 1,650 | 0.480 | 0.492 | 0.472 | 0.6909 / 0.6876 | 0.31 (1.8) | +3.0% (672) | +5.2% (1.4) | -0.0% (-0.0) |
+
+(Season labels are the START year. Under the strict flag 2025-26 has only 68 scored props, so the first note's yearly table could not
+speak for it; with the grace window it has 20,758.) "c" is the blend coefficient: > 0 means the model adds information beyond the
+market. "vs-ref" is the 5pp-disagreement ROI minus betting BOTH sides of the same props at the same prices.
+
+Disagreement bets, all seasons pooled (gap = model P(over) - consensus P(over)):
+
+| gap | price | bets | ROI (t) | win rate | no-skill ROI (both sides, same props) | vs no-skill (t) |
+|---|---|---|---|---|---|---|
+| 3pp | best | 38,643 | +1.3% (+2.6) | 52.8% | -3.7% | +5.1% (+10.0) |
+| 3pp | novig | 10,331 | -1.5% (-1.6) | 52.3% | -5.3% | +3.8% (+4.0) |
+| 5pp | best | 22,356 | +2.2% (+3.3) | 53.3% | -3.7% | +5.9% (+9.0) |
+| 5pp | novig | 5,613 | -1.0% (-0.8) | 52.6% | -5.2% | +4.2% (+3.3) |
+| 8pp | best | 8,352 | +2.6% (+2.3) | 53.4% | -3.6% | +6.1% (+5.7) |
+| 8pp | novig | 1,987 | -0.3% (-0.1) | 52.9% | -4.5% | +4.3% (+1.9) |
+
+### Reading it
+- **Information beyond the market: yes, small, consistent.** Blend c = +0.34 (t = 8.2) pooled and positive in all five seasons
+  (+0.25 to +0.41; t from 1.8 in the 1,650-prop 2026-27 start to 5.0). The model alone is slightly worse than the market in log-loss
+  (0.6832 vs 0.6824), as in the first note. The 2026-10-14 SOG study found c = +0.10 +- 0.11 for a model trained on ~3 months of
+  2025-26; its section 3 ("longer-history model check") was marked NOT RUN. This is that check: with 2019+ training the information
+  content rises to c = +0.34, so that study's NO_EDGE was substantially a short-training-history effect on information, not a statement
+  about the market.
+- **Profitability is not established.** At the BEST book price the disagreement bets return +1.3% / +2.2% / +2.6% at 3 / 5 / 8pp (t 2.6 /
+  3.3 / 2.3, clustered by game), monotone in the gap and positive in every season (t above 2 in two of five). At Novig's price (an exchange
+  quote; the loader notes Novig only starts quoting in 2025, so this is a thinner, later sample: 5.6k bets at 5pp) they return -1.0% (t = -0.8): break-even. The no-skill reference is -3.7% at best price, so side
+  selection is worth about +4 to +6pp, but the "best price" is a line-shopped, optimistic fill and the hold is what it eats.
+- **Blind sides remain ~0:** blind Under at best price -0.6% (t = -1.4) pooled (first note: -0.08%); it flips sign by season (+1.2% in 2023, -2.6% in 2025).
+- **Status: UNDETERMINED, not promotable.** Unchanged rule: CLV, which this one-snapshot-per-day feed cannot give. Of the NHL markets scored so far
+  (SOG here; saves / goals / assists / points in PR #70) SOG is the only one whose pooled best-price disagreement ROI is positive with t > 3
+  AND positive in every season; goals / assists / points were ~0% or negative and saves flipped negative in 2025-26. (The information
+  signal itself is comparable on goals and assists, c +0.38 / +0.34.) Looks here: 3 gaps x 2 prices x 6 slices, so single cells below |t| ~ 3 are noise; the pooled 5pp best-price cell
+  (t = 3.3) was not pre-registered.
+
+Reproduce (needs local copies of the masters and the BettingPros partitions; use `gcloud storage cp`, not `gsutil -m`):
+```
+PYTHONPATH=. python scripts/nhl_sog_market_eval.py --bp-dir <dir containing shots/*.parquet> --masters-dir <dir with NHL masters + shots/> \
+    --names-from-masters --slack-min 10 --json out.json      # 15-30 min: 49 monthly refits
+```
