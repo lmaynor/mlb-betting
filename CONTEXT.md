@@ -4038,6 +4038,16 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   `deploy/setup_nba_kaggle_ingest.sh` (16Gi). Live-reproducible advanced-feature
   source matching the historical training parquet.
 
+- **ESPN-keyed history (2026-10-16, branch `feat/nba-data-minutes-hoopr`):** `nba/data/hoopr.py` mirrors the sportsdataverse (hoopR)
+  ESPN parquet releases -- player box, team box, schedules (pbp opt-in) -- byte-for-byte to `NBA/hoopr/{dataset}/{stem}_{season}.parquet`
+  (+ `_manifest.json`, `last_refresh.json`); `python -m nba.data.hoopr --mode backfill|refresh [--probe|--dry-run]`. hoopR `season` = the
+  year the season ENDS (2027 = 2026-27). `nba/props/espn_data.py` reshapes it into the exact `rows/team_games` schema `nba.props.data.prepare`
+  returns (parity-tested), with `player_id` = ESPN athlete id (no name bridge) and real ET tips; opt in with
+  `python -m nba.props.score --history-source espn` (default stays SportsBlaze). ESPN lists DNP players with a free-text `reason`
+  (`espn_data.inactives` / `classify_reason`) but the listing is PARTIAL (53% of rotation absences are not on the box) -- see
+  `docs/solutions/integration-issues/hoopr-espn-nba-box-scores.md`. Nightly job script `deploy/setup_nba_hoopr_refresh.sh` is NOT yet run.
+  Availability study: `docs/analysis/nba_zip_review_2026-10-16.md`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
