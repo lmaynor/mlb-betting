@@ -16,13 +16,20 @@ EVSweep/{sport}_props/projections_latest.json (or computed on demand when that f
 
 WHAT THE ENGINE IS (and is not). The trained research models (nfl/models/props.py, nhl/props/train.py,
 nba/props/train.py) keep their artifacts LOCAL (never in GCS, never in the Cloud Run image), so the live board cannot
-load them. It runs an empirical estimator instead -- engine "empirical_ewm_v1":
+load them. It runs an empirical estimator instead -- engine "empirical_ewm_v2":
 
-    mu    = 0.5 * EWM(value) + 0.5 * EWM(value)/EWM(usage) * projected usage          (usage = targets / carries /
-            attempts / TOI / minutes), then x an opponent-allowed factor (ratio of what that opponent's opposition
-            produced vs each producer's own baseline, shrunk toward 1 and clipped to [0.85, 1.15])
+    mu    = w * EWM(value) + (1-w) * EWM(value)/EWM(usage) * projected usage          (usage = targets / carries /
+            attempts / TOI / minutes; w = 0.5, STAT_PARAMS overrides where validated), then x an opponent-allowed
+            factor (ratio of what that opponent's opposition produced vs each producer's own baseline, shrunk toward 1
+            and clipped to [0.85, 1.15]; measured worth ~0, kept because it is harmless)
+    NFL calibration (nfl/props/projection_calibration.json, only stats that cleared a held-out walk-forward bar):
+            mu_cal = mu * k (scale) or mu * exp(b0 + b1 ln(implied team total/22.5) + b2 team spread/7) (game term)
+            -- the pool of players a book quotes is selected on high trailing usage and regresses ~3-7% in every season
     dist  = NegBin (counts) / Normal (yards, points, saves) / Poisson at-least-one (anytime TD); the spread parameter is
-            fit from the league's own within-player game-to-game variance in the same master.
+            fit from the league's own within-player game-to-game variance in the same master. The NORMAL family's spread
+            is tied to the UNCALIBRATED mean (cv was measured against raw trailing means).
+    evidence: python -m nfl.props.engine_eval (walk-forward replay of THIS code, accuracy only -- see
+            docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md)
 
 It does NOT model injuries, lineups, minutes restrictions, weather, rest or teammate-absence redistribution, and none
 of it has been validated against closing prices: every row is `validated: false`. The only evidence for any of this
@@ -54,11 +61,12 @@ from scipy.stats import nbinom, norm
 from ev.props import DFS_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
+from nfl.props import env_adjust as _ea
 
 log = logging.getLogger("ev.daily_projections")
 _ET = ZoneInfo("America/New_York")
 
-ENGINE = "empirical_ewm_v1"
+ENGINE = "empirical_ewm_v2"
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 
@@ -76,6 +84,21 @@ STAT_LABEL = {
 }
 
 HALFLIFE = {"nfl": 3.0, "nhl": 8.0, "nba": 8.0}      # games
+# Per-stat overrides of (halflife, ewm_weight, opp_k) -- ONLY where a walk-forward replay on held-out seasons showed a
+# gain past a multiplicity-corrected bar (nfl.props.engine_eval; selected on 2021-23 / 2021-22, scored on the
+# seasons after, never used for selection: rec_yds log score +0.027 / +0.032 per row, MAE -0.23 / -0.27 yds;
+# anytime_td log score +0.012, Brier -0.0033). Every other stat keeps the original hand-set values.
+STAT_PARAMS = {
+    "nfl": {"rec_yds": {"halflife": 7.0, "ewm_weight": 1.0, "opp_k": 200.0},
+            "anytime_td": {"halflife": 7.0, "ewm_weight": 0.3, "opp_k": 200.0}},
+}
+
+
+def stat_params(sport: str, stat: str) -> tuple:
+    """-> (halflife, ewm_weight, opp_shrink_k) for a sport/stat: the override if one was validated, else defaults."""
+    o = STAT_PARAMS.get(sport, {}).get(stat, {})
+    return (o.get("halflife", HALFLIFE[sport]), o.get("ewm_weight", EWM_WEIGHT), o.get("opp_k", OPP_SHRINK_K))
+
 MIN_GAMES = 4                                        # fewer prior games than this -> no projection
 HISTORY_GAMES = 60
 OPP_SHRINK_K = 60.0                                  # player-games of evidence that fully trusts an opponent factor
@@ -141,11 +164,40 @@ def beezy_score(edge: float | None, n_books: int | None, p_hit: float | None) ->
     return int(round(min(max(e + (cons_raw + hit_raw) * scale, 0.0), 100.0)))
 
 
+# ------------------------------------------------------------------------------------------------------ calibration
+_CALIB: dict | None = None
+
+
+def calibration(sport: str, stat: str) -> dict | None:
+    """The shipped calibration coefficients for an NFL stat ({"k"} or {"b0","b1","b2"}), else None. Loaded once."""
+    global _CALIB
+    if sport != "nfl":
+        return None
+    if _CALIB is None:
+        _CALIB = _ea.load_calibration()
+    return _CALIB.get(stat)
+
+
+def _load_env_lines() -> dict:
+    try:
+        from nfl.data.read import load
+        t = _ea.game_env_table(load("schedules", columns=["game_id", "season", "week", "gameday", "home_team",
+                                                           "away_team", "spread_line", "total_line"]))
+    except Exception as exc:                                                            # noqa: BLE001
+        log.info("nfl schedule lines unavailable (%s): game term falls back to the scale", exc)
+        return {}
+    t = t[t["implied_total"].notna() & t["team_spread"].notna()]
+    return {(tm, str(gd)[:10]): (float(it), float(sp))
+            for tm, gd, it, sp in zip(t["team"], t["gameday"], t["implied_total"], t["team_spread"])}
+
+
 # ------------------------------------------------------------------------------------------------------ game logs
 @dataclass
 class StatContext:
     """League-level facts for one stat, derived once from the master (not per player)."""
     opp_factor: dict = field(default_factory=dict)      # canonical opponent code -> multiplier
+    opp_raw: dict = field(default_factory=dict)         # canonical opponent code -> UNSHRUNK allowed/expected ratio
+    opp_cnt: dict = field(default_factory=dict)         # canonical opponent code -> player-games behind that ratio
     alpha: float = 0.25                                  # NegBin dispersion (var = mu + alpha mu^2)
     cv: float = 0.5                                      # within-player sd / mean (Normal family)
     league_mean: float = 0.0
@@ -168,10 +220,12 @@ def _hist(rows: list, stat_def: tuple) -> list:
 class GameLogs:
     """A sport's player game-log index (cockpit_form shape) plus lazily built per-stat league contexts."""
 
-    def __init__(self, sport: str, idx: dict):
+    def __init__(self, sport: str, idx: dict, opp_shrink_k: float | None = None):
         self.sport = sport
         self.idx = idx
+        self.opp_shrink_k = opp_shrink_k          # None = the per-stat validated value (stat_params)
         self._ctx: dict = {}
+        self._env: dict | None = None
         self._lock = threading.Lock()
 
     @classmethod
@@ -202,6 +256,16 @@ class GameLogs:
         last = rows[-1]
         raw = (last.get("recent_team") or last.get("team")) if self.sport == "nfl" else last.get("team_abbr")
         return canon_team(self.sport, raw)
+
+    def env_lines(self) -> dict:
+        """{(canonical team, ET kickoff date): (implied_team_total, team_spread)} from the mirrored schedules, NFL only
+        ({} for other sports or when the mirror is unreadable: the game term then falls back to the scale alone)."""
+        if self.sport != "nfl":
+            return {}
+        with self._lock:
+            if self._env is None:
+                self._env = _load_env_lines()
+            return self._env
 
     def latest_date(self) -> str | None:
         """Newest game date in the master (YYYY-MM-DD; NFL: 'season Wweek')."""
@@ -259,10 +323,13 @@ class GameLogs:
                     mean_sq_sum += m * m
                     mean_sum += m
                     n_players += 1
+        k_opp = self.opp_shrink_k if self.opp_shrink_k is not None else stat_params(self.sport, stat)[2]
         for oc, e in exp.items():
             if e > 0:
-                w = cnt[oc] / (cnt[oc] + OPP_SHRINK_K)
+                w = cnt[oc] / (cnt[oc] + k_opp)
                 ctx.opp_factor[oc] = min(max(1.0 + (got[oc] / e - 1.0) * w, OPP_CLIP[0]), OPP_CLIP[1])
+                ctx.opp_raw[oc] = got[oc] / e
+                ctx.opp_cnt[oc] = cnt[oc]
         if n_players and mean_sq_sum > 0:
             # method of moments over the whole population: var = mu + alpha*mu^2 (NegBin), var = (cv*mu)^2 (Normal)
             ctx.alpha = min(max((var_sum - mean_sum) / mean_sq_sum, ALPHA_RANGE[0]), ALPHA_RANGE[1])
@@ -273,7 +340,7 @@ class GameLogs:
 
 
 # ------------------------------------------------------------------------------------------- projection + P(over)
-def project_mu(hist: list, halflife: float, opp_factor: float = 1.0) -> dict | None:
+def project_mu(hist: list, halflife: float, opp_factor: float = 1.0, ewm_weight: float | None = None) -> dict | None:
     """Chronological [(val, usage, season, opp)] -> {'mu', 'n_games', 'usage_proj', 'opp_factor'} or None (too little)."""
     n = len(hist)
     if n < MIN_GAMES:
@@ -291,12 +358,14 @@ def project_mu(hist: list, halflife: float, opp_factor: float = 1.0) -> dict | N
         szn_u = float(np.mean(use[ok][-min(int(ok.sum()), 20):]))
         usage_proj = 0.6 * ewm_u + 0.4 * szn_u
         rate = float(np.sum(wu * vals[ok]) / np.sum(wu * use[ok]))
-        mu = EWM_WEIGHT * ewm_v + (1.0 - EWM_WEIGHT) * rate * usage_proj
+        wgt = EWM_WEIGHT if ewm_weight is None else ewm_weight
+        mu = wgt * ewm_v + (1.0 - wgt) * rate * usage_proj
     return {"mu": max(mu * opp_factor, 0.0), "n_games": n, "usage_proj": usage_proj, "opp_factor": opp_factor}
 
 
-def p_over(family: str, mu: float, line: float, ctx: StatContext) -> float | None:
-    """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything)."""
+def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None) -> float | None:
+    """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything). `sd_mu` is the mean
+    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread."""
     if mu is None or not math.isfinite(mu) or line is None:
         return None
     if family == "anytime":
@@ -306,8 +375,27 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext) -> float | Non
     if family == "negbin":
         n = 1.0 / ctx.alpha
         return float(1.0 - nbinom.cdf(math.floor(line), n, n / (n + mu)))
-    sd = max(ctx.cv * mu, MIN_SD_FRAC * mu, 1e-6)
+    ref = mu if sd_mu is None else sd_mu
+    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(1.0 - norm.cdf((line - mu) / sd))
+
+
+def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
+               sd_mu: float | None = None):
+    """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
+    one-sided anytime market. Yards are floored at 0 (the board shows a rate-style range, not a loss). These describe
+    the MODEL'S spread (league-wide within-player variance), not an interval with validated coverage."""
+    if mu is None or not math.isfinite(mu) or family == "anytime":
+        return None, None
+    if mu <= 0:
+        return 0.0, 0.0
+    if family == "negbin":
+        n = 1.0 / ctx.alpha
+        pr = n / (n + mu)
+        return float(nbinom.ppf(lo, n, pr)), float(nbinom.ppf(hi, n, pr))
+    ref = mu if sd_mu is None else sd_mu
+    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
+    return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
 
 
 def _pois_cdf(k: int, mu: float) -> float:
@@ -451,11 +539,19 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
              has_line: bool = True) -> dict | None:
     family = PROJECT_STATS[sport][stat]
     ctx = logs.context(stat)
-    proj = project_mu(_hist(rows, sdef), HALFLIFE[sport], ctx.opp_factor.get(opp, 1.0) if opp else 1.0)
+    hl, ewm_w, _ = stat_params(sport, stat)
+    proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
     if proj is None:
         return None
-    mu = proj["mu"]
-    p_model_over = p_over(family, mu, line, ctx) if line is not None else None
+    mu_raw = proj["mu"]
+    coef = calibration(sport, stat)
+    lines = None
+    if coef and "b0" in coef and team is not None and start is not None:
+        lines = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat()))
+    mult = _ea.multiplier(coef, *(lines or (None, None))) if coef else 1.0
+    mu = mu_raw * mult
+    p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
+    p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -471,7 +567,9 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
         "mins_to_start": None if mins is None else round(mins, 1),
         "has_line": bool(has_line and line is not None), "line": _f(line, 2), "consensus_line": _f(line, 2),
-        "side": side, "proj_mean": _f(mu, 3), "p_over_model": _f(p_model_over),
+        "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
+        "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
+        "p_over_model": _f(p_model_over),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",

@@ -10,7 +10,8 @@ Checks:
   2. SGO snapshot age: Odds/sgo/latest.json must be < 26 hrs old
   3. Feature CSV age: each system's model_features.csv must be < 26 hrs old
   4. Model artifact exists: each system's xgb_*.json must exist in GCS
-  5. NFL/last_refresh.json (when present) must not report status=error
+  5. NFL/last_refresh.json (when present) must not report status=error; NFL/contracts_latest.json (when present)
+     must not report a failed data contract
 
 Called by main.py /monitor-ops.
 """
@@ -194,6 +195,31 @@ def _check_nfl_sentinel() -> list[str]:
     return [f"NFL refresh failed (status=error, at={data.get('timestamp', '?')})" + (f": {detail}" if detail else "")]
 
 
+NFL_CONTRACTS_KEY = "NFL/contracts_latest.json"
+
+
+def _check_nfl_contracts() -> list[str]:
+    """nfl.data.pipeline writes NFL/contracts_latest.json after every refresh (nfl.data.contracts: grain, coverage of
+    every final game, player-vs-team reconciliation, scoring-formula drift, schedule freshness). Only a FAILED check
+    (report ok == false) alerts; warnings are logged in the report, not paged. A missing report is silent (the pillar
+    may not have run yet)."""
+    import json
+    from mlb_core.storage import exists, read_bytes
+    try:
+        if not exists(NFL_CONTRACTS_KEY):
+            return []
+        data = json.loads(read_bytes(NFL_CONTRACTS_KEY).decode())
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"monitor_ops: NFL contracts check failed: {e}")
+        return []
+    if data.get("ok", True):
+        return []
+    bad = [c for c in (data.get("checks") or []) if c.get("status") == "fail"]
+    detail = "; ".join(f"{c.get('name')}: {json.dumps(c.get('detail'), default=str)[:90]}" for c in bad[:3])
+    return [f"NFL data contracts FAILED ({len(bad)} check(s), season {data.get('season', '?')}, "
+            f"at={data.get('generated_at', '?')})" + (f": {detail}" if detail else "")]
+
+
 def _check_snapshot_freshness() -> list[str]:
     age = _gcs_age_hours(SGO_SNAPSHOT_KEY)
     if age is None:
@@ -321,6 +347,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_snapshot_freshness()
     failures += _check_build_sentinels()
     failures += _check_nfl_sentinel()
+    failures += _check_nfl_contracts()
     failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()

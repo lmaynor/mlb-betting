@@ -111,6 +111,19 @@ ALW_COLS = [c.replace("off_", "alw_") for c in OFF_COLS]
 DVP_METRICS = ["rec_yds", "rec", "tgt", "rush_yds", "carries", "tds", "pass_yds", "pass_att", "pass_tds"]
 DVP_POS = ["QB", "RB", "WR", "TE"]
 
+# ---- pbp context (OPT-IN: built into every frame when the derived tables are supplied, excluded from the default
+# feature list; pass include_pbp_ctx=True). Trailing (shift(1)) EWM / L5 of nflfastR-style team and player usage rates
+# from nfl.data.derived. All names start with PC_PREFIX.
+PC_PREFIX = "pc_"
+PC_OWN = ["neutral_pass_rate", "pass_oe", "sec_per_play_neutral", "epa_dropback", "epa_rush", "sack_rate",
+          "rz_pass_rate", "adot", "expl_pass_rate", "success_rate", "no_huddle_rate"]
+PC_DEF = ["epa_dropback", "epa_rush", "expl_pass_rate", "sack_rate", "adot", "neutral_pass_rate", "success_rate",
+          "pass_oe"]
+PC_OPP_OFF = ["sec_per_play_neutral", "neutral_pass_rate"]
+PC_PLAYER = ["deep_tgt", "tgt_rz20", "tgt_in10", "car_rz10", "rush_expl10", "rec_epa", "rush_epa", "pass_epa",
+             "air_yards", "tgt_pbp", "car_pbp"]
+PC_PLAYER_COUNTS = [c for c in PC_PLAYER if not c.endswith("_epa")]
+
 META_COLS = ["player_id", "player_name", "position", "pos_grp", "team", "opponent", "season", "week", "game_id",
              "gameday", "is_upcoming"]
 Y_COLS = ["y_pass_yds", "y_rush_yds", "y_rec_yds", "y_receptions", "y_pass_tds", "y_td_count", "y_anytime_td",
@@ -142,6 +155,8 @@ class Frames:
     injuries: Optional[pd.DataFrame] = None
     players: Optional[pd.DataFrame] = None
     pbp_rz: Optional[pd.DataFrame] = None     # (game_id, player_id, rz_car, gl_car, rz_tgt) from aggregate_pbp_redzone
+    pbp_team: Optional[pd.DataFrame] = None   # nfl.data.derived team_game_pbp (off_* / def_* rates per game, team)
+    pbp_player: Optional[pd.DataFrame] = None  # nfl.data.derived player_game_pbp (targets / air yards / rz usage)
 
 
 def _alias(s: pd.Series) -> pd.Series:
@@ -411,10 +426,12 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
     # ---- team-level trailing (own offense; opponent defense allowed; defense vs position)
     tg = tg.sort_values(["team", "ord"], kind="mergesort").reset_index(drop=True)
     dvp_cols = [f"dvp_{p}_{m}" for p in DVP_POS for m in DVP_METRICS]
+    tg = _attach_pbp_team(tg, fr.pbp_team)
+    tr_pc = _pbp_team_trailing(tg)
     tr_off = add_trailing(tg, "team", OFF_COLS, stats=("l5", "ewm"))
     tr_alw = add_trailing(tg, "team", ALW_COLS, stats=("l5", "szn", "ewm"))
     tr_dvp = add_trailing(tg, "team", dvp_cols, stats=("l5", "ewm"))
-    tgt_cols = pd.DataFrame({**tr_off, **tr_alw, **tr_dvp})
+    tgt_cols = pd.DataFrame({**tr_off, **tr_alw, **tr_dvp, **tr_pc})
     tg = pd.concat([tg, tgt_cols], axis=1)
     tg["exp_team_pass_plays"] = tg["off_plays_ewm"] * tg["off_pass_rate_ewm"]
     tg["exp_team_rush_plays"] = tg["off_plays_ewm"] * (1.0 - tg["off_pass_rate_ewm"])
@@ -427,6 +444,7 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
     pg = pg.sort_values(["player_id", "ord"], kind="mergesort").reset_index(drop=True)
     tr = add_trailing(pg, "player_id", BASES, post_cols=("tgt", "carries", "rec"))
     pg = pd.concat([pg, pd.DataFrame(tr)], axis=1)
+    pg = _attach_pbp_player(pg, fr.pbp_player)
     gp = pg.groupby("player_id", sort=False)
     prev_tg = gp["tg_idx"].shift(1)
     prev_team = gp["team"].shift(1)
@@ -459,14 +477,16 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
     tcols = ["game_id", "team", "is_home", "team_spread", "total_line", "implied_team_total", "implied_opp_total",
              "rest", "opp_rest", "indoor", "temp_f", "wind_mph", "div_game", "qb_id_f", "qb_known", "qb_changed",
              "gameday", "game_type", "exp_team_pass_plays", "exp_team_rush_plays"] + \
-            [f"{c}_{s}" for c in OFF_COLS for s in ("l5", "ewm")]
+            [f"{c}_{s}" for c in OFF_COLS for s in ("l5", "ewm")] + \
+            [c for c in tg.columns if c.startswith(PC_PREFIX + "tm_")]
     ctx = tg[tcols].rename(columns={c: f"team_{c}" for c in tcols if c.startswith("off_")})
     pg = pg.merge(ctx, on=["game_id", "team"], how="left")
 
     # ---- opponent defence (allowed) + opponent pace + defence vs the player's position group
     ocols = ["game_id", "team"] + [f"{c}_{s}" for c in ALW_COLS for s in ("l5", "szn", "ewm")] + \
             ["off_plays_ewm", "off_pass_rate_ewm"] + \
-            [f"dvp_{p}_{m}_{s}" for p in DVP_POS for m in DVP_METRICS for s in ("l5", "ewm")]
+            [f"dvp_{p}_{m}_{s}" for p in DVP_POS for m in DVP_METRICS for s in ("l5", "ewm")] + \
+            [c for c in tg.columns if c.startswith(PC_PREFIX + "opp_")]
     octx = tg[ocols].rename(columns={"team": "opp"})
     octx = octx.rename(columns={"off_plays_ewm": "opp_off_plays_ewm", "off_pass_rate_ewm": "opp_off_pass_rate_ewm",
                                 **{c: f"opp_{c}" for c in octx.columns if c.startswith("alw_")}})
@@ -524,7 +544,7 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
     out = out.rename(columns={"opp": "opponent"})
     out["gameday"] = out["gameday"].astype(str)
     feat = [c for c in out.columns if c not in META_COLS and c not in Y_COLS and c not in ELIG_COLS
-            and c not in _DROP_FROM_OUTPUT]
+            and c not in _DROP_FROM_OUTPUT and not c.startswith(_PCRAW_PREFIX)]
     out = out[META_COLS + feat + Y_COLS + ELIG_COLS]
     out = out.sort_values(["season", "week", "game_id", "player_id"], kind="mergesort").reset_index(drop=True)
     return out
@@ -534,17 +554,86 @@ def build_from_frames(fr: Frames, emit_seasons: Iterable[int], include_upcoming:
 _DROP_FROM_OUTPUT = set(STAT_COLS) | {
     "snaps", "snap_pct", "td_count", "rz_car", "gl_car", "rz_tgt", "has_stat_row", "ord", "widx", "tg_idx",
     "tg_szn_n", "game_type", "qb_id_f", "tgt_post", "carries_post", "rec_post", "team_game_type"}
+_PCRAW_PREFIX = "pcraw_"
 
 
-def feature_columns(df: pd.DataFrame, include_experimental: bool = False) -> list:
+def feature_columns(df: pd.DataFrame, include_experimental: bool = False, include_pbp_ctx: bool = False) -> list:
     """Model-input columns of a built frame (everything that is not meta / target / eligibility).
+
+    pbp-context columns (prefix `pc_`, see PC_*) are built when the derived tables are supplied but are NOT model
+    inputs unless `include_pbp_ctx=True`: the default model feature list is unchanged by their addition.
 
     EXPERIMENTAL_FEATURES (teammate-absence usage shares) are built into every frame but are NOT model inputs
     unless `include_experimental=True`: the default model feature list is unchanged by their addition."""
     skip = set(META_COLS) | set(Y_COLS) | set(ELIG_COLS)
     if not include_experimental:
         skip |= set(EXPERIMENTAL_FEATURES)
-    return [c for c in df.columns if c not in skip]
+    return [c for c in df.columns if c not in skip and (include_pbp_ctx or not c.startswith(PC_PREFIX))]
+
+
+# ------------------------------------------------------------------------------------------------ pbp context
+def _attach_pbp_team(tg: pd.DataFrame, pt: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Left-join the derived team-game rates onto the team-game table as pcx_off_* / pcx_def_* (RAW, same-game
+    values: they are only ever used through shift(1) trailing, never emitted). Row order is preserved."""
+    if pt is None or len(pt) == 0:
+        return tg
+    t = pt.copy()
+    t["team"] = _alias(t["team"])
+    keep = ["game_id", "team"]
+    ren = {}
+    for m in sorted(set(PC_OWN) | set(PC_OPP_OFF)):
+        if f"off_{m}" in t.columns:
+            ren[f"off_{m}"] = f"pcx_off_{m}"
+    for m in PC_DEF:
+        if f"def_{m}" in t.columns:
+            ren[f"def_{m}"] = f"pcx_def_{m}"
+    t = t[keep + list(ren)].rename(columns=ren).drop_duplicates(keep)
+    return tg.merge(t, on=keep, how="left")
+
+
+def _pbp_team_trailing(tg: pd.DataFrame) -> dict:
+    """pc_tm_* (own offense), pc_opp_def_* (what a team's DEFENSE allowed) and pc_opp_off_* (a team's own offense
+    pace/tendency, to be read for the OPPONENT) -- all pre-game trailing EWMs, keyed on the team-game table."""
+    out = {}
+    own = [f"pcx_off_{m}" for m in PC_OWN if f"pcx_off_{m}" in tg.columns]
+    dfn = [f"pcx_def_{m}" for m in PC_DEF if f"pcx_def_{m}" in tg.columns]
+    opp_off = [f"pcx_off_{m}" for m in PC_OPP_OFF if f"pcx_off_{m}" in tg.columns]
+    cols = sorted(set(own + dfn + opp_off))
+    if not cols:
+        return out
+    tr = add_trailing(tg, "team", cols, stats=("ewm",))
+    for c in own:
+        out[f"{PC_PREFIX}tm_{c[len('pcx_off_'):]}_ewm"] = tr[f"{c}_ewm"]
+    for c in dfn:
+        out[f"{PC_PREFIX}opp_def_{c[len('pcx_def_'):]}_ewm"] = tr[f"{c}_ewm"]
+    for c in opp_off:
+        out[f"{PC_PREFIX}opp_off_{c[len('pcx_off_'):]}_ewm"] = tr[f"{c}_ewm"]
+    return out
+
+
+def _attach_pbp_player(pg: pd.DataFrame, pp: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Merge the derived player-game usage (as raw pcraw_* columns, dropped from the output) and add the pre-game
+    trailing pc_pl_* features. `pg` must be sorted by (player_id, ord) with a unique index; order is preserved.
+    Counting columns are 0 (not NaN) for a player of a covered game who had no such event; uncovered games and
+    upcoming rows stay NaN."""
+    if pp is None or len(pp) == 0:
+        return pg
+    use = [c for c in PC_PLAYER if c in pp.columns]
+    p = pp[["game_id", "player_id"] + use].drop_duplicates(["game_id", "player_id"])
+    p = p.rename(columns={c: f"{_PCRAW_PREFIX}{c}" for c in use})
+    pg = pg.merge(p, on=["game_id", "player_id"], how="left")
+    covered = pg["game_id"].isin(set(pp["game_id"])) & ~pg["is_upcoming"].astype(bool)
+    for c in PC_PLAYER_COUNTS:
+        col = f"{_PCRAW_PREFIX}{c}"
+        if col in pg.columns:
+            pg[col] = np.where(covered, pg[col].fillna(0.0), np.nan)
+    raw = [f"{_PCRAW_PREFIX}{c}" for c in use]
+    tr = add_trailing(pg, "player_id", raw, stats=("ewm", "l5"))
+    new = {f"{PC_PREFIX}pl_{k[len(_PCRAW_PREFIX):]}": v for k, v in tr.items()}
+    ay, tg_ = new.get(f"{PC_PREFIX}pl_air_yards_ewm"), new.get(f"{PC_PREFIX}pl_tgt_pbp_ewm")
+    if ay is not None and tg_ is not None:
+        new[f"{PC_PREFIX}pl_adot_ewm"] = ay / tg_.where(tg_ > 0)
+    return pd.concat([pg, pd.DataFrame(new, index=pg.index)], axis=1)
 
 
 # ------------------------------------------------------------------------------------------------ injuries
@@ -680,7 +769,8 @@ def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -
 
 
 # ------------------------------------------------------------------------------------------------ GCS wrapper
-def load_frames(seasons: Iterable[int], use_pbp: bool = True, history_seasons: int = 1) -> Frames:
+def load_frames(seasons: Iterable[int], use_pbp: bool = True, history_seasons: int = 1,
+                use_pbp_ctx: bool = True) -> Frames:
     """Load the raw nflverse frames (GCS via nfl.data.read) for `seasons` plus `history_seasons` earlier ones."""
     from nfl.data.read import load, mirrored_seasons
 
@@ -705,16 +795,30 @@ def load_frames(seasons: Iterable[int], use_pbp: bool = True, history_seasons: i
             except Exception as e:          # pbp is optional enrichment; never block the build on it
                 logger.warning("pbp %s unavailable (%s) -- red-zone features NaN for that season", s, e)
         rz = pd.concat(parts, ignore_index=True) if parts else None
-    return Frames(ps, sched, ts, snaps, inj, players, rz)
+    pt = pp = None
+    if use_pbp_ctx:
+        try:
+            from nfl.data.read import derived_seasons, load_derived
+            from nfl.data.derived import PLAYER_TABLE, TEAM_TABLE
+            have = set(derived_seasons(TEAM_TABLE)) & set(derived_seasons(PLAYER_TABLE))
+            want = [s for s in load_seasons if s in have]
+            if want:
+                pt = load_derived(TEAM_TABLE, seasons=want)
+                pp = load_derived(PLAYER_TABLE, seasons=want)
+            else:
+                logger.warning("no derived pbp tables (python -m nfl.data.derived) -- pc_* features not built")
+        except Exception as e:          # derived tables are optional enrichment; never block the build on them
+            logger.warning("derived pbp tables unavailable (%s) -- pc_* features not built", e)
+    return Frames(ps, sched, ts, snaps, inj, players, rz, pt, pp)
 
 
 def build_player_week_features(seasons: Iterable[int], include_upcoming: bool = False, use_pbp: bool = True,
-                               history_seasons: int = 1) -> pd.DataFrame:
+                               history_seasons: int = 1, use_pbp_ctx: bool = True) -> pd.DataFrame:
     """GCS-backed builder. `seasons` = seasons to EMIT; `history_seasons` earlier seasons are loaded so trailing
     features at week 1 carry over. Set include_upcoming=True to also emit placeholder rows (y_* NaN,
     is_upcoming=True) for each team's next unplayed regular-season game."""
     seasons = sorted(set(int(s) for s in seasons))
-    fr = load_frames(seasons, use_pbp=use_pbp, history_seasons=history_seasons)
+    fr = load_frames(seasons, use_pbp=use_pbp, history_seasons=history_seasons, use_pbp_ctx=use_pbp_ctx)
     return build_from_frames(fr, seasons, include_upcoming=include_upcoming)
 
 
@@ -750,7 +854,13 @@ def perturb_outcomes(fr: Frames, season: int, week: int, seed: int = 0) -> Frame
     if rz2 is not None:
         gids = set(sc.loc[m, "game_id"])
         rz2 = scramble(rz2, ["rz_car", "gl_car", "rz_tgt"], rz2["game_id"].isin(gids))
-    return Frames(ps2, sc2, ts2, sn2, fr.injuries, fr.players, rz2)
+    gids = set(sc.loc[m, "game_id"])
+    pt2, pp2 = fr.pbp_team, fr.pbp_player
+    if pt2 is not None:
+        pt2 = scramble(pt2, [c for c in pt2.columns if c.startswith(("off_", "def_"))], pt2["game_id"].isin(gids))
+    if pp2 is not None:
+        pp2 = scramble(pp2, [c for c in pp2.columns if c not in ("season", "week")], pp2["game_id"].isin(gids))
+    return Frames(ps2, sc2, ts2, sn2, fr.injuries, fr.players, rz2, pt2, pp2)
 
 
 def leakage_check(fr: Frames, emit_seasons: Iterable[int], season: int, week: int, seed: int = 0,
@@ -760,7 +870,7 @@ def leakage_check(fr: Frames, emit_seasons: Iterable[int], season: int, week: in
           empty), "n_changed_after": feature cells that moved AFTER the week (sanity: > 0 => the test has power)}."""
     base = build_from_frames(fr, emit_seasons, include_upcoming=include_upcoming)
     pert = build_from_frames(perturb_outcomes(fr, season, week, seed), emit_seasons, include_upcoming=include_upcoming)
-    feats = feature_columns(base, include_experimental=True)     # leakage-check EVERYTHING we build
+    feats = feature_columns(base, include_experimental=True, include_pbp_ctx=True)   # leakage-check EVERYTHING
     key = ["player_id", "game_id"]
     b = base.set_index(key)
     p = pert.set_index(key)
