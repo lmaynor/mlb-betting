@@ -4,14 +4,16 @@ import { render, screen, within } from '@testing-library/react'
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href, 'aria-current': current, 'aria-label': label }: { children: React.ReactNode; href: string; 'aria-current'?: 'date' | 'true'; 'aria-label'?: string }) => <a href={href} aria-current={current} aria-label={label}>{children}</a> }))
 jest.mock('next/navigation', () => ({
   usePathname: () => '/picks/nfl',
-  useSearchParams: () => new URLSearchParams('market=NFL_REC_YDS'),
+  useSearchParams: () => new URLSearchParams('market=NFL_REC_YDS&game=g2&day=yesterday'),
 }))
 
-import { DayScroller } from '../components/picks/day-scroller'
-import { SystemsFooter } from '../components/picks/systems-footer'
-import { applyPickFilters, filterBoard, systemTodayCounts, type BoardRow } from '../lib/board-rows'
-import { boardDays, chooseDay, inDay, sliceByDay } from '../lib/board-days'
-import { parsePickFilters } from '../lib/picks-filters'
+import { DayToggle } from '../components/picks/day-toggle'
+import { GamesStrip } from '../components/picks/games-strip'
+import { SystemStrip } from '../components/picks/system-strip'
+import { SystemsTable } from '../components/picks/systems-table'
+import { systemTodayCounts, type BoardRow } from '../lib/board-rows'
+import { gamesFromRows, gamesFromSlate, gameTimeLabel, mergeGames, withCounts } from '../lib/board-games'
+import { anyTeamLogoUrl } from '../lib/sport-assets'
 import { liveAccuracy } from '../lib/prop-model-specs'
 import { headshotUrlById } from '../lib/sport-assets'
 import { playerIdByName } from '../lib/sport-assets.server'
@@ -19,7 +21,7 @@ import { codesInMatchup, matchesSearch, searchHaystack, teamSearchTerms } from '
 import type { SportProjectionRow } from '../lib/types'
 
 const row = (o: Partial<BoardRow>): BoardRow => ({
-  key: 'k', sport: 'nfl', system: 'NFL_REC_YDS', marketLabel: 'Rec Yds', player: 'Pat Receiver', headshotId: null, matchup: 'HOU v JAC', start: '2026-10-18T17:00:00Z',
+  key: 'k', sport: 'nfl', system: 'NFL_REC_YDS', marketLabel: 'Rec Yds', player: 'Pat Receiver', headshotId: null, team: 'HOU', matchup: 'HOU @ JAC', gameKey: 'nfl:2026-10-18:HOU@JAC', away: 'HOU', home: 'JAC', avg10: null, avgSzn: null, result: null, start: '2026-10-18T17:00:00Z',
   side: 'over', line: 64.5, hasLine: true, proj: 70, pModel: 0.6, pFair: 0.5, nBooks: 6, l5: 0.6, l10: 0.6, odds: 110, book: 'draftkings',
   modelEdge: 0.05, marketEv: 0.04, confluence: true, score: 80, isPick: false, ...o,
 })
@@ -54,67 +56,93 @@ describe('team-aware search', () => {
     expect(codesInMatchup('KC@LV and HOU v JAC')).toEqual(['KC', 'LV', 'HOU', 'JAC'])
   })
 
-  it('reaches the picks filters: a city name now cuts the board, the abbreviation still does', () => {
-    const rows = [row({ key: 'a', player: 'A One', matchup: 'HOU v JAC' }), row({ key: 'b', player: 'B Two', matchup: 'KC v LV' })]
-    const f = (q: string) => applyPickFilters(rows, parsePickFilters({ q })).map(r => r.key)
-    expect(f('kansas city')).toEqual(['b'])
-    expect(f('jaguars')).toEqual(['a'])
-    expect(f('LV')).toEqual(['b'])
-    const base = { market: 'ALL', side: 'ALL', signal: 'ALL', sort: 'score' } as const
-    expect(filterBoard(rows, { ...base, q: 'vegas' }).map(r => r.key)).toEqual(['b'])
-  })
 })
 
-describe('game days', () => {
-  // 17:00Z is noon Central, the same calendar day; 03:00Z is the previous evening in Central
-  const starts = ['2026-10-18T17:00:00Z', '2026-10-18T18:30:00Z', '2026-10-19T03:00:00Z', '2026-10-24T17:00:00Z', null]
+describe('games strip and day toggle', () => {
+  const g = (o: Partial<BoardRow>) => row({ sport: 'nhl', ...o })
+  const rows = [
+    g({ key: '1', gameKey: 'nhl:2026-10-17:BOS@LAK', away: 'BOS', home: 'LAK', start: '2026-10-18T01:00:00Z' }),
+    g({ key: '2', gameKey: 'nhl:2026-10-17:BOS@LAK', away: 'BOS', home: 'LAK', start: '2026-10-18T01:00:00Z' }),
+    g({ key: '3', gameKey: 'nhl:2026-10-17:MTL@SEA', away: 'MTL', home: 'SEA', start: '2026-10-18T02:00:00Z' }),
+    g({ key: '4', gameKey: '', away: null, home: null }),
+  ]
 
-  it('lists the days that have games, soonest first, on the site clock, with counts; a missing start is no day', () => {
-    expect(boardDays(starts)).toEqual([{ key: '2026-10-18', count: 3 }, { key: '2026-10-24', count: 1 }])
+  it('builds the games from the rows, soonest first, with counts; a row with no game belongs to none', () => {
+    expect(gamesFromRows(rows).map(x => [x.key, x.count])).toEqual([['nhl:2026-10-17:BOS@LAK', 2], ['nhl:2026-10-17:MTL@SEA', 1]])
   })
 
-  it('chooses all, a day that has rows, or the first day (also for a stale or malformed date)', () => {
-    const days = boardDays(starts)
-    expect(chooseDay(undefined, days)).toBe('2026-10-18')
-    expect(chooseDay('2026-10-24', days)).toBe('2026-10-24')
-    expect(chooseDay('2026-10-20', days)).toBe('2026-10-18')
-    expect(chooseDay('yesterday', days)).toBe('2026-10-18')
-    expect(chooseDay('all', days)).toBe('all')
-    expect(chooseDay('2026-10-18', [])).toBe('all')
+  it('merges the feed game list: a scheduled game with no rows stays listed with a count of 0', () => {
+    const feed = [
+      { game_key: 'nhl:2026-10-17:BOS@LAK', away: 'BOS', home: 'LAK', start: '2026-10-18T01:00:00Z' },
+      { game_key: 'nhl:2026-10-18:NYR@DAL', away: 'NYR', home: 'DAL', start: '2026-10-19T00:00:00Z' },
+    ]
+    const merged = mergeGames('nhl', feed, rows)
+    expect(merged.map(x => [x.key, x.count])).toEqual([['nhl:2026-10-17:BOS@LAK', 2], ['nhl:2026-10-17:MTL@SEA', 1], ['nhl:2026-10-18:NYR@DAL', 0]])
+    expect(mergeGames('nhl', undefined, rows)).toHaveLength(2)         // an older payload: derive from the rows
+    expect(withCounts(merged, rows.slice(0, 1)).map(x => x.count)).toEqual([1, 0, 0])
   })
 
-  it('cuts rows to the selected day; all keeps rows with no start', () => {
-    expect(inDay('2026-10-24T17:00:00Z', '2026-10-24')).toBe(true)
-    expect(inDay('2026-10-24T17:00:00Z', '2026-10-18')).toBe(false)
-    expect(inDay(null, 'all')).toBe(true)
-    expect(inDay(null, '2026-10-18')).toBe(false)
-    const rows = starts.map((s, i) => ({ id: i, s }))
-    const day = sliceByDay(rows, r => r.s, '2026-10-24')
-    expect(day.rows.map(r => r.id)).toEqual([3])
-    expect(day.days).toHaveLength(2)                                    // the strip keeps every day whatever is selected
-    expect(sliceByDay(rows, r => r.s, 'all').rows).toHaveLength(5)
+  it('MLB games come from the slate, keyed like the MLB rows', () => {
+    const slate = { games: [{ game_pk: 849816, away_team: 'TB', home_team: 'CLE', start_time: '8:00 PM ET', away_pitcher: null, home_pitcher: null, picks: [] }], run_date: '2026-10-17', as_of: '', total_picks: 0, total_games: 1 }
+    const mlb = [row({ sport: 'mlb', key: 'm', gameKey: 'mlb:849816', away: 'TB', home: 'CLE' })]
+    expect(gamesFromSlate(slate, mlb)).toEqual([{ key: 'mlb:849816', sport: 'mlb', away: 'TB', home: 'CLE', start: null, startText: '8:00 PM ET', count: 1 }])
   })
 
-  it('DayScroller renders ALL DAYS plus a chip per day, marks the selected one, keeps other params and drops date for the first day', () => {
-    const days = boardDays(starts)
-    render(<DayScroller days={days} selected="2026-10-24" today="2026-10-17" />)
-    const nav = screen.getByRole('navigation', { name: 'Game day' })
-    const links = within(nav).getAllByRole('link')
-    const hrefs = links.map(l => l.getAttribute('href'))
-    expect(hrefs).toContain('/picks/nfl?market=NFL_REC_YDS&date=all')
-    expect(hrefs).toContain('/picks/nfl?market=NFL_REC_YDS')             // the first day is the default: no date param
-    expect(hrefs).toContain('/picks/nfl?market=NFL_REC_YDS&date=2026-10-24')
-    expect(within(nav).getByText('ALL DAYS').closest('a')).not.toHaveAttribute('aria-current', 'date')
-    expect(within(nav).getByText('SAT, OCT 24').closest('a')).toHaveAttribute('aria-current', 'date')
-    expect(within(nav).getByText(/TOMORROW/)).toBeInTheDocument()
-    // from the last day there is no next day, so Next is not a link
-    expect(within(nav).queryByRole('link', { name: 'Next day' })).toBeNull()
-    expect(within(nav).getByRole('link', { name: 'Previous day' })).toBeInTheDocument()
+  it('labels a game with its time today and the weekday for a later day', () => {
+    expect(gameTimeLabel({ start: '2026-10-18T01:00:00Z', startText: null }, '2026-10-17')).toBe('8:00 PM')
+    expect(gameTimeLabel({ start: '2026-10-18T17:00:00Z', startText: null }, '2026-10-17')).toBe('SUN 12:00 PM')
+    expect(gameTimeLabel({ start: null, startText: '8:00 PM ET' }, '2026-10-17')).toBe('8:00 PM ET')
   })
 
-  it('DayScroller renders nothing when the board has no games', () => {
-    const { container } = render(<DayScroller days={[]} selected="all" today="2026-10-17" />)
+  it('GamesStrip lists ALL GAMES and a card per game, toggles ?game= and keeps the other params', () => {
+    render(<GamesStrip games={gamesFromRows(rows)} selected="g2" today="2026-10-17" total={3} />)
+    const nav = screen.getByRole('navigation', { name: 'Games' })
+    const hrefs = within(nav).getAllByRole('link').map(l => l.getAttribute('href'))
+    expect(hrefs[0]).toBe('/picks/nfl?market=NFL_REC_YDS&day=yesterday')                      // ALL GAMES drops game
+    expect(hrefs).toContain('/picks/nfl?market=NFL_REC_YDS&game=nhl%3A2026-10-17%3ABOS%40LAK&day=yesterday')
+    expect(within(nav).getByText('2 games', { exact: false })).toBeInTheDocument()
+    expect(within(nav).getByText('8:00 PM', { exact: false })).toBeInTheDocument()
+  })
+
+  it('GamesStrip renders nothing for a board with no games', () => {
+    const { container } = render(<GamesStrip games={[]} today="2026-10-17" total={0} />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('DayToggle is TODAY | YESTERDAY, marks the shown day, clears the game and drops day for today', () => {
+    render(<DayToggle day="yesterday" today="2026-10-17" yesterday="2026-10-16" />)
+    const nav = screen.getByRole('navigation', { name: 'Day' })
+    const today = within(nav).getByText('TODAY', { exact: false }).closest('a')!
+    const yest = within(nav).getByText('YESTERDAY', { exact: false }).closest('a')!
+    expect(today.getAttribute('href')).toBe('/picks/nfl?market=NFL_REC_YDS')
+    expect(yest.getAttribute('href')).toBe('/picks/nfl?market=NFL_REC_YDS&day=yesterday')
+    expect(yest).toHaveAttribute('aria-current', 'date')
+    expect(today).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByText('SAT OCT 17')).toBeInTheDocument()
+  })
+
+  it('every sport has a team logo path: local files for MLB / NHL / NBA, ESPN for the NFL, nothing invented for an unknown team', () => {
+    expect(anyTeamLogoUrl('mlb', 'NYY')).toBe('/logos/nyy.png')
+    expect(anyTeamLogoUrl('mlb', 'WSH')).toBe('/logos/wsh.png')
+    expect(anyTeamLogoUrl('nhl', 'BOS')).toBe('/logos/nhl/bos-dark.svg')
+    expect(anyTeamLogoUrl('nba', 'LAL')).toBe('/logos/nba/lal-dark.svg')
+    expect(anyTeamLogoUrl('nfl', 'JAC')).toContain('/teamlogos/nfl/500/jax.png')
+    expect(anyTeamLogoUrl('nfl', 'WAS')).toContain('/wsh.png')
+    expect(anyTeamLogoUrl('nfl', 'LAR')).toContain('/lar.png')
+    expect(anyTeamLogoUrl('nfl', 'XXX')).toBeNull()
+    expect(anyTeamLogoUrl('nhl', '')).toBeNull()
+  })
+
+  it('SystemStrip is ALL SYSTEMS plus one tab per system, linking to each system page', () => {
+    render(<SystemStrip sport="nfl" active="NFL_REC_YDS" />)
+    const nav = screen.getByRole('navigation', { name: 'NFL systems' })
+    const links = within(nav).getAllByRole('link')
+    expect(links[0].getAttribute('href')).toBe('/picks/nfl/systems')
+    expect(links[0]).not.toHaveAttribute('aria-current')
+    expect(links).toHaveLength(11)
+    const rec = within(nav).getByText('Rec Yds').closest('a')!
+    expect(rec).toHaveAttribute('aria-current', 'page')
+    expect(rec.getAttribute('href')).toBe('/picks/nfl/rec-yds')
   })
 })
 
@@ -162,7 +190,7 @@ describe('systems statistics', () => {
   })
 
   it('the projection footer shows today counts and the live MAE (engine / L5) instead of dashes', () => {
-    render(<SystemsFooter sport="nfl" today={{ NFL_REC_YDS: { rows: 12, priced: 5, confluence: 1 } }} />)
+    render(<SystemsTable sport="nfl" today={{ NFL_REC_YDS: { rows: 12, priced: 5, confluence: 1 } }} />)
     const rec = within(screen.getByText('Receiving Yards').closest('tr')!)
     expect(rec.getByText('12')).toBeInTheDocument()
     expect(rec.getByText('25.9 / 27.1')).toBeInTheDocument()

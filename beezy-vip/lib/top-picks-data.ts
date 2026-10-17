@@ -13,7 +13,7 @@ const PROJECTION_SPORTS = LIVE_SPORTS.filter(p => p.board === 'projection').map(
 export async function loadTopPlayerPicks(date: string): Promise<{ top: TopPick[]; candidates: TopPick[]; mlbToday: Bet[] }> {
   const [mlbToday, ...boards] = await Promise.all([
     apiGetPicks({ date, limit: 200 }).catch(() => [] as Bet[]),
-    ...PROJECTION_SPORTS.map(s => apiGetSportProjections(s).catch(() => null as SportProjections | null)),
+    ...PROJECTION_SPORTS.map(s => apiGetSportProjections(s, { limit: 600 }).catch(() => null as SportProjections | null)),
   ])
   const projected = boards.flatMap(b => (b?.rows ?? []).map(fromProjection).filter((p): p is TopPick => p != null))
   // `candidates` is every scored pick (the filters on /picks cut from it); `top` is the unfiltered ten the Daily Card uses.

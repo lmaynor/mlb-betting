@@ -260,9 +260,13 @@ export async function apiGetEvFeed(params?: { sport?: string; minEv?: number; li
  * Daily NFL / NHL / NBA projection board: one row per player x stat with the projection, the market and the two engines'
  * agreement. Every row is unvalidated. Callers that only need rows read `.rows`.
  */
-export async function apiGetSportProjections(sport: ProjectionSport, market?: string): Promise<SportProjections> {
+export async function apiGetSportProjections(sport: ProjectionSport, opts: { market?: string; date?: string; limit?: number } = {}): Promise<SportProjections> {
   const sp = new URLSearchParams({ sport })
-  if (market) sp.set('market', market)
+  // The API's default page is 300 rows and its rows run nearest game day first, so a caller that wants the whole board says so
+  if (opts.limit) sp.set('limit', String(opts.limit))
+  if (opts.market) sp.set('market', opts.market)
+  // `date` = an archived day's board (the day's last pre-game state of every row); omitted = the live board
+  if (opts.date) sp.set('date', opts.date)
   return apiFetch<SportProjections>(`/api/public/projections?${sp.toString()}`, 60, `/api/projections?${sp.toString()}`)
 }
 
