@@ -32,15 +32,20 @@ Terminal design system v2 (2026-10-14), per the v2 overhaul spec. Dark fintech:
 - Canvas #090a0f, card #11131a, elevated #171a24, hairlines #1e2230 / #151822
 - Brand emerald #57F287 (CTA, WIN, +EV); lean amber #facc15; loss #ef4444; info #38bdf8
 - Text: #f3f4f6 body, #9ca3af secondary, #7d8596 muted (kept above AA on the canvas)
-- Typography: Inter for UI, JetBrains Mono for every odd, probability, EV%, stake, timestamp;
-  tabular-nums wherever numbers align
-- Geometry: 6px badges, 10px cards, 14px containers, 1px hairline borders
+- Typography (three faces, app/layout.tsx): Space Grotesk 600/700 for h1/h2, display classes and the wordmark
+  (--font-display); Plus Jakarta Sans for dense UI and tables (--font-inter, a historical variable name that ~1,600
+  inline styles read); IBM Plex Mono for every odd, probability, EV%, stake, timestamp and every uppercase micro-label
+  (--font-mono), with tabular-nums and slashed zeros. 10px is the minimum size for any text.
+- Geometry: ONE surface spec (SURFACE_CARD in lib/tokens.ts): #11131a, 1px #1e2230, 8px radius, at most a 1px shadow.
+  6px badges, pills for system badges. Shared table bases are TABLE_TH / TABLE_TD; do not re-declare them per file.
+- Canonical classes are .ui-display, .ui-heading and .btn-primary; the .dell-* names are deprecated aliases.
+- Palette is closed: six retired off-palette grays are banned by tests/no-slop-ui.test.tsx.
 - Per-system hues in lib/tokens.ts SYSTEM_COLOR (+ NFL stat keys); book identity in BOOK_META
 - Tokens live in app/globals.css :root + lib/tokens.ts; legacy variable names are aliases.
   RULE: CSS var() does NOT work inside SVG attributes (recharts/inline SVG) or Satori OG routes -- use literal hex there
 
 ## Anti-References
-- **SaaS cream/beige landing page** — warm-tinted bg, hero metrics grid. The AI default. Never. (Inter is now the house face by owner decision 2026-10-14; the rest of this anti-pattern still applies.)
+- **SaaS cream/beige landing page** — warm-tinted bg, hero metrics grid. The AI default. Never. (The house faces are Space Grotesk, Plus Jakarta Sans and IBM Plex Mono by owner decision 2026-10-17; the rest of this anti-pattern still applies.)
 - **Sports media (ESPN, The Athletic)** — photo-heavy, team-color splashes, editorial hero images. This is a data product, not content.
 - **DraftKings / FanDuel** — promo-code energy, "$100 bonus" CTAs, aggressive green. Beezy earns trust through transparency, not promotion.
 - **Bloomberg Terminal clone** — raw data dump with no visual hierarchy or information design. Data must be navigable.

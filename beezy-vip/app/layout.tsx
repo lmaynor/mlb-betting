@@ -1,9 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { IBM_Plex_Mono, Plus_Jakarta_Sans, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
+// Three faces. Variable names are the contract with globals.css and ~1,600 inline styles: --font-inter is the dense UI
+// face (historical name, now Plus Jakarta Sans), --font-display is headings and the wordmark, --font-mono is every number.
+const uiSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-inter', weight: ['400', '500', '600', '700'], display: 'swap' })
+const displaySans = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700'], display: 'swap' })
+const plexMono = IBM_Plex_Mono({ subsets: ['latin'], variable: '--font-mono', weight: ['400', '500', '600', '700'], display: 'swap' })
 import { ClerkProvider } from '@clerk/nextjs'
 import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { Nav } from '@/components/layout/nav'
@@ -38,7 +41,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const shell = (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${uiSans.variable} ${displaySans.variable} ${plexMono.variable}`}>
       <body>
         <div className="page-frame">
           <div className="site-chrome">

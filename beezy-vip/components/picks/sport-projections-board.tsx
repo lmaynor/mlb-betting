@@ -8,11 +8,11 @@ import { scoreTier, TIER_META } from '@/lib/beezy-score'
 import { formatOdds } from '@/lib/odds'
 import { hasHeadshots } from '@/lib/sport-assets'
 import { SPORT_PILLARS, type SportSlug } from '@/lib/sports'
-import { bookDisplay } from '@/lib/tokens'
+import { bookDisplay, SURFACE_CARD, TABLE_TD, TABLE_TH } from '@/lib/tokens'
 
-const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px' } as const
-const TH = { textAlign: 'left', padding: '9px 10px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230', background: '#11131a', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
-const TD = { padding: '9px 10px', borderBottom: '1px solid #151822', verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
+const SURFACE = SURFACE_CARD
+const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
+const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
 
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
@@ -69,7 +69,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     {t ? (
                       <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px' }}>
                         <span className="mono" style={{ color: t.color, fontWeight: 700 }}>{r.score}</span>
-                        <span className="dell-heading" style={{ fontSize: '9px', color: t.color }}>{t.label}</span>
+                        <span className="dell-heading" style={{ fontSize: '10px', color: t.color }}>{t.label}</span>
                       </span>
                     ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                   </td>
@@ -137,8 +137,8 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.modelEdge)}</span>
                     {r.marketEv != null && <span className="mono" title="Best price against the market consensus" style={{ marginLeft: '8px', color: r.marketEv > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.marketEv)}</span>}
-                    {r.confluence && <span className="dell-heading" title="The projection and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '9px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="dell-heading" style={{ marginLeft: '8px', fontSize: '9.5px', color: 'var(--signal)' }}>PICK</span>}
+                    {r.confluence && <span className="dell-heading" title="The projection and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.isPick && <span className="dell-heading" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
                   </td>
                   {showResult && (
                     <td className="dell-heading" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--fog)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>

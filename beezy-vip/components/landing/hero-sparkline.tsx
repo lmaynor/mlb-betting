@@ -11,7 +11,7 @@ function CustomTooltip({ active, payload }: any) {
   const pos = d.cum_pnl >= 0
   return (
     <div style={{ background: 'var(--graphite)', border: B, padding: '6px 10px' }}>
-      <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginBottom: '2px' }}>{d.date}</div>
+      <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '2px' }}>{d.date}</div>
       <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
         {pos ? '+' : ''}{(d.cum_pnl / 10).toFixed(2)}u
       </div>
@@ -29,7 +29,7 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
   return (
     <div style={{ borderTop: B, padding: '12px 18px 14px', gridColumn: '1 / -1' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)' }}>
+        <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)' }}>
           30D cumulative &middot; paper &middot; {settled} settled
         </span>
         <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: lineColor }}>

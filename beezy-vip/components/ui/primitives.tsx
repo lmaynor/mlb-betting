@@ -28,7 +28,7 @@ export function SystemBadge({ system }: { system: string }) {
   return (
     <span
       className="dell-heading"
-      style={{ fontSize: '9.5px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
+      style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
     >
       {label}
     </span>
@@ -57,7 +57,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.06em', color: 'var(--fog)' }}>PENDING</span>
+    return <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', color: 'var(--fog)' }}>PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -70,7 +70,7 @@ export function ResultPill({ result }: { result: string | null }) {
   return (
     <span
       className="dell-heading"
-      style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
+      style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
     >
       {result.toUpperCase()}
     </span>
@@ -120,7 +120,7 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
       </span>
       <span
         className="dell-heading"
-        style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color }}
+        style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color }}
       >
         {TIER_LABEL[tier]}
       </span>

@@ -42,3 +42,97 @@ describe('no-slop-ui', () => {
     expect(read('app/globals.css')).toMatch(/\.site-chrome \{ position: sticky/)
   })
 })
+
+/** Every .ts/.tsx/.css file under app/, components/ and lib/, as [relative path, source]. */
+function sources(): [string, string][] {
+  const out: [string, string][] = []
+  const walk = (dir: string) => {
+    for (const name of fs.readdirSync(path.join(root, dir))) {
+      const rel = path.join(dir, name)
+      if (fs.statSync(path.join(root, rel)).isDirectory()) walk(rel)
+      else if (/\.(tsx?|css)$/.test(name)) out.push([rel, read(rel)])
+    }
+  }
+  for (const d of ['app', 'components', 'lib']) walk(d)
+  return out
+}
+
+describe('design-system debt guards', () => {
+  it('uses none of the six retired off-palette grays', () => {
+    const banned = /#(1a1d27|9aa0aa|8a8a93|0d0d10|d8d8de|5a5a64)\b/i
+    const hits = sources().filter(([, src]) => banned.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
+  it('renders no text below the 10px floor', () => {
+    const small = /(?:fontSize: *'?|font-size: *|fontSize=["{])(?:[0-9]|[0-9]\.[0-9]+)(?:px)?['"}]?\s*[,;} \n]/
+    const hits = sources().filter(([, src]) => small.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
+  it('the home hero is a solid surface: no gradient, no radius-xl, no paper-mode eyebrow', () => {
+    const hero = read('components/landing/hero.tsx')
+    expect(hero).not.toMatch(/linear-gradient|radius-xl/)
+    expect(hero).toMatch(/SURFACE_CARD/)
+    expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
+    expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
+    // the legal paper-mode disclosure stays in the footer
+    expect(read('components/layout/footer.tsx')).toMatch(/PAPER MODE/)
+  })
+
+  it('primary buttons shift colour on hover and never glow', () => {
+    const css = read('app/globals.css')
+    expect(css).not.toMatch(/--glow-signal/)
+    const hover = /\.btn-primary:hover[^{]*\{([^}]*)\}/.exec(css)
+    expect(hover).not.toBeNull()
+    expect(hover![1]).toMatch(/background: #6bf596/)
+    expect(hover![1]).not.toMatch(/box-shadow/)
+  })
+
+  it('there is one surface spec: CARD_STYLE is SURFACE_CARD at 8px with a 1px shadow, and .ribbon-card-wrap matches', async () => {
+    const tokens = await import('../lib/tokens')
+    expect(tokens.CARD_STYLE).toBe(tokens.SURFACE_CARD)
+    expect(tokens.SURFACE_CARD).toEqual({ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' })
+    expect(tokens.SURFACE_ELEVATED).toEqual({ background: '#171a24', border: '1px solid #2e3446', borderRadius: '8px' })
+    expect(tokens.TABLE_TH.fontSize).toBe('10px')
+    expect(tokens.TABLE_TD.borderBottom).toBe('1px solid #151822')
+    const wrap = /\.ribbon-card-wrap \{([^}]*)\}/.exec(read('app/globals.css'))![1]
+    expect(wrap).toMatch(/border-radius: 8px/)
+    expect(wrap).toMatch(/box-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.45\)/)
+  })
+
+  it('tables share the tokens.ts primitives instead of re-declaring them', () => {
+    for (const f of ['components/picks/top-picks-table.tsx', 'components/picks/systems-table.tsx', 'components/picks/sport-projections-board.tsx', 'app/picks/history/history-table.tsx']) {
+      const src = read(f)
+      expect(src).toMatch(/TABLE_TH/)
+      expect(src).not.toMatch(/const TH = \{ textAlign/)
+    }
+  })
+
+  it('canonical .ui-* classes exist and the .dell-* names are aliases of the same rules', () => {
+    const css = read('app/globals.css')
+    expect(css).toMatch(/\.ui-display,\s*\.dell-display \{/)
+    expect(css).toMatch(/\.ui-heading,\s*\.dell-heading \{/)
+    expect(css).toMatch(/\.btn-primary,\s*\.dell-btn-primary,\s*\.dell-btn-red \{/)
+  })
+
+  it('loads the three-face stack with the variable names the CSS and inline styles read', () => {
+    const layout = read('app/layout.tsx')
+    expect(layout).toMatch(/Plus_Jakarta_Sans\(\{[^}]*variable: '--font-inter'/)
+    expect(layout).toMatch(/Space_Grotesk\(\{[^}]*variable: '--font-display'[^}]*weight: \['600', '700'\]/)
+    expect(layout).toMatch(/IBM_Plex_Mono\(\{[^}]*variable: '--font-mono'[^}]*weight: \['400', '500', '600', '700'\]/)
+    expect(layout).toMatch(/uiSans\.variable.*displaySans\.variable.*plexMono\.variable/)
+    expect(layout).not.toMatch(/JetBrains|\bInter\(/)
+    const css = read('app/globals.css')
+    expect(css).not.toMatch(/--font-display: var\(--font-inter\)/)
+    expect(css).toMatch(/font-variant-numeric: tabular-nums slashed-zero/)
+    expect(css).toMatch(/font-feature-settings: "tnum" 1, "zero" 1/)
+    expect(read('components/ui/brand-mark.tsx')).toMatch(/var\(--font-display\), var\(--font-inter\), sans-serif[^\n]*fontWeight: 700, letterSpacing: '-0\.035em'/)
+  })
+
+  it('OG routes keep Satori-safe system fonts (no next/font, no remote font fetch)', () => {
+    const og = sources().filter(([f]) => f.startsWith(path.join('app', 'api', 'og')) || f === path.join('lib', 'og-brand.tsx'))
+    expect(og.length).toBeGreaterThan(0)
+    for (const [, src] of og) expect(src).not.toMatch(/next\/font|fonts\.googleapis|fonts\.gstatic/)
+  })
+})

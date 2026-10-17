@@ -58,7 +58,7 @@ function Chip({ label, active, color, onClick }: {
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div style={{ padding: '16px 20px', flex: 1, minWidth: 0 }}>
-      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
+      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--ash)', lineHeight: 1 }}>{value}</div>
       {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px' }}>{sub}</div>}
     </div>
@@ -72,7 +72,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   const color = SYSTEM_COLOR[sys] ?? 'var(--silver)'
   return (
     <div style={{ background: 'var(--graphite)', border: B, padding: '12px 14px', fontSize: '11px', minWidth: '160px' }}>
-      <div className="mono" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
+      <div className="mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
       <div style={{ color: 'var(--fog)', marginBottom: '6px', fontSize: '10px' }}>{p.game_date}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
         <span style={{ color: 'var(--fog)' }}>Model edge</span>
@@ -194,14 +194,14 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         {/* Date range */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
+          <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
+          <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
@@ -293,8 +293,8 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Quadrant labels (outside chart, below) */}
       <div style={{ border: B, borderTop: 'none', display: 'flex', justifyContent: 'space-between', padding: '6px 16px', marginBottom: '16px' }}>
-        <span className="mono" style={{ fontSize: '9px', color: 'var(--signal)60', letterSpacing: '0.06em' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
-        <span className="mono" style={{ fontSize: '9px', color: 'var(--loss)60', letterSpacing: '0.06em' }}>BOTTOM LEFT: no edge, negative CLV</span>
+        <span className="mono" style={{ fontSize: '10px', color: 'var(--signal)60', letterSpacing: '0.06em' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
+        <span className="mono" style={{ fontSize: '10px', color: 'var(--loss)60', letterSpacing: '0.06em' }}>BOTTOM LEFT: no edge, negative CLV</span>
       </div>
 
       {/* System legend */}

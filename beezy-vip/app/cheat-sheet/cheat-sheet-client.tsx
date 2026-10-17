@@ -52,7 +52,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       }}
     >
       <div style={{ width: '80px', minWidth: '80px', position: 'relative', overflow: 'hidden', background: `${color}18`, borderRight: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="mono" style={{ position: 'absolute', top: '6px', left: '7px', fontSize: '8px', color: `${color}99`, fontWeight: 800 }}>#{rank}</span>
+        <span className="mono" style={{ position: 'absolute', top: '6px', left: '7px', fontSize: '10px', color: `${color}99`, fontWeight: 800 }}>#{rank}</span>
         {pick.headshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -66,7 +66,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
               // eslint-disable-next-line @next/next/no-img-element
               <img src={pick.awayLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
             )}
-            <span className="mono" style={{ fontSize: '7px', color: `${color}66` }}>@</span>
+            <span className="mono" style={{ fontSize: '10px', color: `${color}66` }}>@</span>
             {pick.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={pick.homeLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
@@ -80,9 +80,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
         <div style={{ marginBottom: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-            <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
+            <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
             {!pick.tracked && (
-              <span className="dell-heading" title="Projections are not tracked in the public results yet." style={{ fontSize: '8px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED</span>
+              <span className="dell-heading" title="Projections are not tracked in the public results yet." style={{ fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
             )}
           </span>
           {edge && <span className="mono" style={{ fontSize: '10px', fontWeight: 800, color: tierColor, letterSpacing: '0.04em' }}>{edge} EDGE</span>}
@@ -93,8 +93,8 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {bullets.slice(0, 3).map((b, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                <span style={{ color, fontSize: '9px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', lineHeight: '14px' }}>{b}</span>
+                <span style={{ color, fontSize: '10px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', lineHeight: '14px' }}>{b}</span>
               </div>
             ))}
           </div>
@@ -104,7 +104,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       <div title={`${TIER_LABEL[scoreTier(pick.score)]}. Beezy Score is a 0-100 strength score, not a win probability.`}
         style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
         <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
-        <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '999px', border: `1px solid ${tierColor}`, color: tierColor }}>{TIER_LABEL[scoreTier(pick.score)]}</span>
+        <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '999px', border: `1px solid ${tierColor}`, color: tierColor }}>{TIER_LABEL[scoreTier(pick.score)]}</span>
       </div>
     </div>
   )
@@ -114,10 +114,10 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
   const win = pick.result === 'win'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--basalt)' }}>
-      <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
+      <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
-      <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {pick.who}{pick.what ? ` / ${pick.what}` : ''}
       </span>
     </div>
@@ -125,7 +125,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
 }
 
 const chip = (on: boolean): React.CSSProperties => ({
-  padding: '5px 10px', fontSize: '9px', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase',
+  padding: '5px 10px', fontSize: '10px', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase',
   border: `1px solid ${on ? 'var(--steel)' : 'var(--basalt)'}`, background: on ? '#131a1e' : 'transparent', color: on ? 'var(--chalk)' : 'var(--fog)',
 })
 
@@ -200,10 +200,10 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
               <div>
                 <div className="dell-display" style={{ fontSize: '22px', color: 'var(--ash)', lineHeight: 1 }}>BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span></div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
-                <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>{today}</div>
+                <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>{today}</div>
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
-                style={{ fontSize: '8px', letterSpacing: '0.08em', color: allExpanded ? 'var(--chalk)' : 'var(--fog)', background: 'transparent', border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`, padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ fontSize: '10px', letterSpacing: '0.08em', color: allExpanded ? 'var(--chalk)' : 'var(--fog)', background: 'transparent', border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`, padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 {allExpanded ? 'COLLAPSE' : 'EXPAND'}
               </button>
             </div>
@@ -225,10 +225,10 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
 
           {list.length > 0 && (
             <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--basalt)', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-              <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{list.length} PICKS</span>
-              {strong > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{strong} STRONG</span>}
-              {lean > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{lean} LEAN</span>}
-              {best > 0 && <span className="dell-heading" style={{ fontSize: '9px', color: 'var(--signal)', letterSpacing: '0.06em' }}>BEST EDGE +{best.toFixed(1)}%</span>}
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{list.length} PICKS</span>
+              {strong > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{strong} STRONG</span>}
+              {lean > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{lean} LEAN</span>}
+              {best > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
@@ -243,10 +243,10 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
                   </div>
                   {yesterday.length > 0 && (
                     <>
-                      <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>YESTERDAY&apos;S RESULTS</div>
+                      <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', marginBottom: '6px', textAlign: 'center' }}>YESTERDAY&apos;S RESULTS</div>
                       {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
                       {ydayWins + ydayLosses > 0 && (
-                        <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', textAlign: 'center', marginTop: '10px' }}>{ydayWins}-{ydayLosses} yesterday</div>
+                        <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', textAlign: 'center', marginTop: '10px' }}>{ydayWins}-{ydayLosses} yesterday</div>
                       )}
                     </>
                   )}
@@ -257,7 +257,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
             <>
               {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
               {list.length > DEFAULT_LIMIT && (
-                <div className="mono" style={{ padding: '8px 16px', fontSize: '9px', letterSpacing: '0.08em', color: 'var(--fog)', borderTop: '1px solid var(--basalt)', textAlign: 'center' }}>
+                <div className="mono" style={{ padding: '8px 16px', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--fog)', borderTop: '1px solid var(--basalt)', textAlign: 'center' }}>
                   +{list.length - DEFAULT_LIMIT} MORE ON <Link href={mode === 'games' ? '/picks/games' : '/picks'} style={{ color: 'var(--link)' }}>THE PICKS PAGE</Link>
                 </div>
               )}
@@ -267,11 +267,11 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
 
           <div style={{ borderTop: '1px solid var(--basalt)', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--carbon)' }}>
             <button onClick={handleShare} className="dell-heading"
-              style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.08em' }}>BEEZY.FYI</span>
+            <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em' }}>BEEZY.FYI</span>
           </div>
         </div>
 
@@ -280,9 +280,9 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
               <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}>POST TO X</span>
-              <span className="mono" style={{ fontSize: '9px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
+              <span className="mono" style={{ fontSize: '10px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
               <div style={{ flex: 1 }} />
-              <button onClick={copyTweet} className="mono" style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
+              <button onClick={copyTweet} className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
                 {tweetCopied ? 'COPIED' : 'COPY'}
               </button>
             </div>
@@ -314,7 +314,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
                 <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
+                  <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
                   <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
                 </div>
               )

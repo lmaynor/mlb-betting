@@ -39,7 +39,7 @@ function ResultPill({ result }: { result: string | null }) {
       alignItems: 'center',
       padding: '3px 8px',
       borderRadius: 'var(--radius-pill)',
-      fontSize: '9px',
+      fontSize: '10px',
       letterSpacing: '0.06em',
       color: c.color,
       background: c.bg,
@@ -74,7 +74,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
         {score}
       </span>
       <span className="dell-heading" style={{
-        fontSize: '7px',
+        fontSize: '10px',
         letterSpacing: '0.08em',
         padding: '2px 5px',
         borderRadius: 'var(--radius-pill)',
@@ -169,7 +169,7 @@ function TableRow({ bet }: { bet: Bet }) {
           maxWidth: '96px',
           padding: '3px 8px',
           borderRadius: 'var(--radius-pill)',
-          fontSize: '9px',
+          fontSize: '10px',
           letterSpacing: '0.06em',
           color: pill.color,
           background: pill.bg,
@@ -204,8 +204,8 @@ function TableRow({ bet }: { bet: Bet }) {
           <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
-                <span style={{ color: pill.color, fontSize: '8px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', lineHeight: '14px' }}>{n}</span>
+                <span style={{ color: pill.color, fontSize: '10px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', lineHeight: '14px' }}>{n}</span>
               </div>
             ))}
           </div>
@@ -214,7 +214,7 @@ function TableRow({ bet }: { bet: Bet }) {
 
       <div style={{ padding: '10px 6px' }}>
         <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)' }}>{fmtOdds(bet.odds)}</div>
-        <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginTop: '2px' }}>{impliedLabel(bet.odds)}</div>
+        <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '2px' }}>{impliedLabel(bet.odds)}</div>
       </div>
       <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', fontWeight: 700, color: 'var(--signal)' }}>
         {fmtEdge(bet.edge)}
@@ -254,7 +254,7 @@ function BetCard({ bet }: { bet: Bet }) {
           <span className="dell-heading" style={{
             padding: '3px 8px',
             borderRadius: 'var(--radius-pill)',
-            fontSize: '9px',
+            fontSize: '10px',
             letterSpacing: '0.06em',
             color: pill.color,
             background: pill.bg,
@@ -287,8 +287,8 @@ function BetCard({ bet }: { bet: Bet }) {
           <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} style={{ display: 'flex', gap: '6px' }}>
-                <span style={{ color: pill.color, fontSize: '9px', flexShrink: 0 }}>&middot;</span>
-                <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{n}</span>
+                <span style={{ color: pill.color, fontSize: '10px', flexShrink: 0 }}>&middot;</span>
+                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{n}</span>
               </div>
             ))}
           </div>
@@ -302,9 +302,9 @@ function BetCard({ bet }: { bet: Bet }) {
           { label: 'BOOK', value: bet.book ?? '--' },
         ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
-            <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
+            <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
             <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--chalk)' : 'var(--silver)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-            {sub && <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginTop: '2px' }}>{sub}</div>}
+            {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '2px' }}>{sub}</div>}
           </div>
         ))}
         <div><ResultPill result={bet.result} /></div>
@@ -389,7 +389,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
             {COLS.map(c => c.sortKey ? (
               <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
                 padding: '8px 10px',
-                fontSize: '9px',
+                fontSize: '10px',
                 fontFamily: 'var(--font-mono)',
                 letterSpacing: '0.1em',
                 color: sortKey === c.sortKey ? 'var(--ash)' : 'var(--fog)',
@@ -401,7 +401,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
                 {c.label}{sortIndicator(c.sortKey)}
               </button>
             ) : (
-              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)' }}>{c.label}</div>
+              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)' }}>{c.label}</div>
             ))}
           </div>
           {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}
