@@ -55,7 +55,7 @@ function SystemPill({ system, edgePct }: { system: string; edgePct: number }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '5px',
       padding: '3px 8px', background: p.bg, border: p.border,
-      fontSize: '9px', fontFamily: 'var(--font-mono), monospace',
+      fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
       fontWeight: 600, letterSpacing: '0.06em',
     }}>
       <span style={{ color: p.color }}>{system}</span>
@@ -85,7 +85,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
   const notes  = pick.notes?.split(' . ').filter(Boolean) ?? []
 
   return (
-    <div style={{ padding: '14px 16px', borderTop: B, background: '#0d0d10' }}>
+    <div style={{ padding: '14px 16px', borderTop: B, background: '#090a0f' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: notes.length ? '10px' : 0 }}>
         <div>
           <div style={{ fontSize: '12px', color: 'var(--ash)', fontWeight: 600, marginBottom: '4px' }}>{label}</div>
@@ -131,7 +131,7 @@ function GameRow({ game }: { game: SlateGame }) {
           gap: '16px',
           padding: '14px 16px',
           cursor: hasPicks ? 'pointer' : 'default',
-          background: open ? '#0d0d10' : 'transparent',
+          background: open ? '#090a0f' : 'transparent',
           transition: 'background 0.1s',
         }}
       >
@@ -261,7 +261,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         <div style={{ width: '0.5px', background: 'var(--basalt)', height: '20px', flexShrink: 0 }} />
 
         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="mono" style={{ fontSize: '9px', color: 'var(--fog)', marginRight: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>System</span>
+          <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
@@ -291,10 +291,10 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         <div style={{ border: B }}>
           {/* Column headers */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '8px 16px', background: 'var(--graphite)', borderBottom: B }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
               Game -- Starters -- Picks
             </span>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
               {filtered.length} games
             </span>
           </div>

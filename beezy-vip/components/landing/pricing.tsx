@@ -6,6 +6,7 @@ import { PRE_LAUNCH } from '@/lib/launch'
 import { DISCORD_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
+import { SURFACE_CARD } from '@/lib/tokens'
 import { LEAGUES, type League } from '@/lib/tiers'
 
 const CheckoutButton = dynamic(
@@ -13,7 +14,7 @@ const CheckoutButton = dynamic(
   { ssr: false }
 )
 
-const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' } as const
+const SURFACE = SURFACE_CARD
 
 /** Plan copy lives in one object so the tests can pin prices and the annual-savings arithmetic. */
 export const PLANS = {

@@ -77,7 +77,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
             <Link key={p.slug} href={`/sports/${p.slug}`} className="card-hover" style={{ ...CARD_STYLE, padding: '18px', textDecoration: 'none', borderColor: `${p.accent}33`, display: 'block' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
                 <span className="dell-display" style={{ fontSize: '24px', color: p.accent }}>{p.shortName}</span>
-                <span className="dell-heading" style={{ fontSize: '9.5px', color: 'var(--fog)' }}>{STATUS_LABEL[p.status]}</span>
+                <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>{STATUS_LABEL[p.status]}</span>
               </div>
               <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--silver)', marginBottom: '8px' }}>{p.seasonBadge}</div>
               <p className="times" style={{ fontSize: '12.5px', color: 'var(--fog)', lineHeight: 1.55 }}>{p.description}</p>

@@ -63,7 +63,7 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
 /** NFL / NHL / NBA: every system with its engine and live accuracy against the last-5 average, linking to its model page. */
 function ProjectionSportTable({ sport }: { sport: ProjectionSport }) {
   const systems = getSystemsBySport(sport)
-  const TH = { textAlign: 'left', padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', background: 'var(--obsidian)', borderBottom: B_INNER, whiteSpace: 'nowrap' } as const
+  const TH = { textAlign: 'left', padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', background: 'var(--obsidian)', borderBottom: B_INNER, whiteSpace: 'nowrap' } as const
   const TD = { padding: '12px', verticalAlign: 'top', borderBottom: B } as const
   return (
     <>
@@ -80,7 +80,7 @@ function ProjectionSportTable({ sport }: { sport: ProjectionSport }) {
               return (
                 <tr key={sys.key}>
                   <td style={TD}>
-                    <span className="mono" style={{ fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', whiteSpace: 'nowrap' }}>{sys.shortName}</span>
+                    <span className="mono" style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', whiteSpace: 'nowrap' }}>{sys.shortName}</span>
                   </td>
                   <td style={{ ...TD, fontSize: '12px', color: 'var(--silver)', lineHeight: 1.55 }}>
                     <div style={{ fontWeight: 600, color: 'var(--ash)', marginBottom: '2px' }}>{sys.name}</div>
@@ -136,7 +136,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         <div className="models-table-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', background: 'var(--obsidian)', borderBottom: B_INNER }}>
             {['System', 'What it prices', 'Metric', 'Training', 'Detail'].map(h => (
-              <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
+              <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
             ))}
           </div>
           {ACTIVE_MODELS.map((model, i) => {
@@ -146,13 +146,13 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <div key={model.system} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 88px 88px 72px', borderBottom: i < ACTIVE_MODELS.length - 1 ? B : undefined, alignItems: 'center' }}>
                 <div style={{ padding: '12px' }}>
-                  <span className="mono" style={{ fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
-                  <div className="mono" style={{ fontSize: '9px', color: 'var(--fog)' }}>{model.version}</div>
+                  <span className="mono" style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, display: 'inline-block', marginBottom: '4px' }}>{model.system}</span>
+                  <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{model.version}</div>
                 </div>
                 <div style={{ padding: '12px', fontSize: '12px', color: 'var(--silver)', lineHeight: 1.55 }}>{model.desc}</div>
                 <div style={{ padding: '12px' }}>
                   <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--ash)' }}>{model.metric}</div>
-                  <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
+                  <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{model.metricLabel}</div>
                   {roi !== null && <div className="mono" style={{ fontSize: '10px', color: roi >= 0 ? 'var(--signal)' : 'var(--loss)', marginTop: '2px', fontWeight: 700 }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
                 </div>
                 <div className="mono" style={{ padding: '12px', fontSize: '11px', color: 'var(--silver)' }}>{model.range}</div>
@@ -194,7 +194,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             const slug = getModelSpec(model.system.toLowerCase().replace(/_/g, '-'))?.slug
             const body = (
               <>
-                <span className="mono" style={{ display: 'inline-block', fontSize: '9px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
+                <span className="mono" style={{ display: 'inline-block', fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border, marginBottom: '9px' }}>{model.system}</span>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ash)', marginBottom: '5px' }}>{model.label}</div>
                 <p style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>{model.note}</p>
                 {slug && <div className="times" style={{ fontSize: '12px', color: 'var(--link)', fontWeight: 600, marginTop: '8px' }}>Detail &rarr;</div>}

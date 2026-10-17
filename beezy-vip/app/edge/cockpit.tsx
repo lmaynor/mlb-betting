@@ -171,7 +171,7 @@ function StatPills({ items }: { items: { label: string; value: string; color?: s
       {items.map(it => (
         <div key={it.label} style={{ background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '7px 9px', minWidth: 0 }}>
           <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: it.color ?? 'var(--chalk)', lineHeight: 1.1 }}>{it.value}</div>
-          <div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)', marginTop: '4px' }}>{it.label}</div>
+          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px' }}>{it.label}</div>
         </div>
       ))}
     </div>
@@ -207,7 +207,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         {ticks.map(t => (
           <g key={t}>
             <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#1e2230" strokeWidth="1" />
-            <text x={padL - 5} y={y(t) + 3} textAnchor="end" fill="#7d8596" style={{ fontSize: '9px', fontFamily: 'monospace' }}>{Math.round(t)}</text>
+            <text x={padL - 5} y={y(t) + 3} textAnchor="end" fill="#7d8596" style={{ fontSize: '10px', fontFamily: 'monospace' }}>{Math.round(t)}</text>
           </g>
         ))}
         {games.map((g, i) => {
@@ -219,8 +219,8 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
           return (
             <g key={i}>
               <rect x={x + bw * 0.16} y={H - padB - h} width={bw * 0.68} height={h} rx="2" fill={fill} opacity="0.92" />
-              <text x={x + bw / 2} y={H - padB - h - 4} textAnchor="middle" fill="#d1d5db" style={{ fontSize: '9px', fontFamily: 'monospace' }}>{v}</text>
-              <text x={x + bw / 2} y={H - 12} textAnchor="middle" fill="#7d8596" style={{ fontSize: '8.5px', fontFamily: 'monospace' }}>
+              <text x={x + bw / 2} y={H - padB - h - 4} textAnchor="middle" fill="#d1d5db" style={{ fontSize: '10px', fontFamily: 'monospace' }}>{v}</text>
+              <text x={x + bw / 2} y={H - 12} textAnchor="middle" fill="#7d8596" style={{ fontSize: '10px', fontFamily: 'monospace' }}>
                 {String((useOpp ? g.opp : g.date) ?? '').slice(useOpp ? 0 : -5, useOpp ? 4 : undefined)}
               </text>
             </g>
@@ -229,7 +229,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         {line != null && (
           <g>
             <line x1={padL} x2={W - padR} y1={y(line)} y2={y(line)} stroke="#f3f4f6" strokeWidth="1.4" strokeDasharray="5 4" />
-            <text x={W - padR} y={y(line) - 4} textAnchor="end" fill="#f3f4f6" style={{ fontSize: '9.5px', fontWeight: 700, fontFamily: 'monospace' }}>Line {line}</text>
+            <text x={W - padR} y={y(line) - 4} textAnchor="end" fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace' }}>Line {line}</text>
           </g>
         )}
       </svg>
@@ -284,16 +284,16 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         aria-label={`${label} over the last ${n} games, ${trend}`}>
         <path d={area} fill="#38bdf8" opacity="0.12" />
         <line x1={padL} x2={W - padR} y1={y(avg)} y2={y(avg)} stroke="#7d8596" strokeWidth="1" strokeDasharray="4 4" />
-        <text x={padL - 5} y={y(avg) + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '9px', fontFamily: 'monospace' }}>{fmt(avg)}</text>
+        <text x={padL - 5} y={y(avg) + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '10px', fontFamily: 'monospace' }}>{fmt(avg)}</text>
         <path d={line} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
         {idx.map(i => (
           <g key={i}>
             <circle cx={x(i)} cy={y(pts[i] as number)} r="3" fill="#38bdf8" />
-            <text x={x(i)} y={y(pts[i] as number) - 7} textAnchor="middle" fill="#d1d5db" style={{ fontSize: '8.5px', fontFamily: 'monospace' }}>{fmt(pts[i] as number)}</text>
+            <text x={x(i)} y={y(pts[i] as number) - 7} textAnchor="middle" fill="#d1d5db" style={{ fontSize: '10px', fontFamily: 'monospace' }}>{fmt(pts[i] as number)}</text>
           </g>
         ))}
         {form.games.map((g, i) => (
-          <text key={i} x={x(i)} y={H - 7} textAnchor="middle" fill="#7d8596" style={{ fontSize: '8.5px', fontFamily: 'monospace' }}>
+          <text key={i} x={x(i)} y={H - 7} textAnchor="middle" fill="#7d8596" style={{ fontSize: '10px', fontFamily: 'monospace' }}>
             {String(g.opp ?? g.date ?? '').slice(0, 4)}
           </text>
         ))}
@@ -332,7 +332,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
       <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} style={{ overflowX: 'auto' }}>
         <div role="row" style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', padding: '0 4px 6px', borderBottom: `1px solid ${HAIR}`, minWidth: '320px' }}>
           {['BOOK', 'OVER', 'UNDER', 'FAIR O%'].map(h => (
-            <span key={h} role="columnheader" className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>{h}</span>
+            <span key={h} role="columnheader" className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>{h}</span>
           ))}
         </div>
         {ranked.map(({ quote, best }) => {
@@ -342,7 +342,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
               style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', alignItems: 'center', padding: '8px 4px', borderBottom: '1px solid #151822', minWidth: '320px', background: best ? 'rgba(87, 242, 135, 0.06)' : 'transparent' }}>
               <span role="cell" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <BookBadge book={quote.book} />
-                {flagged && <span className="dell-heading" style={{ fontSize: '8px', color: SKY }}>TARGET</span>}
+                {flagged && <span className="dell-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
@@ -373,7 +373,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           <Avatar r={r} size={56} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
-              <span className="dell-heading" style={{ fontSize: '9px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
+              <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
               <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fog)' }}>{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
             </div>
             <h2 className="dell-display" style={{ fontSize: 'clamp(19px, 3vw, 24px)', color: 'var(--chalk)', lineHeight: 1.15, overflowWrap: 'anywhere' }}>{r.player ?? 'Unknown player'}</h2>
@@ -426,7 +426,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--chalk)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.player ?? 'Unknown player'}</span>
         <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{propText(r)}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
-          <span className="dell-heading" style={{ fontSize: '8.5px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 5px', flex: '0 0 auto' }}>{r.sport.toUpperCase()}</span>
+          <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 5px', flex: '0 0 auto' }}>{r.sport.toUpperCase()}</span>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta}</span>
         </span>
       </span>

@@ -164,7 +164,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: { label: string
 function Big({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="dell-heading" style={{ fontSize: '9.5px', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
+      <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: 'var(--chalk)' }}>{value}</div>
     </div>
   )

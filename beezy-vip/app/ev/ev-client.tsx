@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
-import { BOOK_META, bookDisplay, CARD_STYLE, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
+import { BOOK_META, bookDisplay, CARD_STYLE, SURFACE_CARD, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
 import { matchesMyBooks, useMyBooks } from '@/lib/use-my-books'
 import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
@@ -54,7 +54,7 @@ interface Row {
 }
 
 const HAIR = '#1e2230'
-const BAR_STYLE = { background: '#11131a', border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' } as const
+const BAR_STYLE = SURFACE_CARD
 const COLUMNS: { label: string; w?: string; right?: boolean }[] = [
   { label: 'SIGNAL / SCORE', w: '112px' },
   { label: 'SPORT & MATCHUP', w: '150px' },
@@ -549,7 +549,7 @@ function BookStrip({ id, r }: { id: string; r: Row }) {
   )
   return (
     <div id={id} role="group" aria-label={`All books for ${r.title}`} style={{ flex: '1 0 100%', gridColumn: '1 / -1', borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-      <div className="dell-heading" style={{ fontSize: '9px', color: 'var(--fog)', marginBottom: '8px' }}>
+      <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '8px' }}>
         LINE SHOPPING &middot; FAIR = DE-VIGGED P(OVER) AT EACH BOOK
       </div>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
@@ -563,11 +563,11 @@ function BookStrip({ id, r }: { id: string; r: Row }) {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
-                {best && <span className="dell-heading" style={{ fontSize: '8.5px', color: '#57F287' }} aria-label={`Best ${bestSide} price`}>BEST</span>}
+                {best && <span className="dell-heading" style={{ fontSize: '10px', color: '#57F287' }} aria-label={`Best ${bestSide} price`}>BEST</span>}
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>OVER</div>{price(quote.over, best && bestSide === 'over')}</div>
-                <div><div className="dell-heading" style={{ fontSize: '8.5px', color: 'var(--fog)' }}>UNDER</div>{price(quote.under, best && bestSide === 'under')}</div>
+                <div><div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>OVER</div>{price(quote.over, best && bestSide === 'over')}</div>
+                <div><div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>UNDER</div>{price(quote.under, best && bestSide === 'under')}</div>
               </div>
               <div className="mono" style={{ fontSize: '11px', color: 'var(--ash)' }}>
                 fair {quote.fair != null ? `${(quote.fair * 100).toFixed(1)}%` : <>&ndash;</>}
@@ -602,12 +602,12 @@ function EvRow({ r, bankroll, copied, onCopy }: { r: Row; bankroll: number; copi
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span className="mono" style={{ fontSize: '20px', fontWeight: 800, color: meta.color, lineHeight: 1 }} aria-label={`Beezy score ${r.score}`}>{r.score}</span>
-              <span className="dell-heading" style={{ fontSize: '8.5px', color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '6px', padding: '2px 6px' }}>{meta.label}</span>
+              <span className="dell-heading" style={{ fontSize: '10px', color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, borderRadius: '6px', padding: '2px 6px' }}>{meta.label}</span>
             </div>
           )}
         </td>
         <td>
-          <span className="dell-heading" style={{ fontSize: '9px', color: r.tagColor, border: `1px solid ${r.tagColor}55`, borderRadius: '4px', padding: '1px 6px', marginRight: '8px' }}>{r.tag}</span>
+          <span className="dell-heading" style={{ fontSize: '10px', color: r.tagColor, border: `1px solid ${r.tagColor}55`, borderRadius: '4px', padding: '1px 6px', marginRight: '8px' }}>{r.tag}</span>
           <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fog)' }}>{r.matchup}</span>
           <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '3px' }}>{r.when}</div>
         </td>

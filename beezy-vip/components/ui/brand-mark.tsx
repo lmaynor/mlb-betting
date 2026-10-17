@@ -56,8 +56,8 @@ export function BrandWordmark({ size = 'md', showDomain = true }: {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: `${m.gap}px`, lineHeight: 1 }}>
       <BrandMark size={m.mark} color={BRAND_EMERALD} />
-      <span style={{ fontSize: `${m.font}px`, letterSpacing: '-0.03em', whiteSpace: 'nowrap' }}>
-        <span style={{ color: BRAND_MONO, fontWeight: 800 }}>beezy</span>
+      <span style={{ fontFamily: 'var(--font-display), var(--font-inter), sans-serif', fontSize: `${m.font}px`, fontWeight: 700, letterSpacing: '-0.035em', whiteSpace: 'nowrap' }}>
+        <span style={{ color: BRAND_MONO, fontWeight: 700 }}>beezy</span>
         {showDomain && <span style={{ color: BRAND_EMERALD, fontWeight: 700 }}>.fyi</span>}
       </span>
     </span>

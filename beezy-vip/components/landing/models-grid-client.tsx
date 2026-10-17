@@ -73,7 +73,7 @@ function SystemTile({ s }: { s: SystemCard }) {
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <span className="dell-heading" style={{ fontSize: '9.5px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
             {s.system}
           </span>
         </span>
@@ -116,7 +116,7 @@ function SystemTile({ s }: { s: SystemCard }) {
                 ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--chalk)' : 'var(--fog)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
-                  <div className="dell-heading" style={{ fontSize: '8.5px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
+                  <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
                   <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color }}>{val}</div>
                 </div>
               ))}

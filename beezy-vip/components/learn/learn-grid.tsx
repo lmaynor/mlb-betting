@@ -46,7 +46,7 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
         {shown.map(article => (
           <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover" style={{ display: 'block', padding: '22px', textDecoration: 'none', background: 'var(--graphite)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)' }}>
-            <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>
               {article.category} · {article.keyword} · {article.readTime} min read
             </div>
             <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '8px', letterSpacing: '-0.01em' }}>{article.title}</div>

@@ -6,7 +6,7 @@ import { americanToImpliedProb, removeVig, probToAmerican, formatProb, formatOdd
 
 const B = '1px solid var(--basalt)'
 const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '6px' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '6px' }
 
 export default function OddsCalculatorPage() {
   const [odds1, setOdds1] = useState('-110')
@@ -34,8 +34,8 @@ export default function OddsCalculatorPage() {
       {result && (
         <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden', marginBottom: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'var(--obsidian)', borderBottom: B }}>
-            <div /><div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 1</div>
-            <div className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 2</div>
+            <div /><div className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 1</div>
+            <div className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 2</div>
           </div>
           {[
             { label: 'Input Odds',   v1: formatOdds(o1),                          v2: formatOdds(o2) },
@@ -57,7 +57,7 @@ export default function OddsCalculatorPage() {
       )}
 
       <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '20px' }}>
-        <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '10px' }}>How it works</div>
+        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '10px' }}>How it works</div>
         <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6, marginBottom: '8px' }}>Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
         <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6 }}>If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" style={{ color: 'var(--link)', textDecoration: 'underline' }}>Kelly Calculator</a> to size your stake.</p>
       </div>

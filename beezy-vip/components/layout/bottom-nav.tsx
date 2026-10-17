@@ -64,7 +64,7 @@ export function BottomNav() {
             </span>
             <span
               className="dell-heading"
-              style={{ fontSize: '9px', letterSpacing: '0.03em' }}
+              style={{ fontSize: '10px', letterSpacing: '0.03em' }}
             >
               {tab.label}
             </span>
