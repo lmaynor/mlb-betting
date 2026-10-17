@@ -76,3 +76,40 @@ export function withCounts(games: BoardGame[], rows: BoardRow[]): BoardGame[] {
   const counts = new Map(gamesFromRows(rows).map(g => [g.key, g.count]))
   return games.map(g => ({ ...g, count: counts.get(g.key) ?? 0 }))
 }
+
+/**
+ * The instant a game starts: the feed's ISO start, or for MLB's slate ('7:05 PM ET', no date) that wall time on `today`'s
+ * date in Eastern time. Null when neither is usable. Pure, so a client can turn it into the viewer's own clock.
+ */
+export function startInstant(g: Pick<BoardGame, 'start' | 'startText'>, today = siteDateKey()): Date | null {
+  if (g.start) {
+    const d = new Date(g.start)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)\s*ET$/i.exec(g.startText ?? '')
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today)
+  if (!m || !day) return null
+  const hour = (Number(m[1]) % 12) + (m[3].toUpperCase() === 'PM' ? 12 : 0)
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' })
+  for (const offset of [4, 5]) {   // EDT, then EST: keep the offset under which Eastern wall time reads back as `hour`
+    const cand = new Date(Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]), hour + offset, Number(m[2])))
+    if (Number(fmt.format(cand)) === hour) return cand
+  }
+  return null
+}
+
+/**
+ * The start time on the viewer's own clock ('2:00 PM', or 'SUN 12:00 PM' when it falls on another local day). `timeZone`
+ * defaults to the browser's; falls back to the server label when the start cannot be resolved.
+ */
+export function localTimeLabel(
+  g: Pick<BoardGame, 'start' | 'startText'>, today = siteDateKey(), opts: { now?: Date; timeZone?: string } = {},
+): string {
+  const d = startInstant(g, today)
+  if (!d) return g.startText ?? ''
+  const tz = opts.timeZone ? { timeZone: opts.timeZone } : {}
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...tz })
+  const day = (x: Date) => x.toLocaleDateString('en-CA', tz)
+  if (day(d) === day(opts.now ?? new Date())) return time
+  return `${d.toLocaleDateString('en-US', { weekday: 'short', ...tz }).toUpperCase()} ${time}`
+}

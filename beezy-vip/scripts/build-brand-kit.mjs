@@ -50,8 +50,19 @@ await (await tile(400, 0.18)).toFile(out('public/brand/x-avatar-400.png'))
 await writeFile(out('public/brand/logo-emerald.svg'), finSvg(EMERALD, VW) + '\n')
 await writeFile(out('public/brand/logo-mono-white.svg'), finSvg(MONO, VW) + '\n')
 
-// favicon.ico: a 32x32 PNG inside an ICO container (supported by every current browser).
-const png32 = await (await tile(32, 0.1)).toBuffer()
+// Browser-tab icons are the bare fin on a transparent canvas: no tile, no border, so Safari draws no frame around it.
+// The tiled app icon (apple-icon, icon-192/512, avatars) is kept for places that need a square badge.
+{
+  const pad = 142 // (VW - VH) / 2: centres the fin vertically in a square viewBox
+  const body = paths.map(d => `<path d="${d}"/>`).join('')
+  await writeFile(out('app/icon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -${pad} ${VW} ${VW}" width="512" height="512"><title>beezy.fyi</title><g fill="${EMERALD}">${body}</g></svg>\n`)
+}
+
+// favicon.ico: the bare fin as a 32x32 transparent PNG inside an ICO container (supported by every current browser).
+const png32 = await sharp({ create: { width: 32, height: 32, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+  .composite([{ input: Buffer.from(finSvg(EMERALD, 30)), left: 1, top: Math.round((32 - Math.round((30 * VH) / VW)) / 2) }])
+  .png()
+  .toBuffer()
 const header = Buffer.alloc(22)
 header.writeUInt16LE(0, 0)
 header.writeUInt16LE(1, 2)

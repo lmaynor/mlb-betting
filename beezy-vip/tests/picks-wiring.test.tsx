@@ -12,7 +12,7 @@ import { GamesStrip } from '../components/picks/games-strip'
 import { SystemStrip } from '../components/picks/system-strip'
 import { SystemsTable } from '../components/picks/systems-table'
 import { systemTodayCounts, type BoardRow } from '../lib/board-rows'
-import { gamesFromRows, gamesFromSlate, gameTimeLabel, mergeGames, withCounts } from '../lib/board-games'
+import { gamesFromRows, gamesFromSlate, gameTimeLabel, localTimeLabel, mergeGames, startInstant, withCounts } from '../lib/board-games'
 import { anyTeamLogoUrl } from '../lib/sport-assets'
 import { liveAccuracy } from '../lib/prop-model-specs'
 import { headshotUrlById } from '../lib/sport-assets'
@@ -100,8 +100,26 @@ describe('games strip and day toggle', () => {
     const hrefs = within(nav).getAllByRole('link').map(l => l.getAttribute('href'))
     expect(hrefs[0]).toBe('/picks/nfl?market=NFL_REC_YDS&day=yesterday')                      // ALL GAMES drops game
     expect(hrefs).toContain('/picks/nfl?market=NFL_REC_YDS&game=nhl%3A2026-10-17%3ABOS%40LAK&day=yesterday')
-    expect(within(nav).getByText('2 games', { exact: false })).toBeInTheDocument()
-    expect(within(nav).getByText('8:00 PM', { exact: false })).toBeInTheDocument()
+    // compact cards: both logos and a time; the team codes and the count live in the accessible name, not as text
+    expect(within(nav).getByRole('link', { name: /^All games: 2 games, 3 rows/ })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: /^BOS at LAK, .*2 rows$/ })).toBeInTheDocument()
+    expect(within(nav).queryByText('BOS')).toBeNull()
+    expect(within(nav).queryByText(/rows/)).toBeNull()
+    expect(within(nav).getAllByText(/\d:\d\d (AM|PM)/)).toHaveLength(2)
+  })
+
+  it('shows start times on the viewer\'s own clock, with the weekday only when it is another local day', () => {
+    const nhl = { start: '2026-10-18T01:00:00Z', startText: null }
+    const now = new Date('2026-10-17T20:00:00Z')
+    expect(localTimeLabel(nhl, '2026-10-17', { now, timeZone: 'America/Chicago' })).toBe('8:00 PM')
+    expect(localTimeLabel(nhl, '2026-10-17', { now, timeZone: 'America/Los_Angeles' })).toBe('6:00 PM')
+    expect(localTimeLabel(nhl, '2026-10-17', { now: new Date('2026-10-17T12:00:00Z'), timeZone: 'Asia/Tokyo' })).toBe('SUN 10:00 AM')
+    // MLB's slate has only '8:00 PM ET' (no date): it is resolved on the site date, then shown in the viewer's zone
+    const mlb = { start: null, startText: '8:00 PM ET' }
+    expect(localTimeLabel(mlb, '2026-10-17', { now, timeZone: 'America/New_York' })).toBe('8:00 PM')
+    expect(localTimeLabel(mlb, '2026-10-17', { now, timeZone: 'America/Los_Angeles' })).toBe('5:00 PM')
+    expect(startInstant(mlb, '2026-12-05')?.toISOString()).toBe('2026-12-06T01:00:00.000Z')   // EST in winter
+    expect(localTimeLabel({ start: null, startText: 'TBD' }, '2026-10-17')).toBe('TBD')
   })
 
   it('GamesStrip renders nothing for a board with no games', () => {

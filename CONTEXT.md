@@ -2478,8 +2478,12 @@ service as an environment variable:
 `ev_exchanges` (EV_EXCHANGES -> ALERTS -> OPS), `card` (CARD_<SPORT> -> URL), `recap` (RECAP -> legacy SUMMARY -> URL), `tweets` (TWEETS -> OPS),
 `ops` (OPS only). +EV pagers (`fast_alert_loop`, `kalshi_alert`) no longer fall back to #daily-picks (unset chain = print only) and split
 exchange vs sportsbook rows into their own channels; every +EV embed carries `url` + deep links to /ev and /edge. The NFL/NHL/NBA
-sweeps (`ev/sweep_nfl_props.py`, `ev/sweep_props_alerts.py`) deliberately keep their admin-only webhook (unvalidated rows) and only gained the
-links. Kambi clones: `sugarhouse` is dropped when `betrivers` quotes the same proposition (`drop_kambi_clones`) and folded into `betrivers`
+sweeps (`ev/sweep_nfl_props.py`, `ev/sweep_props_alerts.py`) deliberately keep an admin-only webhook (unvalidated rows) and only gained the
+links. **2026-10-17:** their alerts route via `webhook_for("props_alerts")` = `DISCORD_WEBHOOK_ALERTS` ONLY. They used to fall back to
+`DISCORD_WEBHOOK_OPS`, and because the `discord-webhook-alerts` secret was never created every NFL props alert landed in `#ops-alerts`. With
+the secret unset they now log instead of posting; the NFL sweep's own run notices (started / budget exhausted) still go to ops. To see the
+alerts again: create the admin alerts channel + webhook and the `discord-webhook-alerts` secret, then re-run `deploy/setup_props_alerts.sh`
+and mount it on `ev-nfl-props-sweep`. Kambi clones: `sugarhouse` is dropped when `betrivers` quotes the same proposition (`drop_kambi_clones`) and folded into `betrivers`
 in `ev/props.parse_event_props`, so a pair counts as ONE book in consensus, Discord and `bets`.
 
 `discord-bot/` (Node 22, discord.js 14, `node:sqlite`, no voice/native deps; own tests via `npm test`) is the persistent beezy-bot: `/ev /proj

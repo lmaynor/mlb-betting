@@ -12,6 +12,11 @@ falls back to a channel that belongs to a different audience (an +EV alert never
     webhook_for("recap")           DISCORD_WEBHOOK_RECAP        -> (legacy _SUMMARY) -> DISCORD_WEBHOOK_URL
     webhook_for("tweets")          DISCORD_WEBHOOK_TWEETS       -> _OPS
     webhook_for("ops")             DISCORD_WEBHOOK_OPS
+    webhook_for("props_alerts")    DISCORD_WEBHOOK_ALERTS       (nothing after it: see below)
+
+`props_alerts` is the unvalidated NFL / NHL / NBA props sweeps (ev/sweep_nfl_props.py, ev/sweep_props_alerts.py). Those rows
+must not land in a member channel (unvalidated) and must not land in #ops-alerts either (that channel is for failures; a
+signal feed buried the real pages there). With DISCORD_WEBHOOK_ALERTS unset the chain is empty and the sweep logs instead.
 
 Returns None when nothing in the chain is set (callers print instead of posting). Blank / whitespace-only
 values count as unset.
@@ -34,6 +39,7 @@ _CHAINS = {
     "recap": ("DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_URL"),
     "tweets": ("DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"),
     "ops": ("DISCORD_WEBHOOK_OPS",),
+    "props_alerts": ("DISCORD_WEBHOOK_ALERTS",),
 }
 KINDS = tuple(sorted(set(_CHAINS) | {"card"}))
 

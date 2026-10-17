@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { AlignedBar } from '@/components/picks/aligned-bar'
 import { DayToggle } from '@/components/picks/day-toggle'
 import { FilterBar } from '@/components/picks/filter-bar'
 import { GamesStrip } from '@/components/picks/games-strip'
@@ -57,9 +58,9 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       <SystemStrip sport={sport} active={system.key} />
       {board && (
         <>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--basalt)', background: 'var(--carbon)' }}>
+          <AlignedBar>
             <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} />
-          </div>
+          </AlignedBar>
           <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>

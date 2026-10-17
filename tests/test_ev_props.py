@@ -194,8 +194,10 @@ def test_alert_embed_and_webhook_never_uses_member_channel(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://example.invalid/picks")      # member channel: must be ignored
     assert sw.webhook_url() == ""
-    monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://example.invalid/ops")
-    assert sw.webhook_url().endswith("/ops")
+    monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://example.invalid/ops")        # #ops-alerts is for failures: also ignored
+    assert sw.webhook_url() == ""
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://example.invalid/alerts")
+    assert sw.webhook_url().endswith("/alerts")
 
 
 def _fake_pc(events):

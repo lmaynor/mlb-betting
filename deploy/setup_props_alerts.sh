@@ -9,8 +9,9 @@
 # or removing these schedulers cannot affect the credit budget. It REFUSES a snapshot older than 45 min, so a missed
 # banker run means "no alerts", never alerts on stale quotes.
 #
-# DISCORD: alerts go to DISCORD_WEBHOOK_ALERTS if that secret exists, else DISCORD_WEBHOOK_OPS (admin-only). The
-# sweep's own code refuses to fall back to a member channel (tests/test_ev_props_alerts.py pins that).
+# DISCORD: alerts go to DISCORD_WEBHOOK_ALERTS ONLY (secret discord-webhook-alerts -> a dedicated admin channel). With the
+# secret absent the sweep logs instead of posting: it never falls back to #ops-alerts (failures only) or to a member channel
+# (tests/test_ev_props_alerts.py pins both). Create the channel + secret before relying on these alerts.
 #
 # Prereqs: the feeds image (see IMAGE below -- NOT the production mlb-betting image) rebuilt with this code; odds banking provisioned
 # (deploy/setup_odds_banking.sh) -- the sweep has nothing to read before that. Idempotent.

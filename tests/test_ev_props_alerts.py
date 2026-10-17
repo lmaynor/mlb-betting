@@ -161,10 +161,33 @@ def test_run_once_writes_evidence_and_latest_and_dedups_alerts(mem, monkeypatch)
     assert res2["alerts_sent"] == 0 and len(posted) == n
 
 
-def test_webhook_never_falls_back_to_a_member_channel(monkeypatch):
-    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL"):
+def test_webhook_never_falls_back_to_a_member_channel_or_ops(monkeypatch):
+    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_EV_BOOKS"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://member.example/picks")
+    monkeypatch.setenv("DISCORD_WEBHOOK_EV_BOOKS", "https://member.example/ev")
     assert sw.webhook_url() == ""
+    monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://ops.example")            # #ops-alerts is for failures, not this feed
+    assert sw.webhook_url() == ""
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://alerts.example")
+    assert sw.webhook_url() == "https://alerts.example"
+
+
+def test_nfl_sweep_alerts_skip_ops_but_run_notices_use_it(monkeypatch):
+    from ev import sweep_nfl_props as nfl
+    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL"):
+        monkeypatch.delenv(k, raising=False)
+    sent = []
+
+    class _R:
+        status_code = 204
+
+    monkeypatch.setattr(nfl.requests, "post", lambda url, **kw: sent.append(url) or _R())
     monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://ops.example")
-    assert sw.webhook_url() == "https://ops.example"
+    assert nfl.post_discord("NFL props sweep: 1 new candidate(s)", []) is False      # no alerts webhook: not posted, not sent to ops
+    assert sent == []
+    assert nfl.post_discord("NFL props sweep stopped: run credit budget exhausted.", ops=True) is True
+    assert sent == ["https://ops.example"]
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://alerts.example")
+    assert nfl.post_discord("NFL props sweep: 1 new candidate(s)", []) is True
+    assert sent[-1] == "https://alerts.example"
