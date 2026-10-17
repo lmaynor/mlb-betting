@@ -29,6 +29,8 @@ async function apiFetch<T>(path: string, cacheSecs = 60, clientPath?: string): P
   const res = await fetch(url, {
     headers,
     next: isBrowser ? undefined : { revalidate: cacheSecs },
+    // A slow backend must never hang an SSR page load: give up after 4s (server side only).
+    signal: isBrowser ? undefined : AbortSignal.timeout(4000),
   })
   if (!res.ok) {
     throw new Error(`Betting API error ${res.status} on ${url}`)

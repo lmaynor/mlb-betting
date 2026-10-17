@@ -451,9 +451,11 @@ import mlb.runners.public_api as pa   # noqa: E402
 
 @pytest.fixture
 def clean_proj(monkeypatch):
-    pa._PROJ_LAST_TRY.clear()
+    dp._PROJ_CACHE.clear()
+    dp._PROJ_LAST_TRY.clear()
     yield
-    pa._PROJ_LAST_TRY.clear()
+    dp._PROJ_CACHE.clear()
+    dp._PROJ_LAST_TRY.clear()
 
 
 def _payload(ts, rows=None, status="live"):
@@ -463,34 +465,65 @@ def _payload(ts, rows=None, status="live"):
             "lines_age_minutes": 5.0}
 
 
+class _NoThread:
+    started = []
+
+    def __init__(self, target=None, args=(), **kw):
+        self.target, self.args = target, args
+
+    def start(self):
+        _NoThread.started.append(self.args)
+
+
 def test_get_sport_projections_serves_fresh_file_and_filters(monkeypatch, clean_proj):
     fresh = _payload(datetime.now(timezone.utc) - timedelta(minutes=10))
-    monkeypatch.setattr(pa, "_read_projections", lambda sp: fresh)
-    boom = MagicMock(side_effect=AssertionError("must not recompute a fresh board"))
-    monkeypatch.setattr(dp, "run_sport", boom)
+    reads = []
+    monkeypatch.setattr(dp, "read_precomputed", lambda sp: reads.append(sp) or fresh)
+    monkeypatch.setattr(dp, "run_sport", MagicMock(side_effect=AssertionError("must not compute a fresh board")))
     out = pa.get_sport_projections("NBA")
     assert out["count"] == 2 and out["stale"] is False and out["age_minutes"] == pytest.approx(10, abs=0.2)
     assert out["validated"] is False                                  # never trusts the stored flag
     assert [r["player"] for r in pa.get_sport_projections("nba", market="reb")["rows"]] == ["B"]
     assert pa.get_sport_projections("nba", limit=1)["count"] == 2 and len(pa.get_sport_projections("nba", limit=1)["rows"]) == 1
+    assert reads == ["nba"]                                           # process cache: one GCS read for all four calls
 
 
-def test_get_sport_projections_recomputes_when_stale_then_throttles(monkeypatch, clean_proj):
+def test_stale_board_is_served_immediately_and_recomputed_in_background_once(monkeypatch, clean_proj):
     old = _payload(datetime.now(timezone.utc) - timedelta(minutes=500), rows=[{"stat": "points", "player": "OLD"}])
-    monkeypatch.setattr(pa, "_read_projections", lambda sp: old)
-    calls = []
-    new = _payload(datetime.now(timezone.utc), rows=[{"stat": "points", "player": "NEW"}])
-    monkeypatch.setattr(dp, "run_sport", lambda sp, now=None, write=True: calls.append(sp) or new)
-    assert pa.get_sport_projections("nba")["rows"][0]["player"] == "NEW"
-    out = pa.get_sport_projections("nba")                                # within the throttle window: no second compute
-    assert calls == ["nba"] and out["rows"][0]["player"] == "OLD" and out["stale"] is True
+    monkeypatch.setattr(dp, "read_precomputed", lambda sp: old)
+    monkeypatch.setattr(dp, "run_sport", MagicMock(side_effect=AssertionError("web path must not compute inline")))
+    _NoThread.started = []
+    monkeypatch.setattr(dp.threading, "Thread", _NoThread)
+    out = pa.get_sport_projections("nba")
+    assert out["rows"][0]["player"] == "OLD" and out["stale"] is True
+    pa.get_sport_projections("nba")                                   # inside the throttle window: no second thread
+    assert _NoThread.started == [("nba",)]
 
 
-def test_get_sport_projections_degrades_when_nothing_exists(monkeypatch, clean_proj):
-    monkeypatch.setattr(pa, "_read_projections", lambda sp: None)
-    monkeypatch.setattr(dp, "run_sport", MagicMock(side_effect=RuntimeError("no gcs")))
+def test_missing_board_returns_unavailable_and_starts_background(monkeypatch, clean_proj):
+    monkeypatch.setattr(dp, "read_precomputed", lambda sp: None)
+    monkeypatch.setattr(dp, "run_sport", MagicMock(side_effect=AssertionError("web path must not compute inline")))
+    _NoThread.started = []
+    monkeypatch.setattr(dp.threading, "Thread", _NoThread)
     out = pa.get_sport_projections("nfl")
     assert out["status"] == "unavailable" and out["rows"] == [] and out["stale"] is True and out["validated"] is False
+    assert _NoThread.started == [("nfl",)]
+
+
+def test_bg_compute_populates_cache(monkeypatch, clean_proj):
+    new = _payload(datetime.now(timezone.utc), rows=[{"stat": "points", "player": "NEW"}])
+    monkeypatch.setattr(dp, "run_sport", lambda sp, now=None, write=True: new)
+    dp._bg_compute_and_save("nba")
+    assert dp._PROJ_CACHE["nba"][1] is new
+    monkeypatch.setattr(dp, "read_precomputed", lambda sp: None)
+    assert pa.get_sport_projections("nba")["rows"][0]["player"] == "NEW"
+
+
+def test_allow_compute_runs_inline_for_the_job_path(monkeypatch, clean_proj):
+    new = _payload(datetime.now(timezone.utc), rows=[{"stat": "points", "player": "NEW"}])
+    monkeypatch.setattr(dp, "read_precomputed", lambda sp: None)
+    monkeypatch.setattr(dp, "run_sport", lambda sp, now=None, write=True: new)
+    assert dp.get_daily_projections("nba", allow_compute=True)["rows"][0]["player"] == "NEW"
 
 
 def test_get_sport_projections_rejects_unknown_sport():
