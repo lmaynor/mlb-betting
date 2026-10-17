@@ -12,6 +12,7 @@
  *    "empirical_ewm_v2"). It has not been validated against prices.
  */
 import type { SportSlug } from '@/lib/sports'
+import accuracy from './engine-accuracy.json'
 
 export interface ModelValidation {
   /** evaluation sample, as the study states it */
@@ -146,4 +147,30 @@ export const SPORT_MODEL_SPECS: Record<Exclude<SportSlug, 'mlb'>, SportModelSpec
       'No edge claimable. Accuracy gains over a rolling mean are 0.5 - 2.7% of MAE, the kind of gap a book\'s own projection already contains. Minutes and availability are the main driver the model does not have.',
     sources: 'NBA props evaluation, 2026-10-14 (CRPS: 2025-26 season; Brier / ECE: proxy lines, PIT-recalibrated).',
   },
+}
+
+/**
+ * How accurate the mean behind the live board has been, per stat (lib/engine-accuracy.json, produced by
+ * python -m nfl.props.engine_eval and python -m scripts.engine_accuracy; each file says how). MAE against the trailing-5
+ * average on past games only: it measures the projection, not edge against a price. Null where no replay covered the stat.
+ */
+export interface LiveAccuracy {
+  n: number
+  mae: number
+  baselineMae: number
+  /** engine MAE minus baseline MAE (negative = more accurate) and its standard error, paired over the same games */
+  dMae: number
+  dMaeSe: number
+  method: string
+  sample: string
+}
+
+interface AccuracyFile { method: string; sample: string; stats: Record<string, Omit<LiveAccuracy, 'method' | 'sample'>> }
+const ACCURACY = accuracy as unknown as Record<string, AccuracyFile | string>
+
+export function liveAccuracy(sport: SportSlug, statKey: string | undefined): LiveAccuracy | null {
+  const f = ACCURACY[sport]
+  if (!statKey || !f || typeof f === 'string') return null
+  const s = f.stats[statKey]
+  return s ? { ...s, method: f.method, sample: f.sample } : null
 }

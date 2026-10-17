@@ -5,7 +5,7 @@
  */
 import { limitRows, type Viewer } from '@/lib/access'
 import { apiGetEvFeed, apiGetSportProjections, apiGetTodayAllPredictions } from '@/lib/betting-api'
-import { boardStatusText, confluenceKey, fromMlbProjections, fromSportProjections, type BoardRow } from '@/lib/board-rows'
+import { boardStatusText, confluenceKey, fromMlbProjections, fromSportProjections, systemTodayCounts, type BoardRow, type SystemToday } from '@/lib/board-rows'
 import { shapeHub } from '@/lib/hub-data'
 import { buildMlbProjections } from '@/lib/mlb-projections'
 import { hasHeadshots } from '@/lib/sport-assets'
@@ -19,6 +19,8 @@ export interface SportBoard {
   locked: number
   /** one-line freshness note for the board, when the feed has one */
   status?: string
+  /** the status line should read as a warning (the lines on the board are stale) */
+  statusWarn?: boolean
   /** copy for the empty state, when it should differ from the default */
   emptyBody?: string
   /** books and exchanges beating the consensus (projection sports only) */
@@ -27,13 +29,15 @@ export interface SportBoard {
   block: { status: string; age_minutes: number | null } | null
   /** player|stat|side keys the projection board also favors, to badge the matching market prices */
   confluenceKeys: string[]
+  /** per-system row counts today, from the uncut feed (projection sports) */
+  today: Record<string, SystemToday>
 }
 
 export async function loadSportBoard(sport: SportSlug, viewer: Viewer): Promise<SportBoard> {
   if (SPORT_PILLARS[sport].board === 'tracked') {
     const bets = await apiGetTodayAllPredictions().catch(() => [] as Bet[])
     const board = limitRows(buildMlbProjections(bets), viewer, 'player_board', sport, r => r.score)
-    return { rows: fromMlbProjections(board.rows), locked: board.locked, outliers: [], lockedPrices: 0, block: null, confluenceKeys: [] }
+    return { rows: fromMlbProjections(board.rows), locked: board.locked, outliers: [], lockedPrices: 0, block: null, confluenceKeys: [], today: {} }
   }
   const ps = sport as ProjectionSport
   const [feed, pr] = await Promise.all([
@@ -51,12 +55,15 @@ export async function loadSportBoard(sport: SportSlug, viewer: Viewer): Promise<
     rows,
     locked: hub.lockedProjections,
     status: hub.projections ? boardStatusText(hub.projections) : undefined,
+    statusWarn: hub.projections?.lines_stale === true,
     emptyBody: !hub.projections || hub.projections.status === 'unavailable'
       ? 'The projection board could not be loaded. It refreshes automatically; try again in a few minutes.'
-      : `No ${SPORT_PILLARS[sport].shortName} games are scheduled in the next 36 hours. The board fills in once a slate and prices are available.`,
-    outliers: hub.outliers,
+      : `No ${SPORT_PILLARS[sport].shortName} games are on the schedule right now. The board fills in once a slate and prices are available.`,
+    // NFL price rows have no usable league id; resolve every row's face by name here, on the server
+    outliers: hasHeadshots(sport) ? hub.outliers.map(o => ({ ...o, headshot_id: playerIdByName(sport, o.player, o.team) })) : hub.outliers,
     lockedPrices: hub.lockedPrices,
     block: hub.block,
     confluenceKeys,
+    today: systemTodayCounts(pr?.rows ?? []),
   }
 }

@@ -1,10 +1,13 @@
 import Link from 'next/link'
+import { DayScroller } from '@/components/picks/day-scroller'
 import { MarketPrices } from '@/components/picks/market-prices'
 import { SportProjectionsBoard } from '@/components/picks/sport-projections-board'
 import { SportTabs } from '@/components/picks/sport-tabs'
 import { SystemMethodology } from '@/components/picks/system-methodology'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { getViewer } from '@/lib/auth'
+import { inDay, sliceByDay } from '@/lib/board-days'
+import { siteDateKey } from '@/lib/dates'
 import type { PickSystem } from '@/lib/pick-systems'
 import { loadSportBoard } from '@/lib/sport-board-data'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
@@ -14,17 +17,19 @@ import { SYSTEM_COLOR } from '@/lib/tokens'
  * One projection system (a market of NFL / NHL / NBA / any projection sport): today's rows and market prices for that one
  * stat, then the methodology card. A system with a data gap shows the gap instead of a board.
  */
-export async function ProjectionSystemPage({ sport, system }: { sport: ProjectionSport; system: PickSystem }) {
+export async function ProjectionSystemPage({ sport, system, searchParams }: { sport: ProjectionSport; system: PickSystem; searchParams: Promise<Record<string, string>> }) {
   const pillar = SPORT_PILLARS[sport]
   const color = SYSTEM_COLOR[system.key] ?? pillar.accent
   const board = await loadSportBoard(sport, await getViewer())
-  const rows = board.rows.filter(r => r.system === system.key)
-  const outliers = board.outliers.filter(o => (o.stat ?? o.market) === system.statKey)
+  const day = sliceByDay(board.rows.filter(r => r.system === system.key), r => r.start, (await searchParams).date)
+  const rows = day.rows
+  const outliers = board.outliers.filter(o => (o.stat ?? o.market) === system.statKey && inDay(o.commence, day.selected))
   const confluence = rows.filter(r => r.confluence).length
   const priced = rows.filter(r => r.hasLine).length
   return (
     <div>
       <SportTabs sport={sport} active={null} />
+      {!system.gap && <DayScroller days={day.days} selected={day.selected} today={siteDateKey()} />}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
@@ -48,7 +53,7 @@ export async function ProjectionSystemPage({ sport, system }: { sport: Projectio
         {system.gap ? null : (
           <>
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 10px' }}>Today</h2>
-            <SportProjectionsBoard sport={sport} rows={rows} status={board.status} marketChips={false}
+            <SportProjectionsBoard sport={sport} rows={rows} status={board.status} statusWarn={board.statusWarn} marketChips={false}
               emptyBody={`No ${system.name.toLowerCase()} projections right now: no ${pillar.shortName} game is on the slate, or its lines have not posted.`} />
             <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${system.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
             <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '32px 0 10px' }}>Market prices</h2>

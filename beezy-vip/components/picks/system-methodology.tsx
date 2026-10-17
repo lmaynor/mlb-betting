@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { LIVE_ENGINE, SPORT_MODEL_SPECS, type ModelValidation, type PropModelSpec } from '@/lib/prop-model-specs'
+import { liveAccuracy, LIVE_ENGINE, SPORT_MODEL_SPECS, type ModelValidation, type PropModelSpec } from '@/lib/prop-model-specs'
 import type { PickSystem } from '@/lib/pick-systems'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
 
@@ -42,6 +42,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
   const model: PropModelSpec | undefined = spec.models.find(m => m.key === system.statKey)
   const v: ModelValidation | null = model?.validation ?? null
   const pillar = SPORT_PILLARS[sport]
+  const live = liveAccuracy(sport, system.statKey)
   return (
     <div style={CARD}>
       {system.gap && (
@@ -58,8 +59,20 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
         <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>WHAT THE LIVE BOARD LOOKS AT</div>
         <ul style={{ margin: 0, paddingLeft: '18px' }}>{system.features.map(f => <li key={f}>{f}</li>)}</ul>
       </div>
+      {live && (
+        <div>
+          <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>LIVE BOARD ACCURACY</div>
+          <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
+            <Stat label="SAMPLE" value={live.sample} />
+            <Stat label="PLAYER-GAMES" value={live.n.toLocaleString('en-US')} />
+            <Stat label="MAE (ENGINE VS L5)" value={pair(live.mae, live.baselineMae, live.mae >= 10 ? 1 : 3)} title="Mean absolute error of the projection on past games, using only earlier games; L5 is the player's average over the last five. Lower is better." />
+            <Stat label="MAE CHANGE" value={`${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}% (se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%)`} title="Paired over the same games, as a share of the L5 error; negative means the engine is more accurate." />
+          </div>
+          <div style={{ marginTop: '8px', color: 'var(--fog)', fontSize: '11.5px' }}>{live.method}. Accuracy of the projection only; it says nothing about beating a price.</div>
+        </div>
+      )}
       <div>
-        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>VALIDATION</div>
+        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>RESEARCH MODEL VALIDATION</div>
         <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
           <Stat label="SAMPLE" value={v?.sample ?? '--'} />
           <Stat label="MAE (MODEL VS BASELINE)" value={v ? pair(v.mae, v.baselineMae, 3) : '--'} title="Lower is better; the baseline is the best trailing-average forecaster in the study" />

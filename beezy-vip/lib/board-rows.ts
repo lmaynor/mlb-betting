@@ -6,7 +6,8 @@
 import { getSystemByStat } from '@/lib/pick-systems'
 import type { MlbProjectionRow } from '@/lib/mlb-projections'
 import { probToAmerican } from '@/lib/odds'
-import { matchesBook, matchesQuery, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesBook, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesSearch, searchHaystack } from '@/lib/team-directory'
 import type { SportSlug } from '@/lib/sports'
 import { playerSlug } from '@/lib/sport-assets'
 import type { SportProjectionRow, SportProjections } from '@/lib/types'
@@ -18,7 +19,7 @@ export interface BoardRow {
   system: string
   marketLabel: string
   player: string
-  headshotId: number | null
+  headshotId: number | string | null
   /** 'BOS @ LAL', or '' when unknown */
   matchup: string
   /** ISO game start, or null */
@@ -138,7 +139,7 @@ export function filterBoard(rows: BoardRow[], f: BoardFilter): BoardRow[] {
     if (f.side !== 'ALL' && r.side !== f.side.toLowerCase()) return false
     if (f.signal === 'CONFLUENCE' && !r.confluence) return false
     if (f.signal === 'EV' && !((r.marketEv ?? 0) > 0 || (r.modelEdge ?? 0) > 0)) return false
-    if (q && !`${r.player} ${r.matchup}`.toLowerCase().includes(q)) return false
+    if (q && !matchesSearch(searchHaystack(r.sport, r.player, r.matchup), q)) return false
     return true
   })
   const k = KEY[f.sort]
@@ -168,7 +169,7 @@ export function applyPickFilters(rows: BoardRow[], f: PickFilters): BoardRow[] {
     (!f.market || r.system === f.market) &&
     matchesTier(r.score, f.tier) &&
     matchesBook(r.book, f) &&
-    matchesQuery(`${r.player} ${r.matchup}`, f.q))
+    matchesSearch(searchHaystack(r.sport, r.player, r.matchup), f.q))
   const k = PICK_KEY[f.sort]
   const mul = f.dir === 'asc' ? -1 : 1
   return kept.map((r, i) => ({ r, i })).sort((a, b) => mul * (k(b.r) - k(a.r)) || a.i - b.i).map(x => x.r)
@@ -182,16 +183,36 @@ export function sidePrice(r: SportProjectionRow): { odds: number | null; book: s
     : { odds: r.best_under_odds, book: r.best_under_book, side }
 }
 
+/** 45 -> '45 min', 600 -> '10.0 h'. */
+export const ageText = (min: number | null | undefined) => (min == null ? 'some time' : min < 90 ? `${Math.round(min)} min` : `${(min / 60).toFixed(1)} h`)
+
 /** Plain-language freshness line: what the user is looking at and how old it is. */
 export function boardStatusText(d: SportProjections): string {
   if (d.status === 'unavailable') return 'Projections are not available right now.'
   const parts: string[] = []
-  if (d.status === 'live') parts.push(d.lines_age_minutes != null ? `Lines updated ${Math.round(d.lines_age_minutes)} min ago` : 'Lines live')
+  if (d.status === 'live' && d.lines_stale) parts.push(`Lines are ${ageText(d.lines_age_minutes)} old (books are polled twice a day): check the price at the book before betting`)
+  else if (d.status === 'live') parts.push(d.lines_age_minutes != null ? `Lines updated ${Math.round(d.lines_age_minutes)} min ago` : 'Lines live')
   else if (d.status === 'awaiting_lines') parts.push('Lines have not posted yet: projections only')
-  else parts.push('No games scheduled in the next 36 hours')
+  else parts.push('No games on the schedule')
   if (d.stale_gamelog) parts.push(`game logs end ${d.gamelog_latest ?? 'last season'} (off-season carry-over)`)
   return parts.join(' \u00b7 ')
 }
 
 /** Key a market-price row and a projection row share when they are the same player, stat and side. */
 export const confluenceKey = (player: string, stat: string, side: string) => `${playerSlug(player)}|${stat}|${side.toLowerCase()}`
+
+/** What the board holds today for one system: rows, rows with a posted line, rows where model and market agree. */
+export interface SystemToday { rows: number; priced: number; confluence: number }
+
+/** Counts per registry system (by key), from the UNCUT feed rows, so the figures do not depend on the viewer's access. */
+export function systemTodayCounts(rows: SportProjectionRow[]): Record<string, SystemToday> {
+  const out: Record<string, SystemToday> = {}
+  for (const r of rows) {
+    const key = getSystemByStat(r.sport, r.stat)?.key ?? r.stat
+    const c = out[key] ?? (out[key] = { rows: 0, priced: 0, confluence: 0 })
+    c.rows += 1
+    if (r.has_line) c.priced += 1
+    if (r.confluence) c.confluence += 1
+  }
+  return out
+}

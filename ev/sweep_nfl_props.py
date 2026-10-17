@@ -569,7 +569,8 @@ def main(argv=None) -> int:
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     state: dict = {}
     first_rem, cycle, next_cycle = None, 0, 0.0
-    post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin channel only).")
+    if a.loop_minutes > 0:                                   # a scheduled one-cycle run must not ping the channel every firing
+        post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin channel only).")
     while True:
         if time.time() >= next_cycle:
             try:

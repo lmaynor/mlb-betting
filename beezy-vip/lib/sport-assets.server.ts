@@ -3,7 +3,8 @@
  * bloat any client bundle that pulled this in). Client code should use headshotUrlById() from ./sport-assets with a
  * resolved id.
  *
- * NHL/NBA maps are written by scripts/build_sport_assets.py --players. Keys: `slug__team` for every player (team =
+ * NHL/NBA maps are written by scripts/build_sport_assets.py --players, the NFL map by --nfl-players (values are nfl.com image
+ * tokens, strings). Keys: `slug__team` for every player (team =
  * lowercase abbreviation) and a bare `slug` ONLY when the name is unique league-wide -- so a duplicate name with no team hint
  * resolves to NOTHING rather than to the wrong person's face. Rosters change: re-run the script.
  *
@@ -15,9 +16,11 @@
 import nhlMap from '@/public/headshots/nhl_player_map.json'
 import nbaMap from '@/public/headshots/nba_player_map.json'
 import mlbMap from '@/public/headshots/player_map.json'
+import nflMap from '@/public/headshots/nfl_player_map.json'
 import { headshotUrlById, playerSlug, teamCode, type AssetSport, type HeadshotSport } from './sport-assets'
 
-const MAPS: Record<HeadshotSport, Record<string, number>> = {
+const MAPS: Record<HeadshotSport, Record<string, number | string>> = {
+  nfl: nflMap as Record<string, string>,
   nhl: nhlMap as Record<string, number>,
   nba: nbaMap as Record<string, number>,
   mlb: mlbMap as Record<string, number>,
@@ -33,7 +36,7 @@ function slugAsciiLegacy(name: string): string {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
 }
 
-export function playerIdByName(sport: HeadshotSport, name: string | null | undefined, team?: string | null): number | null {
+export function playerIdByName(sport: HeadshotSport, name: string | null | undefined, team?: string | null): number | string | null {
   if (!name) return null
   const map = MAPS[sport]
   if (sport === 'mlb') {
@@ -44,7 +47,8 @@ export function playerIdByName(sport: HeadshotSport, name: string | null | undef
   }
   const slug = playerSlug(name)
   if (!slug) return null
-  const code = teamCode(sport as AssetSport, team)
+  // NFL rows carry the ev/ team code already (HOU, JAC, LAR); NHL / NBA spell teams many ways, so normalise those
+  const code = sport === 'nfl' ? (team ?? '').trim().toUpperCase() || null : teamCode(sport as AssetSport, team)
   return (code ? map[`${slug}__${code.toLowerCase()}`] : undefined) ?? map[slug] ?? null
 }
 

@@ -56,6 +56,8 @@ then `python -m ev.daily_projections --sport <sport> --no-write`.
 - `tokens.ts`: `SYSTEM_COLOR`, `SYSTEM_LABEL` and `SYSTEM_LABEL_SHORT` for each system key.
 - `prop-model-specs.ts`: an entry per stat if a study exists (otherwise add a plain "unvalidated" entry; the footer prints `--`).
 - Optional: team logos / headshots -- `python scripts/build_sport_assets.py` and `lib/sport-assets.ts` (`HEADSHOT_SPORTS`).
+- Search by city / nickname: add the sport's teams to `lib/team-directory.ts` (NFL and MLB are listed there by hand; NHL and NBA come from `lib/sport-teams.json`). Without it the filter only matches abbreviations.
+- Systems statistics: a replay of the live engine per stat into `lib/engine-accuracy.json` (`python -m scripts.engine_accuracy --sport X`, NFL: `python -m nfl.props.engine_eval --no-grid`); a stat with no replay prints `--`.
 
 Because `/picks/[sport]`, `/picks/[sport]/projections` and `/picks/[sport]/[system]` are data-driven, the ribbon, `SportTabs`,
 `FilterBar`, `SportProjectionsBoard`, `SystemsFooter` and every system page go live with no new pages.

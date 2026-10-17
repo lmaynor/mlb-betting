@@ -9,6 +9,9 @@
  *    These are undocumented URLs and could change without notice -- every <img> must tolerate a 404 (see
  *    components/ui/sport-assets.tsx, which hides a broken image instead of showing the broken-image icon).
  *  - NBA ids here are ESPN's, NOT NBA personIds (the official NBA JSON endpoints are blocked from our infra).
+ *  - NFL: the nfl.com image CDN, keyed by the image TOKEN the nflverse rosters carry (a short string, not a number; the ESPN id
+ *    exists for only ~70% of players, the token for 97%). Verified 2026-10-16: 200, transparent cutout, ~8KB at w_200.
+ *      NFL  static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/{token}
  *
  *  - MLB headshots use MLB's own `silo` variant, the transparent cutout (the older `headshot/67` URL is a JPEG WITH a
  *    background, which is why a local rembg pipeline used to exist). Verified 2026-10-14: real photos for all 1,272 mapped
@@ -25,11 +28,11 @@
 import teams from './sport-teams.json'
 
 export type AssetSport = 'nhl' | 'nba'
-/** Headshots also cover MLB (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets). */
-export type HeadshotSport = AssetSport | 'mlb'
+/** Headshots also cover MLB and NFL (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets, NFL has none). */
+export type HeadshotSport = AssetSport | 'mlb' | 'nfl'
 
-/** Sports with a headshot source (NFL has none). A sport added to lib/sports.ts gets headshots by being added here. */
-export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nhl', 'nba']
+/** Sports with a headshot source. A sport added to lib/sports.ts gets headshots by being added here. */
+export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nfl', 'nhl', 'nba']
 export const hasHeadshots = (sport: string): sport is HeadshotSport => HEADSHOT_SPORTS.includes(sport)
 
 interface TeamRow { abbr: string; name: string; alias: string[] }
@@ -79,8 +82,12 @@ export function teamLogoUrl(sport: AssetSport, team: string | null | undefined, 
   return dark ? `/logos/${sport}/${base}-dark.svg` : `/logos/${sport}/${base}.svg`
 }
 
-/** Headshot URL from a league player id (NHL playerId / ESPN athlete id), or null for a missing/invalid id. */
+/** nfl.com image tokens are short lowercase-alphanumeric strings; anything else (a path, a URL) is rejected, never interpolated. */
+const NFL_TOKEN = /^[a-z0-9]{10,40}$/i
+
+/** Headshot URL from a league player id (NHL playerId / ESPN athlete id / NFL image token), or null for a missing/invalid id. */
 export function headshotUrlById(sport: HeadshotSport, id: number | string | null | undefined): string | null {
+  if (sport === 'nfl') return typeof id === 'string' && NFL_TOKEN.test(id) ? `https://static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/${id}` : null
   const n = typeof id === 'string' ? Number(id) : id
   if (n == null || !Number.isInteger(n) || n <= 0) return null
   if (sport === 'nhl') return `https://assets.nhle.com/mugs/nhl/latest/${n}.png`

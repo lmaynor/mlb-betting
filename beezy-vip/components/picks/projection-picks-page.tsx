@@ -1,3 +1,4 @@
+import { DayScroller } from '@/components/picks/day-scroller'
 import { FilterBar } from '@/components/picks/filter-bar'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { MarketPrices } from '@/components/picks/market-prices'
@@ -8,6 +9,7 @@ import { SystemsFooter } from '@/components/picks/systems-footer'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { getViewer } from '@/lib/auth'
 import { applyPickFilters, pickRows } from '@/lib/board-rows'
+import { inDay, sliceByDay } from '@/lib/board-days'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import { parsePickFilters } from '@/lib/picks-filters'
 import { loadSportBoard } from '@/lib/sport-board-data'
@@ -20,13 +22,18 @@ import { SPORT_PILLARS, STATUS_LABEL, type ProjectionSport } from '@/lib/sports'
  */
 export async function ProjectionPicksPage({ sport, searchParams }: { sport: ProjectionSport; searchParams: Promise<Record<string, string>> }) {
   const pillar = SPORT_PILLARS[sport]
-  const f = parsePickFilters(await searchParams)
+  const sp = await searchParams
+  const f = parsePickFilters(sp)
   const board = await loadSportBoard(sport, await getViewer())
-  const picks = applyPickFilters(pickRows(board.rows), f)
+  // The day strip lists every game day on the board (so a day with no priced pick yet is still there to open); the other filters apply inside the day.
+  const day = sliceByDay(board.rows, r => r.start, sp.date)
+  const picks = applyPickFilters(pickRows(day.rows), f)
   const date = siteDateKey()
+  const prices = board.outliers.filter(r => inDay(r.commence, day.selected))
   return (
     <div>
       <SportTabs sport={sport} active="picks" />
+      <DayScroller days={day.days} selected={day.selected} today={date} />
       <FilterBar sport={sport} />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
         <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -39,18 +46,20 @@ export async function ProjectionPicksPage({ sport, searchParams }: { sport: Proj
           </span>
         </div>
         <SportProjectionsBoard
-          sport={sport} rows={picks} controls={false} status={board.status}
-          emptyBody={board.rows.length > 0
-            ? 'No pick clears these filters. Rows without a posted line, or without a positive score, are on the Projections tab.'
-            : board.emptyBody}
+          sport={sport} rows={picks} controls={false} status={board.status} statusWarn={board.statusWarn}
+          emptyBody={board.rows.length === 0
+            ? board.emptyBody
+            : pickRows(board.rows).length === 0
+              ? `No ${pillar.shortName} prop lines are banked for these games yet, so there is nothing to price a pick against. Every projection is on the Projections tab; picks appear here once lines post.`
+              : 'No pick clears these filters. Rows without a posted line, or without a positive score, are on the Projections tab.'}
         />
         <LockedNotice locked={board.locked} shown={picks.length} what={`${pillar.shortName} picks`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
 
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '32px 0 10px' }}>Market prices</h2>
-        <MarketPrices sport={sport} rows={board.outliers} locked={board.lockedPrices} block={board.block} confluenceKeys={board.confluenceKeys} />
+        <MarketPrices sport={sport} rows={prices} locked={board.lockedPrices} block={board.block} confluenceKeys={board.confluenceKeys} />
 
         <ScoreLegend />
-        <SystemsFooter sport={sport} />
+        <SystemsFooter sport={sport} today={board.today} />
         <SportEvidenceNote sport={sport} />
       </div>
     </div>

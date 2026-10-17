@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import { SportProjectionsPage } from '@/components/picks/sport-projections-page'
 import { isSportSlug, SPORT_PILLARS } from '@/lib/sports'
 
-type Props = { params: Promise<{ sport: string }> }
+type Props = { params: Promise<{ sport: string }>; searchParams: Promise<Record<string, string>> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { sport } = await params
@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function SportProjectionsRoute({ params }: Props) {
+export default async function SportProjectionsRoute({ params, searchParams }: Props) {
   const { sport } = await params
   if (!isSportSlug(sport)) notFound()
-  return <SportProjectionsPage sport={sport} />
+  return <SportProjectionsPage sport={sport} searchParams={searchParams} />
 }
