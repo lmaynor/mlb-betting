@@ -1,3 +1,4 @@
+import type { ProjectionSport } from '@/lib/sports'
 /**
  * Shared TypeScript interfaces matching the production `bets` table schema.
  * These are the canonical type definitions -- import from here not from lib/db.
@@ -222,7 +223,7 @@ export interface EvFeed {
 // -- Daily projection board (GET /api/public/projections; ev/daily_projections.py) ----------------------------
 /** One player x stat. `has_line: false` rows are rotation projections with no market yet (line/side fields are null). */
 export interface SportProjectionRow {
-  sport: 'nfl' | 'nhl' | 'nba'
+  sport: ProjectionSport
   stat: string
   stat_label: string
   player: string
@@ -239,6 +240,8 @@ export interface SportProjectionRow {
   side: 'over' | 'under' | null
   proj_mean: number | null
   p_over_model: number | null
+  /** market-anchored posterior (display only, unvalidated prior; ev/daily_projections.py blend_p_over) */
+  p_over_blend?: number | null
   p_model_side: number | null
   p_mkt_side: number | null
   l5_hit_rate: number | null
@@ -267,7 +270,7 @@ export interface SportProjectionRow {
 }
 
 export interface SportProjections {
-  sport: 'nfl' | 'nhl' | 'nba'
+  sport: ProjectionSport
   engine: string | null
   validated: false
   status: 'live' | 'awaiting_lines' | 'idle' | 'unavailable'

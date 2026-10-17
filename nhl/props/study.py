@@ -268,7 +268,7 @@ def games_from_gamelog(gl: pd.DataFrame) -> pd.DataFrame:
 
 
 def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.DataFrame, min_books: int = 3,
-                                cutoffs=None, allow_compat: bool = True) -> dict:
+                                cutoffs=None, allow_compat: bool = True, slack_min: float | None = None) -> dict:
     """OPTIONAL (nothing calls it by default): score the SOG model against HISTORICAL BettingPros consensus lines.
 
     cons   mlb_core.odds.bettingpros_loader consensus frame (stat label 'sog'); gl  canonical game log (nhl.props.gamelog);
@@ -282,29 +282,43 @@ def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.
     quotes updated after the scheduled start are dropped as `postgame_quote`); the model's features for a game use only
     earlier games and its booster only earlier dates; void props (player did not appear) are dropped, never graded.
     `allow_compat=False` additionally drops names the resolver matched only by compatible first name.
+    `slack_min` (default None = the loader's STRICT `pregame` flag, behaviour unchanged): re-label `pregame` with
+    nhl.props.bp_eval.apply_slack -- a quote last updated up to `slack_min` minutes AFTER the scheduled start is kept. The strict
+    flag discards the books' last quotes (books re-post within seconds of the puck drop): 46% of saves rows, 36% of SOG rows, and in
+    2025-26 nearly every row (docs/solutions/integration-issues/bettingpros-nhl-pregame-flag-and-team-codes.md). Use 10.
+    The frame also carries best_over / best_under / novig_over / novig_under (American prices) for price-based scoring.
     Returns {"coverage": {consensus_rows, matched, dropped{low_books, postgame_quote, no_game, unresolved, ambiguous,
     void, duplicate, no_model, push}}, "resolve_how": {...}, "scores": {...}, "frame": props, "cutoffs": [...]}.
-    Team codes: BettingPros away/home are assumed to be NHL abbreviations (history.TEAM_FIX applied); a code the game log
-    spells differently shows up as `no_game` -- check that count on real data before trusting coverage."""
+    Team codes: BettingPros uses LA/NJ/SJ/TB (+ ARI/UTA by era); history.canon_team maps them to the game log's tricodes
+    and attach_outcomes retries a unique +-1 day match. Anything still unmatched shows up as `no_game`."""
     from mlb_core.odds import model_vs_market as MVM
+    if slack_min is not None and len(cons):
+        from nhl.props import bp_eval
+        cons = bp_eval.apply_slack(cons, slack_min)
     c, n_in, dropped = MVM.screen_consensus(cons, {"sog": "sog"}, min_books)
     dropped = dict(dropped, no_game=0, unresolved=0, ambiguous=0, void=0, duplicate=0, no_model=0, push=0)
     cols = ["event_id", "pkey", "line", "game_id", "game_date", "status", "won_over", "push", "cons_fair", "cons_n",
-            "p_model"]
+            "p_model", "best_over", "best_under", "novig_over", "novig_under"]
     if len(c) == 0:
         return {"coverage": MVM.coverage(n_in, 0, dropped), "resolve_how": {}, "scores": MVM.score_model_vs_market([], [], [], []),
                 "frame": pd.DataFrame(columns=cols), "cutoffs": []}
-    fix = history.TEAM_FIX
     pairs = pd.DataFrame({"event_id": c["event_id"].to_numpy(), "game_date": c["game_date"].astype(str).to_numpy(),
-                          "home_abbrev": c["home"].replace(fix).to_numpy(), "away_abbrev": c["away"].replace(fix).to_numpy(),
+                          "home_abbrev": [history.canon_team(t, d) for t, d in zip(c["home"], c["game_date"].astype(str))],
+                          "away_abbrev": [history.canon_team(t, d) for t, d in zip(c["away"], c["game_date"].astype(str))],
                           "player_name": c["player"].to_numpy(), "player_norm": c["player_norm"].to_numpy(),
                           "line": c["line"].astype(float).to_numpy(), "cons_fair": c["p_over_cons"].astype(float).to_numpy(),
-                          "cons_n": c["n_books"].to_numpy()})
+                          "cons_n": c["n_books"].to_numpy(),
+                          "best_over": pd.to_numeric(c["best_over_odds"], errors="coerce").to_numpy(),
+                          "best_under": pd.to_numeric(c["best_under_odds"], errors="coerce").to_numpy(),
+                          "novig_over": pd.to_numeric(c["novig_over_odds"], errors="coerce").to_numpy(),
+                          "novig_under": pd.to_numeric(c["novig_under_odds"], errors="coerce").to_numpy()})
     pairs = history.resolve_players(pairs, names)
     how = pairs["resolve_how"].value_counts().to_dict()
     if not allow_compat:
         pairs.loc[pairs["resolve_how"] == "compat", "player_id"] = pd.NA
-    pairs = history.attach_outcomes(pairs, games_from_gamelog(gl), gl)
+    games = games_from_gamelog(gl)
+    # team codes are canonicalised on BOTH sides, dated, inside history.attach_outcomes (ARI through 2024-04, UTA after)
+    pairs = history.attach_outcomes(pairs, games, gl)
     amb = (pairs["resolve_how"] == "ambiguous") | (pairs["resolve_how"] == "compat") & pairs["player_id"].isna()
     st = pairs["status"].to_numpy(dtype=object).copy()
     reason = np.full(len(pairs), "", dtype=object)
@@ -344,7 +358,8 @@ def load_history_dir(d: str) -> pd.DataFrame:
     import os
     games = pd.read_csv(os.path.join(d, "games_master.csv"), low_memory=False)
     sk = pd.read_csv(os.path.join(d, "skater_boxscores_master.csv"), low_memory=False)
-    frames = [pd.read_csv(f, low_memory=False) for f in sorted(glob.glob(os.path.join(d, "shots_*.csv")))]
+    files = sorted(glob.glob(os.path.join(d, "shots_*.csv"))) or sorted(glob.glob(os.path.join(d, "shots", "shots_*.csv")))
+    frames = [pd.read_csv(f, low_memory=False) for f in files]
     return gamelog.from_masters(games, sk, pd.concat(frames, ignore_index=True) if frames else None)
 
 

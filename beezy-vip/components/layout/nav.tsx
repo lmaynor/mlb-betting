@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
-import { SPORT_LIST } from '@/lib/sports'
+import { LIVE_SPORTS } from '@/lib/sports'
 import { NAV, navActive, sportActive, sportHref } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
@@ -150,7 +150,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
       <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
           <SportLink href={sportHref('all')} label="ALL SPORTS" active={sportActive(pathname, 'all')} />
-          {SPORT_LIST.map(p => (
+          {LIVE_SPORTS.map(p => (
             <SportLink
               key={p.slug}
               href={sportHref(p.slug)}

@@ -11,7 +11,7 @@ import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { siteDateKey } from '@/lib/dates'
-import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
+import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { LockedNotice } from '@/components/picks/locked-notice'
@@ -332,7 +332,7 @@ export function EvClient({ initialFeed, headline }: { initialFeed: EvFeed | null
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <Label>SPORT</Label>
           <PillGroup>
-            {(['all', 'mlb', 'nfl', 'nhl', 'nba'] as SportFilter[]).map(s => (
+            {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
               <Pill key={s} active={sport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>
             ))}
           </PillGroup>

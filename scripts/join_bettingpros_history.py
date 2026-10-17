@@ -34,12 +34,21 @@ def main(argv=None) -> int:
     ap.add_argument("--min-books", type=int, default=3, help="min two-sided books at the modal line (default 3)")
     ap.add_argument("--pregame-only", action="store_true",
                     help="drop quotes whose `updated` is after the scheduled start (assumes both are UTC)")
+    ap.add_argument("--grace-minutes", default=None,
+                    help="minutes after the scheduled start a quote may be last updated and still count as pregame: a "
+                         "number, or 'auto' for the per-sport default (10 for all three). Default 0 (strict).")
     ap.add_argument("--gcs", action="store_true", help="write via mlb_core.storage instead of a local file")
     a = ap.parse_args(argv)
 
+    if a.grace_minutes is None:
+        grace = None
+    elif str(a.grace_minutes).lower() == "auto":
+        grace = L.DEFAULT_GRACE_MINUTES[a.sport.upper()]
+    else:
+        grace = float(a.grace_minutes)
     markets = [m.strip() for m in a.markets.split(",") if m.strip()] if a.markets else None
     cons = L.build_market_consensus(a.sport, a.start, a.end, markets=markets, prefix=a.prefix,
-                                    min_books=a.min_books, pregame_only=a.pregame_only)
+                                    min_books=a.min_books, pregame_only=a.pregame_only, grace_minutes=grace)
     cov = L.coverage(cons)
     print(f"sport={a.sport} rows={cov['rows']} game_days={cov['days']} min_books={a.min_books}")
     print("books per row: " + (", ".join(f"{k}:{v}" for k, v in cov["books_hist"].items()) or "(none)"))

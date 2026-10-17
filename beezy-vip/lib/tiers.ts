@@ -6,10 +6,13 @@
  * Current plans: single_sport ($19/mo, one league), pro_monthly ($39/mo, all four), pro_annual ($299/yr, all four).
  * Legacy names (starter / pro / season) stay valid so existing Clerk metadata and Stripe prices keep working.
  */
+import { SPORT_SLUGS } from '@/lib/sports'
+
 export const TIERS = ['public', 'single_sport', 'pro_monthly', 'pro_annual', 'starter', 'pro', 'season'] as const
 export type Tier = (typeof TIERS)[number]
 
-export const LEAGUES = ['mlb', 'nfl', 'nba', 'nhl'] as const
+/** The leagues a Single-Sport Pass can be bought for: every sport in lib/sports.ts, so a new sport joins the selector there. */
+export const LEAGUES = SPORT_SLUGS
 export type League = (typeof LEAGUES)[number]
 
 export const ALL_ACCESS: readonly Tier[] = ['pro_monthly', 'pro_annual', 'pro', 'season']

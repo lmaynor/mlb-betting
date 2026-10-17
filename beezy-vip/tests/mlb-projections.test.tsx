@@ -8,8 +8,9 @@ jest.mock('next/link', () => ({
   default: ({ children, href, 'aria-current': current }: { children: React.ReactNode; href: string; 'aria-current'?: 'page' }) => <a href={href} aria-current={current}>{children}</a>,
 }))
 
-import { MlbProjectionsBoard } from '../components/picks/mlb-projections-board'
-import { MlbTabs } from '../components/picks/mlb-tabs'
+import { SportProjectionsBoard } from '../components/picks/sport-projections-board'
+import { SportTabs } from '../components/picks/sport-tabs'
+import { fromMlbProjections } from '../lib/board-rows'
 
 let id = 0
 const bet = (o: Partial<Bet>): Bet => ({
@@ -65,41 +66,52 @@ describe('MLB projections', () => {
   })
 })
 
-describe('MLB projections board', () => {
+describe('MLB projections on the unified board', () => {
   const rows = buildMlbProjections([
     bet({}),
     bet({ system: 'BATTER_TB', bet_type: 'BATTER_TB_UNDER_1.5', player: 'Mookie Betts', game_pk: 2, proj_mean: 1.31, odds: -105, edge: 0.04, kelly_triggered: false }),
   ])
+  const board = (r = rows) => <SportProjectionsBoard sport="mlb" rows={fromMlbProjections(r)} />
 
   it('shows the projection beside the line, the preferred side, the price, the edge and a PICK marker', () => {
-    render(<MlbProjectionsBoard rows={rows} />)
+    render(board())
     const cole = within(screen.getByText('Gerrit Cole').closest('tr')!)
-    expect(cole.getByText('O 5.5')).toBeInTheDocument()
+    expect(cole.getByText('Over 5.5')).toBeInTheDocument()
     expect(cole.getByText('6.4')).toBeInTheDocument()
     expect(cole.getByText('60%')).toBeInTheDocument()
     expect(cole.getByText('+110')).toBeInTheDocument()
     expect(cole.getByText('+6.0%')).toBeInTheDocument()
     expect(cole.getByText('PICK')).toBeInTheDocument()
+    // the market's fair probability is the model's minus the edge: 60% - 6% = 54%
+    expect(cole.getByText(/54%/)).toBeInTheDocument()
     const betts = within(screen.getByText('Mookie Betts').closest('tr')!)
-    expect(betts.getByText('U 1.5')).toBeInTheDocument()
+    expect(betts.getByText('Under 1.5')).toBeInTheDocument()
     expect(betts.getByText('1.31')).toBeInTheDocument()
     expect(betts.queryByText('PICK')).toBeNull()
     expect(document.querySelectorAll('thead').length).toBe(1)
   })
 
-  it('filters by market and explains an empty board', () => {
-    const { rerender } = render(<MlbProjectionsBoard rows={rows} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Total bases' }))
-    expect(screen.queryByText('Gerrit Cole')).toBeNull()
-    expect(screen.getByText('Mookie Betts')).toBeInTheDocument()
-    rerender(<MlbProjectionsBoard rows={[]} />)
-    expect(screen.getByText('No projections yet')).toBeInTheDocument()
+  it('has no UNVALIDATED badge (MLB is the tracked card) and no hit-rate columns to fill: dashes, not numbers', () => {
+    render(board())
+    expect(screen.queryByText('UNVALIDATED')).toBeNull()
+    const cole = within(screen.getByText('Gerrit Cole').closest('tr')!)
+    expect(cole.queryByText(/L5:/)).toBeNull()
+    expect(cole.getAllByText('--').length).toBeGreaterThan(0)
   })
 
-  it('MLB tabs mark the current view', () => {
-    render(<MlbTabs active="projections" />)
-    expect(screen.getByRole('link', { name: 'Projections' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Picks' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('link', { name: 'Picks' })).toHaveAttribute('href', '/picks/mlb')
+  it('market chips are the MLB systems and filter the board; an empty board is explained', () => {
+    const { rerender } = render(board())
+    fireEvent.click(screen.getByRole('button', { name: 'TB' }))
+    expect(screen.queryByText('Gerrit Cole')).toBeNull()
+    expect(screen.getByText('Mookie Betts')).toBeInTheDocument()
+    rerender(<SportProjectionsBoard sport="mlb" rows={[]} emptyBody="Today's projections publish with the ~11:00 AM CT model run." />)
+    expect(screen.getByText(/publish with the ~11:00 AM CT model run/)).toBeInTheDocument()
+  })
+
+  it('sport tabs mark the current view and link the three views of MLB', () => {
+    render(<SportTabs sport="mlb" active="projections" />)
+    expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', '/picks/mlb')
   })
 })

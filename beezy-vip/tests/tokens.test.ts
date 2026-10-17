@@ -144,7 +144,7 @@ describe('pickLabel resolves pooled EV alert rows to their underlying market', (
 import { beezyscore, scoreTier, TIER_META } from '../lib/beezy-score'
 import { BOOK_META, bookDisplay, CARD_STYLE } from '../lib/tokens'
 import { SPORT_PILLARS, SPORT_LIST } from '../lib/sports'
-import { americanToDecimal, fairAmerican, fullKelly, kellySizing } from '../lib/ev-math'
+import { americanToDecimal, fairAmerican, fullKelly, kellySizing, shrinkEdge } from '../lib/ev-math'
 
 describe('pickLabel on system="EV" rows strips the trailing book tag', () => {
   test('K over', () => {
@@ -199,9 +199,9 @@ describe('sport registry and tokens', () => {
       for (const m of p.markets) expect(m.status).not.toMatch(/soon|preview|planned/i)
     }
     expect(SPORT_PILLARS.mlb.seasonBadge).toBe('10 MODELS + +EV SCANNER')
-    expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['rec_yds', 'rush_yds', 'pass_yds', 'receptions', 'pass_tds', 'anytime_td'])
-    expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'points', 'assists', 'saves'])
-    expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['pts', 'reb', 'ast', 'threes', 'pra'])
+    expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['pass_yds', 'pass_tds', 'pass_completions', 'pass_attempts', 'interceptions', 'rush_yds', 'rush_attempts', 'rec_yds', 'receptions', 'anytime_td'])
+    expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'assists', 'points', 'pp_points', 'saves', 'blocked_shots'])
+    expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['points', 'rebounds', 'assists', 'threes', 'pra', 'pr', 'pa', 'ra', 'steals', 'blocks'])
   })
   test('BOOK_META marks exchanges and bookDisplay falls back for unknown books', () => {
     expect(BOOK_META.kalshi.isExchange).toBe(true)
@@ -230,6 +230,17 @@ describe('ev-math', () => {
     expect(kellySizing(1000, 0.9, 2).dollars).toBeCloseTo(50)        // capped at 5%
     expect(kellySizing(1000, null, 2).dollars).toBe(0)
     expect(kellySizing(0, 0.55, 2).dollars).toBe(0)
+    // shrinkage: edge over the 6% knee is sized off 0.06 + 0.35 * excess, capped at 10%
+    expect(kellySizing(1000, 0.62, 2).dollars).toBeCloseTo(kellySizing(1000, 0.5 + shrinkEdge(0.12), 2, 0.25, 0.05, false).dollars)
+    expect(kellySizing(1000, 0.62, 2).dollars).toBeLessThan(kellySizing(1000, 0.62, 2, 0.25, 0.05, false).dollars)
+  })
+
+  test('shrinkEdge: identity below the knee, concave above, capped, odd', () => {
+    expect(shrinkEdge(0.05)).toBeCloseTo(0.05)
+    expect(shrinkEdge(0.10)).toBeCloseTo(0.074)
+    expect(shrinkEdge(0.6)).toBeCloseTo(0.10)
+    expect(shrinkEdge(-0.12)).toBeCloseTo(-shrinkEdge(0.12))
+    expect(shrinkEdge(NaN)).toBe(0)
   })
   test('fairAmerican', () => {
     expect(fairAmerican(0.478)).toBe('+109')

@@ -28,6 +28,10 @@ export type AssetSport = 'nhl' | 'nba'
 /** Headshots also cover MLB (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets). */
 export type HeadshotSport = AssetSport | 'mlb'
 
+/** Sports with a headshot source (NFL has none). A sport added to lib/sports.ts gets headshots by being added here. */
+export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nhl', 'nba']
+export const hasHeadshots = (sport: string): sport is HeadshotSport => HEADSHOT_SPORTS.includes(sport)
+
 interface TeamRow { abbr: string; name: string; alias: string[] }
 const TABLE = teams as unknown as Record<AssetSport, TeamRow[]>
 

@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 NFLVERSE_BASE = os.environ.get(
     "NFL_NFLVERSE_BASE", "https://github.com/nflverse/nflverse-data/releases/download")
 USER_AGENT = os.environ.get("NFL_USER_AGENT", "beezy.fyi-nfl-ingest/1.0 (+https://beezy.fyi)")
+# ffverse's expected-opportunity model (ff_opportunity) is published on a DIFFERENT repo's releases.
+FFOPP_BASE = os.environ.get("NFL_FFOPP_BASE", "https://github.com/ffverse/ffopportunity/releases/download")
 TIMEZONE = "America/New_York"
 
 # -- GCS prefix ------------------------------------------------------------------
@@ -63,6 +65,7 @@ class Dataset:
                 validation only (valid parquet, non-empty).
     roster_year True for datasets nflreadpy keys on the ROSTER year (rolls over
                 on Mar 15) rather than the season year (rolls over after Labor Day).
+    base        release-download base URL when the dataset is not published on nflverse-data (None = NFLVERSE_BASE).
     """
     name: str
     tag: str
@@ -72,10 +75,11 @@ class Dataset:
     group: str
     required: tuple = ()
     roster_year: bool = False
+    base: Optional[str] = None
 
     def url(self, season: Optional[int] = None) -> str:
         stem = self.stem.format(season=season) if self.per_season else self.stem
-        return f"{NFLVERSE_BASE}/{self.tag}/{stem}.parquet"
+        return f"{self.base or NFLVERSE_BASE}/{self.tag}/{stem}.parquet"
 
     def key(self, season: Optional[int] = None) -> str:
         leaf = f"{self.name}_{season}" if self.per_season else self.name
@@ -124,6 +128,14 @@ _DATASETS = [
     # PFR advanced stats, weekly, per stat type per season (2018+).
     *[_per_season(f"pfr_{t}", "pfr_advstats", f"advstats_week_{t}_{{season}}", 2018, "detail")
       for t in ("pass", "rush", "rec", "def")],
+    # ffverse expected-opportunity model (weekly): model-expected yards / TDs / fantasy points from each player's
+    # actual opportunities (targets, air yards, carries by field position) -- the "what SHOULD he have scored"
+    # series that regression-to-the-mean features need. Published by ffverse/ffopportunity (release tag
+    # `latest-data`, asset ep_weekly_{season}), NOT nflverse-data; nflreadpy's load_ff_opportunity builds the same
+    # path (floor 2006). URL existence verified by HEAD 2026-10-16 (2024: 1.1 MB, 2026: 0.4 MB); NO dictionary-verified
+    # columns yet, so structural validation only until a first real download is inspected. Group `extra` (opt-in:
+    # --groups extra / --datasets ff_opportunity) because no feature consumes it yet.
+    Dataset("ff_opportunity", "latest-data", "ep_weekly_{season}", True, 2006, "extra", base=FFOPP_BASE),
     # ---- extra: not needed for betting work; opt-in via --groups extra ----
     _single("contracts", "contracts", "historical_contracts", "extra"),
     _single("draft_picks", "draft_picks", "draft_picks", "extra", ("season",)),

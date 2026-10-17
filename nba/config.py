@@ -159,7 +159,8 @@ PARLAY_GAME_MARKETS = ["h2h", "spreads", "totals"]
 
 # Optional second tier, enabled with `--tier full` on the accumulator (more credits per event).
 PARLAY_PROP_MARKETS_ALT = {
-    "basketball_nba": ["player_steals", "player_blocks", "player_turnovers", "player_points_alternate",
+    "basketball_nba": ["player_steals", "player_blocks", "player_turnovers", "player_points_rebounds",
+                       "player_points_assists", "player_rebounds_assists", "player_points_alternate",
                        "player_rebounds_alternate", "player_assists_alternate", "player_threes_alternate"],
     "icehockey_nhl": ["player_power_play_points", "player_blocked_shots", "player_hits"],
 }

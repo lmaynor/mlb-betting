@@ -4,6 +4,7 @@
 
 import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
+import type { ProjectionSport } from '@/lib/sports'
 
 function normalizeApiUrl(value: string) {
   const trimmed = value.trim().replace(/\/+$/, '')
@@ -28,6 +29,8 @@ async function apiFetch<T>(path: string, cacheSecs = 60, clientPath?: string): P
   const res = await fetch(url, {
     headers,
     next: isBrowser ? undefined : { revalidate: cacheSecs },
+    // A slow backend must never hang an SSR page load: give up after 4s (server side only).
+    signal: isBrowser ? undefined : AbortSignal.timeout(4000),
   })
   if (!res.ok) {
     throw new Error(`Betting API error ${res.status} on ${url}`)
@@ -257,7 +260,7 @@ export async function apiGetEvFeed(params?: { sport?: string; minEv?: number; li
  * Daily NFL / NHL / NBA projection board: one row per player x stat with the projection, the market and the two engines'
  * agreement. Every row is unvalidated. Callers that only need rows read `.rows`.
  */
-export async function apiGetSportProjections(sport: 'nfl' | 'nhl' | 'nba', market?: string): Promise<SportProjections> {
+export async function apiGetSportProjections(sport: ProjectionSport, market?: string): Promise<SportProjections> {
   const sp = new URLSearchParams({ sport })
   if (market) sp.set('market', market)
   return apiFetch<SportProjections>(`/api/public/projections?${sp.toString()}`, 60, `/api/projections?${sp.toString()}`)

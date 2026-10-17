@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { PicksTable } from '@/components/picks/picks-table'
+import { SportTabs } from '@/components/picks/sport-tabs'
+import { SystemMethodology } from '@/components/picks/system-methodology'
 import { limitBets } from '@/lib/access-bets'
 import { getViewer } from '@/lib/auth'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
@@ -16,6 +18,7 @@ const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadi
 export async function SystemPicksPage({ system }: { system: string }) {
   const meta = getPickSystemByKey(system) ?? {
     key: system, slug: system.toLowerCase(), name: system, shortName: system, description: 'Today\'s model-qualified picks from Beezy.FYI.',
+    sport: 'mlb' as const, market: 'prop' as const, family: '--', features: [],
   }
   const kind = kindOfSystem(system)
   const color = SYSTEM_COLOR[system] ?? 'var(--silver)'
@@ -39,6 +42,8 @@ export async function SystemPicksPage({ system }: { system: string }) {
   const back = kind === 'player' ? { href: '/picks/mlb#systems', label: 'MLB player picks' } : { href: '/picks/games#systems', label: 'Game picks' }
 
   return (
+    <div>
+    <SportTabs sport="mlb" active={null} />
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
@@ -79,7 +84,10 @@ export async function SystemPicksPage({ system }: { system: string }) {
         </>
       )}
 
+      <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '28px 0 10px' }}>Methodology</h2>
+      <SystemMethodology system={meta} />
       <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '16px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>{meta.description}</p>
+    </div>
     </div>
   )
 }

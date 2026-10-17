@@ -3,16 +3,20 @@
  * about what today's list is. The Top 10 itself is the free tier, so nothing here is cut by the access policy.
  */
 import { apiGetPicks, apiGetSportProjections } from '@/lib/betting-api'
+import { LIVE_SPORTS, type SportSlug } from '@/lib/sports'
 import { fromProjection, rankTopPicks, TOP_N, topFromBets, type TopPick } from '@/lib/top-picks'
 import type { Bet, SportProjections } from '@/lib/types'
 
-const OTHER = ['nfl', 'nhl', 'nba'] as const
+/** Every live sport whose board is a projection feed (lib/sports.ts `board`): a new sport joins the Top 10 by registry entry. */
+const PROJECTION_SPORTS = LIVE_SPORTS.filter(p => p.board === 'projection').map(p => p.slug) as Exclude<SportSlug, 'mlb'>[]
 
-export async function loadTopPlayerPicks(date: string): Promise<{ top: TopPick[]; mlbToday: Bet[] }> {
+export async function loadTopPlayerPicks(date: string): Promise<{ top: TopPick[]; candidates: TopPick[]; mlbToday: Bet[] }> {
   const [mlbToday, ...boards] = await Promise.all([
     apiGetPicks({ date, limit: 200 }).catch(() => [] as Bet[]),
-    ...OTHER.map(s => apiGetSportProjections(s).catch(() => null as SportProjections | null)),
+    ...PROJECTION_SPORTS.map(s => apiGetSportProjections(s).catch(() => null as SportProjections | null)),
   ])
   const projected = boards.flatMap(b => (b?.rows ?? []).map(fromProjection).filter((p): p is TopPick => p != null))
-  return { top: rankTopPicks([...topFromBets(mlbToday, TOP_N), ...projected], TOP_N), mlbToday }
+  // `candidates` is every scored pick (the filters on /picks cut from it); `top` is the unfiltered ten the Daily Card uses.
+  const candidates = rankTopPicks([...topFromBets(mlbToday, 1000), ...projected], 1000)
+  return { top: candidates.slice(0, TOP_N), candidates, mlbToday }
 }

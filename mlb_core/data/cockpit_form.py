@@ -55,6 +55,12 @@ NFL_STATS = {
     "rec_yds":    (("receiving_yards",), ("targets",), "Targets"),
     "receptions": (("receptions",), ("targets",), "Targets"),
     "pass_tds":   (("passing_tds",), ("attempts",), "Pass attempts"),
+    # volume + turnover markets (2026-10-16). nflverse names: completions, attempts, carries, passing_interceptions.
+    # No dropback / snap-share column exists in player_stats, so a volume stat's own count is its usage proxy.
+    "pass_completions": (("completions",), ("attempts",), "Pass attempts"),
+    "pass_attempts":    (("attempts",), ("attempts",), "Pass attempts"),
+    "rush_attempts":    (("carries",), ("carries",), "Carries"),
+    "interceptions":    (("passing_interceptions",), ("attempts",), "Pass attempts"),
     # rush + receiving TDs only (return / defensive TDs are not in these columns); the books' own scope is UNVERIFIED
     "anytime_td": (("rushing_tds", "receiving_tds"), ("carries", "targets"), "Touches"),
 }
@@ -181,7 +187,8 @@ def _season_year_now() -> int:
 def _load_nfl() -> dict | None:
     cols = ["player_id", "player_display_name", "player_name", "team", "recent_team", "season", "week", "season_type",
             "opponent_team", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
-            "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "position"]
+            "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "position",
+            "completions", "passing_interceptions"]
     frames = []
     y = _season_year_now()
     for season in (y + 1, y, y - 1):       # newest first; stop after KEEP_SEASONS found
@@ -196,7 +203,8 @@ def _load_nfl() -> dict | None:
     df = pd.concat(frames, ignore_index=True)
     name_col = "player_display_name" if "player_display_name" in df.columns else "player_name"
     for c in ("season", "week", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
-              "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds"):
+              "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "completions",
+              "passing_interceptions"):
         if c in df.columns:
             df[c] = _num(df[c])
     df = df.dropna(subset=["season", "week"]).sort_values(["season", "week"], kind="stable")

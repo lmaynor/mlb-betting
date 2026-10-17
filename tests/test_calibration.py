@@ -104,3 +104,52 @@ class TestEdgeCapInteraction:
 
     def test_calibrated_small_edge_not_capped(self):
         assert self._capped(edge=0.08, was_calibrated=True) is False
+
+
+class TestShrinkEdge:
+    def test_identity_below_knee(self):
+        from mlb_core.risk.calibration import shrink_edge
+        assert shrink_edge(0.04) == pytest.approx(0.04)
+        assert shrink_edge(0.06) == pytest.approx(0.06)
+
+    def test_concave_above_knee_and_capped(self):
+        from mlb_core.risk.calibration import shrink_edge
+        assert shrink_edge(0.10) == pytest.approx(0.06 + 0.35 * 0.04)
+        assert shrink_edge(0.15) == pytest.approx(0.0915)
+        assert shrink_edge(0.60) == pytest.approx(0.10)          # capped
+        assert shrink_edge(0.10) < 0.10
+
+    def test_monotone_and_odd(self):
+        from mlb_core.risk.calibration import shrink_edge
+        xs = [i / 100 for i in range(0, 40)]
+        ys = [shrink_edge(x) for x in xs]
+        assert all(b >= a for a, b in zip(ys, ys[1:]))
+        assert shrink_edge(-0.12) == pytest.approx(-shrink_edge(0.12))
+        assert shrink_edge(float("nan")) == 0.0
+
+
+class TestMarketBlend:
+    def test_zero_c_returns_market(self):
+        from mlb_core.risk.calibration import market_blend_prob
+        assert market_blend_prob(0.55, 0.70, "nfl", "pass_yds") == pytest.approx(0.55)      # unlisted -> c=0
+
+    def test_listed_stat_moves_toward_model_but_not_past_it(self):
+        from mlb_core.risk.calibration import market_blend_prob
+        p = market_blend_prob(0.50, 0.60, "nba", "threes")
+        assert 0.50 < p < 0.60
+        assert market_blend_prob(0.50, 0.40, "NBA", "Threes") < 0.50                       # case-insensitive keys
+
+    def test_explicit_c_one_equals_model_until_clamp(self):
+        from mlb_core.risk.calibration import market_blend_prob
+        assert market_blend_prob(0.50, 0.55, "nba", "points", c=1.0) == pytest.approx(0.55)
+
+    def test_clamped_to_max_shift(self):
+        from mlb_core.risk.calibration import market_blend_prob
+        assert market_blend_prob(0.50, 0.95, "nba", "points", c=1.0) == pytest.approx(0.58)
+        assert market_blend_prob(0.50, 0.05, "nba", "points", c=1.0) == pytest.approx(0.42)
+
+    def test_missing_inputs_never_return_model_only(self):
+        from mlb_core.risk.calibration import market_blend_prob
+        import math
+        assert market_blend_prob(0.52, float("nan"), "nba", "threes") == pytest.approx(0.52)
+        assert math.isnan(market_blend_prob(float("nan"), 0.6, "nba", "threes"))

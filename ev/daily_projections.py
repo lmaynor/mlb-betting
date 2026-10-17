@@ -11,18 +11,26 @@ today's scheduled teams) it produces ONE row joining:
 
     PYTHONPATH=. python -m ev.daily_projections --sport nfl|nhl|nba|all [--local] [--no-write]
 
-Served by mlb/runners/public_api.py::get_sport_projections() at GET /api/public/projections?sport=nfl|nhl|nba, from
-EVSweep/{sport}_props/projections_latest.json (or computed on demand when that file is missing/stale).
+Served by mlb/runners/public_api.py::get_sport_projections() at GET /api/public/projections?sport=nfl|nhl|nba via
+get_daily_projections(): process cache -> EVSweep/{sport}_props/projections_latest.json; a missing/stale file triggers a
+BACKGROUND recompute, never an inline one. The CLI below (`--write-gcs`) is the scheduled precompute.
 
 WHAT THE ENGINE IS (and is not). The trained research models (nfl/models/props.py, nhl/props/train.py,
 nba/props/train.py) keep their artifacts LOCAL (never in GCS, never in the Cloud Run image), so the live board cannot
-load them. It runs an empirical estimator instead -- engine "empirical_ewm_v1":
+load them. It runs an empirical estimator instead -- engine "empirical_ewm_v2":
 
-    mu    = 0.5 * EWM(value) + 0.5 * EWM(value)/EWM(usage) * projected usage          (usage = targets / carries /
-            attempts / TOI / minutes), then x an opponent-allowed factor (ratio of what that opponent's opposition
-            produced vs each producer's own baseline, shrunk toward 1 and clipped to [0.85, 1.15])
+    mu    = w * EWM(value) + (1-w) * EWM(value)/EWM(usage) * projected usage          (usage = targets / carries /
+            attempts / TOI / minutes; w = 0.5, STAT_PARAMS overrides where validated), then x an opponent-allowed
+            factor (ratio of what that opponent's opposition produced vs each producer's own baseline, shrunk toward 1
+            and clipped to [0.85, 1.15]; measured worth ~0, kept because it is harmless)
+    NFL calibration (nfl/props/projection_calibration.json, only stats that cleared a held-out walk-forward bar):
+            mu_cal = mu * k (scale) or mu * exp(b0 + b1 ln(implied team total/22.5) + b2 team spread/7) (game term)
+            -- the pool of players a book quotes is selected on high trailing usage and regresses ~3-7% in every season
     dist  = NegBin (counts) / Normal (yards, points, saves) / Poisson at-least-one (anytime TD); the spread parameter is
-            fit from the league's own within-player game-to-game variance in the same master.
+            fit from the league's own within-player game-to-game variance in the same master. The NORMAL family's spread
+            is tied to the UNCALIBRATED mean (cv was measured against raw trailing means).
+    evidence: python -m nfl.props.engine_eval (walk-forward replay of THIS code, accuracy only -- see
+            docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md)
 
 It does NOT model injuries, lineups, minutes restrictions, weather, rest or teammate-absence redistribution, and none
 of it has been validated against closing prices: every row is `validated: false`. The only evidence for any of this
@@ -54,28 +62,53 @@ from scipy.stats import nbinom, norm
 from ev.props import DFS_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
+from nfl.props import env_adjust as _ea
 
 log = logging.getLogger("ev.daily_projections")
 _ET = ZoneInfo("America/New_York")
 
-ENGINE = "empirical_ewm_v1"
+ENGINE = "empirical_ewm_v2"
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 
 # stat -> distribution family
 PROJECT_STATS = {
-    "nfl": {"pass_yds": "normal", "rush_yds": "normal", "rec_yds": "normal", "receptions": "negbin",
-            "pass_tds": "negbin", "anytime_td": "anytime"},
-    "nhl": {"sog": "negbin", "goals": "negbin", "points": "negbin", "assists": "negbin", "saves": "normal"},
-    "nba": {"points": "normal", "rebounds": "negbin", "assists": "negbin", "threes": "negbin", "pra": "normal"},
+    "nfl": {"pass_yds": "normal", "pass_tds": "negbin", "pass_completions": "normal", "pass_attempts": "normal",
+            "interceptions": "negbin", "rush_yds": "normal", "rush_attempts": "normal", "rec_yds": "normal",
+            "receptions": "negbin", "anytime_td": "anytime"},
+    # pp_points is NOT here: the NHL skater master carries power_play_goals but no power-play assists, so a PP-points
+    # projection cannot be built from it (see CONTEXT s21). It is registered on the site as a data gap, not faked.
+    "nhl": {"sog": "negbin", "goals": "negbin", "assists": "negbin", "points": "negbin", "saves": "normal",
+            "blocked_shots": "negbin"},
+    "nba": {"points": "normal", "rebounds": "negbin", "assists": "negbin", "threes": "negbin", "pra": "normal",
+            "pr": "normal", "pa": "normal", "ra": "normal", "steals": "negbin", "blocks": "negbin"},
 }
 STAT_LABEL = {
     "pass_yds": "Pass Yds", "rush_yds": "Rush Yds", "rec_yds": "Rec Yds", "receptions": "Receptions",
-    "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
-    "assists": "Assists", "saves": "Saves", "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast",
+    "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "pass_completions": "Completions",
+    "pass_attempts": "Pass Attempts", "rush_attempts": "Carries", "interceptions": "Interceptions",
+    "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
+    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots",
+    "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast", "pr": "Pts+Reb", "pa": "Pts+Ast",
+    "ra": "Reb+Ast", "steals": "Steals", "blocks": "Blocks",
 }
 
 HALFLIFE = {"nfl": 3.0, "nhl": 8.0, "nba": 8.0}      # games
+# Per-stat overrides of (halflife, ewm_weight, opp_k) -- ONLY where a walk-forward replay on held-out seasons showed a
+# gain past a multiplicity-corrected bar (nfl.props.engine_eval; selected on 2021-23 / 2021-22, scored on the
+# seasons after, never used for selection: rec_yds log score +0.027 / +0.032 per row, MAE -0.23 / -0.27 yds;
+# anytime_td log score +0.012, Brier -0.0033). Every other stat keeps the original hand-set values.
+STAT_PARAMS = {
+    "nfl": {"rec_yds": {"halflife": 7.0, "ewm_weight": 1.0, "opp_k": 200.0},
+            "anytime_td": {"halflife": 7.0, "ewm_weight": 0.3, "opp_k": 200.0}},
+}
+
+
+def stat_params(sport: str, stat: str) -> tuple:
+    """-> (halflife, ewm_weight, opp_shrink_k) for a sport/stat: the override if one was validated, else defaults."""
+    o = STAT_PARAMS.get(sport, {}).get(stat, {})
+    return (o.get("halflife", HALFLIFE[sport]), o.get("ewm_weight", EWM_WEIGHT), o.get("opp_k", OPP_SHRINK_K))
+
 MIN_GAMES = 4                                        # fewer prior games than this -> no projection
 HISTORY_GAMES = 60
 OPP_SHRINK_K = 60.0                                  # player-games of evidence that fully trusts an opponent factor
@@ -86,19 +119,24 @@ ALPHA_RANGE = (0.01, 1.5)
 MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of mu
 
 CONFLUENCE_MIN_BOOKS = 3
+BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
 MAX_AGE_MIN = 240.0                                  # banked lines older than this are not shown as live lines
 STALE_GAMELOG_DAYS = 150
 ROTATION_PER_TEAM = 6
-MAX_ROWS = 700
+MAX_ROWS = 1200
 
 # usage thresholds that define a "rotation" player (avg over the last 10 games)
-ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0},
-                      "nhl": {"sog": 14.0, "goals": 14.0, "points": 14.0, "assists": 14.0, "saves": 10.0},
-                      "nba": {"points": 20.0, "rebounds": 20.0, "assists": 20.0, "threes": 20.0, "pra": 20.0}}
-ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds"),
-                  "nhl": ("sog", "points", "saves"),
-                  "nba": ("points", "rebounds", "assists", "pra")}
+ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0,
+                              "pass_attempts": 15.0, "pass_completions": 15.0, "rush_attempts": 8.0},
+                      "nhl": {"sog": 14.0, "goals": 14.0, "points": 14.0, "assists": 14.0, "saves": 10.0,
+                              "blocked_shots": 14.0},
+                      "nba": {"points": 20.0, "rebounds": 20.0, "assists": 20.0, "threes": 20.0, "pra": 20.0,
+                              "pr": 20.0, "pa": 20.0, "ra": 20.0, "steals": 20.0, "blocks": 20.0}}
+ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds", "pass_attempts", "pass_completions",
+                          "rush_attempts"),
+                  "nhl": ("sog", "points", "saves", "blocked_shots"),
+                  "nba": ("points", "rebounds", "assists", "pra", "pr", "pa", "ra", "steals", "blocks")}
 
 _NFL_CANON = {"JAX": "JAC", "LA": "LAR", "STL": "LAR", "OAK": "LV", "SD": "LAC", "WSH": "WAS"}
 
@@ -141,11 +179,40 @@ def beezy_score(edge: float | None, n_books: int | None, p_hit: float | None) ->
     return int(round(min(max(e + (cons_raw + hit_raw) * scale, 0.0), 100.0)))
 
 
+# ------------------------------------------------------------------------------------------------------ calibration
+_CALIB: dict | None = None
+
+
+def calibration(sport: str, stat: str) -> dict | None:
+    """The shipped calibration coefficients for an NFL stat ({"k"} or {"b0","b1","b2"}), else None. Loaded once."""
+    global _CALIB
+    if sport != "nfl":
+        return None
+    if _CALIB is None:
+        _CALIB = _ea.load_calibration()
+    return _CALIB.get(stat)
+
+
+def _load_env_lines() -> dict:
+    try:
+        from nfl.data.read import load
+        t = _ea.game_env_table(load("schedules", columns=["game_id", "season", "week", "gameday", "home_team",
+                                                           "away_team", "spread_line", "total_line"]))
+    except Exception as exc:                                                            # noqa: BLE001
+        log.info("nfl schedule lines unavailable (%s): game term falls back to the scale", exc)
+        return {}
+    t = t[t["implied_total"].notna() & t["team_spread"].notna()]
+    return {(tm, str(gd)[:10]): (float(it), float(sp))
+            for tm, gd, it, sp in zip(t["team"], t["gameday"], t["implied_total"], t["team_spread"])}
+
+
 # ------------------------------------------------------------------------------------------------------ game logs
 @dataclass
 class StatContext:
     """League-level facts for one stat, derived once from the master (not per player)."""
     opp_factor: dict = field(default_factory=dict)      # canonical opponent code -> multiplier
+    opp_raw: dict = field(default_factory=dict)         # canonical opponent code -> UNSHRUNK allowed/expected ratio
+    opp_cnt: dict = field(default_factory=dict)         # canonical opponent code -> player-games behind that ratio
     alpha: float = 0.25                                  # NegBin dispersion (var = mu + alpha mu^2)
     cv: float = 0.5                                      # within-player sd / mean (Normal family)
     league_mean: float = 0.0
@@ -168,10 +235,12 @@ def _hist(rows: list, stat_def: tuple) -> list:
 class GameLogs:
     """A sport's player game-log index (cockpit_form shape) plus lazily built per-stat league contexts."""
 
-    def __init__(self, sport: str, idx: dict):
+    def __init__(self, sport: str, idx: dict, opp_shrink_k: float | None = None):
         self.sport = sport
         self.idx = idx
+        self.opp_shrink_k = opp_shrink_k          # None = the per-stat validated value (stat_params)
         self._ctx: dict = {}
+        self._env: dict | None = None
         self._lock = threading.Lock()
 
     @classmethod
@@ -202,6 +271,16 @@ class GameLogs:
         last = rows[-1]
         raw = (last.get("recent_team") or last.get("team")) if self.sport == "nfl" else last.get("team_abbr")
         return canon_team(self.sport, raw)
+
+    def env_lines(self) -> dict:
+        """{(canonical team, ET kickoff date): (implied_team_total, team_spread)} from the mirrored schedules, NFL only
+        ({} for other sports or when the mirror is unreadable: the game term then falls back to the scale alone)."""
+        if self.sport != "nfl":
+            return {}
+        with self._lock:
+            if self._env is None:
+                self._env = _load_env_lines()
+            return self._env
 
     def latest_date(self) -> str | None:
         """Newest game date in the master (YYYY-MM-DD; NFL: 'season Wweek')."""
@@ -259,10 +338,13 @@ class GameLogs:
                     mean_sq_sum += m * m
                     mean_sum += m
                     n_players += 1
+        k_opp = self.opp_shrink_k if self.opp_shrink_k is not None else stat_params(self.sport, stat)[2]
         for oc, e in exp.items():
             if e > 0:
-                w = cnt[oc] / (cnt[oc] + OPP_SHRINK_K)
+                w = cnt[oc] / (cnt[oc] + k_opp)
                 ctx.opp_factor[oc] = min(max(1.0 + (got[oc] / e - 1.0) * w, OPP_CLIP[0]), OPP_CLIP[1])
+                ctx.opp_raw[oc] = got[oc] / e
+                ctx.opp_cnt[oc] = cnt[oc]
         if n_players and mean_sq_sum > 0:
             # method of moments over the whole population: var = mu + alpha*mu^2 (NegBin), var = (cv*mu)^2 (Normal)
             ctx.alpha = min(max((var_sum - mean_sum) / mean_sq_sum, ALPHA_RANGE[0]), ALPHA_RANGE[1])
@@ -273,7 +355,7 @@ class GameLogs:
 
 
 # ------------------------------------------------------------------------------------------- projection + P(over)
-def project_mu(hist: list, halflife: float, opp_factor: float = 1.0) -> dict | None:
+def project_mu(hist: list, halflife: float, opp_factor: float = 1.0, ewm_weight: float | None = None) -> dict | None:
     """Chronological [(val, usage, season, opp)] -> {'mu', 'n_games', 'usage_proj', 'opp_factor'} or None (too little)."""
     n = len(hist)
     if n < MIN_GAMES:
@@ -291,12 +373,14 @@ def project_mu(hist: list, halflife: float, opp_factor: float = 1.0) -> dict | N
         szn_u = float(np.mean(use[ok][-min(int(ok.sum()), 20):]))
         usage_proj = 0.6 * ewm_u + 0.4 * szn_u
         rate = float(np.sum(wu * vals[ok]) / np.sum(wu * use[ok]))
-        mu = EWM_WEIGHT * ewm_v + (1.0 - EWM_WEIGHT) * rate * usage_proj
+        wgt = EWM_WEIGHT if ewm_weight is None else ewm_weight
+        mu = wgt * ewm_v + (1.0 - wgt) * rate * usage_proj
     return {"mu": max(mu * opp_factor, 0.0), "n_games": n, "usage_proj": usage_proj, "opp_factor": opp_factor}
 
 
-def p_over(family: str, mu: float, line: float, ctx: StatContext) -> float | None:
-    """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything)."""
+def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None) -> float | None:
+    """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything). `sd_mu` is the mean
+    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread."""
     if mu is None or not math.isfinite(mu) or line is None:
         return None
     if family == "anytime":
@@ -306,8 +390,44 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext) -> float | Non
     if family == "negbin":
         n = 1.0 / ctx.alpha
         return float(1.0 - nbinom.cdf(math.floor(line), n, n / (n + mu)))
-    sd = max(ctx.cv * mu, MIN_SD_FRAC * mu, 1e-6)
+    ref = mu if sd_mu is None else sd_mu
+    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(1.0 - norm.cdf((line - mu) / sd))
+
+
+def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float = BLEND_C) -> float | None:
+    """Market-anchored posterior: logit(p) = logit(market) + c * (logit(model) - logit(market)).
+
+    This is the form the repo's own model-vs-market studies test (blend coefficient `c`; docs/analysis/
+    bettingpros_model_vs_market_2026-10-15.md): c = 0 trusts the market entirely, c = 1 trusts the model entirely. Those
+    studies measured c = +0.02 .. +0.30 for the TRAINED research models; nothing has been measured for this empirical
+    engine, so BLEND_C is a deliberately small, UNVALIDATED shrinkage prior. It is display-only: it feeds neither the
+    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability."""
+    if p_model_over is None or p_mkt_over is None:
+        return None
+    lo, hi = 0.01, 0.99
+    pm = min(max(float(p_model_over), lo), hi)
+    pk = min(max(float(p_mkt_over), lo), hi)
+    z = math.log(pk / (1 - pk)) + c * (math.log(pm / (1 - pm)) - math.log(pk / (1 - pk)))
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
+               sd_mu: float | None = None):
+    """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
+    one-sided anytime market. Yards are floored at 0 (the board shows a rate-style range, not a loss). These describe
+    the MODEL'S spread (league-wide within-player variance), not an interval with validated coverage."""
+    if mu is None or not math.isfinite(mu) or family == "anytime":
+        return None, None
+    if mu <= 0:
+        return 0.0, 0.0
+    if family == "negbin":
+        n = 1.0 / ctx.alpha
+        pr = n / (n + mu)
+        return float(nbinom.ppf(lo, n, pr)), float(nbinom.ppf(hi, n, pr))
+    ref = mu if sd_mu is None else sd_mu
+    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
+    return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
 
 
 def _pois_cdf(k: int, mu: float) -> float:
@@ -451,11 +571,19 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
              has_line: bool = True) -> dict | None:
     family = PROJECT_STATS[sport][stat]
     ctx = logs.context(stat)
-    proj = project_mu(_hist(rows, sdef), HALFLIFE[sport], ctx.opp_factor.get(opp, 1.0) if opp else 1.0)
+    hl, ewm_w, _ = stat_params(sport, stat)
+    proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
     if proj is None:
         return None
-    mu = proj["mu"]
-    p_model_over = p_over(family, mu, line, ctx) if line is not None else None
+    mu_raw = proj["mu"]
+    coef = calibration(sport, stat)
+    lines = None
+    if coef and "b0" in coef and team is not None and start is not None:
+        lines = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat()))
+    mult = _ea.multiplier(coef, *(lines or (None, None))) if coef else 1.0
+    mu = mu_raw * mult
+    p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
+    p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -471,7 +599,10 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
         "mins_to_start": None if mins is None else round(mins, 1),
         "has_line": bool(has_line and line is not None), "line": _f(line, 2), "consensus_line": _f(line, 2),
-        "side": side, "proj_mean": _f(mu, 3), "p_over_model": _f(p_model_over),
+        "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
+        "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
+        "p_over_model": _f(p_model_over),
+        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over)),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
@@ -683,14 +814,103 @@ def _finish(payload: dict, sport: str, write: bool) -> dict:
     return payload
 
 
+# ------------------------------------------------------------------------------------------------ serving fast path
+# The HTTP route must never compute a board inline (a cold compute downloads the sport's game-log master from GCS and
+# blocks SSR for 5-15 s). get_daily_projections() is the web path: process cache -> the precomputed JSON in GCS -> if
+# that is missing or stale, kick ONE background recompute and answer immediately with whatever exists (stale-while-
+# revalidate). Only the CLI / scheduled job passes allow_compute=True. NOTE: the background thread only makes progress
+# while Cloud Run has CPU allocated; the scheduled job (deploy/setup_daily_projections_job.sh) is the dependable path.
+PROJ_CACHE_TTL_SEC = 30 * 60
+PROJ_STALE_MINUTES = 90
+PROJ_RECOMPUTE_SEC = 600
+_PROJ_CACHE: dict = {}                      # sport -> (time.monotonic() loaded, payload)
+_PROJ_LOCK = threading.Lock()
+_PROJ_LAST_TRY: dict = {}                   # sport -> time.monotonic() of the last compute attempt (success or not)
+
+
+def read_precomputed(sport: str) -> dict | None:
+    """The stored board (one small JSON), or None when it has not been produced yet."""
+    from mlb_core import storage
+    try:
+        return json.loads(storage.read_bytes(OUT_KEY.format(sport=sport)))
+    except Exception:                                                                  # noqa: BLE001
+        return None
+
+
+def payload_age_min(payload: dict | None, now: datetime | None = None) -> float | None:
+    try:
+        return ((now or datetime.now(timezone.utc)) - datetime.fromisoformat(str(payload.get("ts")))).total_seconds() / 60.0
+    except Exception:                                                                  # noqa: BLE001
+        return None
+
+
+def _cache_put(sport: str, payload: dict) -> None:
+    with _PROJ_LOCK:
+        _PROJ_CACHE[sport] = (time.monotonic(), payload)
+
+
+def _bg_compute_and_save(sport: str) -> None:
+    """Thread target: compute, write EVSweep/{sport}_props/projections_latest.json, refresh the process cache."""
+    try:
+        fresh = run_sport(sport, write=True)
+    except Exception:                                                                  # noqa: BLE001
+        log.exception("background projections compute failed for %s", sport)
+        return
+    if fresh.get("status") != "unavailable":
+        _cache_put(sport, fresh)
+
+
+def _kick_background(sport: str) -> bool:
+    """Start one daemon recompute thread unless one was started within PROJ_RECOMPUTE_SEC (success or not)."""
+    with _PROJ_LOCK:
+        if time.monotonic() - _PROJ_LAST_TRY.get(sport, -1e9) < PROJ_RECOMPUTE_SEC:
+            return False
+        _PROJ_LAST_TRY[sport] = time.monotonic()
+    threading.Thread(target=_bg_compute_and_save, args=(sport,), daemon=True, name=f"proj-{sport}").start()
+    return True
+
+
+def get_daily_projections(sport: str, limit: int = MAX_ROWS, allow_compute: bool = False) -> dict | None:
+    """One sport's board payload (rows capped at `limit`), or None when none exists yet (a background compute is then
+    already running). allow_compute=False (every web request) never computes inline; True (CLI/job) does."""
+    sport = (sport or "").lower()
+    if sport not in PROJECT_STATS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
+    now = datetime.now(timezone.utc)
+    with _PROJ_LOCK:
+        hit = _PROJ_CACHE.get(sport)
+    payload = hit[1] if hit and time.monotonic() - hit[0] < PROJ_CACHE_TTL_SEC else None
+    if payload is None:
+        payload = read_precomputed(sport)
+        if payload is not None:
+            _cache_put(sport, payload)
+    age = payload_age_min(payload, now) if payload else None
+    if payload is None or age is None or age > PROJ_STALE_MINUTES:
+        if allow_compute:
+            fresh = run_sport(sport, now=now, write=True)
+            if fresh.get("status") != "unavailable" or payload is None:
+                payload = fresh
+                _cache_put(sport, fresh)
+        else:
+            _kick_background(sport)
+    if not payload:
+        return None
+    rows = payload.get("rows") or []
+    return payload if len(rows) <= limit else {**payload, "rows": rows[:limit]}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--sport", choices=[*SPORTS, "all"], default="all")
+    ap.add_argument("--write-gcs", action="store_true",
+                    help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
     ap.add_argument("--no-write", action="store_true", help="print the summary, do not write to GCS/local storage")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if a.write_gcs and a.no_write:
+        ap.error("--write-gcs and --no-write are mutually exclusive")
     for sp in (SPORTS if a.sport == "all" else (a.sport,)):
-        p = run_sport(sp, write=not a.no_write)
+        p = run_sport(sp, write=not a.no_write)               # the job path: synchronous compute (allow_compute=True)
         print(f"{sp}: status={p['status']} rows={p['count']} lines_age={p['lines_age_minutes']} "
               f"gamelog_latest={p['gamelog_latest']} summary={json.dumps(p['summary'], default=str)}")
     return 0

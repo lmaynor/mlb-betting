@@ -56,3 +56,32 @@ def load(dataset: str, seasons: Optional[Iterable[int]] = None, columns: Optiona
         logger.warning("%s: skipping unmirrored season(s) %s", dataset, missing)
     frames = [storage.read_parquet(ds.key(s), columns=columns) for s in want if s in have]
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns or [])
+
+
+# -- derived (gold) tables built by nfl.data.derived ------------------------------------------------------------
+def _derived_prefix(table: str) -> str:
+    from nfl.data.derived import DERIVED_PREFIX, PLAYER_TABLE, TEAM_TABLE
+    if table not in (TEAM_TABLE, PLAYER_TABLE):
+        raise ValueError(f"unknown derived table {table!r}; known: {[TEAM_TABLE, PLAYER_TABLE]}")
+    return f"{DERIVED_PREFIX}/{table}"
+
+
+def derived_seasons(table: str) -> list:
+    """Seasons for which a derived table exists, ascending."""
+    keys = storage.list_keys(f"{_derived_prefix(table)}/")
+    return sorted(int(m.group(1)) for k in keys if (m := _SEASON_RE.search(k)))
+
+
+def load_derived(table: str, seasons: Optional[Iterable[int]] = None, columns: Optional[list] = None,
+                 strict: bool = True) -> pd.DataFrame:
+    """Load derived table(s) (team_game_pbp / player_game_pbp). Same strictness contract as `load`."""
+    prefix = _derived_prefix(table)
+    have = derived_seasons(table)
+    want = sorted(set(seasons)) if seasons is not None else have
+    missing = [s for s in want if s not in have]
+    if missing and strict:
+        raise FileNotFoundError(
+            f"derived table {table!r} has no file for season(s) {missing} (have {have}). "
+            f"Build with: python3 -m nfl.data.derived --seasons {missing[0]}-{missing[-1]}")
+    frames = [storage.read_parquet(f"{prefix}/{table}_{s}.parquet", columns=columns) for s in want if s in have]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns or [])

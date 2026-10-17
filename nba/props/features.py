@@ -400,16 +400,18 @@ class FeatureContext:
             if active is None or tb >= len(days) or int(days[tb]) != qd:
                 return None                                   # this game is not in the history: cannot know who dressed
             act = set(active)
-            absent = {p for p in rot if p not in act}
+            absent = {p: 1.0 for p in rot if p not in act}
             if availability == "history_inactive":
                 # the league's own pre-game inactive list: exactly who was ruled out, no benchings, no guessing
-                absent = absent & self._tg_inactive.get((team, tb + 1), set())
+                listed = self._tg_inactive.get((team, tb + 1), set())
+                absent = {p: w for p, w in absent.items() if p in listed}
             if availability == "history_excl_scratch":
                 # closer to the live definition (the injury list's "Out"): a listed healthy scratch (COACH'S DECISION) is a
                 # benching the public injury list can never contain, so it is not an absence. Unlisted absences stay: ESPN's
                 # box lists only dressed/some inactive players (53% of rotation absences are unlisted), and those are
                 # overwhelmingly inactive-for-injury/rest, i.e. what the live list reports.
-                absent = absent - self._tg_scratch.get((team, tb + 1), set())
+                for p in self._tg_scratch.get((team, tb + 1), set()):
+                    absent.pop(p, None)
         else:
             # per-game lists: a (team, ET-day int) key (see _days) wins over the bare team key, so a backfilled feed of
             # historical pre-game lists can be served through the same code path as tonight's single list
@@ -418,7 +420,10 @@ class FeatureContext:
                 inj = availability.get(team)
             if inj is None:
                 return None
-            absent = rot & set(inj)
+            if isinstance(inj, dict):                         # {sb id: P(absent)} -- expectation over uncertain statuses
+                absent = {p: float(w) for p, w in inj.items() if p in rot and float(w) > 0}
+            else:
+                absent = {p: 1.0 for p in rot & set(inj)}
         return rot, absent
 
     def _tb(self, team: str, date):
@@ -431,7 +436,7 @@ class FeatureContext:
         for callers that want to replay it through the live path."""
         d, tb = self._tb(team, date)
         res = self._group_candidates(team, d, tb, "history")
-        return None if res is None else res[1]
+        return None if res is None else set(res[1])
 
     def rotation(self, team: str, date) -> set | None:
         d, tb = self._tb(team, date)
@@ -460,7 +465,7 @@ class FeatureContext:
             rot, absent = res
             valid.add((team, int(qd)))
             for p in rot:
-                cand_rows.append((team, int(qd), p, p in absent))
+                cand_rows.append((team, int(qd), p, float(absent.get(p, 0.0))))
         if not valid:
             return out
         cand = pd.DataFrame(cand_rows, columns=["team", "qd", "player_id", "absent"])
@@ -473,15 +478,16 @@ class FeatureContext:
         ok = (cand["last_team"] == cand["team"]) & (cand["min_l10"] >= C.ROTATION_MIN_L10)
         cand = cand[ok].copy()
         cand["usg"] = cand["points_l10"] + C.USG_PROXY_AST_WEIGHT * cand["assists_l10"] + cand["rebounds_l10"]
-        ab = cand[cand["absent"]]
+        ab = cand[cand["absent"] > 0]
         sums: dict = {k: [0.0, 0.0, 0.0] for k in valid}
         contrib: dict = {}
-        for team, qd, pid, mn, us in zip(ab["team"], ab["qd"], ab["player_id"], ab["min_l10"], ab["usg"]):
+        for team, qd, pid, mn, us, w in zip(ab["team"], ab["qd"], ab["player_id"], ab["min_l10"], ab["usg"], ab["absent"]):
             a = sums[(team, int(qd))]
-            a[0] += float(mn)
-            a[1] += float(us)
-            a[2] += 1.0
-            contrib[(team, int(qd), pid)] = (float(mn), float(us))
+            w = float(w)
+            a[0] += w * float(mn)
+            a[1] += w * float(us)
+            a[2] += w
+            contrib[(team, int(qd), pid)] = (w * float(mn), w * float(us), w)
         o_min, o_usg, o_n = (out[k] for k in names)
         for i, (team, qd, pid) in enumerate(zip(teams, qday, pids)):
             k = (team, int(qd))
@@ -491,21 +497,27 @@ class FeatureContext:
             own = contrib.get((team, int(qd), pid))      # own-row exclusion: a player never counts himself
             o_min[i] = a[0] - (own[0] if own else 0.0)
             o_usg[i] = a[1] - (own[1] if own else 0.0)
-            o_n[i] = a[2] - (1.0 if own else 0.0)
+            o_n[i] = a[2] - (own[2] if own else 0.0)
         return out
 
 
 def availability_from_injuries(absent_espn_by_team: dict, bridge) -> dict:
     """{tricode: iterable of ESPN player ids (e.g. nba.data.espn_injuries.absent_ids)} -> {tricode: set of SportsBlaze ids}
-    for FeatureContext.features(availability=...). An ESPN id with no SportsBlaze bridge has no history, so it cannot
+    for FeatureContext.features(availability=...). The values may also be {espn id: P(absent)} (see
+    nba.data.espn_injuries.absence_weights_by_team) -> {tricode: {sb id: P(absent)}}. An ESPN id with no SportsBlaze bridge has no history, so it cannot
     be a rotation player and is dropped; the TEAM key is kept even when its set ends up empty (known-healthy)."""
     out: dict = {}
+    weighted = any(isinstance(v, dict) for v in (absent_espn_by_team or {}).values())
     for team, ids in (absent_espn_by_team or {}).items():
-        sb = set()
-        for e in ids or ():
+        sb: dict | set = {} if weighted else set()
+        items = ids.items() if isinstance(ids, dict) else [(e, 1.0) for e in (ids or ())]
+        for e, w in items:
             sid, _why = bridge.sb_id(e)
             if sid is not None:
-                sb.add(sid)
+                if weighted:
+                    sb[sid] = max(float(w), sb.get(sid, 0.0))
+                else:
+                    sb.add(sid)
         out[team] = sb
     return out
 

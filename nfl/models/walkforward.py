@@ -76,11 +76,12 @@ def _ece(p, o) -> float:
 
 
 def eval_season(df: pd.DataFrame, stat: str, test_season: int, family: str = None, overrides: dict = None,
-                include_experimental: bool = False):
+                include_experimental: bool = False, include_pbp_ctx: bool = False):
     """Train on seasons < test_season, return (row-level result frame, model)."""
     spec = P.SPECS[stat]
     train = df[df["season"] < test_season]
-    model = P.train_stat(train, stat, family=family, overrides=overrides, include_experimental=include_experimental)
+    model = P.train_stat(train, stat, family=family, overrides=overrides, include_experimental=include_experimental,
+                         include_pbp_ctx=include_pbp_ctx)
     fam = model.dispersion["family"]
     bcol = BASE_COL[stat]
     te = P.training_rows(df[df["season"] == test_season], stat)
@@ -312,6 +313,8 @@ def main(argv=None) -> int:
     ap.add_argument("--stats", default=",".join(P.DEFAULT_STATS), help="available: " + ",".join(P.SPECS))
     ap.add_argument("--experimental-features", action="store_true",
                     help="also feed the teammate-absence usage-share features to the models (default: off)")
+    ap.add_argument("--pbp-context", action="store_true",
+                    help="also feed the pbp-derived team/player context features (pc_*; needs python -m nfl.data.derived)")
     ap.add_argument("--seasons", default="2021-2026", help="test seasons; the newest is reported as to-date")
     ap.add_argument("--features-cache", default=None, help="parquet path: load if exists, else build + save")
     ap.add_argument("--out", default=None, help="write the markdown report here")
@@ -349,7 +352,8 @@ def main(argv=None) -> int:
         market[stat] = {}
         frames = []
         for s in test_seasons:
-            res, _ = eval_season(df, stat, s, include_experimental=args.experimental_features)
+            res, _ = eval_season(df, stat, s, include_experimental=args.experimental_features,
+                                 include_pbp_ctx=args.pbp_context)
             if res is None:
                 results[stat][s] = None
                 market[stat][s] = None
