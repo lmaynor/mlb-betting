@@ -14,7 +14,7 @@ const maeDigits = (x: number) => (x >= 10 ? 1 : 3)
 function StatBlock({ label, value, sub, accent, last }: { label: string; value: string; sub?: string; accent?: boolean; last?: boolean }) {
   return (
     <div style={{ padding: '18px', borderRight: last ? undefined : B }}>
-      <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
+      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--ash)' }}>{value}</div>
       {sub && <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</div>}
     </div>
@@ -139,12 +139,12 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
           <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '3px' }}>{system.features.length} live-board inputs &middot; {spec.features.length} research-model inputs</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', background: 'var(--obsidian)', borderBottom: B }}>
-          {['Used by', 'Feature'].map(h => <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', padding: '9px 14px' }}>{h}</div>)}
+          {['Used by', 'Feature'].map(h => <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)', padding: '9px 14px' }}>{h}</div>)}
         </div>
         {[...system.features.map(f => ({ f, used: 'Live board' })), ...(gap ? [] : spec.features.map(f => ({ f, used: 'Research model' })))].map(({ f, used }, i, arr) => (
           <div key={`${used}-${f}`} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: i < arr.length - 1 ? B : undefined, alignItems: 'center' }}>
             <div style={{ padding: '10px 14px' }}>
-              <span className="mono" style={{ fontSize: '9px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)', color: used === 'Live board' ? 'var(--signal)' : 'var(--fog)', border: `1px solid ${used === 'Live board' ? 'var(--win-border)' : 'var(--iron)'}`, background: used === 'Live board' ? 'var(--win-wash)' : 'transparent' }}>{used}</span>
+              <span className="mono" style={{ fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)', color: used === 'Live board' ? 'var(--signal)' : 'var(--fog)', border: `1px solid ${used === 'Live board' ? 'var(--win-border)' : 'var(--iron)'}`, background: used === 'Live board' ? 'var(--win-wash)' : 'transparent' }}>{used}</span>
             </div>
             <div style={{ fontSize: '11.5px', color: 'var(--silver)', padding: '10px 14px' }}>{f}</div>
           </div>

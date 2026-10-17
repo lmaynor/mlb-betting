@@ -3,12 +3,13 @@
 import { Fragment, useState } from 'react'
 import { TopPicksTable } from '@/components/picks/top-picks-table'
 import { formatDateKey } from '@/lib/dates'
+import { TABLE_TD, TABLE_TH } from '@/lib/tokens'
 import type { Record1u, TopPick } from '@/lib/top-picks'
 
 export interface HistoryDay { date: string; picks: TopPick[]; record: Record1u }
 
-const TH = { textAlign: 'left', padding: '9px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230', background: '#11131a', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
-const TD = { padding: '10px 12px', borderBottom: '1px solid #151822', whiteSpace: 'nowrap' } as const
+const TH = { ...TABLE_TH, textAlign: 'left', padding: '9px 12px', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
+const TD = { ...TABLE_TD, padding: '10px 12px', whiteSpace: 'nowrap' } as const
 
 /** One row per day; a day opens to its ranked ten as a colSpan sub-row. The newest day starts open. */
 export function HistoryTable({ days }: { days: HistoryDay[] }) {

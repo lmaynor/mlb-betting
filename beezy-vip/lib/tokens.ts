@@ -13,13 +13,43 @@ export const B = '1px solid var(--basalt)'
 // Subtler inner border for table rows and nested dividers.
 export const B_INNER = '1px solid #151822'
 
-// Standard card surface (spec v2): 10px radius, hairline border, soft shadow.
-export const CARD_STYLE = {
+// ONE surface spec for the whole app (no-slop rule 3): solid graphite, 1px hairline, 8px radius, at most a 1px shadow.
+// Inline styles stay the house style, so these are shared objects to spread, not classes. Do not re-declare them locally.
+export const SURFACE_CARD = {
   background: '#11131a',
   border: '1px solid #1e2230',
-  borderRadius: '10px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+  borderRadius: '8px',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.45)',
 } as const
+
+// One step up: nested panels, popovers, detail sheets.
+export const SURFACE_ELEVATED = {
+  background: '#171a24',
+  border: '1px solid #2e3446',
+  borderRadius: '8px',
+} as const
+
+// Table header and cell bases. Spread them and add only what a table needs (textAlign, position: 'sticky', whiteSpace, padding).
+export const TABLE_TH = {
+  fontSize: '10px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: '#7d8596',
+  background: '#11131a',
+  padding: '9px 10px',
+  borderBottom: '1px solid #1e2230',
+} as const
+
+export const TABLE_TD = {
+  fontSize: '13px',
+  color: '#f3f4f6',
+  padding: '9px 10px',
+  borderBottom: '1px solid #151822',
+} as const
+
+// Legacy name, kept so existing imports resolve. Same object as SURFACE_CARD.
+export const CARD_STYLE = SURFACE_CARD
 
 // -- Confidence tiers (mirror --strong / --lean / --watch in globals.css) --
 export type ScoreTier = 'strong' | 'lean' | 'watch'

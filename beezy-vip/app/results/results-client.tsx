@@ -66,7 +66,7 @@ function Chip({ label, active, color, onClick }: {
 function GroupLabel({ label }: { label: string }) {
   return (
     <span style={{
-      fontFamily: 'var(--font-mono), monospace', fontSize: '9px',
+      fontFamily: 'var(--font-mono), monospace', fontSize: '10px',
       letterSpacing: '0.1em', textTransform: 'uppercase' as const,
       color: 'var(--fog)', padding: '0 4px', whiteSpace: 'nowrap' as const,
     }}>{label}</span>
@@ -244,12 +244,12 @@ function ResultBetCard({ bet }: { bet: Bet }) {
           { label: 'Book', value: bet.book ?? '--', color: 'var(--silver)' },
         ].map(item => (
           <div key={item.label} style={{ minWidth: 0 }}>
-            <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>{item.label}</div>
+            <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>{item.label}</div>
             <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: item.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
           </div>
         ))}
         <div>
-          <div className="mono" style={{ fontSize: '8px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>P&L</div>
+          <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>P&L</div>
           <PnL value={bet.profit} stake={bet.stake} result={bet.result} />
         </div>
       </div>
@@ -448,7 +448,7 @@ export function ResultsClient({
           <div className="results-model-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', marginBottom: '24px', overflowX: 'auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', background: 'var(--obsidian)', borderBottom: B }}>
               {['System', 'Bets', 'Win Rate', 'ROI', 'P&L', 'Avg Edge'].map(h => (
-                <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
+                <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
               ))}
             </div>
             {Object.entries(SYSTEM_GROUPS).flatMap(([groupName, systems]) => {
@@ -464,7 +464,7 @@ export function ResultsClient({
                 }}>
                   <div className="mono" style={{
                     gridColumn: '1 / -1', padding: '6px 12px',
-                    fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
+                    fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase',
                     color: 'var(--fog)',
                   }}>{groupName}</div>
                 </div>,
@@ -501,7 +501,7 @@ export function ResultsClient({
 
               return (
                 <div key={groupName} style={{ marginBottom: '14px' }}>
-                  <div className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '8px' }}>{groupName}</div>
+                  <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '8px' }}>{groupName}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {groupStats.map(s => {
                       const r = s.roi == null ? null : parseFloat(String(s.roi))
@@ -521,7 +521,7 @@ export function ResultsClient({
                               ['Edge', fmtSigned(s.avg_edge), 'var(--ash)'],
                             ].map(([label, value, color]) => (
                               <div key={label}>
-                                <div className="mono" style={{ fontSize: '8px', color: 'var(--fog)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '3px' }}>{label}</div>
+                                <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '3px' }}>{label}</div>
                                 <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color }}>{value}</div>
                               </div>
                             ))}
@@ -543,7 +543,7 @@ export function ResultsClient({
 
           {/* ALL chip */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>System</span>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>System</span>
             <Chip label={`ALL (${countsBySystem['ALL'] ?? 0})`} active={system === 'ALL'} onClick={() => { setSystem('ALL'); setPage(0) }} />
           </div>
 
@@ -562,7 +562,7 @@ export function ResultsClient({
         {/* Result + Sort row */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Result</span>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Result</span>
             {RESULTS.map(r => (
               <Chip key={r} label={r} active={result === r}
                 color={r === 'WIN' ? 'var(--signal)' : r === 'LOSS' ? 'var(--loss)' : r === 'VOID' ? 'var(--fog)' : undefined}
@@ -570,7 +570,7 @@ export function ResultsClient({
             ))}
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Sort</span>
+            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Sort</span>
             {(['date', 'edge', 'odds', 'pnl'] as const).map(s => (
               <button key={s}
                 onClick={() => {
@@ -636,14 +636,14 @@ export function ResultsClient({
                 else { setSortBy(col.key!); setSortDir('desc') }
                 setPage(0)
               }} className="mono" style={{
-                padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
+                padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase',
                 color: sortBy === col.key ? 'var(--ash)' : 'var(--fog)',
                 background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
               }}>
                 {col.label}{sortBy === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
             ) : (
-              <div key={col.label} className="mono" style={{ padding: '9px 12px', fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>{col.label}</div>
+              <div key={col.label} className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>{col.label}</div>
             ))}
           </div>
           {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => {

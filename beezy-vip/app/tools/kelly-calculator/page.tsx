@@ -55,12 +55,12 @@ export default function KellyCalculatorPage() {
         <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
-              <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Full Kelly</div>
+              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Full Kelly</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--signal)' }}>{result.fullKelly}%</div>
               <div className="mono" style={{ fontSize: '13px', color: 'var(--signal)', marginTop: '4px' }}>${result.stakeFullDollars.toFixed(2)}</div>
             </div>
             <div style={{ padding: '20px' }}>
-              <div className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Half Kelly</div>
+              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Half Kelly</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--ash)' }}>{result.halfKelly}%</div>
               <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
