@@ -289,8 +289,8 @@ def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.
     The frame also carries best_over / best_under / novig_over / novig_under (American prices) for price-based scoring.
     Returns {"coverage": {consensus_rows, matched, dropped{low_books, postgame_quote, no_game, unresolved, ambiguous,
     void, duplicate, no_model, push}}, "resolve_how": {...}, "scores": {...}, "frame": props, "cutoffs": [...]}.
-    Team codes: BettingPros away/home are assumed to be NHL abbreviations (history.TEAM_FIX applied); a code the game log
-    spells differently shows up as `no_game` -- check that count on real data before trusting coverage."""
+    Team codes: BettingPros uses LA/NJ/SJ/TB (+ ARI/UTA by era); history.canon_team maps them to the game log's tricodes
+    and attach_outcomes retries a unique +-1 day match. Anything still unmatched shows up as `no_game`."""
     from mlb_core.odds import model_vs_market as MVM
     if slack_min is not None and len(cons):
         from nhl.props import bp_eval
@@ -302,9 +302,9 @@ def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.
     if len(c) == 0:
         return {"coverage": MVM.coverage(n_in, 0, dropped), "resolve_how": {}, "scores": MVM.score_model_vs_market([], [], [], []),
                 "frame": pd.DataFrame(columns=cols), "cutoffs": []}
-    fix = history.TEAM_FIX
     pairs = pd.DataFrame({"event_id": c["event_id"].to_numpy(), "game_date": c["game_date"].astype(str).to_numpy(),
-                          "home_abbrev": c["home"].replace(fix).to_numpy(), "away_abbrev": c["away"].replace(fix).to_numpy(),
+                          "home_abbrev": [history.canon_team(t, d) for t, d in zip(c["home"], c["game_date"].astype(str))],
+                          "away_abbrev": [history.canon_team(t, d) for t, d in zip(c["away"], c["game_date"].astype(str))],
                           "player_name": c["player"].to_numpy(), "player_norm": c["player_norm"].to_numpy(),
                           "line": c["line"].astype(float).to_numpy(), "cons_fair": c["p_over_cons"].astype(float).to_numpy(),
                           "cons_n": c["n_books"].to_numpy(),
@@ -317,8 +317,7 @@ def bettingpros_model_vs_market(cons: pd.DataFrame, gl: pd.DataFrame, names: pd.
     if not allow_compat:
         pairs.loc[pairs["resolve_how"] == "compat", "player_id"] = pd.NA
     games = games_from_gamelog(gl)
-    # the game log spells Arizona ARI until 2023-24; TEAM_FIX maps the quote side ARI -> UTA, so map the game side the same way
-    games["home_team"], games["away_team"] = games["home_team"].replace(fix), games["away_team"].replace(fix)
+    # team codes are canonicalised on BOTH sides, dated, inside history.attach_outcomes (ARI through 2024-04, UTA after)
     pairs = history.attach_outcomes(pairs, games, gl)
     amb = (pairs["resolve_how"] == "ambiguous") | (pairs["resolve_how"] == "compat") & pairs["player_id"].isna()
     st = pairs["status"].to_numpy(dtype=object).copy()

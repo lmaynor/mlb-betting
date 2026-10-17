@@ -160,6 +160,26 @@ def absent_ids(team, statuses=("Out",), frame: pd.DataFrame | None = None) -> se
     return {int(i) for i in sel["espn_player_id"]}
 
 
+# Empirical-style absence probabilities per ESPN status class (a prior, not a fit): the live features are SUMS over
+# rotation players of minutes/usage, so weighting each listed player by P(absent) gives their expectation. Training
+# ("history") knows who actually sat and uses 1.0/0.0.
+STATUS_ABSENCE_PROB = {"Out": 1.0, "Doubtful": 0.75, "Questionable": 0.35, "Day-To-Day": 0.25}
+
+
+def absence_weights_by_team(frame: pd.DataFrame, probs: dict | None = None) -> dict:
+    """{tricode: {espn_id: P(absent)}} for ALL 30 teams when the report is usable, else {} (unknown). Statuses missing
+    from `probs` (Probable, Other) carry weight 0. The highest weight wins when a player is listed twice."""
+    probs = STATUS_ABSENCE_PROB if probs is None else probs
+    if not frame.attrs.get("ok", False):
+        return {}
+    out = {c: {} for c, *_ in TEAMS}
+    for code, pid, st in zip(frame["team_abbrev"], frame["espn_player_id"], frame["status"]):
+        w = float(probs.get(st, 0.0))
+        if code in out and w > 0:
+            out[code][int(pid)] = max(w, out[code].get(int(pid), 0.0))
+    return out
+
+
 def absent_by_team(frame: pd.DataFrame, statuses=("Out",)) -> dict:
     """{tricode: set of ESPN ids} for ALL 30 teams when the report is usable (teams absent from the payload are healthy),
     else {} (unknown: a consumer keyed on this mapping then emits NaN, not zeros)."""

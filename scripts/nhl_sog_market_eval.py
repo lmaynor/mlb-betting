@@ -71,6 +71,10 @@ def price_baseline(cons: pd.DataFrame, frame: pd.DataFrame) -> None:
     for name, r in (("UNDER", ru), ("OVER", ro)):
         lo, hi = _cluster_boot_roi(r, m.game_date)
         print(f"always {name:5} @ best price: ROI={r.mean():+.4f}  95% CI (date-cluster bootstrap) [{lo:+.4f}, {hi:+.4f}]")
+    if "p_model" in m.columns:
+        from mlb_core.odds import model_vs_market as MVM
+        bt = m.rename(columns={"won_over": "over", "cons_fair": "p_market"}).dropna(subset=["p_model", "p_market"])
+        print("\n" + MVM.render_price_test("NHL SOG market-anchored blend (walk-forward by season)", MVM.blend_price_test(bt)))
     yr = m.game_date.astype(str).str[:4]
     for y, g in m.groupby(yr):
         u = np.where(g.won_over == 0, _profit_per_unit(g.best_under_odds), -1.0)
@@ -118,6 +122,12 @@ def main(argv=None) -> int:
     print("\nDisagreement-bet ladder (gap = model - consensus P(over) in probability points; price = best book / Novig):")
     for x in ladder.get("roi", []):
         print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in x.items()})
+    fr = r["frame"]
+    if len(fr) and {"best_over", "best_under", "p_model", "cons_fair", "won_over"} <= set(fr.columns):
+        from mlb_core.odds import model_vs_market as MVM
+        bt = fr.rename(columns={"won_over": "over", "cons_fair": "p_market", "best_over": "best_over_odds",
+                                "best_under": "best_under_odds"})
+        print("\n" + MVM.render_price_test("NHL SOG market-anchored blend (walk-forward by season)", MVM.blend_price_test(bt)))
     if a.json:
         with open(a.json, "w") as fh:
             json.dump({"coverage": r["coverage"], "resolve_how": r["resolve_how"], "scores": r["scores"], "by_season": seasons,

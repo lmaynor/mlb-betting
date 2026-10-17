@@ -153,6 +153,18 @@ def test_pregame_only_drops_post_start_quotes():
     assert out.iloc[0]["n_books"] == 2 and out.iloc[0]["pregame"] == True    # noqa: E712
 
 
+def test_grace_window_keeps_quotes_just_after_scheduled_start():
+    # SCHED is 00:30 UTC; a quote last updated 00:33 is 3 min after the scheduled start
+    near = frame(*[q(b, o, u, updated="2025-12-11 00:33:00") for b, o, u in BOOKS])
+    assert L.consensus_from_long(near, 3).iloc[0]["pregame"] == False                       # noqa: E712  (strict default)
+    assert L.consensus_from_long(near, 3, grace_minutes=5.0).iloc[0]["pregame"] == True     # noqa: E712
+    assert L.consensus_from_long(near, 3, grace_minutes=2.0).iloc[0]["pregame"] == False    # noqa: E712
+    # pregame_only honours the same window, so the near-close quotes survive pairing
+    assert len(L.consensus_from_long(near, 3, pregame_only=True)) == 0
+    assert len(L.consensus_from_long(near, 3, pregame_only=True, grace_minutes=5.0)) == 1
+    assert L.DEFAULT_GRACE_MINUTES == {"NBA": 10.0, "NHL": 10.0, "NFL": 10.0}
+
+
 def test_duplicate_quotes_latest_updated_wins():
     old = q(10, -300, 250, updated="2025-12-10 10:00:00")
     df = frame(basic().to_dict("records"), old)

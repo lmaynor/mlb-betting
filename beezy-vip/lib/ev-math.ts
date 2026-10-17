@@ -17,12 +17,29 @@ export function fullKelly(p: number, decimal: number): number {
 
 export interface StakeSizing { pct: number; dollars: number; units: number }
 
-/** Fractional-Kelly stake (default quarter Kelly, capped at 5% of bankroll). */
+/**
+ * Concave shrinkage of a CLAIMED edge (a fraction, 0.08 = 8%) before sizing: identity up to `knee`, `tailSlope` per unit
+ * above it, capped at `maxEffEdge`. Graded +EV alerts claiming 12%+ edge averaged 61.6% fair probability but hit 49.9%
+ * (n=2,474), so the largest apparent edges are partly adverse selection. Mirror of mlb_core.risk.calibration.shrink_edge.
+ */
+export function shrinkEdge(edge: number, knee = 0.06, tailSlope = 0.35, maxEffEdge = 0.10): number {
+  if (!isFinite(edge)) return 0
+  const mag = Math.abs(edge)
+  const eff = Math.min(mag <= knee ? mag : knee + tailSlope * (mag - knee), maxEffEdge)
+  return edge >= 0 ? eff : -eff
+}
+
+/**
+ * Fractional-Kelly stake (default quarter Kelly, capped at 5% of bankroll). A positive edge over the price
+ * (p - 1/decimal) is shrunk with shrinkEdge before sizing; pass `shrink = false` for the raw-probability stake.
+ */
 export function kellySizing(
-  bankroll: number, p: number | null | undefined, decimal: number, fraction = 0.25, cap = 0.05,
+  bankroll: number, p: number | null | undefined, decimal: number, fraction = 0.25, cap = 0.05, shrink = true,
 ): StakeSizing {
   if (p == null || !isFinite(bankroll) || bankroll <= 0) return { pct: 0, dollars: 0, units: 0 }
-  const pct = Math.min(Math.max(fullKelly(p, decimal) * fraction, 0), cap)
+  const implied = decimal > 0 ? 1 / decimal : 1
+  const pEff = shrink && p > implied ? implied + shrinkEdge(p - implied) : p
+  const pct = Math.min(Math.max(fullKelly(pEff, decimal) * fraction, 0), cap)
   const dollars = pct * bankroll
   return { pct, dollars, units: pct * 100 }
 }

@@ -149,3 +149,32 @@ def test_gamelog_from_masters_schema_attempts_and_preseason():
     assert a["opp"] == "CHI" and a["is_home"] == 1 and a["attempts"] == 3 and a["pp_attempts"] == 1
     d = gl[gl.player_id == 22].iloc[0]
     assert d["opp"] == "FLA" and d["attempts"] == 0 and d["pp_attempts"] == 0     # played, never shot, game HAS pbp -> 0 not NaN
+
+
+def test_canon_team_maps_bettingpros_codes_and_dates_the_coyotes():
+    for bp, api in (("LA", "LAK"), ("NJ", "NJD"), ("SJ", "SJS"), ("TB", "TBL"), ("LAK", "LAK"), ("WSH", "WSH")):
+        assert history.canon_team(bp, "2025-01-10") == api
+    assert history.canon_team("ARI", "2023-11-01") == "ARI"            # the log still spells the Coyotes ARI then
+    assert history.canon_team("ARI", "2024-11-01") == "UTA"
+    assert history.canon_team("UTA", "2024-11-01") == "UTA"
+    assert history.canon_team("Utah Mammoth", "2025-02-01") == "UTA"
+    assert history.canon_team("ZZZ", "2025-01-01") == "ZZZ" and history.canon_team("", "2025-01-01") == ""
+
+
+def test_attach_outcomes_matches_kalshi_style_codes_and_a_unique_plus_minus_one_day():
+    games = pd.DataFrame({"game_id": [1, 2, 3], "date": ["2025-01-10", "2025-01-12", "2025-01-12"],
+                          "home_team": ["TBL", "WSH", "WSH"], "away_team": ["LAK", "MTL", "MTL"]})     # 2 + 3: ambiguous pair
+    gl = pd.DataFrame({"game_id": [1], "player_id": [7], "sog": [3]})
+    base = {"player_id": pd.array([7], dtype="Int64"), "line": [2.5], "player_name": ["X"], "resolve_how": ["exact"]}
+    exact = history.attach_outcomes(pd.DataFrame({**base, "game_date": ["2025-01-10"], "home_abbrev": ["TB"],
+                                                  "away_abbrev": ["LA"]}), games, gl)
+    assert exact.loc[0, "game_id"] == 1 and exact.loc[0, "status"] == "ok" and exact.loc[0, "won_over"] == 1.0
+    off = history.attach_outcomes(pd.DataFrame({**base, "game_date": ["2025-01-11"], "home_abbrev": ["TB"],
+                                                "away_abbrev": ["LA"]}), games, gl)            # UTC/ET off-by-one day
+    assert off.loc[0, "game_id"] == 1 and off.loc[0, "status"] == "ok"
+    amb = history.attach_outcomes(pd.DataFrame({**base, "game_date": ["2025-01-11"], "home_abbrev": ["WSH"],
+                                                "away_abbrev": ["MTL"]}), games, gl)           # two candidate days -> not guessed
+    assert amb.loc[0, "status"] == "no_game"
+    wrong_way = history.attach_outcomes(pd.DataFrame({**base, "game_date": ["2025-01-10"], "home_abbrev": ["LA"],
+                                                      "away_abbrev": ["TB"]}), games, gl)      # home/away swapped never matches
+    assert wrong_way.loc[0, "status"] == "no_game"

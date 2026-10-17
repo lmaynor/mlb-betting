@@ -44,6 +44,14 @@ export function booksBehind(bet: Pick<Bet, 'notes'> & { n_books?: number | null 
 
 export interface ScoreParts { edge: number; consensus: number; hit: number; total: number }
 
+/**
+ * HR model picks realised -16% ROI (handoff_2026-10-15_ui_consistency_sweep item 2). A standalone HR model score
+ * therefore never reaches STRONG: it is capped inside LEAN unless at least HR_MIN_BOOKS reference books back the price.
+ * Lift this once HR shows positive out-of-sample CLV.
+ */
+export const HR_MODEL_ONLY_CAP = 64
+export const HR_MIN_BOOKS = 4
+
 export function scoreParts(bet: Bet): ScoreParts {
   const edgePct = Math.max(edgeAsPct(bet.edge), 0)
   const edge = Math.min(edgePct * 4, SCORE_WEIGHTS.edge)
@@ -53,7 +61,9 @@ export function scoreParts(bet: Bet): ScoreParts {
   const scale = Math.min(edgePct / 2, 1)
   const consensus = consensusRaw * scale
   const hit = hitRaw * scale
-  return { edge, consensus, hit, total: Math.round(clamp(edge + consensus + hit, 0, 100)) }
+  let total = Math.round(clamp(edge + consensus + hit, 0, 100))
+  if (bet.system === 'HR' && (books == null || books < HR_MIN_BOOKS)) total = Math.min(total, HR_MODEL_ONLY_CAP)
+  return { edge, consensus, hit, total }
 }
 
 export function beezyscore(bet: Bet): number {

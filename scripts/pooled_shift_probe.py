@@ -2,6 +2,7 @@
 
     GCS_BUCKET=<bucket> python scripts/pooled_shift_probe.py --mode cross  [--start 2023-09-01 --end 2026-02-28]
     GCS_BUCKET=<bucket> python scripts/pooled_shift_probe.py --mode within
+    GCS_BUCKET=<bucket> python scripts/pooled_shift_probe.py --mode outcome [--grace-minutes 10]
 
 --mode cross   pairs of DIFFERENT books quoting different points (|gap| <= 1) for the same player/event; predicts book B's
                de-vigged P(over) at its own point from book A's at A's point, with the production shift.
@@ -106,14 +107,100 @@ def report(stat: str, p: pd.DataFrame, mode: str) -> None:
           f"{-0.3989 / (POOL_SD_FRAC[stat] * max(p.b.median(), 1)):+.4f})")
 
 
+STAT_COLS = {"pass_yds": "passing_yards", "rush_yds": "rushing_yards", "rec_yds": "receiving_yards"}
+MIN_LINE = 5.0
+
+
+def outcome_dispersion(d: pd.DataFrame) -> dict:
+    """d: columns stat, line, actual. Per stat: n, bias and RMS of (actual - line) / line (= the sd fraction implied by
+    outcomes), a MAD-based robust version, the same RMS by line tercile, and the production POOL_SD_FRAC. Rows with a
+    line below MIN_LINE or a missing actual are dropped. A half-point line has no push; integer lines add a little noise."""
+    out: dict = {}
+    for stat, g in d.groupby("stat"):
+        g = g[(g["line"] >= MIN_LINE) & g["actual"].notna()]
+        if len(g) == 0:
+            continue
+        z = ((g["actual"] - g["line"]) / g["line"]).to_numpy(dtype=float)
+        by: dict = {}
+        if len(g) >= 30:
+            tert = pd.qcut(g["line"].rank(method="first"), 3, labels=["low", "mid", "high"])     # rank: ties never collapse a bin
+            by = {k: float(np.sqrt(np.mean(z[(tert == k).to_numpy()] ** 2))) for k in ("low", "mid", "high")}
+        out[stat] = {"n": int(len(g)), "bias": float(z.mean()), "sd_frac_rms": float(np.sqrt(np.mean(z ** 2))),
+                     "sd_frac_mad": float(1.4826 * np.median(np.abs(z - np.median(z)))), "by_line_tercile": by,
+                     "production": POOL_SD_FRAC.get(stat)}
+    return out
+
+
+def load_outcome_frame(start: str, end: str, grace_minutes: float, min_books: int = 3) -> pd.DataFrame:
+    """BettingPros modal-line consensus (yardage markets) joined to nflverse player_stats actuals. Identity is the
+    fail-closed nfl.props.resolve resolver; a player with no stat row is DROPPED (a missing row is not a DNP, and a prop on
+    a player who did not play is void anyway)."""
+    from mlb_core.odds import bettingpros_loader as L
+    from nfl.data.read import load
+    from nfl.props.resolve import RESOLVED, PlayerResolver
+    frames = []
+    for slug, stat in MARKETS.items():
+        long = load_long(slug, start, end)
+        if len(long):
+            c = L.consensus_from_long(long, min_books=min_books, stat_map={slug: stat}, sport="NFL",
+                                      grace_minutes=grace_minutes)
+            frames.append(c[c["pregame"].astype("boolean").fillna(True) == True])        # noqa: E712
+    if not frames:
+        return pd.DataFrame(columns=["stat", "line", "actual"])
+    cons = pd.concat(frames, ignore_index=True)
+    seasons = sorted({int(str(x)[:4]) - (1 if int(str(x)[5:7]) <= 3 else 0) for x in cons["game_date"]})
+    res = PlayerResolver.from_mirror(seasons)
+    cache: dict = {}
+    ids = []
+    for name, gd in zip(cons["player"], cons["game_date"]):
+        k = (name, gd)
+        if k not in cache:
+            r = res.resolve(str(name), game_date=gd, team=None)
+            cache[k] = r.gsis_id if r.status == RESOLVED else None
+        ids.append(cache[k])
+    cons = cons.assign(gsis_id=ids)
+    cons = cons[cons["gsis_id"].notna()]
+    sched = load("schedules")[["season", "week", "gameday"]].drop_duplicates()
+    sched = sched.assign(game_date=sched["gameday"].astype(str).str[:10]).drop_duplicates("game_date")
+    cons = cons.merge(sched[["game_date", "season", "week"]], on="game_date", how="left").dropna(subset=["season"])
+    ps = load("player_stats", seasons=sorted({int(x) for x in cons["season"]}))
+    ps = ps[ps["season_type"].isin(["REG", "POST"])] if "season_type" in ps.columns else ps
+    cols = ["player_id", "season", "week"] + list(STAT_COLS.values())
+    ps = ps[cols].drop_duplicates(["player_id", "season", "week"])
+    m = cons.merge(ps, left_on=["gsis_id", "season", "week"], right_on=["player_id", "season", "week"], how="inner")
+    m["actual"] = [float(r[STAT_COLS[st]]) for st, (_, r) in zip(m["stat"], m.iterrows())]
+    return m[["stat", "line", "actual", "game_date", "n_books"]].assign(line=lambda x: x["line"].astype(float))
+
+
+def load_long(slug: str, start: str, end: str) -> pd.DataFrame:
+    return load(slug, start, end)
+
+
+def report_outcome(res: dict) -> None:
+    print("\n== outcome-based sd fraction (RMS of (actual - modal line) / line)")
+    for stat, r in res.items():
+        flag = ""
+        prod = r["production"]
+        if prod and abs(r["sd_frac_rms"] - prod) / prod > 0.15:
+            flag = "  <- differs from production by >15%"
+        print(f"{stat}: n={r['n']} bias={r['bias']:+.3f} rms={r['sd_frac_rms']:.3f} mad={r['sd_frac_mad']:.3f} "
+              f"by tercile={ {k: round(v, 3) for k, v in r['by_line_tercile'].items()} } production={prod}{flag}")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--mode", choices=["cross", "within"], required=True)
+    ap.add_argument("--mode", choices=["cross", "within", "outcome"], required=True)
+    ap.add_argument("--grace-minutes", type=float, default=10.0, help="outcome mode: pregame grace after scheduled start")
     ap.add_argument("--start", default="2023-09-01")
     ap.add_argument("--end", default="2026-02-28")
     ap.add_argument("--gap", type=float, default=1.0)
     ap.add_argument("--markets", default=",".join(MARKETS), help="comma list of BettingPros slugs")
     a = ap.parse_args(argv)
+    if a.mode == "outcome":
+        d = load_outcome_frame(a.start, a.end, a.grace_minutes)
+        print(f"outcome rows: {len(d)}")
+        report_outcome(outcome_dispersion(d))
+        return 0
     for slug in [m.strip() for m in a.markets.split(",") if m.strip()]:
         df = load(slug, a.start, a.end)
         if df.empty:

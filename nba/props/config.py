@@ -47,6 +47,8 @@ USG_PROXY_AST_WEIGHT = 1.5        # usage proxy per game = PTS + 1.5*AST + REB (
 # ---- live scorer guards (mirror ev/sweep_props_alerts.py; UNVALIDATED starting points) ----
 MAX_HISTORY_GAP_DAYS = 4          # newest box score must be within this many days of the event date
 ROLLOVER_MAX_GAP_DAYS = 150       # explicit opt-in only: last season's history carried into a new season
+ROLLOVER_AUTO_DAYS = 35           # allow_rollover="auto": rollover is automatic for event days up to this many days after Oct 1
+                                  # (Opening Night 2026-10-20 + ~2 weeks). Later the gap check refuses again (never guess).
 MIN_BOOKS = 3                     # two-sided real books quoting the (player, stat, point)
 MIN_EV = 0.03
 EV_CAP = 0.15                     # bigger apparent edges are far more often model/reference error (repo rule)
