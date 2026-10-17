@@ -12,6 +12,8 @@ Checks:
   4. Model artifact exists: each system's xgb_*.json must exist in GCS
   5. NFL/last_refresh.json (when present) must not report status=error; NFL/contracts_latest.json (when present)
      must not report a failed data contract
+  6. The picks-board feeds (2026-10-17): EVSweep/{nfl,nhl,nba}_props/projections_latest.json (rewritten every 30 min by
+     the daily-projections job) < 3 h old, and in season Odds/bettingpros_live/{sport}/latest.json (hourly crawl) < 6 h old
 
 Called by main.py /monitor-ops.
 """
@@ -220,6 +222,32 @@ def _check_nfl_contracts() -> list[str]:
             f"at={data.get('generated_at', '?')})" + (f": {detail}" if detail else "")]
 
 
+PROJECTION_KEYS = {sp: f"EVSweep/{sp}_props/projections_latest.json" for sp in ("nfl", "nhl", "nba")}
+PROJECTION_STALE_HOURS = 3.0          # the daily-projections job runs every 30 min
+BP_LIVE_KEYS = {sp: f"Odds/bettingpros_live/{sp}/latest.json" for sp in ("nfl", "nhl", "nba")}
+BP_LIVE_STALE_HOURS = 6.0             # the bp-live-* crawls run hourly (NFL Sep-Feb, NHL / NBA Oct-Jun)
+BP_LIVE_MONTHS = {"nfl": {9, 10, 11, 12, 1, 2}, "nhl": {10, 11, 12, 1, 2, 3, 4, 5, 6},
+                  "nba": {10, 11, 12, 1, 2, 3, 4, 5, 6}}
+
+
+def _check_board_feeds(month: int | None = None) -> list[str]:
+    """The NFL / NHL / NBA picks boards: a missing file is silent (the job may not be provisioned yet), a STALE one is the
+    failure this check exists for -- the boards were hours old for days before anything noticed."""
+    month = month or datetime.now(timezone.utc).month
+    failures = []
+    for sp, key in PROJECTION_KEYS.items():
+        age = _gcs_age_hours(key)
+        if age is not None and age > PROJECTION_STALE_HOURS:
+            failures.append(f"{sp.upper()} picks board stale: `{key}` {age:.1f}h old (daily-projections job)")
+    for sp, key in BP_LIVE_KEYS.items():
+        if month not in BP_LIVE_MONTHS[sp]:
+            continue
+        age = _gcs_age_hours(key)
+        if age is not None and age > BP_LIVE_STALE_HOURS:
+            failures.append(f"{sp.upper()} BettingPros live lines stale: `{key}` {age:.1f}h old (bp-live-{sp} job)")
+    return failures
+
+
 def _check_snapshot_freshness() -> list[str]:
     age = _gcs_age_hours(SGO_SNAPSHOT_KEY)
     if age is None:
@@ -348,6 +376,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_build_sentinels()
     failures += _check_nfl_sentinel()
     failures += _check_nfl_contracts()
+    failures += _check_board_feeds()
     failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()

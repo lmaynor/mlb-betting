@@ -1166,23 +1166,26 @@ def public_edge_cockpit():
 @app.route("/api/public/projections", methods=["GET", "OPTIONS"])
 def public_projections():
     """Daily NFL / NHL / NBA projection board (ev/daily_projections.py): model projection + market lines + edge +
-    confluence + Beezy Score per player x stat. Unvalidated; status/freshness travel with the payload."""
+    confluence + Beezy Score per player x stat, plus the games list. `date=YYYY-MM-DD` = that Central game day's archived
+    board; `day=YYYY-MM-DD` filters the live board to one day. Unvalidated; status/freshness travel with the payload."""
     if request.method == "OPTIONS":
         return "", 204, _cors_headers()
     err = _auth_required(request)
     if err:
         return err
     try:
+        extra = {k: request.args[k] for k in ("date", "day") if request.args.get(k)}   # YYYY-MM-DD, Central game day
         data = get_sport_projections(
             request.args.get("sport", ""),
             market=request.args.get("market") or None,
             limit=int(request.args.get("limit", 300)),
+            **extra,
         )
         resp = jsonify(data)
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"
         return resp
-    except ValueError as exc:      # unknown sport / bad limit
+    except ValueError as exc:      # unknown sport / bad limit / bad date
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_projections failed")
