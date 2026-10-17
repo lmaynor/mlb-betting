@@ -21,7 +21,7 @@ No auth, no API quota. URL shapes and season floors come from the `nflreadpy` lo
 |---|---|
 | **core** | `schedules` (incl. closing spread/total/moneyline, result, roof/weather, rest, QBs, referee; 1999+), `players` (id crosswalk), `teams`, `officials`, `player_stats` (weekly, 1999+ -- the prop grader), `team_stats`, `rosters`, `rosters_weekly`, `injuries`, `depth_charts`, `snap_counts` |
 | **detail** | `pbp`, `participation`, `ftn_charting`, `ngs_{passing,receiving,rushing}`, `pfr_{pass,rush,rec,def}` |
-| **extra** (opt-in) | `contracts`, `draft_picks`, `trades`, `combine` |
+| **extra** (opt-in) | `contracts`, `draft_picks`, `trades`, `combine`, `ff_opportunity` (ffverse expected-opportunity model; lives on the `ffverse/ffopportunity` release, not nflverse-data; columns not yet dictionary-verified) |
 
 Default selection is core + detail. Default backfill window starts at `NFL_BACKFILL_START` (2018).
 
@@ -59,7 +59,9 @@ GCS_BUCKET=concrete-crow-445205-m4-mlb-data python3 -m nfl.data.ingest --mode ba
 GCS_BUCKET=concrete-crow-445205-m4-mlb-data python3 -m nfl.data.ingest --mode refresh
 ```
 
-Provision the nightly job with `deploy/setup_nfl_refresh.sh` (not wired into `monitor_ops`, same as NBA).
+Provision the nightly job with `deploy/setup_nfl_refresh.sh`. The job runs `python -m nfl.data.pipeline`
+(mirror -> derived tables -> data contracts); `monitor_ops` alerts on a failed refresh AND on a failed contract.
+`nfl-refresh-data` is provisioned and has been running (sentinel 2026-10-15 13:32 UTC, status ok).
 
 ## Reading
 
@@ -71,6 +73,31 @@ games = load("schedules")          # strict=True: a requested-but-unmirrored sea
 
 `nfl.data.keys.add_game_keys(schedules)` adds the `game_key` (`nfl:{date}:{AWAY}@{HOME}`) that `ev/` uses, translating
 nflverse team codes to the Kalshi/ParlayAPI codes (`JAX->JAC`, `LA->LAR`; `OAK/SD/STL` relocations).
+
+## Derived tables (`nfl/data/derived.py`)
+
+Small versioned tables built from the mirrored play-by-play, so consumers read ~1 MB per season instead of a 20 MB,
+372-column pbp file. nflfastR conventions (`xpass`/`pass_oe` are nflfastR's expected-pass model; neutral situation =
+1st/2nd down, win probability 0.20-0.80, outside the last two minutes of a half).
+
+```
+NFL/derived/team_game_pbp/team_game_pbp_{season}.parquet      (game_id, team): off_* rates + the defense's allowed def_* rates
+NFL/derived/player_game_pbp/player_game_pbp_{season}.parquet  (game_id, player_id): targets, air yards, deep / red-zone / goal-line usage, EPA
+NFL/derived/_manifest.json                                    rows, version, source_sha256 -> rebuilt only when pbp or the definitions change
+```
+
+```bash
+GCS_BUCKET=... python3 -m nfl.data.derived --seasons 2018-2026      # all seasons ~8 s on a laptop
+python -c "from nfl.data.read import load_derived; load_derived('team_game_pbp', seasons=[2025])"
+```
+
+## Data contracts (`nfl/data/contracts.py`)
+
+Table-level guarantees the ingest's per-file checks cannot give: grain, sign, every final game present in
+`player_stats` / `team_stats` / `pbp`, per-team-game reconciliation of player vs team stats (exact), the PPR formula
+(semantic drift), schedule results and upcoming lines. `python -m nfl.data.contracts --today 2026-10-16` prints
+failures; the pipeline writes `NFL/contracts_latest.json`. Real finding: nflverse writes one null-`player_id`
+team-penalty row per week -- see `docs/solutions/integration-issues/nflverse-player-stats-null-id-team-row.md`.
 
 ## Prop systems (shadow, no betting)
 
@@ -84,9 +111,19 @@ GCS_BUCKET=... python scripts/nfl_banked_lines.py --out ./.nfl_lines_out
 GCS_BUCKET=... python scripts/nfl_model_vs_market.py --lines ./.nfl_lines_out/props_open_close.parquet --features-cache f.parquet
 ```
 
+### Evidence tools (accuracy only -- there are NO historical NFL prop lines in this repo)
+
+```bash
+# paired feature-group ablation (same held-out rows, standard errors, season agreement)
+python -m nfl.models.ablation --group pbp_ctx --features-cache f.parquet --seasons 2021-2025
+# replay of the SERVING projection engine (ev/daily_projections.py) + the game-environment adjustment
+python -m nfl.props.engine_eval --seasons 2021-2025 --tune-through 2023 --env --cache rows.parquet
+```
+
+Findings and the adoption rule: `docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md`.
+
 ## Not built yet (natural next steps)
 
 - A shadow scorer/runner on live consensus lines (features for upcoming games exist: `include_upcoming=True`; market-
   dependent columns must be overwritten with live lines) and a scheduled retrain.
 - Reading the books' and Kalshi's anytime-TD and DNP rule text to settle the grader's UNVERIFIED assumptions.
-- Freshness check in `monitor_ops`.

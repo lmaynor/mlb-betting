@@ -359,3 +359,12 @@ def test_add_game_keys():
     out = keys.add_game_keys(s)
     assert list(out["game_key"]) == ["nfl:2026-10-12:JAC@LAR", "nfl:2026-10-13:LV@KC"]
     assert "game_key" not in s.columns                                      # input not mutated
+
+
+def test_ff_opportunity_lives_on_the_ffverse_repo_not_nflverse_data():
+    ds = config.DATASETS["ff_opportunity"]
+    assert ds.url(2024) == "https://github.com/ffverse/ffopportunity/releases/download/latest-data/ep_weekly_2024.parquet"
+    assert ds.key(2024) == "NFL/nflverse/ff_opportunity/ff_opportunity_2024.parquet"
+    assert ds.first == 2006 and ds.group == "extra"                    # opt-in: not part of the nightly default
+    assert ds not in ingest.select_datasets(None, config.DEFAULT_GROUPS)
+    assert config.DATASETS["player_stats"].url(2024).startswith(config.NFLVERSE_BASE)     # others unchanged

@@ -359,7 +359,7 @@ mlb-betting/
 │                                 (KEXEC_* env). allow_wide_book_on_consensus (default False) lets an exchange
 │                                 taker judge the ASK vs an EXTERNAL consensus instead of the venue mid -- on only
 │                                 for Novig (see 15.11). Reused unchanged by ev/novig/exec.py.
-├── ev/daily_projections.py       Daily NFL/NHL/NBA projection board (GET /api/public/projections); empirical_ewm_v1 engine, unvalidated
+├── ev/daily_projections.py       Daily NFL/NHL/NBA projection board (GET /api/public/projections); empirical_ewm_v2 engine (NFL: walk-forward-validated per-stat params + mean calibration, accuracy only), unvalidated vs prices
 ├── mlb_core/alerts/              discord_routes.py: webhook fallback chains, Kambi clone dedup, deep links
 ├── discord-bot/                  beezy-bot service (Node); see s14
 ├── ev/                           Multi-sport +EV sweep (shadow/paper only, NFL props first): props.py (ParlayAPI
@@ -1816,6 +1816,8 @@ Checks (all post-feature-build):
 - Any bets pending > 3 days
 - `NFL/last_refresh.json` (when present) must not report `status=error` (`partial` is silent; a missing file is silent -- a dead
   `nfl-refresh-data` job is caught by the scheduler check instead)
+- `NFL/contracts_latest.json` (when present) must not report a FAILED data contract (`ok=false`; warnings are not paged) -- grain,
+  every final game present in player_stats/team_stats/pbp, exact player-vs-team reconciliation, PPR-formula drift, schedule results
 
 The scheduler check covers EVERY enabled job in every pillar (`nfl-/nhl-/nba-refresh-data`, `odds-bank-*`, `props-alerts-*`,
 `props-grade-*`, `ev-nfl-props-sweep`, ...) and ignores PAUSED ones, so an intentionally paused sport never pages but a resumed
@@ -1943,7 +1945,7 @@ The Cloud Run service exposes read-only endpoints authenticated with
 | `GET /api/public/stats/sparkline?system=X` | 300s | Per-system sparkline |
 | `GET /api/public/ev/feed` | 60s | +EV terminal feed: tracked MLB `system='EV'` rows (`sport`, `min_ev`, `limit`, `days`) + the shadow sweep blocks: `nfl` (read from `EVSweep/nfl_props/latest.json`: Kalshi `rows` plus `book_outliers`, the Sink A book/exchange rows -- present even when Kalshi blocks the cloud egress IP and `rows` is empty), `nhl` / `nba` (`EVSweep/{sport}_props/latest.json`). Every shadow block carries `status`/`age_minutes`/`stale`/`validated:false`, started games are dropped, and Sink A rows share one shape (`EvBookOutlierRow`: `ev`, `p_fair`, `point`, `american`, `decimal`, `n_books`, `flag`). An outlier-only NFL snapshot counts as live for 45 min (Kalshi-backed snapshots for 180) |
 | `GET /api/public/edge/cockpit` | 60s | `/edge` multi-sport prop cockpit (`sport`, `limit`, `min_ev`): MLB (today's model predictions + `system='EV'` alerts, with the Statcast enrichment) + NFL / NHL / NBA sweep rows in ONE row shape (`CockpitRow`), each with `recentForm` = the player's last-10 game log vs the line (`mlb_core/data/cockpit_form.py`; reads `NFL/nflverse/player_stats/`, `NHL/{skater,goalie}_boxscores_master.csv`, `NBA/player_boxscores_master`, cached 10 min, `null` when a master is absent) and `all_books` for line shopping. Per-sport `status`/freshness like `/ev/feed`. Next.js proxy `/api/edge-cockpit`; `/edge` falls back to the MLB model board when this endpoint is unreachable |
-| `GET /api/public/projections` | 60s | Daily NFL / NHL / NBA projection board (`sport` required, `market`, `limit`): one row per player x stat from `ev/daily_projections.py` -- `proj_mean`, `p_over_model`, `l5/l10_hit_rate`, `szn_avg`, `consensus_line`, best over/under price + book, `p_over_market`, `model_edge`, `market_ev`, `confluence`, `beezy_score`; rows with `has_line:false` are rotation projections (lines not posted). Read from `EVSweep/{sport}_props/projections_latest.json`, computed on demand when missing/older than 90 min (throttled 10 min/sport). ENGINE is `empirical_ewm_v1` (EWM + usage + opponent factor on the game-log masters), NOT the trained XGBoost research models (their artifacts are local-only). Every row `validated:false`. Next.js proxy `/api/projections` |
+| `GET /api/public/projections` | 60s | Daily NFL / NHL / NBA projection board (`sport` required, `market`, `limit`): one row per player x stat from `ev/daily_projections.py` -- `proj_mean`, `p_over_model`, `l5/l10_hit_rate`, `szn_avg`, `consensus_line`, best over/under price + book, `p_over_market`, `model_edge`, `market_ev`, `confluence`, `beezy_score`; rows with `has_line:false` are rotation projections (lines not posted). Read from `EVSweep/{sport}_props/projections_latest.json`, computed on demand when missing/older than 90 min (throttled 10 min/sport). ENGINE is `empirical_ewm_v2` (EWM + usage + opponent factor on the game-log masters; NFL adds the validated per-stat params and `nfl/props/projection_calibration.json`, see s20), NOT the trained XGBoost research models (their artifacts are local-only). Rows also carry `proj_raw` (pre-calibration mean), `calib_mult`, and `proj_p10`/`proj_p90` (the model's own 10/90% quantiles; not a validated interval). Every row `validated:false`. Next.js proxy `/api/projections` |
 | `GET /api/public/analytics/deep-dive` | 300s | `edge_buckets`, `book_leaderboard` (both scoped by `system`), `bankroll_curve` (EV flat vs EV Kelly vs MLB models; `bankroll`, `kelly_mult` params) and `ev_headline`. Voids are EXCLUDED from every ROI denominator (the 7.56% in the 2026-10-03 handoff included void stake; the live figure reads ~8.2%) |
 
 The site's `lib/betting-api.ts` wraps these with typed fetchers. All pages
@@ -4053,6 +4055,16 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   `deploy/setup_nba_kaggle_ingest.sh` (16Gi). Live-reproducible advanced-feature
   source matching the historical training parquet.
 
+- **ESPN-keyed history (2026-10-16, branch `feat/nba-data-minutes-hoopr`):** `nba/data/hoopr.py` mirrors the sportsdataverse (hoopR)
+  ESPN parquet releases -- player box, team box, schedules (pbp opt-in) -- byte-for-byte to `NBA/hoopr/{dataset}/{stem}_{season}.parquet`
+  (+ `_manifest.json`, `last_refresh.json`); `python -m nba.data.hoopr --mode backfill|refresh [--probe|--dry-run]`. hoopR `season` = the
+  year the season ENDS (2027 = 2026-27). `nba/props/espn_data.py` reshapes it into the exact `rows/team_games` schema `nba.props.data.prepare`
+  returns (parity-tested), with `player_id` = ESPN athlete id (no name bridge) and real ET tips; opt in with
+  `python -m nba.props.score --history-source espn` (default stays SportsBlaze). ESPN lists DNP players with a free-text `reason`
+  (`espn_data.inactives` / `classify_reason`) but the listing is PARTIAL (53% of rotation absences are not on the box) -- see
+  `docs/solutions/integration-issues/hoopr-espn-nba-box-scores.md`. Nightly job script `deploy/setup_nba_hoopr_refresh.sh` is NOT yet run.
+  Availability study: `docs/analysis/nba_zip_review_2026-10-16.md`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
@@ -4102,6 +4114,28 @@ backbone. Full detail in `nfl/README.md`.
     only ~69 props have >=3 books at both open and close. On the banked weeks the pooled model-vs-market Brier gap looked
     significant but was an artifact of single-book, flat-priced and alt-ladder props; restricted to >=3 books it is
     -0.005 +/- 0.013 (n=83) -- no detectable difference. CLV needs a much larger bank.
+
+- **2026-10-16 data infra + projection evidence (branch `feat/nfl-data-infra-projections`; own PR, nothing deployed, nothing written to GCS/bets).**
+  Built from the nine repos the owner supplied (nflverse-data, nflfastR, nfldata, nflverse workflows, fantasy-football-ai, sports-quant,
+  NFLBigDataBowl, nfl-touchdown-prediction-ml, Player_Stat_Prediction, NFL-Betting-Models); what was and was NOT taken is in
+  `handoffs/handoff_2026-10-16_nfl_data_infra_projection_evidence.md`.
+  - `nfl/data/contracts.py` -- table-level data contracts (grain, sign, final-game coverage, exact player-vs-team reconciliation, PPR drift,
+    schedule results/lines) -> `NFL/contracts_latest.json`, alerted by monitor_ops. Real finding: nflverse writes one null-`player_id`
+    team-penalty row per week (docs/solutions/integration-issues/nflverse-player-stats-null-id-team-row.md).
+  - `nfl/data/derived.py` -- versioned pbp-derived tables `NFL/derived/{team_game_pbp,player_game_pbp}/` (nflfastR xpass/pass_oe, neutral pass
+    rate, pace, EPA, explosive/sack rates, deep/red-zone usage); rebuilt only when the pbp sha256 or `DERIVED_VERSION` changes; read with
+    `nfl.data.read.load_derived`. `nfl/data/pipeline.py` = ingest -> derived -> contracts (what `nfl-refresh-data` now runs; re-run
+    `deploy/setup_nfl_refresh.sh` after the image carries it).
+  - `ff_opportunity` (ffverse expected-opportunity model) registered as an opt-in `extra` dataset (different release repo; URL verified by HEAD only).
+  - nflverse update cadence, previously a guess, is now verified from the nflverse-data workflows (stats/pbp 09:00 UTC + after each game window,
+    injuries/rosters 07:00 UTC); `nfl-refresh-data` IS provisioned and running (sentinel 2026-10-15 13:32 UTC).
+  - **Evidence tools** (accuracy only; still NO historical prop lines): `nfl.models.ablation` (paired feature-group ablation) and
+    `nfl.props.engine_eval` (walk-forward replay of the SERVING engine `ev/daily_projections.py`). Results and the adoption rule:
+    docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md. Headlines: the engine beats trailing baselines on every
+    stat; its opponent factor is worth ~0; every trailing projection over-projects the quoted pool by 3-7% in every season (a per-stat scale fixes
+    MAE 5/5 seasons); `rec_yds` / `anytime_td` got validated per-stat params (`STAT_PARAMS`) and a spread/total game term on top of the scale;
+    the pbp context features gave NO measurable gain to the XGBoost models (kept off: `include_pbp_ctx`). Shipped file:
+    `nfl/props/projection_calibration.json` (only stats that cleared the bar). Re-run `engine_eval --write-calibration` each offseason.
 
 ---
 

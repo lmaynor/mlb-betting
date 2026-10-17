@@ -376,7 +376,8 @@ def oof_predictions(tr: pd.DataFrame, spec: StatSpec, features: list, rounds: in
 
 
 def train_stat(df: pd.DataFrame, stat: str, family: Optional[str] = None, overrides: Optional[dict] = None,
-               oof_folds: int = 4, include_experimental: bool = False) -> NFLPropModel:
+               oof_folds: int = 4, include_experimental: bool = False,
+               include_pbp_ctx: bool = False) -> NFLPropModel:
     """Fit the mean model on all eligible rows of `df` and the dispersion on walk-forward OOF residuals.
 
     Number of boosting rounds comes from early stopping on the LAST training season (trained on the earlier
@@ -390,7 +391,8 @@ def train_stat(df: pd.DataFrame, stat: str, family: Optional[str] = None, overri
     tr = training_rows(df, stat)
     if len(tr) < 300:
         raise ValueError(f"{stat}: only {len(tr)} eligible labelled rows -- not enough to train")
-    features = [f for f in feature_columns(df, include_experimental=include_experimental) if tr[f].notna().any()]
+    features = [f for f in feature_columns(df, include_experimental=include_experimental,
+                                           include_pbp_ctx=include_pbp_ctx) if tr[f].notna().any()]
     seasons = sorted(tr["season"].unique())
     if len(seasons) >= 2:
         last = seasons[-1]

@@ -9,7 +9,7 @@
  *  - `research`: the trained model (XGBoost + a fitted distribution) evaluated in those studies. Its artifacts are local
  *    only and are NOT what the live board runs.
  *  - LIVE_ENGINE: the empirical estimator that produces the daily board (ev/daily_projections.py, engine
- *    "empirical_ewm_v1"). It has not been validated against prices.
+ *    "empirical_ewm_v2"). It has not been validated against prices.
  */
 import type { SportSlug } from '@/lib/sports'
 
@@ -63,9 +63,9 @@ const withBlend = (sport: string, models: PropModelSpec[]): PropModelSpec[] =>
 const none = (sample: string): ModelValidation => ({ sample, mae: null, baselineMae: null, crps: null, baselineCrps: null, brier: null, ece: null })
 
 export const LIVE_ENGINE = {
-  name: 'Empirical projection (empirical_ewm_v1)',
+  name: 'Empirical projection (empirical_ewm_v2)',
   summary:
-    'The daily board runs an empirical estimator: exponentially weighted game-log average, blended with a usage-adjusted rate, scaled by an opponent-allowed factor, with a negative-binomial or normal spread fitted from the league\'s own game-to-game variance. It does not model injuries, lineups, minutes, weather or teammate absences, and it has not been validated against prices.',
+    'The daily board runs an empirical estimator: exponentially weighted game-log average, blended with a usage-adjusted rate, scaled by an opponent-allowed factor, with a negative-binomial or normal spread fitted from the league\'s own game-to-game variance. NFL means are calibrated on 2021-2025 outcomes (accuracy only: the pool of quoted players is over-projected by 3-7%). It does not model injuries, lineups, minutes, weather or teammate absences, and it has not been validated against prices.',
 }
 
 const NBA_SAMPLE = '4 rolling-origin test seasons (2022-2025), 186,447 played player-games in the master'
