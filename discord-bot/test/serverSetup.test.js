@@ -30,7 +30,7 @@ test('categories and channels match the specified layout', () => {
     ['DAILY MODEL CARDS', ['mlb-card', 'nfl-card', 'nba-card', 'nhl-card']],
     ['PUBLIC LEDGER & RECAPS', ['daily-recap']],
     ['SHARP COMMUNITY', ['general-sweat', 'betting-theory']],
-    ['OPS & TWEET QUEUE', ['ops-alerts', 'tweet-queue', 'deploys']],
+    ['OPS & TWEET QUEUE', ['ops-alerts', 'nfl-props-alerts', 'tweet-queue', 'deploys']],
   ]);
 });
 
@@ -83,7 +83,7 @@ test('visibility matrix: recap is public read-only, community channels allow cha
 
 test('visibility matrix: OPS channels are hidden from @everyone and from every paid role', () => {
   const everyRole = setup.ROLE_SPECS.map((r) => r.name);
-  for (const n of ['ops-alerts', 'tweet-queue', 'deploys']) {
+  for (const n of ['ops-alerts', 'nfl-props-alerts', 'tweet-queue', 'deploys']) {
     assert.deepEqual(access(n), { view: false, send: false }, n);
     assert.equal(access(n, everyRole).view, false, n);
     const spec = setup.overwritesFor(find(n).category, find(n).channel);
@@ -117,6 +117,7 @@ test('webhook targets map to the Python-side secret names and env vars', () => {
     ['nhl-card', 'discord-webhook-card-nhl', 'DISCORD_WEBHOOK_CARD_NHL'],
     ['daily-recap', 'discord-webhook-recap', 'DISCORD_WEBHOOK_RECAP'],
     ['ops-alerts', 'discord-ops-webhook-url', 'DISCORD_WEBHOOK_OPS'],
+    ['nfl-props-alerts', 'discord-webhook-props-nfl', 'DISCORD_WEBHOOK_PROPS_NFL'],
     ['tweet-queue', 'discord-webhook-tweets', 'DISCORD_WEBHOOK_TWEETS'],
   ]);
   const names = new Set(allChannels.map((x) => x.channel.name));
@@ -202,9 +203,9 @@ const OPTS = { ownerId: '900000000000000001', botUserId: '900000000000000002' };
 test('provision on an empty guild creates everything', async () => {
   const guild = makeFakeGuild();
   const result = await setup.provisionBeezyServer(guild, OPTS);
-  assert.deepEqual(guild.created, { roles: 6, categories: 6, channels: 16, webhooks: 9 });
+  assert.deepEqual(guild.created, { roles: 6, categories: 6, channels: 17, webhooks: 10 });
   assert.ok(result.roles.every((r) => r.status === 'created'));
-  assert.equal(result.webhooks.length, 9);
+  assert.equal(result.webhooks.length, 10);
   assert.ok(result.webhooks.every((w) => /^https:\/\/discord\.com\/api\/webhooks\/\d+\/tok\d+$/.test(w.url)));
   assert.deepEqual(result.warnings, []);
 
@@ -247,7 +248,7 @@ test('running provision twice creates nothing the second time', async () => {
   // same webhook URLs are returned both times
   assert.deepEqual(second.webhooks.map((w) => w.url), first.webhooks.map((w) => w.url));
   assert.equal(guild.roles.cache.size, 6);
-  assert.equal(guild.channels.cache.size, 22);
+  assert.equal(guild.channels.cache.size, 23);
 });
 
 test('rerun repairs drifted topics, parents, role colors and overwrites on existing objects', async () => {

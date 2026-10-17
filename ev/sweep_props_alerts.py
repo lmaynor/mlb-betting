@@ -155,14 +155,15 @@ def outlier_rows(spec: PropSport, events: list, now: datetime, resolver=None, co
 
 
 # ----------------------------------------------------------------------------- discord (admin alerts channel only)
-def webhook_url() -> str:
-    # Admin alerts channel only (unvalidated shadow rows): webhook_for("props_alerts") = DISCORD_WEBHOOK_ALERTS. Never a member
-    # channel and never #ops-alerts, which is for failures; unset means the sweep logs instead of posting.
-    return webhook_for("props_alerts") or ""
+def webhook_url(sport: str | None = None) -> str:
+    # Admin alerts only (unvalidated shadow rows): the sport's own hook (DISCORD_WEBHOOK_PROPS_<SPORT>) if it has one, else the
+    # shared DISCORD_WEBHOOK_ALERTS. Never a member channel and never #ops-alerts, which is for failures; unset means the
+    # sweep logs instead of posting.
+    return webhook_for("props_alerts", sport=sport) or ""
 
 
-def post_discord(text: str, embeds=None) -> bool:
-    url = webhook_url()
+def post_discord(text: str, embeds=None, sport: str | None = None) -> bool:
+    url = webhook_url(sport)
     if not url:
         log.warning("no Discord webhook configured; alert not posted")
         return False
@@ -208,7 +209,7 @@ def post_new(spec: PropSport, rows: list, day: str, discord: bool = True) -> int
     sent = 0
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
-        if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch)):
+        if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch), spec.sport):
             notified.update(_key(r) for r in batch)
             sent += len(batch)
     try:

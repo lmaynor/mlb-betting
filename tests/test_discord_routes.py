@@ -10,6 +10,7 @@ from mlb_core.alerts import discord_routes as dr
 
 ALL_VARS = [
     "DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_EV_EXCHANGES", "DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS",
+    "DISCORD_WEBHOOK_PROPS_NFL",
     "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_TWEETS",
     "DISCORD_WEBHOOK_CARD_MLB", "DISCORD_WEBHOOK_CARD_NFL", "DISCORD_WEBHOOK_CARD_NHL", "DISCORD_WEBHOOK_CARD_NBA",
 ]
@@ -307,3 +308,16 @@ def test_props_alerts_never_reach_ops_or_a_member_channel(monkeypatch):
     for var in ("DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_EV_EXCHANGES"):
         monkeypatch.setenv(var, f"https://hook.test/{var}")
     assert dr.webhook_for("props_alerts") is None
+
+
+def test_props_alerts_use_the_sport_channel_then_the_shared_admin_hook(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://hook.test/alerts")
+    assert dr.webhook_for("props_alerts") == "https://hook.test/alerts"
+    assert dr.webhook_for("props_alerts", sport="nfl") == "https://hook.test/alerts"
+    monkeypatch.setenv("DISCORD_WEBHOOK_PROPS_NFL", "https://hook.test/nfl")
+    assert dr.webhook_for("props_alerts", sport="nfl") == "https://hook.test/nfl"
+    assert dr.webhook_for("props_alerts", sport="NFL") == "https://hook.test/nfl"
+    assert dr.webhook_for("props_alerts", sport="nhl") == "https://hook.test/alerts"     # no cross-sport leak
+    assert dr.webhook_for("props_alerts") == "https://hook.test/alerts"
+    with pytest.raises(ValueError):
+        dr.webhook_for("props_alerts", sport="cricket")

@@ -107,6 +107,7 @@ export const LAYOUT = [
     readOnly: false,
     channels: [
       { name: 'ops-alerts', topic: 'Pipeline and job alerts (owner only)' },
+      { name: 'nfl-props-alerts', topic: 'NFL props sweep signals: shadow mode, unvalidated (owner only; widen visibleTo to share)' },
       { name: 'tweet-queue', topic: 'Draft tweets awaiting review (owner only)' },
       { name: 'deploys', topic: 'Deploy notices (owner only)' },
     ],
@@ -123,6 +124,7 @@ export const WEBHOOK_TARGETS = [
   { channel: 'nhl-card', secret: 'discord-webhook-card-nhl', env: 'DISCORD_WEBHOOK_CARD_NHL' },
   { channel: 'daily-recap', secret: 'discord-webhook-recap', env: 'DISCORD_WEBHOOK_RECAP' },
   { channel: 'ops-alerts', secret: 'discord-ops-webhook-url', env: 'DISCORD_WEBHOOK_OPS' },
+  { channel: 'nfl-props-alerts', secret: 'discord-webhook-props-nfl', env: 'DISCORD_WEBHOOK_PROPS_NFL' },
   { channel: 'tweet-queue', secret: 'discord-webhook-tweets', env: 'DISCORD_WEBHOOK_TWEETS' },
 ];
 
