@@ -11,8 +11,9 @@ today's scheduled teams) it produces ONE row joining:
 
     PYTHONPATH=. python -m ev.daily_projections --sport nfl|nhl|nba|all [--local] [--no-write]
 
-Served by mlb/runners/public_api.py::get_sport_projections() at GET /api/public/projections?sport=nfl|nhl|nba, from
-EVSweep/{sport}_props/projections_latest.json (or computed on demand when that file is missing/stale).
+Served by mlb/runners/public_api.py::get_sport_projections() at GET /api/public/projections?sport=nfl|nhl|nba via
+get_daily_projections(): process cache -> EVSweep/{sport}_props/projections_latest.json; a missing/stale file triggers a
+BACKGROUND recompute, never an inline one. The CLI below (`--write-gcs`) is the scheduled precompute.
 
 WHAT THE ENGINE IS (and is not). The trained research models (nfl/models/props.py, nhl/props/train.py,
 nba/props/train.py) keep their artifacts LOCAL (never in GCS, never in the Cloud Run image), so the live board cannot
@@ -715,14 +716,103 @@ def _finish(payload: dict, sport: str, write: bool) -> dict:
     return payload
 
 
+# ------------------------------------------------------------------------------------------------ serving fast path
+# The HTTP route must never compute a board inline (a cold compute downloads the sport's game-log master from GCS and
+# blocks SSR for 5-15 s). get_daily_projections() is the web path: process cache -> the precomputed JSON in GCS -> if
+# that is missing or stale, kick ONE background recompute and answer immediately with whatever exists (stale-while-
+# revalidate). Only the CLI / scheduled job passes allow_compute=True. NOTE: the background thread only makes progress
+# while Cloud Run has CPU allocated; the scheduled job (deploy/setup_daily_projections_job.sh) is the dependable path.
+PROJ_CACHE_TTL_SEC = 30 * 60
+PROJ_STALE_MINUTES = 90
+PROJ_RECOMPUTE_SEC = 600
+_PROJ_CACHE: dict = {}                      # sport -> (time.monotonic() loaded, payload)
+_PROJ_LOCK = threading.Lock()
+_PROJ_LAST_TRY: dict = {}                   # sport -> time.monotonic() of the last compute attempt (success or not)
+
+
+def read_precomputed(sport: str) -> dict | None:
+    """The stored board (one small JSON), or None when it has not been produced yet."""
+    from mlb_core import storage
+    try:
+        return json.loads(storage.read_bytes(OUT_KEY.format(sport=sport)))
+    except Exception:                                                                  # noqa: BLE001
+        return None
+
+
+def payload_age_min(payload: dict | None, now: datetime | None = None) -> float | None:
+    try:
+        return ((now or datetime.now(timezone.utc)) - datetime.fromisoformat(str(payload.get("ts")))).total_seconds() / 60.0
+    except Exception:                                                                  # noqa: BLE001
+        return None
+
+
+def _cache_put(sport: str, payload: dict) -> None:
+    with _PROJ_LOCK:
+        _PROJ_CACHE[sport] = (time.monotonic(), payload)
+
+
+def _bg_compute_and_save(sport: str) -> None:
+    """Thread target: compute, write EVSweep/{sport}_props/projections_latest.json, refresh the process cache."""
+    try:
+        fresh = run_sport(sport, write=True)
+    except Exception:                                                                  # noqa: BLE001
+        log.exception("background projections compute failed for %s", sport)
+        return
+    if fresh.get("status") != "unavailable":
+        _cache_put(sport, fresh)
+
+
+def _kick_background(sport: str) -> bool:
+    """Start one daemon recompute thread unless one was started within PROJ_RECOMPUTE_SEC (success or not)."""
+    with _PROJ_LOCK:
+        if time.monotonic() - _PROJ_LAST_TRY.get(sport, -1e9) < PROJ_RECOMPUTE_SEC:
+            return False
+        _PROJ_LAST_TRY[sport] = time.monotonic()
+    threading.Thread(target=_bg_compute_and_save, args=(sport,), daemon=True, name=f"proj-{sport}").start()
+    return True
+
+
+def get_daily_projections(sport: str, limit: int = MAX_ROWS, allow_compute: bool = False) -> dict | None:
+    """One sport's board payload (rows capped at `limit`), or None when none exists yet (a background compute is then
+    already running). allow_compute=False (every web request) never computes inline; True (CLI/job) does."""
+    sport = (sport or "").lower()
+    if sport not in PROJECT_STATS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
+    now = datetime.now(timezone.utc)
+    with _PROJ_LOCK:
+        hit = _PROJ_CACHE.get(sport)
+    payload = hit[1] if hit and time.monotonic() - hit[0] < PROJ_CACHE_TTL_SEC else None
+    if payload is None:
+        payload = read_precomputed(sport)
+        if payload is not None:
+            _cache_put(sport, payload)
+    age = payload_age_min(payload, now) if payload else None
+    if payload is None or age is None or age > PROJ_STALE_MINUTES:
+        if allow_compute:
+            fresh = run_sport(sport, now=now, write=True)
+            if fresh.get("status") != "unavailable" or payload is None:
+                payload = fresh
+                _cache_put(sport, fresh)
+        else:
+            _kick_background(sport)
+    if not payload:
+        return None
+    rows = payload.get("rows") or []
+    return payload if len(rows) <= limit else {**payload, "rows": rows[:limit]}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     ap.add_argument("--sport", choices=[*SPORTS, "all"], default="all")
+    ap.add_argument("--write-gcs", action="store_true",
+                    help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
     ap.add_argument("--no-write", action="store_true", help="print the summary, do not write to GCS/local storage")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if a.write_gcs and a.no_write:
+        ap.error("--write-gcs and --no-write are mutually exclusive")
     for sp in (SPORTS if a.sport == "all" else (a.sport,)):
-        p = run_sport(sp, write=not a.no_write)
+        p = run_sport(sp, write=not a.no_write)               # the job path: synchronous compute (allow_compute=True)
         print(f"{sp}: status={p['status']} rows={p['count']} lines_age={p['lines_age_minutes']} "
               f"gamelog_latest={p['gamelog_latest']} summary={json.dumps(p['summary'], default=str)}")
     return 0
