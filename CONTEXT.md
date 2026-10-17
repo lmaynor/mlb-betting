@@ -4047,6 +4047,15 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   (`espn_data.inactives` / `classify_reason`) but the listing is PARTIAL (53% of rotation absences are not on the box) -- see
   `docs/solutions/integration-issues/hoopr-espn-nba-box-scores.md`. Nightly job script `deploy/setup_nba_hoopr_refresh.sh` is NOT yet run.
   Availability study: `docs/analysis/nba_zip_review_2026-10-16.md`.
+- **Availability feeds (2026-10-16, branch `feat/nba-availability-minutes`):** `nba/data/injury_bank.py` banks the ESPN injury list
+  change-only to `NBA/injuries/espn/` (heartbeat in `latest.json`; `state_asof` refuses unknown). `nba/data/nba_injury_report.py`
+  fetches/parses the OFFICIAL NBA injury report PDFs (hourly `HHPM` names to 2025-12, quarter-hour `HH_MMPM` from 2026-01; a missing
+  object is 403; parsing needs poppler `pdftotext`, NOT in the Docker image) and backfills them resumably to
+  `NBA/injuries/official/{ET day}/report_{HHMM}.csv`. `nba/props/official_availability.py` turns banked reports into per-game
+  pre-game lists (>= 30 min before tip, fail-closed coverage), serves them through `FeatureContext.features(availability={(team, day): ids})`
+  and fits P(played | status). `nba/data/nbadb_inactives.py` (nbadb inactive_players -> ESPN ids, `availability="history_inactive"`) is
+  fixture-tested only -- never run on real data (no Kaggle credentials). Job scripts `deploy/setup_nba_injury_bank.sh` NOT run.
+  See `docs/solutions/integration-issues/nba-official-injury-report-pdf.md` and `docs/analysis/nba_official_availability_2026-10-16.md`.
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
