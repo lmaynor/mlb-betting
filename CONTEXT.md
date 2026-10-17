@@ -2296,8 +2296,10 @@ Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
 - **Stale lines are carried, not hidden**: the NHL / NBA odds bankers run twice a day (17:30 / 22:30 UTC), so every banked line was older
   than `MAX_AGE_MIN` (240) for ~15 h a day and the boards were empty of prices. Lines up to `CARRY_MAX_AGE_MIN` (1200 min) are now shown with
   payload `lines_stale: true` and `lines_age_minutes`; the page prints "Lines are N h old ... check the price at the book". The +EV pagers
-  keep their own 45-min gate. **NFL has NO scheduler**: `ev-nfl-props-sweep` is a manual job with a hard-coded `--until`, last run
-  2026-10-15, so every NFL row is a no-line rotation row until someone runs it (credits: shared 20k/mo pool).
+  keep their own 45-min gate. **NFL banking is scheduled (2026-10-17, `deploy/setup_nfl_sweep_schedule.sh`)**: `ev-nfl-props-sweep` runs ONE cycle per
+  firing (`--max-credits 150`, no retries): Mon-Sat every 2 h, Sun every 30 min 06:00-11:30 CT then hourly 12-20 + 00/02/04/22 (America/Chicago;
+  schedulers `ev-nfl-props-sweep-{weekly,sun-am,sun-rest}`; `PAUSE=1` pauses them). Cost = 1 + 5 x games inside the 40 h horizon (~56-76 per firing
+  Fri night-Sun, ~1-6 otherwise): ~10k credits a month from the shared ParlayAPI pool. Before 2026-10-17 it was a manual job and every NFL row was no-line.
 - **Search is team-aware** (`lib/team-directory.ts`): every text filter (board, FilterBar, MLB card, Top 10) goes through
   `searchHaystack` / `matchesSearch`, so "houston", "texans", "habs", "sixers" and "HOU" all work; every word must match. Sport-keyed
   because HOU is the Astros and the Texans.

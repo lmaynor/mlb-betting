@@ -7,7 +7,7 @@ deployed. The main checkout was left alone (it is mid-merge on `feat/discord-bot
 1. **NHL / NBA**: lines are banked twice a day (17:30 and 22:30 UTC). The projection engine refused any snapshot older than 240 min
    ("snapshot is 271 min old (> 240); refusing stale quotes"), so from ~9:30 PM to ~12:30 PM CT every row was a no-line rotation row: no
    price, no consensus, no edge, no model + market. FIXED: lines up to 20 h old are carried and flagged `lines_stale`.
-2. **NFL**: there is no scheduler. `ev-nfl-props-sweep` is a manual Cloud Run Job with a hard-coded `--until`; last run 2026-10-15 01:32 UTC,
+2. **NFL** (FIXED later the same day, see the end of this file): there was no scheduler. `ev-nfl-props-sweep` is a manual Cloud Run Job with a hard-coded `--until`; last run 2026-10-15 01:32 UTC,
    `reason: no NFL raw prop payloads banked for today/tomorrow`. NOT FIXED (it spends the shared ParlayAPI pool; 14,620 credits left on the
    2026-10-15 run). Until it runs on a cadence, NFL shows projections only. This is the one real blocker for NFL prices.
 3. **Market prices table** is books beating the consensus (`book_outliers`). NHL/NBA sweeps ran at 22:35 and found 0 rows (a legitimate
@@ -42,3 +42,13 @@ The stale-lines and multi-day views used FIXTURE edits to the captured payloads 
 - Merge, deploy backend (`deploy/deploy_service.sh`) BEFORE Vercel; the site tolerates a missing `lines_stale`.
 - NHL goals / assists / blocked shots have no rotation rows (only SOG, points, saves do), so they only appear when lines are banked.
 - Re-run `--nfl-players` after roster moves; re-run the accuracy replays each offseason.
+
+## Addendum -- NFL sweep scheduled (2026-10-17, user approved; credits to be raised to 100k when the 20k pool runs out)
+`deploy/setup_nfl_sweep_schedule.sh` (run once, idempotent): job `ev-nfl-props-sweep` args -> `-m ev.sweep_nfl_props --max-credits 150`, retries 0,
+timeout 900; scheduler-invoker granted run.invoker on the job; 3 schedulers in America/Chicago: `-weekly` `0 */2 * * 1-6`, `-sun-am` `*/30 6-11 * * 0`,
+`-sun-rest` `0 0,2,4,12-20,22 * * 0`. Probe firing 2026-10-17 04:57 UTC succeeded: 11 events, 56 credits, 245 rows, Kalshi reachable, 13,783 credits left.
+- Weekdays: cheap by construction (40 h horizon). Tue-Wed nothing is inside it (1 credit/firing); the cost sits Fri night-Mon (~56-76 per firing).
+  Estimate ~2.3k/week, ~10k/month. The 20k pool had 13.8k left, shared with MLB and NHL/NBA, hence the planned 100k.
+- The ev image still posts "NFL props SHADOW sweep running" on every firing until it is rebuilt with the `ev/sweep_nfl_props.py` change in this PR
+  (startup ping only for looping runs). Rebuild via `deploy/build_all_images.sh` (it retags prod :latest, read it first).
+- Sink A / flagged alerts still dedupe through GCS `notified.json`, so frequent firings do not re-alert.
