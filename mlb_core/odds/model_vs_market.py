@@ -96,3 +96,136 @@ def screen_consensus(cons: pd.DataFrame, stat_map: dict, min_books: int = 3):
     post = c["pregame"].astype("boolean").fillna(True) == False                      # noqa: E712
     dropped = {"low_books": int(low.sum()), "postgame_quote": int(post.sum())}
     return c[~post].reset_index(drop=True), n_in, dropped
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Walk-forward price test of the market-anchored blend (2026-10-16).
+# ---------------------------------------------------------------------------------------------------------------------
+PRICE_THRESHOLDS = (0.03, 0.04, 0.05)
+BLEND_MAX_SHIFT = 0.08
+
+
+def _sig(z):
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def _profit_units(american, win) -> np.ndarray:
+    """Flat 1-unit profit at American odds: dec-1 on a win, -1 on a loss."""
+    a = np.asarray(american, dtype=float)
+    dec = np.where(a > 0, a / 100.0 + 1.0, 100.0 / np.abs(a) + 1.0)
+    return np.where(np.asarray(win, dtype=bool), dec - 1.0, -1.0)
+
+
+def _implied(american) -> np.ndarray:
+    a = np.asarray(american, dtype=float)
+    return np.where(a > 0, 100.0 / (a + 100.0), np.abs(a) / (np.abs(a) + 100.0))
+
+
+def _cluster_boot_mean(x: np.ndarray, groups, n_boot: int = 400, seed: int = 1) -> tuple:
+    """95% CI of mean(x) resampling whole groups (game dates) with replacement."""
+    x = np.asarray(x, dtype=float)
+    if len(x) == 0:
+        return (np.nan, np.nan)
+    g = pd.Series(np.asarray(groups)).astype(str)
+    sums = pd.DataFrame({"s": x, "g": g.to_numpy()}).groupby("g")["s"].agg(["sum", "count"])
+    rng = np.random.default_rng(seed)
+    k = len(sums)
+    idx = rng.integers(0, k, size=(n_boot, k))
+    tot, cnt = sums["sum"].to_numpy()[idx].sum(1), sums["count"].to_numpy()[idx].sum(1)
+    est = tot / np.clip(cnt, 1, None)
+    return (float(np.percentile(est, 2.5)), float(np.percentile(est, 97.5)))
+
+
+def _price_rows(y, p_prob, o_over, o_under, thr: float):
+    """Bets where the better side's probability beats that side's best-price implied probability by >= thr."""
+    e_over = p_prob - _implied(o_over)
+    e_under = (1.0 - p_prob) - _implied(o_under)
+    take_over = e_over >= e_under
+    edge = np.where(take_over, e_over, e_under)
+    sel = edge >= thr
+    won = np.where(take_over, y == 1.0, y == 0.0)
+    prof = _profit_units(np.where(take_over, o_over, o_under), won)
+    return sel, prof
+
+
+def blend_price_test(frame: pd.DataFrame, thresholds=PRICE_THRESHOLDS, min_train: int = 500, max_shift: float = BLEND_MAX_SHIFT,
+                     n_boot: int = 400, season_col: str = "season") -> dict:
+    """Walk-forward test of p_blend = sigmoid(a + b*logit(p_mkt) + c*(logit(p_model) - logit(p_mkt))), clamped to
+    p_mkt +/- max_shift. For each season (or year of game_date when `season_col` is absent) the (a, b, c) come from
+    blend_regression on EARLIER seasons only; the first season is never scored. `frame` needs: over, p_model, p_market,
+    game_date, game_id, best_over_odds, best_under_odds.
+
+    Returns {"n", "fits": {season: {a, b, c, t_c, n_train}}, "scores": Brier/log-loss of blend / market / model on the
+    scored rows with the paired Brier difference (blend - market) and its game-date-cluster 95% CI, "price": {rule:
+    {threshold: {n_bets, roi, ci_lo, ci_hi}}}} for rules 'blend', 'market' (line shopping vs the consensus alone: the
+    control the blend must beat) and 'model' (standalone), all flat 1 unit at the best quoted price per side."""
+    need = ["over", "p_model", "p_market", "game_date", "game_id", "best_over_odds", "best_under_odds"]
+    miss = [c for c in need if c not in frame.columns]
+    if miss:
+        raise ValueError(f"frame is missing {miss}")
+    f = frame.copy()
+    if season_col not in f.columns:
+        d = pd.to_datetime(f["game_date"].astype(str).str[:10], errors="coerce")
+        f[season_col] = (d.dt.year - (d.dt.month < 8).astype(int)).astype("Int64")
+    for c in ("over", "p_model", "p_market", "best_over_odds", "best_under_odds"):
+        f[c] = pd.to_numeric(f[c], errors="coerce")
+    f = f.dropna(subset=need + [season_col]).reset_index(drop=True)
+    f = f[(f["p_model"] > 0) & (f["p_model"] < 1) & (f["p_market"] > 0) & (f["p_market"] < 1)].reset_index(drop=True)
+    out = {"n": 0, "fits": {}, "scores": None, "price": {}}
+    parts = []
+    for s in sorted(f[season_col].unique()):
+        tr = f[f[season_col] < s]
+        te = f[f[season_col] == s]
+        if len(tr) < min_train or len(te) == 0:
+            continue
+        try:
+            fit = M.blend_regression(tr["over"], tr["p_market"], tr["p_model"], tr["game_id"])
+        except np.linalg.LinAlgError:
+            continue
+        a, b, c = float(fit["a"]), float(fit["b"]), float(fit["c"])
+        lm = M.logit(te["p_market"].to_numpy(float))
+        ld = M.logit(te["p_model"].to_numpy(float)) - lm
+        pb = np.clip(_sig(a + b * lm + c * ld), te["p_market"] - max_shift, te["p_market"] + max_shift)
+        out["fits"][int(s)] = {"a": a, "b": b, "c": c, "t_c": float(fit["t_c"]), "n_train": int(len(tr))}
+        parts.append(te.assign(p_blend=pb.to_numpy() if hasattr(pb, "to_numpy") else pb))
+    if not parts:
+        return out
+    t = pd.concat(parts, ignore_index=True)
+    y = t["over"].to_numpy(float)
+    out["n"] = int(len(t))
+    sc = {k: {"brier": M.brier(y, t[col].to_numpy(float)), "logloss": M.logloss(y, t[col].to_numpy(float))}
+          for k, col in (("blend", "p_blend"), ("market", "p_market"), ("model", "p_model"))}
+    dbr = (t["p_blend"] - y) ** 2 - (t["p_market"] - y) ** 2
+    lo, hi = _cluster_boot_mean(dbr.to_numpy(float), t["game_date"].astype(str), n_boot)
+    sc["d_brier_blend_vs_market"] = {"mean": float(dbr.mean()), "ci_lo": lo, "ci_hi": hi}
+    out["scores"] = sc
+    oo, ou = t["best_over_odds"].to_numpy(float), t["best_under_odds"].to_numpy(float)
+    for rule, col in (("blend", "p_blend"), ("market", "p_market"), ("model", "p_model")):
+        out["price"][rule] = {}
+        for thr in thresholds:
+            sel, prof = _price_rows(y, t[col].to_numpy(float), oo, ou, float(thr))
+            r = prof[sel]
+            lo, hi = _cluster_boot_mean(r, t.loc[sel, "game_date"].astype(str), n_boot) if len(r) else (np.nan, np.nan)
+            out["price"][rule][float(thr)] = {"n_bets": int(sel.sum()), "roi": float(r.mean()) if len(r) else float("nan"),
+                                              "ci_lo": lo, "ci_hi": hi}
+    return out
+
+
+def render_price_test(label: str, res: dict) -> str:
+    """Markdown for a blend_price_test result."""
+    if not res or res.get("n", 0) == 0:
+        return f"- {label}: price test not run (too few rows or no earlier season to fit on)"
+    sc = res["scores"]
+    d = sc["d_brier_blend_vs_market"]
+    L = [f"- {label}: walk-forward n={res['n']} (seasons fitted on earlier seasons only) | Brier blend {sc['blend']['brier']:.4f} / "
+         f"market {sc['market']['brier']:.4f} / model {sc['model']['brier']:.4f}; logloss blend {sc['blend']['logloss']:.4f} / "
+         f"market {sc['market']['logloss']:.4f} / model {sc['model']['logloss']:.4f}; paired dBrier(blend-market) "
+         f"{d['mean']:+.5f} [{d['ci_lo']:+.5f}, {d['ci_hi']:+.5f}]",
+         "  fitted c by season: " + ", ".join(f"{k}: {v['c']:+.2f} (t={v['t_c']:+.1f})" for k, v in res["fits"].items())]
+    for rule in ("blend", "market", "model"):
+        cells = []
+        for thr, r in res["price"][rule].items():
+            cells.append(f">={thr:.0%}: n={r['n_bets']} ROI {r['roi']:+.2%} [{r['ci_lo']:+.2%}, {r['ci_hi']:+.2%}]"
+                         if r["n_bets"] else f">={thr:.0%}: n=0")
+        L.append(f"  flat 1u at best price, rule={rule}: " + " | ".join(cells))
+    return "\n".join(L)

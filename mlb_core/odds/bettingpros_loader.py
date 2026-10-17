@@ -36,6 +36,12 @@ from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, d
 EXCLUDED_KINDS = ("dfs", "consensus", "open", "sharp")
 KALSHI_BOOK_ID = 68
 NOVIG_BOOK_ID = 60
+# Recommended grace (minutes after the SCHEDULED start) within which a quote's last update still counts as pregame.
+# Measured 2026-10-16 on real NFL partitions: in 2024 `updated` is the last genuine quote change (median ~6 h before the
+# start), but in 2025 ~90% of stamps sit 1-5 minutes AFTER the scheduled start (p90 ~5.4 min: a freeze/close stamp), so the
+# strict filter discards nearly the whole 2025 close. 10 min recovers nearly all of them. Default stays 0 (strict) because a
+# quote stamped after the start could in principle be in-play: compare scores with and without before trusting the rows.
+DEFAULT_GRACE_MINUTES = {"NBA": 10.0, "NHL": 10.0, "NFL": 10.0}
 OVER_SIDES = {"over", "yes"}
 UNDER_SIDES = {"under", "no"}
 
@@ -86,7 +92,7 @@ def _utc(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, utc=True, errors="coerce", format="mixed")
 
 
-def filter_reference_quotes(df: pd.DataFrame, pregame_only: bool = False) -> pd.DataFrame:
+def filter_reference_quotes(df: pd.DataFrame, pregame_only: bool = False, grace_minutes: float = 0.0) -> pd.DataFrame:
     """The kept quote rows: real books + exchanges, never Kalshi/DFS/consensus/open/sharp; valid over/under American
     prices at a numeric line. Adds `side_n` ('over'/'under') and `ts_updated` (UTC timestamp)."""
     miss = [c for c in REQUIRED_COLUMNS if c not in df.columns]
@@ -107,22 +113,23 @@ def filter_reference_quotes(df: pd.DataFrame, pregame_only: bool = False) -> pd.
     d = d[ok].assign(odds=odds[ok].astype(float), line=line[ok].astype(float))
     d = d.assign(ts_updated=_utc(d["updated"]) if "updated" in d.columns else pd.NaT)
     if pregame_only and "scheduled" in d.columns and len(d):
-        start = _utc(d["scheduled"])
+        start = _utc(d["scheduled"]) + pd.Timedelta(minutes=float(grace_minutes))
         late = d["ts_updated"].notna() & start.notna() & (d["ts_updated"] > start)
         d = d[~late]
     return d
 
 
 def consensus_from_long(df: pd.DataFrame, min_books: int = 3, stat_map: dict | None = None,
-                        sport: str | None = None, pregame_only: bool = False) -> pd.DataFrame:
+                        sport: str | None = None, pregame_only: bool = False,
+                        grace_minutes: float = 0.0) -> pd.DataFrame:
     """Pure: long BettingPros table -> one consensus row per (date, event, player, stat) at the modal line.
 
     `stat_map` ({market slug: stat label}) relabels the `market` column; when None the `market` value is used as the stat
     (or, with `sport`, mapped through slug_to_stat). See the module docstring for the rules. An empty / all-filtered
-    input returns an empty frame with OUTPUT_COLUMNS."""
+    input returns an empty frame with OUTPUT_COLUMNS. `grace_minutes` widens "pregame" to updated <= scheduled + grace."""
     if df is None or len(df) == 0:
         return _empty()
-    d = filter_reference_quotes(df, pregame_only=pregame_only)
+    d = filter_reference_quotes(df, pregame_only=pregame_only, grace_minutes=grace_minutes)
     if len(d) == 0:
         return _empty()
     if stat_map is None and sport:
@@ -201,7 +208,7 @@ def consensus_from_long(df: pd.DataFrame, min_books: int = 3, stat_map: dict | N
     sched = _utc(out["scheduled"])
     et = sched.dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
     out["game_date"] = et.where(sched.notna(), out["date"].astype(str).str[:10])
-    pre = (out["updated_max"] <= sched).astype("boolean")
+    pre = (out["updated_max"] <= sched + pd.Timedelta(minutes=float(grace_minutes))).astype("boolean")
     out["pregame"] = pre.where(out["updated_max"].notna() & sched.notna(), pd.NA)
     out["updated_max"] = out["updated_max"].dt.strftime("%Y-%m-%d %H:%M:%S")
     for c in ("novig_over_odds", "novig_under_odds", "best_over_odds", "best_under_odds"):
@@ -211,12 +218,16 @@ def consensus_from_long(df: pd.DataFrame, min_books: int = 3, stat_map: dict | N
 
 
 def build_market_consensus(sport: str, start: str | None = None, end: str | None = None, markets: list | None = None,
-                           prefix: str | None = None, min_books: int = 3, pregame_only: bool = False) -> pd.DataFrame:
+                           prefix: str | None = None, min_books: int = 3, pregame_only: bool = False,
+                           grace_minutes: float | None = None) -> pd.DataFrame:
     """Read the sport's backfilled partitions (Odds/bettingpros_{sport}/{market}/{date}.parquet) market by market and
     return the concatenated consensus table. `markets` = stat labels (SPORTS keys) and/or slugs; None = every market the
     sport defines. Markets with no partitions in range are skipped silently (an empty frame comes back if none have
     data)."""
     sp = sport.upper()
+    if grace_minutes is not None and grace_minutes < 0:
+        raise ValueError("grace_minutes must be >= 0")
+    grace = float(grace_minutes or 0.0)
     if sp not in bpp.SPORTS:
         raise ValueError(f"unknown sport {sport!r}; known: {sorted(bpp.SPORTS)}")
     labels = bpp.SPORTS[sp]
@@ -229,7 +240,7 @@ def build_market_consensus(sport: str, start: str | None = None, end: str | None
         if len(long_df) == 0:
             continue
         c = consensus_from_long(long_df, min_books=min_books, stat_map={slug: stat}, sport=sp,
-                                pregame_only=pregame_only)
+                                pregame_only=pregame_only, grace_minutes=grace)
         if len(c):
             frames.append(c)
     if not frames:

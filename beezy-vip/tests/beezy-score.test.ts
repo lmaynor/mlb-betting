@@ -1,4 +1,4 @@
-import { beezyscore, booksBehind, explainScore, scoreParts, scoreTier, TIER_CUTS } from '../lib/beezy-score'
+import { beezyscore, booksBehind, explainScore, HR_MODEL_ONLY_CAP, scoreParts, scoreTier, TIER_CUTS } from '../lib/beezy-score'
 import type { Bet } from '../lib/types'
 
 const bet = (over: Partial<Bet>): Bet => ({
@@ -43,5 +43,18 @@ describe('Beezy Score v2', () => {
   it('caps at 100 and tiers use the published cut points', () => {
     expect(beezyscore(bet({ edge: 0.5, model_prob: 0.9, notes: '(20 books)' }))).toBeLessThanOrEqual(100)
     expect(TIER_CUTS).toEqual({ strong: 70, lean: 45 })
+  })
+})
+
+describe('HR model-only cap', () => {
+  const hr = (over: Partial<Bet>) => bet({ system: 'HR', notes: null, edge: 0.15, model_prob: 0.5, ...over })
+  it('never lets a standalone HR model score reach STRONG', () => {
+    expect(beezyscore(bet({ system: 'K', notes: null, edge: 0.15, model_prob: 0.5 }))).toBeGreaterThanOrEqual(TIER_CUTS.strong)
+    expect(beezyscore(hr({}))).toBe(HR_MODEL_ONLY_CAP)
+    expect(scoreTier(beezyscore(hr({})))).toBe('lean')
+  })
+  it('lifts the cap once 4+ reference books back the price, and does not touch other systems', () => {
+    expect(beezyscore(hr({ notes: 'x (3 books)' }))).toBe(HR_MODEL_ONLY_CAP)
+    expect(beezyscore(hr({ notes: 'x (8 books)' }))).toBeGreaterThanOrEqual(TIER_CUTS.strong)
   })
 })

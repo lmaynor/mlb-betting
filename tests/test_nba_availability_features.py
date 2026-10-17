@@ -228,3 +228,44 @@ def test_availability_from_injuries_maps_espn_ids_through_the_bridge():
 
     m = F.availability_from_injuries({"BOS": {1, 99}, "LAL": set(), "MIA": [2]}, FakeBridge())
     assert m == {"BOS": {"sb-1"}, "LAL": set(), "MIA": {"sb-2"}}
+
+
+def test_weighted_live_availability_is_the_expectation_of_the_absence_indicator(world):
+    """{id: P(absent)} scales each listed rotation player's contribution; weight 1.0 equals the plain set path and
+    weight 0.35 gives 0.35x the sums (the features are linear in the absence indicators)."""
+    pb, gm, tips, rows, tg, ctx, X, meta = world
+    ridx, r, ab = _absent_case(world)
+    pb_t, gm_t, tips_t = truncate_before(pb, gm, tips, pd.Timestamp(r["date"]))
+    rows_t, tg_t = prepared(pb_t, gm_t, tips_t)
+    ctx_t = F.FeatureContext(rows_t, tg_t)
+    q = pd.DataFrame([{c: r[c] for c in F.ID_COLS}])
+    plain = ctx_t.features(q, availability={r["team"]: set(ab)}).iloc[0]
+    full = ctx_t.features(q, availability={r["team"]: {p: 1.0 for p in ab}}).iloc[0]
+    part = ctx_t.features(q, availability={r["team"]: {p: 0.35 for p in ab}}).iloc[0]
+    zero = ctx_t.features(q, availability={r["team"]: {p: 0.0 for p in ab}}).iloc[0]
+    _eq(plain, full, AV)
+    for c in AV:
+        assert float(part[c]) == pytest.approx(0.35 * float(plain[c]))
+        assert float(zero[c]) == 0.0
+    assert float(plain["team_missing_min_l10"]) > 0
+
+
+def test_espn_status_weights_and_bridge_mapping():
+    from nba.data import espn_injuries as EI
+    fr = pd.DataFrame({"team_abbrev": ["BOS", "BOS", "BOS", "BOS", "MIA"], "espn_player_id": [1, 2, 3, 4, 5],
+                       "status": ["Out", "Doubtful", "Questionable", "Probable", "Day-To-Day"]})
+    fr.attrs["ok"] = True
+    w = EI.absence_weights_by_team(fr)
+    assert w["BOS"] == {1: 1.0, 2: 0.75, 3: 0.35}                  # Probable carries no weight
+    assert w["MIA"] == {5: 0.25} and w["LAL"] == {}                 # every team keyed when the report is usable
+    bad = fr.copy()
+    bad.attrs["ok"] = False
+    assert EI.absence_weights_by_team(bad) == {}                    # unknown is not healthy
+
+    class Bridge:
+        def sb_id(self, e):
+            return (f"sb{e}", None) if e != 2 else (None, "unbridged")
+
+    out = F.availability_from_injuries({"BOS": w["BOS"], "LAL": {}}, Bridge())
+    assert out == {"BOS": {"sb1": 1.0, "sb3": 0.35}, "LAL": {}}
+    assert F.availability_from_injuries({"BOS": {1, 2}}, Bridge()) == {"BOS": {"sb1"}}      # plain sets unchanged
