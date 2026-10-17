@@ -223,6 +223,11 @@ consistent with "the market already prices rolling shot rates".
 
 (If this section still says NOT RUN, nobody has re-run it yet: `nhl-backfill` had not finished.)
 
+**UPDATE 2026-10-16:** the long-history model has since been scored against four seasons of BettingPros consensus (72,485 props, 98% of
+rows): blend coefficient c = +0.34 (t = 8.2) versus +0.10 +- 0.11 here -- see the follow-up in
+`docs/analysis/bettingpros_model_vs_market_2026-10-15.md`. That is evidence the 2019+ model carries information beyond the market that the
+3-month model did not; it is still not CLV, so the verdict stays UNDETERMINED rather than promotable.
+
 ## 4. Things the live system will hit that this study did not
 
 * **The live ParlayAPI SOG feed may be much thinner than this DB.** The study had 8-9 two-sided books per prop (median 6 per
