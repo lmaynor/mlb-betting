@@ -1,11 +1,22 @@
 import fs from 'fs'
 import path from 'path'
 import { NAV, SECTIONS, navActive, sectionFor, sportActive, sportHref, tabActive } from '../lib/ia'
+import { PICK_SYSTEMS } from '../lib/pick-systems'
+import { LIVE_SPORTS, SPORT_SLUGS } from '../lib/sports'
 
 const app = path.resolve(__dirname, '..', 'app')
+/** A page exists for the path, counting a dynamic [param] folder where no literal folder matches (as Next resolves it). */
 const routeExists = (href: string) => {
-  const p = href.split('?')[0]
-  return fs.existsSync(path.join(app, p === '/' ? '' : p, 'page.tsx'))
+  const segs = href.split('?')[0].split('/').filter(Boolean)
+  let dir = app
+  for (const seg of segs) {
+    const literal = path.join(dir, seg)
+    if (fs.existsSync(literal)) { dir = literal; continue }
+    const dyn = fs.existsSync(dir) ? fs.readdirSync(dir).find(d => /^\[[^\]]+\]$/.test(d)) : undefined
+    if (!dyn) return false
+    dir = path.join(dir, dyn)
+  }
+  return fs.existsSync(path.join(dir, 'page.tsx'))
 }
 
 describe('information architecture', () => {
@@ -55,17 +66,28 @@ describe('information architecture', () => {
     for (const p of ['/picks', '/picks/mlb', '/picks/mlb/systems', '/picks/history', '/sports/nhl', '/cheat-sheet']) expect(navActive(p, NAV[2])).toBe(true)
   })
 
-  it('the sport ribbon: ALL SPORTS is the Top 10, MLB is its own section, the rest share /sports', () => {
+  it('the sport ribbon: ALL SPORTS is the Top 10 and every sport is /picks/[sport]', () => {
     expect(sportHref('all')).toBe('/picks')
-    expect(sportHref('mlb')).toBe('/picks/mlb')
-    expect(sportHref('nfl')).toBe('/sports/nfl')
     expect(routeExists(sportHref('all'))).toBe(true)
-    expect(routeExists(sportHref('mlb'))).toBe(true)
+    for (const s of SPORT_SLUGS) {
+      expect(sportHref(s)).toBe(`/picks/${s}`)
+      expect(routeExists(sportHref(s))).toBe(true)
+      expect(routeExists(`${sportHref(s)}/projections`)).toBe(true)
+    }
     expect(sportActive('/', 'all')).toBe(false)
     expect(sportActive('/picks/history', 'all')).toBe(true)
     expect(sportActive('/picks/mlb', 'all')).toBe(false)
     expect(sportActive('/picks/mlb/hr', 'mlb')).toBe(true)
-    expect(sportActive('/sports/nba', 'nba')).toBe(true)
-    expect(sportActive('/sports/nba', 'nhl')).toBe(false)
+    expect(sportActive('/picks/nba/projections', 'nba')).toBe(true)
+    expect(sportActive('/picks/nba', 'nhl')).toBe(false)
+  })
+
+  it('the ribbon is the live pillars of the registry, in registry order', () => {
+    expect(LIVE_SPORTS.map(p => p.slug)).toEqual([...SPORT_SLUGS])
+  })
+
+  it('every system page resolves to a route, and the retired /sports hub still has its redirect page', () => {
+    for (const s of PICK_SYSTEMS) expect(routeExists(`/picks/${s.sport}/${s.slug}`)).toBe(true)
+    expect(routeExists('/sports/nfl')).toBe(true)
   })
 })

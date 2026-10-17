@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { SPORT_PILLARS, type SportSlug } from '@/lib/sports'
+import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { SYSTEM_COLOR } from '@/lib/tokens'
 import type { TopPick } from '@/lib/top-picks'
 
@@ -146,7 +146,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
   const [copied, setCopied] = useState(false)
   const [tweetCopied, setTweetCopied] = useState(false)
 
-  const sports = useMemo(() => (['mlb', 'nfl', 'nhl', 'nba'] as SportSlug[]).filter(s => players.some(p => p.sport === s)), [players])
+  const sports = useMemo(() => (SPORT_SLUGS as readonly SportSlug[]).filter(s => players.some(p => p.sport === s)), [players])
   const list = mode === 'games' ? games : players.filter(p => sport === 'all' || p.sport === sport)
   const shown = list.slice(0, DEFAULT_LIMIT)
   const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
@@ -302,7 +302,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: '8px', fontSize: '12.5px' }}>
               <Link href="/picks/mlb#systems" style={{ color: 'var(--link)' }}>MLB players</Link>
               <Link href="/picks/games#systems" style={{ color: 'var(--link)' }}>MLB games</Link>
-              {(['nfl', 'nhl', 'nba'] as const).map(s => <Link key={s} href={`${sportHref(s)}#systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
+              {SPORT_SLUGS.filter(s => s !== 'mlb').map(s => <Link key={s} href={`${sportHref(s)}#systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
             </div>
           </div>
 

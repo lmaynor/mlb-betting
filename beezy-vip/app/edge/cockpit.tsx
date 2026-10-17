@@ -19,11 +19,11 @@ import { apiGetEdgeCockpit } from '@/lib/betting-api'
 import { bookDisplay, CARD_STYLE } from '@/lib/tokens'
 import { americanToDecimal, fairAmerican } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
-import { propStatLabel, SPORT_PILLARS } from '@/lib/sports'
+import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { headshotUrlById } from '@/lib/sport-assets'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
-export const COCKPIT_SPORTS: CockpitSport[] = ['all', 'mlb', 'nfl', 'nhl', 'nba']
+export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
 
 const HAIR = '#1e2230'
 const GOOD = '#57F287'

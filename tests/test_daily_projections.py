@@ -334,6 +334,115 @@ def test_canon_team_nba_nhl():
     assert dp.canon_team("nhl", "Montreal Canadiens") == "MTL"
 
 
+# ----------------------------------------------------------------------------------------------- full market depth
+# 2026-10-16: NFL 10 / NHL 6 / NBA 10 projectable stats. NHL pp_points is a documented data gap (the skater master has
+# power_play_goals but no power-play assists), so it is asserted ABSENT rather than faked.
+DEPTH = {"nfl": 10, "nhl": 6, "nba": 10}
+SPORT_TEAMS = {  # (log team code, event away name, event home name)
+    "nfl": ("KC", "Las Vegas Raiders", "Kansas City Chiefs"),
+    "nhl": ("TOR", "Boston Bruins", "Toronto Maple Leafs"),
+    "nba": ("LAL", "Boston Celtics", "Los Angeles Lakers"),
+}
+OPP_CODE = {"nfl": "LV", "nhl": "BOS", "nba": "BOS"}
+
+
+def _stat_defs(sport):
+    if sport == "nfl":
+        return cf.NFL_STATS
+    if sport == "nba":
+        return cf.NBA_STATS
+    return {**cf.NHL_SKATER_STATS, **cf.NHL_GOALIE_STATS}
+
+
+def _depth_logs(sport, mean_of):
+    """One synthetic player per projectable stat, alternating 0.75x / 1.25x of the stat's mean over 20 games."""
+    team, _, _ = SPORT_TEAMS[sport]
+    skater, goalie, allt = {}, {}, {}
+    for stat in dp.PROJECT_STATS[sport]:
+        val_cols, use_cols, _ = _stat_defs(sport)[stat]
+        m = mean_of(stat)
+        rows = []
+        for i in range(20):
+            v = m * (0.75 if i % 2 == 0 else 1.25)
+            r = {"season": 2025, "season_year": 2025, "_opp": OPP_CODE[sport], "_date": f"2026-02-{i + 1:02d}",
+                 "_sort": f"2026-02-{i + 1:02d}" if sport != "nfl" else 202500 + i + 1,
+                 "name": f"Player {stat}", "player_display_name": f"Player {stat}"}
+            r["recent_team" if sport == "nfl" else "team_abbr"] = team
+            for c in val_cols:
+                r[c] = v / len(val_cols)
+            for c in use_cols:
+                r.setdefault(c, 30.0)
+            rows.append(r)
+        key = cf.norm_name(f"Player {stat}")
+        (goalie if stat in cf.NHL_GOALIE_STATS else skater if sport == "nhl" else allt)[key] = rows
+    return dp.GameLogs(sport, {"skater": skater, "goalie": goalie} if sport == "nhl" else {"all": allt})
+
+
+def _depth_event(sport, line_of):
+    from ev.props import STAT_KEYS_BY_SPORT
+    _, away, home = SPORT_TEAMS[sport]
+    tbl = STAT_KEYS_BY_SPORT[sport]
+    books = []
+    for b in ("draftkings", "fanduel", "betmgm", "caesars"):
+        markets = []
+        for stat in dp.PROJECT_STATS[sport]:
+            mkey = sorted(tbl[stat])[0]
+            markets.append({"key": mkey, "outcomes": [
+                {"name": "Over", "description": f"Player {stat}", "price": -110, "point": line_of(stat)},
+                {"name": "Under", "description": f"Player {stat}", "price": -110, "point": line_of(stat)}]})
+        books.append({"key": b, "markets": markets})
+    return event(books, away=away, home=home)
+
+
+@pytest.mark.parametrize("sport", ["nfl", "nhl", "nba"])
+def test_every_projectable_stat_produces_a_valid_row(sport):
+    mean_of = lambda st: 0.6 if st == "anytime_td" else 20.0          # noqa: E731
+    line_of = lambda st: 0.5 if st == "anytime_td" else 19.5          # noqa: E731
+    assert len(dp.PROJECT_STATS[sport]) == DEPTH[sport]
+    rows, st = dp.build_line_rows(sport, [_depth_event(sport, line_of)], _depth_logs(sport, mean_of), NOW)
+    by_stat = {r["stat"]: r for r in rows}
+    assert set(by_stat) == set(dp.PROJECT_STATS[sport]), st
+    for stat, r in by_stat.items():
+        assert r["has_line"] and r["sport"] == sport
+        assert r["stat_label"] == dp.STAT_LABEL[stat]
+        assert r["proj_mean"] is not None and r["proj_mean"] > 0
+        assert 0.0 <= r["p_over_model"] <= 1.0 and 0.0 <= r["p_over_market"] <= 1.0
+        assert r["l5_hit_rate"] is not None and r["l10_hit_rate"] is not None
+        assert isinstance(r["beezy_score"], int) and 0 <= r["beezy_score"] <= 100
+        assert r["validated"] is False and r["engine"] == dp.ENGINE
+        lo, hi = sorted((r["p_over_model"], r["p_over_market"]))
+        assert lo - 1e-3 <= r["p_over_blend"] <= hi + 1e-3                # the blend sits between its two inputs
+
+
+def test_nhl_pp_points_is_a_documented_gap_not_a_projection():
+    assert "pp_points" not in dp.PROJECT_STATS["nhl"]
+    assert "pp_points" not in cf.supported_stats("nhl")
+
+
+def test_cockpit_form_supports_the_new_volume_stats():
+    assert {"pass_completions", "pass_attempts", "rush_attempts", "interceptions"} <= cf.supported_stats("nfl")
+    assert {"pr", "pa", "ra", "steals", "blocks"} <= cf.supported_stats("nba")
+    assert {"blocked_shots", "saves"} <= cf.supported_stats("nhl")
+    row = {"completions": 22.0}
+    assert cf._sum_cols(row, cf.NFL_STATS["pass_completions"][0]) == 22.0
+
+
+def test_rotation_covers_new_stats():
+    logs = _depth_logs("nba", lambda st: 25.0)
+    games = [{"away": "BOS", "home": "LAL", "start": START}]
+    rows, _ = dp.rotation_rows("nba", logs, games, NOW, set())
+    assert {"pr", "pa", "ra", "steals", "blocks"} <= {r["stat"] for r in rows}
+
+
+def test_blend_p_over_properties():
+    assert dp.blend_p_over(None, 0.5) is None and dp.blend_p_over(0.5, None) is None
+    assert dp.blend_p_over(0.7, 0.5, c=0.0) == pytest.approx(0.5)
+    assert dp.blend_p_over(0.7, 0.5, c=1.0) == pytest.approx(0.7)
+    mid = dp.blend_p_over(0.7, 0.5)
+    assert 0.5 < mid < 0.7 and mid < 0.5 + 0.5 * (0.7 - 0.5)           # default c is a small prior toward the market
+    assert 0.0 < dp.blend_p_over(1.0, 0.0) < 1.0                       # clipped, never 0/1
+
+
 # ----------------------------------------------------------------------------------------------- public API + route
 from unittest.mock import MagicMock, patch   # noqa: E402
 

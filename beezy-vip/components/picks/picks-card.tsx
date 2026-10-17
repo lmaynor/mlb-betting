@@ -6,13 +6,15 @@ import { PicksTable } from '@/components/picks/picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
-import { MlbTabs } from '@/components/picks/mlb-tabs'
+import { SportTabs } from '@/components/picks/sport-tabs'
 import { SystemsFooter } from '@/components/picks/systems-footer'
 import { apiGetPicks as getPicks, apiGetStats } from '@/lib/betting-api'
 import { addDaysToDateKey, formatDateKey, siteDateKey } from '@/lib/dates'
 import { collapseBooks } from '@/lib/dedupe'
 import { beezyscore } from '@/lib/beezy-score'
 import { betKind, type PickKind } from '@/lib/pick-systems'
+import type { SportSlug } from '@/lib/sports'
+import { matchesBook, matchesQuery, matchesTier, parsePickFilters } from '@/lib/picks-filters'
 import type { Bet } from '@/lib/types'
 
 const COPY: Record<PickKind, { h1: string; sub: string; what: string; plan: string }> = {
@@ -39,13 +41,14 @@ async function PicksContent({ kind, searchParams }: { kind: PickKind; searchPara
   // The API knows pending|settled|won|lost; the chips say WIN/LOSS.
   const STATUS_MAP: Record<string, string> = { win: 'won', loss: 'lost', pending: 'pending' }
   const status = sp.status && sp.status !== 'ALL' ? STATUS_MAP[sp.status.toLowerCase()] : undefined
-  const market = sp.market && sp.market !== 'ALL' ? sp.market : undefined
-  const book = sp.book && sp.book !== 'ALL' ? sp.book.toLowerCase().replace(/ /g, '') : undefined
-  const sort = (sp.sort ?? 'score') as 'date' | 'score' | 'edge' | 'odds'
-  const dir = (sp.dir ?? 'desc') as 'asc' | 'desc'
+  const f = parsePickFilters(sp)
+  const { market, book, sort, dir } = f
 
+  // Tier, "my books" and the text search are cut here after the fetch (the API filters on system, date, status and one book).
+  const keep = (p: Bet) => matchesTier(beezyscore(p), f.tier) && matchesBook(p.book, { book: undefined, books: f.books })
+    && matchesQuery(`${p.player ?? ''} ${p.away_team ?? ''} ${p.home_team ?? ''}`, f.q)
   const load = (d: string) => getPicks({ system: market, date: d, status, book, limit: 200 })
-    .then(rows => rows.filter(p => betKind(p) === kind))
+    .then(rows => rows.filter(p => betKind(p) === kind && keep(p)))
     .catch(() => [] as Bet[])
 
   let picks = await load(date)
@@ -79,21 +82,21 @@ async function PicksContent({ kind, searchParams }: { kind: PickKind; searchPara
         </div>
       )}
       {/* keyed on the query so the table's local sort/page state resets whenever a filter changes */}
-      {limited.rows.length > 0 && <PicksTable key={[date, market, status, book, sort, dir].join('|')} bets={limited.rows} sort={sort} dir={dir} />}
+      {limited.rows.length > 0 && <PicksTable key={[date, market, status, book, f.books.join(','), f.tier, f.q, sort, dir].join('|')} bets={limited.rows} sort={sort} dir={dir} />}
       <LockedNotice locked={limited.locked} shown={limited.rows.length} what={COPY[kind].what} plan={COPY[kind].plan} />
     </>
   )
 }
 
 /** MLB's tracked card, split by what is being picked: a player's stat (`player`) or a game outcome (`game`). */
-export async function PicksCard({ kind, searchParams }: { kind: PickKind; searchParams: Promise<Record<string, string>> }) {
+export async function PicksCard({ sport = 'mlb', kind, searchParams }: { sport?: SportSlug; kind: PickKind; searchParams: Promise<Record<string, string>> }) {
   const copy = COPY[kind]
   const stats = await apiGetStats().then(r => r.bySystem).catch(() => [])
   return (
     <div>
-      {kind === 'player' && <MlbTabs active="picks" />}
+      {kind === 'player' && <SportTabs sport={sport} active="picks" />}
       <DateBar />
-      <FilterBar kind={kind} />
+      <FilterBar sport={sport} kind={kind} />
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' }}>
         <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{copy.h1}</h1>
@@ -111,7 +114,7 @@ export async function PicksCard({ kind, searchParams }: { kind: PickKind; search
           <PicksContent kind={kind} searchParams={searchParams} />
         </Suspense>
         <ScoreLegend />
-        <SystemsFooter kind={kind} stats={stats} />
+        <SystemsFooter sport={sport} kind={kind === 'game' ? 'game' : undefined} stats={stats} />
       </div>
     </div>
   )

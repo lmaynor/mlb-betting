@@ -199,9 +199,9 @@ describe('sport registry and tokens', () => {
       for (const m of p.markets) expect(m.status).not.toMatch(/soon|preview|planned/i)
     }
     expect(SPORT_PILLARS.mlb.seasonBadge).toBe('10 MODELS + +EV SCANNER')
-    expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['rec_yds', 'rush_yds', 'pass_yds', 'receptions', 'pass_tds', 'anytime_td'])
-    expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'points', 'assists', 'saves'])
-    expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['pts', 'reb', 'ast', 'threes', 'pra'])
+    expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['pass_yds', 'pass_tds', 'pass_completions', 'pass_attempts', 'interceptions', 'rush_yds', 'rush_attempts', 'rec_yds', 'receptions', 'anytime_td'])
+    expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'assists', 'points', 'pp_points', 'saves', 'blocked_shots'])
+    expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['points', 'rebounds', 'assists', 'threes', 'pra', 'pr', 'pa', 'ra', 'steals', 'blocks'])
   })
   test('BOOK_META marks exchanges and bookDisplay falls back for unknown books', () => {
     expect(BOOK_META.kalshi.isExchange).toBe(true)

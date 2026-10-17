@@ -315,7 +315,7 @@ function BetCard({ bet }: { bet: Bet }) {
   )
 }
 
-type SortKey = 'date' | 'score' | 'edge' | 'odds'
+type SortKey = 'date' | 'score' | 'edge' | 'odds' | 'prob'
 
 function sortBets(bets: Bet[], sort: SortKey, dir: 'asc' | 'desc'): Bet[] {
   const mul = dir === 'asc' ? 1 : -1
@@ -323,6 +323,7 @@ function sortBets(bets: Bet[], sort: SortKey, dir: 'asc' | 'desc'): Bet[] {
     if (sort === 'score') return mul * (beezyscore(a) - beezyscore(b))
     if (sort === 'edge') return mul * ((a.edge ?? -1) - (b.edge ?? -1))
     if (sort === 'odds') return mul * (a.odds - b.odds)
+    if (sort === 'prob') return mul * ((a.model_prob ?? -1) - (b.model_prob ?? -1))
     const d = a.game_date.localeCompare(b.game_date)
     return mul * (d !== 0 ? d : a.id - b.id)
   })

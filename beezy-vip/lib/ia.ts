@@ -8,8 +8,8 @@
  *   Tools    calculators and dashboards       /tools/*
  *   Home     proof, nothing else
  *
- * Sport ribbon (under the nav): ALL SPORTS = /picks, MLB = /picks/mlb (its own section: card + systems), NFL / NHL / NBA =
- * /sports/[sport] (one shared template: projection board, market prices, methodology). /sports/mlb redirects to /picks/mlb.
+ * Sport ribbon (under the nav): ALL SPORTS = /picks, then one item per LIVE pillar in lib/sports.ts, each at /picks/[sport]:
+ * the same page hierarchy for every sport (picks board, /projections, /[system]). /sports/[sport] redirects to /picks/[sport].
  */
 import type { SportSlug } from '@/lib/sports'
 
@@ -73,10 +73,9 @@ export function tabActive(pathname: string, tabParam: string | null, tab: Sectio
   return under(pathname, path)
 }
 
-/** Sport ribbon target: ALL SPORTS is the cross-sport Top 10, MLB is its own section, the rest share the /sports template. */
+/** Sport ribbon target: ALL SPORTS is the cross-sport Top 10; every sport is /picks/[sport]. */
 export function sportHref(slug: SportSlug | 'all'): string {
-  if (slug === 'all') return '/picks'
-  return slug === 'mlb' ? '/picks/mlb' : `/sports/${slug}`
+  return slug === 'all' ? '/picks' : `/picks/${slug}`
 }
 
 /** Which ribbon item is current. Pages outside the Picks family (home, /ev, /results) light none. */

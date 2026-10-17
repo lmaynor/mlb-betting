@@ -3,9 +3,10 @@
  * cut are testable without Clerk or the network; the server page calls it and hands the result to the client component.
  */
 import { limitRows, type Viewer } from '@/lib/access'
+import type { ProjectionSport } from '@/lib/sports'
 import type { EvBookOutlierRow, EvFeed, SportProjections } from '@/lib/types'
 
-export type HubSport = 'nfl' | 'nhl' | 'nba'
+export type HubSport = ProjectionSport
 
 export interface HubData {
   projections: SportProjections | null
