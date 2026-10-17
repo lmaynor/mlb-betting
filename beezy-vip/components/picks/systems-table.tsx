@@ -21,11 +21,12 @@ function specFor(sport: SportSlug, s: PickSystem): PropModelSpec | null {
 }
 
 /**
- * The systems behind a sport page, as its footer: the same table for every sport, one row per registered system
+ * The systems of a sport, on its SYSTEMS tab: the same table for every sport, one row per registered system
  * (lib/pick-systems.ts), each linking to /picks/[sport]/[system]. Tracked sports (MLB) show the settled record; projection
  * sports show the out-of-sample accuracy their studies produced. `kind` narrows to player or game systems (MLB's two cards).
  */
-export function SystemsFooter({ sport, kind, stats = [], today = {} }: { sport: SportSlug; kind?: PickKind; stats?: SystemStats[]; today?: Record<string, SystemToday> }) {
+export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2' }: { sport: SportSlug; kind?: PickKind; stats?: SystemStats[]; today?: Record<string, SystemToday>; level?: 'h1' | 'h2' }) {
+  const Heading = level
   const pillar = SPORT_PILLARS[sport]
   const tracked = pillar.board === 'tracked'
   const status = new Map(pillar.markets.map(m => [m.system ?? m.key, m.status]))
@@ -35,9 +36,9 @@ export function SystemsFooter({ sport, kind, stats = [], today = {} }: { sport: 
   const heading = kind ? (kind === 'player' ? 'Player systems' : 'Game systems') : `${pillar.shortName} systems`
 
   return (
-    <section id="systems" aria-labelledby="systems-h" style={{ marginTop: '36px' }}>
+    <section aria-labelledby="systems-h">
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <h2 id="systems-h" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{heading}</h2>
+        <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{heading}</Heading>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>

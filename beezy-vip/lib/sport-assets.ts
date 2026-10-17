@@ -101,3 +101,28 @@ export function headshotUrlById(sport: HeadshotSport, id: number | string | null
 export function playerSlug(name: string | null | undefined): string {
   return fold(name).replace(/ /g, '_').replace(/[^a-z0-9_]/g, '')
 }
+
+// ---- team logos for the games strip and tables, every sport ------------------------------------------------------
+export type LogoSport = AssetSport | 'mlb' | 'nfl'
+
+/** ESPN's NFL logo slugs differ from the ev/ team codes in a few places (JAC -> jax, WAS -> wsh); everything else is the lowercased code. */
+const ESPN_NFL_SLUG: Record<string, string> = { JAC: 'jax', JAX: 'jax', WAS: 'wsh', WSH: 'wsh', LA: 'lar' }
+const NFL_CODES = new Set(('ARI ATL BAL BUF CAR CHI CIN CLE DAL DEN DET GB HOU IND JAC KC LAC LAR LV MIA MIN NE NO NYG NYJ PHI PIT '
+  + 'SEA SF TB TEN WAS JAX WSH LA').split(' '))
+/** The MLB logos shipped in public/logos/{abbr}.png (the same set lib/tokens.ts TEAM_ABBREV derives). */
+const MLB_LOGOS = new Set(('ari atl bal bos chc cin cle col cws det hou kc laa lad mia mil min nym nyy oak phi pit sd sea sf stl tb tex '
+  + 'tor wsh').split(' '))
+
+/** Logo URL for a team code in any sport: local files for MLB / NHL / NBA, ESPN's CDN (64px, transparent) for the NFL, or null. */
+export function anyTeamLogoUrl(sport: LogoSport, team: string | null | undefined): string | null {
+  const code = (team ?? '').trim().toUpperCase()
+  if (!code) return null
+  if (sport === 'nhl' || sport === 'nba') return teamLogoUrl(sport, code)
+  if (sport === 'mlb') {
+    const slug = code === 'WAS' ? 'wsh' : code === 'CHW' ? 'cws' : code === 'ATH' ? 'oak' : code.toLowerCase()
+    return MLB_LOGOS.has(slug) ? `/logos/${slug}.png` : null
+  }
+  if (!NFL_CODES.has(code)) return null
+  const slug = ESPN_NFL_SLUG[code] ?? code.toLowerCase()
+  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/${slug}.png&w=64&h=64`
+}

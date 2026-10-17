@@ -19,6 +19,8 @@ export const PROJECTION_MARKETS: Record<string, { label: string; unit: string }>
 export interface MlbProjectionRow {
   key: string
   id: number
+  /** 'mlb:{game_pk}': what the games strip filters on */
+  gameKey: string
   system: string
   marketLabel: string
   player: string
@@ -54,6 +56,7 @@ export function toProjectionRow(bet: Bet): MlbProjectionRow | null {
   return {
     key: `${bet.system}|${bet.game_pk}|${bet.player}`,
     id: bet.id,
+    gameKey: `mlb:${bet.game_pk}`,
     system: bet.system,
     marketLabel: market.label,
     player: bet.player,

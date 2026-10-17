@@ -2081,7 +2081,7 @@ Satori OG routes -- use literal hex there.
   string, parsed by `lib/picks-filters.ts`; `sport='all'` is /picks). `board: 'tracked'` (MLB) renders the settled-bets card;
   `board: 'projection'` renders projection rows + market prices (`lib/sport-board-data.ts` loads either, with the access cut applied
   server-side). `/sports/:sport` is a 308 to `/picks/:sport`. The retired `app/sports/[sport]` hub, `MlbTabs` and
-  `MlbProjectionsBoard` are gone. **Systems are a footer, not a tab**: `SystemsFooter` lists every registered system of the sport
+  `MlbProjectionsBoard` are gone. **Systems are their own tab (changed 2026-10-17; it was a footer)**: `SystemsTable` on `/picks/[sport]/systems` lists every registered system of the sport
   (MLB: 10 listed; shelved F3/F7/1I/F1H/BATTER_K keep their URL but are not listed unless they have bets); `kind` narrows MLB to
   player or game (/picks/games). Tracked sports show bets / hit % / ROI, projection sports show the study MAE / Brier / blend c or `--`. **Daily Card** (/cheat-sheet) is the shareable Top 10 player picks (same loader as /picks,
   `lib/top-picks-data.ts`) with a Players | Games toggle (games follow the game-picks access policy) and per-sport chips; the public
@@ -2289,10 +2289,16 @@ Nav: "Cheat Sheet" link added to `beezy-vip/components/layout/nav.tsx`.
 
 ### Picks-page wiring (2026-10-17, PR `fix/picks-wiring`)
 
-- **Day strip** (`components/picks/day-scroller.tsx`, `lib/board-days.ts`): NFL / NHL / NBA pages get the counterpart of MLB's DateBar --
-  ALL DAYS + one chip per game day on the board (site clock = Central), `?date=YYYY-MM-DD|all`, default = first game day. It lists days
-  from the whole feed, so a day with no priced pick yet is still openable. Feed horizon (`ev/daily_projections.py` `HORIZON_HOURS`): NFL
-  7 days, NHL / NBA 48 h (was a flat 36 h).
+- **One shell for every sport (2026-10-17, PR `feat/picks-ia`)**: MLB, NFL, NHL and NBA render the SAME page: tabs `PICKS & +EV | PROJECTIONS | SYSTEMS`
+  (`SportTabs`), then one control stack -- `DayToggle` (TODAY | YESTERDAY, `?day=`; nothing older, that is Results / Picks history), `GamesStrip` (every game of
+  the day as a card with both logos and the start time, `?game=`, counts include games with no rows) and ONE `FilterBar` (search, market, show, book, sort; for
+  settled MLB also result) -- then `SportProjectionsBoard`, a purely presentational table (no controls of its own; a column nothing fills is left out).
+  `components/picks/sport-board-page.tsx` is the page; `lib/sport-board-data.ts` `loadSportBoard(sport, viewer, {day, view, kind})` loads either source into
+  `BoardRow`s (`lib/board-rows.ts`): MLB bets via `lib/mlb-board.ts` `fromBets`, the others via `fromSportProjections`; `applyPickFilters` is the ONE filter.
+  Yesterday = the settled MLB card, or the projection sports' archived board (`/api/public/projections?date=`). There is no TIME sort. Search matches the
+  player's OWN team by abbreviation, city or nickname (`lib/team-directory.ts`); MLB bets carry no team, so MLB falls back to both teams of the game.
+- **Systems are tabs, not a footer**: `/picks/[sport]/systems` is the index (`SystemsTable`: record or live accuracy + today's rows) and every system's page
+  (`SystemPage`, same shell narrowed to the market + prices + methodology) carries `SystemStrip`, a tab per system. No `#systems` anchors remain.
 - **Stale lines are carried, not hidden**: the NHL / NBA odds bankers run twice a day (17:30 / 22:30 UTC), so every banked line was older
   than `MAX_AGE_MIN` (240) for ~15 h a day and the boards were empty of prices. Lines up to `CARRY_MAX_AGE_MIN` (1200 min) are now shown with
   payload `lines_stale: true` and `lines_age_minutes`; the page prints "Lines are N h old ... check the price at the book". The +EV pagers

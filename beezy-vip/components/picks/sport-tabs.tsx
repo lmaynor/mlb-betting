@@ -6,8 +6,8 @@ export type SportView = 'picks' | 'projections' | 'systems'
 
 /**
  * The one header strip every sport page shares (MLB, NFL, NHL, NBA, and any sport added to lib/sports.ts): the sport and
- * how many systems it lists on the left, PICKS & +EV / PROJECTIONS / SYSTEMS on the right. `active` is null on a system
- * page, which is a destination of its own rather than one of the three views.
+ * how many systems it lists on the left, PICKS & +EV / PROJECTIONS / SYSTEMS on the right. A system's own page is part of
+ * SYSTEMS (it carries the strip of every system), so it passes active='systems'.
  */
 export function SportTabs({ sport, active }: { sport: SportSlug; active: SportView | null }) {
   const pillar = SPORT_PILLARS[sport]
@@ -15,7 +15,7 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   const tabs: { id: SportView; label: string; href: string }[] = [
     { id: 'picks', label: 'PICKS & +EV', href: `/picks/${sport}` },
     { id: 'projections', label: 'PROJECTIONS', href: `/picks/${sport}/projections` },
-    { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}#systems` },
+    { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (
     <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid #1e2230', background: '#090a0f' }}>
