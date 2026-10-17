@@ -1,218 +1,104 @@
 import type { Metadata } from 'next'
+import { ContactLine, LegalPage } from '@/components/legal/legal-page'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export const metadata: Metadata = { title: 'Privacy Policy' }
 
 export default function PrivacyPage() {
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 20px' }}>
+    <LegalPage title="Privacy Policy">
+      <h2>1. Who this covers</h2>
+      <p>
+        This policy describes what personal information beezy.fyi collects and how it is used. beezy.fyi is operated by an
+        independent individual creator and sole proprietor, who is the responsible party for this information.
+      </p>
 
-      {/* Legal review banner */}
-      <div style={{
-        background: '#1c1207',
-        color: '#f59e0b',
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        letterSpacing: '0.1em',
-        padding: '10px 14px',
-        marginBottom: '28px',
-        borderRadius: '4px',
-      }}>
-        ⚠ THIS DOCUMENT IS CURRENTLY IN LEGAL REVIEW AND MAY BE REVISED. USE IS PROVISIONAL.
-      </div>
+      <h2>2. What we collect</h2>
+      <ul>
+        <li>
+          <strong>Authentication (Clerk):</strong> your email address, name or username, and OAuth identifiers. Sign-in,
+          sessions, and password handling are managed by Clerk. We never see your password.
+        </li>
+        <li>
+          <strong>Billing (Stripe):</strong> subscription status, Stripe Customer ID, and plan metadata. beezy.fyi never
+          receives or stores raw card numbers; Stripe handles payment details under its own privacy policy.
+        </li>
+        <li>
+          <strong>Discord role sync (beezy-bot):</strong> an optional Discord User ID, stored only if you link your account
+          from <a href="/dashboard/settings">account settings</a> or the <code>/link</code> command, so subscriber roles can
+          be assigned.
+        </li>
+        <li>
+          <strong>Bankroll:</strong> a bankroll figure you enter is kept in your browser&apos;s local storage. If you save it
+          from account settings, it is also stored in your Clerk profile metadata.
+        </li>
+        <li>
+          <strong>Browser local storage:</strong> your selected sportsbooks (<code>beezy_my_books</code>) and any bet slip
+          you build stay in your browser and are not sent to us.
+        </li>
+        <li>
+          <strong>Request data:</strong> our host (Vercel) receives your IP address and request headers. Region headers
+          derived from your IP are read at request time to apply availability rules; we do not store them against your
+          account.
+        </li>
+        <li>
+          <strong>Support messages:</strong> anything you include when you email or message us.
+        </li>
+      </ul>
+      <p>
+        We do not collect Social Security or government ID numbers, biometric identifiers, or precise geolocation. We do
+        not sell your personal information.
+      </p>
 
-      <div style={{ marginBottom: '8px' }}>
-        <span style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: '#6b7280',
-          background: '#f3f4f6',
-          padding: '3px 10px',
-          borderRadius: '99px',
-        }}>LEGAL</span>
-      </div>
+      <h2>3. How we use it</h2>
+      <ul>
+        <li>To provide and secure the Service, including gating paid content and syncing Discord roles.</li>
+        <li>To process subscriptions and send receipts and renewal notices.</li>
+        <li>To answer support requests and send service announcements.</li>
+        <li>To prevent fraud and abuse and to comply with the law.</li>
+      </ul>
 
-      <h1 style={{ fontSize: '28px', fontWeight: 800, marginBottom: '6px' }}>Privacy Policy</h1>
-      <p style={{ color: '#6b7280', fontSize: '13px', marginBottom: '36px' }}>Last updated: 2026-05-21</p>
+      <h2>4. Service providers</h2>
+      <p>
+        We share data only with the providers needed to run the Service: Clerk (authentication), Stripe (billing), Vercel
+        (hosting), Discord (role sync, if you link), and our cloud infrastructure. We may also disclose information if
+        required by law or to protect the Service and its users.
+      </p>
 
-      <div className="article-body">
+      <h2>5. Cookies</h2>
+      <p>
+        We use cookies that are necessary for sign-in sessions. You can block cookies in your browser, but signing in may
+        stop working.
+      </p>
 
-        <h2>1. Scope and Controller Identity</h2>
-        <p>
-          This Privacy Policy describes how <strong>[Operator Name]</strong> ("we," "us," or "our"),
-          the operator of Beezy.FYI, collects, uses, and discloses personal information when you
-          use the Service. For purposes of applicable privacy law, <strong>[Operator Name]</strong>
-          is the data controller.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Confirm whether Illinois BIPA (740 ILCS 14/) or the Illinois
-              Personal Information Protection Act (815 ILCS 530/) impose additional obligations
-              beyond what is stated here. BIPA is triggered by biometric identifiers — confirm
-              the Service collects none. */}
-        </p>
+      <h2>6. Retention</h2>
+      <p>
+        We keep account and billing records while your account is active and for a reasonable period afterwards for tax,
+        fraud-prevention, and dispute purposes. Locally stored data stays in your browser until you clear it.
+      </p>
 
-        <h2>2. Information We Collect</h2>
+      <h2>7. Deleting your data</h2>
+      <p>
+        You can delete your account from your Clerk account settings (the profile menu in the site header). You can also
+        ask us to remove your data, including a linked Discord ID, by emailing{' '}
+        <a href={`mailto:${SITE_CONFIG.supportEmail}`}>{SITE_CONFIG.supportEmail}</a>. Billing records we are required to
+        keep may be retained.
+      </p>
 
-        <h3>2a. Information You Provide</h3>
-        <ul>
-          <li><strong>Account registration:</strong> email address, username, password (hashed).</li>
-          <li><strong>Payment:</strong> billing name, billing address. We do <em>not</em> store
-            full payment card numbers — all payment data is handled directly by Stripe, Inc.
-            under Stripe's own privacy policy and PCI DSS compliance program.</li>
-          <li><strong>Support communications:</strong> any information you include in emails or
-            support requests.</li>
-        </ul>
+      <h2>8. Security</h2>
+      <p>
+        Traffic is encrypted in transit and access to account data is restricted. No system is completely secure, so we
+        cannot guarantee absolute security.
+      </p>
 
-        <h3>2b. Information Collected Automatically</h3>
-        <ul>
-          <li><strong>Usage data:</strong> pages visited, features used, timestamps, referring URL.</li>
-          <li><strong>Device and browser data:</strong> IP address, browser type, operating system,
-            device identifiers.</li>
-          <li><strong>Cookies and similar technologies:</strong> session cookies required for
-            authentication; analytics cookies (see Section 5).</li>
-        </ul>
+      <h2>9. Children</h2>
+      <p>The Service is not directed at anyone under 18, and we do not knowingly collect their information.</p>
 
-        <h3>2c. Information We Do Not Collect</h3>
-        <p>
-          We do not collect Social Security numbers, government-issued ID numbers, biometric
-          identifiers, precise geolocation, or health information.
-        </p>
+      <h2>10. Changes</h2>
+      <p>We may update this policy and will change the &quot;Last updated&quot; date above when we do.</p>
 
-        <h2>3. How We Use Personal Information</h2>
-        <p>We use personal information to:</p>
-        <ul>
-          <li>Provide, maintain, and improve the Service.</li>
-          <li>Process payments and subscriptions.</li>
-          <li>Send transactional communications (account confirmations, receipts, renewal notices).</li>
-          <li>Send service-related announcements (e.g., material changes to Terms or pricing).</li>
-          <li>Enforce geographic restrictions required by applicable law.</li>
-          <li>Detect and prevent fraud, abuse, and security incidents.</li>
-          <li>Comply with legal obligations.</li>
-        </ul>
-        <p>
-          {/* {LAWYER_REVIEW} — If you intend to send marketing emails, confirm CAN-SPAM Act
-              (15 U.S.C. § 7701) compliance: clear identification, opt-out mechanism, physical
-              postal address required. Illinois does not impose separate email marketing law
-              beyond federal CAN-SPAM as of this writing. */}
-          We will not sell your personal information to third parties.
-        </p>
-
-        <h2>4. Legal Basis for Processing</h2>
-        <p>
-          {/* {LAWYER_REVIEW} — Full GDPR/CCPA analysis required if EU or California residents
-              are accepted as subscribers. As of this draft the Service targets U.S. users but
-              this section should be completed before any international marketing. */}
-          We process personal information on the following bases: (a) performance of a contract
-          (your subscription agreement with us); (b) compliance with legal obligations; and
-          (c) our legitimate interests in operating and improving the Service, where those
-          interests are not overridden by your rights.
-        </p>
-
-        <h2>5. Cookies</h2>
-        <p>
-          We use strictly necessary session cookies to authenticate logged-in users. We may
-          use analytics cookies (e.g., Vercel Analytics, Google Analytics) to understand
-          aggregate usage patterns. Analytics cookies are not required for the Service to
-          function. You may disable cookies in your browser settings; doing so may impair
-          authentication functionality.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — Verify whether a cookie consent banner is required under
-              applicable law for your user base. Illinois does not currently have a comprehensive
-              consumer privacy statute imposing cookie consent requirements, but this may change. */}
-        </p>
-
-        <h2>6. Disclosure of Personal Information</h2>
-        <p>We share personal information only in the following circumstances:</p>
-        <ul>
-          <li><strong>Service providers:</strong> Stripe (payment processing), Vercel (hosting
-            and analytics), Clerk (authentication — if enabled), and similar vendors who
-            process data on our behalf under written data processing agreements.</li>
-          <li><strong>Legal process:</strong> in response to a valid subpoena, court order,
-            or other legal demand, or to protect the rights, property, or safety of
-            [Operator Name], our users, or the public.</li>
-          <li><strong>Business transfers:</strong> in connection with a merger, acquisition,
-            or sale of all or substantially all of our assets, provided the successor agrees
-            to honor this Privacy Policy.</li>
-          <li><strong>With your consent.</strong></li>
-        </ul>
-
-        <h2>7. Data Retention</h2>
-        <p>
-          We retain account data for as long as your subscription is active and for a reasonable
-          period thereafter for legal, tax, and dispute-resolution purposes (generally no more
-          than 3 years post-cancellation, unless a longer period is required by law). Aggregate,
-          de-identified analytics data may be retained indefinitely.
-        </p>
-
-        <h2>8. Security</h2>
-        <p>
-          We implement industry-standard technical and organizational measures to protect
-          personal information, including TLS encryption in transit, hashed password storage,
-          and access controls. No system is completely secure; we cannot guarantee absolute
-          security of your information.
-        </p>
-
-        <h2>9. Children</h2>
-        <p>
-          The Service is not directed at children under 18. We do not knowingly collect
-          personal information from anyone under 18. If we learn we have collected such
-          information, we will delete it promptly.
-        </p>
-
-        <h2>10. Your Rights (Illinois and U.S. Federal)</h2>
-        <p>
-          Under the Illinois Personal Information Protection Act (815 ILCS 530/) and applicable
-          federal law, you have the right to:
-        </p>
-        <ul>
-          <li>Request access to personal information we hold about you.</li>
-          <li>Request correction of inaccurate personal information.</li>
-          <li>Request deletion of your account and associated personal information, subject to
-            legal retention obligations.</li>
-          <li>Opt out of marketing communications at any time via the unsubscribe link in any
-            marketing email or by contacting us directly.</li>
-        </ul>
-        <p>
-          To exercise any of these rights, contact us at <strong>[legal@beezy.fyi]</strong>.
-          We will respond within a reasonable timeframe consistent with applicable law.
-        </p>
-        <p>
-          {/* {LAWYER_REVIEW} — If California residents subscribe, a CCPA/CPRA "Notice at
-              Collection," "Do Not Sell or Share My Personal Information" link, and a separate
-              California Privacy Notice are required. Add before accepting California subscribers. */}
-        </p>
-
-        <h2>11. Data Breach Notification</h2>
-        <p>
-          In the event of a security breach affecting your personal information, we will
-          notify affected users in accordance with the Illinois Personal Information Protection
-          Act (815 ILCS 530/10), which requires notification in the most expedient time possible
-          and without unreasonable delay.
-        </p>
-
-        <h2>12. Third-Party Links</h2>
-        <p>
-          The Service may contain links to third-party websites. We are not responsible for the
-          privacy practices of those sites and encourage you to review their privacy policies.
-        </p>
-
-        <h2>13. Changes to This Policy</h2>
-        <p>
-          We may update this Privacy Policy from time to time. We will notify you of material
-          changes via email or prominent notice on the Service at least 14 days before the
-          changes take effect.
-        </p>
-
-        <h2>14. Contact</h2>
-        <p>
-          {/* {LAWYER_REVIEW} — A physical mailing address is required under CAN-SPAM and
-              is best practice for any privacy policy. Add before launch. */}
-          Privacy inquiries: <strong>[legal@beezy.fyi]</strong>
-        </p>
-
-      </div>
-    </div>
-  );
+      <h2>11. Contact</h2>
+      <ContactLine />
+    </LegalPage>
+  )
 }

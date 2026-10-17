@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { OgBrandBadge } from "@/lib/og-brand";
 import { headshotUrlById } from "@/lib/sport-assets";
 export const runtime = "edge";
 
@@ -105,10 +106,7 @@ export async function GET() {
 
       {/* HEADER */}
       <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #1e2230", gap:"12px" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:"0px" }}>
-          <span style={{ fontSize:"52px", fontWeight:900, color:"#ffffff", letterSpacing:"-3px" }}>BEEZY</span>
-          <span style={{ fontSize:"52px", fontWeight:900, color:"#57f287", letterSpacing:"-3px" }}>.FYI</span>
-        </div>
+        <OgBrandBadge size={72} />
         <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
           <div style={{ display:"flex", background:"#15241e", border:"1px solid #2f553b", borderRadius:"999px", padding:"5px 14px" }}>
             <span style={{ fontSize:"12px", color:"#57f287", letterSpacing:"3px", fontWeight:800 }}>PLAYER PROPS</span>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { DISCORD_URL } from '@/lib/links'
+import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
 import { LEAGUES, type League } from '@/lib/tiers'
 
@@ -85,7 +86,7 @@ export function PricingSection() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Pricing</h1>
         <span style={{ fontSize: '12.5px', color: 'var(--fog)' }}>
-          {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime. 7-day money-back guarantee.'}
+          {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime in 1 click.'}
         </span>
       </div>
 
@@ -142,8 +143,14 @@ export function PricingSection() {
         </div>
       </div>
 
-      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
-        {PRE_LAUNCH ? 'Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.' : 'Cancel anytime.'}
+      {PRE_LAUNCH && (
+        <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
+          Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.
+        </p>
+      )}
+      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '8px 0 0', lineHeight: 1.55 }}>
+        Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
+        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} style={{ color: 'var(--link)' }}>{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} style={{ color: 'var(--link)' }}>Discord</a>.
       </p>
     </section>
   )

@@ -5,6 +5,7 @@ import { tierLabel } from '@/lib/tiers'
 import { BankrollInput } from '@/components/ui/bankroll-input'
 import type { Metadata } from 'next'
 import { DISCORD_URL } from '@/lib/links'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export const metadata: Metadata = { title: 'Settings — Dashboard' }
 
@@ -39,7 +40,7 @@ export default async function DashboardSettingsPage() {
       <div className="border border-[var(--border)] p-5 mb-4">
         <p className="mono text-xs uppercase tracking-widest text-muted mb-4">Subscription</p>
         <p className="text-xs text-muted mb-4 leading-relaxed">
-          Manage billing, cancel, or change your plan via the Stripe customer portal.
+          Manage billing, cancel, or change your plan via the Stripe customer portal. Cancelling keeps access through the end of the paid period.
         </p>
         <a
           href="/api/stripe/portal"
@@ -47,6 +48,11 @@ export default async function DashboardSettingsPage() {
         >
           Manage Billing →
         </a>
+        <p className="text-xs text-muted mt-4 leading-relaxed">
+          Billing or Discord role-sync trouble? Email{' '}
+          <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-accent">{SITE_CONFIG.supportEmail}</a> or ask in the{' '}
+          <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="text-accent">Discord</a>.
+        </p>
       </div>
 
       {/* Bankroll setting */}
