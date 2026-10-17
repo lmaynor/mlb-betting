@@ -67,6 +67,11 @@ export const LAYOUT = [
         topic: `Zero-fee Novig & Kalshi order-book dislocations -> ${SITE}/ev`,
       },
       {
+        name: 'nfl-props-alerts',
+        visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nfl],
+        topic: `NFL props sweep: book prices beating the consensus. Shadow mode, unvalidated, not in the public results -> ${SITE}/edge`,
+      },
+      {
         name: 'daily-free-plays',
         visibleTo: [EVERYONE],
         topic: `2 free daily Watch/Confluence plays + public audit -> ${SITE}`,
@@ -107,7 +112,6 @@ export const LAYOUT = [
     readOnly: false,
     channels: [
       { name: 'ops-alerts', topic: 'Pipeline and job alerts (owner only)' },
-      { name: 'nfl-props-alerts', topic: 'NFL props sweep signals: shadow mode, unvalidated (owner only; widen visibleTo to share)' },
       { name: 'tweet-queue', topic: 'Draft tweets awaiting review (owner only)' },
       { name: 'deploys', topic: 'Deploy notices (owner only)' },
     ],

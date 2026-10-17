@@ -26,11 +26,11 @@ test('six roles with the specified colors', () => {
 test('categories and channels match the specified layout', () => {
   assert.deepEqual(setup.LAYOUT.map((c) => [c.name, c.channels.map((ch) => ch.name)]), [
     ['START HERE', ['welcome', 'announcements', 'link-account']],
-    ['LIVE +EV & EXCHANGE ALERTS', ['ev-sportsbooks', 'ev-exchanges', 'daily-free-plays']],
+    ['LIVE +EV & EXCHANGE ALERTS', ['ev-sportsbooks', 'ev-exchanges', 'nfl-props-alerts', 'daily-free-plays']],
     ['DAILY MODEL CARDS', ['mlb-card', 'nfl-card', 'nba-card', 'nhl-card']],
     ['PUBLIC LEDGER & RECAPS', ['daily-recap']],
     ['SHARP COMMUNITY', ['general-sweat', 'betting-theory']],
-    ['OPS & TWEET QUEUE', ['ops-alerts', 'nfl-props-alerts', 'tweet-queue', 'deploys']],
+    ['OPS & TWEET QUEUE', ['ops-alerts', 'tweet-queue', 'deploys']],
   ]);
 });
 
@@ -61,8 +61,8 @@ test('visibility matrix: +EV channels are All-Access Pro only, free plays are pu
   assert.deepEqual(access('daily-free-plays'), { view: true, send: false });
 });
 
-test('visibility matrix: each model card is All-Access Pro + that sport pass only', () => {
-  const passes = { 'mlb-card': 'MLB Pass', 'nfl-card': 'NFL Pass', 'nba-card': 'NBA Pass', 'nhl-card': 'NHL Pass' };
+test('visibility matrix: each model card (and the NFL props alerts) is All-Access Pro + that sport pass only', () => {
+  const passes = { 'mlb-card': 'MLB Pass', 'nfl-card': 'NFL Pass', 'nba-card': 'NBA Pass', 'nhl-card': 'NHL Pass', 'nfl-props-alerts': 'NFL Pass' };
   for (const [channel, pass] of Object.entries(passes)) {
     assert.equal(access(channel).view, false, `${channel} hidden from everyone`);
     assert.deepEqual(access(channel, ['All-Access Pro']), { view: true, send: false }, channel);
@@ -83,7 +83,7 @@ test('visibility matrix: recap is public read-only, community channels allow cha
 
 test('visibility matrix: OPS channels are hidden from @everyone and from every paid role', () => {
   const everyRole = setup.ROLE_SPECS.map((r) => r.name);
-  for (const n of ['ops-alerts', 'nfl-props-alerts', 'tweet-queue', 'deploys']) {
+  for (const n of ['ops-alerts', 'tweet-queue', 'deploys']) {
     assert.deepEqual(access(n), { view: false, send: false }, n);
     assert.equal(access(n, everyRole).view, false, n);
     const spec = setup.overwritesFor(find(n).category, find(n).channel);

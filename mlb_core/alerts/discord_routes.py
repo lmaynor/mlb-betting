@@ -17,9 +17,10 @@ falls back to a channel that belongs to a different audience (an +EV alert never
 
 `props_alerts` is the unvalidated NFL / NHL / NBA props sweeps (ev/sweep_nfl_props.py, ev/sweep_props_alerts.py). Each sport
 has its own channel (#nfl-props-alerts -> DISCORD_WEBHOOK_PROPS_NFL; the same pattern for NHL / NBA when they get one) and
-a shared admin fallback, DISCORD_WEBHOOK_ALERTS. Those rows must not land in a member channel (unvalidated) and must not
-land in #ops-alerts either (that channel is for failures; a signal feed buried the real pages there). With nothing in the
-chain set the sweep logs instead of posting.
+a shared admin fallback, DISCORD_WEBHOOK_ALERTS. The rows are unvalidated, so they never fall back into the +EV channels,
+a daily card or #ops-alerts (that channel is for failures; a signal feed buried the real pages there). #nfl-props-alerts is
+the one member-visible home, gated to All-Access Pro + NFL Pass (discord-bot/src/serverSetup.js). With nothing in the chain
+set the sweep logs instead of posting.
 
 Returns None when nothing in the chain is set (callers print instead of posting). Blank / whitespace-only
 values count as unset.
