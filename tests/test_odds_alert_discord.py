@@ -40,9 +40,10 @@ def test_post_freshness_alert_noop_without_webhook(monkeypatch):
     assert calls == []
 
 
-def test_post_scorecard_posts_to_performance_webhook(monkeypatch):
+def test_post_scorecard_posts_to_ops_webhook_even_if_performance_is_set(monkeypatch):
     calls = []
     monkeypatch.setenv("DISCORD_WEBHOOK_PERFORMANCE", "https://fake-perf-webhook")
+    monkeypatch.setattr("mlb_core.notify.discord._get_ops_webhook", lambda: "https://fake-ops-webhook")
     monkeypatch.setattr("mlb_core.notify.discord._post", lambda url, payload: calls.append((url, payload)))
 
     scorecard = pd.DataFrame(
@@ -53,23 +54,9 @@ def test_post_scorecard_posts_to_performance_webhook(monkeypatch):
 
     assert len(calls) == 1
     url, payload = calls[0]
-    assert url == "https://fake-perf-webhook"
+    assert url == "https://fake-ops-webhook"
     field_names = [f["name"] for f in payload["embeds"][0]["fields"]]
     assert "hr_yn" in field_names
-
-
-def test_post_scorecard_falls_back_to_ops_webhook(monkeypatch):
-    calls = []
-    monkeypatch.delenv("DISCORD_WEBHOOK_PERFORMANCE", raising=False)
-    monkeypatch.setattr("mlb_core.notify.discord._get_ops_webhook", lambda: "https://fake-ops-webhook")
-    monkeypatch.setattr("mlb_core.notify.discord._post", lambda url, payload: calls.append((url, payload)))
-
-    scorecard = pd.DataFrame(
-        {"alerts": [1], "entry_ev": [0.04], "ev_at_close": [-0.01], "held_up_pct": [0.0]},
-        index=pd.Index(["k_ou"], name="market"),
-    )
-    oa._post_scorecard(scorecard, "2026-08-17", n_new=1)
-    assert calls and calls[0][0] == "https://fake-ops-webhook"
 
 
 # ---------------------------------------------------------------------------

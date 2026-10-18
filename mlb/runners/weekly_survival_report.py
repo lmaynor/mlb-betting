@@ -29,9 +29,8 @@ MIN_EV = float(os.environ.get("SURVIVAL_MIN_EV", "0.02"))
 
 
 def _perf_webhook() -> str | None:
-    return (os.getenv("DISCORD_WEBHOOK_PERFORMANCE")
-            or os.getenv("DISCORD_WEBHOOK_OPS")
-            or os.getenv("DISCORD_WEBHOOK_URL"))
+    # Ops only: never fall back to DISCORD_WEBHOOK_URL (a member card channel).
+    return os.getenv("DISCORD_WEBHOOK_OPS")
 
 
 def _post_report(title: str, body: str) -> None:

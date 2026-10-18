@@ -35,7 +35,7 @@ gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 \
 
 JOB_FLAGS=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
-  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_PERFORMANCE=discord-webhook-performance:latest"
+  --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest"
   --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
   --command="python3" --args="-m,mlb.runners.weekly_survival_report"
   --memory=1Gi --cpu=1 --task-timeout=1800 --max-retries=1 --quiet
