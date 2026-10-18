@@ -19,10 +19,12 @@ export const MAX_POST_BODY_BYTES = 96 * 1024;
 export const POST_CHANNELS = {
   ev_sportsbooks: 'ev-sportsbooks',
   ev_exchanges: 'ev-exchanges',
-  mlb_card: 'mlb-card',
-  nfl_card: 'nfl-card',
-  nba_card: 'nba-card',
-  nhl_card: 'nhl-card',
+  // keys keep the old *_card names (the Python callers send them); the channels are now *-alerts
+  mlb_card: 'mlb-alerts',
+  nfl_card: 'nfl-alerts',
+  nba_card: 'nba-alerts',
+  nhl_card: 'nhl-alerts',
+  free_plays: 'daily-free-plays',
   daily_recap: 'daily-recap',
   ops_alerts: 'ops-alerts',
   tweet_queue: 'tweet-queue',
@@ -88,7 +90,11 @@ export async function postMessage(client, guildId, value) {
   if (!guild) return { status: 'no_guild' };
   const channels = await guild.channels.fetch();
   const name = POST_CHANNELS[value.channel];
-  const target = [...channels.values()].find((c) => c && c.name === name && typeof c.send === 'function');
+  // Until /setup-server has renamed #<sport>-card, fall back to the legacy name so a deploy-order gap drops nothing.
+  const legacy = name.endsWith('-alerts') ? name.replace(/-alerts$/, '-card') : null;
+  const sendable = (c) => c && typeof c.send === 'function';
+  const target = [...channels.values()].find((c) => sendable(c) && c.name === name)
+    ?? (legacy ? [...channels.values()].find((c) => sendable(c) && c.name === legacy) : undefined);
   if (!target) return { status: 'no_channel' };
   const sent = await target.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
   const out = { status: 'ok', id: sent?.id ?? null, thread: false, mentioned: 0 };

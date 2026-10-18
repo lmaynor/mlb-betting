@@ -42,6 +42,16 @@ SECRETS="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_OPS=discord-ops-we
 if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
   SECRETS="${SECRETS},DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest"
 fi
+# Member-channel delivery (#nhl-alerts / #nba-alerts, Beezy-Score-gated; mlb_core/alerts/sport_alerts.py). Each secret is
+# mounted only if it exists, so provisioning order does not matter: no secret = the sweep stays admin-only for that sport.
+BOT_ENV=""
+for pair in "DISCORD_WEBHOOK_CARD_NHL=discord-webhook-card-nhl" "DISCORD_WEBHOOK_CARD_NBA=discord-webhook-card-nba" \
+            "BEEZY_BOT_SECRET=beezy-bot-secret"; do
+  if gcloud secrets describe "${pair#*=}" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
+    SECRETS="${SECRETS},${pair}:latest"
+    [[ "$pair" == BEEZY_BOT_SECRET=* ]] && BOT_ENV=",BEEZY_BOT_URL=https://beezy-discord-bot-628109313129.us-central1.run.app"
+  fi
+done
 
 # job_name | module args (comma-separated for --args) | cron(UTC) | timeout(s)
 ROWS=(
@@ -54,7 +64,7 @@ ROWS=(
 for row in "${ROWS[@]}"; do
   IFS='|' read -r JOB ARGS CRON TMO <<<"$row"
   FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL" --set-secrets="$SECRETS"
-         --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}" --command="python" --args="$ARGS"
+         --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}${BOT_ENV}" --command="python" --args="$ARGS"
          --memory=1Gi --cpu=1 --task-timeout="$TMO" --max-retries=0 --quiet)
   if gcloud run jobs describe "$JOB" --region="$REGION" --quiet >/dev/null 2>&1; then
     gcloud run jobs update "$JOB" "${FLAGS[@]}"

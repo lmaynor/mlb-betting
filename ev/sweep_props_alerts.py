@@ -4,7 +4,8 @@ leave-self-out consensus of the OTHER real books at the same (player, stat, poin
 
 No Kalshi leg, no orders, no model. Evidence + admin-channel alerts only: the signals are UNVALIDATED (the only
 positive paper evidence behind this idea is MLB soft-book vs Pinnacle-anchored consensus, +7.56%, itself unverified
-for execution). Alerts go to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS -- NEVER a member channel.
+for execution). EVERY flagged row goes to the admin channel (DISCORD_WEBHOOK_ALERTS, else _OPS); only the Beezy-Score-gated
+subset (mlb_core.alerts.sport_alerts, labelled paper/unvalidated) goes to the member #<sport>-alerts channel.
 
 ZERO EXTRA ODDS CREDITS: this reads the newest props snapshot the odds banker already bought
 (nba/odds/accumulator.py -> OddsAccum/{sport}/raw/{date}/props_{HHMM}.json, pointer latest_props.json). Run it a few
@@ -205,6 +206,11 @@ def post_new(spec: PropSport, rows: list, day: str, discord: bool = True) -> int
     if not new or not discord:
         return 0
     sent = 0
+    # Member channel (#<sport>-alerts): the Beezy-Score-gated subset, labelled paper/unvalidated. Admin still gets all.
+    from mlb_core.alerts.sport_alerts import gate, post_sport_alerts
+    member = gate(new)
+    if member and post_sport_alerts(spec.sport, member):
+        notified.update(_key(r) for r in member)
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
         if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch)):

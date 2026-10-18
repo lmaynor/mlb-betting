@@ -17,8 +17,9 @@ Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
   EVSweep/nfl_props/latest.json                    rows (Kalshi join) + book_outliers (Sink A); public +EV feed
-Discord: DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin-only). NEVER the member channels:
-these signals are unvalidated.
+Discord: everything goes to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin). Only the Sink A book outliers that
+clear the Beezy Score floor also reach the member #nfl-alerts channel, labelled paper/unvalidated (sport_alerts.py); the
+Kalshi-join rows stay admin-only.
 """
 
 from __future__ import annotations
@@ -411,6 +412,11 @@ def post_new_sink_a(outliers: list, state: dict, day: str, cfg=None) -> int:
     if not new:
         return 0
     sent = 0
+    # Member channel (#nfl-alerts): Beezy-Score-gated subset, labelled paper/unvalidated. Admin still gets all.
+    from mlb_core.alerts.sport_alerts import gate, post_sport_alerts
+    member = gate(new)
+    if member and post_sport_alerts("nfl", member):
+        notified.update(_sink_a_key(r) for r in member)
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
         if post_discord(f"NFL props sweep (Sink A): {len(batch)} new book outlier(s)", alert_embed_sink_a(batch)):

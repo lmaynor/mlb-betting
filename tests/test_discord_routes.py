@@ -11,7 +11,7 @@ from mlb_core.alerts import discord_routes as dr
 ALL_VARS = [
     "DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_EV_EXCHANGES", "DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS",
     "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_TWEETS",
-    "DISCORD_WEBHOOK_CARD_MLB", "DISCORD_WEBHOOK_CARD_NFL", "DISCORD_WEBHOOK_CARD_NHL", "DISCORD_WEBHOOK_CARD_NBA",
+    "DISCORD_WEBHOOK_FREE_PLAYS", "DISCORD_WEBHOOK_CARD_MLB", "DISCORD_WEBHOOK_CARD_NFL", "DISCORD_WEBHOOK_CARD_NHL", "DISCORD_WEBHOOK_CARD_NBA",
 ]
 
 
@@ -22,7 +22,7 @@ def clean_env(monkeypatch):
 
 
 def test_nothing_set_returns_none():
-    for kind in ("ev_sportsbooks", "ev_exchanges", "recap", "tweets", "ops"):
+    for kind in ("ev_sportsbooks", "ev_exchanges", "recap", "tweets", "ops", "free_plays"):
         assert dr.webhook_for(kind) is None
     assert dr.webhook_for("card", sport="nfl") is None
 
@@ -33,6 +33,7 @@ def test_nothing_set_returns_none():
     ("recap", ["DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_URL"]),
     ("tweets", ["DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"]),
     ("ops", ["DISCORD_WEBHOOK_OPS"]),
+    ("free_plays", ["DISCORD_WEBHOOK_FREE_PLAYS"]),
 ])
 def test_chain_order(monkeypatch, kind, chain):
     # setting each link from the LAST to the first must always surface the earliest one set
@@ -299,3 +300,10 @@ def test_kalshi_alert_slip_lines():
     lines = ka._slip_lines(df, {7: "Pat One", 8: "Sam Two"})
     assert lines[0] == "Sam Two Under 6.5 Strikeouts @ FanDuel -105"
     assert lines[1] == "Pat One Over 5.5 Strikeouts @ DraftKings +110"
+
+
+def test_free_plays_never_falls_back_to_another_channel(monkeypatch):
+    for v in ("DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_CARD_MLB"):
+        monkeypatch.setenv(v, f"https://hook.test/{v}")
+    assert dr.webhook_for("free_plays") is None
+    assert dr.bot_channel_key("free_plays") == "free_plays"

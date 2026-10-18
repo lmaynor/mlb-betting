@@ -11,6 +11,7 @@ falls back to a channel that belongs to a different audience (an +EV alert never
     webhook_for("card", sport=..)  DISCORD_WEBHOOK_CARD_<SPORT> -> DISCORD_WEBHOOK_URL
     webhook_for("recap")           DISCORD_WEBHOOK_RECAP        -> (legacy _SUMMARY) -> DISCORD_WEBHOOK_URL
     webhook_for("tweets")          DISCORD_WEBHOOK_TWEETS       -> _OPS
+    webhook_for("free_plays")      DISCORD_WEBHOOK_FREE_PLAYS   (no fallback: a free post never lands in a paid channel)
     webhook_for("ops")             DISCORD_WEBHOOK_OPS
 
 Returns None when nothing in the chain is set (callers print instead of posting). Blank / whitespace-only
@@ -33,6 +34,7 @@ _CHAINS = {
     # mounted on the service) -- kept in the chain so the live recap does not silently move into #daily-picks.
     "recap": ("DISCORD_WEBHOOK_RECAP", "DISCORD_WEBHOOK_SUMMARY", "DISCORD_WEBHOOK_URL"),
     "tweets": ("DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"),
+    "free_plays": ("DISCORD_WEBHOOK_FREE_PLAYS",),
     "ops": ("DISCORD_WEBHOOK_OPS",),
 }
 KINDS = tuple(sorted(set(_CHAINS) | {"card"}))
@@ -123,7 +125,7 @@ def with_deep_links(embed: dict) -> dict:
 
 BOT_CHANNEL = {
     "ev_sportsbooks": "ev_sportsbooks", "ev_exchanges": "ev_exchanges", "recap": "daily_recap",
-    "tweets": "tweet_queue", "ops": "ops_alerts",
+    "free_plays": "free_plays", "tweets": "tweet_queue", "ops": "ops_alerts",
 }
 
 

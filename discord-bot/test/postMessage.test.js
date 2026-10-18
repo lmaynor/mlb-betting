@@ -80,8 +80,18 @@ test('404 when the channel is missing, 502 when Discord rejects the send', async
   assert.equal((await post({ channel: 'ev_exchanges', content: 'x' })).status, 502);
 });
 
+test('<sport>_card keys post to the renamed #<sport>-alerts, or the legacy #<sport>-card until /setup-server runs', async () => {
+  await new Promise((r) => server.close(r));
+  await start({ channels: ['nfl-alerts', 'nba-card'] });
+  assert.equal((await post({ channel: 'nfl_card', content: 'a' })).status, 200);
+  assert.equal(ctx.sent.at(-1).name, 'nfl-alerts');
+  assert.equal((await post({ channel: 'nba_card', content: 'b' })).status, 200);
+  assert.equal(ctx.sent.at(-1).name, 'nba-card');
+  assert.equal((await post({ channel: 'free_plays', content: 'c' })).status, 404, 'no #daily-free-plays in this guild');
+});
+
 test('every allowlisted key maps to a plain channel name', () => {
-  assert.equal(Object.keys(http.POST_CHANNELS).length, 9);
+  assert.equal(Object.keys(http.POST_CHANNELS).length, 10);
   for (const name of Object.values(http.POST_CHANNELS)) assert.match(name, /^[a-z0-9-]+$/);
 });
 
