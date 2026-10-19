@@ -11,8 +11,8 @@ export interface BoardDay {
   date: string
   /** 'SUN OCT 18' */
   label: string
-  /** board rows on that day */
-  count: number
+  /** board rows on that day (absent for a day whose rows are not loaded, such as MLB's) */
+  count?: number
 }
 
 type Dated = { game_key?: string | null; commence?: string | null }
@@ -42,6 +42,21 @@ export function upcomingDays(rows: Dated[], today: string, max = 7): BoardDay[] 
   }
   return [...counts.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, max).map(([date, count]) => ({ date, label: dayLabel(date), count }))
 }
+
+/**
+ * The days that have event records, soonest first (at most `max`), today included. This is the day strip: a chip exists only for a
+ * date with events, so NFL skips straight from Sunday to Monday to Thursday and a quiet today has no chip of its own.
+ */
+export function liveDays(rows: Dated[], today: string, max = 7): BoardDay[] {
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    const d = gameDayKey(r)
+    if (d && d >= today) counts.set(d, (counts.get(d) ?? 0) + 1)
+  }
+  return [...counts.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).slice(0, max).map(([date, count]) => ({ date, label: dayLabel(date), count }))
+}
+
+export const labelDay = dayLabel
 
 /**
  * The day the board shows: the requested upcoming day when it is valid (today or later), else today, and when nothing is

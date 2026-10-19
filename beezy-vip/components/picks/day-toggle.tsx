@@ -3,8 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import type { BoardDay } from '@/lib/board-days'
-import { formatDateKey } from '@/lib/dates'
-import type { PickDay } from '@/lib/picks-filters'
+import { addDaysToDateKey } from '@/lib/dates'
 
 const B = '1px solid var(--basalt)'
 const SEG: React.CSSProperties = {
@@ -14,51 +13,48 @@ const SEG: React.CSSProperties = {
 const ON: React.CSSProperties = { borderColor: 'var(--win-border)', background: 'var(--win-wash)', color: 'var(--signal)', fontWeight: 600 }
 
 /**
- * TODAY | YESTERDAY, the one day control on every picks page (MLB, NFL, NHL, NBA). Today is the live board; yesterday is the
- * settled MLB card or the archived board of the projection sports. Older days live on the Results ledger and Picks history.
- * Switching day clears the game filter, because the games differ.
+ * The one day control on every picks page (MLB, NFL, NHL, NBA): a chip per date that has event records, so it matches the events.
+ * YESTERDAY is the settled MLB card or the archived board of a projection sport (only when it has rows); the rest are the days from
+ * today on with games, TODAY first when it has any. NFL skips from Sunday to Monday to Thursday, and NBA reads YESTERDAY | TODAY.
+ * `selected` is the date of the rows on the page, which is what a chip highlights. Switching day clears the game filter.
  */
-export function DayToggle({ day, today, yesterday, upcoming = [], viewDate }: {
-  day: PickDay; today: string; yesterday: string
-  /** later game days that have rows (projection sports): one chip each after YESTERDAY */
-  upcoming?: BoardDay[]
-  /** the day the rows are from; differs from `today` when the board opened on the next day with games */
-  viewDate?: string
+export function DayToggle({ today, yesterday, days, selected, pinDates = true }: {
+  today: string
+  /** the archive chip, or null when there is nothing to open */
+  yesterday: BoardDay | null
+  /** game days from today on that have rows, soonest first */
+  days: BoardDay[]
+  /** the day the rows on the page are from */
+  selected: string
+  /** projection sports name the date in the URL, so a chip never lands on another day; MLB's board is today's, so it keeps a clean URL */
+  pinDates?: boolean
 }) {
   const pathname = usePathname()
   const sp = useSearchParams()
-  const hrefFor = (d: PickDay | string) => {
+  const hrefFor = (d: string, isYesterday: boolean) => {
     const p = new URLSearchParams(sp.toString())
     p.delete('game')
     p.delete('date')
-    // With later game days on the strip, TODAY names its own date. Without it the board opens on the next day with games when today
-    // has none, so clicking TODAY would silently show another day's events.
-    if (d === 'today') { p.delete('day'); if (upcoming.length > 0) p.set('date', today) }
-    else if (d === 'yesterday') p.set('day', 'yesterday')
-    else { p.delete('day'); p.set('date', d) }
+    p.delete('day')
+    if (isYesterday) p.set('day', 'yesterday')
+    else if (pinDates) p.set('date', d)
     const qs = p.toString()
     return qs ? `${pathname}?${qs}` : pathname
   }
-  const label = (key: string) => formatDateKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase().replace(',', '')
-  const shown = viewDate ?? today
-  const todayOn = day === 'today' && shown === today
-  const first = upcoming.length === 0
+  const chips = [...(yesterday ? [{ ...yesterday, yest: true }] : []), ...days.map(d => ({ ...d, yest: false }))]
+  const name = (c: { date: string; label: string }) =>
+    c.date === today ? `TODAY ${c.label}` : c.date === addDaysToDateKey(today, -1) ? `YESTERDAY ${c.label}` : c.label
   return (
     <nav aria-label="Day" style={{ display: 'inline-flex', maxWidth: '100%', overflowX: 'auto' }}>
-      <Link href={hrefFor('today')} scroll={false} aria-current={todayOn ? 'date' : undefined}
-        style={{ ...SEG, borderRadius: 'var(--radius) 0 0 var(--radius)', ...(todayOn ? ON : {}) }}>
-        TODAY <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{label(today)}</span>
-      </Link>
-      <Link href={hrefFor('yesterday')} scroll={false} aria-current={day === 'yesterday' ? 'date' : undefined}
-        style={{ ...SEG, borderRadius: first ? '0 var(--radius) var(--radius) 0' : 0, borderLeft: 'none', ...(day === 'yesterday' ? ON : {}) }}>
-        YESTERDAY <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{label(yesterday)}</span>
-      </Link>
-      {upcoming.map((u, i) => {
-        const on = day === 'today' && shown === u.date
+      {chips.map((c, i) => {
+        const on = c.date === selected
+        const [word, ...rest] = name(c).split(' ')
+        const dated = word === 'TODAY' || word === 'YESTERDAY'
         return (
-          <Link key={u.date} href={hrefFor(u.date)} scroll={false} aria-current={on ? 'date' : undefined} title={`${u.count} ${u.count === 1 ? 'row' : 'rows'}`}
-            style={{ ...SEG, borderRadius: i === upcoming.length - 1 ? '0 var(--radius) var(--radius) 0' : 0, borderLeft: 'none', ...(on ? ON : {}) }}>
-            {u.label}
+          <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined}
+            title={c.count == null ? undefined : `${c.count} ${c.count === 1 ? 'row' : 'rows'}`}
+            style={{ ...SEG, borderRadius: `${i === 0 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === 0 ? 'var(--radius)' : 0}`, ...(i > 0 ? { borderLeft: 'none' } : {}), ...(on ? ON : {}) }}>
+            {dated ? <>{word} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{rest.join(' ')}</span></> : name(c)}
           </Link>
         )
       })}

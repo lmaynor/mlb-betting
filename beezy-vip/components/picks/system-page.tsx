@@ -17,7 +17,7 @@ import { siteDateKey } from '@/lib/dates'
 import type { PickSystem } from '@/lib/pick-systems'
 import { liveAccuracy } from '@/lib/prop-model-specs'
 import { parsePickFilters } from '@/lib/picks-filters'
-import { dayKey, loadSportBoard } from '@/lib/sport-board-data'
+import { loadSportBoard } from '@/lib/sport-board-data'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
 import { SURFACE_CARD, SYSTEM_COLOR } from '@/lib/tokens'
 
@@ -59,7 +59,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       {board && (
         <>
           <AlignedBar>
-            <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} upcoming={board.days} viewDate={board.date} />
+            <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
           </AlignedBar>
           <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />

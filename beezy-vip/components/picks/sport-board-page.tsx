@@ -14,7 +14,7 @@ import { applyPickFilters, pickRows } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import type { PickKind } from '@/lib/pick-systems'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { dayKey, loadSportBoard, type BoardView } from '@/lib/sport-board-data'
+import { loadSportBoard, type BoardView } from '@/lib/sport-board-data'
 import { SPORT_PILLARS, STATUS_LABEL, type ProjectionSport, type SportSlug } from '@/lib/sports'
 
 const COPY: Record<BoardView, { h1: (s: string) => string; sub: string; what: string }> = {
@@ -55,7 +55,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
     <div>
       <SportTabs sport={sport} active={tab} />
       <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
-        <DayToggle day={board.day} today={today} yesterday={dayKey('yesterday')} upcoming={board.days} viewDate={board.date} />
+        <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
         {tracked && view === 'picks' && (
           <nav aria-label="Pick type" style={{ display: 'flex', gap: '14px', fontSize: '12.5px' }}>
             <Link href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--chalk)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400, textDecoration: 'none' }}>Player picks</Link>
