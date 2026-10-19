@@ -126,7 +126,7 @@ describe('DayToggle with upcoming days', () => {
     expect(links[2]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${day(1)}`)            // drops game and day, sets date
     expect(links[3]).toHaveAttribute('aria-current', 'date')                                         // the shown day
     expect(links[0]).not.toHaveAttribute('aria-current')
-    expect(links[0]).toHaveAttribute('href', '/picks/nba?market=NBA_PTS')                            // TODAY clears date and day
+    expect(links[0]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${TODAY}`)              // TODAY names its own date, so it never shows the next game day
   })
 
   it('TODAY is the active chip on today, and a board with no later games has just the two chips', () => {
