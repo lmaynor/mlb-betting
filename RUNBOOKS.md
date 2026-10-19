@@ -560,8 +560,9 @@ script at all, see docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipe
 
 | Job | Schedule | TWEET_MODE | What it does |
 |---|---|---|---|
-| `mlb-tweet-picks` | 17:00 UTC (noon ET) | picks | Games card to Discord + tweet draft to Typefully |
-| `mlb-tweet-recap` | 10:00 UTC (5am ET) | recap | Recap tweet draft to Typefully |
+| `mlb-tweet-picks` | 17:00 UTC (noon ET) | picks | Link-free tweet drafts -> Discord `#tweet-queue` (picks card, copyable text, 1-tap X intent link, and the link reply to post under it). Nothing posts to X automatically. |
+| `mlb-tweet-recap` | 10:00 UTC (5am ET) | recap | Same, with the settlement card for the recap day |
+| _(not provisioned yet)_ | ~21:15 UTC (5:15pm ET) | reply_ammo | Up to 5 link-free reply snippets (book price vs other books' de-vigged fair) + X live-search links to `#tweet-queue`; no Gemini. `python3 tweet_drafter.py --mode reply_ammo`. |
 | _(not provisioned yet)_ | after `/settle` | settlement | #GamblingX receipt: tweet text + `/api/og/settlement-card` PNG + celebration GIF to Discord (`DISCORD_WEBHOOK_TWEETS`, else `DISCORD_WEBHOOK_OPS`). Optional `TENOR_API_KEY` / `GIPHY_API_KEY`; without one the GIF line carries a Tenor search link. `morning` = alias of `picks`; `steam` is not built. Also `python3 tweet_drafter.py --mode settlement`. |
 
 Script: `tweet_drafter.py` in repo root. Included in Docker image via
@@ -572,24 +573,14 @@ Key in Secret Manager as `gemini-api-key`.
 Free tier requires key from a project with NO billing account linked.
 Get from aistudio.google.com -- create fresh project, no billing.
 
-Typefully: Free tier = 15 scheduled tweets/month (~3-4/week).
-Key in Secret Manager as `typefully-api-key`. Typefully disabled v1
-API-key access entirely (confirmed live 2026-09-02, every push 403'd with
-"API v1 access via API keys is disabled"); migrated to v2 the same day and
-confirmed working end to end with the SAME key (no rotation needed,
-despite Typefully's own docs saying v1 keys can't be used with v2) -- see
-docs/solutions/integration-issues/typefully-api-v1-sunset.md.
-Drafts endpoint: POST `https://api.typefully.com/v2/social-sets/{social_set_id}/drafts`
-(`social_set_id` resolved at runtime via `GET /v2/social-sets`). Payload
-needs `platforms.x.enabled: true` -- Typefully's own migration-guide
-example omits it, but the real API 422s without it.
-Delete unused variants after choosing -- all 3 count against the 15/month limit.
+Typefully was removed 2026-10-19: Discord `#tweet-queue` is the only output and the operator posts by hand (tap the intent link, attach the
+card, then reply to your own post with the link text). A failed or skipped Discord post now FAILS the job. The `typefully-api-key` secret is
+no longer read by anything -- delete it when ready. History: docs/solutions/integration-issues/typefully-api-v1-sunset.md.
 
 Secrets on both jobs:
 - `SITE_API_KEY = site-api-key:latest`
 - `GEMINI_API_KEY = gemini-api-key:latest`
-- `TYPEFULLY_API_KEY = typefully-api-key:latest`
-- `DISCORD_WEBHOOK_URL = discord-webhook-url:latest`
+- `DISCORD_WEBHOOK_OPS = discord-ops-webhook-url:latest` (the `#tweet-queue` fallback; add `DISCORD_WEBHOOK_TWEETS` to post there instead)
 
 Env vars on both jobs:
 - `BEEZY_API_URL=https://api.beezy.fyi`
@@ -695,7 +686,7 @@ curl -i https://beezy.fyi/api/stats/summary
 - Deploy workflow change (Mac vs Cloud Shell, Dockerfile, PAT, proxy) -> §2
 - New card route added or redesigned -> §4 OG image cards
 - Headshots refreshed (update date in §4) -> §3 + §4
-- Typefully replaced with another tool -> §4 Cloud Run jobs
+- Tweet posting tool changed (Typefully was removed 2026-10-19) -> §4 Cloud Run jobs
 - Gemini API key rotated or provider changed -> §4 Cloud Run jobs
 - Domain/API wiring changes -> §4 Website domain wiring
 - Rationale wiring status changes -> §4 Rationale / notes wiring
