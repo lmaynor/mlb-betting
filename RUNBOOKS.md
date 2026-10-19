@@ -562,7 +562,7 @@ script at all, see docs/solutions/runtime-errors/cloud-run-job-set-env-vars-wipe
 |---|---|---|---|
 | `mlb-tweet-picks` | 17:00 UTC (noon ET) | picks | Link-free tweet drafts -> Discord `#tweet-queue` (picks card, copyable text, 1-tap X intent link, and the link reply to post under it). Nothing posts to X automatically. |
 | `mlb-tweet-recap` | 10:00 UTC (5am ET) | recap | Same, with the settlement card for the recap day |
-| _(not provisioned yet)_ | ~21:15 UTC (5:15pm ET) | reply_ammo | Up to 5 link-free reply snippets (book price vs other books' de-vigged fair) + X live-search links to `#tweet-queue`; no Gemini. `python3 tweet_drafter.py --mode reply_ammo`. |
+| `mlb-tweet-reply-ammo` | 22:45 UTC (~6:45pm ET; 10 min after the 22:35 props sweep -- earlier runs see a stale NHL/NBA snapshot) | reply_ammo | Up to 5 link-free reply snippets (book price vs other books' de-vigged fair) + X live-search links to `#tweet-queue`; no Gemini. `python3 tweet_drafter.py --mode reply_ammo`. |
 | _(not provisioned yet)_ | after `/settle` | settlement | #GamblingX receipt: tweet text + `/api/og/settlement-card` PNG + celebration GIF to Discord (`DISCORD_WEBHOOK_TWEETS`, else `DISCORD_WEBHOOK_OPS`). Optional `TENOR_API_KEY` / `GIPHY_API_KEY`; without one the GIF line carries a Tenor search link. `morning` = alias of `picks`; `steam` is not built. Also `python3 tweet_drafter.py --mode settlement`. |
 
 Script: `tweet_drafter.py` in repo root. Included in Docker image via
