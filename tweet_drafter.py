@@ -73,24 +73,30 @@ _CT = ZoneInfo("America/Chicago")
 BANNED_PHRASES = (
     "let's dive in", "lets dive in", "lock it in", "lock of the", "smash", " ai ", "ai-powered", "algorithm",
     "guaranteed", "parlay of the day", "cash it", "can't lose", "free money",
+    "de-vigged", "consensus fair", "proj_mean",   # textbook quant-speak: say what it means instead
 )
 
-SYSTEM_PROMPT = """
-You are the voice of @beezy_fyi on X (#GamblingX): a model-driven betting
-analytics account. beezy.fyi publishes quantitative picks and a +EV board with
-edge %, Kelly stake, and a full public results ledger. Paper mode now.
+PERSONA = """
+You are the voice of @beezy_fyi on X (#GamblingX): the smart friend at the sportsbook bar. You genuinely like betting
+numbers and you talk about them like a person, not a spreadsheet. beezy.fyi publishes model-driven picks, a +EV board and a
+full public results ledger. Paper mode now.
 
-Voice: deadpan, numbers-first, sharp market commentary, slightly irreverent.
-Think @UnabatedSports / @SpankOdds / @PlusEVAnalytics. Lead with the specific
-price dislocation or the closing-line move. Show exact numbers: book + price vs
-the de-vigged consensus fair price, net EV %. When a day loses, say so
-flatly and cite the season sample. Receipts, not hype.
+Voice: warm, natural, a little playful, still numbers-first. Lead with the specific price gap or the result. Always use the
+exact numbers you are given (book, price, line) -- never invent a number, a stat or a fact.
+Say the math in plain betting talk:
+- not "de-vigged fair is -108" but "every other book is around -108" or "the rest of the market moved to -108"
+- not "proj_mean 7.3" but "we have him closer to 7.3"
+- a slow book can be teased lightly: "Did DraftKings fall asleep on this line?", "FanDuel is on an island here"
+- wins are fun, like a fan: "Fun sweat last night", "Nice 4-1 night"; losses are owned gracefully: "Took it on the chin",
+  "Couldn't buy a bounce". Never hide a loss, never gloat about a win. Cite the season sample when it helps.
 
-BANNED: "let's dive in", "lock it in", "lock of the century", "smash",
-"AI", "algorithm", "guaranteed", "parlay of the day", hype caps, more than one
-emoji (zero is better).
+BANNED: "let's dive in", "lock it in", "lock of the century", "smash", "AI", "algorithm", "guaranteed", "parlay of the day",
+"de-vigged", "consensus fair", hype caps, more than one emoji (zero is better).
 
 Audience: bettors tired of tout accounts who want to see real edge.
+"""
+
+SYSTEM_PROMPT = PERSONA + """
 End every variant with the plain-text watermark beezy.fyi. NEVER write a URL:
 no https://, no path after beezy.fyi, no other site. The link goes in a
 separate reply that is added automatically.
@@ -99,14 +105,13 @@ Format rules:
 - Max 280 characters per tweet
 - Return exactly 3 tweet variants as a JSON array of strings
 - No markdown, no explanations outside the JSON
-- Each variant should have a slightly different angle (price dislocation / season ledger / understated)
+- Each variant should have a slightly different angle (price gap / season ledger / understated)
 
 Example good tweet:
-"DraftKings is 23 cents off the market on Stanton HR right now. 12-book fair
-is -108, DK hanging +115 (+7.1% EV). beezy.fyi"
+"Did DraftKings fall asleep on Stanton HR? They're hanging +115 while the rest of the market is around -108. beezy.fyi"
 
 Example bad tweet:
-"STANTON IS A LOCK TODAY 🔥🔥 BET THE HOUSE #MLB"
+"STANTON IS A LOCK TODAY \U0001F525\U0001F525 BET THE HOUSE #MLB"
 """
 
 
@@ -310,9 +315,10 @@ def build_recap_prompt(settled, stats):
 
 # ── Call Gemini ───────────────────────────────────────────────────────────────
 
-def generate_tweets(user_prompt):
+def _gemini_json_text(system_prompt, user_prompt, max_tokens=1536):
+    """One Gemini generateContent call -> the visible reply text with any markdown fences stripped (still JSON text)."""
     payload = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": [{"parts": [{"text": user_prompt}]}],
         # 512 was too tight: newer Gemini generations spend a variable chunk
         # of the budget on internal "thinking" tokens before any visible
@@ -321,7 +327,7 @@ def generate_tweets(user_prompt):
         # text and crashing json.loads("") with a confusing "Expecting
         # value" error. Bumped for real headroom -- cost is negligible on
         # the free tier either way.
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 1536},
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": max_tokens},
     }
 
     resp = requests.post(
@@ -357,8 +363,12 @@ def generate_tweets(user_prompt):
         raw = raw.split("\n", 1)[1]
     if raw.endswith("```"):
         raw = raw.rsplit("```", 1)[0]
+    return raw.strip()
 
-    return [strip_urls(t) for t in filter_voice(json.loads(raw.strip()))]
+
+def generate_tweets(user_prompt):
+    raw = _gemini_json_text(SYSTEM_PROMPT, user_prompt)
+    return [strip_urls(t) for t in filter_voice(json.loads(raw))]
 
 
 # -- Discord #tweet-queue ----------------------------------------------------------------------------------------
@@ -453,6 +463,23 @@ def get_settled_all_sports(limit=200):
     return rows
 
 
+LOSS_OPENERS = ("Took it on the chin on {when}.", "Couldn't buy a bounce on {when}.", "Rough one on {when}.")
+WIN_OPENERS = ("Nice sweat on {when}.", "Fun sweat on {when}.", "Good night on {when}.")
+
+
+def _day_label(day):
+    """'2026-10-18' -> "Sunday's card"; falls back to the raw date string rather than crash."""
+    try:
+        return f"{datetime.strptime(day, '%Y-%m-%d').strftime('%A')}'s card"
+    except (ValueError, TypeError):
+        return f"the {day} card"
+
+
+def _pick(options, key):
+    """Deterministic variety: the same slate always gets the same opener."""
+    return options[sum(map(ord, str(key))) % len(options)]
+
+
 def build_settlement(settled, stats):
     """Summarize the most recent fully settled slate. None when there is nothing graded.
     Returns {date, w, l, p, net, hero, text, card_url, reply_url}; text is the ready-to-post, link-free #GamblingX tweet
@@ -478,14 +505,20 @@ def build_settlement(settled, stats):
             ledger = ""
 
     card_url = f"{BEEZY_SITE_URL}/api/og/settlement-card?date={day}&sport=all"
-    if net < 0:
-        text = f"Dropped {abs(net):.2f}u on {day} card ({w}-{l}{f'-{p}' if p else ''}).{ledger} Every play logged publicly. {WATERMARK}"
+    rec = f"{w}-{l}{f'-{p}' if p else ''}"
+    when = _day_label(day)
+    if net < -0.005:
+        opener = _pick(LOSS_OPENERS, day).format(when=when)
+        text = f"{opener} {rec}, {_u(net)}.{ledger} Every play logged publicly. {WATERMARK}"
+    elif net <= 0.005:
+        text = f"Treaded water on {when}: {rec}, {_u(net)}.{ledger} Every play logged publicly. {WATERMARK}"
     else:
+        opener = _pick(WIN_OPENERS, day).format(when=when)
         best = ""
         if hero:
             who = hero.get("player") or hero.get("bet_type", "").replace("_", " ")
-            best = f" Best price: {who} {int(hero['odds']):+d} ({_u(float(hero.get('profit') or 0))})." if hero.get("odds") is not None else ""
-        text = f"{day} card: {w}-{l}{f'-{p}' if p else ''}, {_u(net)}.{best}{ledger} Receipts: {WATERMARK}"
+            best = f" Best of the night: {who} {int(hero['odds']):+d} ({_u(float(hero.get('profit') or 0))})." if hero.get("odds") is not None else ""
+        text = f"{opener} {rec}, {_u(net)}.{best}{ledger} Receipts: {WATERMARK}"
     return {"date": day, "w": w, "l": l, "p": p, "net": net, "hero": hero, "text": text, "card_url": card_url,
             "reply_url": f"{BEEZY_SITE_URL}/results"}
 
@@ -654,29 +687,122 @@ def select_reply_plays(candidates, max_plays=REPLY_MAX_PLAYS, per_sport=REPLY_MA
     return picked
 
 
+def _play_head(c):
+    if c["stat"] == "anytime_td":
+        return f"{c['player']} anytime TD"
+    return f"{c['player']} {'Over' if c['side'] == 'OVER' else 'Under'} {c['point']:g} {c['stat_label']}"
+
+
+def _book_name(c):
+    return _BOOK_SHORT.get(str(c.get("book") or "").lower()) or str(c.get("book") or "A book").title()
+
+
 def build_reply_snippet(c, proj_mean=None):
-    """One reply (<= REPLY_SNIPPET_MAX chars): who, the line, the book's price vs the other books' de-vigged fair price.
-    Optional pieces (our projection mean, then the EV figure) are dropped, in that order, to fit; None when even the bare
-    sentence does not fit or the result is not link-free -- never truncated."""
+    """The deterministic reply (<= REPLY_SNIPPET_MAX chars), in plain betting talk: who, the line, the book's price vs where
+    the other books are. The projection sentence is dropped first when it does not fit; None when even the bare sentence does
+    not fit or the result is not link-free -- never truncated. This is also the fallback when Gemini is down."""
     fair = prob_to_american(c["p_fair"])
     if fair is None or c.get("point") is None:
         return None
-    book = _BOOK_SHORT.get(str(c.get("book") or "").lower()) or str(c.get("book") or "A book").title()
-    if c["stat"] == "anytime_td":
-        head = f"{c['player']} anytime TD"
-    else:
-        head = f"{c['player']} {'Over' if c['side'] == 'OVER' else 'Under'} {c['point']:g} {c['stat_label']}"
-    core = f"{head}: {book} is hanging {_odds(c['american'])} while the {c['n_books']}-book de-vigged fair sits at {_odds(fair)}."
-    ev = f" ({c['ev'] * 100:+.1f}% EV vs consensus)"
-    model = f" Our projection: {proj_mean:g}." if proj_mean is not None else ""
-    for text in (core[:-1] + ev + "." + model, core[:-1] + ev + ".", core):
+    core = (f"{_play_head(c)}: {_book_name(c)} is hanging {_odds(c['american'])} while the other {c['n_books']} books "
+            f"are around {_odds(fair)}.")
+    model = f" We have him closer to {proj_mean:g}." if proj_mean is not None else ""
+    for text in (core + model, core):
         if len(text) <= REPLY_SNIPPET_MAX and is_link_free(text) and not violates_voice(text):
             return text
     return None
 
 
+REPLY_VARIANTS = ("slow_book", "model_first", "deadpan")
+
+REPLY_SYSTEM_PROMPT = PERSONA + """
+You write short REPLIES to post under other people's tweets about a player. Hard rules for every reply:
+- 180 characters or fewer
+- NO link, NO site name, NO @handle, NO hashtag -- these are replies, not ads
+- use ONLY the numbers given for that play (the book's price, the line, the other books' price, the projection); invent nothing
+- always name the book and its price
+Three styles per play:
+- slow_book: tease the slow book playfully ("Did <book> fall asleep on this line?", "<book> is on an island here")
+- model_first: lead with our projection ("we have him closer to <number>") then the price gap. Only for plays that have a
+  projection number; skip the key otherwise
+- deadpan: flat, numbers-first, no jokes
+
+Return ONLY JSON: {"<play id>": {"slow_book": "...", "model_first": "...", "deadpan": "..."}, ...}
+"""
+
+_NUM_RE = re.compile(r"[+-]?\d+(?:\.\d+)?")
+
+
+def _allowed_numbers(f):
+    """Every number a reply about this play may contain, as the strings a writer would use for it."""
+    out = set()
+    fair = prob_to_american(f["p_fair"])
+    for a in (f["american"], fair):
+        if a is not None:
+            out.update({_odds(a), str(abs(int(a))), str(int(a))})
+    for v in (f.get("point"), f.get("proj_mean")):
+        if v is not None:
+            out.update({f"{v:g}", f"{v:.1f}", f"{v:.2f}"})
+    if f.get("n_books"):
+        n = int(f["n_books"])
+        out.update({str(n), str(n + 1)})
+    if f.get("ev") is not None:
+        pct = f["ev"] * 100
+        out.update({f"{pct:.0f}", f"{pct:.1f}", f"+{pct:.1f}", f"+{pct:.0f}"})
+    return out
+
+
+def reply_variant_ok(text, f):
+    """A Gemini reply is usable only if it is link-free, in voice, short, quotes the book's real price, and contains no number
+    that was not given for this play (a conversational model will happily invent one)."""
+    if not isinstance(text, str):
+        return False
+    text = text.strip()
+    if not text or len(text) > REPLY_SNIPPET_MAX or not is_link_free(text) or violates_voice(text):
+        return False
+    if _odds(f["american"]) not in text:
+        return False
+    allowed = _allowed_numbers(f)
+    return all(tok in allowed or tok.lstrip("+-") in allowed for tok in _NUM_RE.findall(text))
+
+
+def _fodder_prompt(plays):
+    lines = []
+    for i, p in enumerate(plays):
+        f = p["facts"]
+        fair = prob_to_american(f["p_fair"])
+        row = (f"[{i}] {p['sport'].upper()} | {_play_head(f)} | {_book_name(f)} is at {_odds(f['american'])} | "
+               f"the other {f['n_books']} books are around {_odds(fair)}")
+        row += f" | our projection: {f['proj_mean']:g}" if f.get("proj_mean") is not None else " | no projection"
+        lines.append(row)
+    return "Plays:\n" + "\n".join(lines) + "\n\nWrite the replies."
+
+
+def generate_reply_fodder(plays):
+    """Add `variants` ({style: reply}) to every play. ONE batched Gemini call asks for slow_book / model_first / deadpan per
+    play; each reply must pass reply_variant_ok. A play with no usable Gemini reply (or the whole call failing) falls back to
+    its deterministic snippet, so reply_ammo never goes out empty-handed because Gemini had a bad day."""
+    out = [dict(p, variants={}) for p in plays]
+    try:
+        data = json.loads(_gemini_json_text(REPLY_SYSTEM_PROMPT, _fodder_prompt(plays), max_tokens=4096))
+    except Exception as e:  # noqa: BLE001 -- fall back to deterministic snippets
+        print(f"  Gemini reply variants failed ({e}); using deterministic snippets")
+        data = {}
+    for i, p in enumerate(out):
+        mine = data.get(str(i)) if isinstance(data, dict) else None
+        for style in REPLY_VARIANTS:
+            text = mine.get(style) if isinstance(mine, dict) else None
+            if style == "model_first" and p["facts"].get("proj_mean") is None:
+                continue
+            if reply_variant_ok(text, p["facts"]):
+                p["variants"][style] = text.strip()
+        if not p["variants"]:
+            p["variants"] = {"standard": p["snippet"]}
+    return out
+
+
 def build_reply_ammo(feed, projections=None):
-    """[{sport, player, snippet, search_url}] for the day's top plays. `projections` = {sport: projection payload}; a matching
+    """[{sport, player, snippet, facts, search_url}] for the day's top plays (`snippet` = the deterministic reply). `projections` = {sport: projection payload}; a matching
     (player, stat) row adds our projection mean to the snippet. Plays that cannot be written within the limits are skipped."""
     proj_idx = {}
     for sp, payload in (projections or {}).items():
@@ -685,9 +811,11 @@ def build_reply_ammo(feed, projections=None):
                 proj_idx[(sp, r.get("player_norm"), r.get("stat"))] = _num(r.get("proj_mean"))
     plays = []
     for c in select_reply_plays(reply_candidates(feed)):
-        snippet = build_reply_snippet(c, proj_idx.get((c["sport"], c.get("player_norm"), c["stat"])))
+        proj_mean = proj_idx.get((c["sport"], c.get("player_norm"), c["stat"]))
+        snippet = build_reply_snippet(c, proj_mean)
         if snippet:
             plays.append({"sport": c["sport"], "player": c["player"], "snippet": snippet,
+                          "facts": {**c, "proj_mean": proj_mean},
                           "search_url": build_x_search_url(f"{c['player']} min_faves:{REPLY_MIN_FAVES}")})
     return plays
 
@@ -697,11 +825,15 @@ def post_reply_ammo_to_discord(plays):
     hook = webhook_for("tweets")
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
-    content = (f"**Reply ammo ({date.today()})** -- tap Search, find a fresh tweet about the player, paste the snippet as a "
-               "REPLY. No links, no pitch. NFL/NHL/NBA rows are unvalidated paper signals: state the price, not a pick.")
-    embeds = [{"title": f"{p['sport'].upper()} | {p['player']}",
-               "description": f"{_code(p['snippet'])}\n[Search X for {p['player']} (live, {REPLY_MIN_FAVES}+ likes)]({p['search_url']})"}
-              for p in plays]
+    content = (f"**Reply ammo ({date.today()})** -- tap Search, find a fresh tweet about the player, then paste the variant "
+               "whose vibe fits it as a REPLY. No links, no pitch. NFL/NHL/NBA rows are unvalidated paper signals: "
+               "state the price, not a pick.")
+    embeds = []
+    for p in plays:
+        variants = p.get("variants") or {"standard": p["snippet"]}
+        body = "\n".join(f"**{style}**\n{_code(text)}" for style, text in variants.items())
+        embeds.append({"title": f"{p['sport'].upper()} | {p['player']}",
+                       "description": f"{body}\n[Search X for {p['player']} (live, {REPLY_MIN_FAVES}+ likes)]({p['search_url']})"})
     return post_embeds(hook, content, embeds)
 
 
@@ -717,8 +849,12 @@ def run_reply_ammo():
     if not plays:
         print("No credible price gaps right now -- no reply ammo.")
         return
+    plays = generate_reply_fodder(plays)
     for i, p in enumerate(plays, 1):
-        print(f"  [{i}] {p['sport']}: {p['snippet']}\n      {p['search_url']}")
+        print(f"  [{i}] {p['sport']} | {p['player']}")
+        for style, text in p["variants"].items():
+            print(f"      {style}: {text}")
+        print(f"      {p['search_url']}")
     print(require_posted(post_reply_ammo_to_discord(plays)))
 
 

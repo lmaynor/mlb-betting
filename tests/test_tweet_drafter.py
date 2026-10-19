@@ -224,7 +224,8 @@ def test_build_settlement_winning_day_text_and_card_url():
 def test_build_settlement_losing_day_owns_the_variance():
     settled = [_bet(YESTERDAY, "loss", -1.0), _bet(YESTERDAY, "loss", -0.8), _bet(YESTERDAY, "win", 0.0)]
     s = td.build_settlement(settled, {"overall": {"roi": 8.2, "total_bets": 7550}})
-    assert s["text"].startswith("Dropped 1.80u on")
+    assert any(s["text"].startswith(o.format(when=td._day_label(YESTERDAY))) for o in td.LOSS_OPENERS)
+    assert " 1-2, -1.80u." in s["text"]    # the 0.0-profit "win" still counts as a win: 1-2
     assert "Every play logged publicly" in s["text"]
     assert s["hero"] is not None
 
@@ -445,17 +446,18 @@ def test_stat_labels_mirror_the_projection_engine():
 def test_reply_snippet_is_link_free_short_and_factual():
     c = td.reply_candidates(_feed(nba=[_outlier()]))[0]
     text = td.build_reply_snippet(c, proj_mean=34.1)
-    assert text == ("Luka Doncic Over 32.5 Points: DraftKings is hanging +115 while the 8-book de-vigged fair sits at -108 "
-                    "(+11.6% EV vs consensus). Our projection: 34.1.")
+    assert text == ("Luka Doncic Over 32.5 Points: DraftKings is hanging +115 while the other 8 books are around -108. "
+                    "We have him closer to 34.1.")
     assert len(text) <= td.REPLY_SNIPPET_MAX
     assert td.is_link_free(text) and not td.violates_voice(text)
 
 
 def test_reply_snippet_drops_optional_parts_to_fit_and_never_truncates():
-    long_name = "Maximilian Bartholomew Featherstonehaugh-Cholmondeley"
+    long_name = "Maximilian Bartholomew Featherstonehaugh-Cholmondeley the Third of Westmorland"
     c = td.reply_candidates(_feed(nba=[_outlier(player=long_name)]))[0]
-    text = td.build_reply_snippet(c, proj_mean=34.1)
-    assert text is not None and len(text) <= td.REPLY_SNIPPET_MAX and "projection" not in text
+    assert len(td.build_reply_snippet(c, proj_mean=None)) <= td.REPLY_SNIPPET_MAX   # bare sentence fits...
+    text = td.build_reply_snippet(c, proj_mean=34.1)                                # ...but not with the projection added
+    assert text is not None and len(text) <= td.REPLY_SNIPPET_MAX and "closer to" not in text
     c2 = td.reply_candidates(_feed(nba=[_outlier(player=long_name * 3)]))[0]
     assert td.build_reply_snippet(c2) is None                                  # does not fit even bare: skipped, not cut
 
@@ -515,14 +517,16 @@ def test_reply_candidates_mlb_only_pending_rows_from_todays_slate():
 def test_build_reply_ammo_adds_projection_mean_when_matched():
     feed = _feed(nba=[_outlier()])
     plays = td.build_reply_ammo(feed, {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.12}]}})
-    assert plays[0]["snippet"].endswith("Our projection: 34.12.")
-    assert "projection" not in td.build_reply_ammo(feed, {})[0]["snippet"]
+    assert plays[0]["snippet"].endswith("We have him closer to 34.12.")
+    assert plays[0]["facts"]["proj_mean"] == pytest.approx(34.12)
+    assert "closer to" not in td.build_reply_ammo(feed, {})[0]["snippet"]
 
 
 def test_run_reply_ammo_posts_one_embed_per_play_with_search_link(monkeypatch):
     monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
     monkeypatch.setattr(td, "get_ev_feed", lambda *a, **k: _feed(nba=[_outlier(), _outlier(player="Jayson Tatum", player_norm="jayson tatum", ev=0.09)]))
     monkeypatch.setattr(td, "get_projections", lambda sp: (_ for _ in ()).throw(RuntimeError("down")) if sp == "nfl" else {"rows": []})
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gemini down")))
     with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
         td.run_reply_ammo()
     body = post.call_args.kwargs["json"]
@@ -595,3 +599,148 @@ def test_main_runs_without_any_typefully_env(monkeypatch):
     monkeypatch.delenv("TYPEFULLY_API_KEY", raising=False)
     import importlib
     importlib.reload(td)   # import must not require TYPEFULLY_API_KEY any more
+
+
+# -- Conversational voice (2026-10-19) ---------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("robotic", [
+    "the 12-book de-vigged fair is -108", "vs the consensus fair price", "proj_mean says 7.3",
+])
+def test_robotic_quant_terms_are_banned(robotic):
+    assert td.violates_voice(robotic)
+    for term in ("de-vigged", "consensus fair", "proj_mean"):
+        assert term in td.BANNED_PHRASES
+
+
+def test_persona_teaches_plain_betting_talk_and_keeps_the_link_rule():
+    for phrase in ("every other book is around", "we have him closer to", "fall asleep on this line", "on an island",
+                   "Fun sweat", "Took it on the chin", "never invent a number"):
+        assert phrase.lower() in td.PERSONA.lower() or phrase.lower() in td.SYSTEM_PROMPT.lower()
+    assert "beezy.fyi" in td.SYSTEM_PROMPT and "NEVER write a URL" in td.SYSTEM_PROMPT
+    assert "beezy.fyi/" not in td.SYSTEM_PROMPT and "https://beezy" not in td.SYSTEM_PROMPT
+    assert "NO link" in td.REPLY_SYSTEM_PROMPT and "180 characters" in td.REPLY_SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("day", ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-19", "2026-10-25"])
+def test_settlement_text_is_human_in_voice_and_short_across_days(day):
+    loss = td.build_settlement([_bet(day, "win", 1.0), _bet(day, "loss", -3.0)], {"overall": {"roi": 8.2, "total_bets": 7550}})
+    win = td.build_settlement([_bet(day, "win", 2.0, player="Gerrit Cole", odds=115), _bet(day, "loss", -1.0)],
+                              {"overall": {"roi": 8.2, "total_bets": 7550}})
+    for s in (loss, win):
+        assert len(s["text"]) <= 280 and not td.violates_voice(s["text"]) and not td.has_url(s["text"])
+        assert "Dropped" not in s["text"] and "card:" not in s["text"]            # the clinical phrasing is gone
+    assert any(loss["text"].startswith(o.format(when=td._day_label(day))) for o in td.LOSS_OPENERS)
+    assert any(win["text"].startswith(o.format(when=td._day_label(day))) for o in td.WIN_OPENERS)
+    assert "Best of the night: Gerrit Cole +115" in win["text"]
+
+
+def test_settlement_flat_day_and_label_fallbacks():
+    s = td.build_settlement([_bet(YESTERDAY, "win", 1.0), _bet(YESTERDAY, "loss", -1.0)], {})
+    assert s["text"].startswith("Treaded water on")
+    assert td._day_label("2026-10-18") == "Sunday's card"
+    assert td._day_label("not-a-date") == "the not-a-date card"
+    assert td._pick(td.WIN_OPENERS, "2026-10-18") == td._pick(td.WIN_OPENERS, "2026-10-18")   # deterministic
+
+
+def _play(**kw):
+    c = td.reply_candidates(_feed(nba=[_outlier(**kw)]))[0]
+    return {"sport": "nba", "player": c["player"], "snippet": td.build_reply_snippet(c, 34.1), "search_url": "https://x.com/search?q=a",
+            "facts": {**c, "proj_mean": 34.1}}
+
+
+GOOD = {
+    "slow_book": "Did DraftKings fall asleep on Luka Over 32.5 points? They're at +115 while the rest of the market is around -108.",
+    "model_first": "We have Luka closer to 34.1 tonight, and DraftKings is still hanging +115 on the Over 32.5.",
+    "deadpan": "Luka Over 32.5 points: DraftKings +115, the other 8 books around -108.",
+}
+
+
+def test_reply_variant_ok_accepts_clean_replies():
+    f = _play()["facts"]
+    assert all(td.reply_variant_ok(t, f) for t in GOOD.values())
+
+
+@pytest.mark.parametrize("bad", [
+    "Did DraftKings fall asleep? They are at +125 while everyone else is near -108.",               # invented price
+    "Luka Over 32.5: DraftKings is on an island.",                                                  # never quotes the real price
+    "DraftKings +115 vs a de-vigged fair of -108 on Luka Over 32.5.",                                # robotic term
+    "DraftKings +115 on Luka, full board at beezy.fyi",                                              # brand/link
+    "DraftKings +115 on Luka, see https://x.co/a",                                                    # url
+    "DraftKings +115 on Luka, the other 40 books are around -108",                                   # invented count
+    "DraftKings +115 on Luka. " + "x" * 200,                                                         # too long
+    "",
+    None,
+    7,
+])
+def test_reply_variant_ok_rejects_unsafe_or_invented_replies(bad):
+    assert not td.reply_variant_ok(bad, _play()["facts"])
+
+
+def _gemini_reply(payload):
+    return lambda *a, **k: json.dumps(payload)
+
+
+def test_generate_reply_fodder_returns_all_three_styles(monkeypatch):
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
+    out = td.generate_reply_fodder([_play()])
+    assert list(out[0]["variants"]) == ["slow_book", "model_first", "deadpan"]
+    assert out[0]["variants"]["slow_book"] == GOOD["slow_book"]
+
+
+def test_generate_reply_fodder_skips_model_first_without_a_projection(monkeypatch):
+    play = _play()
+    play["facts"]["proj_mean"] = None
+    play["snippet"] = td.build_reply_snippet(play["facts"])
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
+    assert "model_first" not in td.generate_reply_fodder([play])[0]["variants"]
+
+
+def test_generate_reply_fodder_drops_invented_numbers_and_keeps_the_rest(monkeypatch):
+    bad = {**GOOD, "deadpan": "Luka Over 32.5 points: DraftKings +115, the other 8 books around -140."}
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": bad}))
+    assert list(td.generate_reply_fodder([_play()])[0]["variants"]) == ["slow_book", "model_first"]
+
+
+def test_generate_reply_fodder_falls_back_per_play_and_when_gemini_fails(monkeypatch, capsys):
+    a, b = _play(), _play(player="Jayson Tatum", player_norm="jayson tatum")
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))             # nothing usable for play 1
+    out = td.generate_reply_fodder([a, b])
+    assert "slow_book" in out[0]["variants"] and out[1]["variants"] == {"standard": b["snippet"]}
+
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("quota")))
+    out = td.generate_reply_fodder([a, b])
+    assert [p["variants"] for p in out] == [{"standard": a["snippet"]}, {"standard": b["snippet"]}]
+    assert "using deterministic snippets" in capsys.readouterr().out
+
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: "[1, 2]")              # valid JSON, wrong shape
+    assert td.generate_reply_fodder([a])[0]["variants"] == {"standard": a["snippet"]}
+
+
+def test_generate_reply_fodder_is_one_batched_call_and_prompt_carries_only_given_facts(monkeypatch):
+    seen = []
+    monkeypatch.setattr(td, "_gemini_json_text", lambda system, user, max_tokens=0: seen.append((system, user, max_tokens)) or "{}")
+    td.generate_reply_fodder([_play(), _play(player="Jayson Tatum", player_norm="jayson tatum")])
+    assert len(seen) == 1
+    system, user, _ = seen[0]
+    assert system == td.REPLY_SYSTEM_PROMPT
+    assert "[0] NBA | Luka Doncic Over 32.5 Points | DraftKings is at +115" in user and "[1] NBA | Jayson Tatum" in user
+    assert "our projection: 34.1" in user and "http" not in user and "beezy" not in user.lower()
+
+
+def test_discord_renders_every_variant_as_a_labelled_code_block(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
+    play = dict(_play(), variants=dict(GOOD))
+    with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
+        td.post_reply_ammo_to_discord([play])
+    desc = post.call_args.kwargs["json"]["embeds"][0]["description"]
+    for style, text in GOOD.items():
+        assert f"**{style}**\n```\n{text}\n```" in desc
+    assert "x.com/search" in desc and "vibe" in post.call_args.kwargs["json"]["content"]
+
+
+def test_discord_falls_back_to_the_plain_snippet_when_no_variants(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
+    play = _play()
+    with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
+        td.post_reply_ammo_to_discord([play])
+    assert f"```\n{play['snippet']}\n```" in post.call_args.kwargs["json"]["embeds"][0]["description"]

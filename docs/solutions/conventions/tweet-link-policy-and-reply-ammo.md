@@ -24,6 +24,19 @@ date: 2026-10-19
   play) rather than truncating. The intent link is deliberately NOT offered for replies: it cannot target a tweet id, so a tap would
   post the snippet as a context-free standalone tweet.
 
+## Voice: plain betting talk, never invented numbers (2026-10-19)
+
+`PERSONA` (shared by `SYSTEM_PROMPT` and `REPLY_SYSTEM_PROMPT`) is "the smart friend at the sportsbook bar": the math is said as
+"every other book is around -108" / "we have him closer to 7.3", slow books get teased, wins are fun, losses are owned.
+`de-vigged`, `consensus fair` and `proj_mean` are in `BANNED_PHRASES`, so a draft that slips back into quant-speak is dropped.
+Settlement text is deterministic and human-toned (`LOSS_OPENERS` / `WIN_OPENERS`, "Sunday's card").
+
+`reply_ammo` asks Gemini ONCE (batched) for `slow_book` / `model_first` / `deadpan` replies per play, and a reply is used only if
+`reply_variant_ok()` passes: link-free, in voice, <= 180 chars, quotes the book's real price, and contains no number that was not
+given for that play. A conversational model will invent a price if you let it; that check is what makes the tone safe. A play with
+no usable reply (or Gemini down) falls back to the deterministic `build_reply_snippet()`. Discord shows every surviving variant as
+its own code block so the operator picks the vibe that fits the tweet.
+
 ## Not verified
 
 The 50-80% reach penalty for outbound links is the premise of this convention, taken from outside advice, not measured on this
