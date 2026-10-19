@@ -15,7 +15,7 @@ jest.mock('@/lib/betting-api', () => ({
 }))
 
 import { DayToggle } from '../components/picks/day-toggle'
-import { gameDayKey, isDateKey, onDay, slateRows, upcomingDays, viewDay } from '../lib/board-days'
+import { gameDayKey, isDateKey, liveDays, onDay, slateRows, upcomingDays, viewDay } from '../lib/board-days'
 import { addDaysToDateKey, siteDateKey } from '../lib/dates'
 import { parsePickFilters } from '../lib/picks-filters'
 import { loadSportBoard } from '../lib/sport-board-data'
@@ -83,56 +83,93 @@ describe('game days', () => {
   })
 })
 
+/** The API: no `date` = the live feed, `date` = that day's archive. */
+const serve = (live: SportProjectionRow[], archive: SportProjectionRow[] = []) =>
+  mockProjections.mockImplementation((_s: string, o: { date?: string } = {}) => Promise.resolve(o.date ? { ...feed(archive), archive: true } : feed(live)))
+
 describe('the board', () => {
-  it('TODAY has only today\'s games and rows; the other days are chips', async () => {
-    mockProjections.mockResolvedValue(feed(week()))
+  it('liveDays is the strip: only dates with events, today first when it has any', () => {
+    expect(liveDays(week(), TODAY).map(d => [d.date, d.count])).toEqual([[TODAY, 3], [day(1), 2], [day(3), 4]])
+    expect(liveDays(week().filter(r => gameDayKey(r) !== TODAY), TODAY).map(d => d.date)).toEqual([day(1), day(3)])
+  })
+
+  it('TODAY has only today\'s games and rows; the other game days are chips', async () => {
+    serve(week())
     const b = await loadSportBoard('nba', viewer, { day: 'today', view: 'picks' })
     expect(b.date).toBe(TODAY)
     expect(b.rows).toHaveLength(3)
     expect(b.games.map(g => g.key)).toEqual([`nba:${TODAY}:BOS@DET`])
-    expect(b.days.map(d => d.date)).toEqual([day(1), day(3)])
+    expect(b.days.map(d => d.date)).toEqual([TODAY, day(1), day(3)])
+    expect(b.yesterday).toBeNull()                                              // no archive rows, so no chip to nowhere
   })
 
-  it('an upcoming day shows only its own rows and games', async () => {
-    mockProjections.mockResolvedValue(feed(week()))
+  it('an asked-for day shows only its own rows and games', async () => {
+    serve(week())
     const b = await loadSportBoard('nba', viewer, { day: 'today', view: 'picks', date: day(3) })
     expect(b.date).toBe(day(3))
     expect(b.rows).toHaveLength(4)
     expect(b.games.map(g => g.key)).toEqual([`nba:${day(3)}:BOS@DET`])
   })
 
-  it('opens on the next day with games when today has none', async () => {
-    mockProjections.mockResolvedValue(feed(week().filter(r => gameDayKey(r) !== TODAY)))
-    const b = await loadSportBoard('nba', viewer, { day: 'today', view: 'picks' })
-    expect(b.date).toBe(day(1))
-    expect(b.rows).toHaveLength(2)
+  it('TODAY asked for by date with no games today is an empty today, not the next game day', async () => {
+    serve(week().filter(r => gameDayKey(r) !== TODAY))
+    const b = await loadSportBoard('nfl', viewer, { day: 'today', view: 'picks', date: TODAY })
+    expect(b.date).toBe(TODAY)
+    expect(b.rows).toHaveLength(0)
   })
 
-  it('the yesterday archive is untouched by the day cut', async () => {
-    mockProjections.mockResolvedValue({ ...feed([prow(day(-1), 0), prow(day(-1), 1)]), archive: true })
+  it('football: no games today means no TODAY chip, and the board opens on the first game day', async () => {
+    serve(week().filter(r => gameDayKey(r) !== TODAY))
+    const b = await loadSportBoard('nfl', viewer, { day: 'today', view: 'picks' })
+    expect(b.date).toBe(day(1))
+    expect(b.rows).toHaveLength(2)
+    expect(b.days.map(d => d.date)).toEqual([day(1), day(3)])                    // skips the empty days
+  })
+
+  it('basketball: YESTERDAY (archive) and TODAY, each chip only when it has events', async () => {
+    serve(week().filter(r => gameDayKey(r) === TODAY), [prow(day(-1), 0), prow(day(-1), 1)])
+    const b = await loadSportBoard('nba', viewer, { day: 'today', view: 'picks' })
+    expect(b.yesterday).toMatchObject({ date: day(-1), count: 2 })
+    expect(b.days.map(d => d.date)).toEqual([TODAY])
+    expect(b.date).toBe(TODAY)
+  })
+
+  it('the yesterday archive is untouched by the day cut, and the strip is still there to step forward', async () => {
+    serve(week(), [prow(day(-1), 0), prow(day(-1), 1)])
     const b = await loadSportBoard('nba', viewer, { day: 'yesterday', view: 'picks' })
     expect(b.rows).toHaveLength(2)
-    expect(b.days).toEqual([])
+    expect(b.date).toBe(day(-1))
+    expect(b.days.map(d => d.date)).toEqual([TODAY, day(1), day(3)])
   })
 })
 
-describe('DayToggle with upcoming days', () => {
-  it('lists TODAY, YESTERDAY, then one chip per upcoming day, marking the day shown and clearing game and day', () => {
-    const upcoming = upcomingDays(week(), TODAY)
-    render(<DayToggle day="today" today={TODAY} yesterday={day(-1)} upcoming={upcoming} viewDate={day(3)} />)
-    const nav = screen.getByRole('navigation', { name: 'Day' })
-    const links = within(nav).getAllByRole('link')
+describe('DayToggle', () => {
+  const chips = (props: Partial<React.ComponentProps<typeof DayToggle>> = {}) => {
+    render(<DayToggle today={TODAY} yesterday={{ date: day(-1), label: 'SAT OCT 17', count: 2 }} days={liveDays(week(), TODAY)} selected={TODAY} {...props} />)
+    return within(screen.getByRole('navigation', { name: 'Day' })).getAllByRole('link')
+  }
+
+  it('one chip per date with events: YESTERDAY, TODAY, then each later game day, the shown date marked', () => {
+    const links = chips({ selected: day(3) })
     expect(links).toHaveLength(4)
-    expect(links[2]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${day(1)}`)            // drops game and day, sets date
-    expect(links[3]).toHaveAttribute('aria-current', 'date')                                         // the shown day
-    expect(links[0]).not.toHaveAttribute('aria-current')
-    expect(links[0]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${TODAY}`)              // TODAY names its own date, so it never shows the next game day
+    expect(links[0]).toHaveTextContent('YESTERDAY')
+    expect(links[1]).toHaveTextContent('TODAY')
+    expect(links[0]).toHaveAttribute('href', '/picks/nba?market=NBA_PTS&day=yesterday')           // drops game, sets day
+    expect(links[1]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${TODAY}`)           // names its own date
+    expect(links[2]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${day(1)}`)
+    expect(links[3]).toHaveAttribute('aria-current', 'date')
+    expect(links[1]).not.toHaveAttribute('aria-current')
   })
 
-  it('TODAY is the active chip on today, and a board with no later games has just the two chips', () => {
-    render(<DayToggle day="today" today={TODAY} yesterday={day(-1)} viewDate={TODAY} />)
-    const links = within(screen.getByRole('navigation', { name: 'Day' })).getAllByRole('link')
+  it('no archive and no games today: just the days with events, and the first one is the shown date', () => {
+    const links = chips({ yesterday: null, days: liveDays(week().filter(r => gameDayKey(r) !== TODAY), TODAY), selected: day(1) })
     expect(links).toHaveLength(2)
     expect(links[0]).toHaveAttribute('aria-current', 'date')
+    expect(links[0]).not.toHaveTextContent('TODAY')
+  })
+
+  it('MLB keeps clean URLs (its board is always the day itself)', () => {
+    const links = chips({ pinDates: false })
+    expect(links[1]).toHaveAttribute('href', '/picks/nba?market=NBA_PTS')
   })
 })

@@ -11,7 +11,7 @@ import { limitRows, type Viewer } from '@/lib/access'
 import { apiGetEvFeed, apiGetPicks, apiGetSportProjections, apiGetTodayAllPredictions, apiGetTodaySlate } from '@/lib/betting-api'
 import { gamesFromSlate, mergeGames, type BoardGame } from '@/lib/board-games'
 import { boardStatusText, confluenceKey, fromMlbProjections, fromSportProjections, systemTodayCounts, type BoardRow, type SystemToday } from '@/lib/board-rows'
-import { upcomingDays, viewDay, onDay, gameDayKey, type BoardDay } from '@/lib/board-days'
+import { liveDays, labelDay, viewDay, onDay, gameDayKey, type BoardDay } from '@/lib/board-days'
 import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 import { shapeHub } from '@/lib/hub-data'
 import { fromBets } from '@/lib/mlb-board'
@@ -48,8 +48,10 @@ export interface SportBoard {
   confluenceKeys: string[]
   /** per-system row counts, from the uncut feed (projection sports) */
   today: Record<string, SystemToday>
-  /** upcoming game days that have rows (projection sports, today's board), for the day chips; `date` is the day the rows are from */
+  /** the day strip: game days from today on that have event records (MLB: just today); `date` is the day the rows are from */
   days: BoardDay[]
+  /** yesterday's chip: the settled MLB card, or the archived board of a projection sport when it has rows; null when there is nothing to open */
+  yesterday: BoardDay | null
 }
 
 /** The most rows the API serves in one page: the whole board (a week of NFL, three days of NHL), nearest game day first. */
@@ -57,7 +59,7 @@ const BOARD_LIMIT = 1200
 
 export const dayKey = (day: PickDay) => (day === 'yesterday' ? addDaysToDateKey(siteDateKey(), -1) : siteDateKey())
 
-const EMPTY: Omit<SportBoard, 'day' | 'date' | 'rows' | 'games' | 'locked'> = { outliers: [], lockedPrices: 0, block: null, confluenceKeys: [], today: {}, days: [] }
+const EMPTY: Omit<SportBoard, 'day' | 'date' | 'rows' | 'games' | 'locked'> = { outliers: [], lockedPrices: 0, block: null, confluenceKeys: [], today: {}, days: [], yesterday: null }
 
 async function mlbBoard(sport: SportSlug, viewer: Viewer, day: PickDay, view: BoardView, kind?: PickKind): Promise<SportBoard> {
   const date = dayKey(day)
@@ -83,6 +85,8 @@ async function mlbBoard(sport: SportSlug, viewer: Viewer, day: PickDay, view: Bo
   const label = kind === 'game' ? 'game picks' : 'picks'
   return {
     ...EMPTY, day, date, rows, locked,
+    days: [{ date: dayKey('today'), label: labelDay(dayKey('today')) }],
+    yesterday: { date: dayKey('yesterday'), label: labelDay(dayKey('yesterday')) },
     games: gamesFromSlate(slate, rows),
     emptyBody: view === 'projections'
       ? 'The model projections publish with the ~11:00 AM CT run, once lineups and prices are in.'
@@ -101,31 +105,38 @@ export async function loadSportBoard(
 
   const ps = sport as ProjectionSport
   const todayKey = siteDateKey()
-  const [feed, pr] = await Promise.all([
-    // market prices exist for today only; yesterday's prices are history
+  const yKey = dayKey('yesterday')
+  const [feed, live, archive] = await Promise.all([
+    // market prices exist for today's board only; an archived day's prices are history
     day === 'today' ? apiGetEvFeed({ sport: ps, minEv: 0.02, limit: 150 }).catch(() => null) : Promise.resolve(null),
-    apiGetSportProjections(ps, { limit: BOARD_LIMIT, ...(day === 'yesterday' ? { date: dayKey(day) } : {}) }).catch(() => null),
+    apiGetSportProjections(ps, { limit: BOARD_LIMIT }).catch(() => null),
+    // yesterday's archived board: its rows when that tab is open, and otherwise only whether it has any (its chip)
+    apiGetSportProjections(ps, { limit: BOARD_LIMIT, date: yKey }).catch(() => null),
   ])
-  // The live feed is a rolling window of games (a week of NBA): each row belongs to the day its game is played, and today's board
-  // shows ONE day (today, or the requested upcoming day, or the next day with games when today has none). The day cut happens before
-  // the access cut, so a free preview is today's best rows, not the best rows of the week.
-  const live = day === 'today' && pr != null
-  const date = live ? viewDay(pr.rows, todayKey, opts.date) : dayKey(day)
-  const days = live ? upcomingDays(pr.rows, todayKey) : []
-  const scoped = live
-    ? { ...pr, rows: onDay(pr.rows, date, todayKey), games: pr.games?.filter(g => (gameDayKey({ game_key: g.game_key, commence: g.start }) ?? todayKey) === date) }
+  // The live feed is a rolling window of games that have not started (a week of NFL, three days of NBA): each row belongs to the day
+  // its game is played and the board shows ONE day. The strip lists the days that have events: yesterday's archive, then every day
+  // from today on with rows. With no day asked for, the board opens on the first of them (today, else the next game day). The day
+  // cut happens before the access cut, so a free preview is that day's best rows, not the best rows of the week.
+  const showingToday = day === 'today' && live != null
+  const date = day === 'yesterday' ? yKey : showingToday ? viewDay(live?.rows ?? [], todayKey, opts.date) : todayKey
+  const days = liveDays(live?.rows ?? [], todayKey)
+  const archived = archive?.rows?.length ?? 0
+  const yesterday: BoardDay | null = archived > 0 || day === 'yesterday' ? { date: yKey, label: labelDay(yKey), count: archived } : null
+  const pr = day === 'yesterday' ? archive : live
+  const scoped = showingToday && live
+    ? { ...live, rows: onDay(live.rows, date, todayKey), games: live.games?.filter(g => (gameDayKey({ game_key: g.game_key, commence: g.start }) ?? todayKey) === date) }
     : pr
   // Headshots resolve by name on the server, for the sports that have a source.
   const withHeads = scoped && hasHeadshots(sport)
     ? { ...scoped, rows: scoped.rows.map(r => ({ ...r, headshot_id: playerIdByName(sport, r.player, r.team) })) }
     : scoped
-  const dayFeed = live && feed ? withFeedOutliersOnDay(feed, ps, date, todayKey) : feed
+  const dayFeed = showingToday && feed ? withFeedOutliersOnDay(feed, ps, date, todayKey) : feed
   const hub = shapeHub(ps, dayFeed, withHeads, viewer)
   const rows = fromSportProjections(hub.projections?.rows ?? [])
   const confluenceKeys = (hub.projections?.rows ?? []).filter(r => r.confluence && r.side).map(r => confluenceKey(r.player, r.stat, r.side as string))
   const unavailable = !hub.projections || hub.projections.status === 'unavailable'
   return {
-    day, date, rows, days,
+    day, date, rows, days, yesterday,
     games: mergeGames(sport, scoped?.games, rows),
     locked: hub.lockedProjections,
     status: day === 'yesterday'
