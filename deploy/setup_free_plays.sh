@@ -17,6 +17,7 @@ JOB_NAME="mlb-free-plays"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
+INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"   # the job reads today's `bets` rows: needs Cloud SQL like the other DB jobs
 
 # UTC. After the 16:00 / 19:05 / 22:00 /run jobs and the 15-min EV pager window has populated `bets`.
 SCHEDULES=("30 17 * * *" "20 19 * * *" "15 22 * * *")
@@ -37,7 +38,7 @@ done
 
 FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL" --set-secrets="$SECRETS"
        --set-env-vars="$ENVV" --command="python3" --args="-m,mlb.runners.free_plays"
-       --memory=1Gi --cpu=1 --task-timeout=300 --max-retries=0 --quiet)
+       --set-cloudsql-instances="$INSTANCE" --memory=1Gi --cpu=1 --task-timeout=300 --max-retries=0 --quiet)
 if gcloud run jobs describe "$JOB_NAME" --region="$REGION" --quiet >/dev/null 2>&1; then
   gcloud run jobs update "$JOB_NAME" "${FLAGS[@]}"
 else
