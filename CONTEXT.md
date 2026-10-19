@@ -1578,7 +1578,8 @@ never carries a URL (X throttles small accounts that do) -- it ends with the pla
 on Gemini output; the clickable link is a reply the operator posts under it (the Discord message carries the text). **Typefully was removed 2026-10-19:**
 picks / recap / settlement / reply_ammo all go ONLY to `#tweet-queue` (OG card + copyable text + 1-tap `x.com/intent` link) and a failed or
 skipped post fails the job; nothing posts to X automatically. See
-docs/solutions/conventions/tweet-link-policy-and-reply-ammo.md.
+**Voice (2026-10-19):** plain betting talk (`PERSONA`), quant terms banned; `reply_ammo` gets 3 Gemini styles per play, each validated
+against the play's real numbers, with a deterministic fallback. docs/solutions/conventions/tweet-link-policy-and-reply-ammo.md.
 
 ### Scoring paired to snapshots (2026-06-25)
 
