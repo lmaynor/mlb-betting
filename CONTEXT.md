@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-17 02:00 CST_
+_Last updated: 2026-10-18 22:20 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -2396,171 +2396,101 @@ inline styles everywhere**.
 
 ## 14. Discord server (beezy.fyi)
 
-*Last configured: 2026-05-20*
+*Layout rewritten 2026-10-17 (free plays + `-alerts` channels added same day) to match `discord-bot/src/serverSetup.js` (`LAYOUT`, `WEBHOOK_TARGETS`), which is the source of truth and is
+applied idempotently by the owner-only `/setup-server` command. Role-gated channels: all-access role + per-sport pass roles (`SPORT_PASS_ROLES`).*
 
-### What it is
+Server ID `1476027259956494533`, name `beezy.fyi`. The old #daily-picks / #performance / #verify / #rules layout (2026-05-20) no longer exists.
 
-Community layer for beezy.fyi. Receives pick signals and daily recaps via
-webhooks. Members opt into book-specific pings. Ops alerts are routed to an
-admin-only channel, never surfaced to members.
+### Channels, content, and feeders
 
-Server ID: `1476027259956494533`
-Server name: `beezy.fyi`
+| Category | Channel | Visible to | Content | Fed by |
+|---|---|---|---|---|
+| START HERE | `#welcome`, `#announcements`, `#link-account` | everyone, read-only | Intro, product/model updates, `/link` for subscription sync | humans / bot commands (no job) |
+| LIVE +EV & EXCHANGE ALERTS | `#ev-sportsbooks` | all-access | Intraday soft-book +EV alerts (grouped by book, EV-sorted) | `mlb.runners.fast_alert_loop`, sportsbook rows of `kalshi_alert` |
+| | `#ev-exchanges` | all-access | Novig / Kalshi / ProphetX dislocations | exchange rows of the same two pagers |
+| | `#daily-free-plays` | everyone, read-only | Up to 2 free plays/day: the highest Beezy Scores, STRONG (70+) only; paper-tracked, graded in #daily-recap | `mlb.runners.free_plays` (`mlb-free-plays` job, 17:30 / 19:20 / 22:15 UTC) |
+| DAILY MODEL CARDS (category name unchanged) | `#mlb-alerts` (was `#mlb-card`) | all-access, MLB pass | Daily MLB card: bets that cleared Kelly/edge, grouped by book, plus a slips thread | `/run` jobs -> `post_bets()` |
+| | `#nfl-alerts`, `#nhl-alerts`, `#nba-alerts` (were `-card`) | all-access + that sport's pass | Prop +EV alerts at Beezy Score >= 45 (`ALERTS_MIN_SCORE`), labelled PAPER / UNVALIDATED | `ev/sweep_nfl_props.py` (Sink A), `ev/sweep_props_alerts.py` (NHL/NBA) via `mlb_core/alerts/sport_alerts.py`; every flagged row also goes into the sport's daily "props signals" thread in the same channel |
+| PUBLIC LEDGER & RECAPS | `#daily-recap` | everyone, read-only | Nightly settlement summary across systems | `mlb-settle` -> `post_all_systems_summary()` |
+| SHARP COMMUNITY | `#general-sweat`, `#betting-theory` | everyone | Discussion | humans |
+| OPS & TWEET QUEUE | `#ops-alerts` | owner only | Runner crashes, settle failures, infra health, **performance alerts + Monday digest, odds_alert scorecard, weekly survival report**, bakeoff notices, NFL/NHL/NBA sweep alerts | `main.py`, every `run_*`, `settle_bets`, `monitor_ops`, `monitor_performance`, `odds_alert`, `weekly_survival_report`, `bakeoff_persist`, `ev/sweep_*` |
+| | `#tweet-queue` | owner only | Draft tweets, settlement cards (PNG + GIF) | `tweet_drafter.py` |
+| | `#deploys` | owner only | Deploy notes | humans |
 
-### Server structure
+**There is no #performance channel.** Performance output goes through ops (decided 2026-10-17); `DISCORD_WEBHOOK_PERFORMANCE` is no longer read.
 
-```
-ONBOARDING
-  #verify        -- Entry gate. Unverified members see only this channel.
-  #preferences   -- Self-assign book roles for tailored pick pings.
+### Feeding jobs (UTC)
 
-INFO
-  #welcome       -- What beezy.fyi is, how to read picks. Carl-bot welcome
-                    message posts here on member join.
-  #announcements -- System updates, paper mode progress, launch news.
-  #rules         -- React with checkmark to get Paper Tester role and unlock
-                    the server.
-
-PICKS  (read-only for members, webhook-only posting)
-  #daily-picks   -- post_bets() output. One thread per day.
-  #daily-recap   -- post_all_systems_summary() after settlement.
-  #performance   -- monitor_performance.py alerts + Monday digest.
-                    Paid members only (Member, Member Pro).
-
-COMMUNITY
-  #general       -- Member discussion. Paper Testers read-only.
-  #betting-theory -- Forum channel for strategy discussion. Paid members only.
-  #paper-feedback -- Reactions to picks during paper mode. All members.
-
-OPS  (Admin only)
-  #ops-alerts    -- monitor_ops.py failures + post_error() output.
-  #deploys       -- Manual deploy notes.
-```
-
-### Role hierarchy
-
-Ordered highest to lowest. Carl-bot can only assign roles below its own position.
-
-| Role | Color | Description |
-| --- | --- | --- |
-| Admin | Red `#ED4245` | Full access. You. |
-| Moderator | Pink `#EB459E` | Manage messages/kick/ban. No ops or picks config. |
-| Member Pro | Yellow `#FEE75C` | Paid tier post-launch. Mirrors Clerk Pro auth. |
-| Member | Green `#57F287` | Paid tier post-launch. Mirrors Clerk auth. |
-| Paper Tester | Blurple `#5865F2` | Free during paper mode. Assigned via #rules reaction. |
-| Bot | Grey | beezy-bot + webhook posting role. |
-| Carl-bot | Managed | Required for reaction roles and moderation. |
-| beezy-bot | Managed | The Discord bot account used by setup/cleanup scripts. |
-
-Book roles (grey, mentionable -- used for pick pings):
-`DraftKings`, `FanDuel`, `Caesars`, `BetMGM`, `theScore`, `PointsBet`
-
-These match `ONSHORE_BOOKS` in `mlb_core/odds/sgo.py` exactly. If a book
-is added or removed from SGO, update the Discord roles to match.
-
-State roles were considered but dropped -- book roles are sufficient for
-tailored pings and lower member friction.
+- Model card: `mlb-betting-morning` 16:00, `-afternoon` 19:05, `-evening` 22:00, `-pregame` 23:35 (each ~5 min after an odds snapshot). Runners post only
+  `kelly_triggered` rows; log-only systems (SB, GAME, F1H, PITCHER_ER, BATTER_HITS) post nothing. Empty slates post "No qualifying bets".
+- +EV pagers: `fast_alert_loop` every 15 min 19:00-23:59 and every 2 h 00:00-16:00 (each posted alert also logs to `bets`, system="EV");
+  `kalshi_alert` 6x/day (16:05, 19:05, 20:35, 21:35, 22:05, 23:15). MLB only.
+- `mlb-settle` 09:00 (recap), `mlb-monitor` 09:30 (degradation alerts, Monday digest), `mlb-monitor-ops` 15:20 (failures only),
+  `odds_alert` 21:15 / 23:00 / 23:45 (scorecard), `mlb-weekly-survival` Mondays 13:00.
+- Sweeps: `ev/sweep_nfl_props.py` and `ev/sweep_props_alerts.py` (NHL/NBA, 17:35 + 22:35) post EVERY flagged row into a daily "props signals" thread under `#<sport>-alerts` via the bot (admin `DISCORD_WEBHOOK_ALERTS` only if the bot is down), plus the Beezy-Score-gated subset as top-level paper/unvalidated highlights. The Kalshi-join NFL rows stay in the thread only.
+- Free plays: `mlb-free-plays` (17:30, 19:20, 22:15 UTC) picks from today's `bets` rows (model + system="EV") and the NHL/NBA/NFL sweep snapshots; <= 2 per ET day total, never replaced (state `FreePlays/{ET day}/posted.json`). `deploy/setup_free_plays.sh`.
+- Tweets: `mlb-tweet-picks-schedule` 17:00, `mlb-tweet-recap-schedule` 10:00; settlement mode not provisioned.
 
 ### Webhook routing
 
-Each webhook is stored in Secret Manager and mounted on the Cloud Run
-service as an environment variable:
+`mlb_core/alerts/discord_routes.py::webhook_for(kind, sport=None)` is the one place that picks a webhook; a kind never falls back to a channel
+for a different audience. Blank values count as unset; an unset chain means print-only.
 
-| Secret | Env var | Channel | Used by |
-| --- | --- | --- | --- |
-| `discord-webhook-url` | `DISCORD_WEBHOOK_URL` | `#daily-picks` | `post_bets()` |
-| `discord-webhook-summary` | `DISCORD_WEBHOOK_SUMMARY` | `#daily-recap` | `post_all_systems_summary()` |
-| `discord-ops-webhook-url` | `DISCORD_WEBHOOK_OPS` | `#ops-alerts` | `post_error()`, `post_ops_alert()` |
-| `discord-webhook-performance` | `DISCORD_WEBHOOK_PERFORMANCE` | `#performance` | `monitor_performance.py` (rolling perf alerts + Monday digest), `weekly_survival_report.py` |
-| `discord-webhook-alerts` (secret not created yet; both jobs' `--set-secrets` already reference it) | `DISCORD_WEBHOOK_ALERTS` | recommended: new `#soft-line-alerts` channel (2026-08-16 recommendation, not yet built) -- falls back to `#daily-picks` via `DISCORD_WEBHOOK_URL` until then | `mlb.runners.fast_alert_loop`, `mlb.runners.kalshi_alert` (both intraday +EV pagers) |
+| Kind | Chain | Channel |
+|---|---|---|
+| `ev_sportsbooks` | `DISCORD_WEBHOOK_EV_BOOKS` -> `_ALERTS` -> `_OPS` | #ev-sportsbooks |
+| `ev_exchanges` | `DISCORD_WEBHOOK_EV_EXCHANGES` -> `_ALERTS` -> `_OPS` | #ev-exchanges |
+| `card` (sport) | `DISCORD_WEBHOOK_CARD_<SPORT>` -> `DISCORD_WEBHOOK_URL` | #<sport>-card |
+| `recap` | `DISCORD_WEBHOOK_RECAP` -> legacy `_SUMMARY` -> `_URL` | #daily-recap |
+| `tweets` | `DISCORD_WEBHOOK_TWEETS` -> `_OPS` | #tweet-queue |
+| `free_plays` | `DISCORD_WEBHOOK_FREE_PLAYS` (no fallback) | #daily-free-plays |
+| `ops` | `DISCORD_WEBHOOK_OPS` | #ops-alerts |
 
 **Routing is centralised (2026-10-15):** `mlb_core/alerts/discord_routes.py::webhook_for(kind, sport=None)` -- `ev_sportsbooks` (EV_BOOKS -> ALERTS -> OPS),
 `ev_exchanges` (EV_EXCHANGES -> ALERTS -> OPS), `card` (CARD_<SPORT> -> URL), `recap` (RECAP -> legacy SUMMARY -> URL), `tweets` (TWEETS -> OPS),
 `ops` (OPS only). +EV pagers (`fast_alert_loop`, `kalshi_alert`) no longer fall back to #daily-picks (unset chain = print only) and split
 exchange vs sportsbook rows into their own channels; every +EV embed carries `url` + deep links to /ev and /edge. The NFL/NHL/NBA
 sweeps (`ev/sweep_nfl_props.py`, `ev/sweep_props_alerts.py`) deliberately keep an admin-only webhook (unvalidated rows) and only gained the
-links. **2026-10-17:** their alerts go into ONE daily thread per sport under that sport's card channel ("NFL props signals - Sat Oct 18" under
-`#nfl-card`) through beezy-bot (`mlb_core.alerts.discord_routes.post_props_signal`; bot `POST /internal/post-message` takes
+links. **2026-10-17:** their alerts go into ONE daily thread per sport under that sport's alerts channel ("NFL props signals - Sat Oct 18" under
+`#nfl-alerts`, formerly `#nfl-card`) through beezy-bot (`mlb_core.alerts.discord_routes.post_props_signal`; bot `POST /internal/post-message` takes
 `daily_thread: {name}` and finds-or-creates the active thread). No channels of their own (that cluttered the server); access follows the
 sport pass. They used to fall back `DISCORD_WEBHOOK_ALERTS -> DISCORD_WEBHOOK_OPS` and, because the `discord-webhook-alerts` secret never
 existed, every NFL props alert landed in `#ops-alerts`. The sweep jobs need `BEEZY_BOT_URL` + `BEEZY_BOT_SECRET`
 (`deploy/setup_props_alerts.sh`, `deploy/rollout_multisport_live.sh`); `DISCORD_WEBHOOK_ALERTS` is only the bot-down fallback and neither set
 means log-only. The NFL sweep's own run notices (started / budget exhausted) still go to `#ops-alerts`. Threads do not push-notify unless a
-member follows them: acceptable for unvalidated shadow signals. Kambi clones: `sugarhouse` is dropped when `betrivers` quotes the same proposition (`drop_kambi_clones`) and folded into `betrivers`
-in `ev/props.parse_event_props`, so a pair counts as ONE book in consensus, Discord and `bets`.
+member follows them: acceptable for unvalidated shadow signals.
+The Beezy-Score-gated subset (>= `ALERTS_MIN_SCORE`, default 45) of those rows is ALSO posted top-level as a highlight in the same alerts channel, labelled paper/unvalidated (`mlb_core/alerts/sport_alerts.py`, webhook `DISCORD_WEBHOOK_CARD_<SPORT>` or bot).
+The `-card` secret/env names (`DISCORD_WEBHOOK_CARD_<SPORT>`) were kept when the channels were renamed to `-alerts`; so were the bot post keys (`mlb_card` ...).
+Secrets (Secret Manager -> env): `discord-webhook-ev-books`, `-ev-exchanges`, `-card-{mlb,nfl,nba,nhl}`, `-recap`, `-free-plays`, `-tweets`, `discord-ops-webhook-url`;
+legacy `discord-webhook-url`, `-summary` still mounted. `DISCORD_WEBHOOK_<SYSTEM>` per-system override still beats the card webhook.
+Kambi clones: `sugarhouse` is dropped when `betrivers` quotes the same line and folded into `betrivers` in `ev/props.parse_event_props`.
 
-`discord-bot/` (Node 22, discord.js 14, `node:sqlite`, no voice/native deps; own tests via `npm test`) is the persistent beezy-bot: `/ev /proj
-/edge /record /ask /link`, owner-only `/setup-server` (idempotent roles/channels/webhooks + gcloud secret commands), antispam/automod,
-welcome, `POST /internal/sync-role` and `POST /internal/post-message` (bot-authored alerts + threads), plus owner-only admin commands. DEPLOYED to Cloud Run
-(`beezy-discord-bot`); see handoffs/handoff_2026-10-15_multisport_pricing_discord_bot.md addendum.
+### Beezy Score in Python
 
-`post_error()` previously routed to the main picks webhook. It now uses
-`DISCORD_WEBHOOK_OPS`, keeping errors out of member-facing channels.
+`mlb_core/alerts/beezy_score.py` is a port of `beezy-vip/lib/beezy-score.ts` (v2: edge 60 + consensus 20 + hit prob 20; STRONG 70, LEAN 45;
+HR model-only capped at 64). `tests/test_beezy_score_port.py` pins the constants against the TS source so the two cannot drift. Cut points were
+chosen on the same sample they were measured on, and are unvalidated for model bets and for NFL/NHL/NBA props.
 
-`post_ops_alert(message, run_date)` added for `monitor_ops.py` to call directly
-for infra health failures.
+### Rename rollout (do in this order)
 
-Per-system webhook override still supported: `DISCORD_WEBHOOK_{SYSTEM}`
-(e.g. `DISCORD_WEBHOOK_NRFI`) takes priority over `DISCORD_WEBHOOK_URL`.
+1. Deploy the bot image (`discord-bot/`). Until step 2 it still finds the legacy `#<sport>-card` channels, so nothing drops.
+2. Owner runs `/setup-server`: it RENAMES `#<sport>-card` -> `#<sport>-alerts` in place (`renamedFrom`), creates `#daily-free-plays`'s webhook, and
+   prints the `gcloud secrets` commands for `discord-webhook-free-plays`. Store it, then redeploy the service / re-run `deploy/setup_props_alerts.sh`
+   and `deploy/setup_free_plays.sh` so the jobs mount the new secrets.
+3. A sport with no `-card-<sport>` secret mounted simply stays admin-only; nothing errors.
 
-### Bot infrastructure
+### beezy-bot (`discord-bot/`, Cloud Run `beezy-discord-bot`)
 
-**beezy-bot** -- Discord application bot account.
-- Token stored in Secret Manager as `discord-bot-token`.
-- Used by `setup_discord.py` (one-time server setup) and
-  `cleanup_discord.py` (role cleanup).
-- Not a persistent bot -- scripts run on-demand from Cloud Shell.
-- Does NOT handle real-time events. Webhook-only for all pick posting.
-- See §15.7 gotcha: webhook messages do not trigger Discord bots.
-  GamblyBot was the original bot and is still in the server but ignores
-  webhook content. Real bot needed for interactive commands (backlog).
-
-**Carl-bot** -- Third-party moderation and reaction role bot.
-- Dashboard: https://carl.gg
-- Handles: reaction roles (#rules gate, #preferences book roles),
-  welcome message, automod (Medium preset), modlogs to #ops-alerts.
-- Mute role: Moderator.
-- #rules and #preferences channels need explicit Carl-bot permission overrides
-  (Send Messages, Add Reactions, Manage Messages) because the default
-  everyone deny blocks Carl-bot otherwise.
-
-### Stripe -> Discord role sync (backlog)
-
-When a user pays on beezy.fyi via Stripe/Clerk, they should automatically
-receive the `Member` or `Member Pro` Discord role. This requires:
-
-1. A Clerk/Stripe webhook hitting a Cloud Run endpoint
-2. A persistent bot (real token, not webhook) to assign roles via Discord API
-3. Mapping Clerk user ID -> Discord user ID (requires OAuth link at signup)
-
-Not blocking launch. Manual role assignment during early paid access is fine.
-Design the Clerk signup flow to prompt Discord OAuth link from day one.
+Node 22 / discord.js 14 / `node:sqlite`. Slash commands `/ev /proj /edge /record /ask /link`, owner-only `/setup-server`, antispam/automod, welcome,
+`POST /internal/sync-role` (Stripe -> role) and `POST /internal/post-message`. Callers use `post_via_bot()` (env `BEEZY_BOT_URL` +
+`BEEZY_BOT_SECRET`, header `X-Beezy-Secret`); channel keys are an allowlist (`POST_CHANNELS`). Bot-authored messages carry plain slip text in `content`
+and optionally a `thread` where the slip bots (GamblyBot, Playbook; `SLIP_BOT_NAMES`) are @mentioned. Webhook is the fallback if the bot is down.
 
 ### Discord gotchas
 
-**Webhook messages do not trigger Discord bots.** GamblyBot and beezy-bot
-both ignore webhook content. Carl-bot reaction roles work because Carl-bot
-listens to reaction events, not message content.
-
-**Carl-bot requires explicit channel permission overrides.** The #rules and
-#preferences channels have everyone deny at the channel level. Carl-bot
-must be added explicitly to each channel's permission overrides with Send
-Messages + Add Reactions + Manage Messages, or it gets a 403 on posting.
-
-**Carl-bot role hierarchy.** Carl-bot's role must be positioned above any
-role it assigns. If Paper Tester is moved above Carl-bot in the hierarchy,
-the reaction role assignment silently fails.
-
-**News channel and Forum channel require Community mode.** The setup script
-handles this gracefully with try/except -- falls back to text channel if
-Community mode is not enabled. Enable Community mode in Server Settings ->
-Community to unlock both channel types.
-
-**Book role pings require a real bot token.** post_bets() via webhook cannot
-ping roles. Role pings from webhooks are silently ignored by Discord.
-Implementing book-role pings requires replacing the webhook call with a
-bot API call using beezy-bot's token. This is the primary driver for
-eventually moving from webhooks to a persistent bot. (Backlog.)
+- **Webhook messages do not trigger other bots**, and webhook role pings are ignored. That is why alerts and cards go bot-authored first.
+- **News/Forum channel types need Community mode**; setup falls back to text channels.
+- `permissionOverwrites.set()` replaces a channel's overwrites, so manual per-channel overrides are reset each `/setup-server` run.
 
 ---
 
@@ -3606,7 +3536,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-17 02:00 CST_
+_Last updated: 2026-10-18 22:20 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).

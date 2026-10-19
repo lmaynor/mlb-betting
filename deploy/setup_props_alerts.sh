@@ -45,6 +45,14 @@ SECRETS="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_OPS=discord-ops-we
 if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
   SECRETS="${SECRETS},DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest"
 fi
+# Member-channel delivery (#nhl-alerts / #nba-alerts highlights, Beezy-Score-gated; mlb_core/alerts/sport_alerts.py). Each card
+# secret is mounted only if it exists, so provisioning order does not matter: no secret = no gated highlight for that sport
+# (the daily signals thread, which goes through the bot, is unaffected).
+for pair in "DISCORD_WEBHOOK_CARD_NHL=discord-webhook-card-nhl" "DISCORD_WEBHOOK_CARD_NBA=discord-webhook-card-nba"; do
+  if gcloud secrets describe "${pair#*=}" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
+    SECRETS="${SECRETS},${pair}:latest"
+  fi
+done
 
 # job_name | module args (comma-separated for --args) | cron(UTC) | timeout(s)
 ROWS=(

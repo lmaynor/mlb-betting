@@ -326,11 +326,10 @@ def _post_alert(system: str, alerts: list[str], stats: dict, run_date: str) -> N
 
 def _post_weekly_digest(system_stats: dict, per_book: dict[str, dict],
                         run_date: str) -> None:
-    """Post full season summary every Monday (#performance)."""
-    import os
+    """Post full season summary every Monday (#ops-alerts; there is no #performance channel)."""
     from mlb_core.notify.discord import _get_ops_webhook, _post
 
-    webhook_url = os.getenv("DISCORD_WEBHOOK_PERFORMANCE") or _get_ops_webhook()
+    webhook_url = _get_ops_webhook()
     if not webhook_url:
         return
 

@@ -83,11 +83,10 @@ def _post_freshness_alert(fr: dict, day: str) -> None:
 
 
 def _post_scorecard(scorecard, day: str, n_new: int) -> None:
-    """Lag-vs-informed resolution scorecard -> #performance."""
-    import os as _os
+    """Lag-vs-informed resolution scorecard -> #ops-alerts."""
     from mlb_core.notify.discord import _get_ops_webhook, _post
 
-    webhook_url = _os.getenv("DISCORD_WEBHOOK_PERFORMANCE") or _get_ops_webhook()
+    webhook_url = _get_ops_webhook()
     if not webhook_url:
         return
     fields = []

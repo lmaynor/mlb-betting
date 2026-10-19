@@ -658,14 +658,14 @@ test('server status diffs against the exported layout and checks the role hierar
   const snap = liveInventorySnapshot();
   snap.roles = snap.roles.filter((r) => r.name !== 'NHL Pass');
   snap.categories = snap.categories.filter((c) => c.name !== 'PUBLIC LEDGER & RECAPS');
-  snap.channels = snap.channels.filter((c) => c.name !== 'daily-recap' && c.name !== 'mlb-card');
-  snap.channels.find((c) => c.name === 'nfl-card').parentId = snap.cats['START HERE'].id;
+  snap.channels = snap.channels.filter((c) => c.name !== 'daily-recap' && c.name !== 'mlb-alerts');
+  snap.channels.find((c) => c.name === 'nfl-alerts').parentId = snap.cats['START HERE'].id;
   snap.roles.find((r) => r.name === 'NFL Pass').position = 55; // above the bot
   const status = buildStatus(snap);
   assert.deepEqual(status.missingRoles, ['NHL Pass']);
   assert.deepEqual(status.missingCategories, ['PUBLIC LEDGER & RECAPS']);
-  assert.deepEqual(status.missingChannels.sort(), ['daily-recap', 'mlb-card']);
-  assert.deepEqual(status.misplacedChannels, ['#nfl-card (expected in DAILY MODEL CARDS)']);
+  assert.deepEqual(status.missingChannels.sort(), ['daily-recap', 'mlb-alerts']);
+  assert.deepEqual(status.misplacedChannels, ['#nfl-alerts (expected in DAILY MODEL CARDS)']);
   assert.equal(status.botAbovePaidRoles, false);
   assert.deepEqual(status.rolesAtOrAboveBot, ['NFL Pass']);
   const text = formatStatus(status);

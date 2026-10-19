@@ -78,10 +78,10 @@ export const LAYOUT = [
     visibleTo: [EVERYONE],
     readOnly: true,
     channels: [
-      { name: 'mlb-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.mlb], topic: `Daily MLB model card -> ${SITE}/edge` },
-      { name: 'nfl-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nfl], topic: `Daily NFL model card -> ${SITE}/edge` },
-      { name: 'nba-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nba], topic: `Daily NBA model card -> ${SITE}/edge` },
-      { name: 'nhl-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nhl], topic: `Daily NHL model card -> ${SITE}/edge` },
+      { name: 'mlb-alerts', renamedFrom: 'mlb-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.mlb], topic: `MLB alerts + daily model card (paper / unvalidated where labelled) -> ${SITE}/edge` },
+      { name: 'nfl-alerts', renamedFrom: 'nfl-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nfl], topic: `NFL alerts + daily model card (paper / unvalidated where labelled) -> ${SITE}/edge` },
+      { name: 'nba-alerts', renamedFrom: 'nba-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nba], topic: `NBA alerts + daily model card (paper / unvalidated where labelled) -> ${SITE}/edge` },
+      { name: 'nhl-alerts', renamedFrom: 'nhl-card', visibleTo: [ALL_ACCESS_ROLE, SPORT_PASS_ROLES.nhl], topic: `NHL alerts + daily model card (paper / unvalidated where labelled) -> ${SITE}/edge` },
     ],
   },
   {
@@ -117,12 +117,13 @@ export const LAYOUT = [
 export const WEBHOOK_TARGETS = [
   { channel: 'ev-sportsbooks', secret: 'discord-webhook-ev-books', env: 'DISCORD_WEBHOOK_EV_BOOKS' },
   { channel: 'ev-exchanges', secret: 'discord-webhook-ev-exchanges', env: 'DISCORD_WEBHOOK_EV_EXCHANGES' },
-  { channel: 'mlb-card', secret: 'discord-webhook-card-mlb', env: 'DISCORD_WEBHOOK_CARD_MLB' },
-  { channel: 'nfl-card', secret: 'discord-webhook-card-nfl', env: 'DISCORD_WEBHOOK_CARD_NFL' },
-  { channel: 'nba-card', secret: 'discord-webhook-card-nba', env: 'DISCORD_WEBHOOK_CARD_NBA' },
-  { channel: 'nhl-card', secret: 'discord-webhook-card-nhl', env: 'DISCORD_WEBHOOK_CARD_NHL' },
+  { channel: 'mlb-alerts', secret: 'discord-webhook-card-mlb', env: 'DISCORD_WEBHOOK_CARD_MLB' },
+  { channel: 'nfl-alerts', secret: 'discord-webhook-card-nfl', env: 'DISCORD_WEBHOOK_CARD_NFL' },
+  { channel: 'nba-alerts', secret: 'discord-webhook-card-nba', env: 'DISCORD_WEBHOOK_CARD_NBA' },
+  { channel: 'nhl-alerts', secret: 'discord-webhook-card-nhl', env: 'DISCORD_WEBHOOK_CARD_NHL' },
   { channel: 'daily-recap', secret: 'discord-webhook-recap', env: 'DISCORD_WEBHOOK_RECAP' },
   { channel: 'ops-alerts', secret: 'discord-ops-webhook-url', env: 'DISCORD_WEBHOOK_OPS' },
+  { channel: 'daily-free-plays', secret: 'discord-webhook-free-plays', env: 'DISCORD_WEBHOOK_FREE_PLAYS' },
   { channel: 'tweet-queue', secret: 'discord-webhook-tweets', env: 'DISCORD_WEBHOOK_TWEETS' },
 ];
 
@@ -367,6 +368,15 @@ export async function provisionBeezyServer(guild, { ownerId, botUserId, reason =
       const overwrites = toDiscordOverwrites(guild, spec, { extraMembers: extras });
 
       let channel = findText(guild, ch.name);
+      if (!channel && ch.renamedFrom) {
+        // Renamed channel: adopt the old one (keeps history, webhooks and permissions) instead of creating a duplicate.
+        const old = findText(guild, ch.renamedFrom);
+        if (old) {
+          await old.setName(ch.name, reason);
+          channel = old;
+          result.channels.push({ name: ch.name, status: 'renamed', from: ch.renamedFrom });
+        }
+      }
       if (!channel) {
         channel = await guild.channels.create({
           name: ch.name,

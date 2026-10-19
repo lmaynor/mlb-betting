@@ -17,9 +17,11 @@ Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
   EVSweep/nfl_props/latest.json                    rows (Kalshi join) + book_outliers (Sink A); public +EV feed
-Discord: alerts go into the daily 'NFL props signals' thread under #nfl-card via the bot (the admin DISCORD_WEBHOOK_ALERTS hook if
-the bot is down; log-only if neither); run notices go to DISCORD_WEBHOOK_OPS. NEVER the +EV channels or #ops-alerts for signals:
-these rows are unvalidated.
+Discord: every flagged row goes into the daily 'NFL props signals' thread under #nfl-alerts via the bot (the admin
+DISCORD_WEBHOOK_ALERTS hook if the bot is down; log-only if neither); run notices go to DISCORD_WEBHOOK_OPS. On top of that, the
+Sink A book outliers that clear the Beezy Score floor are posted as top-level highlights in #nfl-alerts, labelled
+paper/unvalidated (mlb_core/alerts/sport_alerts.py). NEVER the +EV channels or #ops-alerts for signals; the Kalshi-join rows
+stay in the thread only: these rows are unvalidated.
 """
 
 from __future__ import annotations
@@ -423,6 +425,11 @@ def post_new_sink_a(outliers: list, state: dict, day: str, cfg=None) -> int:
     if not new:
         return 0
     sent = 0
+    # Member channel (#nfl-alerts): Beezy-Score-gated subset, labelled paper/unvalidated. Admin still gets all.
+    from mlb_core.alerts.sport_alerts import gate, post_sport_alerts
+    member = gate(new)
+    if member and post_sport_alerts("nfl", member):
+        notified.update(_sink_a_key(r) for r in member)
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
         if post_discord(f"NFL props sweep (Sink A): {len(batch)} new book outlier(s)", alert_embed_sink_a(batch)):
