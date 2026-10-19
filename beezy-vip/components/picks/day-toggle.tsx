@@ -31,7 +31,9 @@ export function DayToggle({ day, today, yesterday, upcoming = [], viewDate }: {
     const p = new URLSearchParams(sp.toString())
     p.delete('game')
     p.delete('date')
-    if (d === 'today') p.delete('day')
+    // With later game days on the strip, TODAY names its own date. Without it the board opens on the next day with games when today
+    // has none, so clicking TODAY would silently show another day's events.
+    if (d === 'today') { p.delete('day'); if (upcoming.length > 0) p.set('date', today) }
     else if (d === 'yesterday') p.set('day', 'yesterday')
     else { p.delete('day'); p.set('date', d) }
     const qs = p.toString()
