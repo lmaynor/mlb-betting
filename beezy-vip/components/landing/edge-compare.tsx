@@ -65,7 +65,7 @@ export async function EdgeCompare() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: '1 1 240px', minWidth: 0 }}>
                 <Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" color="var(--fog)" />
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                  <span className="dell-heading" style={{ flexShrink: 0, fontSize: '9px', letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+                  <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', letterSpacing: '0.05em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
                     {bet.system}
                   </span>
                   <span style={{ fontSize: '13.5px', color: 'var(--ash)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

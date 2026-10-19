@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { OgBrandBadge } from "@/lib/og-brand";
 import { apiGetAnalyticsDeepDive, apiGetEvFeed } from "@/lib/betting-api";
 import { formatOdds } from "@/lib/odds";
 import { propStatLabel, SPORT_PILLARS } from "@/lib/sports";
@@ -196,10 +197,7 @@ export async function GET(req: Request) {
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ display: "flex", alignItems: "baseline" }}>
-            <span style={{ fontSize: `${vertical ? 56 : 38}px`, fontWeight: 900, color: C.text, letterSpacing: "-2px" }}>BEEZY</span>
-            <span style={{ fontSize: `${vertical ? 56 : 38}px`, fontWeight: 900, color: C.emerald, letterSpacing: "-2px" }}>.FYI</span>
-          </div>
+          <OgBrandBadge size={vertical ? 80 : 56} />
           <span style={{ fontSize: `${vertical ? 17 : 12}px`, color: C.sub, letterSpacing: "2px", fontWeight: 700 }}>+EV SCANNER &amp; MULTI-SPORT DISLOCATIONS</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>

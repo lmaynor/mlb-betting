@@ -22,7 +22,7 @@ def clean_env(monkeypatch):
 
 
 def test_nothing_set_returns_none():
-    for kind in ("ev_sportsbooks", "ev_exchanges", "recap", "tweets", "ops", "free_plays"):
+    for kind in ("ev_sportsbooks", "ev_exchanges", "recap", "tweets", "ops", "free_plays", "props_alerts"):
         assert dr.webhook_for(kind) is None
     assert dr.webhook_for("card", sport="nfl") is None
 
@@ -34,6 +34,7 @@ def test_nothing_set_returns_none():
     ("tweets", ["DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"]),
     ("ops", ["DISCORD_WEBHOOK_OPS"]),
     ("free_plays", ["DISCORD_WEBHOOK_FREE_PLAYS"]),
+    ("props_alerts", ["DISCORD_WEBHOOK_ALERTS"]),
 ])
 def test_chain_order(monkeypatch, kind, chain):
     # setting each link from the LAST to the first must always surface the earliest one set
@@ -307,3 +308,65 @@ def test_free_plays_never_falls_back_to_another_channel(monkeypatch):
         monkeypatch.setenv(v, f"https://hook.test/{v}")
     assert dr.webhook_for("free_plays") is None
     assert dr.bot_channel_key("free_plays") == "free_plays"
+
+
+def test_props_alerts_never_reach_ops_or_a_member_channel(monkeypatch):
+    # the unvalidated NFL/NHL/NBA props feed: #ops-alerts is for failures, and the member channels are for validated alerts
+    for var in ("DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_EV_EXCHANGES"):
+        monkeypatch.setenv(var, f"https://hook.test/{var}")
+    assert dr.webhook_for("props_alerts") is None
+
+
+def test_signals_thread_name_is_one_ascii_name_per_sport_per_site_day():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = datetime(2026, 10, 18, 9, 5, tzinfo=ZoneInfo("America/Chicago"))
+    assert dr.signals_thread_name("nfl", now) == "NFL props signals - Sun Oct 18"
+    assert dr.signals_thread_name("nba", now) == "NBA props signals - Sun Oct 18"
+    assert dr.signals_thread_name("nhl", now).isascii()
+
+
+def test_props_signal_goes_to_the_sports_daily_thread_under_its_card_channel(monkeypatch):
+    seen = {}
+
+    def fake_bot(kind, content, embeds, sport=None, timeout=15.0, thread=None, daily_thread=None):
+        seen.update(kind=kind, content=content, embeds=embeds, sport=sport, daily_thread=daily_thread, thread=thread)
+        return True
+
+    monkeypatch.setattr(dr, "post_via_bot", fake_bot)
+    assert dr.post_props_signal("nfl", "NFL props sweep: 2 new", [{"title": "t"}]) is True
+    assert (seen["kind"], seen["sport"], seen["thread"]) == ("card", "nfl", None)
+    assert seen["daily_thread"].startswith("NFL props signals - ")
+    assert dr.bot_channel_key("card", "nfl") == "nfl_card"                       # the channel the thread lives under
+
+
+def test_props_signal_falls_back_to_the_admin_hook_never_ops_or_a_member_channel(monkeypatch):
+    monkeypatch.setattr(dr, "post_via_bot", lambda *a, **k: False)                # bot down / not configured
+    for var in ("DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_EV_BOOKS", "DISCORD_WEBHOOK_CARD_NFL"):
+        monkeypatch.setenv(var, f"https://hook.test/{var}")
+    assert dr.post_props_signal("nfl", "x") is False                              # nothing admin-only configured: log, do not post
+    sent = []
+
+    class _R:
+        status_code = 204
+
+    import requests
+    monkeypatch.setattr(requests, "post", lambda url, **kw: sent.append(url) or _R())
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://hook.test/alerts")
+    assert dr.post_props_signal("nfl", "x") is True
+    assert sent == ["https://hook.test/alerts"]
+
+
+def test_post_via_bot_sends_daily_thread(monkeypatch):
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s")
+    seen = {}
+
+    class _R:
+        status_code = 200
+
+    import requests
+    monkeypatch.setattr(requests, "post", lambda url, json=None, **kw: seen.update(url=url, json=json) or _R())
+    assert dr.post_via_bot("card", None, [{"title": "t"}], sport="nba", daily_thread="NBA props signals - Sun Oct 18") is True
+    assert seen["url"] == "https://bot.test/internal/post-message"
+    assert seen["json"] == {"channel": "nba_card", "embeds": [{"title": "t"}], "daily_thread": {"name": "NBA props signals - Sun Oct 18"}}

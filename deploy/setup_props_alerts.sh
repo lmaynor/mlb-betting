@@ -9,8 +9,10 @@
 # or removing these schedulers cannot affect the credit budget. It REFUSES a snapshot older than 45 min, so a missed
 # banker run means "no alerts", never alerts on stale quotes.
 #
-# DISCORD: alerts go to DISCORD_WEBHOOK_ALERTS if that secret exists, else DISCORD_WEBHOOK_OPS (admin-only). The
-# sweep's own code refuses to fall back to a member channel (tests/test_ev_props_alerts.py pins that).
+# DISCORD: alerts post through beezy-bot into ONE daily thread per sport under its card channel (#nhl-card / #nba-card): no channels
+# of their own, access follows the sport pass. The jobs need BEEZY_BOT_URL + BEEZY_BOT_SECRET. DISCORD_WEBHOOK_ALERTS (secret
+# discord-webhook-alerts, optional) is only the bot-down fallback. With neither the sweep logs instead of posting; it never falls
+# back to #ops-alerts (failures only) or a +EV channel (tests/test_ev_props_alerts.py pins that).
 #
 # Prereqs: the feeds image (see IMAGE below -- NOT the production mlb-betting image) rebuilt with this code; odds banking provisioned
 # (deploy/setup_odds_banking.sh) -- the sweep has nothing to read before that. Idempotent.
@@ -38,18 +40,17 @@ fi
 gcloud iam service-accounts describe "$SA_EMAIL" --quiet >/dev/null || { echo "ERROR: $SA_EMAIL not found."; exit 1; }
 gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 || { echo "ERROR: $IMAGE not found."; exit 1; }
 
-SECRETS="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest"
+BOT_URL="${BEEZY_BOT_URL:-https://beezy-discord-bot-628109313129.us-central1.run.app}"
+SECRETS="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,BEEZY_BOT_SECRET=beezy-bot-secret:latest"
 if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
   SECRETS="${SECRETS},DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest"
 fi
-# Member-channel delivery (#nhl-alerts / #nba-alerts, Beezy-Score-gated; mlb_core/alerts/sport_alerts.py). Each secret is
-# mounted only if it exists, so provisioning order does not matter: no secret = the sweep stays admin-only for that sport.
-BOT_ENV=""
-for pair in "DISCORD_WEBHOOK_CARD_NHL=discord-webhook-card-nhl" "DISCORD_WEBHOOK_CARD_NBA=discord-webhook-card-nba" \
-            "BEEZY_BOT_SECRET=beezy-bot-secret"; do
+# Member-channel delivery (#nhl-alerts / #nba-alerts highlights, Beezy-Score-gated; mlb_core/alerts/sport_alerts.py). Each card
+# secret is mounted only if it exists, so provisioning order does not matter: no secret = no gated highlight for that sport
+# (the daily signals thread, which goes through the bot, is unaffected).
+for pair in "DISCORD_WEBHOOK_CARD_NHL=discord-webhook-card-nhl" "DISCORD_WEBHOOK_CARD_NBA=discord-webhook-card-nba"; do
   if gcloud secrets describe "${pair#*=}" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     SECRETS="${SECRETS},${pair}:latest"
-    [[ "$pair" == BEEZY_BOT_SECRET=* ]] && BOT_ENV=",BEEZY_BOT_URL=https://beezy-discord-bot-628109313129.us-central1.run.app"
   fi
 done
 
@@ -64,7 +65,7 @@ ROWS=(
 for row in "${ROWS[@]}"; do
   IFS='|' read -r JOB ARGS CRON TMO <<<"$row"
   FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL" --set-secrets="$SECRETS"
-         --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}${BOT_ENV}" --command="python" --args="$ARGS"
+         --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},BEEZY_BOT_URL=${BOT_URL}" --command="python" --args="$ARGS"
          --memory=1Gi --cpu=1 --task-timeout="$TMO" --max-retries=0 --quiet)
   if gcloud run jobs describe "$JOB" --region="$REGION" --quiet >/dev/null 2>&1; then
     gcloud run jobs update "$JOB" "${FLAGS[@]}"

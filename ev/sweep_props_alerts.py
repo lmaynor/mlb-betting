@@ -4,8 +4,10 @@ leave-self-out consensus of the OTHER real books at the same (player, stat, poin
 
 No Kalshi leg, no orders, no model. Evidence + admin-channel alerts only: the signals are UNVALIDATED (the only
 positive paper evidence behind this idea is MLB soft-book vs Pinnacle-anchored consensus, +7.56%, itself unverified
-for execution). EVERY flagged row goes to the admin channel (DISCORD_WEBHOOK_ALERTS, else _OPS); only the Beezy-Score-gated
-subset (mlb_core.alerts.sport_alerts, labelled paper/unvalidated) goes to the member #<sport>-alerts channel.
+for execution). Every flagged row goes into a daily thread under the sport's alerts channel (#nhl-alerts / #nba-alerts) via the
+bot; the admin DISCORD_WEBHOOK_ALERTS hook is the fallback, log-only if neither. The Beezy-Score-gated subset
+(mlb_core.alerts.sport_alerts, labelled paper/unvalidated) is also posted top-level as a highlight. NEVER a +EV channel or
+#ops-alerts.
 
 ZERO EXTRA ODDS CREDITS: this reads the newest props snapshot the odds banker already bought
 (nba/odds/accumulator.py -> OddsAccum/{sport}/raw/{date}/props_{HHMM}.json, pointer latest_props.json). Run it a few
@@ -36,7 +38,7 @@ import pandas as pd
 import requests
 
 from ev.props import parse_event_props, scan_book_outliers
-from mlb_core.alerts.discord_routes import with_deep_links
+from mlb_core.alerts.discord_routes import post_props_signal, webhook_for, with_deep_links
 
 log = logging.getLogger("ev.sweep_props_alerts")
 _ET = ZoneInfo("America/New_York")
@@ -155,22 +157,19 @@ def outlier_rows(spec: PropSport, events: list, now: datetime, resolver=None, co
     return sorted(rows, key=lambda r: (-int(r["flag"]), -r["ev"])), stats
 
 
-# ----------------------------------------------------------------------------- discord (admin channels only)
+# ----------------------------------------------------------------------------- discord (daily thread under the card channel)
 def webhook_url() -> str:
-    # Admin-only on purpose (unvalidated shadow rows) -- not the member-facing discord_routes chain.
-    return os.environ.get("DISCORD_WEBHOOK_ALERTS") or os.environ.get("DISCORD_WEBHOOK_OPS") or ""
+    # Only the bot-down fallback: the shared admin hook (DISCORD_WEBHOOK_ALERTS). Never a member channel and never #ops-alerts,
+    # which is for failures.
+    return webhook_for("props_alerts") or ""
 
 
-def post_discord(text: str, embeds=None) -> bool:
-    url = webhook_url()
-    if not url:
-        log.warning("no Discord webhook configured; alert not posted")
-        return False
-    try:
-        return requests.post(url, json={"content": text[:1900], "embeds": embeds or []}, timeout=20).status_code < 300
-    except requests.RequestException as e:
-        log.warning("discord post failed: %r", e)
-        return False
+def post_discord(text: str, embeds=None, sport: str | None = None) -> bool:
+    """Alerts go into the sport's daily signals thread under its card channel (post_props_signal); log-only when nothing took it."""
+    ok = post_props_signal(sport or "nhl", text, embeds)
+    if not ok:
+        log.warning("props signal not posted (no bot, no admin hook): %s", text[:120])
+    return ok
 
 
 def alert_embed(spec: PropSport, rows: list) -> list:
@@ -213,7 +212,7 @@ def post_new(spec: PropSport, rows: list, day: str, discord: bool = True) -> int
         notified.update(_key(r) for r in member)
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
-        if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch)):
+        if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch), spec.sport):
             notified.update(_key(r) for r in batch)
             sent += len(batch)
     try:

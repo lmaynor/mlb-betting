@@ -7,7 +7,8 @@ import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
 import { betKind, type PickKind } from '@/lib/pick-systems'
 import { propStatLabel, type SportSlug } from '@/lib/sports'
-import { matchesBook, matchesQuery, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesBook, matchesSignal, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesSearch, searchHaystack } from '@/lib/team-directory'
 import { pickLabel } from '@/lib/tokens'
 import type { Bet, SportProjectionRow } from '@/lib/types'
 
@@ -149,8 +150,9 @@ export function filterTopPicks(picks: TopPick[], f: PickFilters, n = TOP_N): Top
   const kept = picks.filter(p =>
     (!f.sport || p.sport === f.sport) &&
     matchesTier(p.score, f.tier) &&
+    matchesSignal({ score: p.score, hasLine: p.odds != null, confluence: false, edge: p.edge }, f.signal) &&
     matchesBook(p.book, f) &&
-    matchesQuery(`${p.who} ${p.what} ${p.game}`, f.q))
+    matchesSearch(searchHaystack(p.sport, p.who, p.what, p.game), f.q))
   const ranked = rankTopPicks(kept, n)
   // A cross-sport pick carries no model probability or start time, so those two sorts fall back to the score.
   const key: Partial<Record<PickSort, (p: TopPick) => number>> = { edge: p => p.edge ?? -9, odds: p => p.odds ?? -9999 }

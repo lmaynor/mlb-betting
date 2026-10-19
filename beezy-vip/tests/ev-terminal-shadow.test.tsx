@@ -194,7 +194,8 @@ describe('source files with typographic characters stay ASCII', () => {
   const files = [
     'lib/sport-assets.ts', 'lib/sports.ts', 'lib/types.ts', 'components/ui/sport-assets.tsx',
     'app/ev/ev-client.tsx', 'components/picks/market-prices.tsx', 'components/picks/sport-projections-board.tsx', 'components/picks/sport-tabs.tsx',
-    'components/picks/projection-picks-page.tsx', 'components/picks/projection-system-page.tsx', 'components/picks/system-methodology.tsx',
+    'components/picks/sport-board-page.tsx', 'components/picks/system-page.tsx', 'components/picks/system-methodology.tsx',
+    'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'components/picks/filter-bar.tsx', 'lib/team-directory.ts', 'lib/board-rows.ts', 'lib/board-games.ts',
     'app/sports/[sport]/page.tsx',
     'app/api/og/route.tsx', 'app/api/og/ev-recap-card/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
     'app/edge/page.tsx', 'app/edge/edge-client.tsx', 'app/edge/cockpit.tsx', 'app/api/edge-cockpit/route.ts',

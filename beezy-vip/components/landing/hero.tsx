@@ -3,6 +3,7 @@ import { apiGetAnalyticsDeepDive, apiGetEvFeed } from '@/lib/betting-api'
 import { HeroPerfCard } from '@/components/landing/hero-perf-card'
 import { propKey } from '@/lib/dedupe'
 import { siteDateKey } from '@/lib/dates'
+import { SURFACE_CARD } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
 const B = '1px solid var(--basalt)'
@@ -23,11 +24,11 @@ export async function Hero() {
 
   return (
     <section className="reveal" style={{ marginTop: '28px' }}>
-      <div className="hero-grid" style={{ border: B, borderRadius: 'var(--radius-xl)', overflow: 'hidden', background: 'var(--graphite)', boxShadow: 'var(--shadow-card)' }}>
+      <div className="hero-grid" style={{ ...SURFACE_CARD, overflow: 'hidden' }}>
 
         <div
           className="hero-left"
-          style={{ padding: '52px 44px', borderRight: B, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'linear-gradient(180deg, color-mix(in oklab, var(--signal) 5%, var(--graphite)), var(--graphite))' }}
+          style={{ padding: '52px 44px', borderRight: B, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
         >
           <span style={{ alignSelf: 'flex-start', marginBottom: '20px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#57F287', background: 'rgba(87, 242, 135, 0.10)', border: '1px solid rgba(87, 242, 135, 0.30)', borderRadius: '999px', padding: '5px 12px' }}>
             MULTI-SPORT +EV SCANNER &amp; QUANTITATIVE MODELS
@@ -49,7 +50,7 @@ export async function Hero() {
           </div>
 
           <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>
-            PAPER MODE &middot; NO REAL MONEY STAKED &middot; EVERY RESULT PUBLIC
+            VERIFIED PUBLIC LEDGER &middot; 1/4 KELLY SIZING
           </span>
         </div>
 

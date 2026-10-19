@@ -809,41 +809,85 @@ def get_multisport_cockpit(sport="all", limit=60, engine=None, min_ev=0.02):
 
 
 # -- daily multi-sport projection board (ev/daily_projections.py) ----------------------------------------------------
-# GET /api/public/projections?sport=nfl|nhl|nba[&market=<stat>][&limit=N]: one row per player x stat joining the
-# sport's game-log projection to the market (consensus line, best prices, edge, confluence, Beezy Score). Served by
-# ev.daily_projections.get_daily_projections(allow_compute=False): process cache -> the precomputed GCS JSON; a missing
-# or stale board starts a BACKGROUND recompute and the request answers immediately (never computes inline).
+# GET /api/public/projections?sport=nfl|nhl|nba[&market=<stat>][&limit=N][&day=YYYY-MM-DD][&date=YYYY-MM-DD]: one row per
+# player x stat joining the sport's game-log projection to the market (consensus line, best prices, edge, confluence,
+# Beezy Score). Served by ev.daily_projections.get_daily_projections(allow_compute=False): process cache -> the
+# precomputed GCS JSON; a missing or stale board starts a BACKGROUND recompute and the request answers immediately (never
+# computes inline).
+#   day=   keep only the rows / games whose game starts on that America/Chicago day (a live board spans up to a week);
+#   date=  the ARCHIVED board for that Central game day (each row's last pre-game state; works for today too and then
+#          includes games already under way): same shape + `archive: true`, or status 'unavailable' with no rows.
 _PROJ_SPORTS = ("nfl", "nhl", "nba")
 _PROJ_MARKET_ALIAS = {"pts": "points", "reb": "rebounds", "ast": "assists", "3pm": "threes", "td": "anytime_td"}
+_PROJ_DAY_RE = _re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_PROJ_LIMIT_MAX = 1200
 
 
-def get_sport_projections(sport, market=None, limit=300):
+def _proj_day(value, name):
+    """'YYYY-MM-DD' (a real calendar date) or ValueError; None/'' -> None."""
+    if value is None or str(value).strip() == "":
+        return None
+    v = str(value).strip()
+    if not _PROJ_DAY_RE.match(v):
+        raise ValueError(f"{name} must be YYYY-MM-DD, got {v!r}")
+    try:
+        _datetime.strptime(v, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"{name} is not a calendar date: {v!r}") from None
+    return v
+
+
+def get_sport_projections(sport, market=None, limit=300, date=None, day=None):
     """Daily projection board for one of nfl / nhl / nba (ValueError otherwise). Never raises on missing data and never
     blocks on a compute: the payload then carries status 'unavailable' with no rows. Every row is `validated: false`."""
     sport = (sport or "").lower()
     if sport not in _PROJ_SPORTS:
         raise ValueError(f"unknown sport {sport!r}; expected one of {_PROJ_SPORTS}")
-    limit = max(1, min(int(limit), 700))
+    limit = max(1, min(int(limit), _PROJ_LIMIT_MAX))
+    date, day = _proj_day(date, "date"), _proj_day(day, "day")
     from ev import daily_projections as _dp
     now = _datetime.now(_timezone.utc)
-    try:
-        payload = _dp.get_daily_projections(sport, limit=_dp.MAX_ROWS, allow_compute=False)
-    except Exception:  # noqa: BLE001 -- serve the empty shape
-        logger.exception("projections read failed for %s", sport)
-        payload = None
-    age = _dp.payload_age_min(payload, now) if payload else None
-    if not payload:
-        return {"sport": sport, "engine": None, "validated": False, "status": "unavailable", "stale": True,
-                "as_of": None, "age_minutes": None, "stats": [], "count": 0, "rows": [], "summary": {},
-                "gamelog_latest": None, "stale_gamelog": None, "lines_age_minutes": None}
+    empty = {"sport": sport, "engine": None, "validated": False, "status": "unavailable", "stale": True,
+             "as_of": None, "age_minutes": None, "stats": [], "count": 0, "rows": [], "games": [], "summary": {},
+             "gamelog_latest": None, "stale_gamelog": None, "lines_age_minutes": None, "lines_stale": False,
+             "lines_source": [], "archive": bool(date)}
+    if date:
+        try:
+            payload = _dp.get_archive(sport, date)
+        except Exception:  # noqa: BLE001 -- serve the empty shape
+            logger.exception("projections archive read failed for %s %s", sport, date)
+            payload = None
+        if not payload:
+            return {**empty, "stale": False, "date": date}
+        age = None
+    else:
+        try:
+            payload = _dp.get_daily_projections(sport, limit=_dp.MAX_ROWS, allow_compute=False)
+        except Exception:  # noqa: BLE001 -- serve the empty shape
+            logger.exception("projections read failed for %s", sport)
+            payload = None
+        age = _dp.payload_age_min(payload, now) if payload else None
+        if not payload:
+            return empty
     rows = payload.get("rows") or []
+    games = payload.get("games") or []
+    if day:
+        rows = [r for r in rows if _dp.ct_day(r.get("commence")) == day]
+        games = [g for g in games if _dp.ct_day(g.get("start")) == day]
     if market:
         m = _PROJ_MARKET_ALIAS.get(str(market).lower(), str(market).lower())
         rows = [r for r in rows if r.get("stat") == m]
     out = {k: payload.get(k) for k in ("sport", "engine", "validated", "status", "stats", "summary", "gamelog_latest",
-                                       "stale_gamelog", "lines_age_minutes")}
+                                       "stale_gamelog", "lines_age_minutes", "lines_stale", "lines_source")}
+    out["lines_source"] = out["lines_source"] or []
+    out["lines_stale"] = bool(out["lines_stale"])
     out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
-               stale=age is None or age > _dp.PROJ_STALE_MINUTES, count=len(rows), rows=rows[:limit], validated=False)
+               stale=False if date else (age is None or age > _dp.PROJ_STALE_MINUTES), count=len(rows),
+               rows=rows[:limit], games=games, validated=False, archive=bool(date))
+    if date:
+        out["date"] = date
+    if day:
+        out["day"] = day
     return out
 
 

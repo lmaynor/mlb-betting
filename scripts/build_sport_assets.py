@@ -3,6 +3,7 @@
 
   python scripts/build_sport_assets.py --logos      # download + SANITIZE team logo SVGs into public/logos/{nhl,nba}/
   python scripts/build_sport_assets.py --players    # rebuild public/headshots/{nhl,nba}_player_map.json (rosters)
+  python scripts/build_sport_assets.py --nfl-players  # rebuild public/headshots/nfl_player_map.json (nflverse rosters)
   python scripts/build_sport_assets.py --teams      # rebuild lib/sport-teams.json from the Python team tables
   python scripts/build_sport_assets.py --all
 
@@ -11,8 +12,10 @@ Design (decided 2026-10-14, verified live):
   * Player headshots are HOTLINKED from the official CDNs, which serve transparent PNG cutouts, so no rembg step:
       NHL  https://assets.nhle.com/mugs/nhl/latest/{playerId}.png                        (336x336, ~100KB, Cloudflare)
       NBA  https://a.espncdn.com/combiner/i?img=/i/headshots/nba/players/full/{espnId}.png&w=200&h=146   (~31KB)
+      NFL  https://static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/{token}                (~8KB, nfl.com CDN)
     The player maps here only translate a name (+ team) into the id those URLs need. MLB keeps its existing
-    public/headshots/player_map.json pipeline untouched.
+    public/headshots/player_map.json pipeline untouched. NFL's "id" is the nfl.com image token carried by the nflverse
+    rosters' `headshot_url` (97% of players; the ESPN id exists for only ~70%), so it is a string, not an integer.
   * lib/sport-teams.json is GENERATED from nhl.config.TEAMS / nba.teams.TEAMS (the single source of truth) and
     tests/test_sport_assets.py fails if the committed copy drifts from it.
 
@@ -115,7 +118,7 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9_]", "", re.sub(r"\s+", "_", s.strip()))
 
 
-def _to_map(rows) -> dict:
+def _to_map(rows, cast=int) -> dict:
     """rows: (full_name, team_code, id). Emits `slug__team` for every player and a bare `slug` ONLY when that name is
     unique league-wide: a duplicate name ("Jack Hughes") with no team must resolve to nothing, never to the wrong face."""
     by_slug: dict = {}
@@ -124,12 +127,12 @@ def _to_map(rows) -> dict:
         s = _slug(name)
         if not s:
             continue
-        out[f"{s}__{team.lower()}"] = int(pid)
-        by_slug.setdefault(s, set()).add(int(pid))
+        out[f"{s}__{team.lower()}"] = cast(pid)
+        by_slug.setdefault(s, set()).add(cast(pid))
     for name, team, pid in rows:
         s = _slug(name)
         if s and len(by_slug[s]) == 1:
-            out[s] = int(pid)
+            out[s] = cast(pid)
     return dict(sorted(out.items()))
 
 
@@ -175,6 +178,46 @@ def build_player_maps() -> dict:
     return res
 
 
+NFL_TOKEN = re.compile(r"static\.www\.nfl\.com/image/(?:upload|private)/[^/]+/league/([A-Za-z0-9]{10,40})(?:[/?.]|$)")
+NFL_POSITIONS = {"QB", "RB", "FB", "WR", "TE"}              # the positions the projection board has props for
+
+
+def nfl_rows(roster) -> list:
+    """nflverse roster frame -> (full_name, ev team code, nfl.com image token) for offensive skill players on a roster."""
+    sys.path.insert(0, str(ROOT))
+    from nfl.data.keys import ev_code
+    rows = []
+    for r in roster.to_dict("records"):
+        m = NFL_TOKEN.search(str(r.get("headshot_url") or ""))
+        team = ev_code(r.get("team"))
+        if m and team and str(r.get("position")) in NFL_POSITIONS and r.get("full_name"):
+            rows.append((str(r["full_name"]), team, m.group(1)))
+    return rows
+
+
+def build_nfl_player_map() -> dict:
+    """public/headshots/nfl_player_map.json from the current-season nflverse roster mirror (GCS read; needs GCS_BUCKET)."""
+    sys.path.insert(0, str(ROOT))
+    from nfl.data.read import load
+    season = datetime.now(timezone.utc).year
+    roster = None
+    for s in (season, season - 1):                            # before the new season's file exists, use last season's
+        try:
+            roster = load("rosters", seasons=[s])
+        except FileNotFoundError:
+            continue
+        if len(roster):
+            break
+    if roster is None or not len(roster):
+        raise SystemExit("no nflverse roster mirror found; not writing an empty map")
+    rows = nfl_rows(roster)
+    if len(rows) < 500:
+        raise SystemExit(f"only {len(rows)} NFL skill players with a headshot; refusing to write a partial map")
+    m = _to_map(rows, cast=str)
+    (PUBLIC / "headshots" / "nfl_player_map.json").write_text(json.dumps(m, separators=(",", ":")) + "\n")
+    return {"players": len(rows), "keys": len(m)}
+
+
 # ----------------------------------------------------------------------------- shared team table
 def team_table() -> dict:
     sys.path.insert(0, str(ROOT))
@@ -197,17 +240,20 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--logos", action="store_true")
     ap.add_argument("--players", action="store_true")
+    ap.add_argument("--nfl-players", action="store_true")
     ap.add_argument("--teams", action="store_true")
     ap.add_argument("--all", action="store_true")
     a = ap.parse_args(argv)
-    if not (a.logos or a.players or a.teams or a.all):
-        ap.error("choose --logos, --players, --teams or --all")
+    if not (a.logos or a.players or a.nfl_players or a.teams or a.all):
+        ap.error("choose --logos, --players, --nfl-players, --teams or --all")
     if a.all or a.teams:
         print("teams:", build_teams())
     if a.all or a.logos:
         print("logos:", build_logos())
     if a.all or a.players:
         print("players:", build_player_maps())
+    if a.all or a.nfl_players:
+        print("nfl players:", build_nfl_player_map())
     return 0
 
 

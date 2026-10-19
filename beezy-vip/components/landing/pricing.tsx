@@ -4,7 +4,9 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { DISCORD_URL } from '@/lib/links'
+import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
+import { SURFACE_CARD } from '@/lib/tokens'
 import { LEAGUES, type League } from '@/lib/tiers'
 
 const CheckoutButton = dynamic(
@@ -12,7 +14,7 @@ const CheckoutButton = dynamic(
   { ssr: false }
 )
 
-const SURFACE = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' } as const
+const SURFACE = SURFACE_CARD
 
 /** Plan copy lives in one object so the tests can pin prices and the annual-savings arithmetic. */
 export const PLANS = {
@@ -85,7 +87,7 @@ export function PricingSection() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Pricing</h1>
         <span style={{ fontSize: '12.5px', color: 'var(--fog)' }}>
-          {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime. 7-day money-back guarantee.'}
+          {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime in 1 click.'}
         </span>
       </div>
 
@@ -142,8 +144,14 @@ export function PricingSection() {
         </div>
       </div>
 
-      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
-        {PRE_LAUNCH ? 'Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.' : 'Cancel anytime.'}
+      {PRE_LAUNCH && (
+        <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
+          Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.
+        </p>
+      )}
+      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '8px 0 0', lineHeight: 1.55 }}>
+        Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
+        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} style={{ color: 'var(--link)' }}>{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} style={{ color: 'var(--link)' }}>Discord</a>.
       </p>
     </section>
   )

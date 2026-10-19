@@ -2,6 +2,7 @@
 
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ResearchTabs } from '@/components/picks/research-tabs'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
@@ -104,7 +105,7 @@ function Legend({ items }: { items: LegendItem[] }) {
         <span key={i}>
           <i className={it.kind === 'dot' ? 'edge-lg-dot' : it.kind === 'ring' ? 'edge-lg-ring' : 'edge-lg-sq'}
             style={it.kind === 'ring'
-              ? { borderColor: it.color ?? '#5a5a64', opacity: it.opacity }
+              ? { borderColor: it.color ?? '#7d8596', opacity: it.opacity }
               : { background: it.color, opacity: it.opacity }} />
           {it.label}
         </span>
@@ -146,10 +147,10 @@ function EdgeTrack({ model, market, color }: { model: number; market: number; co
         </g>
       ))}
       {/* market marker + label */}
-      <rect x={sx(market) - 1.5} y={y - 9} width="3" height="18" fill="#d8d8de" />
-      <text className="edge-axl" x={sx(market)} y={y - 12} textAnchor="middle" fill="#d8d8de">MARKET</text>
+      <rect x={sx(market) - 1.5} y={y - 9} width="3" height="18" fill="#f3f4f6" />
+      <text className="edge-axl" x={sx(market)} y={y - 12} textAnchor="middle" fill="#f3f4f6">MARKET</text>
       {/* model marker + label */}
-      <rect x={sx(model) - 5} y={y - 11} width="10" height="22" fill={color} stroke="#0d0d10" strokeWidth="1.5" />
+      <rect x={sx(model) - 5} y={y - 11} width="10" height="22" fill={color} stroke="#090a0f" strokeWidth="1.5" />
       <text className="edge-axl" x={sx(model)} y={y + 25} textAnchor="middle" fill={color}>MODEL</text>
     </svg>
   )
@@ -224,7 +225,7 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
               <rect x={x + 1.5} y={H - padB - h} width={Math.max(bw - 3, 1)} height={Math.max(h, 0.5)}
                 fill={ok ? color : '#3a3a42'} />
               <text className="edge-axt" x={x + bw / 2} y={H - padB - h - 3} textAnchor="middle"
-                fill={ok ? color : '#6f6f78'} style={{ fontSize: '7.5px' }}>{g.value}</text>
+                fill={ok ? color : '#6f6f78'} style={{ fontSize: '10px' }}>{g.value}</text>
             </g>
           )
         })}
@@ -276,7 +277,7 @@ function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>;
         <text className="edge-axt" x={tx(210)} y={ty(64)} textAnchor="middle">RF</text>
         {points.map((pt, i) => pt.hit
           ? <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r="2.6" fill={color} opacity="0.95" />
-          : <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r="1.9" fill="none" stroke="#5a5a64" strokeWidth="1" opacity="0.6" />
+          : <circle key={i} cx={tx(pt.x)} cy={ty(pt.y)} r="1.9" fill="none" stroke="#7d8596" strokeWidth="1" opacity="0.6" />
         )}
       </svg>
       <Legend items={[{ kind: 'dot', color, label: 'hit' }, { kind: 'ring', label: 'out' }]} />
@@ -292,7 +293,7 @@ const PITCH_NAME: Record<string, string> = {
   FF: '4-Seam', SI: 'Sinker', FT: '2-Seam', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
   CU: 'Curveball', KC: 'Knuckle-curve', CH: 'Changeup', FS: 'Splitter', SP: 'Splitter',
 }
-const pc = (p: string) => PITCH_COLORS[p] ?? '#9aa0aa'
+const pc = (p: string) => PITCH_COLORS[p] ?? '#9ca3af'
 
 function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>; color: string }) {
   if (!points.length) return null
@@ -315,7 +316,7 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
         <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="#57f287" opacity="0.06" />
         <rect x={xa(10)} y={ya(120)} width={xa(35) - xa(10)} height={ya(98) - ya(120)} fill="#57f287" opacity="0.10" />
         <text x={(xa(10) + xa(35)) / 2} y={ya(116)} textAnchor="middle" fill="#57f287"
-          style={{ fontSize: '8px', fontWeight: 800, letterSpacing: '0.04em' }}>BARRELS</text>
+          style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em' }}>BARRELS</text>
         {yticks.map(v => (
           <g key={v}>
             <line x1={x0} y1={ya(v)} x2={x1} y2={ya(v)} stroke="#202026" strokeWidth="0.6" />
@@ -330,7 +331,7 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
         ))}
         {points.map((p, i) => p.hit
           ? <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r="2.4" fill={color} opacity="0.95" />
-          : <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r="1.7" fill="none" stroke="#5a5a64" strokeWidth="0.9" opacity="0.55" />
+          : <circle key={i} cx={xa(p.la)} cy={ya(p.ev)} r="1.7" fill="none" stroke="#7d8596" strokeWidth="0.9" opacity="0.55" />
         )}
         <text className="edge-axl" x="6" y={(y0 + y1) / 2} textAnchor="middle"
           transform={`rotate(-90 8 ${(y0 + y1) / 2})`} fill="#9a9aa3">Exit velo (mph)</text>
@@ -604,7 +605,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
   p: EdgePick; bankroll: number
   inSlip?: boolean; onToggleSlip?: (stake: number | null) => void
 }) {
-  const color = SYSTEM_COLOR[p.system] ?? '#9aa0aa'
+  const color = SYSTEM_COLOR[p.system] ?? '#9ca3af'
   const pill = SYSTEM_PILL[p.system] ?? SYSTEM_PILL.ALL
   const isGame = groupOf(p.system) === 'game'
   const model = p.modelProbPct ?? 0
@@ -961,6 +962,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           </span>
         </div>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '16px' }}>
+          <ResearchTabs active="cockpit" />
           {feed != null && <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
@@ -1127,7 +1129,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
         <div className="edge-grid">
           <ol className="edge-list" onKeyDown={onListKeyDown}>
             {visible.map((p, i) => {
-              const color = SYSTEM_COLOR[p.system] ?? '#9aa0aa'
+              const color = SYSTEM_COLOR[p.system] ?? '#9ca3af'
               const active = selected?.id === p.id
               const isGame = groupOf(p.system) === 'game'
               const inSlip = slip[p.id] != null
@@ -1248,27 +1250,27 @@ function Styles() {
   margin: 0; text-wrap: balance; }
 .edge-updated { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; color: var(--signal); }
-.edge-updated-time { color: #8a8a93; font-weight: 600; letter-spacing: 0; }
+.edge-updated-time { color: #9ca3af; font-weight: 600; letter-spacing: 0; }
 .edge-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--signal);
   box-shadow: 0 0 0 0 var(--signal)77; animation: edgepulse 2.4s ease-out infinite; }
 @keyframes edgepulse { 0% { box-shadow: 0 0 0 0 var(--signal)66; } 70% { box-shadow: 0 0 0 7px var(--signal)00; } 100% { box-shadow: 0 0 0 0 var(--signal)00; } }
 .edge-tagline { color: #b6b6be; font-size: 14px; margin: 8px 0 0; max-width: 60ch; line-height: 1.5; }
 .edge-sports { display: flex; gap: 6px; margin-top: 16px; }
-.edge-sport { background: var(--graphite); color: #9aa0aa; border: 1px solid var(--basalt); padding: 6px 14px;
+.edge-sport { background: var(--graphite); color: #9ca3af; border: 1px solid var(--basalt); padding: 6px 14px;
   font-size: 12px; font-weight: 800; letter-spacing: 0.06em; cursor: pointer; transition: color .18s, border-color .18s, background .18s; }
 .edge-sport.is-active { color: var(--ash); border-color: var(--ash); background: #17171b; }
 .edge-sport.is-soon { cursor: not-allowed; opacity: 0.55; display: inline-flex; align-items: center; gap: 6px; }
-.edge-soon { font-size: 8px; font-weight: 800; letter-spacing: 0.1em; color: #6f6f78; border: 1px solid var(--iron); padding: 1px 4px; }
+.edge-soon { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: #6f6f78; border: 1px solid var(--iron); padding: 1px 4px; }
 .edge-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
-.edge-filter { background: transparent; color: #9aa0aa; border: 1px solid var(--basalt); padding: 6px 12px;
+.edge-filter { background: transparent; color: #9ca3af; border: 1px solid var(--basalt); padding: 6px 12px;
   font-size: 12px; font-weight: 700; cursor: pointer; transition: color .18s, border-color .18s; }
-.edge-filter:hover { color: #d8d8de; }
+.edge-filter:hover { color: #f3f4f6; }
 .edge-filter.is-active { color: #0b0b0d; background: var(--ash); border-color: var(--ash); }
 .edge-filter-n { font-variant-numeric: tabular-nums; opacity: 0.6; margin-left: 2px; }
 .edge-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
 @media (min-width: 900px) { .edge-grid { grid-template-columns: minmax(320px, 0.92fr) 1.08fr; }
   .edge-panel { position: sticky; top: 16px; } }
-.edge-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--basalt); background: #0d0d10; }
+.edge-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--basalt); background: #090a0f; }
 .edge-row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 11px 12px; text-align: left;
   background: var(--graphite); color: var(--ash); border: 0; border-bottom: 1px solid var(--basalt); cursor: pointer;
   transition: background .16s ease-out, transform .16s ease-out; }
@@ -1283,11 +1285,11 @@ function Styles() {
 .edge-row-logo { width: 24px; height: 24px; object-fit: contain; }
 .edge-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .edge-row-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.edge-row-meta { display: flex; gap: 8px; font-size: 11px; color: #9aa0aa; align-items: center; }
+.edge-row-meta { display: flex; gap: 8px; font-size: 11px; color: #9ca3af; align-items: center; }
 .edge-row-sys { font-weight: 800; letter-spacing: 0.04em; }
 .edge-row-odds { font-variant-numeric: tabular-nums; color: #b6b6be; }
 .edge-row-edge { font-size: 18px; font-weight: 840; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.edge-panel { border: 1px solid var(--basalt); background: #0d0d10; min-height: 200px; animation: edgein .22s ease-out; }
+.edge-panel { border: 1px solid var(--basalt); background: #090a0f; min-height: 200px; animation: edgein .22s ease-out; }
 @keyframes edgein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .edge-detail { padding: 18px; }
 .edge-detail-head { display: flex; gap: 14px; align-items: flex-start; padding-bottom: 16px; border-bottom: 1px solid var(--basalt); }
@@ -1300,38 +1302,38 @@ function Styles() {
 .edge-pill { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; padding: 2px 7px; }
 .edge-detail-name { font-size: clamp(1.25rem, 3.4vw, 1.7rem); font-weight: 820; letter-spacing: -0.02em;
   margin: 8px 0 6px; line-height: 1.05; text-wrap: balance; }
-.edge-detail-sub { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #9aa0aa; align-items: center; }
+.edge-detail-sub { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #9ca3af; align-items: center; }
 .edge-strong { font-weight: 800; }
 .edge-block { padding: 18px 0 4px; }
 .edge-block-top { display: flex; align-items: baseline; gap: 10px; }
 .edge-hero { font-size: clamp(2.4rem, 8vw, 3.4rem); font-weight: 880; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
-.edge-hero-label { font-size: 12px; color: #9aa0aa; font-weight: 600; }
+.edge-hero-label { font-size: 12px; color: #9ca3af; font-weight: 600; }
 .edge-track { width: 100%; max-width: 380px; height: auto; display: block; margin: 16px 0 8px; }
-.edge-axt { fill: #9a9aa3; font-size: 8px; font-family: var(--font-mono), ui-monospace, monospace; }
-.edge-axl { font-size: 8.5px; font-weight: 700; font-family: var(--font-mono), ui-monospace, monospace; }
+.edge-axt { fill: #9a9aa3; font-size: 10px; font-family: var(--font-mono), ui-monospace, monospace; }
+.edge-axl { font-size: 10px; font-weight: 700; font-family: var(--font-mono), ui-monospace, monospace; }
 .edge-readout { display: flex; gap: 20px; margin-top: 6px; }
 .edge-read { display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .edge-read-dot { width: 9px; height: 9px; border-radius: 2px; }
-.edge-read-dot-market { background: #d8d8de; }
-.edge-read-k { color: #9aa0aa; }
+.edge-read-dot-market { background: #f3f4f6; }
+.edge-read-k { color: #9ca3af; }
 .edge-read-v { color: var(--ash); font-weight: 800; font-variant-numeric: tabular-nums; }
 .edge-meta { display: flex; gap: 26px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); }
-.edge-meta-k { display: block; font-size: 11px; color: #8a8a93; letter-spacing: 0.04em; margin-bottom: 3px; }
+.edge-meta-k { display: block; font-size: 11px; color: #9ca3af; letter-spacing: 0.04em; margin-bottom: 3px; }
 .edge-meta-v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.edge-meta-dim { color: #8a8a93; font-weight: 600; }
+.edge-meta-dim { color: #9ca3af; font-weight: 600; }
 .edge-why { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); }
-.edge-why-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #8a8a93; margin-bottom: 8px; }
+.edge-why-h { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 8px; }
 .edge-why-list { margin: 0; padding-left: 16px; color: #c4c4cc; font-size: 13px; line-height: 1.7; }
 .edge-context { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--basalt); display: flex; flex-direction: column; gap: 16px; }
 .edge-context-row { display: flex; flex-wrap: wrap; gap: 28px; }
 .edge-ctx { min-width: 0; }
 .edge-ctx-wide { width: 100%; }
-.edge-ctx-k { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #8a8a93; margin-bottom: 6px; text-transform: uppercase; }
-.edge-ctx-v { font-size: 13px; color: #d8d8de; }
-.edge-ctx-dim { color: #8a8a93; }
+.edge-ctx-k { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #9ca3af; margin-bottom: 6px; text-transform: uppercase; }
+.edge-ctx-v { font-size: 13px; color: #f3f4f6; }
+.edge-ctx-dim { color: #9ca3af; }
 .edge-weather { display: flex; gap: 14px; }
 /* plain-language takeaway: every chart leads with its insight */
-.edge-take { font-size: 12.5px; line-height: 1.45; color: #d8d8de; margin: 0 0 9px; display: flex; gap: 7px; align-items: baseline; }
+.edge-take { font-size: 12.5px; line-height: 1.45; color: #f3f4f6; margin: 0 0 9px; display: flex; gap: 7px; align-items: baseline; }
 .edge-take::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; margin-top: 5px; background: var(--signal); }
 .edge-take b { color: var(--ash); font-weight: 800; }
 .edge-take .mono { color: var(--ash); }
@@ -1339,13 +1341,13 @@ function Styles() {
 .edge-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 10.5px; color: var(--silver); }
 .edge-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .edge-lg-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.edge-lg-ring { width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #5a5a64; display: inline-block; }
+.edge-lg-ring { width: 9px; height: 9px; border-radius: 50%; border: 1.4px solid #7d8596; display: inline-block; }
 .edge-lg-sq { width: 9px; height: 9px; display: inline-block; }
 .edge-stats { display: flex; flex-wrap: wrap; margin-top: 10px; border: 1px solid var(--basalt); }
 .edge-stat { flex: 1; min-width: 64px; padding: 7px 9px; border-right: 1px solid var(--basalt); }
 .edge-stat:last-child { border-right: 0; }
 .edge-stat-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; font-family: var(--font-mono), ui-monospace, monospace; line-height: 1; }
-.edge-stat-l { font-size: 9.5px; color: var(--fog); letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
+.edge-stat-l { font-size: 10px; color: var(--fog); letter-spacing: 0.03em; margin-top: 3px; text-transform: uppercase; }
 .edge-spark { width: 100%; max-width: 360px; height: auto; display: block; }
 .edge-spray { width: 100%; max-width: 200px; height: auto; display: block; }
 .edge-viz { width: 100%; max-width: 340px; height: auto; display: block; }
@@ -1361,32 +1363,32 @@ function Styles() {
 .edge-velo-num { text-align: right; }
 .edge-velo-v { display: block; font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; color: #e8e8ee; font-weight: 700; font-size: 12px; }
 .edge-velo-v small { color: var(--fog); font-weight: 400; }
-.edge-velo-use { display: block; font-size: 9px; color: var(--fog); margin-top: 1px; }
+.edge-velo-use { display: block; font-size: 10px; color: var(--fog); margin-top: 1px; }
 .edge-zone-wrap { display: flex; gap: 12px; align-items: flex-start; }
-.edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: var(--fog); height: 106px; }
+.edge-zone-side { display: flex; flex-direction: column; justify-content: space-between; font-size: 10px; color: var(--fog); height: 106px; }
 .edge-zone { display: grid; grid-template-columns: repeat(3, 34px); grid-auto-rows: 34px; gap: 2px; }
 .edge-zone-cell { display: flex; align-items: center; justify-content: center; font-size: 10px;
   font-weight: 800; color: #0b0b0d; font-variant-numeric: tabular-nums; font-family: var(--font-mono), monospace; }
 .edge-zone-cell.is-hot { outline: 1.5px solid var(--signal); outline-offset: -1.5px; }
-.edge-zone-x { display: flex; justify-content: space-between; font-size: 9px; color: var(--fog); margin-top: 3px; }
-.edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--silver); margin-top: 8px; }
+.edge-zone-x { display: flex; justify-content: space-between; font-size: 10px; color: var(--fog); margin-top: 3px; }
+.edge-zone-scale { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--silver); margin-top: 8px; }
 .edge-zone-ramp { display: inline-flex; gap: 1px; }
 .edge-zone-ramp i { width: 13px; height: 9px; display: block; }
 .edge-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
-  padding: 10px 12px; border: 1px solid var(--basalt); background: #0d0d10; }
-.edge-toggle { background: transparent; color: #9aa0aa; border: 1px solid var(--iron); padding: 6px 12px;
+  padding: 10px 12px; border: 1px solid var(--basalt); background: #090a0f; }
+.edge-toggle { background: transparent; color: #9ca3af; border: 1px solid var(--iron); padding: 6px 12px;
   font-size: 12px; font-weight: 700; cursor: pointer; transition: color .16s, border-color .16s, background .16s; }
 .edge-toggle.is-on { background: var(--signal); color: #0b0b0d; border-color: var(--signal); }
-.edge-slider { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #9aa0aa; min-width: 150px; }
+.edge-slider { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #9ca3af; min-width: 150px; }
 .edge-slider strong { color: var(--signal); font-variant-numeric: tabular-nums; }
 .edge-slider input { accent-color: var(--signal); }
 .edge-select { display: flex; align-items: center; gap: 7px; font-size: 12px; }
-.edge-select-k { color: #9aa0aa; }
+.edge-select-k { color: #9ca3af; }
 .edge-select select { background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); padding: 5px 8px; font-size: 12px; }
 .edge-teamsel { position: relative; }
 .edge-teamsel-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--graphite); color: var(--ash); border: 1px solid var(--iron); padding: 5px 8px; font-size: 12px; cursor: pointer; min-width: 84px; }
 .edge-teamsel-btn:hover { border-color: var(--basalt); }
-.edge-teamsel-caret { margin-left: auto; color: #8a8a93; font-size: 10px; }
+.edge-teamsel-caret { margin-left: auto; color: #9ca3af; font-size: 10px; }
 .edge-teamsel-logo { width: 16px; height: 16px; object-fit: contain; flex: 0 0 16px; }
 .edge-teamsel-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; background: var(--graphite); border: 1px solid var(--basalt); box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-height: 320px; overflow-y: auto; min-width: 160px; padding: 4px; }
 .edge-teamsel-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--ash); border: 0; padding: 6px 8px; font-size: 12px; cursor: pointer; }
@@ -1394,13 +1396,13 @@ function Styles() {
 .edge-teamsel-opt.is-sel { color: var(--signal); }
 .edge-matchsel-btn { min-width: 140px; }
 .edge-matchsel-val { display: inline-flex; align-items: center; gap: 4px; }
-.edge-matchsel-at { color: #8a8a93; margin: 0 1px; }
+.edge-matchsel-at { color: #9ca3af; margin: 0 1px; }
 .edge-matchsel-menu { min-width: 190px; }
 .edge-matchsel-opt { gap: 4px; }
-.edge-clear { background: transparent; color: #8a8a93; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
-.edge-empty { border: 1px solid var(--basalt); background: #0d0d10; padding: 40px 24px; text-align: center; }
+.edge-clear { background: transparent; color: #9ca3af; border: 0; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.edge-empty { border: 1px solid var(--basalt); background: #090a0f; padding: 40px 24px; text-align: center; }
 .edge-empty-h { font-size: 16px; font-weight: 700; margin: 0 0 6px; }
-.edge-empty-s { color: #9aa0aa; font-size: 13px; margin: 0; }
+.edge-empty-s { color: #9ca3af; font-size: 13px; margin: 0; }
 .edge-link { color: var(--signal); }
 
 /* -- cockpit: mode switch -- */
@@ -1420,18 +1422,18 @@ function Styles() {
 /* -- scorecard: tags / status / position -- */
 .edge-detail-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .edge-pos { font-family: var(--font-mono), monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--silver); border: 1px solid var(--basalt); border-radius: var(--radius-sm); padding: 2px 6px; }
-.edge-status { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-text), sans-serif; font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; border: 1px solid var(--basalt); border-radius: var(--radius-pill); padding: 2px 8px; white-space: nowrap; }
+.edge-status { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-text), sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; border: 1px solid var(--basalt); border-radius: var(--radius-pill); padding: 2px 8px; white-space: nowrap; }
 .edge-row-name { display: inline-flex; align-items: center; gap: 8px; }
-.edge-row-name .edge-status { font-size: 9px; padding: 1px 6px; }
+.edge-row-name .edge-status { font-size: 10px; padding: 1px 6px; }
 
 /* -- scorecard: season line -- */
 .edge-season { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--basalt); border-radius: var(--radius); background: var(--obsidian); padding: 12px 14px; margin-bottom: 14px; }
 .edge-season-row { display: flex; flex-wrap: wrap; gap: 18px; }
 .edge-season-cell { display: flex; flex-direction: column; gap: 2px; }
-.edge-season-k { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fog); }
+.edge-season-k { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fog); }
 .edge-season-v { font-family: var(--font-mono), monospace; font-size: 16px; font-weight: 700; color: var(--chalk); }
 .edge-season-x { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--basalt); padding-top: 8px; }
-.edge-season-xk { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); flex-shrink: 0; }
+.edge-season-xk { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); flex-shrink: 0; }
 .edge-season-x .edge-season-v { font-size: 13px; }
 
 /* -- scorecard: editable odds + Kelly -- */
@@ -1447,12 +1449,12 @@ function Styles() {
 
 /* -- cockpit: slate HUD -- */
 .edge-hud { display: flex; align-items: stretch; flex-wrap: wrap; border: 1px solid var(--basalt);
-  background: #0d0d10; margin-bottom: 16px; }
+  background: #090a0f; margin-bottom: 16px; }
 .edge-hud-cell { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px;
   border-right: 1px solid var(--basalt); justify-content: center; }
 .edge-hud-v { font-family: var(--font-mono), ui-monospace, monospace; font-size: 17px; font-weight: 700;
   color: var(--chalk); font-variant-numeric: tabular-nums; line-height: 1.1; }
-.edge-hud-k { font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fog); }
+.edge-hud-k { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fog); }
 .edge-hud-best { display: flex; align-items: center; gap: 10px; margin-left: auto; padding: 10px 16px;
   background: transparent; border: 0; border-left: 1px solid var(--basalt); color: var(--ash);
   cursor: pointer; text-align: left; transition: background .16s ease-out; }

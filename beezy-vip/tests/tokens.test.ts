@@ -210,8 +210,9 @@ describe('sport registry and tokens', () => {
     expect(bookDisplay('somenewbook').label).toBe('Somenewbook')
     expect(bookDisplay(null).label).toBe('--')
   })
-  test('CARD_STYLE uses the v2 geometry', () => {
-    expect(CARD_STYLE.borderRadius).toBe('10px')
+  test('CARD_STYLE is the one surface spec (8px, hairline, 1px shadow)', () => {
+    expect(CARD_STYLE.borderRadius).toBe('8px')
+    expect(CARD_STYLE.boxShadow).toBe('0 1px 2px rgba(0,0,0,0.45)')
     expect(CARD_STYLE.border).toBe('1px solid #1e2230')
   })
 })

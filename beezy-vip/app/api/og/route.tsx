@@ -1,12 +1,13 @@
 import { ImageResponse } from 'next/og'
 import { NextRequest }   from 'next/server'
+import { OgBrandBadge } from '@/lib/og-brand'
 
 export const runtime = 'edge'
 
 export async function GET(req: NextRequest) {
   const sp    = req.nextUrl.searchParams
-  const title = sp.get('title') ?? 'Beezy.FYI'
-  const sub   = sp.get('sub')   ?? 'MLB Picks \u00b7 Backed by Machine Learning'
+  const title = sp.get('title') ?? 'beezy.fyi'
+  const sub   = sp.get('sub')   ?? 'Quantitative models \u00b7 +EV terminal'
   const stat1 = sp.get('stat1') ?? ''
   const stat2 = sp.get('stat2') ?? ''
   const stat3 = sp.get('stat3') ?? ''
@@ -30,10 +31,7 @@ export async function GET(req: NextRequest) {
       >
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '48px' }}>
-          <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#57f287' }} />
-          <span style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px' }}>
-            BEEZY<span style={{ color: '#57f287' }}>.FYI</span>
-          </span>
+          <OgBrandBadge size={40} />
           <span style={{ display: 'flex', width: '1px', height: '18px', background: '#2e3446' }} />
           <span style={{ fontSize: '12px', color: '#7d8596', letterSpacing: '3px', textTransform: 'uppercase' }}>
             Paper Mode

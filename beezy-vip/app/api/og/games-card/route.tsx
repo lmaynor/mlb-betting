@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { OgBrandBadge } from "@/lib/og-brand";
 export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
@@ -101,10 +102,7 @@ export async function GET() {
 
       {/* HEADER */}
       <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", height:`${HEADER_H}px`, borderBottom:"1px solid #1e2230", gap:"10px", padding:"0 40px" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:"2px" }}>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#ffffff", letterSpacing:"-2px" }}>BEEZY</span>
-          <span style={{ fontSize:"44px", fontWeight:900, color:"#57f287", letterSpacing:"-2px" }}>.FYI</span>
-        </div>
+        <OgBrandBadge size={64} />
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
           <span style={{ fontSize:"13px", color:"#4ea6f5", letterSpacing:"3px", fontWeight:700 }}>GAME PICKS</span>
           <span style={{ fontSize:"13px", color:"#7d8596" }}>&middot;</span>

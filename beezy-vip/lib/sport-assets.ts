@@ -9,6 +9,9 @@
  *    These are undocumented URLs and could change without notice -- every <img> must tolerate a 404 (see
  *    components/ui/sport-assets.tsx, which hides a broken image instead of showing the broken-image icon).
  *  - NBA ids here are ESPN's, NOT NBA personIds (the official NBA JSON endpoints are blocked from our infra).
+ *  - NFL: the nfl.com image CDN, keyed by the image TOKEN the nflverse rosters carry (a short string, not a number; the ESPN id
+ *    exists for only ~70% of players, the token for 97%). Verified 2026-10-16: 200, transparent cutout, ~8KB at w_200.
+ *      NFL  static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/{token}
  *
  *  - MLB headshots use MLB's own `silo` variant, the transparent cutout (the older `headshot/67` URL is a JPEG WITH a
  *    background, which is why a local rembg pipeline used to exist). Verified 2026-10-14: real photos for all 1,272 mapped
@@ -25,11 +28,11 @@
 import teams from './sport-teams.json'
 
 export type AssetSport = 'nhl' | 'nba'
-/** Headshots also cover MLB (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets). */
-export type HeadshotSport = AssetSport | 'mlb'
+/** Headshots also cover MLB and NFL (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets, NFL has none). */
+export type HeadshotSport = AssetSport | 'mlb' | 'nfl'
 
-/** Sports with a headshot source (NFL has none). A sport added to lib/sports.ts gets headshots by being added here. */
-export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nhl', 'nba']
+/** Sports with a headshot source. A sport added to lib/sports.ts gets headshots by being added here. */
+export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nfl', 'nhl', 'nba']
 export const hasHeadshots = (sport: string): sport is HeadshotSport => HEADSHOT_SPORTS.includes(sport)
 
 interface TeamRow { abbr: string; name: string; alias: string[] }
@@ -79,8 +82,12 @@ export function teamLogoUrl(sport: AssetSport, team: string | null | undefined, 
   return dark ? `/logos/${sport}/${base}-dark.svg` : `/logos/${sport}/${base}.svg`
 }
 
-/** Headshot URL from a league player id (NHL playerId / ESPN athlete id), or null for a missing/invalid id. */
+/** nfl.com image tokens are short lowercase-alphanumeric strings; anything else (a path, a URL) is rejected, never interpolated. */
+const NFL_TOKEN = /^[a-z0-9]{10,40}$/i
+
+/** Headshot URL from a league player id (NHL playerId / ESPN athlete id / NFL image token), or null for a missing/invalid id. */
 export function headshotUrlById(sport: HeadshotSport, id: number | string | null | undefined): string | null {
+  if (sport === 'nfl') return typeof id === 'string' && NFL_TOKEN.test(id) ? `https://static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/${id}` : null
   const n = typeof id === 'string' ? Number(id) : id
   if (n == null || !Number.isInteger(n) || n <= 0) return null
   if (sport === 'nhl') return `https://assets.nhle.com/mugs/nhl/latest/${n}.png`
@@ -93,4 +100,29 @@ export function headshotUrlById(sport: HeadshotSport, id: number | string | null
 /** Same slug algorithm as scripts/build_sport_assets.py::_slug (accent-fold, lowercase, '_' separated). */
 export function playerSlug(name: string | null | undefined): string {
   return fold(name).replace(/ /g, '_').replace(/[^a-z0-9_]/g, '')
+}
+
+// ---- team logos for the games strip and tables, every sport ------------------------------------------------------
+export type LogoSport = AssetSport | 'mlb' | 'nfl'
+
+/** ESPN's NFL logo slugs differ from the ev/ team codes in a few places (JAC -> jax, WAS -> wsh); everything else is the lowercased code. */
+const ESPN_NFL_SLUG: Record<string, string> = { JAC: 'jax', JAX: 'jax', WAS: 'wsh', WSH: 'wsh', LA: 'lar' }
+const NFL_CODES = new Set(('ARI ATL BAL BUF CAR CHI CIN CLE DAL DEN DET GB HOU IND JAC KC LAC LAR LV MIA MIN NE NO NYG NYJ PHI PIT '
+  + 'SEA SF TB TEN WAS JAX WSH LA').split(' '))
+/** The MLB logos shipped in public/logos/{abbr}.png (the same set lib/tokens.ts TEAM_ABBREV derives). */
+const MLB_LOGOS = new Set(('ari atl bal bos chc cin cle col cws det hou kc laa lad mia mil min nym nyy oak phi pit sd sea sf stl tb tex '
+  + 'tor wsh').split(' '))
+
+/** Logo URL for a team code in any sport: local files for MLB / NHL / NBA, ESPN's CDN (64px, transparent) for the NFL, or null. */
+export function anyTeamLogoUrl(sport: LogoSport, team: string | null | undefined): string | null {
+  const code = (team ?? '').trim().toUpperCase()
+  if (!code) return null
+  if (sport === 'nhl' || sport === 'nba') return teamLogoUrl(sport, code)
+  if (sport === 'mlb') {
+    const slug = code === 'WAS' ? 'wsh' : code === 'CHW' ? 'cws' : code === 'ATH' ? 'oak' : code.toLowerCase()
+    return MLB_LOGOS.has(slug) ? `/logos/${slug}.png` : null
+  }
+  if (!NFL_CODES.has(code)) return null
+  const slug = ESPN_NFL_SLUG[code] ?? code.toLowerCase()
+  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/${slug}.png&w=64&h=64`
 }

@@ -7,7 +7,7 @@ import { TopPicksTable } from '@/components/picks/top-picks-table'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { siteDateKey, formatDateKey } from '@/lib/dates'
 import { sportHref } from '@/lib/ia'
-import { parsePickFilters } from '@/lib/picks-filters'
+import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
 import { LIVE_SPORTS } from '@/lib/sports'
 import { filterTopPicks } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
@@ -23,13 +23,13 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
   const { candidates } = await loadTopPlayerPicks(date)
   // The ten best of what the filters leave: "NFL" is the ten best NFL picks, not the NFL rows inside the overall ten.
   const top = filterTopPicks(candidates, filters)
-  const filtered = filters.sport != null || filters.tier != null || filters.book != null || filters.books.length > 0 || filters.q !== ''
+  const filtered = activeFilterCount(filters) > 0
 
   const showResult = top.some(p => p.result != null)
 
   return (
     <div>
-      <FilterBar sport="all" defaultOpen />
+      <FilterBar sport="all" />
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top 10 player picks</h1>

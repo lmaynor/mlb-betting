@@ -2,6 +2,7 @@
 validated SVG that matches its manifest; the SVG validator must reject hostile input; player maps must be sane."""
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -66,3 +67,28 @@ def test_shipped_player_maps_are_complete_enough(sport, min_players):
     assert len(team_keys) >= min_players
     assert all(isinstance(v, int) and v > 0 for v in m.values())
     assert len({k.split("__")[1] for k in team_keys}) == (32 if sport == "nhl" else 30)    # every team represented
+
+
+def test_nfl_rows_take_the_nflcom_token_for_skill_players_only():
+    import pandas as pd
+    base = "https://static.www.nfl.com/image/upload/f_auto,q_auto/league/"
+    roster = pd.DataFrame([
+        {"full_name": "C.J. Stroud", "team": "HOU", "position": "QB", "headshot_url": base + "tt4zrtxlhifaljhj0rn7"},
+        {"full_name": "Trevor Lawrence", "team": "JAX", "position": "QB", "headshot_url": base + "pyevyueqikk1vbkh9ju1"},   # JAX -> ev code JAC
+        {"full_name": "Some Kicker", "team": "ATL", "position": "K", "headshot_url": base + "abcdefghij0123456789"},       # not a prop position
+        {"full_name": "No Photo", "team": "KC", "position": "WR", "headshot_url": None},
+        {"full_name": "Odd Url", "team": "KC", "position": "WR", "headshot_url": "https://evil.example/league/abcdefghij0123456789"},
+        {"full_name": "Ghost Team", "team": "XXX", "position": "WR", "headshot_url": base + "abcdefghij0123456789"},
+    ])
+    rows = bsa.nfl_rows(roster)
+    assert rows == [("C.J. Stroud", "HOU", "tt4zrtxlhifaljhj0rn7"), ("Trevor Lawrence", "JAC", "pyevyueqikk1vbkh9ju1")]
+    m = bsa._to_map(rows, cast=str)
+    assert m["cj_stroud"] == "tt4zrtxlhifaljhj0rn7" and m["trevor_lawrence__jac"] == "pyevyueqikk1vbkh9ju1"
+
+
+def test_shipped_nfl_player_map_is_complete_enough():
+    m = json.loads((PUBLIC / "headshots" / "nfl_player_map.json").read_text())
+    team_keys = [k for k in m if "__" in k]
+    assert len(team_keys) >= 800
+    assert all(isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9]{10,40}", v) for v in m.values())     # tokens, never paths or URLs
+    assert len({k.split("__")[1] for k in team_keys}) == 32                                          # every franchise represented

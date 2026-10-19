@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/ui/brand-mark'
 
 export const metadata: Metadata = {
   title:  'Not available in your region',
@@ -16,6 +17,7 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
   return (
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
       <div style={{ width: '100%', maxWidth: '460px' }}>
+        <div style={{ marginBottom: '20px' }}><BrandWordmark size="md" /></div>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
         <p style={{ fontSize: '14px', color: 'var(--silver)', lineHeight: 1.6, margin: '0 0 12px' }}>
           Picks and +EV alerts are not offered where local rules restrict them. The free calculators, guides and the public results record remain available.

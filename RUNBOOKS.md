@@ -801,17 +801,18 @@ Afterwards watch the next `mlb-settle` and the first runner for `ON CONFLICT` / 
 ### 7b. Create the alerts webhook secret and resume NHL
 
 ```bash
-# The NFL/NHL/NBA sweeps post to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS -- an ADMIN channel, never a member one
-# (these signals are unvalidated). Create the secret ONCE (rotate with `gcloud secrets versions add ... --data-file=-`).
-printf '%s' "$ALERTS_WEBHOOK_URL" | gcloud secrets create discord-webhook-alerts --replication-policy=automatic --data-file=- --project=$PROJECT_ID
-gcloud secrets add-iam-policy-binding discord-webhook-alerts --project=$PROJECT_ID --role=roles/secretmanager.secretAccessor \
-  --member="serviceAccount:mlb-betting-sa@${PROJECT_ID}.iam.gserviceaccount.com"      # skip if the SA already has it project-wide
-
-# Re-provision so the props-alerts jobs mount it (setup_props_alerts.sh adds DISCORD_WEBHOOK_ALERTS only when the secret exists;
-# `--set-secrets` REPLACES the list, which is why this goes through the script and not an ad-hoc update).
+# The NFL/NHL/NBA sweeps post through beezy-bot into ONE daily thread per sport under that sport's card channel
+# ("NFL props signals - Sat Oct 18" under #nfl-card): no channels of their own, access follows the sport pass, never #ops-alerts.
+# They need BEEZY_BOT_URL + BEEZY_BOT_SECRET. Re-provision the NHL/NBA alert jobs (it adds both) and give the NFL job the same:
 PROJECT_ID=$PROJECT_ID bash deploy/setup_props_alerts.sh
-# Optional: the NFL sweep job (it falls back to the OPS webhook without this)
-gcloud run jobs update ev-nfl-props-sweep --region=$REGION --project=$PROJECT_ID --update-secrets=DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest
+gcloud run jobs update ev-nfl-props-sweep --region=$REGION --project=$PROJECT_ID \
+  --update-secrets=BEEZY_BOT_SECRET=beezy-bot-secret:latest \
+  --update-env-vars=BEEZY_BOT_URL=https://beezy-discord-bot-628109313129.us-central1.run.app
+# Optional bot-down fallback (an ADMIN channel only, never a member channel): create the secret ONCE and mount it as DISCORD_WEBHOOK_ALERTS
+#   printf '%s' "$ALERTS_WEBHOOK_URL" | gcloud secrets create discord-webhook-alerts --replication-policy=automatic --data-file=- --project=$PROJECT_ID
+#   gcloud secrets add-iam-policy-binding discord-webhook-alerts --project=$PROJECT_ID --role=roles/secretmanager.secretAccessor \
+#     --member="serviceAccount:mlb-betting-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+# The bot needs Create Public Threads + Send Messages in Threads on the card channels (it has Administrator today).
 
 # Resume NHL banking FIRST (the alerts sweep refuses a banked snapshot older than 45 min), then the NHL alerts. Spends ParlayAPI credits.
 for S in $(gcloud scheduler jobs list --location=$REGION --project=$PROJECT_ID --format='value(ID.basename())' | grep -E '^(odds-bank-nhl-|props-alerts-nhl-)'); do
@@ -849,8 +850,8 @@ and pass `SKIP_PROD=1` when you only need the sport-feed images refreshed. The s
 
 `deploy/rollout_multisport_live.sh` chains s7-s8 with gates: build (`build_all_images.sh`, its own clean-tree/origin-main guards),
 a READ-ONLY v4 check of every Cloud Run Job's latest execution digest + the serving revision (prints whether
-`DROP INDEX IF EXISTS idx_bets_dedup_v3;` is safe -- it NEVER runs the DROP), props-alerts provisioning if the
-`discord-webhook-alerts` secret exists (and mounts it on `ev-nfl-props-sweep`), optional NHL resume, optional BettingPros backfill.
+`DROP INDEX IF EXISTS idx_bets_dedup_v3;` is safe -- it NEVER runs the DROP), props-alerts provisioning (and
+gives `ev-nfl-props-sweep` the bot URL + secret for its daily signals thread), optional NHL resume, optional BettingPros backfill.
 
 ```bash
 PROJECT_ID=concrete-crow-445205-m4 DRY_RUN=1 RESUME_NHL=1 START_BP_BACKFILL=1 bash deploy/rollout_multisport_live.sh   # print the plan

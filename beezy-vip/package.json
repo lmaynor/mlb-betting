@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "brand:build": "node scripts/build-brand-kit.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.3.4",
@@ -37,6 +38,7 @@
     "eslint-config-next": "16.2.6",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "ts-jest": "^29.4.9",
     "typescript": "^5"

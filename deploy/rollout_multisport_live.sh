@@ -7,7 +7,7 @@
 #                 against the set of digests known to contain bets.sport + idx_bets_dedup_v4, then prints whether
 #                 `DROP INDEX IF EXISTS idx_bets_dedup_v3;` is safe. THIS SCRIPT NEVER DROPS THE INDEX: Cloud SQL's socket only
 #                 exists inside Cloud Run (CONTEXT.md s5), so the DROP is a manual `gcloud sql connect` step (RUNBOOKS.md s7a).
-#   3. ALERTS     if secret discord-webhook-alerts exists: deploy/setup_props_alerts.sh, then mount the secret on ev-nfl-props-sweep.
+#   3. SIGNALS    deploy/setup_props_alerts.sh, then give ev-nfl-props-sweep the bot URL + secret (daily thread under #nfl-card).
 #   4. NHL        RESUME_NHL=1: resume odds-bank-nhl-* FIRST, then props-alerts-nhl-*, and print their STATE table.
 #                 Resuming banking SPENDS shared ParlayAPI credits (pool is 20k/mo; the ledger caps NHL at its own budget).
 #   5. BP BACKFILL START_BP_BACKFILL=1: provision bp-backfill-{nfl,nhl,nba} (deploy/setup_backfill_bettingpros_props.sh) and
@@ -121,19 +121,21 @@ else
 fi
 echo "  Manual step (RUNBOOKS.md s7a): gcloud sql connect, then  DROP INDEX IF EXISTS idx_bets_dedup_v3;"
 
-# ---- 3. alerts webhook -> props alerts + NFL sweep ----------------------------------------------------------------------
-say "3/5 alerts: secret discord-webhook-alerts?"
-if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
-  echo "  secret exists -> provisioning props alerts (idempotent; they idle until odds banking is resumed)"
-  run env PROJECT_ID="$PROJECT_ID" bash deploy/setup_props_alerts.sh
-  if gcloud run jobs describe ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
+# ---- 3. props signals -> a daily thread under each sport's card channel (via the bot) ----------------------------------------
+# The sweeps post into ONE thread per day under #nfl-card / #nhl-card / #nba-card through beezy-bot (no channels of their own).
+# They need the bot URL + secret. DISCORD_WEBHOOK_ALERTS (if that secret exists) is only the bot-down fallback.
+say "3/5 props signals: bot access for the sweeps"
+BOT_URL="${BEEZY_BOT_URL:-https://beezy-discord-bot-628109313129.us-central1.run.app}"
+run env PROJECT_ID="$PROJECT_ID" bash deploy/setup_props_alerts.sh
+if gcloud run jobs describe ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
+  run gcloud run jobs update ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" \
+    --update-secrets=BEEZY_BOT_SECRET=beezy-bot-secret:latest --update-env-vars="BEEZY_BOT_URL=${BOT_URL}"
+  if gcloud secrets describe discord-webhook-alerts --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     run gcloud run jobs update ev-nfl-props-sweep --region="$REGION" --project="$PROJECT_ID" \
       --update-secrets=DISCORD_WEBHOOK_ALERTS=discord-webhook-alerts:latest
-  else
-    warn "job ev-nfl-props-sweep not found; skipped mounting the secret on it"
   fi
 else
-  echo "  secret not found: skipped (create it per RUNBOOKS.md s7b; alerts then fall back to the OPS webhook)"
+  warn "job ev-nfl-props-sweep not found; skipped giving it bot access"
 fi
 
 # ---- 4. resume NHL --------------------------------------------------------------------------------------------------------

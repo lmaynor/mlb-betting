@@ -1,9 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { IBM_Plex_Mono, Plus_Jakarta_Sans, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' })
+// Three faces. Variable names are the contract with globals.css and ~1,600 inline styles: --font-inter is the dense UI
+// face (historical name, now Plus Jakarta Sans), --font-display is headings and the wordmark, --font-mono is every number.
+const uiSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-inter', weight: ['400', '500', '600', '700'], display: 'swap' })
+const displaySans = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700'], display: 'swap' })
+const plexMono = IBM_Plex_Mono({ subsets: ['latin'], variable: '--font-mono', weight: ['400', '500', '600', '700'], display: 'swap' })
 import { ClerkProvider } from '@clerk/nextjs'
 import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { Nav } from '@/components/layout/nav'
@@ -22,22 +25,23 @@ export const viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default:  'Beezy.FYI \u2014 +EV Scanner and MLB Models',
-    template: '%s — Beezy.FYI',
+    default:  'beezy.fyi \u2014 Quantitative Sports Analytics',
+    template: '%s \u2014 beezy.fyi',
   },
   description:
-    'A 15-minute +EV scanner across sportsbooks, Kalshi and Novig, plus MLB models graded daily. Paper-tracked, every result public.',
+    'Quantitative models, prop research and a live +EV terminal across MLB, NFL, NHL and NBA. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
-    images: [{ url: '/api/og?title=%2BEV+Scanner+%2F+MLB+Models&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
-    siteName: 'Beezy.FYI',
+    images: [{ url: '/api/og?title=Quantitative+Models+%26+%2BEV+Terminal&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
+    siteName: 'beezy.fyi',
     type:     'website',
   },
+  twitter: { card: 'summary_large_image', site: '@beezy_fyi', creator: '@beezy_fyi' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const shell = (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${uiSans.variable} ${displaySans.variable} ${plexMono.variable}`}>
       <body>
         <div className="page-frame">
           <div className="site-chrome">

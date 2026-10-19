@@ -13,6 +13,13 @@ falls back to a channel that belongs to a different audience (an +EV alert never
     webhook_for("tweets")          DISCORD_WEBHOOK_TWEETS       -> _OPS
     webhook_for("free_plays")      DISCORD_WEBHOOK_FREE_PLAYS   (no fallback: a free post never lands in a paid channel)
     webhook_for("ops")             DISCORD_WEBHOOK_OPS
+    webhook_for("props_alerts")    DISCORD_WEBHOOK_ALERTS       (admin hook; nothing after it)
+
+`props_alerts` is the unvalidated NFL / NHL / NBA props sweeps (ev/sweep_nfl_props.py, ev/sweep_props_alerts.py). They do NOT get
+channels of their own (that cluttered the server): post_props_signal() puts each alert in ONE daily thread under the sport's card
+channel (#nfl-card, ...), so the card stays on top, access follows the sport pass, and old threads archive themselves. The
+webhook above is only the fallback when the bot is unreachable. The rows are unvalidated, so they never fall into the +EV
+channels, a daily card's own message stream, or #ops-alerts (failures only). With neither the bot nor the hook the sweep logs.
 
 Returns None when nothing in the chain is set (callers print instead of posting). Blank / whitespace-only
 values count as unset.
@@ -36,6 +43,7 @@ _CHAINS = {
     "tweets": ("DISCORD_WEBHOOK_TWEETS", "DISCORD_WEBHOOK_OPS"),
     "free_plays": ("DISCORD_WEBHOOK_FREE_PLAYS",),
     "ops": ("DISCORD_WEBHOOK_OPS",),
+    "props_alerts": ("DISCORD_WEBHOOK_ALERTS",),
 }
 KINDS = tuple(sorted(set(_CHAINS) | {"card"}))
 
@@ -158,11 +166,14 @@ def slip_text(lines, limit: int = 2000) -> str:
 
 
 def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str | None = None, timeout: float = 15.0,
-                 thread: dict | None = None) -> bool:
+                 thread: dict | None = None, daily_thread: str | None = None) -> bool:
     """Post as the bot user. True only when the bot accepted it; False (never raises) so callers fall back to a webhook.
 
     `thread` = {"name": ..., "content": ...}: the bot opens a thread under the message and posts `content` there with the
-    slip bots (GamblyBot, Playbook) @mentioned -- they only react to a mention on a real message."""
+    slip bots (GamblyBot, Playbook) @mentioned -- they only react to a mention on a real message.
+
+    `daily_thread` = a thread name: the bot posts INTO the channel's active thread of that name, creating it first if there is
+    none (one thread per day keeps a busy feed out of the channel itself). Not combined with `thread`."""
     if not bot_configured():
         return False
     import requests
@@ -174,9 +185,39 @@ def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str
         body["embeds"] = embeds
     if thread:
         body["thread"] = {"name": str(thread["name"])[:100], "content": str(thread["content"])[:1800]}
+    if daily_thread:
+        body["daily_thread"] = {"name": str(daily_thread)[:100]}
     try:
         r = requests.post(f"{base}/internal/post-message", json=body, timeout=timeout,
                           headers={"X-Beezy-Secret": os.environ["BEEZY_BOT_SECRET"].strip()})
         return r.status_code == 200
     except Exception:  # noqa: BLE001 -- a bot outage must fall back to the webhook, not break the pager
+        return False
+
+
+# -- props sweep signals: one daily thread under the sport's card channel -------------------------------------------------
+
+def signals_thread_name(sport: str, now=None) -> str:
+    """'NFL props signals - Sat Oct 18': one thread per sport per site day (America/Chicago), plain ASCII."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = now or datetime.now(ZoneInfo("America/Chicago"))
+    return f"{sport.upper()} props signals - {now.strftime('%a %b')} {now.day}"
+
+
+def post_props_signal(sport: str, content: str | None, embeds: list | None = None, now=None) -> bool:
+    """Post an unvalidated props-sweep alert into the sport's daily signals thread (under its card channel, via the bot).
+
+    Falls back to the admin DISCORD_WEBHOOK_ALERTS hook when the bot is unreachable or not configured. NEVER #ops-alerts or a
+    +EV channel. Returns False (and the caller logs) when neither took it; never raises."""
+    if post_via_bot("card", content, embeds, sport=sport, daily_thread=signals_thread_name(sport, now)):
+        return True
+    url = webhook_for("props_alerts")
+    if not url:
+        return False
+    import requests
+    try:
+        r = requests.post(url, json={"content": (content or "")[:1900], "embeds": embeds or []}, timeout=20)
+        return r.status_code < 300
+    except requests.RequestException:
         return False

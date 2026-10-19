@@ -45,78 +45,85 @@ const rotation = row({ player: 'Sam Rotation', player_norm: 'sam rotation', has_
 const board = (rows: SportProjectionRow[], sport: 'nba' | 'nfl' | 'nhl' = 'nba') => <SportProjectionsBoard sport={sport} rows={fromSportProjections(rows)} />
 
 describe('unified projections board', () => {
-  it('renders score and tier, player and matchup, market and line, model proj, consensus fair, L5/L10, best book and edge', () => {
+  it('renders score and tier, player and team, game, market and line, model, market fair, form, best price and edge', () => {
     render(board([row()]))
-    const t = within(screen.getByText('Jo Doe').closest('tr')!)
+    const tr = screen.getByText('Jo Doe').closest('tr')!
+    const t = within(tr)
     expect(t.getByText('62')).toBeInTheDocument()
     expect(t.getByText('LEAN')).toBeInTheDocument()
-    expect(t.getByText(/LAL v BOS/)).toBeInTheDocument()
+    const cells = [...tr.querySelectorAll('td')].map(td => td.textContent ?? '')
+    expect(cells[1]).toContain('LAL')                       // the player's own team
+    expect(cells[2]).toContain('BOS@LAL')                   // the game: away @ home
+    expect(cells[2]).toContain('CT')                        // with its start time
     expect(t.getByText('Over 24.5')).toBeInTheDocument()
     expect(t.getByText('26.3')).toBeInTheDocument()
     expect(t.getByText('60%')).toBeInTheDocument()
     expect(t.getByText(/52% -108/)).toBeInTheDocument()
     expect(t.getByText(/6 bk/)).toBeInTheDocument()
-    expect(t.getByText('L5: 80%')).toBeInTheDocument()
-    expect(t.getByText('L10: 70%')).toBeInTheDocument()
+    expect(t.getByText('L5 80%')).toBeInTheDocument()
+    expect(t.getByText('L10 70%')).toBeInTheDocument()
     expect(t.getByText('+120')).toBeInTheDocument()
     expect(t.getByText('FanDuel')).toBeInTheDocument()
     expect(t.getByText('+8.0%')).toBeInTheDocument()
     expect(t.getByText('+5.0%')).toBeInTheDocument()
     expect(t.getByText('MODEL + MARKET')).toBeInTheDocument()
-    expect(screen.getAllByText('UNVALIDATED').length).toBeGreaterThan(0)
     expect(document.querySelectorAll('thead').length).toBe(1)
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(
-      ['SCORE', 'PLAYER & MATCHUP', 'MARKET & LINE', 'MODEL PROJ', 'CONSENSUS FAIR', 'L5 / L10 HIT %', 'BEST BOOK & PRICE', 'EDGE / EV'])
+      ['SCORE', 'PLAYER', 'GAME', 'MARKET & LINE', 'MODEL', 'MARKET FAIR', 'FORM', 'BEST PRICE', 'EDGE / EV'])
+  })
+
+  it('has no controls of its own: the filter bar above the table is the only set', () => {
+    render(board([row(), rotation]))
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
   })
 
   it('hit rates and price follow the listed side: an under pick shows the share that stayed under and the under price', () => {
     render(board([row({ side: 'under', l5_hit_rate: 0.8, l10_hit_rate: 0.7 })]))
     const t = within(screen.getByText('Jo Doe').closest('tr')!)
-    expect(t.getByText('L5: 20%')).toBeInTheDocument()
-    expect(t.getByText('L10: 30%')).toBeInTheDocument()
+    expect(t.getByText('L5 20%')).toBeInTheDocument()
+    expect(t.getByText('L10 30%')).toBeInTheDocument()
     expect(t.getByText('Under 24.5')).toBeInTheDocument()
     expect(t.getByText('-110')).toBeInTheDocument()
     expect(t.getByText('BetMGM')).toBeInTheDocument()
   })
 
-  it('market chips come from the sport\'s registered systems, filter the rows, and rotation rows show dashes, never fake numbers', () => {
+  it('a row with no line shows its projection and the player\'s own averages, never fake odds or hit rates', () => {
     render(board([row(), rotation]))
-    const chips = within(screen.getByRole('group', { name: 'Filter by market' })).getAllByRole('button').map(b => b.textContent)
-    expect(chips).toEqual(['ALL', ...getSystemsBySport('nba').map(s => ({ NBA_PTS: 'PTS', NBA_REB: 'REB', NBA_AST: 'AST', NBA_3PM: '3PM', NBA_PRA: 'PRA', NBA_PR: 'PR', NBA_PA: 'PA', NBA_RA: 'RA', NBA_STL: 'STL', NBA_BLK: 'BLK' }[s.key]))])
     const rot = within(screen.getByText('Sam Rotation').closest('tr')!)
     expect(rot.getByText('7.2')).toBeInTheDocument()
     expect(rot.getByText('(no line yet)')).toBeInTheDocument()
+    expect(rot.getByText(/L10 avg 26\.0/)).toBeInTheDocument()
+    expect(rot.getByText(/szn 25\.1/)).toBeInTheDocument()
     expect(rot.queryByText('MODEL + MARKET')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'PTS' }))
-    expect(screen.queryByText('Sam Rotation')).toBeNull()
-    expect(screen.getByText('Jo Doe')).toBeInTheDocument()
-    fireEvent.click(within(screen.getByRole('group', { name: 'Filter by market' })).getByRole('button', { name: 'ALL' }))
-    expect(screen.getByText('Sam Rotation')).toBeInTheDocument()
+    expect(rot.queryByText(/%/)).toBeNull()
   })
 
-  it('filters by side, by signal and by player or team search, and sorts', () => {
-    const under = row({ player: 'Una Under', player_norm: 'una under', side: 'under', confluence: false, market_ev: -0.01, model_edge: 0.03, beezy_score: 20, team: 'MIA', opp: 'DEN' })
-    render(board([row(), under]))
-    fireEvent.click(screen.getByRole('button', { name: 'UNDER' }))
-    expect(screen.queryByText('Jo Doe')).toBeNull()
-    expect(screen.getByText('Una Under')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'ALL', pressed: false }))   // side ALL
-    fireEvent.click(screen.getByRole('button', { name: 'MODEL + MARKET' }))
-    expect(screen.queryByText('Una Under')).toBeNull()
-    fireEvent.click(screen.getAllByRole('button', { name: 'ALL', pressed: false })[0])
-    fireEvent.change(screen.getByLabelText('Search player or team'), { target: { value: 'den' } })
-    expect(screen.getByText('Una Under')).toBeInTheDocument()
-    expect(screen.queryByText('Jo Doe')).toBeNull()
-    fireEvent.change(screen.getByLabelText('Search player or team'), { target: { value: '' } })
-    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'l10' } })
-    expect((screen.getByLabelText('Sort') as HTMLSelectElement).value).toBe('l10')
+  it('leaves out a column nothing fills instead of printing a column of dashes', () => {
+    render(board([rotation]))
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('MARKET FAIR')
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('RESULT')
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toContain('FORM')
+  })
+
+  it('shows a RESULT column when a settled pick is on the board', () => {
+    const rows = fromSportProjections([row()]).map(r => ({ ...r, result: 'win' as const }))
+    render(<SportProjectionsBoard sport="nba" rows={rows} />)
+    expect(screen.getByRole('columnheader', { name: 'RESULT' })).toBeInTheDocument()
+    expect(screen.getByText('WIN')).toBeInTheDocument()
   })
 
   it('explains an empty board instead of leaving a blank page', () => {
     const { rerender } = render(<SportProjectionsBoard sport="nfl" rows={[]} emptyBody="The projection board could not be loaded." />)
     expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument()
     rerender(<SportProjectionsBoard sport="nfl" rows={[]} />)
-    expect(screen.getByText(/No NFL projections yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/No NFL rows match/i)).toBeInTheDocument()
+  })
+
+  it('shows the freshness line, as a warning when the lines are stale', () => {
+    render(<SportProjectionsBoard sport="nba" rows={fromSportProjections([row()])} status="Lines are 10.0 h old" statusWarn />)
+    expect(screen.getByRole('status')).toHaveTextContent('Lines are 10.0 h old')
   })
 
   it('side price follows the model side; status text is plain language', () => {
@@ -137,7 +144,7 @@ describe('sport tabs', () => {
     expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
     expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('href', `/picks/${sport}/projections`)
-    expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('href', `/picks/${sport}#systems`)
+    expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('href', `/picks/${sport}/systems`)
   })
   it('the header counts match the specified systems per sport', () => {
     expect(['mlb', 'nfl', 'nhl', 'nba'].map(s => getSystemsBySport(s as 'mlb').length)).toEqual([10, 10, 7, 10])

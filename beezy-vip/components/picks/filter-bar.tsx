@@ -1,175 +1,138 @@
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import Link from 'next/link'
-import { BOOK_CHIPS, bookParam, SORT_OPTIONS, TIER_OPTIONS } from '@/lib/picks-filters'
+import { AlignedBar } from '@/components/picks/aligned-bar'
+import { BOOK_CHIPS, bookParam, SIGNAL_OPTIONS, SORT_OPTIONS } from '@/lib/picks-filters'
 import { getSystemsBySport, kindOfSystem, type PickKind } from '@/lib/pick-systems'
-import { LIVE_SPORTS, SPORT_PILLARS, type SportSlug } from '@/lib/sports'
-import { SYSTEM_COLOR, SYSTEM_LABEL_SHORT } from '@/lib/tokens'
+import { LIVE_SPORTS, type SportSlug } from '@/lib/sports'
+import { SYSTEM_LABEL_SHORT } from '@/lib/tokens'
 import { useMyBooks } from '@/lib/use-my-books'
-import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 
 const B = '1px solid var(--basalt)'
-
-const CHIP_BASE: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 11px', borderRadius: 'var(--radius-pill)',
-  border: B, background: 'var(--graphite)', color: 'var(--silver)', fontSize: '11px', fontFamily: 'var(--font-mono)',
-  letterSpacing: '0.04em', cursor: 'pointer', whiteSpace: 'nowrap' as const, userSelect: 'none' as const,
-  WebkitTapHighlightColor: 'transparent', transition: 'color var(--dur), border-color var(--dur), background var(--dur)',
+const CONTROL: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 9px', borderRadius: 'var(--radius)', border: B, background: 'var(--graphite)',
+  color: 'var(--chalk)',
 }
-const CHIP_ACTIVE: React.CSSProperties = { ...CHIP_BASE, color: 'var(--chalk)', borderColor: 'var(--steel)', background: 'var(--slate)' }
-
-const DATE_LABELS: Record<string, string> = { today: 'Today', yesterday: 'Yesterday' }
-const RESULT_LABELS: Record<string, string> = { ALL: 'All', WIN: 'Win', LOSS: 'Loss', PENDING: 'Pending' }
-const RESULTS = ['ALL', 'WIN', 'LOSS', 'PENDING']
+// each labelled control grows to share the row, so on a phone they stack two or one to a row instead of ragged wraps
+const LABEL: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', flex: '1 1 150px', minWidth: 0 }
+const SELECT: React.CSSProperties = { flex: '1 1 auto', minWidth: 0 }
 
 /**
- * The one filter bar every picks page uses (/picks and /picks/[sport], any sport). State lives in the query string, so the
- * server page reads the same params (lib/picks-filters.ts) and the URL is shareable.
+ * The ONE set of filters on a picks page (every sport, and a system's page): search, market, signal, book, sort, and for a
+ * settled MLB day the result. Games are picked in the games strip above and the day in the day toggle, so nothing here
+ * repeats them. State lives in the query string, so the server page reads the same params (lib/picks-filters.ts) and a
+ * filtered view is a shareable link.
  *
- *   sport = 'all'   cross-sport Top 10: SPORT chips, TIER, BOOK, search, sort
- *   sport = <slug>  MARKET chips from that sport's registered systems, TIER, BOOK, search, sort;
- *                   plus DATE and RESULT when the sport's board is the tracked (settled) card
- * `kind` narrows MLB's market chips to player or game systems (the two MLB cards).
+ *   sport = 'all'   the cross-sport Top 10: SPORT instead of MARKET
+ *   fixedMarket     a system's page: the market is already chosen, so there is no market menu
+ *   showResult      the settled MLB card
  */
-export function FilterBar({ sport = 'mlb', kind, defaultOpen = false }: { sport?: SportSlug | 'all'; kind?: PickKind; defaultOpen?: boolean } = {}) {
+export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult = false }: {
+  sport?: SportSlug | 'all'; kind?: PickKind; fixedMarket?: boolean; showResult?: boolean
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
-  const [open, setOpen] = useState(defaultOpen)
   const my = useMyBooks()
-  const pillar = sport === 'all' ? null : SPORT_PILLARS[sport]
-  const tracked = pillar?.board === 'tracked'
 
   const market = sp.get('market') ?? 'ALL'
-  const date = sp.get('date') ?? 'today'
-  const status = sp.get('status') ?? 'ALL'
+  const signal = sp.get('signal') ?? 'ALL'
   const book = sp.get('book') ?? 'ALL'
   const books = sp.get('books') ?? ''
-  const tier = (sp.get('tier') ?? 'ALL').toUpperCase()
-  const sportParam = sp.get('sport') ?? 'ALL'
+  const sportParam = (sp.get('sport') ?? 'ALL').toLowerCase()
+  const result = sp.get('result') ?? 'ALL'
   const sort = sp.get('sort') ?? 'score'
   const dir = sp.get('dir') ?? 'desc'
   const qParam = sp.get('q') ?? ''
-  const [q, setQ] = useState(qParam)
-  useEffect(() => { setQ(qParam) }, [qParam])
+  const mineKey = my.books.join(',')
 
   const push = useCallback((mutate: (p: URLSearchParams) => void) => {
     const params = new URLSearchParams(sp.toString())
     mutate(params)
     const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname)
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [router, sp, pathname])
+  const set = (key: string, value: string, dflt: string) => push(p => { if (value === dflt) p.delete(key); else p.set(key, value) })
 
-  const set = useCallback((key: string, value: string, defaultVal: string) => {
-    push(p => { if (value === defaultVal) p.delete(key); else p.set(key, value) })
-  }, [push])
-
-  const toggleSort = useCallback((value: string) => {
-    push(p => {
-      if (sort === value) p.set('dir', dir === 'desc' ? 'asc' : 'desc')
-      else { p.set('sort', value); p.delete('dir') }
-    })
-  }, [push, sort, dir])
-
-  const markets = sport === 'all' ? [] : getSystemsBySport(sport).filter(s => sport !== 'mlb' || !kind || kindOfSystem(s.key) === kind).map(s => s.key)
-  const MARKETS = ['ALL', ...(sport === 'mlb' ? ['EV'] : []), ...markets]
+  const systems = sport === 'all' ? [] : getSystemsBySport(sport).filter(s => sport !== 'mlb' || !kind || kindOfSystem(s.key) === kind)
   const sortOptions = sport === 'all' ? SORT_OPTIONS.filter(o => o.value === 'score' || o.value === 'edge' || o.value === 'odds') : SORT_OPTIONS
-  const yesterdayKey = addDaysToDateKey(siteDateKey(), -1)
-  const dateChoice = date === 'today' ? 'today' : date === yesterdayKey ? 'yesterday' : date
-  const mineKey = my.books.join(',')
-  const mineActive = books !== '' && books === mineKey
+  const bookValue = books !== '' && books === mineKey ? 'MY' : book !== 'ALL' ? book.toLowerCase() : 'ALL'
 
-  const activeCount = [
-    market !== 'ALL', sportParam !== 'ALL', date !== 'today', status !== 'ALL', book !== 'ALL', books !== '', tier !== 'ALL', qParam !== '',
-  ].filter(Boolean).length
-
-  function chip(label: string, active: boolean, onClick: () => void, dot?: string) {
-    return (
-      <button key={label} onClick={onClick} aria-pressed={active} style={active ? CHIP_ACTIVE : CHIP_BASE}>
-        {dot && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot, flexShrink: 0 }} />}
-        {label}
-      </button>
-    )
-  }
-  function row(label: string, children: React.ReactNode) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 16px', borderBottom: B }}>
-        <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', minWidth: '44px' }}>{label}</span>
-        {children}
-      </div>
-    )
-  }
-  const marketChip = (k: string) => chip(k === 'ALL' || k === 'EV' ? k : (SYSTEM_LABEL_SHORT[k] ?? k), market === k, () => set('market', k, 'ALL'), k === 'ALL' ? 'var(--fog)' : (SYSTEM_COLOR[k] ?? 'var(--fog)'))
+  const active = [!fixedMarket && market !== 'ALL', signal !== 'ALL', bookValue !== 'ALL', sportParam !== 'all', result !== 'ALL', qParam !== ''].filter(Boolean).length
+  const clear = () => push(p => { for (const k of ['market', 'signal', 'book', 'books', 'sport', 'result', 'q', 'game', 'tier']) { if (!(fixedMarket && k === 'market')) p.delete(k) } })
 
   return (
-    <div style={{ borderBottom: B, background: 'var(--carbon)' }}>
-      {/* one toolbar row: filters toggle + active summary, search, sort */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={() => setOpen(o => !o)} aria-expanded={open}
-            style={{ ...CHIP_BASE, color: open ? 'var(--chalk)' : 'var(--silver)', borderColor: open ? 'var(--steel)' : 'var(--basalt)', background: open ? 'var(--slate)' : 'var(--graphite)', gap: '8px' }}>
-            FILTERS
-            {activeCount > 0 && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '17px', height: '17px', borderRadius: 'var(--radius-pill)', background: 'var(--signal)', color: 'var(--carbon)', fontSize: '9px', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>{activeCount}</span>
-            )}
-            <span style={{ fontSize: '9px', color: 'var(--fog)' }}>{open ? '^' : 'v'}</span>
-          </button>
-          {!open && activeCount > 0 && (
-            <>
-              {market !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{SYSTEM_LABEL_SHORT[market] ?? market}</span>}
-              {sportParam !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{sportParam.toUpperCase()}</span>}
-              {tier !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{tier}</span>}
-              {date !== 'today' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{DATE_LABELS[dateChoice] ?? date}</span>}
-              {status !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{RESULT_LABELS[status] ?? status}</span>}
-              {book !== 'ALL' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>{book}</span>}
-              {books !== '' && <span style={{ ...CHIP_ACTIVE, fontSize: '10px', padding: '3px 8px' }}>MY BOOKS</span>}
-            </>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <form onSubmit={e => { e.preventDefault(); set('q', q.trim(), '') }} role="search" style={{ display: 'inline-flex' }}>
-            <input type="search" aria-label="Search player or team" placeholder="Player or team" value={q} onChange={e => setQ(e.target.value)}
-              onBlur={() => { if (q.trim() !== qParam) set('q', q.trim(), '') }}
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '5px 9px', borderRadius: 'var(--radius-pill)', border: B, background: 'var(--graphite)', color: 'var(--chalk)', width: '150px' }} />
-          </form>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', marginRight: '4px' }}>SORT</span>
-            {sortOptions.map(({ value, label }) => {
-              const active = sort === value
-              return (
-                <button key={value} onClick={() => toggleSort(value)} aria-pressed={active} style={{ ...(active ? CHIP_ACTIVE : CHIP_BASE), padding: '4px 8px', gap: '4px' }}>
-                  {label}
-                  {active && <span style={{ fontSize: '9px', opacity: 0.7 }}>{dir === 'desc' ? 'v' : '^'}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
+    <AlignedBar role="search" style={{ display: 'flex', alignItems: 'center', gap: '8px 14px', flexWrap: 'wrap' }}>
+      <input key={qParam} type="search" aria-label="Search player, team or city" placeholder="Player, team or city" defaultValue={qParam}
+        onKeyDown={e => { if (e.key === 'Enter') set('q', e.currentTarget.value.trim(), '') }}
+        onBlur={e => { if (e.currentTarget.value.trim() !== qParam) set('q', e.currentTarget.value.trim(), '') }}
+        style={{ ...CONTROL, flex: '1 1 180px', minWidth: '160px', maxWidth: '260px' }} />
 
-      {open && (
-        <div style={{ borderTop: B }}>
-          {sport === 'all'
-            ? row('SPORT', [chip('ALL', sportParam === 'ALL', () => set('sport', 'ALL', 'ALL'), 'var(--fog)'),
-                ...LIVE_SPORTS.map(p => chip(p.shortName, sportParam.toLowerCase() === p.slug, () => set('sport', p.slug, 'ALL'), p.accent))])
-            : row('MARKET', MARKETS.map(marketChip))}
-          {tracked && row('DATE', Object.keys(DATE_LABELS).map(d => chip(DATE_LABELS[d], dateChoice === d, () => set('date', d === 'yesterday' ? yesterdayKey : 'today', 'today'))))}
-          {tracked && row('RESULT', RESULTS.map(r => chip(RESULT_LABELS[r], status === r, () => set('status', r, 'ALL'))))}
-          {row('TIER', [chip('ALL', tier === 'ALL', () => set('tier', 'ALL', 'ALL')), ...TIER_OPTIONS.map(t => chip(t.label, tier === t.value, () => set('tier', t.value, 'ALL')))])}
-          {row('BOOK', [
-            chip('ALL BOOKS', book === 'ALL' && books === '', () => push(p => { p.delete('book'); p.delete('books') })),
-            chip('MY BOOKS', mineActive, () => push(p => { p.delete('book'); if (mineKey) p.set('books', mineKey); else p.delete('books') })),
-            ...BOOK_CHIPS.map(b => chip(b, book.toLowerCase() === bookParam(b), () => push(p => { p.delete('books'); if (book.toLowerCase() === bookParam(b)) p.delete('book'); else p.set('book', b) }))),
-          ])}
-          {my.books.length === 0 && (
-            <div style={{ padding: '6px 16px 8px 76px', fontSize: '11px', color: 'var(--fog)', borderBottom: B }}>
-              MY BOOKS is empty: choose the books you can bet at on the <Link href="/ev" style={{ color: 'var(--link)' }}>+EV terminal</Link>.
-            </div>
-          )}
-        </div>
+      {sport === 'all' ? (
+        <label style={LABEL}>SPORT
+          <select aria-label="Sport" value={sportParam} onChange={e => set('sport', e.target.value, 'all')} style={{ ...CONTROL, ...SELECT }}>
+            <option value="all">All sports</option>
+            {LIVE_SPORTS.map(p => <option key={p.slug} value={p.slug}>{p.shortName}</option>)}
+          </select>
+        </label>
+      ) : !fixedMarket && (
+        <label style={LABEL}>MARKET
+          <select aria-label="Market" value={market} onChange={e => set('market', e.target.value, 'ALL')} style={{ ...CONTROL, ...SELECT }}>
+            <option value="ALL">All</option>
+            {sport === 'mlb' && <option value="EV">+EV alerts</option>}
+            {systems.map(s => <option key={s.key} value={s.key}>{SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}</option>)}
+          </select>
+        </label>
       )}
-    </div>
+
+      <label style={LABEL}>SHOW
+        <select aria-label="Signal" value={signal.toLowerCase()} onChange={e => set('signal', e.target.value, 'all')} style={{ ...CONTROL, ...SELECT }}>
+          <option value="all">Everything</option>
+          {SIGNAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </label>
+
+      <label style={LABEL}>BOOK
+        <select aria-label="Book" value={bookValue}
+          onChange={e => {
+            const v = e.target.value
+            push(p => {
+              p.delete('book'); p.delete('books')
+              if (v === 'MY') { if (mineKey) p.set('books', mineKey) } else if (v !== 'ALL') p.set('book', BOOK_CHIPS.find(b => bookParam(b) === v) ?? v)
+            })
+          }} style={{ ...CONTROL, ...SELECT }}>
+          <option value="ALL">All books</option>
+          <option value="MY">{my.books.length > 0 ? `My books (${my.books.length})` : 'My books (none set)'}</option>
+          {BOOK_CHIPS.map(b => <option key={b} value={bookParam(b)}>{b}</option>)}
+        </select>
+      </label>
+
+      {showResult && (
+        <label style={LABEL}>RESULT
+          <select aria-label="Result" value={result.toLowerCase()} onChange={e => set('result', e.target.value, 'all')} style={{ ...CONTROL, ...SELECT }}>
+            <option value="all">All</option><option value="win">Win</option><option value="loss">Loss</option><option value="pending">Pending</option>
+          </select>
+        </label>
+      )}
+
+      <label style={{ ...LABEL, flex: '1 1 220px' }}>SORT
+        <select aria-label="Sort" value={sort} onChange={e => push(p => { if (e.target.value === 'score') p.delete('sort'); else p.set('sort', e.target.value) })} style={{ ...CONTROL, ...SELECT }}>
+          {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button type="button" aria-label={dir === 'desc' ? 'Sorted high to low; switch to low to high' : 'Sorted low to high; switch to high to low'}
+          onClick={() => push(p => { if (dir === 'desc') p.set('dir', 'asc'); else p.delete('dir') })} style={{ ...CONTROL, cursor: 'pointer' }}>
+          {dir === 'desc' ? 'High-Low' : 'Low-High'}
+        </button>
+      </label>
+
+      {active > 0 && (
+        <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)' }}>Clear {active}</button>
+      )}
+      {my.books.length === 0 && bookValue === 'MY' && (
+        <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>+EV terminal</Link> first.</span>
+      )}
+    </AlignedBar>
   )
 }

@@ -17,9 +17,11 @@ Outputs (GCS, via mlb_core.storage):
   EVSweep/nfl_props/{ET day}/pooled_{HHMMSS}.csv    exact vs pooled consensus per Kalshi strike (no flags/orders)
   EVSweep/nfl_props/raw/{ET day}/{event}_{HHMMSS}.json   raw ParlayAPI payload (backtest/survival data)
   EVSweep/nfl_props/latest.json                    rows (Kalshi join) + book_outliers (Sink A); public +EV feed
-Discord: everything goes to DISCORD_WEBHOOK_ALERTS, else DISCORD_WEBHOOK_OPS (admin). Only the Sink A book outliers that
-clear the Beezy Score floor also reach the member #nfl-alerts channel, labelled paper/unvalidated (sport_alerts.py); the
-Kalshi-join rows stay admin-only.
+Discord: every flagged row goes into the daily 'NFL props signals' thread under #nfl-alerts via the bot (the admin
+DISCORD_WEBHOOK_ALERTS hook if the bot is down; log-only if neither); run notices go to DISCORD_WEBHOOK_OPS. On top of that, the
+Sink A book outliers that clear the Beezy Score floor are posted as top-level highlights in #nfl-alerts, labelled
+paper/unvalidated (mlb_core/alerts/sport_alerts.py). NEVER the +EV channels or #ops-alerts for signals; the Kalshi-join rows
+stay in the thread only: these rows are unvalidated.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ import pandas as pd
 import requests
 
 from ev.kalshi_map import game_key
-from mlb_core.alerts.discord_routes import with_deep_links
+from mlb_core.alerts.discord_routes import post_props_signal, webhook_for, with_deep_links
 from ev.kalshi_props import PROP_SERIES, PropLeg, map_prop_market
 from ev.props import (POOL_MAX_GAP, book_points, build_consensus, parse_event_props, pooled_consensus,
                       scan_book_outliers)
@@ -337,15 +339,26 @@ def fetch_kalshi_legs(client: KalshiClient):
 
 
 def webhook_url():
-    # Deliberately NOT mlb_core.alerts.discord_routes.webhook_for("ev_sportsbooks"): that chain starts at the
-    # member-facing #ev-sportsbooks channel, and these shadow rows are unvalidated (admin channels only).
-    return os.environ.get("DISCORD_WEBHOOK_ALERTS") or os.environ.get("DISCORD_WEBHOOK_OPS") or ""
+    # Only the bot-down fallback for signals: the shared admin hook (DISCORD_WEBHOOK_ALERTS). Never #ops-alerts (failures only),
+    # a +EV channel or a member channel: these shadow rows are unvalidated.
+    return webhook_for("props_alerts") or ""
 
 
-def post_discord(text: str, embeds=None) -> bool:
-    url = webhook_url()
+def ops_webhook_url():
+    # Run notices (started, budget exhausted) are operational, so they are the one thing here that belongs in #ops-alerts.
+    return webhook_for("ops") or webhook_for("props_alerts") or ""
+
+
+def post_discord(text: str, embeds=None, *, ops: bool = False) -> bool:
+    """Signals (the default) go to the NFL daily thread under #nfl-card (post_props_signal); run notices go to #ops-alerts."""
+    if not ops:
+        ok = post_props_signal("nfl", text, embeds)
+        if not ok:
+            log.warning("NFL props signal not posted (no bot, no admin hook): %s", text[:120])
+        return ok
+    url = ops_webhook_url()
     if not url:
-        log.warning("no Discord webhook configured; alert not posted")
+        log.warning("no Discord webhook configured for ops; message not posted: %s", text[:120])
         return False
     try:
         r = requests.post(url, json={"content": text[:1900], "embeds": embeds or []}, timeout=20)
@@ -575,7 +588,8 @@ def main(argv=None) -> int:
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
     state: dict = {}
     first_rem, cycle, next_cycle = None, 0, 0.0
-    post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to this admin channel only).")
+    if a.loop_minutes > 0:                                   # a scheduled one-cycle run must not ping the channel every firing
+        post_discord("NFL props SHADOW sweep running (unvalidated signals; alerts go to the admin alerts channel only).", ops=True)
     while True:
         if time.time() >= next_cycle:
             try:
@@ -587,7 +601,7 @@ def main(argv=None) -> int:
             next_cycle = time.time() + a.loop_minutes * 60
             if first_rem and pc.credits_remaining and first_rem - int(pc.credits_remaining) >= a.max_credits:
                 log.error("credit budget for this run exhausted (%s spent); stopping", a.max_credits)
-                post_discord("NFL props sweep stopped: run credit budget exhausted.")
+                post_discord("NFL props sweep stopped: run credit budget exhausted.", ops=True)
                 return 0
         if a.loop_minutes <= 0 or (until and datetime.now(timezone.utc) >= until):
             return 0

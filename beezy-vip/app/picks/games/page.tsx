@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { PicksCard } from '@/components/picks/picks-card'
+import { SportBoardPage } from '@/components/picks/sport-board-page'
 
 export const metadata: Metadata = {
   title: 'Game Picks',
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 }
 
 export default function GamePicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  return <PicksCard kind="game" searchParams={searchParams} />
+  return <SportBoardPage sport="mlb" view="picks" kind="game" searchParams={searchParams} />
 }

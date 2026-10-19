@@ -32,7 +32,7 @@ function ScoreMark({ score, tier }: { score: number; tier: ReturnType<typeof sco
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
-      <span className="dell-heading" style={{ fontSize: '8px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color, whiteSpace: 'nowrap' }}>
+      <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color, whiteSpace: 'nowrap' }}>
         {TIER_LABEL[tier]}
       </span>
     </div>
@@ -42,7 +42,7 @@ function ScoreMark({ score, tier }: { score: number; tier: ReturnType<typeof sco
 function ResultPill({ result }: { result: string | null }) {
   const tone = resultTone(result)
   return (
-    <span className="dell-heading" style={{ fontSize: '9px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: tone.bg, color: tone.color, border: `1px solid ${tone.border}`, display: 'inline-flex', width: 'fit-content' }}>
+    <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: tone.bg, color: tone.color, border: `1px solid ${tone.border}`, display: 'inline-flex', width: 'fit-content' }}>
       {tone.label}
     </span>
   )
@@ -97,7 +97,7 @@ export async function RecentPicksTable() {
             <div className="home-recent-desktop">
             <div style={{ display: 'grid', gridTemplateColumns: COL, gap: '12px', padding: '11px 16px', background: 'var(--obsidian)', borderBottom: '1px solid var(--basalt)' }}>
               {[['Score', 'left'], ['Result', 'left'], ['Game', 'left'], ['Pick', 'left'], ['P&L', 'right']].map(([h, align]) => (
-                <div key={h} className="mono" style={{ fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', textAlign: align as 'left' | 'right' }}>
+                <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', textAlign: align as 'left' | 'right' }}>
                   {h}
                 </div>
               ))}
@@ -116,7 +116,7 @@ export async function RecentPicksTable() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                      <span className="dell-heading" style={{ flexShrink: 0, fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+                      <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
                         {bet.system}
                       </span>
                       <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -154,7 +154,7 @@ export async function RecentPicksTable() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px' }}>
-                      <span className="dell-heading" style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+                      <span className="dell-heading" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', padding: '3px 7px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
                         {bet.system}
                       </span>
                       <Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="12px" />

@@ -69,7 +69,7 @@ def test_bot_first_then_webhook_fallback(monkeypatch):
     assert calls == [("card", "nfl")]
 
 
-def test_props_sweep_posts_gated_rows_to_members_and_all_rows_to_admin(monkeypatch):
+def test_props_sweep_posts_gated_highlights_and_every_row_to_the_signals_thread(monkeypatch):
     import ev.sweep_props_alerts as spa
     from mlb_core import storage
     member, admin = [], []
@@ -78,8 +78,8 @@ def test_props_sweep_posts_gated_rows_to_members_and_all_rows_to_admin(monkeypat
     monkeypatch.setattr("mlb_core.alerts.sport_alerts.post_via_bot", lambda *a, **k: False)
     monkeypatch.setattr("mlb_core.alerts.sport_alerts.post_sport_alerts",
                         lambda sport, rows: member.append((sport, [r["player"] for r in rows])) or True)
-    monkeypatch.setattr(spa, "post_discord", lambda text, embeds=None: admin.append(text) or True)
+    monkeypatch.setattr(spa, "post_discord", lambda text, embeds=None, sport=None: admin.append((sport, text)) or True)
     rows = [row(player="Strong", ev=0.14), row(player="Weak", ev=0.03, player_norm="weak")]
     assert spa.post_new(spa.SPORTS["nhl"], rows, "2026-10-17") == 2
-    assert member == [("nhl", ["Strong"])]                 # only the gated row reaches members
-    assert len(admin) == 1                                   # admin still receives the full batch
+    assert member == [("nhl", ["Strong"])]                 # only the gated row is highlighted top-level
+    assert len(admin) == 1 and admin[0][0] == "nhl"       # the signals thread still receives the full batch

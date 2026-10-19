@@ -151,7 +151,7 @@ def test_no_pointer_is_a_clean_skip(mem):
 def test_run_once_writes_evidence_and_latest_and_dedups_alerts(mem, monkeypatch):
     _bank(mem, NOW - timedelta(minutes=5), [_sog_event()])
     posted = []
-    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posted.append((text, embeds)) or True)
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None, sport=None: posted.append((text, embeds)) or True)
     monkeypatch.setattr(sw, "load_resolver", lambda spec: (PlayerResolver(HOCKEY_ROSTER), {"WSH", "MTL"}))
     res = sw.run_once(sw.SPORTS["nhl"], NOW)
     assert res["status"] == "ok" and res["flagged"] >= 1 and res["alerts_sent"] >= 1 and res["validated"] is False
@@ -161,10 +161,40 @@ def test_run_once_writes_evidence_and_latest_and_dedups_alerts(mem, monkeypatch)
     assert res2["alerts_sent"] == 0 and len(posted) == n
 
 
-def test_webhook_never_falls_back_to_a_member_channel(monkeypatch):
-    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL"):
+def test_webhook_fallback_never_reaches_a_member_channel_or_ops(monkeypatch):
+    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL", "DISCORD_WEBHOOK_EV_BOOKS"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://member.example/picks")
+    monkeypatch.setenv("DISCORD_WEBHOOK_EV_BOOKS", "https://member.example/ev")
     assert sw.webhook_url() == ""
+    monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://ops.example")            # #ops-alerts is for failures, not this feed
+    assert sw.webhook_url() == ""
+    monkeypatch.setenv("DISCORD_WEBHOOK_ALERTS", "https://alerts.example")
+    assert sw.webhook_url() == "https://alerts.example"
+
+
+def test_nfl_sweep_signals_use_the_daily_thread_and_run_notices_use_ops(monkeypatch):
+    from ev import sweep_nfl_props as nfl
+    for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL"):
+        monkeypatch.delenv(k, raising=False)
+    signals, sent = [], []
+    monkeypatch.setattr(nfl, "post_props_signal", lambda sport, text, embeds=None: signals.append((sport, text)) or True)
+
+    class _R:
+        status_code = 204
+
+    monkeypatch.setattr(nfl.requests, "post", lambda url, **kw: sent.append(url) or _R())
     monkeypatch.setenv("DISCORD_WEBHOOK_OPS", "https://ops.example")
-    assert sw.webhook_url() == "https://ops.example"
+    assert nfl.post_discord("NFL props sweep: 1 new candidate(s)", []) is True
+    assert signals == [("nfl", "NFL props sweep: 1 new candidate(s)")] and sent == []   # a signal never touches the ops hook
+    assert nfl.post_discord("NFL props sweep stopped: run credit budget exhausted.", ops=True) is True
+    assert sent == ["https://ops.example"] and len(signals) == 1                         # run notices stay in ops
+    monkeypatch.setattr(nfl, "post_props_signal", lambda *a, **k: False)
+    assert nfl.post_discord("NFL props sweep: 1 new candidate(s)", []) is False         # nothing took it: logged, not an error
+
+
+def test_nhl_nba_sweep_posts_to_its_own_sports_thread(monkeypatch):
+    seen = []
+    monkeypatch.setattr(sw, "post_props_signal", lambda sport, text, embeds=None: seen.append(sport) or True)
+    assert sw.post_discord("x", [], "nba") is True and sw.post_discord("y", [], "nhl") is True
+    assert seen == ["nba", "nhl"]
