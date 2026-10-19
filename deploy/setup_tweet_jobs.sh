@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# setup_tweet_jobs.sh -- provision the two tweet_drafter.py Cloud Run Jobs.
+# setup_tweet_jobs.sh -- provision the three tweet_drafter.py Cloud Run Jobs.
 #
-# mlb-tweet-picks (TWEET_MODE=picks, 17:00 UTC) and mlb-tweet-recap
-# (TWEET_MODE=recap, 10:00 UTC) run the SAME script (tweet_drafter.py,
-# COPY'd into the image root by Dockerfile) with different MODE env vars.
+# mlb-tweet-picks (TWEET_MODE=picks, 17:00 UTC), mlb-tweet-recap
+# (TWEET_MODE=recap, 10:00 UTC) and mlb-tweet-reply-ammo (TWEET_MODE=reply_ammo,
+# 22:45 UTC) run the SAME script (tweet_drafter.py, COPY'd into the image root
+# by Dockerfile) with different MODE env vars. All three post to Discord
+# #tweet-queue only (Typefully was removed 2026-10-19).
+#
+# reply_ammo reads the NHL/NBA sweep snapshots, which the props-alerts jobs
+# refresh at 17:35 and 22:35 UTC, and the API drops a snapshot older than 120
+# min -- so it runs 10 min after the 22:35 sweep (~6:45pm ET). A 21:15 UTC run
+# would see a 3.5h-old snapshot and silently lose NHL/NBA. If the odds-bank /
+# props-alerts schedulers are PAUSED, only NFL + MLB rows can appear.
 #
 # This script did not exist before 2026-09-02 -- both jobs were hand-created,
 # and RUNBOOKS.md's own "one-shot Cloud Shell update" snippet used
@@ -57,6 +65,7 @@ _upsert_job() {  # job_name  tweet_mode
 
 _upsert_job "mlb-tweet-picks" "picks"
 _upsert_job "mlb-tweet-recap" "recap"
+_upsert_job "mlb-tweet-reply-ammo" "reply_ammo"
 
 _upsert_sched() {  # sched_name  cron  job_name  description
   local name="$1" cron="$2" job_name="$3" desc="$4" action=create
@@ -75,9 +84,10 @@ _upsert_sched() {  # sched_name  cron  job_name  description
 
 _upsert_sched "mlb-tweet-picks-schedule" "0 17 * * *" "mlb-tweet-picks" "Games card + picks tweet draft"
 _upsert_sched "mlb-tweet-recap-schedule" "0 10 * * *" "mlb-tweet-recap" "Recap tweet draft after overnight settle"
+_upsert_sched "mlb-tweet-reply-ammo-schedule" "45 22 * * *" "mlb-tweet-reply-ammo" "Link-free reply snippets, 10 min after the 22:35 props sweep"
 
 echo ""
-echo "=== Done: 2 jobs, 2 schedules ==="
+echo "=== Done: 3 jobs, 3 schedules ==="
 echo "Verify env vars stuck:"
 echo "  gcloud run jobs describe mlb-tweet-recap --region=$REGION --format='yaml(spec.template.spec.template.spec.containers[0].env)'"
 echo "Run once now:"

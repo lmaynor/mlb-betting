@@ -1562,6 +1562,7 @@ use `--oidc-*` flags for these -- OIDC is for Cloud Run service endpoints only.
 | `mlb-monitor-drift` | `0 9 * * 1` | `/monitor-drift` | 300s | `{}` |
 | `mlb-tweet-picks-schedule` | `0 17 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=picks) |
 | `mlb-tweet-recap-schedule` | `0 10 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=recap) |
+| `mlb-tweet-reply-ammo-schedule` | `45 22 * * *` | tweet_drafter (Job) | -- | none (Job's own env has TWEET_MODE=reply_ammo) |
 
 **Picks-board jobs (2026-10-17, Cloud Run Jobs on the `mlb-betting-feeds` image, schedulers in America/Chicago):** `daily-projections` (scheduler
 `daily-projections-30m`, `25,55 * * * *`; `deploy/setup_daily_projections_job.sh`), `bp-live-nhl` (`5 * * 10-12,1-6 *`), `bp-live-nfl` (`10 * * 9-12,1-2 1-6`
@@ -1571,7 +1572,7 @@ plus Sunday `10,40 6-12` / `10 0-5,13-23`), `bp-live-nba` (`15 * * 10-12,1-6 *`)
 `tweet_drafter.py` modes (`--mode` or `TWEET_MODE`): `picks` (alias `morning`), `recap`, `settlement` (added 2026-10-14, PR #56:
 deterministic #GamblingX text + `beezy-vip` `/api/og/settlement-card` PNG + celebration GIF -> Discord `DISCORD_WEBHOOK_TWEETS`
 else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `reply_ammo` (added 2026-10-19: deterministic link-free reply snippets for
-the day's top book-vs-consensus price gaps across sports + X live-search links -> Discord `#tweet-queue`; NOT provisioned as a Job yet),
+the day's top book-vs-consensus price gaps across sports + X live-search links -> Discord `#tweet-queue`; Job `mlb-tweet-reply-ammo`, scheduler `mlb-tweet-reply-ammo-schedule` 22:45 UTC via `deploy/setup_tweet_jobs.sh`, provisioning pending),
 `steam` (not built). Every Gemini draft passes `violates_voice()` (banned phrases, >1 emoji). **Link policy (2026-10-19):** a main tweet
 never carries a URL (X throttles small accounts that do) -- it ends with the plain `beezy.fyi` watermark and `strip_urls()` enforces that
 on Gemini output; the clickable link is a reply the operator posts under it (the Discord message carries the text). **Typefully was removed 2026-10-19:**
@@ -2435,7 +2436,7 @@ Server ID `1476027259956494533`, name `beezy.fyi`. The old #daily-picks / #perfo
   `odds_alert` 21:15 / 23:00 / 23:45 (scorecard), `mlb-weekly-survival` Mondays 13:00.
 - Sweeps: `ev/sweep_nfl_props.py` and `ev/sweep_props_alerts.py` (NHL/NBA, 17:35 + 22:35) post EVERY flagged row into a daily "props signals" thread under `#<sport>-alerts` via the bot (admin `DISCORD_WEBHOOK_ALERTS` only if the bot is down), plus the Beezy-Score-gated subset as top-level paper/unvalidated highlights. The Kalshi-join NFL rows stay in the thread only.
 - Free plays: `mlb-free-plays` (17:30, 19:20, 22:15 UTC) picks from today's `bets` rows (model + system="EV") and the NHL/NBA/NFL sweep snapshots; <= 2 per ET day total, never replaced (state `FreePlays/{ET day}/posted.json`). `deploy/setup_free_plays.sh`.
-- Tweets: `mlb-tweet-picks-schedule` 17:00, `mlb-tweet-recap-schedule` 10:00; settlement mode not provisioned.
+- Tweets: `mlb-tweet-picks-schedule` 17:00, `mlb-tweet-recap-schedule` 10:00, `mlb-tweet-reply-ammo-schedule` 22:45 (all -> #tweet-queue only); settlement mode not provisioned.
 
 ### Webhook routing
 
