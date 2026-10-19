@@ -1360,7 +1360,7 @@ secretmanager.secretAccessor.
 - `site-origin` -- allowed CORS origin(s), comma-separated when both apex and www are enabled
 - `discord-bot-token` -- beezy-bot bot account
 - `gemini-api-key` -- tweet drafting (see RUNBOOKS.md social pipeline)
-- `typefully-api-key` -- tweet scheduling
+- `typefully-api-key` -- UNUSED since 2026-10-19 (Typefully removed from tweet_drafter); safe to delete
 
 **Cloud Run Jobs:**
 - `mlb-retrain-f5-meta` (DEPRECATED -- exits non-zero; use mlb-retrain-f5-v5)
@@ -1570,8 +1570,14 @@ plus Sunday `10,40 6-12` / `10 0-5,13-23`), `bp-live-nba` (`15 * * 10-12,1-6 *`)
 
 `tweet_drafter.py` modes (`--mode` or `TWEET_MODE`): `picks` (alias `morning`), `recap`, `settlement` (added 2026-10-14, PR #56:
 deterministic #GamblingX text + `beezy-vip` `/api/og/settlement-card` PNG + celebration GIF -> Discord `DISCORD_WEBHOOK_TWEETS`
-else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `steam` (not built). Every Gemini draft passes `violates_voice()`
-(banned phrases, >1 emoji). Existing picks/recap Jobs are unchanged.
+else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `reply_ammo` (added 2026-10-19: deterministic link-free reply snippets for
+the day's top book-vs-consensus price gaps across sports + X live-search links -> Discord `#tweet-queue`; NOT provisioned as a Job yet),
+`steam` (not built). Every Gemini draft passes `violates_voice()` (banned phrases, >1 emoji). **Link policy (2026-10-19):** a main tweet
+never carries a URL (X throttles small accounts that do) -- it ends with the plain `beezy.fyi` watermark and `strip_urls()` enforces that
+on Gemini output; the clickable link is a reply the operator posts under it (the Discord message carries the text). **Typefully was removed 2026-10-19:**
+picks / recap / settlement / reply_ammo all go ONLY to `#tweet-queue` (OG card + copyable text + 1-tap `x.com/intent` link) and a failed or
+skipped post fails the job; nothing posts to X automatically. See
+docs/solutions/conventions/tweet-link-policy-and-reply-ammo.md.
 
 ### Scoring paired to snapshots (2026-06-25)
 
