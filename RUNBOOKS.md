@@ -580,7 +580,8 @@ no longer read by anything -- delete it when ready. History: docs/solutions/inte
 Secrets on both jobs:
 - `SITE_API_KEY = site-api-key:latest`
 - `GEMINI_API_KEY = gemini-api-key:latest`
-- `DISCORD_WEBHOOK_OPS = discord-ops-webhook-url:latest` (the `#tweet-queue` fallback; add `DISCORD_WEBHOOK_TWEETS` to post there instead)
+- `DISCORD_WEBHOOK_TWEETS = discord-webhook-tweets:latest` (`#tweet-queue`)
+- `DISCORD_WEBHOOK_OPS = discord-ops-webhook-url:latest` (fallback only if the tweets webhook is unset; without the tweets one every post lands in `#ops-alerts`)
 
 Env vars on both jobs:
 - `BEEZY_API_URL=https://api.beezy.fyi`
