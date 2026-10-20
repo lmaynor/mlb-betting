@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { PlayerHeadshot, SportLogo } from '@/components/ui/sport-assets'
 import { fairAmerican, type BoardRow } from '@/lib/board-rows'
-import { gameTimeLabel } from '@/lib/board-games'
 import { scoreTier, TIER_META } from '@/lib/beezy-score'
 import { formatOdds } from '@/lib/odds'
 import { hasHeadshots } from '@/lib/sport-assets'
@@ -14,6 +13,12 @@ const SURFACE = SURFACE_CARD
 const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
+const HEAD_TIPS: Record<string, string> = {
+  SCORE: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
+  'MARKET FAIR': 'The books\' consensus probability for this side with the vig removed.',
+  'MODEL EDGE': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
+  'PRICE EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',
+}
 
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
 const signed = (x: number | null | undefined) => (x == null ? '--' : `${x > 0 ? '+' : ''}${(x * 100).toFixed(1)}%`)
@@ -47,22 +52,22 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   const showFair = rows.some(r => r.pFair != null)
   const showForm = rows.some(r => r.l5 != null || r.l10 != null || r.avg10 != null || r.avgSzn != null)
   const showResult = rows.some(r => r.result != null)
+  const showEv = rows.some(r => r.marketEv != null)
   const showModel = rows.some(r => r.proj != null || r.pModel != null)
-  const heads = ['SCORE', 'PLAYER', 'GAME', 'MARKET & LINE', ...(showModel ? ['MODEL'] : []), ...(showFair ? ['MARKET FAIR'] : []),
-    ...(showForm ? ['FORM'] : []), 'BEST PRICE', 'EDGE / EV', ...(showResult ? ['RESULT'] : [])]
+  const heads = ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', ...(showModel ? ['MODEL'] : []), ...(showFair ? ['MARKET FAIR'] : []),
+    ...(showForm ? ['FORM'] : []), 'BEST PRICE', 'MODEL EDGE', ...(showEv ? ['PRICE EV'] : []), ...(showResult ? ['RESULT'] : [])]
 
   return (
     <div>
       {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--fog)', marginBottom: '8px' }}>{status}</div>}
       <div style={{ ...SURFACE, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px', fontSize: '13px' }}>
-          <thead><tr>{heads.map(h => <th key={h} className="dell-heading" style={TH}>{h}</th>)}</tr></thead>
+          <thead><tr>{heads.map(h => <th key={h} className="dell-heading" title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
               const t = r.score > 0 ? TIER_META[scoreTier(r.score)] : null
               const b = r.book ? bookDisplay(r.book) : null
               const fair = fairAmerican(r.pFair)
-              const when = r.start ? gameTimeLabel({ start: r.start, startText: null }) : ''
               return (
                 <tr key={r.key} className="sys-row">
                   <td style={TD}>
@@ -78,21 +83,17 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                       {r.headshotId != null && hasHeadshots(r.sport) && <PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} />}
                       <span>
                         <span style={{ color: 'var(--chalk)', fontWeight: 600 }}>{r.player}</span>
-                        {r.team && (
-                          <span className="mono" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--fog)', marginTop: '1px' }}>
-                            <SportLogo sport={r.sport} team={r.team} size={14} />{r.team}
-                          </span>
-                        )}
                       </span>
                     </span>
                   </td>
                   <td style={TD}>
-                    {r.away && r.home ? (
-                      <span>
-                        <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--silver)', fontSize: '12px' }}>
-                          <SportLogo sport={r.sport} team={r.away} size={16} />{r.away}<span style={{ color: 'var(--fog)' }}>@</span><SportLogo sport={r.sport} team={r.home} size={16} />{r.home}
-                        </span>
-                        {when && <span className="mono" style={{ display: 'block', fontSize: '11px', color: 'var(--fog)', marginTop: '1px' }}>{when} CT</span>}
+                    {r.team ? (
+                      <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--silver)', fontSize: '12px' }}>
+                        <SportLogo sport={r.sport} team={r.team} size={20} />{r.team}
+                      </span>
+                    ) : r.away && r.home ? (
+                      <span className="mono" title="The feed does not name this player's team" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--silver)', fontSize: '12px' }}>
+                        <SportLogo sport={r.sport} team={r.away} size={16} />{r.away}<span style={{ color: 'var(--fog)' }}>@</span><SportLogo sport={r.sport} team={r.home} size={16} />{r.home}
                       </span>
                     ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                   </td>
@@ -135,11 +136,15 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     )}
                   </td>
                   <td style={TD}>
-                    <span className="mono" title="Model probability minus the de-vigged market" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.modelEdge)}</span>
-                    {r.marketEv != null && <span className="mono" title="Best price against the market consensus" style={{ marginLeft: '8px', color: r.marketEv > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.marketEv)}</span>}
-                    {r.confluence && <span className="dell-heading" title="The projection and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.modelEdge)}</span>
+                    {r.confluence && <span className="dell-heading" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
                     {r.isPick && <span className="dell-heading" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
                   </td>
+                  {showEv && (
+                    <td style={TD}>
+                      <span className="mono" title="Best price against the market's fair probability, not the model's" style={{ color: (r.marketEv ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.marketEv)}</span>
+                    </td>
+                  )}
                   {showResult && (
                     <td className="dell-heading" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--fog)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
                   )}
@@ -153,10 +158,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost" style={{ marginTop: '10px' }}>Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
       <p style={{ fontSize: '11.5px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.55 }}>
-        Model is the expected value for the stat and the probability the model gives the listed side. Market fair is the de-vigged consensus
-        probability for that side, its American price and how many books it rests on. Form is the share of recent games that landed on the
-        listed side of the line, or the player&rsquo;s own average when there is no line. Edge is the model minus the market; the second
-        figure is the best price against the market. Rows with no line are projections only: prices have not posted.
+        Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
+        price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
+        model likes the play. Rows with no line are projections only: prices have not posted.
       </p>
       {note}
     </div>

@@ -8,6 +8,7 @@ import { MarketPrices } from '@/components/picks/market-prices'
 import { SportProjectionsBoard } from '@/components/picks/sport-projections-board'
 import { SportTabs, type SportView } from '@/components/picks/sport-tabs'
 import { ScoreLegend } from '@/components/ui/score-legend'
+import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { getViewer } from '@/lib/auth'
 import { withCounts } from '@/lib/board-games'
 import { applyPickFilters, pickRows } from '@/lib/board-rows'
@@ -81,6 +82,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
             <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={board.lockedPrices} block={board.block} confluenceKeys={board.confluenceKeys} />
           </>
         )}
+        <EdgeEvLegend />
         <ScoreLegend />
       </div>
     </div>

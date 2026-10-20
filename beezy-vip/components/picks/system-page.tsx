@@ -6,6 +6,7 @@ import { GamesStrip } from '@/components/picks/games-strip'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { MarketPrices } from '@/components/picks/market-prices'
 import { SportProjectionsBoard } from '@/components/picks/sport-projections-board'
+import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { SportTabs } from '@/components/picks/sport-tabs'
 import { SystemMethodology } from '@/components/picks/system-methodology'
 import { SystemStrip } from '@/components/picks/system-strip'
@@ -104,6 +105,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
               emptyBody={base.length === 0
                 ? (tracked ? `No ${system.shortName} picks ${f.day === 'today' ? 'yet today' : 'yesterday'}. The model card publishes after the ~11:00 AM CT run.` : `No ${system.name.toLowerCase()} projections right now: no ${pillar.shortName} game is on the schedule, or its lines have not posted.`)
                 : 'No rows match these filters.'} />
+            <EdgeEvLegend />
             <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${system.shortName} rows`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
             {!tracked && f.day === 'today' && (
               <>
