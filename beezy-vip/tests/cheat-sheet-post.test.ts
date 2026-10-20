@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import { SPORT_SLUGS } from '../lib/sports'
-import { buildSheets, isEvPick, LINK_REPLY, POST_LIMIT, postLength, shortMarket, SHEET_SIZE, type SheetPick } from '../lib/cheat-sheet-post'
+import { BOOK_META, bookDisplay } from '../lib/tokens'
+import { bookPostName, buildSheets, isEvPick, LINK_REPLY, POST_LIMIT, postLength, shortMarket, SHEET_SIZE, type SheetPick } from '../lib/cheat-sheet-post'
 
 const pick = (o: Partial<SheetPick>): SheetPick => ({
   sport: 'nba', who: 'Jalen Williams', what: 'Under 4.5 Rebounds', odds: -110, book: 'espnbet', edge: 0.146, basis: 'ev', ...o,
@@ -36,8 +37,8 @@ describe('buildSheets', () => {
     expect(sheet.text).toBe([
       `Tuesday +EV NBA Cheat Sheet ${BASKETBALL}`,
       '',
-      '1. Jalen Williams U 4.5 Reb -110 ESPN BET | +14.6% EV',
-      '2. Shai Gilgeous-Alexander U 1.5 3PM +100 BetMGM | +14.3% EV',
+      '1. Jalen Williams U 4.5 Reb -110 theScore Bet | +14.6% EV',
+      '2. Shai Gilgeous-Alexander U 1.5 3PM +100 MGM | +14.3% EV',
       '3. Derrick White U 23.5 PRA -108 Novig | +15.0% EV',
       '4. Karl-Anthony Towns U 4.5 Ast +114 BetRivers | +14.6% EV',
       '5. Daniss Jenkins O 3.5 Ast +156 ProphetX | +9.0% EV',
@@ -53,8 +54,8 @@ describe('buildSheets', () => {
     const all = sheets[0]
     expect(all.text.split('\n')[0]).toBe('Tuesday +EV Cheat Sheet')
     expect(all.lines).toBe(SHEET_SIZE)
-    expect(all.text).toContain('1. NBA Jalen Williams U 4.5 Reb -110 ESPN BET | +14.6% EV')
-    expect(all.text).toContain('2. NHL Skater 1 O 2.5 SOG +120 DraftKings | +8.0% EV')   // overall keeps the caller's rank order
+    expect(all.text).toContain('1. NBA Jalen Williams U 4.5 Reb -110 theScore Bet | +14.6% EV')
+    expect(all.text).toContain('2. NHL Skater 1 O 2.5 SOG +120 DK | +8.0% EV')   // overall keeps the caller's rank order
     const nhlSheet = sheets.find(s => s.id === 'nhl')!
     expect(nhlSheet.text.split('\n')[0]).toContain('Tuesday +EV NHL Cheat Sheet')
     expect(nhlSheet.lines).toBe(SHEET_SIZE)                       // 6 NHL picks in, 5 out
@@ -95,6 +96,29 @@ describe('buildSheets', () => {
     expect(postLength(sheet.text)).toBeGreaterThan(POST_LIMIT)     // the owner's own 5-line example does not fit 280
     const [short] = buildSheets(NBA.slice(0, 2), 'Tuesday')
     expect(postLength(short.text)).toBeLessThanOrEqual(POST_LIMIT)
+  })
+})
+
+describe('bookPostName', () => {
+  it.each([
+    ['draftkings', 'DK'], ['fanduel', 'FD'], ['betmgm', 'MGM'], ['caesars', 'CZR'], ['DraftKings', 'DK'],
+  ])('%s -> %s (standard abbreviation)', (book, expected) => expect(bookPostName(book)).toBe(expected))
+
+  it.each([['novig', 'Novig'], ['prophetx', 'ProphetX'], ['betrivers', 'BetRivers'], ['hardrock', 'Hard Rock'], ['bet365', 'bet365'], ['fanatics', 'Fanatics']])(
+    '%s keeps its full name (no standard abbreviation, and not the site\'s internal short code)', (book, expected) => expect(bookPostName(book)).toBe(expected))
+
+  it('shows ESPN BET as theScore Bet whichever key the feed uses', () => {
+    expect(bookPostName('espnbet')).toBe('theScore Bet')
+    expect(bookPostName('thescore')).toBe('theScore Bet')
+    expect(bookDisplay('espnbet').label).toBe('theScore Bet')     // the shared site label too, not just the post
+    expect(JSON.stringify(Object.values(BOOK_META).map(b => b.label))).not.toMatch(/ESPN/i)
+  })
+
+  it('handles a missing or unknown book', () => {
+    expect(bookPostName(null)).toBe('')
+    expect(bookPostName('somenewbook')).toBe('Somenewbook')
+    const [sheet] = buildSheets([{ sport: 'nba', who: 'A B', what: 'Over 1.5 Assists', odds: 100, book: null, edge: 0.1, basis: 'ev' }], 'Monday')
+    expect(sheet.text).toContain('1. A B O 1.5 Ast +100 | +10.0% EV')           // no dangling book
   })
 })
 
