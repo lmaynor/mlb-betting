@@ -7,7 +7,8 @@ writes anywhere. Every failure degrades to `None` (the caller renders "no game l
 Sources (real keys; the spec's aliases are tried last):
     nfl  NFL/nflverse/player_stats/player_stats_{season}.parquet   (weekly lines, no calendar date -> "W5" labels)
     nhl  NHL/skater_boxscores_master.csv, NHL/goalie_boxscores_master.csv (+ team box master for the opponent)
-    nba  NBA/player_boxscores_master.parquet|csv
+    nba  NBA/player_boxscores_master.parquet|csv (SportsBlaze), topped up with the hoopR/ESPN mirror
+         NBA/hoopr/player_boxscores/player_box_{season}.parquet for every game after the master's newest date
 
 `recent_form()` returns the cockpit shape the frontend charts:
     {line, stat, n_games, games: [{date, opp, val, usage, hit}], l5_rate, l10_rate, szn_rate, szn_avg, szn_games,
@@ -93,6 +94,15 @@ NHL_SKATER_KEYS = ("NHL/skater_boxscores_master.csv", "NHL/skaters_master.csv")
 NHL_GOALIE_KEYS = ("NHL/goalie_boxscores_master.csv", "NHL/goalies_master.csv")
 NHL_TEAM_KEY = "NHL/team_boxscores_master.csv"
 NBA_KEYS = ("NBA/player_boxscores_master.parquet", "NBA/player_boxscores_master.csv", "NBA/player_box_master.parquet")
+NBA_HOOPR_KEY = "NBA/hoopr/player_boxscores/player_box_{season}.parquet"   # hoopR season = the year the season ENDS
+# hoopR/ESPN season_type code -> the SportsBlaze strings the master uses (preseason is dropped below either way)
+_HOOPR_SEASON_TYPE = {1: "Preseason", 2: "Regular Season", 3: "Playoffs", 5: "Play-In"}
+_HOOPR_STATS = {"points": "points", "rebounds": "rebounds", "assists": "assists", "steals": "steals",
+                "blocks": "blocks", "turnovers": "turnovers", "fouls": "fouls",
+                "three_point_field_goals_made": "three_points_made",
+                "three_point_field_goals_attempted": "three_points_attempted",
+                "field_goals_made": "field_goals_made", "field_goals_attempted": "field_goals_attempted",
+                "free_throws_made": "free_throws_made", "free_throws_attempted": "free_throws_attempted"}
 
 _CACHE: dict = {}
 _LOCK = threading.Lock()
@@ -248,8 +258,67 @@ def _load_nhl() -> dict | None:
     return out
 
 
+def _hoopr_nba_rows(after: str, first_season_year: int) -> pd.DataFrame:
+    """Played regular-season / playoff / play-in rows from the hoopR (ESPN) player box that are NEWER than `after`
+    (YYYY-MM-DD, the SportsBlaze master's newest game date), in the master's column names. SportsBlaze has no 2026-27
+    season, so without this the NBA logs freeze at the last game it carries. Absent / unreadable season files and an
+    empty result are normal (the 2026-27 files appear once games are played): -> an empty frame, never an exception.
+
+    Team abbreviations are folded to the repo tricode (ESPN writes GS / NY / NO / SA / UTAH / WSH). `_opp` is left unset
+    exactly as in the master (it has no opponent column), so the engine's opponent factor stays what it was."""
+    from nba.teams import team_code
+    frames = []
+    for season in (first_season_year + 1, first_season_year + 2):         # hoopR season = START year + 1
+        key = NBA_HOOPR_KEY.format(season=season)
+        try:
+            raw = _st.read_bytes(key)
+        except Exception as exc:  # noqa: BLE001 -- not mirrored yet (the new season's file appears after its first games)
+            logger.info("hoopR NBA %s not available: %s", key, exc)
+            continue
+        try:
+            frames.append(pd.read_parquet(io.BytesIO(raw)))
+        except Exception as exc:  # noqa: BLE001 -- a bad mirror file must not take the whole board down
+            logger.warning("hoopR NBA %s unreadable: %s", key, exc)
+    if not frames:
+        return pd.DataFrame()
+    e = pd.concat(frames, ignore_index=True)
+    need = {"game_id", "athlete_id", "athlete_display_name", "team_abbreviation", "game_date", "season", "season_type",
+            "did_not_play", "minutes", *_HOOPR_STATS}
+    if not need <= set(e.columns):
+        logger.warning("hoopR NBA player box lacks columns %s", sorted(need - set(e.columns)))
+        return pd.DataFrame()
+    e = e[e["season_type"].map(_HOOPR_SEASON_TYPE).notna() & e["athlete_id"].notna()].copy()
+    e["date"] = e["game_date"].astype(str).str[:10]
+    e = e[(e["date"] > after) & ~e["did_not_play"].fillna(False).astype(bool) & e["minutes"].notna()]
+    e = e.drop_duplicates(["game_id", "athlete_id"])
+    out = pd.DataFrame({
+        "game_id": e["game_id"].values,
+        "season_year": (_num(e["season"]) - 1).values,
+        "season_type": e["season_type"].map(_HOOPR_SEASON_TYPE).values,
+        "date": e["date"].values,
+        "team_abbr": [team_code(a) or a for a in e["team_abbreviation"]],
+        "name": e["athlete_display_name"].values,
+        "played": True,
+        "minutes": _num(e["minutes"]).values,
+    })
+    for src, dst in _HOOPR_STATS.items():
+        out[dst] = _num(e[src]).fillna(0.0).values
+    return out.reset_index(drop=True)
+
+
 def _load_nba() -> dict | None:
     df = _read(NBA_KEYS, "nba players")
+    try:
+        after = df["date"].astype(str).str[:10].max()
+        first = int(_num(df["season_year"]).max())
+        extra = _hoopr_nba_rows(after, first)
+    except Exception as exc:  # noqa: BLE001 -- the top-up is best effort; the master alone is the old behaviour
+        logger.warning("hoopR NBA top-up skipped: %s", exc)
+        extra = pd.DataFrame()
+    if len(extra):
+        logger.info("hoopR NBA top-up: +%d player-games from %s to %s", len(extra), extra["date"].min(),
+                    extra["date"].max())
+        df = pd.concat([df, extra], ignore_index=True)
     if "played" in df.columns:
         df = df[df["played"].astype(str).str.lower().isin(["true", "1", "1.0"])]
     if "season_type" in df.columns:

@@ -4083,6 +4083,15 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   fixture-tested only -- never run on real data (no Kaggle credentials). Job scripts `deploy/setup_nba_injury_bank.sh` NOT run.
   See `docs/solutions/integration-issues/nba-official-injury-report-pdf.md` and `docs/analysis/nba_official_availability_2026-10-16.md`.
 
+- **In-season game logs (2026-10-19, branch `fix/nba-inseason-gamelogs`):** SportsBlaze has NO 2026-27 season (`/seasons/nba` ends 2025,
+  `/schedule/nba/2026` 404), so `NBA/player_boxscores_master.csv` (what the picks board's engine reads via `mlb_core.data.cockpit_form._load_nba`)
+  froze at 2026-06-14. `_load_nba` now tops the master up with the hoopR/ESPN mirror (`NBA/hoopr/player_boxscores/player_box_{season}.parquet`,
+  seasons START+1 and START+2) for every played non-preseason game dated AFTER the master's newest date (no double count when SportsBlaze
+  catches up; ESPN abbreviations folded to the tricode via `nba.teams.team_code`; names match the master 582/582 for 2025-26). `_opp` stays unset
+  for ESPN rows exactly as in the master, so the opponent factor is unchanged (NOT a validated change). Missing / unreadable / column-short
+  hoopR files fall back to the master alone. The nightly `nba-hoopr-refresh` job (13:45 UTC) is what keeps the 2027 file current; its 2027
+  box files did not exist at the 2026-10-19 run. Tests: `tests/test_nba_inseason_gamelogs.py`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
