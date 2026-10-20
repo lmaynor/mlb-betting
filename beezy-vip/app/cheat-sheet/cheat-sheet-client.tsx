@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { LockedNotice } from '@/components/picks/locked-notice'
-import { LINK_REPLY, POST_LIMIT, postLength, type Sheet } from '@/lib/cheat-sheet-post'
+import { LINK_REPLY, POST_LIMIT, postLength, SHEET_SIZE, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
@@ -21,7 +21,8 @@ export interface CardPick extends TopPick {
 type Mode = 'players' | 'games'
 type SportFilter = 'all' | SportSlug
 
-const DEFAULT_LIMIT = 5
+// the card shows this many picks and each POST TO X sheet is built from the first SHEET_SIZE of the same list: keep them equal
+const DEFAULT_LIMIT = SHEET_SIZE
 const DOT = ' \u00b7 '
 
 const fmtOdds = (o: number | null) => (o == null ? null : o > 0 ? `+${o}` : String(o))
@@ -159,12 +160,12 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
           <div key={sh.id} style={{ marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
               <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--chalk)' }}>{sh.label}</span>
-              <span className="mono" style={{ fontSize: '10px', color: n > POST_LIMIT ? 'var(--loss)' : 'var(--steel)' }}>{n}/{POST_LIMIT}</span>
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--steel)' }}>{n}/{POST_LIMIT}</span>
               <div style={{ flex: 1 }} />
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
-            {n > POST_LIMIT && <p style={{ fontSize: '11px', color: 'var(--loss)', margin: '4px 0 0' }}>Over {POST_LIMIT}: post it as an X Premium long post, or drop a line.</p>}
+            {sh.lines < sh.offered && <p style={{ fontSize: '11px', color: 'var(--fog)', margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
           </div>
         )
       })}
@@ -177,8 +178,9 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
       </div>
       <p style={{ fontSize: '11px', color: 'var(--fog)', margin: '10px 0 0' }}>
-        No links in the posts (X deprioritizes them): post a sheet, then paste the REPLY under it. Only picks whose number is a real +EV are listed;
-        NFL, NHL and NBA rows are unvalidated projection signals.
+        Each box lists the same picks, in the same order, as the card above for that sport. No links in the posts (X deprioritizes them): post a sheet,
+        then paste the REPLY under it. A line says EV only when it is a real +EV price; otherwise it says edge (model vs market). NFL, NHL and NBA rows are
+        unvalidated projection signals.
       </p>
     </div>
   )
@@ -193,8 +195,10 @@ const chip = (on: boolean): React.CSSProperties => ({
  * The shareable Daily Card. It is the free Top 10 player picks (same list as /picks), with a Game picks toggle that follows the
  * game-picks access policy. Players can be narrowed to one sport; sports are never blended inside a sport filter.
  */
-export function CheatSheetClient({ sheets, players, games, gamesLocked, today, yesterday }: {
+export function CheatSheetClient({ sheets, sportPicks, players, games, gamesLocked, today, yesterday }: {
   sheets: Sheet[]
+  /** the best picks per sport (the overall Top 10 can be all one sport); the sport chips and the POST TO X boxes read these */
+  sportPicks: Partial<Record<SportSlug, CardPick[]>>
   players: CardPick[]
   games: CardPick[]
   gamesLocked: number
@@ -206,8 +210,8 @@ export function CheatSheetClient({ sheets, players, games, gamesLocked, today, y
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [copied, setCopied] = useState(false)
 
-  const sports = useMemo(() => (SPORT_SLUGS as readonly SportSlug[]).filter(s => players.some(p => p.sport === s)), [players])
-  const list = mode === 'games' ? games : players.filter(p => sport === 'all' || p.sport === sport)
+  const sports = useMemo(() => (SPORT_SLUGS as readonly SportSlug[]).filter(s => (sportPicks[s]?.length ?? 0) > 0), [sportPicks])
+  const list = mode === 'games' ? games : sport === 'all' ? players : (sportPicks[sport] ?? [])
   const shown = list.slice(0, DEFAULT_LIMIT)
   const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
   const strong = list.filter(p => scoreTier(p.score) === 'strong').length
