@@ -15,6 +15,7 @@ import { Footer } from '@/components/layout/footer'
 import { BottomNav } from '@/components/layout/bottom-nav'
 import { SectionTabs } from '@/components/layout/section-tabs'
 import { Suspense } from 'react'
+import { jsonLdString, ORGANIZATION_LD, WEBSITE_LD } from '@/lib/seo'
 
 export const viewport = {
   width: 'device-width',
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const shell = (
     <html lang="en" className={`${uiSans.variable} ${displaySans.variable} ${plexMono.variable}`}>
       <body>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString([ORGANIZATION_LD, WEBSITE_LD]) }} />
         <div className="page-frame">
           <div className="site-chrome">
             <Nav authDisabled={AUTH_DISABLED} />

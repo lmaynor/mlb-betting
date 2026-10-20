@@ -1,3 +1,20 @@
+# AI answer-engine, search and citation crawlers: welcome. The Disallow list below is deliberately the SAME as the
+# default group's. A crawler obeys only its most specific group, so a bot-only "Allow: /" group would silently drop
+# every Disallow. Keep this group and the "*" group identical (tests/aeo.test.ts enforces it).
+User-agent: meta-webindexer
+User-agent: Meta-ExternalAgent
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: GPTBot
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
 User-agent: *
 Allow: /
 

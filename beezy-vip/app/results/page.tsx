@@ -4,6 +4,7 @@ import { apiGetPicks as getPicks, apiGetStats, apiGetAnalyticsDeepDive } from '@
 import { ResultsClient } from './results-client'
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
+import { asOfLabel } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title:       'Results -- All Settled Bets',
@@ -20,7 +21,7 @@ export default async function ResultsPage() {
 
   return (
     <Suspense fallback={null}>
-      <ResultsClient initialPicks={picks} initialStats={bySystem} curve={curve} />
+      <ResultsClient initialPicks={picks} initialStats={bySystem} curve={curve} asOf={bySystem.length > 0 ? asOfLabel() : undefined} />
     </Suspense>
   )
 }
