@@ -426,8 +426,9 @@ export const BOOK_META: Record<string, BookMeta> = {
   fanatics:   bookMeta('Fanatics',    'FAN',  '#e6007e'),
   hardrock:   bookMeta('Hard Rock',   'HRB',  '#f5a623'),
   betrivers:  bookMeta('BetRivers',   'BR',   '#3d7bd9'),
-  espnbet:    bookMeta('ESPN BET',    'ESPN', '#ff5a4f'),
-  thescore:   bookMeta('theScore',    'SCR',  '#ff5a4f'),
+  // ESPN BET rebranded to theScore Bet; feeds still send the old `espnbet` key, so both keys show the current name
+  espnbet:    bookMeta('theScore Bet', 'SCR', '#ff5a4f'),
+  thescore:   bookMeta('theScore Bet', 'SCR', '#ff5a4f'),
   pinnacle:   bookMeta('Pinnacle',    'PIN',  '#f97316'),
   kalshi:     bookMeta('Kalshi',      'KAL',  '#00d2a0', true),
   novig:      bookMeta('Novig',       'NOV',  '#38bdf8', true),

@@ -45,8 +45,8 @@ describe('Daily Card POST TO X', () => {
     const mobile = container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
     const overall = within(mobile).getByLabelText('OVERALL post') as HTMLTextAreaElement
     expect(overall.value.split('\n')[0]).toBe('Tuesday +EV Cheat Sheet')
-    expect(overall.value).toContain('1. NBA Jalen Williams U 4.5 Reb -110 ESPN BET | +14.6% EV')
-    expect(overall.value).toContain('NHL Pavel Zacha U 1.5 SOG +135 DraftKings | +7.9% EV')
+    expect(overall.value).toContain('1. NBA Jalen Williams U 4.5 Reb -110 theScore Bet | +14.6% EV')
+    expect(overall.value).toContain('NHL Pavel Zacha U 1.5 SOG +135 DK | +7.9% EV')
     const nhl = within(mobile).getByLabelText('NHL post') as HTMLTextAreaElement
     expect(nhl.value.split('\n')[0]).toMatch(/^Tuesday \+EV NHL Cheat Sheet /)
     expect(within(mobile).getAllByText(new RegExp(`^${overall.value.length}/280$`)).length).toBeGreaterThan(0)

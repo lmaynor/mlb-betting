@@ -3,7 +3,7 @@
  *
  *   Tuesday +EV NBA Cheat Sheet <emoji>
  *
- *   1. Jalen Williams U 4.5 Reb -110 ESPN BET | +14.6% EV
+ *   1. Jalen Williams U 4.5 Reb -110 DK | +14.6% EV
  *
  * One OVERALL sheet (top 5 across every sport) followed by one sheet per sport that has picks (top 5 each). Only picks whose
  * percentage really is an EV are listed: a pick built from the model alone shows a model-vs-market probability gap, which can
@@ -65,8 +65,16 @@ export function shortMarket(what: string): string {
 
 const fmtOdds = (o: number) => (o > 0 ? `+${o}` : String(o))
 
+/**
+ * Book names as bettors type them. Only abbreviations that are genuinely standard are used; every other book keeps its full
+ * display name (the site's own short codes such as NOV / PRX / HRB are not something to post). `espnbet` is the key the feeds
+ * still send for the book that is now theScore Bet.
+ */
+const BOOK_POST_NAME: Record<string, string> = { draftkings: 'DK', fanduel: 'FD', betmgm: 'MGM', caesars: 'CZR' }
+export const bookPostName = (book: string | null | undefined): string => (book ? BOOK_POST_NAME[book.toLowerCase()] ?? bookDisplay(book).label : '')
+
 function line(p: SheetPick, rank: number, tagSport: boolean): string {
-  const book = p.book ? bookDisplay(p.book).label : ''
+  const book = bookPostName(p.book)
   const who = [tagSport ? SPORT_PILLARS[p.sport].shortName : '', p.who].filter(Boolean).join(' ')
   const head = [`${rank}.`, who, shortMarket(p.what), fmtOdds(p.odds as number), book].filter(Boolean).join(' ')
   return `${head} | +${((p.edge as number) * 100).toFixed(1)}% EV`
