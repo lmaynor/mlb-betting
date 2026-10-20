@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { LINK_REPLY, POST_LIMIT, postLength, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
@@ -128,6 +129,61 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
   )
 }
 
+const copyBtn = (done: boolean): React.CSSProperties => ({
+  fontSize: '11px', letterSpacing: '0.08em', padding: '7px 16px', cursor: 'pointer', borderRadius: 'var(--radius-sm)',
+  background: done ? 'var(--signal)' : 'transparent', color: done ? '#000' : 'var(--silver)', border: '1px solid var(--basalt)',
+})
+
+/**
+ * POST TO X. One box per sheet (overall first, then each sport), each its own post with its own COPY, then the one link reply.
+ * Read-only on purpose: a focused editable field makes iOS zoom the page; edit in X after pasting.
+ */
+function PostToX({ sheets }: { sheets: Sheet[] }) {
+  const [copied, setCopied] = useState<string | null>(null)
+  if (sheets.length === 0) return null
+
+  async function copy(id: string, text: string) {
+    try { await navigator.clipboard.writeText(text); setCopied(id); setTimeout(() => setCopied(c => (c === id ? null : c)), 2000) } catch { /* clipboard unavailable */ }
+  }
+  const field: React.CSSProperties = {
+    width: '100%', background: 'var(--carbon)', color: 'var(--silver)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-sm)',
+    fontSize: '12px', lineHeight: 1.5, padding: '10px 12px', resize: 'none', boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)', width: '100%', boxSizing: 'border-box' }}>
+      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '12px' }}>POST TO X</div>
+      {sheets.map(sh => {
+        const n = postLength(sh.text)
+        return (
+          <div key={sh.id} style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--chalk)' }}>{sh.label}</span>
+              <span className="mono" style={{ fontSize: '10px', color: n > POST_LIMIT ? 'var(--loss)' : 'var(--steel)' }}>{n}/{POST_LIMIT}</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
+            </div>
+            <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
+            {n > POST_LIMIT && <p style={{ fontSize: '11px', color: 'var(--loss)', margin: '4px 0 0' }}>Over {POST_LIMIT}: post it as an X Premium long post, or drop a line.</p>}
+          </div>
+        )
+      })}
+      <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--chalk)' }}>REPLY</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
+        </div>
+        <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
+      </div>
+      <p style={{ fontSize: '11px', color: 'var(--fog)', margin: '10px 0 0' }}>
+        No links in the posts (X deprioritizes them): post a sheet, then paste the REPLY under it. Only picks whose number is a real +EV are listed;
+        NFL, NHL and NBA rows are unvalidated projection signals.
+      </p>
+    </div>
+  )
+}
+
 const chip = (on: boolean): React.CSSProperties => ({
   padding: '5px 10px', fontSize: '10px', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase',
   border: `1px solid ${on ? 'var(--steel)' : 'var(--basalt)'}`, background: on ? '#131a1e' : 'transparent', color: on ? 'var(--chalk)' : 'var(--fog)',
@@ -137,7 +193,8 @@ const chip = (on: boolean): React.CSSProperties => ({
  * The shareable Daily Card. It is the free Top 10 player picks (same list as /picks), with a Game picks toggle that follows the
  * game-picks access policy. Players can be narrowed to one sport; sports are never blended inside a sport filter.
  */
-export function CheatSheetClient({ players, games, gamesLocked, today, yesterday }: {
+export function CheatSheetClient({ sheets, players, games, gamesLocked, today, yesterday }: {
+  sheets: Sheet[]
   players: CardPick[]
   games: CardPick[]
   gamesLocked: number
@@ -148,7 +205,6 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
   const [sport, setSport] = useState<SportFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [copied, setCopied] = useState(false)
-  const [tweetCopied, setTweetCopied] = useState(false)
 
   const sports = useMemo(() => (SPORT_SLUGS as readonly SportSlug[]).filter(s => players.some(p => p.sport === s)), [players])
   const list = mode === 'games' ? games : players.filter(p => sport === 'all' || p.sport === sport)
@@ -161,29 +217,6 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
   const ydayLosses = yesterday.filter(p => p.result === 'loss').length
 
   const toggle = (key: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
-
-  // Tweet text for X: no external links (the algo deprioritizes them -- the card link lives in bio), under 280 chars.
-  const tweetText = useMemo(() => {
-    const ranked = players.filter(p => scoreTier(p.score) !== 'watch')
-    const use = (ranked.length ? ranked : players).slice(0, 4)
-    const header = `Top player picks - ${today}`
-    const lines = use.map(p => {
-      const e = fmtEdge(p.edge)
-      return `${SPORT_PILLARS[p.sport].shortName}: ${p.who} ${p.what} ${fmtOdds(p.odds) ?? ''}${e ? ` (${e} edge)` : ''}`.replace(/\s+/g, ' ').trim()
-    })
-    const rec = ydayWins + ydayLosses > 0 ? `\nYesterday (MLB): ${ydayWins}-${ydayLosses}.` : ''
-    const footer = `\nModel vs the market line on every play.${rec}\nFull card + record in bio.`
-    let text = `${header}\n\n${lines.join('\n')}${footer}`
-    while (text.length > 278 && lines.length > 2) {
-      lines.pop()
-      text = `${header}\n\n${lines.join('\n')}${footer}`
-    }
-    return text
-  }, [players, today, ydayWins, ydayLosses])
-
-  async function copyTweet() {
-    try { await navigator.clipboard.writeText(tweetText); setTweetCopied(true); setTimeout(() => setTweetCopied(false), 2000) } catch { /* clipboard unavailable */ }
-  }
 
   async function handleShare() {
     const url = 'https://beezy.fyi/cheat-sheet'
@@ -279,21 +312,12 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
           </div>
         </div>
 
+        {/* Mobile: the sidebar is hidden on phones, so the POST TO X sheets sit under the card */}
+        <div className="cheat-sheet-mobile-post"><PostToX sheets={sheets} /></div>
+
         {/* Desktop sidebar */}
         <aside className="cheat-sheet-sidebar">
-          <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}>POST TO X</span>
-              <span className="mono" style={{ fontSize: '10px', color: tweetText.length > 280 ? 'var(--loss)' : 'var(--steel)' }}>{tweetText.length}/280</span>
-              <div style={{ flex: 1 }} />
-              <button onClick={copyTweet} className="mono" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '5px 12px', background: tweetCopied ? 'var(--signal)' : 'transparent', color: tweetCopied ? '#000' : 'var(--signal)', border: '1px solid var(--signal-led)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
-                {tweetCopied ? 'COPIED' : 'COPY'}
-              </button>
-            </div>
-            <textarea readOnly value={tweetText} rows={Math.min(12, tweetText.split('\n').length + 1)} onFocus={e => e.currentTarget.select()} aria-label="Tweet text" className="mono"
-              style={{ width: '100%', background: 'var(--carbon)', color: 'var(--silver)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-sm)', fontSize: '11px', lineHeight: 1.5, padding: '10px 12px', resize: 'vertical' }} />
-            <p style={{ fontSize: '11px', color: 'var(--fog)', margin: '8px 0 0' }}>No links in the text (X deprioritizes them); the card link stays in your bio. Attach the card screenshot for reach.</p>
-          </div>
+          <PostToX sheets={sheets} />
 
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>WHAT IS THIS</div>
