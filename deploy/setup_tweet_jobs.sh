@@ -44,7 +44,7 @@ _upsert_job() {  # job_name  tweet_mode
   local job_name="$1" mode="$2"
   local job_flags=(
     --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
-    --set-secrets="SITE_API_KEY=site-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest"
+    --set-secrets="SITE_API_KEY=site-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,DISCORD_WEBHOOK_OPS=discord-ops-webhook-url:latest,DISCORD_WEBHOOK_TWEETS=discord-webhook-tweets:latest"
     --set-env-vars="BEEZY_API_URL=https://api.beezy.fyi,BEEZY_SITE_URL=https://beezy.fyi,TWEET_MODE=${mode}"
     --command="python3" --args="tweet_drafter.py"
     --memory=512Mi --cpu=1 --task-timeout=300 --max-retries=3 --quiet
