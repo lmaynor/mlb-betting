@@ -4093,6 +4093,14 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   hoopR files fall back to the master alone. The nightly `nba-hoopr-refresh` job (13:45 UTC) is what keeps the 2027 file current; its 2027
   box files did not exist at the 2026-10-19 run. Tests: `tests/test_nba_inseason_gamelogs.py`.
 
+- **Game-line models (2026-10-20, branch `feat/nba-game-models`, code-only, NOT deployed):** `nba/games/` = `bp_games.py` (BettingPros NBA
+  moneyline/spread/total crawl, LONG format -> `Odds/bettingpros_nba_games/{market}/{date}.parquet`, 1,366 days 2021-10..2026-06, uploaded to GCS;
+  the pre-existing `Odds/bettingpros_nba/` backfill is PLAYER PROPS ONLY), `data.py` (hoopR team box + nba_api game-log warm-up), `features.py`
+  (Elo + EWM efficiency + rest, leakage-tested), `models.py` (ridge margin/total + logistic ML), `market.py` (modal-line de-vigged consensus, ParlayAPI
+  adapter, BP tricode aliases PHO/NOR/UTH), `evaluate.py` (walk-forward), `score.py` (live slate vs ParlayAPI, `early_season` flag).
+  **Verdict NO EDGE on all three markets, 2021-25 (n=6,604): model loses to the line every season, incremental coefficient ~0, ROI -3..-7%.**
+  `docs/analysis/nba_game_models_2026-10-20.md`; crawl gotchas `docs/solutions/integration-issues/bettingpros-nba-game-lines-not-in-props-backfill.md`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
