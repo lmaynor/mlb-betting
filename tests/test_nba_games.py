@@ -162,3 +162,24 @@ def test_bettingpros_nonstandard_tricodes_are_mapped():
     c = market.consensus(pd.DataFrame(rows))
     assert len(c) == 1 and (c.iloc[0]["home"], c.iloc[0]["away"]) == ("PHX", "NOP")
     assert market._code("UTH") == "UTA"
+
+
+def _pb(rows):
+    base = {"season_type": 2, "points": 20, "field_goals_attempted": 15, "free_throws_attempted": 4, "turnovers": 2}
+    return pd.DataFrame([{**base, **r} for r in rows])
+
+
+def test_availability_flags_a_fresh_absence_and_resets_each_season():
+    from nba.games import availability as A
+    rows = []
+    for g, (day, season) in enumerate([("2024-11-01", 2024), ("2024-11-03", 2024), ("2024-11-05", 2024), ("2025-10-25", 2025)]):
+        for pid, minutes in ((1, 34), (2, 28)):
+            if pid == 1 and g >= 2:                     # the star is out for game 3 and for the next season's opener
+                continue
+            rows.append({"game_id": f"g{g}", "season": season, "game_date_time": f"{day}T23:00:00Z",
+                         "team_abbreviation": "ATL", "athlete_id": pid, "minutes": minutes})
+    av = A.build(_pb(rows)).set_index("game_id")
+    assert av.loc["g0", "av_missing_min"] == 0 and av.loc["g1", "av_missing_min"] == 0
+    assert av.loc["g2", "av_missing_min"] == pytest.approx(34.0) and av.loc["g2", "av_new_missing_min"] == pytest.approx(34.0)
+    assert av.loc["g2", "av_top_pts"] == pytest.approx(20.0)
+    assert av.loc["g3", "av_missing_min"] == 0          # new season: roster resets, a departure is not an absence

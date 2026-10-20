@@ -149,14 +149,17 @@ _DIFF = ["e_ortg", "e_drtg", "e_efg", "e_tov_rate", "e_orb_pct", "e_ftr", "e_opp
          "e_opp_orb_pct", "e_margin", "e_net_slow", "rest_days", "b2b", "games_7d"]
 
 
-def margin_matrix(f: pd.DataFrame) -> pd.DataFrame:
+def margin_matrix(f: pd.DataFrame, avail: bool = False) -> pd.DataFrame:
     X = pd.DataFrame({f"d_{c}": f[f"h_{c}"] - f[f"a_{c}"] for c in _DIFF}, index=f.index)
     X["elo_diff"] = f["elo_diff"]
     X["playoff"] = f["playoff"]
+    if avail:   # nba.games.availability columns (h_av_*, a_av_*): positive = home is missing more
+        for c in ("missing_min", "new_missing_min", "missing_pts", "missing_usg", "top_pts"):
+            X[f"av_{c}_h"], X[f"av_{c}_a"] = f[f"h_av_{c}"], f[f"a_av_{c}"]
     return X
 
 
-def total_matrix(f: pd.DataFrame) -> pd.DataFrame:
+def total_matrix(f: pd.DataFrame, avail: bool = False) -> pd.DataFrame:
     X = pd.DataFrame(index=f.index)
     X["pace_sum"] = f["h_e_pace"] + f["a_e_pace"]
     X["ortg_sum"] = f["h_e_ortg"] + f["a_e_ortg"]
@@ -169,4 +172,8 @@ def total_matrix(f: pd.DataFrame) -> pd.DataFrame:
     X["b2b_any"] = np.maximum(f["h_b2b"], f["a_b2b"])
     X["lg_total"] = f["lg_total"]
     X["playoff"] = f["playoff"]
+    if avail:
+        for c in ("missing_min", "new_missing_min", "missing_pts", "missing_usg"):
+            X[f"av_{c}_sum"] = f[f"h_av_{c}"] + f[f"a_av_{c}"]
+        X["av_top_pts_max"] = np.maximum(f["h_av_top_pts"], f["a_av_top_pts"])
     return X

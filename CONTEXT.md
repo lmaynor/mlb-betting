@@ -4099,6 +4099,7 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   (Elo + EWM efficiency + rest, leakage-tested), `models.py` (ridge margin/total + logistic ML), `market.py` (modal-line de-vigged consensus, ParlayAPI
   adapter, BP tricode aliases PHO/NOR/UTH), `evaluate.py` (walk-forward), `score.py` (live slate vs ParlayAPI, `early_season` flag).
   **Verdict NO EDGE on all three markets, 2021-25 (n=6,604): model loses to the line every season, incremental coefficient ~0, ROI -3..-7%.**
+  `nba/games/availability.py` = who-actually-missed ceiling features (`evaluate --avail`: closes ~45% of the spread gap, still no edge). **`nba-injury-bank` job + scheduler LIVE since 2026-10-20** (ESPN injury list -> `NBA/injuries/espn/`, every 30 min game hours, forward-only).
   `docs/analysis/nba_game_models_2026-10-20.md`; crawl gotchas `docs/solutions/integration-issues/bettingpros-nba-game-lines-not-in-props-backfill.md`.
 
 When NBA gains odds + a model it graduates to the full "adding a new system"

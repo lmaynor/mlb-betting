@@ -47,24 +47,25 @@ class GameModels:
     total: object
     total_sigma: float
     ml: object
+    avail: bool = False
 
     def predict(self, f: pd.DataFrame) -> pd.DataFrame:
-        Xm, Xt = F.margin_matrix(f), F.total_matrix(f)
+        Xm, Xt = F.margin_matrix(f, self.avail), F.total_matrix(f, self.avail)
         mu_m, mu_t = self.margin.predict(Xm), self.total.predict(Xt)
         return pd.DataFrame({
             "mu_margin": mu_m, "sigma_margin": self.margin_sigma, "mu_total": mu_t, "sigma_total": self.total_sigma,
             "p_ml": self.ml.predict_proba(Xm)[:, 1], "p_ml_margin": norm.cdf(mu_m / self.margin_sigma)}, index=f.index)
 
 
-def fit(train: pd.DataFrame, kind: str = "ridge") -> GameModels:
+def fit(train: pd.DataFrame, kind: str = "ridge", avail: bool = False) -> GameModels:
     """`train` = feature table rows with targets (margin, total, home_win). Rows with no history yet are dropped."""
     t = train.dropna(subset=["h_e_ortg", "a_e_ortg", "lg_total"])
-    Xm, Xt = F.margin_matrix(t), F.total_matrix(t)
+    Xm, Xt = F.margin_matrix(t, avail), F.total_matrix(t, avail)
     m = _reg(kind).fit(Xm, t["margin"])
     tt = _reg(kind).fit(Xt, t["total"])
     ml = _clf(kind).fit(Xm, t["home_win"])
     return GameModels(kind, m, float(np.std(t["margin"] - m.predict(Xm))), tt,
-                      float(np.std(t["total"] - tt.predict(Xt))), ml)
+                      float(np.std(t["total"] - tt.predict(Xt))), ml, avail)
 
 
 # ---- pricing helpers (also used by the evaluator) -------------------------------------------------------------------

@@ -29,13 +29,14 @@ from nba.games import models as M
 THRESHOLDS = (0.0, 0.02, 0.04, 0.06)
 
 
-def walk_forward(feat: pd.DataFrame, test_seasons, kind: str = "ridge", train_from: int = 2008) -> pd.DataFrame:
+def walk_forward(feat: pd.DataFrame, test_seasons, kind: str = "ridge", train_from: int = 2008,
+                 avail: bool = False) -> pd.DataFrame:
     out = []
     for s in test_seasons:
         first = feat.loc[feat["season"] == s, "date"].min()
         tr = feat[(feat["season"] >= train_from) & (feat["date"] < first)]
         te = feat[feat["season"] == s]
-        gm = M.fit(tr, kind)
+        gm = M.fit(tr, kind, avail)
         out.append(pd.concat([te, gm.predict(te)], axis=1))
     return pd.concat(out)
 
@@ -166,7 +167,7 @@ def _fmt_roi(res: dict, tag: str) -> str:
 def report(ml, sp, tot, per_season: pd.DataFrame, meta: dict) -> str:
     L = ["# NBA game-model walk-forward vs BettingPros closing consensus", "",
          f"Test seasons {meta['seasons']}; train from {meta['train_from']} (strictly before each test season); model "
-         f"`{meta['kind']}`. Market = median de-vigged book consensus (BettingPros last quote of day, a closing proxy).",
+         f"`{meta['kind']}`{' + availability CEILING features (who actually missed)' if meta.get('avail') else ''}. Market = median de-vigged book consensus (BettingPros last quote of day, a closing proxy).",
          f"Coverage: {meta['n_games']} test games, {meta['n_priced']} with a market.", "",
          "## Moneyline", f"- n={ml['n']}  log-loss: market **{ml['ll_market']:.4f}**, logistic model {ml['ll_model']:.4f}, "
          f"Phi(margin/sigma) {ml['ll_model_margin']:.4f}, home-rate {ml['ll_home_rate']:.4f}",
@@ -195,6 +196,8 @@ def main() -> None:
     ap.add_argument("--kind", default="ridge", choices=["ridge", "hgb"])
     ap.add_argument("--seasons", default="2021,2022,2023,2024,2025")
     ap.add_argument("--train-from", type=int, default=2008)
+    ap.add_argument("--avail", action="store_true",
+                    help="CEILING test: add who-actually-missed features (nba.games.availability); use --train-from 2018")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     os.environ["MLB_BASE_DATA"] = a.base_data
@@ -202,11 +205,16 @@ def main() -> None:
     g = data.load(a.hoopr_dir, a.tsf_csv)
     feat = F.build(g[g["season"] >= 2005].reset_index(drop=True))
     seasons = [int(x) for x in a.seasons.split(",")]
-    pred = walk_forward(feat, seasons, a.kind, a.train_from)
+    if a.avail:
+        from nba.data import hoopr
+        from nba.games import availability
+        pb = hoopr.read_dataset("player_boxscores", range(2019, 2028), a.hoopr_dir)
+        feat = availability.attach(feat, availability.build(pb))
+    pred = walk_forward(feat, seasons, a.kind, a.train_from, a.avail)
     cons = market.consensus(bp_games.read_games())
     df = market.attach(pred, cons)
     ml, sp, tot = moneyline(df), spread(df), total(df)
-    meta = {"seasons": seasons, "train_from": a.train_from, "kind": a.kind, "n_games": len(df),
+    meta = {"avail": a.avail, "seasons": seasons, "train_from": a.train_from, "kind": a.kind, "n_games": len(df),
             "n_priced": int(df["ml_p_home"].notna().sum())}
     txt = report(ml, sp, tot, by_season(df), meta)
     print(txt)

@@ -27,3 +27,8 @@ BettingPros backfill = NBA PLAYER PROPS ONLY. Game lines crawled this session (4
 1. Add pre-game availability features (`nba/props/official_availability.py`, ESPN injury bank) to the margin/total matrices and re-run `evaluate` -- the only plausible source of signal.
 2. Bank ParlayAPI game lines through the season (already running twice daily) and re-evaluate with true opening-vs-closing for CLV.
 3. Schedule the BettingPros game-line crawl (or fold markets 127/128/129 into `bp-live-nba`).
+
+## Update 2026-10-20 (later): injury bank provisioned + availability ceiling
+- `nba-injury-bank` Cloud Run Job + Scheduler (`*/30 14-23,0-4 * * *` UTC) created via `deploy/setup_nba_injury_bank.sh` (feeds image; ESPN JSON, NOT the PDF route). First run stored 93 rows to `NBA/injuries/espn/`. Verify: `gs://.../NBA/injuries/espn/latest.json` `checked_at` keeps advancing. Before this, NO injury data was being banked (the earlier "injury reports pulling" assumption was wrong; only hoopR refresh was running). The official-PDF banker still needs poppler in the image and is NOT provisioned.
+- `nba/games/availability.py` + `evaluate --avail` ceiling test: with who-actually-missed features the spread RMSE gap to the line shrinks ~45% (14.04 -> 13.85 vs 13.60) and the incremental coefficient is +0.094 (se 0.057); ROI still negative. See the addendum in `docs/analysis/nba_game_models_2026-10-20.md`.
+- Next: after ~4+ weeks of banked snapshots, build a live availability feed (`state_asof` at tip-30min) and a line-staleness monitor; evaluate against banked ParlayAPI game lines for true opening-vs-close.

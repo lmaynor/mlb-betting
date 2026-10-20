@@ -74,3 +74,24 @@ Coverage: 6605 test games, 6604 with a market.
 - incremental coefficient on (model - market): -0.038 (se 0.041); push rate 0.007
 - ROI (median price): -4.2% +/-1.2 (n=6605) | -4.0% +/-1.3 (n=5677) | -4.3% +/-1.4 (n=4732) | -4.2% +/-1.5 (n=3817)
 - ROI (best price): -3.6% +/-1.2 (n=6605) | -3.4% +/-1.3 (n=5677) | -3.6% +/-1.4 (n=4732) | -3.6% +/-1.6 (n=3817)
+
+---
+
+## Addendum: does re-pricing on who is out / resting close the gap? (availability CEILING, 2026-10-20)
+
+`nba/games/availability.py` adds, per team-game, the rolling-minutes/points/usage of rotation players (>= 15 min over their last 10 played, seen in the team's last 10 games, same season) who did NOT play. This is the **upper bound** (who actually missed, known only after the game); the live path only has the pre-game list, which recovered ~60-70% of this signal for props (`nba_official_availability_2026-10-16.md`). Ridge, trained from 2018 (hoopR player box starts 2018-19), test 2021-25, 6,604 priced games:
+
+| | ML log-loss (market 0.5968) | spread RMSE (market 13.603) | spread incremental coef (model - market) | totals RMSE (market 17.991) |
+|---|---|---|---|---|
+| baseline (no availability) | 0.6192 | 14.041 | -0.004 (se 0.047) | 18.631 |
+| + actual absences (ceiling) | 0.6117 | 13.853 | **+0.094 (se 0.057)** | 18.598 |
+
+- Availability is real: it removes ~45% of the model-to-line RMSE gap on the spread and ~30% of the log-loss gap on the moneyline. Totals barely move.
+- It does **not** reach the line even with perfect knowledge, and the live list would recover only part of it. Spread coefficient +0.094 is 1.6 se (not significant); ML blend weight on the model 0.002; flat-stake ROI still negative at the median price (spread -6.0% -> -4.5% at the 6% threshold, ML -5.7% -> -3.7%), best-price ML turns ~+0.1..+0.9% at edge >= 2-4% but within one se of zero and optimistic by construction.
+- So: re-pricing the spread when a rotation player is ruled out is necessary for the model to be sane (without it, the model is wrong on every game with a key absence), but it is not sufficient for an edge. Books reprice within minutes of the same news; a 30-minute poll of a public list cannot out-run that. The defensible product is a **staleness/vs-market monitor** (flag when a banked line has NOT moved after an Out/Doubtful entry on a rotation player), not a model-vs-close bettor.
+- "REST" as a listed reason is rare (42 of ~6,900 DNP rows in 2025-26); load management mostly shows as COACH'S DECISION or is not listed at all (53% of rotation absences are unlisted, per the 10-16 study), so a list-driven rest rule would miss most of it.
+
+Reproduce: `python -m nba.games.evaluate ... --train-from 2018 --avail --out report.md`.
+
+## Injury bank (provisioned 2026-10-20)
+`nba-injury-bank` Cloud Run Job (feeds image) + Scheduler `*/30 14-23,0-4 * * *` UTC polls the ESPN injury list (JSON; no PDFs, no poppler) change-only into `gs://.../NBA/injuries/espn/{ET day}/injuries_{HHMMSS}.csv` + `latest.json` heartbeat. First execution succeeded (93 rows: 40 Out, 53 Day-To-Day, with injury detail and expected return date). Forward-only: there is no history, so evaluation still needs weeks of banked snapshots (`injury_bank.state_asof`).
