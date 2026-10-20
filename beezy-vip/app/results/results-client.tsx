@@ -261,10 +261,13 @@ export function ResultsClient({
   initialPicks,
   initialStats,
   curve = [],
+  asOf,
 }: {
   initialPicks: Bet[]
   initialStats: SystemStats[]
   curve?: BankrollPoint[]
+  /** Central-time date the totals were read, rendered next to them so every figure carries its own date. */
+  asOf?: string
 }) {
   const sp = useSearchParams()
   const dateFilter = sp.get('date') ?? null
@@ -336,7 +339,7 @@ export function ResultsClient({
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Results</h1>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{filtered.length} bets shown &middot; Central Time &middot; paper</span>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
       </div>
 
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}

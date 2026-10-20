@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { renderMarkdown, plainSummary } from '@/lib/markdown'
+import { articleLd, jsonLdString } from '@/lib/seo'
 
 // Where each guide should send a reader next: the free tool or live page that does what the article describes.
 const RELATED: Record<string, { href: string; label: string }[]> = {
@@ -30,7 +31,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const article = getArticle(slug)
   if (!article) return {}
-  return { title: article.title, description: plainSummary(article.description) }
+  return {
+    title: article.title,
+    description: plainSummary(article.description),
+    alternates: { canonical: `/learn/${article.slug}` },
+    openGraph: { type: 'article', publishedTime: article.datePublished, modifiedTime: article.dateModified },
+  }
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -44,11 +50,16 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
 
   return (
     <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 20px' }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
         <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '10px' }}>
           {article.category}
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--ash)', lineHeight: 1.3 }}>{article.title}</h1>
+        <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '10px' }}>
+          Published <time dateTime={article.datePublished}>{article.datePublished}</time>
+          {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>
+        </p>
       </div>
       <div
         className="article-body"

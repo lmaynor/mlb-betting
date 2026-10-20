@@ -8,6 +8,7 @@ import { getSystemsBySport } from '@/lib/pick-systems'
 import { liveAccuracy } from '@/lib/prop-model-specs'
 import { SPORT_PILLARS, STATUS_LABEL, type ProjectionSport, type SportSlug } from '@/lib/sports'
 import { SYSTEM_PILL } from '@/lib/tokens'
+import { asOfLabel } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Models: Methodology & Transparency',
@@ -117,6 +118,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         <span><span style={{ color: 'var(--fog)' }}>NFL / NHL / NBA</span> empirical projections</span>
         <span><span style={{ color: 'var(--fog)' }}>VALIDATION</span> walk-forward, no future data</span>
         <span><span style={{ color: 'var(--fog)' }}>SAMPLE</span> 200 bets per MLB system, paper</span>
+        {stats.length > 0 && <span><span style={{ color: 'var(--fog)' }}>RECORDS AS OF</span> {asOfLabel()}</span>}
       </div>
 
       <section style={{ padding: '20px', border: B, borderRadius: 'var(--radius-lg)', marginBottom: '24px', background: 'var(--graphite)' }}>

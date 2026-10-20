@@ -1,9 +1,14 @@
-// Auto-generated -- do not edit manually
+// Source of truth for /learn (content/learn/*.md are older copies). datePublished/dateModified are real dates (git history), shown on the page
+// and emitted as Article JSON-LD, so bump dateModified whenever an article body changes.
 export interface Article {
   slug: string
   title: string
   category: string
   keyword: string
+  /** ISO date (YYYY-MM-DD) the article first shipped. Hand-maintained from git history. */
+  datePublished: string
+  /** ISO date of the last substantive content change; bump it when you edit the body. */
+  dateModified: string
   description: string
   content: string
 }
@@ -14,6 +19,8 @@ export const ARTICLES: Article[] = [
     title:       "What is NRFI Betting? Complete Guide",
     category:    "Fundamentals",
     keyword:     "nrfi betting",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "**NRFI** stands for \"No Run First Inning.\" It's a bet on whether both teams will fail to score in the first inning of an MLB game. YRFI is the opposite\u2014\"Yes Run",
     content:     `# What is NRFI Betting? Complete Guide
 
@@ -104,6 +111,8 @@ Start with 50–100 bets tracked in a spreadsheet. If you're hitting 55%+ at fai
     title:       "Kelly Criterion for Sports Betting",
     category:    "Theory",
     keyword:     "kelly criterion",
+    datePublished: "2026-05-16",
+    dateModified: "2026-10-15",
     description: "How the Kelly Criterion sizes a bet from your win probability and the price, with a worked example and why most bettors use a fraction of it.",
     content:     `# Kelly Criterion for Sports Betting
 
@@ -159,6 +168,8 @@ The free Kelly Calculator at /tools/kelly-calculator does this math for any bank
     title:       "How to Calculate Implied Probability from Odds",
     category:    "Fundamentals",
     keyword:     "implied probability",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "**Implied probability** is the probability the sportsbook is *pricing in* when it sets odds. If DraftKings prices a pitcher strikeout prop at -110, that means t",
     content:     `# How to Calculate Implied Probability from Odds
 
@@ -338,6 +349,8 @@ Print the reference table above and keep it handy. After a few weeks, you'll hav
     title:       "How to Remove Vig from Sports Betting Odds",
     category:    "Theory",
     keyword:     "remove vig",
+    datePublished: "2026-05-16",
+    dateModified: "2026-10-15",
     description: "**Vig** is the sportsbook's commission. When you see -110 odds on both sides of a bet, the book is saying:",
     content:     `# How to Remove Vig from Sports Betting Odds
 
@@ -485,6 +498,8 @@ The sharps do this automatically. You should too.
     title:       "MLB Strikeout Props Betting Guide",
     category:    "Markets",
     keyword:     "strikeout props",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "A **strikeout prop** on DraftKings is a bet on how many strikeouts a pitcher will record in a single game. You're betting Over/Under a specific line\u2014like \"Will ",
     content:     `# MLB Strikeout Props Betting Guide
 
@@ -646,6 +661,8 @@ Most professional bettors start here because it teaches patience and calibration
     title:       "First 5 Innings (F5) Betting Explained",
     category:    "Markets",
     keyword:     "f5 betting",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "**F5** stands for \"First 5 Innings.\" It's a moneyline bet on who will be winning after the first 5 complete innings of an MLB game.",
     content:     `# First 5 Innings (F5) Betting Explained
 
@@ -809,6 +826,8 @@ The pros start with moneyline betting (full game or F5) before moving to prop pr
     title:       "How to Bet MLB Home Run Props",
     category:    "Markets",
     keyword:     "home run props",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "A **home run prop** on DraftKings is a yes/no bet on whether a specific batter will hit a home run in a single game.",
     content:     `# How to Bet MLB Home Run Props
 
@@ -1017,6 +1036,8 @@ The pros treat HR props as a side market, not their primary focus. They're usefu
     title:       "Why Most Betting Models Lose to the Closing Line",
     category:    "Theory",
     keyword:     "machine learning",
+    datePublished: "2026-05-16",
+    dateModified: "2026-10-15",
     description: "Imagine a sports betting model trained on 5 years of data. It sees patterns humans miss\u2014park effects, weather correlations, pitcher fatigue cycles. It outputs p",
     content:     `# Why Most Betting Models Lose to the Closing Line
 
@@ -1282,6 +1303,8 @@ Start small, validate religiously, and scale gradually. The boring, data-driven 
     title:       "NRFI Betting Strategy: A Data-Driven Approach",
     category:    "Strategy",
     keyword:     "nrfi strategy",
+    datePublished: "2026-05-16",
+    dateModified: "2026-05-16",
     description: "You now know what NRFI is (no run first inning). You know the baseline (55% of games go scoreless). You know the factors (pitcher, lineup, weather).",
     content:     `# NRFI Betting Strategy: A Data-Driven Approach
 
@@ -1492,6 +1515,8 @@ That's the NRFI game.
     title:       "Understanding Line Movement in Sports Betting",
     category:    "Theory",
     keyword:     "line movement",
+    datePublished: "2026-05-16",
+    dateModified: "2026-10-15",
     description: "**Line movement** is when sportsbook odds change between opening and closing.",
     content:     `# Understanding Line Movement in Sports Betting
 
@@ -1721,6 +1746,8 @@ The pros don't see line movement as noise. They see it as the market confessing 
     title:       "Closing Line Value: A Better Test Than ROI",
     category:    "Theory",
     keyword:     "closing line value",
+    datePublished: "2026-07-04",
+    dateModified: "2026-10-15",
     description: "A positive ROI over a few hundred bets can be pure luck -- or a soft-line artifact. Closing Line Value (CLV) is the leakage-proof test of whether you are actually beating the market.",
     content:     `# Closing Line Value: A Better Test Than ROI
 
@@ -1767,6 +1794,8 @@ Win rate tells you what happened. CLV tells you whether it was skill. If you tra
     title:       "Odds Boosts: The Most Reliable +EV Bet You Will Ever Make",
     category:    "Strategy",
     keyword:     "odds boost EV",
+    datePublished: "2026-07-04",
+    dateModified: "2026-10-15",
     description: "Profit boosts and promo odds are the one place a sportsbook voluntarily hands you positive expected value. Here is how to compute exactly how much a boost is worth before you tap it.",
     content:     `# Odds Boosts: The Most Reliable +EV Bet You Will Ever Make
 
