@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { BrandWordmark } from '@/components/ui/brand-mark'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
@@ -20,6 +21,7 @@ type Mode = 'players' | 'games'
 type SportFilter = 'all' | SportSlug
 
 const DEFAULT_LIMIT = 5
+const DOT = ' \u00b7 '
 
 const fmtOdds = (o: number | null) => (o == null ? null : o > 0 ? `+${o}` : String(o))
 const fmtEdge = (e: number | null) => (e == null || e <= 0 ? null : `+${(e * 100).toFixed(1)}%`)
@@ -41,60 +43,62 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const edge = fmtEdge(pick.edge)
   const bullets = splitNotes(pick.bet?.notes)
   const isGame = !pick.what // game picks carry the matchup, not a player
-  const sub = [isGame ? pick.game : pick.what, fmtOdds(pick.odds), pick.book].filter(Boolean).join(' / ')
+  const market = isGame ? pick.game : pick.what
+  const price = [fmtOdds(pick.odds), pick.book].filter(Boolean).join(DOT)
+  const meta = [price, isGame ? '' : pick.game].filter(Boolean).join(DOT)
+  // Projection rows carry no analyst notes, so the expanded view falls back to the matchup.
+  const details = bullets.length ? bullets.slice(0, 3) : [pick.game].filter(Boolean)
 
   return (
     <div
       onClick={onToggle}
       style={{
         background: 'var(--graphite)', borderBottom: '1px solid var(--basalt)', borderLeft: `3px solid ${tierColor}`,
-        display: 'flex', alignItems: 'stretch', minHeight: '96px', overflow: 'hidden', position: 'relative', cursor: 'pointer',
+        display: 'flex', alignItems: 'stretch', minHeight: '108px', overflow: 'hidden', position: 'relative', cursor: 'pointer',
       }}
     >
-      <div style={{ width: '80px', minWidth: '80px', position: 'relative', overflow: 'hidden', background: `${color}18`, borderRight: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="mono" style={{ position: 'absolute', top: '6px', left: '7px', fontSize: '10px', color: `${color}99`, fontWeight: 800 }}>#{rank}</span>
+      <div style={{ width: '96px', minWidth: '96px', position: 'relative', overflow: 'hidden', background: `${color}18`, borderRight: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {pick.headshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={pick.headshotUrl} alt={pick.who} width={68} height={84}
+            src={pick.headshotUrl} alt={pick.who}
             onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-            style={{ objectFit: 'contain', objectPosition: 'bottom center', width: '68px', height: '84px', position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)' }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
           />
         ) : isGame && (pick.awayLogoUrl || pick.homeLogoUrl) ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}>
             {pick.awayLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={pick.awayLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
+              <img src={pick.awayLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
             )}
-            <span className="mono" style={{ fontSize: '10px', color: `${color}66` }}>@</span>
+            <span className="mono" style={{ fontSize: '10px', color: `${color}99` }}>@</span>
             {pick.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={pick.homeLogoUrl} alt="" width={30} height={30} style={{ objectFit: 'contain' }} />
+              <img src={pick.homeLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
             )}
           </div>
         ) : (
           <span className="mono" style={{ fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>{pillar.shortName}</span>
         )}
+        <span className="mono" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, fontSize: '10px', fontWeight: 800, color: 'var(--ash)', background: 'var(--carbon)', padding: '2px 6px', borderBottomRightRadius: '4px' }}>#{rank}</span>
       </div>
 
       <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-        <div style={{ marginBottom: '5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
             <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
-            {!pick.tracked && (
-              <span className="dell-heading" title="Projections are not tracked in the public results yet." style={{ fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
-            )}
           </span>
-          {edge && <span className="mono" style={{ fontSize: '10px', fontWeight: 800, color: tierColor, letterSpacing: '0.04em' }}>{edge} EDGE</span>}
+          {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
         </div>
-        <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '3px' }}>{pick.who}</div>
-        <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: expanded && bullets.length ? '6px' : 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>
-        {expanded && bullets.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {bullets.slice(0, 3).map((b, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
-                <span style={{ color, fontSize: '10px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', lineHeight: '14px' }}>{b}</span>
+        <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pick.who}</div>
+        {market && <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--silver)', lineHeight: 1.25, marginTop: '2px' }}>{market}</div>}
+        {meta && <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
+        {expanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '8px' }}>
+            {details.map((b, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                <span style={{ color, fontSize: '11px', lineHeight: '15px', flexShrink: 0 }}>&bull;</span>
+                <span style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: '15px' }}>{b}</span>
               </div>
             ))}
           </div>
@@ -198,7 +202,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
           <div style={{ background: 'var(--graphite)', padding: '16px 16px 12px', borderBottom: '1px solid var(--basalt)' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
               <div>
-                <div className="dell-display" style={{ fontSize: '22px', color: 'var(--ash)', lineHeight: 1 }}>BEEZY<span style={{ color: 'var(--signal)' }}>.FYI</span></div>
+                <BrandWordmark size="lg" />
                 <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
                 <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>{today}</div>
               </div>
@@ -225,7 +229,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
 
           {list.length > 0 && (
             <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--basalt)', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{list.length} PICKS</span>
+              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
               {strong > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{strong} STRONG</span>}
               {lean > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{lean} LEAN</span>}
               {best > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>BEST EDGE +{best.toFixed(1)}%</span>}
@@ -239,7 +243,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
               ) : (
                 <>
                   <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '14px', textAlign: 'center' }}>
-                    NOTHING SCORED YET &mdash; MLB CARD PUBLISHES ~11:00 AM CT
+                    NO PICKS ON THE CARD YET. THEY POST WHEN TODAY&apos;S LINES ARE IN.
                   </div>
                   {yesterday.length > 0 && (
                     <>
@@ -271,7 +275,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
               {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em' }}>BEEZY.FYI</span>
+            <BrandWordmark size="sm" />
           </div>
         </div>
 
@@ -294,7 +298,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>WHAT IS THIS</div>
             <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: '0 0 10px' }}>
-              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in public; NFL, NHL and NBA rows are projections and are marked UNVALIDATED. Game picks are a separate, paid set.
+              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: 0 }}>
               Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
