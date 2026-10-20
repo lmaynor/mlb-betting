@@ -78,6 +78,9 @@ BANNED_PHRASES = (
     # stock phrases the model kept parroting (2026-10-19): corny, and they read as a template
     "on the chin", "buy a bounce", "days like that", "on to the next", "transparency", "fun sweat", "nice sweat",
     "fall asleep", "on an island", "the process", "variance",
+    # recent-form / streak talk is how scam touts sell ("he's hit 4 of his last 5"): the owner does not want it, ever
+    "last 3", "last 5", "last 10", "last five", "last ten", "of his last", "of their last", "in a row", "streak", "trend",
+    "hit rate",
 )
 
 PERSONA = """
@@ -94,6 +97,8 @@ How to write:
 - Results are reported flat. A win is not a victory lap and a loss is not an apology: say what happened and, if it is clear
   from the legs, what drove it, in one plain sentence. Do not defend the model, do not talk about "the process", "variance"
   or "transparency". If the day is only a handful of bets, say that casually in one clause and move on.
+- No trends. Never cite recent form: no "last 5 / last 10 games", hit rates, streaks, or "he's been hot". That is how scam touts
+  talk. Reasoning is our projection against the line, the price against the market, and minutes when you are given them.
 - No catchphrases, idioms or sports cliches. No exclamation marks, no rhetorical questions. Vary how each tweet is built.
 - Be specific enough that someone could check it: names, lines, prices.
 
@@ -611,7 +616,7 @@ def run_settlement():
 # Replying under a big account with a link or a pitch gets you blocked; replying with a price nobody else posted does not.
 # So every snippet is a plain market fact (a book's price vs the de-vigged consensus of the OTHER books), carries no URL and
 # no brand name, and fits one short reply. Each play also gets an X live-search link to find a fresh tweet about the player.
-REPLY_SNIPPET_MAX = 180
+REPLY_SNIPPET_MAX = 240
 REPLY_MAX_PLAYS = 5
 REPLY_MAX_PER_SPORT = 2      # one hot sport must not fill all five slots
 REPLY_MIN_BOOKS = 4          # mirrors public_api._OUTLIER_MIN_BOOKS: fewer reference books is reference error, not edge
@@ -757,30 +762,66 @@ def build_reply_snippet(c, proj_mean=None):
         return None
     core = (f"{_play_head(c)}: {_book_name(c)} is hanging {_odds(c['american'])} while the other {c['n_books']} books "
             f"are around {_odds(fair)}.")
-    model = f" We have him closer to {proj_mean:g}." if proj_mean is not None else ""
+    model = f" We have him closer to {proj_mean:.1f}." if proj_mean is not None else ""
     for text in (core + model, core):
         if len(text) <= REPLY_SNIPPET_MAX and is_link_free(text) and not violates_voice(text):
             return text
     return None
 
 
-REPLY_VARIANTS = ("slow_book", "model_first", "deadpan")
+REPLY_VARIANTS = ("model_first", "price_math", "short")
 
 REPLY_SYSTEM_PROMPT = PERSONA + """
 You write short REPLIES to post under other people's tweets about a player. Hard rules for every reply:
-- 180 characters or fewer
+- 240 characters or fewer
 - NO link, NO site name, NO @handle, NO hashtag -- these are replies, not ads
-- use ONLY the numbers given for that play (the book's price, the line, the other books' price, the projection); invent nothing
+- use ONLY the numbers given for that play; invent nothing, and give no reason that is not in the data (no matchup, injury, pace,
+  or recent-form talk: you do not have those)
 - always name the book and its price
+- never state a win probability for OUR model; you may quote our projection against the line, and what the market's price implies
+- describe the other books as "around +109" or "sitting near +109": it is a de-vigged consensus price, never an "average"
 Three styles per play:
-- slow_book: the point is that this one book is off the rest of the market; say it your own way, dry, not cutesy
-- model_first: lead with our projection, then the price gap. Only for plays that have a projection number; skip the key otherwise
-- deadpan: flat, numbers-first, nothing else
+- model_first: lead with our projection against the line ("we have X against a line of Y"), then the price. Only for plays that
+  have a projection number; skip the key otherwise
+- price_math: lead with the price against the market: what the price needs to break even versus what the other books imply
+- short: one flat line: player, line, price, where the market sits
 
-Return ONLY JSON: {"<play id>": {"slow_book": "...", "model_first": "...", "deadpan": "..."}, ...}
+Return ONLY JSON: {"<play id>": {"model_first": "...", "price_math": "...", "short": "..."}, ...}
 """
 
 _NUM_RE = re.compile(r"[+-]?\d+(?:\.\d+)?")
+
+
+def breakeven_pct(f):
+    """Win probability (in %) the quoted American price needs to break even."""
+    a = f.get("american")
+    if not a:
+        return None
+    return (100.0 / (a + 100.0) if a > 0 else -a / (-a + 100.0)) * 100.0
+
+
+def market_pct(f):
+    """What the other books' de-vigged consensus gives this side, in %."""
+    return None if f.get("p_fair") is None else f["p_fair"] * 100.0
+
+
+def proj_gap(f):
+    """Our projection minus the line (positive = projected above it), or None without a projection."""
+    if f.get("proj_mean") is None or f.get("point") is None:
+        return None
+    return f["proj_mean"] - f["point"]
+
+
+_MINUTES_LABELS = ("minutes", "toi (min)")
+
+
+def proj_supports_side(proj_mean, point, side):
+    """True when our projection sits on the pick's side of the line (Over: above it, Under: below it). A pick can be fine while the
+    mean is on the other side (counts are discrete: mean 1.57 shots still makes the Under 1.5 more likely than not), but a public
+    reply that says "we project 1.57 against a 1.5 line" and then backs the Under reads as contradicting itself, so it is not used."""
+    if proj_mean is None or point is None:
+        return False
+    return proj_mean > point if str(side).upper() == "OVER" else proj_mean < point
 
 
 def _allowed_numbers(f):
@@ -790,15 +831,24 @@ def _allowed_numbers(f):
     for a in (f["american"], fair):
         if a is not None:
             out.update({_odds(a), str(abs(int(a))), str(int(a))})
-    for v in (f.get("point"), f.get("proj_mean")):
-        if v is not None:
-            out.update({f"{v:g}", f"{v:.1f}", f"{v:.2f}"})
+    if f.get("point") is not None:
+        out.update({f"{f['point']:g}", f"{f['point']:.1f}"})
+    if f.get("proj_mean") is not None:
+        out.update({f"{f['proj_mean']:.1f}", f"{f['proj_mean']:.2f}"})       # never 1.442: three decimals is false precision
     if f.get("n_books"):
         n = int(f["n_books"])
         out.update({str(n), str(n + 1)})
     if f.get("ev") is not None:
         pct = f["ev"] * 100
         out.update({f"{pct:.0f}", f"{pct:.1f}", f"+{pct:.1f}", f"+{pct:.0f}"})
+    for pct in (breakeven_pct(f), market_pct(f)):                    # what the price needs / what the other books imply
+        if pct is not None:
+            out.update({f"{pct:.0f}", f"{pct:.1f}"})
+    gap = proj_gap(f)
+    if gap is not None:
+        out.update({f"{abs(gap):.1f}", f"{abs(gap):g}"})
+    if f.get("proj_minutes") is not None:
+        out.update({f"{f['proj_minutes']:.0f}", f"{f['proj_minutes']:.1f}"})
     return out
 
 
@@ -821,15 +871,22 @@ def _fodder_prompt(plays):
     for i, p in enumerate(plays):
         f = p["facts"]
         fair = prob_to_american(f["p_fair"])
-        row = (f"[{i}] {p['sport'].upper()} | {_play_head(f)} | {_book_name(f)} is at {_odds(f['american'])} | "
-               f"the other {f['n_books']} books are around {_odds(fair)}")
-        row += f" | our projection: {f['proj_mean']:g}" if f.get("proj_mean") is not None else " | no projection"
+        row = (f"[{i}] {p['sport'].upper()} | {_play_head(f)} | {_book_name(f)} is at {_odds(f['american'])} "
+               f"(needs {breakeven_pct(f):.0f}% to break even) | the other {f['n_books']} books are around {_odds(fair)} "
+               f"(they imply {market_pct(f):.0f}%)")
+        gap = proj_gap(f)
+        if gap is not None:
+            row += f" | our projection: {f['proj_mean']:.1f} against a line of {f['point']:g} ({abs(gap):.1f} {'above' if gap > 0 else 'below'} it)"
+        else:
+            row += " | no projection"
+        if f.get("proj_minutes") is not None:
+            row += f" | projected minutes: {f['proj_minutes']:.0f}"
         lines.append(row)
     return "Plays:\n" + "\n".join(lines) + "\n\nWrite the replies."
 
 
 def generate_reply_fodder(plays):
-    """Add `variants` ({style: reply}) to every play. ONE batched Gemini call asks for slow_book / model_first / deadpan per
+    """Add `variants` ({style: reply}) to every play. ONE batched Gemini call asks for model_first / price_math / short per
     play; each reply must pass reply_variant_ok. A play with no usable Gemini reply (or the whole call failing) falls back to
     its deterministic snippet, so reply_ammo never goes out empty-handed because Gemini had a bad day."""
     out = [dict(p, variants={}) for p in plays]
@@ -858,14 +915,17 @@ def build_reply_ammo(feed, projections=None):
     for sp, payload in (projections or {}).items():
         for r in (payload or {}).get("rows") or []:
             if r.get("proj_mean") is not None:
-                proj_idx[(sp, r.get("player_norm"), r.get("stat"))] = _num(r.get("proj_mean"))
+                usage = _num(r.get("usage_proj")) if str(r.get("usage_label") or "").lower() in _MINUTES_LABELS else None
+                proj_idx[(sp, r.get("player_norm"), r.get("stat"))] = (_num(r.get("proj_mean")), usage)
     plays = []
     for c in select_reply_plays(reply_candidates(feed)):
-        proj_mean = proj_idx.get((c["sport"], c.get("player_norm"), c["stat"]))
+        proj_mean, minutes = proj_idx.get((c["sport"], c.get("player_norm"), c["stat"]), (None, None))
+        if not proj_supports_side(proj_mean, c.get("point"), c.get("side")):
+            proj_mean, minutes = None, None          # do not cite a projection that sits against the pick (see proj_supports_side)
         snippet = build_reply_snippet(c, proj_mean)
         if snippet:
             plays.append({"sport": c["sport"], "player": c["player"], "snippet": snippet,
-                          "facts": {**c, "proj_mean": proj_mean},
+                          "facts": {**c, "proj_mean": proj_mean, "proj_minutes": minutes},
                           "search_url": build_x_search_url(f"{c['player']} min_faves:{REPLY_MIN_FAVES}")})
     return plays
 

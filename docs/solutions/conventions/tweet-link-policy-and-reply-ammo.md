@@ -48,10 +48,20 @@ and the model parroted them in every draft, and the recap prompt itself said "th
 size", which produced defensive boasting. Those phrases are now in `BANNED_PHRASES` and out of the prompts; do not put catchphrases
 in a prompt as examples. `de-vigged`, `consensus fair` and `proj_mean` stay banned.
 
-`reply_ammo` asks Gemini ONCE (batched) for `slow_book` / `model_first` / `deadpan` replies per play, and a reply is used only if
+`reply_ammo` asks Gemini ONCE (batched) for `model_first` / `price_math` / `short` replies per play (up to 240 chars), and a reply is used only if
 `reply_variant_ok()` passes: link-free, in voice, <= 180 chars, quotes the book's real price, and contains no number that was not
 given for that play. A conversational model will invent a price if you let it. A play with no usable reply (or Gemini down) falls
 back to the deterministic `build_reply_snippet()`.
+
+## Replies: reasoning is projection vs line and price math, never trends (2026-10-20)
+
+Owner rule: no "he's hit 4 of his last 5" / last-N / hit-rate / streak talk in ANY copy, because that is how scam touts sell. Those
+phrases are in `BANNED_PHRASES` and the persona says why. The projection API's `l5_hit_rate` / `l10_hit_rate` exist (they are for the
+OVER, `hit_basis: "over"`) but are deliberately not used. What a reply may reason with, all derived from data we hold: our projection
+against the line (`proj_mean`), what the quoted price needs to break even (`breakeven_pct`), what the other books imply (`market_pct`),
+the gap to the line (`proj_gap`) and projected minutes. It never states a win probability for OUR model (NFL/NHL/NBA projections are
+unvalidated). Two live-found rules: a projection on the wrong side of the line is not cited (`proj_supports_side`: "we project 1.57
+against 1.5" followed by the Under reads as self-contradiction), and the other books are "around +109", never an "average".
 
 ## Gemini reliability
 
