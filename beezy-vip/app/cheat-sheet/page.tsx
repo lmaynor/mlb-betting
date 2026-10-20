@@ -5,10 +5,11 @@ import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 import { addDaysToDateKey, formatCentralDate, siteDateKey } from '@/lib/dates'
-import { buildSheets } from '@/lib/cheat-sheet-post'
+import { buildSheets, SHEET_SIZE } from '@/lib/cheat-sheet-post'
 import { betKind } from '@/lib/pick-systems'
 import { teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
 import { headshotUrlByName } from '@/lib/sport-assets.server'
+import { SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { TOP_N, topFromBets, type TopPick } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
 import type { Bet } from '@/lib/types'
@@ -82,17 +83,26 @@ export default async function CheatSheetPage() {
     3,
   )
 
-  // POST TO X sheets: one overall (top 5 across sports) then one per sport (top 5 each), from the FULL ranked candidate pool,
-  // not just the overall Top 10 (which can be all one sport). Five rows per sport is within the free player-board preview.
+  // One list per sport from the FULL ranked candidate pool (the overall Top 10 can be all one sport, which is why NHL never showed).
+  // The card's sport chips AND the POST TO X sheets both read these exact arrays, so the screenshot and the text cannot disagree.
+  // limitRows keeps the free player-board preview rule when tier gating is on.
+  const sportPicks: Partial<Record<SportSlug, CardPick[]>> = {}
+  for (const s of SPORT_SLUGS) {
+    const cut = limitRows(candidates.filter(p => p.sport === s).slice(0, TOP_N), viewer, 'player_board', s, p => p.score)
+    if (cut.rows.length) sportPicks[s] = cut.rows.map(enrich)
+  }
+  const players = top.map(enrich)
   const sheets = buildSheets(
-    candidates.map(({ sport, who, what, odds, book, edge, basis }) => ({ sport, who, what, odds, book, edge, basis })),
+    players.slice(0, SHEET_SIZE),
+    Object.fromEntries(Object.entries(sportPicks).map(([s, l]) => [s, (l ?? []).slice(0, SHEET_SIZE)])),
     formatCentralDate(new Date(), { weekday: 'long' }),
   )
 
   return (
     <CheatSheetClient
       sheets={sheets}
-      players={top.map(enrich)}
+      sportPicks={sportPicks}
+      players={players}
       games={games.rows.map(enrich)}
       gamesLocked={games.locked}
       today={dateLabel()}

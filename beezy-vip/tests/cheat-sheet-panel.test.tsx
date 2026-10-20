@@ -1,90 +1,138 @@
 /**
- * Daily Card "POST TO X": one box per sheet (overall, then each sport), each with its own COPY, plus the link reply. The
- * sidebar is hidden on phones (globals.css), so the same panel must also sit under the card in the mobile column.
+ * Daily Card: the card and the POST TO X boxes must list the SAME picks (the page feeds both from one set of lists), every post is
+ * <= 280 characters, NHL appears through its own chip even when the overall Top 10 is all NBA, and the panel is visible on a phone.
  */
 import fs from 'fs'
 import path from 'path'
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { buildSheets, LINK_REPLY, type SheetPick } from '../lib/cheat-sheet-post'
+import { buildSheets, LINK_REPLY, POST_LIMIT, SHEET_SIZE } from '../lib/cheat-sheet-post'
 
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }))
 
-import { CheatSheetClient } from '../app/cheat-sheet/cheat-sheet-client'
+import { CheatSheetClient, type CardPick } from '../app/cheat-sheet/cheat-sheet-client'
 
-const pick = (o: Partial<SheetPick>): SheetPick => ({
-  sport: 'nba', who: 'Jalen Williams', what: 'Under 4.5 Rebounds', odds: -110, book: 'espnbet', edge: 0.146, basis: 'confluence', ...o,
+const cp = (o: Partial<CardPick>): CardPick => ({
+  key: `${o.sport ?? 'nba'}|${o.who ?? 'Jalen Williams'}`, sport: 'nba', who: 'Jalen Williams', what: 'Under 4.5 Rebounds', game: 'BOS v NYK',
+  odds: -110, book: 'espnbet', edge: 0.146, score: 65, basis: 'projection', tracked: false, result: null,
+  headshotUrl: null, awayLogoUrl: null, homeLogoUrl: null, ...o,
 })
-const PICKS: SheetPick[] = [
-  pick({}),
-  pick({ sport: 'nhl', who: 'Pavel Zacha', what: 'Under 1.5 Shots on Goal', odds: 135, book: 'draftkings', edge: 0.079 }),
-  pick({ who: 'Derrick White', what: 'Under 23.5 Pts+Reb+Ast', odds: -108, book: 'novig', edge: 0.15 }),
-  pick({ sport: 'nhl', who: 'Kyle Connor', what: 'Over 3.5 Shots on Goal', odds: 125, book: 'fanduel', edge: 0.069 }),
-]
-const SHEETS = buildSheets(PICKS, 'Tuesday')
 
-function renderCard(sheets = SHEETS) {
-  return render(<CheatSheetClient sheets={sheets} players={[]} games={[]} gamesLocked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} />)
+// Live shape on 2026-10-20: the overall Top 10 was ALL NBA (score 65 vs NHL 57), so NHL existed only as its own list.
+const NBA: CardPick[] = [
+  cp({ who: 'Jalen Williams', score: 65, basis: 'projection' }),
+  cp({ who: 'Karl-Anthony Towns', what: 'Under 4.5 Assists', odds: 100, book: 'novig', edge: 0.137, score: 63 }),
+  cp({ who: 'Tyrese Haliburton', what: 'Over 3.5 Rebounds', odds: -104, book: 'draftkings', edge: 0.144, score: 62 }),
+  cp({ who: 'Daniss Jenkins', what: 'Over 3.5 Assists', odds: 156, book: 'prophetx', edge: 0.09, score: 61, basis: 'confluence' }),
+  cp({ who: 'Egor Demin', what: 'Under 11.5 Points', odds: 125, book: 'novig', edge: 0.075, score: 57, basis: 'confluence' }),
+  cp({ who: 'Pelle Larsson', what: 'Over 18.5 Pts+Reb+Ast', odds: 120, book: 'novig', edge: 0.055, score: 47, basis: 'confluence' }),
+]
+const NHL: CardPick[] = [
+  cp({ sport: 'nhl', who: 'Pavel Zacha', what: 'Under 1.5 Shots on Goal', odds: 140, book: 'hardrock', edge: 0.079, score: 56, basis: 'confluence' }),
+  cp({ sport: 'nhl', who: 'Kyle Connor', what: 'Over 3.5 Shots on Goal', odds: 125, book: 'fanduel', edge: 0.069, score: 52, basis: 'confluence' }),
+  cp({ sport: 'nhl', who: 'Filip Chytil', what: 'Over 0.5 Points', odds: 160, book: 'caesars', edge: 0.061, score: 51, basis: 'confluence' }),
+]
+const SPORT_PICKS = { nba: NBA, nhl: NHL }
+const SHEETS = buildSheets(NBA.slice(0, SHEET_SIZE), { nba: NBA.slice(0, SHEET_SIZE), nhl: NHL.slice(0, SHEET_SIZE) }, 'Tuesday')
+
+function renderCard() {
+  const view = render(<CheatSheetClient sheets={SHEETS} sportPicks={SPORT_PICKS} players={NBA} games={[]} gamesLocked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} />)
+  const card = view.container.querySelector('.cheat-sheet-layout > div') as HTMLElement
+  const mobile = view.container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
+  const sidebar = view.container.querySelector('.cheat-sheet-sidebar') as HTMLElement
+  return { ...view, card, mobile, sidebar }
 }
 
-describe('Daily Card POST TO X', () => {
-  it('has an overall box and one box per sport, in the mobile column AND the desktop sidebar', () => {
-    const { container } = renderCard()
-    expect(SHEETS.map(s => s.id)).toEqual(['all', 'nhl', 'nba'])
-    const mobile = container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
-    const sidebar = container.querySelector('.cheat-sheet-sidebar') as HTMLElement
+/** Names in the order they appear in `text`. */
+const orderIn = (text: string, names: string[]) => names.filter(n => text.includes(n)).sort((a, b) => text.indexOf(a) - text.indexOf(b))
+const lastName = (who: string) => who.split(' ').slice(-1)[0]
+
+describe('the card and the post text list the same picks', () => {
+  it('All chip: the card\'s first five and the OVERALL box are the same picks in the same order', () => {
+    const { card, mobile } = renderCard()
+    const cardNames = NBA.slice(0, SHEET_SIZE).map(p => p.who)
+    for (const n of cardNames) expect(card).toHaveTextContent(n)
+    expect(card).not.toHaveTextContent('Pelle Larsson')                             // the sixth is not on the card...
+    const text = (within(mobile).getByLabelText('OVERALL post') as HTMLTextAreaElement).value
+    expect(text).not.toContain('Larsson')                                           // ...nor in the text
+    const inText = NBA.slice(0, SHEET_SIZE).filter(p => text.includes(lastName(p.who)))
+    expect(inText.length).toBeGreaterThanOrEqual(1)
+    expect(orderIn(text, inText.map(p => lastName(p.who)))).toEqual(inText.map(p => lastName(p.who)))
+    // whatever the 280 cap dropped is the LOWEST-ranked pick(s), never a middle one: the text is a prefix of the card's order
+    expect(inText.map(p => p.who)).toEqual(cardNames.slice(0, inText.length))
+  })
+
+  it('NHL chip exists although no NHL pick is in the overall list, and shows the same picks as the NHL box', () => {
+    const { card, mobile } = renderCard()
+    expect(within(card).getByRole('button', { name: 'NHL' })).toBeInTheDocument()   // the "NHL is not wired" case
+    fireEvent.click(within(card).getByRole('button', { name: 'NHL' }))
+    for (const p of NHL) expect(card).toHaveTextContent(p.who)
+    expect(card).not.toHaveTextContent('Jalen Williams')
+    const text = (within(mobile).getByLabelText('NHL post') as HTMLTextAreaElement).value
+    for (const p of NHL) expect(text).toContain(p.who)
+    expect(orderIn(text, NHL.map(p => p.who))).toEqual(NHL.map(p => p.who))
+  })
+
+  it('every sport chip on the card has a box with the same label', () => {
+    const { card, mobile } = renderCard()
+    for (const label of ['NBA', 'NHL']) {
+      expect(within(card).getByRole('button', { name: label })).toBeInTheDocument()
+      expect(within(mobile).getByLabelText(`${label} post`)).toBeInTheDocument()
+    }
+  })
+})
+
+describe('hard 280 cap in the UI', () => {
+  it('no box is over 280, no counter says otherwise, and a cut is announced', () => {
+    const { mobile } = renderCard()
+    for (const label of ['OVERALL', 'NBA', 'NHL']) {
+      const text = (within(mobile).getByLabelText(`${label} post`) as HTMLTextAreaElement).value
+      expect(text.length).toBeLessThanOrEqual(POST_LIMIT)
+      expect(within(mobile).getAllByText(new RegExp(`^${text.length}/${POST_LIMIT}$`)).length).toBeGreaterThan(0)
+    }
+    for (const sh of SHEETS) {
+      if (sh.lines < sh.offered) expect(within(mobile).getByText(new RegExp(`Showing ${sh.lines} of ${sh.offered}`))).toBeInTheDocument()
+    }
+    expect(mobile.textContent).not.toMatch(/Over 280|Premium/)
+  })
+})
+
+describe('POST TO X panel', () => {
+  it('is in the mobile column and in the desktop sidebar, with the same boxes', () => {
+    const { mobile, sidebar } = renderCard()
     for (const root of [mobile, sidebar]) {
       expect(within(root).getByText('POST TO X')).toBeInTheDocument()
-      for (const label of ['OVERALL post', 'NHL post', 'NBA post']) expect(within(root).getByLabelText(label)).toBeInTheDocument()
-      expect(within(root).getByLabelText('Link reply')).toHaveValue(LINK_REPLY)
+      for (const label of ['OVERALL post', 'NBA post', 'NHL post', 'Link reply']) expect(within(root).getByLabelText(label)).toBeInTheDocument()
     }
   })
 
-  it('shows each sheet\'s text and a per-box character count', () => {
-    const { container } = renderCard()
-    const mobile = container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
-    const overall = within(mobile).getByLabelText('OVERALL post') as HTMLTextAreaElement
-    expect(overall.value.split('\n')[0]).toBe('Tuesday +EV Cheat Sheet')
-    expect(overall.value).toContain('1. NBA Jalen Williams U 4.5 Reb -110 theScore Bet | +14.6% EV')
-    expect(overall.value).toContain('NHL Pavel Zacha U 1.5 SOG +135 DK | +7.9% EV')
-    const nhl = within(mobile).getByLabelText('NHL post') as HTMLTextAreaElement
-    expect(nhl.value.split('\n')[0]).toMatch(/^Tuesday \+EV NHL Cheat Sheet /)
-    expect(within(mobile).getAllByText(new RegExp(`^${overall.value.length}/280$`)).length).toBeGreaterThan(0)
-  })
-
-  it('COPY puts exactly that sheet on the clipboard, and the REPLY copy puts the link text', async () => {
+  it('COPY puts exactly that box on the clipboard; the reply COPY puts the link text', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
-    const { container } = renderCard()
-    const mobile = container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
+    const { mobile } = renderCard()
     const buttons = within(mobile).getAllByRole('button', { name: 'COPY' })
-    expect(buttons).toHaveLength(SHEETS.length + 1)                    // one per sheet + the reply
-    fireEvent.click(buttons[1])                                          // the NHL box
+    expect(buttons).toHaveLength(SHEETS.length + 1)
+    fireEvent.click(buttons[1])
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHEETS[1].text))
     await waitFor(() => expect(within(mobile).getByRole('button', { name: 'COPIED' })).toBeInTheDocument())
-    fireEvent.click(within(mobile).getAllByRole('button', { name: 'COPY' }).slice(-1)[0])
+    fireEvent.click(buttons[buttons.length - 1])
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(LINK_REPLY))
   })
 
-  it('flags a sheet over 280 and keeps the posts themselves link-free', () => {
-    const five = buildSheets(Array.from({ length: 5 }, (_, i) => pick({ who: `Player Number ${i}`, what: 'Under 23.5 Pts+Reb+Ast' })), 'Tuesday')
-    const { container } = renderCard(five)
-    expect(within(container.querySelector('.cheat-sheet-mobile-post') as HTMLElement).getByText(/Over 280: post it as an X Premium long post/)).toBeInTheDocument()
-    for (const ta of screen.getAllByRole('textbox')) {
-      if (ta.getAttribute('aria-label') !== 'Link reply') expect((ta as HTMLTextAreaElement).value).not.toMatch(/https?:\/\//)
-    }
-  })
-
-  it('renders no POST TO X panel when there are no real +EV picks, and the old single-box text is gone', () => {
-    const { container } = renderCard([])
+  it('renders nothing when there are no picks, and the posts carry no link', () => {
+    const { container } = render(<CheatSheetClient sheets={[]} sportPicks={{}} players={[]} games={[]} gamesLocked={0} today="T" yesterday={[]} />)
     expect(screen.queryByText('POST TO X')).not.toBeInTheDocument()
     expect(container.textContent).not.toContain('Top player picks - ')
+    const { mobile } = renderCard()
+    for (const ta of within(mobile).getAllByRole('textbox')) {
+      if (ta.getAttribute('aria-label') !== 'Link reply') expect((ta as HTMLTextAreaElement).value).not.toMatch(/https?:\/\//)
+    }
   })
 })
 
 describe('Daily Card layout CSS', () => {
   const css = fs.readFileSync(path.resolve(__dirname, '../app/globals.css'), 'utf8')
-  it('hides the mobile copy of the panel on desktop and shows it (and hides the sidebar) at 640px and below', () => {
+  it('hides the mobile copy on desktop and shows it (and hides the sidebar) at 640px and below', () => {
     expect(css).toMatch(/\.cheat-sheet-mobile-post\s*\{\s*display:\s*none;\s*\}/)
     const mobileBlock = css.slice(css.indexOf('@media (max-width: 640px)', css.indexOf('.cheat-sheet-layout')))
     expect(mobileBlock.slice(0, mobileBlock.indexOf('\n}'))).toMatch(/\.cheat-sheet-sidebar\s*\{\s*display:\s*none\s*!important;\s*\}/)

@@ -5,10 +5,15 @@
  *
  *   1. Jalen Williams U 4.5 Reb -110 DK | +14.6% EV
  *
- * One OVERALL sheet (top 5 across every sport) followed by one sheet per sport that has picks (top 5 each). Only picks whose
- * percentage really is an EV are listed: a pick built from the model alone shows a model-vs-market probability gap, which can
- * sit beside a NEGATIVE price EV, and calling that "+EV" in a public post would be false. The main post carries no link
- * (X deprioritizes them); the link goes in the separate LINK_REPLY.
+ * One OVERALL sheet then one sheet per sport that has picks. A sheet is built from the SAME list the card shows for that chip
+ * (the page passes the card's own arrays), so the screenshot and the text always list the same picks in the same order.
+ *
+ * Honest labels: a pick's percentage is an "EV" only when it is a real price EV (a tracked +EV alert, or a projection where model
+ * AND market agree). A model-only pick shows a model-vs-market probability gap, which can sit beside a NEGATIVE price EV, so its
+ * line says "edge", and the "+EV" in the header appears only when every listed line is an EV.
+ *
+ * Hard 280 cap: a sheet is never longer than POST_LIMIT. If it does not fit, first-name initials are used, and only then are the
+ * lowest-ranked lines dropped (the UI says how many). The main post carries no link; the link is in LINK_REPLY.
  */
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { bookDisplay } from '@/lib/tokens'
@@ -22,11 +27,13 @@ export interface Sheet {
   /** short chip label for the box */
   label: string
   text: string
+  /** lines shown / lines offered (fewer shown means the 280 cap dropped the lowest-ranked ones) */
   lines: number
+  offered: number
 }
 
 export const SHEET_SIZE = 5
-/** X's standard post limit; a longer sheet needs X Premium's long post or one line trimmed. */
+/** X's post limit. A hard cap: no sheet is ever longer. */
 export const POST_LIMIT = 280
 
 /** The second post: the only place the link lives. Typed by the owner. */
@@ -35,7 +42,7 @@ export const LINK_REPLY = "For today's full slate of +EV bets and model projecti
 /** `edge` is a real price EV only for these bases: a tracked +EV alert, or a projection where model AND market agree. */
 const EV_BASES = new Set<TopPick['basis']>(['ev', 'confluence'])
 
-export const isEvPick = (p: SheetPick): boolean => EV_BASES.has(p.basis) && p.odds != null && p.edge != null && p.edge > 0
+export const isEvBasis = (p: Pick<SheetPick, 'basis'>): boolean => EV_BASES.has(p.basis)
 
 // Emoji built from code points (not typed) so this file stays ASCII.
 const EMOJI: Record<SportSlug, string> = {
@@ -73,36 +80,54 @@ const fmtOdds = (o: number) => (o > 0 ? `+${o}` : String(o))
 const BOOK_POST_NAME: Record<string, string> = { draftkings: 'DK', fanduel: 'FD', betmgm: 'MGM', caesars: 'CZR' }
 export const bookPostName = (book: string | null | undefined): string => (book ? BOOK_POST_NAME[book.toLowerCase()] ?? bookDisplay(book).label : '')
 
-function line(p: SheetPick, rank: number, tagSport: boolean): string {
-  const book = bookPostName(p.book)
-  const who = [tagSport ? SPORT_PILLARS[p.sport].shortName : '', p.who].filter(Boolean).join(' ')
-  const head = [`${rank}.`, who, shortMarket(p.what), fmtOdds(p.odds as number), book].filter(Boolean).join(' ')
-  return `${head} | +${((p.edge as number) * 100).toFixed(1)}% EV`
+/** "Jalen Williams" -> "J. Williams"; "P.J. Washington Jr." and single names are left alone. Used only when a sheet would not fit. */
+export function abbrevName(who: string): string {
+  const parts = who.trim().split(/\s+/)
+  if (parts.length < 2 || parts[0].includes('.')) return who.trim()
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`
 }
 
-function sheetFor(id: 'all' | SportSlug, picks: SheetPick[], weekday: string): Sheet {
-  const top = picks.slice(0, SHEET_SIZE)
+function line(p: SheetPick, rank: number, tagSport: boolean, abbrev: boolean): string {
+  const book = bookPostName(p.book)
+  const name = abbrev ? abbrevName(p.who) : p.who
+  const who = [tagSport ? SPORT_PILLARS[p.sport].shortName : '', name].filter(Boolean).join(' ')
+  const price = p.odds == null ? '' : fmtOdds(p.odds)
+  const head = [`${rank}.`, who, shortMarket(p.what), price, book].filter(Boolean).join(' ')
+  const tag = p.edge != null && p.edge > 0 ? ` | +${(p.edge * 100).toFixed(1)}% ${isEvBasis(p) ? 'EV' : 'edge'}` : ''
+  return `${head}${tag}`
+}
+
+function render(id: 'all' | SportSlug, picks: SheetPick[], weekday: string, abbrev: boolean): string {
   const name = id === 'all' ? '' : `${SPORT_PILLARS[id].shortName} `
   const emoji = id === 'all' ? '' : ` ${EMOJI[id]}`
-  const header = `${weekday} +EV ${name}Cheat Sheet${emoji}`
-  return {
-    id,
-    label: id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName,
-    text: `${header}\n\n${top.map((p, i) => line(p, i + 1, id === 'all')).join('\n')}`,
-    lines: top.length,
+  const ev = picks.length > 0 && picks.every(isEvBasis) ? '+EV ' : ''
+  const header = `${weekday} ${ev}${name}Cheat Sheet${emoji}`
+  return `${header}\n\n${picks.map((p, i) => line(p, i + 1, id === 'all', abbrev)).join('\n')}`
+}
+
+/** Longest sheet <= POST_LIMIT: all lines with full names, then all with initials, then fewer lines (never fewer than one). */
+function sheetFor(id: 'all' | SportSlug, picks: SheetPick[], weekday: string): Sheet {
+  const offered = picks.slice(0, SHEET_SIZE)
+  for (let n = offered.length; n >= 1; n--) {
+    for (const abbrev of [false, true]) {
+      const text = render(id, offered.slice(0, n), weekday, abbrev)
+      if (postLength(text) <= POST_LIMIT) return { id, label: id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName, text, lines: n, offered: offered.length }
+    }
   }
+  // unreachable in practice (one initialled line is far under 280); the cap is still enforced
+  return { id, label: id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName, text: render(id, offered.slice(0, 1), weekday, true).slice(0, POST_LIMIT), lines: 1, offered: offered.length }
 }
 
 /**
- * `picks` must already be in rank order (best first). Returns the overall sheet, then one sheet per sport that has picks, in
- * registry order. When only one sport has picks the overall sheet already is that sport's list, so it is returned alone.
+ * `all` = the picks the card shows under its "All" chip; `bySport[s]` = the picks it shows under sport s's chip (both best first).
+ * Returns the overall sheet, then one per sport with picks in registry order. With picks in only one sport the overall sheet is
+ * that sport's, so it is returned alone.
  */
-export function buildSheets(picks: SheetPick[], weekday: string): Sheet[] {
-  const ev = picks.filter(isEvPick)
-  if (ev.length === 0) return []
-  const sports = SPORT_SLUGS.filter(s => ev.some(p => p.sport === s))
-  if (sports.length === 1) return [sheetFor(sports[0], ev, weekday)]
-  return [sheetFor('all', ev, weekday), ...sports.map(s => sheetFor(s, ev.filter(p => p.sport === s), weekday))]
+export function buildSheets(all: SheetPick[], bySport: Partial<Record<SportSlug, SheetPick[]>>, weekday: string): Sheet[] {
+  const sports = SPORT_SLUGS.filter(s => (bySport[s]?.length ?? 0) > 0)
+  if (sports.length === 0) return all.length ? [sheetFor('all', all, weekday)] : []
+  if (sports.length === 1) return [sheetFor(sports[0], bySport[sports[0]] as SheetPick[], weekday)]
+  return [sheetFor('all', all, weekday), ...sports.map(s => sheetFor(s, bySport[s] as SheetPick[], weekday))]
 }
 
 /** X counts an emoji as 2 characters, which is exactly what String.length reports for a surrogate pair. */
