@@ -46,8 +46,8 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const market = isGame ? pick.game : pick.what
   const price = [fmtOdds(pick.odds), pick.book].filter(Boolean).join(DOT)
   const meta = [price, isGame ? '' : pick.game].filter(Boolean).join(DOT)
-  // Projection rows carry no analyst notes, so the expanded view falls back to the matchup and how the pick is tracked.
-  const details = bullets.length ? bullets.slice(0, 3) : [pick.game, pick.tracked ? 'Tracked and settled in the public record' : 'Projection from the Beezy engine, not tracked in the record yet'].filter(Boolean)
+  // Projection rows carry no analyst notes, so the expanded view falls back to the matchup.
+  const details = bullets.length ? bullets.slice(0, 3) : [pick.game].filter(Boolean)
 
   return (
     <div
@@ -87,9 +87,6 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
             <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
-            {!pick.tracked && (
-              <span className="dell-heading" title="Projections are not tracked in the public results yet." style={{ fontSize: '10px', letterSpacing: '0.06em', color: '#f59e0b' }}>PROJECTION</span>
-            )}
           </span>
           {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
         </div>
