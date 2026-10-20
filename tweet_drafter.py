@@ -34,6 +34,7 @@ import os
 import re
 import sys
 import json
+import time
 import requests
 from datetime import date, datetime
 from urllib.parse import quote
@@ -74,24 +75,30 @@ BANNED_PHRASES = (
     "let's dive in", "lets dive in", "lock it in", "lock of the", "smash", " ai ", "ai-powered", "algorithm",
     "guaranteed", "parlay of the day", "cash it", "can't lose", "free money",
     "de-vigged", "consensus fair", "proj_mean",   # textbook quant-speak: say what it means instead
+    # stock phrases the model kept parroting (2026-10-19): corny, and they read as a template
+    "on the chin", "buy a bounce", "days like that", "on to the next", "transparency", "fun sweat", "nice sweat",
+    "fall asleep", "on an island", "the process", "variance",
 )
 
 PERSONA = """
-You are the voice of @beezy_fyi on X (#GamblingX): the smart friend at the sportsbook bar. You genuinely like betting
-numbers and you talk about them like a person, not a spreadsheet. beezy.fyi publishes model-driven picks, a +EV board and a
-full public results ledger. Paper mode now.
+You write for @beezy_fyi on X (#GamblingX), a betting analytics account with a public, paper-traded ledger. You sound like a
+sharp, dry friend who watches every line move: plain words, specific numbers, a little understated humor, zero salesmanship.
 
-Voice: warm, natural, a little playful, still numbers-first. Lead with the specific price gap or the result. Always use the
-exact numbers you are given (book, price, line) -- never invent a number, a stat or a fact.
-Say the math in plain betting talk:
-- not "de-vigged fair is -108" but "every other book is around -108" or "the rest of the market moved to -108"
-- not "proj_mean 7.3" but "we have him closer to 7.3"
-- a slow book can be teased lightly: "Did DraftKings fall asleep on this line?", "FanDuel is on an island here"
-- wins are fun, like a fan: "Fun sweat last night", "Nice 4-1 night"; losses are owned gracefully: "Took it on the chin",
-  "Couldn't buy a bounce". Never hide a loss, never gloat about a win. Cite the season sample when it helps.
+How to write:
+- Lead with something concrete: a player, a price, a result. Never open with a greeting, a stock phrase or "Today".
+- Use only the names and numbers you are given. Never invent a number, a stat or a reason.
+- Say the math in ordinary betting talk ("the other books are around -108", "we have him closer to 7.3"). Never write
+  "de-vigged", "consensus fair" or "proj_mean".
+- Results are in units: 1u is one flat unit risked per bet at the flagged price, so write them like "-1.9u" or "+0.8u".
+  Use the unit figures you are given; never write dollar amounts and never invent a figure.
+- Results are reported flat. A win is not a victory lap and a loss is not an apology: say what happened and, if it is clear
+  from the legs, what drove it, in one plain sentence. Do not defend the model, do not talk about "the process", "variance"
+  or "transparency". If the day is only a handful of bets, say that casually in one clause and move on.
+- No catchphrases, idioms or sports cliches. No exclamation marks, no rhetorical questions. Vary how each tweet is built.
+- Be specific enough that someone could check it: names, lines, prices.
 
-BANNED: "let's dive in", "lock it in", "lock of the century", "smash", "AI", "algorithm", "guaranteed", "parlay of the day",
-"de-vigged", "consensus fair", hype caps, more than one emoji (zero is better).
+BANNED: "let's dive in", "lock it in", "smash", "AI", "algorithm", "guaranteed", "parlay of the day", "de-vigged",
+"consensus fair", hype caps, more than one emoji (zero is better).
 
 Audience: bettors tired of tout accounts who want to see real edge.
 """
@@ -105,10 +112,10 @@ Format rules:
 - Max 280 characters per tweet
 - Return exactly 3 tweet variants as a JSON array of strings
 - No markdown, no explanations outside the JSON
-- Each variant should have a slightly different angle (price gap / season ledger / understated)
+- Each variant takes a different angle and a different structure
 
 Example good tweet:
-"Did DraftKings fall asleep on Stanton HR? They're hanging +115 while the rest of the market is around -108. beezy.fyi"
+"Peralta under 14.5 outs: DraftKings is +104, the other seven books are around -121. beezy.fyi"
 
 Example bad tweet:
 "STANTON IS A LOCK TODAY \U0001F525\U0001F525 BET THE HOUSE #MLB"
@@ -166,11 +173,6 @@ def build_link_reply(label, url):
     return REPLY_COPY.get(label, "More -> {url}").format(url=url)
 
 
-def build_x_intent_url(text):
-    """1-tap 'post this' link: opens the X composer pre-filled with text."""
-    return f"https://x.com/intent/tweet?text={quote(text, safe='')}"
-
-
 def build_x_search_url(query):
     """X live-search link (newest first), used to find a fresh tweet to reply under."""
     return f"https://x.com/search?q={quote(query, safe='')}&f=live"
@@ -214,35 +216,101 @@ def get_stats():
 
 # ── Build prompt from data ────────────────────────────────────────────────────
 
+_LABEL_RE = re.compile(r"^(K|OUTS|BATTER_TB|BATTER_HITS|PITCHER_ER|SB)_(OVER|UNDER|\d+PLUS)_([\d.]+)")
+_LABEL_NOUN = {"K": "Ks", "OUTS": "outs", "BATTER_TB": "total bases", "BATTER_HITS": "hits", "PITCHER_ER": "earned runs",
+               "SB": "steals"}
+
+
+def bet_label(p):
+    """A settled/pending bet row -> plain words ('Gerrit Cole over 7.5 Ks'). Never a raw bet_type code."""
+    who = p.get("player")
+    bt = str(p.get("bet_type") or "")
+    m = _LABEL_RE.match(bt)
+    if m and who:
+        kind, side, line = m.groups()
+        noun = _LABEL_NOUN[kind]
+        if side.endswith("PLUS"):
+            return f"{who} {side[:-4]}+ {noun}"
+        try:
+            return f"{who} {side.lower()} {float(line):g} {noun}"
+        except ValueError:
+            return f"{who} {side.lower()} {line} {noun}"
+    parts = bt.split("_")
+    if who and parts[0] == "HR":
+        return f"{who} no HR" if len(parts) > 1 and parts[1] == "NO" else f"{who} to homer"
+    away, home = p.get("away_team"), p.get("home_team")
+    matchup = f"{away} @ {home}" if away and home else (p.get("game") or "")
+    if bt in ("NRFI", "YRFI"):
+        return f"{matchup} {bt}".strip()
+    if parts[-1] in ("HOME", "AWAY") and (home or away):
+        return f"{home if parts[-1] == 'HOME' else away} moneyline"
+    desc = bt.replace("_", " ").lower()
+    return f"{who} {desc}".strip() if who else f"{matchup} {desc}".strip()
+
+
+def _odds_str(o):
+    try:
+        return f"{int(float(o)):+d}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _edge_pct(e):
+    """bets.edge is stored as a fraction (0.06) but older rows/fixtures carry percent (6.0): same rule as public_api._edge_frac."""
+    try:
+        e = float(e)
+    except (TypeError, ValueError):
+        return None
+    return (e / 100.0 if abs(e) >= 2 else e) * 100.0
+
+
+def bet_units(r):
+    """One settled bet's result in UNITS: profit / stake, i.e. a flat 1u risked at the flagged price (the site's own
+    convention: 'graded at a flat 1 unit'). bets.profit and bets.stake are both DOLLARS (EV rows stake a flat $100, model rows a
+    Kelly dollar amount), so printing profit as 'u' -- as this file used to -- reported -$190 as '-190u' instead of -1.90u."""
+    try:
+        stake = float(r.get("stake") or 0)
+        return float(r.get("profit") or 0) / stake if stake > 0 else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def day_stats(slate):
+    """Record and flat-unit result for one settled slate."""
+    return {"w": sum(r["result"] == "win" for r in slate), "l": sum(r["result"] == "loss" for r in slate),
+            "p": sum(r["result"] == "push" for r in slate), "n": len(slate), "units": sum(bet_units(r) for r in slate)}
+
+
 def build_picks_prompt(picks):
     if not picks:
         return None
 
     lines = [f"Today's beezy model picks ({date.today().strftime('%b %d')}):\n"]
     for p in picks[:5]:  # cap at 5 so prompt stays tight
-        system = p.get("system", "")
-        game = p.get("game", "")
-        bet_type = p.get("bet_type", "")
-        odds = p.get("odds", "")
-        edge = p.get("edge", "")
-        stake = p.get("stake", "")
-        notes = p.get("notes", "")
-
-        line = f"  {system} | {game} | {bet_type} {odds} | edge {edge}% | {stake}u Kelly"
-        if notes:
-            line += f" | {notes}"
-        lines.append(line)
+        row = f"  {bet_label(p)} at {_odds_str(p.get('odds'))}"
+        if p.get("book"):
+            row += f" ({p['book']})"
+        try:
+            who = "the other books price it at" if p.get("system") == "EV" else "our model has it at"
+            row += f" | {who} {float(p['model_prob']) * 100:.0f}% vs {float(p['market_prob']) * 100:.0f}% implied by this price"
+        except (KeyError, TypeError, ValueError):
+            pass
+        edge = _edge_pct(p.get("edge"))
+        if edge is not None:
+            row += f" | edge {edge:.1f}%"
+        if p.get("notes"):
+            row += f" | {p['notes']}"
+        lines.append(row)
 
     lines.append(
-        "\nWrite 3 tweet drafts for @beezy_fyi announcing today's picks. "
-        "EVERY draft must: (1) state the model probability vs the market's "
-        "implied probability, or the edge %, on at least one pick -- the EV "
-        "math IS the content; (2) end with the plain-text watermark "
-        f"{WATERMARK} on its own line -- NO https://, NO path, NO other URL "
-        "anywhere in the tweet (the link is added as a separate reply); "
-        "(3) stay under 270 characters. No hashtag spam (max 1), no emojis, "
-        "no 'lock'/'smash' tout language. "
-        "Return only a JSON array of 3 strings."
+        "\nWrite 3 tweet drafts for @beezy_fyi about today's picks. Each draft is about ONE pick and the math is the "
+        "content; say where the percentage comes from exactly as the data above does (do not call another book's "
+        "number 'our model'). Draft 1 opens with the book and its price, draft 2 opens with the gap between the two "
+        "percentages, draft 3 is the shortest: player, line, price, one clause. Use a different pick in each draft "
+        "when there are several. Aim for under 200 characters. Do not mention stake size. "
+        f"End with the plain-text watermark {WATERMARK} on its own line -- NO https://, NO path, NO other URL "
+        "anywhere in the tweet (the link is added as a separate reply). Under 270 characters, max 1 hashtag, no emojis, "
+        "no tout language. Return only a JSON array of 3 strings."
     )
     return "\n".join(lines)
 
@@ -272,42 +340,41 @@ def build_recap_prompt(settled, stats):
     if not recap_settled:
         return None
 
-    wins = [p for p in recap_settled if p["result"] == "win"]
-    losses = [p for p in recap_settled if p["result"] == "loss"]
-    total_profit = sum(float(p.get("profit", 0)) for p in recap_settled)
-    record = f"{len(wins)}-{len(losses)}"
+    ds = day_stats(recap_settled)
+    record = f"{ds['w']}-{ds['l']}" + (f"-{ds['p']}" if ds["p"] else "")
 
-    overall = stats.get("overall", {})
+    overall = (stats or {}).get("overall", {}) or {}
     season_roi = overall.get("roi", "N/A")
     total_bets = overall.get("total_bets", "N/A")
 
     try:
-        recap_date_label = datetime.strptime(recap_date, "%Y-%m-%d").strftime("%b %d")
+        recap_date_label = datetime.strptime(recap_date, "%Y-%m-%d").strftime("%A %b %d")
     except (ValueError, TypeError):
         recap_date_label = recap_date  # fall back to the raw string rather than crash
 
     prompt = (
-        f"beezy results for {recap_date_label}:\n"
+        f"beezy results for {recap_date_label} ({ds['n']} bets):\n"
         f"  Record: {record}\n"
-        f"  P&L: {total_profit:+.2f}u\n"
-        f"  Season: {total_bets} bets, {season_roi}% ROI\n\n"
+        f"  Result: {_u(ds['units'])} (flat 1u per bet)\n"
+        f"  Season so far: {total_bets} bets, {season_roi}% ROI (background only)\n\nEvery bet:\n"
     )
-
-    for p in recap_settled[:3]:
-        icon = "✓" if p["result"] == "win" else "✗"
-        prompt += (
-            f"  {icon} {p.get('system')} | {p.get('game')} | "
-            f"{p.get('bet_type')} {p.get('odds')} | "
-            f"{float(p.get('profit', 0)):+.2f}u\n"
-        )
+    # the same proposition is often logged once per book (EV alerts), so identical legs are shown once with a count
+    legs = {}
+    for p in recap_settled:
+        key = (p["result"], bet_label(p), _odds_str(p.get("odds")))
+        legs.setdefault(key, []).append(bet_units(p))
+    for (result, label, odds), us in sorted(legs.items(), key=lambda kv: sum(kv[1]), reverse=True)[:8]:
+        word = {"win": "WON", "loss": "LOST", "push": "PUSH"}[result]
+        prompt += f"  {word}  {label} at {odds} ({_u(us[0])} each)" + (f" x{len(us)} tickets" if len(us) > 1 else "") + "\n"
 
     prompt += (
-        "\nWrite 3 tweet drafts for @beezy_fyi recapping today's results. "
-        "Report the record and units honestly -- LOSING days get posted with "
-        "the same tone as winning days; the transparency is the brand. Cite "
-        f"the season sample size. End with the plain-text watermark {WATERMARK} "
-        "on its own line -- NO https://, NO path, NO other URL (the link is "
-        "added as a separate reply). Under 270 characters, max 1 hashtag, no emojis. "
+        "\nWrite 3 tweet drafts for @beezy_fyi recapping that slate. Facts first: the record, the unit result, and "
+        "the legs that decided it, by name (a leg marked xN was logged N times at different books -- say so, do not "
+        "present it as N separate ideas). Draft 1 leads with the best or worst leg, draft 2 leads with the record, "
+        "draft 3 is one dry sentence. Aim for under 220 characters. Losing days read exactly like winning days: flat, no consolation, no defending "
+        "anything. Mention the season only if it adds something, and never as a boast. Write results in units, never "
+        f"dollars. End with the plain-text watermark {WATERMARK} on its own line -- NO https://, NO path, NO other "
+        "URL (the link is added as a separate reply). Under 270 characters, max 1 hashtag, no emojis. "
         "Return only a JSON array of 3 strings."
     )
     return prompt
@@ -315,7 +382,7 @@ def build_recap_prompt(settled, stats):
 
 # ── Call Gemini ───────────────────────────────────────────────────────────────
 
-def _gemini_json_text(system_prompt, user_prompt, max_tokens=1536):
+def _gemini_json_text(system_prompt, user_prompt, max_tokens=4096, schema=None):
     """One Gemini generateContent call -> the visible reply text with any markdown fences stripped (still JSON text)."""
     payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
@@ -327,8 +394,13 @@ def _gemini_json_text(system_prompt, user_prompt, max_tokens=1536):
         # text and crashing json.loads("") with a confusing "Expecting
         # value" error. Bumped for real headroom -- cost is negligible on
         # the free tier either way.
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": max_tokens},
+        # JSON mode makes Gemini emit parseable JSON; the larger budget stops it being cut off mid-string. Both were real
+        # failures on 2026-10-19: picks died on "Expecting value" and recap's first attempt on "Unterminated string" -- the
+        # reply was truncated because thinking tokens ate the 1536-token budget.
+        "generationConfig": {"temperature": 0.8, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"},
     }
+    if schema:
+        payload["generationConfig"]["responseSchema"] = schema
 
     resp = requests.post(
         GEMINI_URL,
@@ -366,51 +438,52 @@ def _gemini_json_text(system_prompt, user_prompt, max_tokens=1536):
     return raw.strip()
 
 
-def generate_tweets(user_prompt):
-    raw = _gemini_json_text(SYSTEM_PROMPT, user_prompt)
-    return [strip_urls(t) for t in filter_voice(json.loads(raw))]
+_TWEETS_SCHEMA = {"type": "ARRAY", "items": {"type": "STRING"}}
+
+
+def generate_tweets(user_prompt, attempts=3):
+    """Ask Gemini for the drafts; a reply that is not valid JSON or that the voice filter rejects entirely gets re-asked (a
+    second sample is cheap, a dead job is a missing tweet). HTTP errors are not retried here -- Cloud Run retries the job."""
+    last = None
+    for _ in range(attempts):
+        try:
+            raw = _gemini_json_text(SYSTEM_PROMPT, user_prompt, schema=_TWEETS_SCHEMA)
+            return [strip_urls(t) for t in filter_voice(json.loads(raw))]
+        except (ValueError, RuntimeError) as e:     # JSONDecodeError is a ValueError
+            last = e
+            print(f"  Gemini draft attempt failed ({type(e).__name__}: {str(e)[:120]}); retrying")
+    raise last
 
 
 # -- Discord #tweet-queue ----------------------------------------------------------------------------------------
 
-# Discord caps the combined text of all embeds in one message at 6000 chars and a message at 10 embeds.
-_EMBED_TEXT_BUDGET = 5500
-_EMBED_MAX = 10
+# Every draft is its own PLAIN message whose whole content is the tweet text, so Discord's "Copy Text" gives exactly what
+# goes on X (no code fences, no labels, no links to tap). The only extras are one short header line per post and the card.
+_SUPPRESS_EMBEDS = 4          # Discord message flag: do not unfurl the link in this message
+_PAUSE = 0.6                  # webhooks allow ~5 posts / 2 s; the pause keeps a 20-message reply_ammo run under it
 
 
-def _embed_len(e):
-    n = len(e.get("title", "")) + len(e.get("description", ""))
-    n += sum(len(f.get("name", "")) + len(f.get("value", "")) for f in e.get("fields", []))
-    return n
-
-
-def _code(text):
-    """Discord code block (tap-and-hold copies it on mobile); a stray ``` in the text must not close the block early."""
-    return "```\n" + text.replace("```", "'''") + "\n```"
-
-
-def post_embeds(hook, content, embeds):
-    """POST `embeds` to a Discord webhook in as few messages as the limits allow. Returns a status line (never raises on
-    an HTTP error, never raises on an HTTP error; callers decide whether a failed post is fatal via require_posted)."""
-    batches, cur, cur_len = [], [], 0
-    for e in embeds:
-        n = _embed_len(e)
-        if cur and (len(cur) >= _EMBED_MAX or cur_len + n > _EMBED_TEXT_BUDGET):
-            batches.append(cur)
-            cur, cur_len = [], 0
-        cur.append(e)
-        cur_len += n
-    if cur or not batches:
-        batches.append(cur)
-    bad = []
-    for i, batch in enumerate(batches):
-        body = {"embeds": batch}
-        if i == 0 and content:
-            body["content"] = content[:2000]
+def post_messages(hook, messages):
+    """POST each message dict ({content, embeds, flags}) to a Discord webhook in order. One 429 per message is waited out and
+    retried. Returns a status line; never raises on an HTTP error (callers decide via require_posted)."""
+    bad = None
+    for i, m in enumerate(messages):
+        if i:
+            time.sleep(_PAUSE)
+        body = dict(m)
+        if body.get("content"):
+            body["content"] = body["content"][:2000]
         resp = requests.post(hook, json=body, timeout=10)
-        if resp.status_code not in (200, 204):
-            bad.append(resp.status_code)
-    return f"  Discord post {'ok' if not bad else f'FAILED ({bad[0]})'}" + (f" ({len(batches)} messages)" if len(batches) > 1 else "")
+        if resp.status_code == 429:
+            try:
+                wait = min(float(resp.json().get("retry_after", 1)), 5.0)
+            except Exception:  # noqa: BLE001
+                wait = 1.0
+            time.sleep(wait)
+            resp = requests.post(hook, json=body, timeout=10)
+        if resp.status_code not in (200, 204) and bad is None:
+            bad = resp.status_code
+    return f"  Discord post {'ok' if bad is None else f'FAILED ({bad})'} ({len(messages)} messages)"
 
 
 def require_posted(result):
@@ -422,30 +495,26 @@ def require_posted(result):
 
 
 def post_drafts_to_discord(mode_label, tweets, card_url=None, reply_url=None):
-    """Mirror drafted tweets to #tweet-queue: per variant a copyable code block + a 1-tap X intent link, the OG card image on
-    top so it can be saved, and (when the thread has one) the link reply to post under it."""
+    """One short header, then each tweet variant as a plain message, then the card image, then the link reply (plain text, link
+    unfurl suppressed) to post under your own tweet."""
     from mlb_core.alerts.discord_routes import webhook_for
     hook = webhook_for("tweets")          # DISCORD_WEBHOOK_TWEETS -> DISCORD_WEBHOOK_OPS
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
-    reply_text = build_link_reply(mode_label, reply_url) if reply_url else None
-    content = f"**{mode_label} drafts ({date.today()})** -- save the card, tap 1-Tap Post on X, attach the image."
-    if reply_text:
-        content += f"\nThen reply to your own post with:\n{_code(reply_text)}"
-    embeds = []
+    messages = [{"content": f"**{mode_label}** {date.today()} -- {len(tweets)} drafts, then the card" +
+                            (", then the link reply" if reply_url else "")}]
+    messages += [{"content": t} for t in tweets]
     if card_url:
-        embeds.append({"title": f"{mode_label} card", "image": {"url": card_url}})
-    for i, tweet in enumerate(tweets, 1):
-        embeds.append({
-            "title": f"Variant {i}",
-            "description": f"{_code(tweet)}\n[1-Tap Post on X]({build_x_intent_url(tweet)})",
-        })
-    return post_embeds(hook, content, embeds)
+        messages.append({"embeds": [{"image": {"url": card_url}}]})
+    if reply_url:
+        messages.append({"content": build_link_reply(mode_label, reply_url), "flags": _SUPPRESS_EMBEDS})
+    return post_messages(hook, messages)
 
 
 # ── Settlement receipt (deterministic, no Gemini) ─────────────────────────────
 
 def _u(x):
+    """Flat units, e.g. -1.90u. `x` must already be in units (see bet_units): never pass dollars."""
     return f"{'+' if x >= 0 else '-'}{abs(x):.2f}u"
 
 
@@ -463,83 +532,65 @@ def get_settled_all_sports(limit=200):
     return rows
 
 
-LOSS_OPENERS = ("Took it on the chin on {when}.", "Couldn't buy a bounce on {when}.", "Rough one on {when}.")
-WIN_OPENERS = ("Nice sweat on {when}.", "Fun sweat on {when}.", "Good night on {when}.")
-
-
 def _day_label(day):
-    """'2026-10-18' -> "Sunday's card"; falls back to the raw date string rather than crash."""
+    """'2026-10-18' -> 'Sunday'; falls back to the raw date string rather than crash."""
     try:
-        return f"{datetime.strptime(day, '%Y-%m-%d').strftime('%A')}'s card"
+        return datetime.strptime(day, "%Y-%m-%d").strftime("%A")
     except (ValueError, TypeError):
-        return f"the {day} card"
-
-
-def _pick(options, key):
-    """Deterministic variety: the same slate always gets the same opener."""
-    return options[sum(map(ord, str(key))) % len(options)]
+        return str(day)
 
 
 def build_settlement(settled, stats):
     """Summarize the most recent fully settled slate. None when there is nothing graded.
-    Returns {date, w, l, p, net, hero, text, card_url, reply_url}; text is the ready-to-post, link-free #GamblingX tweet
-    and reply_url is the link for the follow-up reply."""
+    Returns {date, w, l, p, units, hero, text, card_url, reply_url}; `units` is the flat-1u result (profit/stake per bet), text
+    is the ready-to-post link-free tweet and reply_url the link for the follow-up reply."""
     dated = [r for r in settled if r.get("game_date") and r.get("result") in ("win", "loss", "push")]
     if not dated:
         return None
     day = max(r["game_date"] for r in dated)
     slate = [r for r in dated if r["game_date"] == day]
-    w = sum(r["result"] == "win" for r in slate)
-    l = sum(r["result"] == "loss" for r in slate)
-    p = sum(r["result"] == "push" for r in slate)
-    net = sum(float(r.get("profit") or 0) for r in slate)
+    ds = day_stats(slate)
+    w, l, p, units = ds["w"], ds["l"], ds["p"], ds["units"]
     wins = [r for r in slate if r["result"] == "win"]
-    hero = max(wins, key=lambda r: float(r.get("profit") or 0)) if wins else None
+    hero = max(wins, key=bet_units) if wins else None
+    losses = [r for r in slate if r["result"] == "loss"]
 
     overall = (stats or {}).get("overall", {}) or {}
     ledger = ""
     if overall.get("roi") is not None and overall.get("total_bets") is not None:
         try:
-            ledger = f" Season ledger {float(overall['roi']):+.1f}% ROI across {int(overall['total_bets']):,} graded bets."
+            ledger = f" Season: {float(overall['roi']):+.1f}% ROI over {int(overall['total_bets']):,} bets."
         except (TypeError, ValueError):
             ledger = ""
 
-    card_url = f"{BEEZY_SITE_URL}/api/og/settlement-card?date={day}&sport=all"
     rec = f"{w}-{l}{f'-{p}' if p else ''}"
-    when = _day_label(day)
-    if net < -0.005:
-        opener = _pick(LOSS_OPENERS, day).format(when=when)
-        text = f"{opener} {rec}, {_u(net)}.{ledger} Every play logged publicly. {WATERMARK}"
-    elif net <= 0.005:
-        text = f"Treaded water on {when}: {rec}, {_u(net)}.{ledger} Every play logged publicly. {WATERMARK}"
-    else:
-        opener = _pick(WIN_OPENERS, day).format(when=when)
-        best = ""
-        if hero:
-            who = hero.get("player") or hero.get("bet_type", "").replace("_", " ")
-            best = f" Best of the night: {who} {int(hero['odds']):+d} ({_u(float(hero.get('profit') or 0))})." if hero.get("odds") is not None else ""
-        text = f"{opener} {rec}, {_u(net)}.{best}{ledger} Receipts: {WATERMARK}"
-    return {"date": day, "w": w, "l": l, "p": p, "net": net, "hero": hero, "text": text, "card_url": card_url,
+    standout = ""
+    if units >= 0 and hero and hero.get("odds") is not None:
+        standout = f" Best: {bet_label(hero)} {_odds_str(hero['odds'])}."
+    elif units < 0 and losses:
+        worst = min(losses, key=bet_units)
+        standout = f" Costliest miss: {bet_label(worst)} {_odds_str(worst.get('odds'))}."
+    text = f"{_day_label(day)}: {rec}, {_u(units)} on {ds['n']} bets.{standout}{ledger} {WATERMARK}"
+    return {"date": day, "w": w, "l": l, "p": p, "units": units, "hero": hero, "text": text,
+            "card_url": f"{BEEZY_SITE_URL}/api/og/settlement-card?date={day}&sport=all",
             "reply_url": f"{BEEZY_SITE_URL}/results"}
 
 
 def post_settlement_to_discord(summary, gif):
-    """Post tweet text + receipt PNG + GIF to the tweet-queue webhook so the operator can post both to X in one go."""
+    """Header, the tweet as a plain message, the receipt card, the link reply, and the GIF when one resolved."""
     from mlb_core.alerts.discord_routes import webhook_for
     hook = webhook_for("tweets")          # DISCORD_WEBHOOK_TWEETS -> DISCORD_WEBHOOK_OPS
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
-    content = f"**Settlement tweet draft ({summary['date']})**\n{_code(summary['text'])}\n[1-Tap Post on X]({build_x_intent_url(summary['text'])})"
+    messages = [{"content": f"**settlement** {summary['date']} -- tweet, card" + (", link reply" if summary.get("reply_url") else "") +
+                            (", GIF" if gif.get("gif_url") else "")},
+                {"content": summary["text"]},
+                {"embeds": [{"image": {"url": summary["card_url"]}}]}]
     if summary.get("reply_url"):
-        content += f"\nThen reply to your own post with:\n{_code(build_link_reply('settlement', summary['reply_url']))}"
-    embeds = [{"title": f"Settlement receipt {summary['date']}", "image": {"url": summary["card_url"]}}]
+        messages.append({"content": build_link_reply("settlement", summary["reply_url"]), "flags": _SUPPRESS_EMBEDS})
     if gif.get("gif_url"):
-        content += f"\nCelebration GIF ({gif['query']}): {gif['gif_url']}"
-        embeds.append({"title": gif["query"], "image": {"url": gif.get("preview_url") or gif["gif_url"]}})
-    else:
-        content += f"\nNo GIF resolved for \"{gif['query']}\" (no TENOR_API_KEY/GIPHY_API_KEY): {gif.get('search_url', '')}"
-    resp = requests.post(hook, json={"content": content[:2000], "embeds": embeds}, timeout=10)
-    return f"  Discord post {'ok' if resp.status_code in (200, 204) else f'FAILED ({resp.status_code})'}"
+        messages.append({"embeds": [{"image": {"url": gif.get("preview_url") or gif["gif_url"]}}]})
+    return post_messages(hook, messages)
 
 
 def run_settlement():
@@ -722,10 +773,9 @@ You write short REPLIES to post under other people's tweets about a player. Hard
 - use ONLY the numbers given for that play (the book's price, the line, the other books' price, the projection); invent nothing
 - always name the book and its price
 Three styles per play:
-- slow_book: tease the slow book playfully ("Did <book> fall asleep on this line?", "<book> is on an island here")
-- model_first: lead with our projection ("we have him closer to <number>") then the price gap. Only for plays that have a
-  projection number; skip the key otherwise
-- deadpan: flat, numbers-first, no jokes
+- slow_book: the point is that this one book is off the rest of the market; say it your own way, dry, not cutesy
+- model_first: lead with our projection, then the price gap. Only for plays that have a projection number; skip the key otherwise
+- deadpan: flat, numbers-first, nothing else
 
 Return ONLY JSON: {"<play id>": {"slow_book": "...", "model_first": "...", "deadpan": "..."}, ...}
 """
@@ -821,20 +871,19 @@ def build_reply_ammo(feed, projections=None):
 
 
 def post_reply_ammo_to_discord(plays):
+    """A one-line note, then per play a header (sport, player, X search link) followed by each reply variant as a plain message."""
     from mlb_core.alerts.discord_routes import webhook_for
     hook = webhook_for("tweets")
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
-    content = (f"**Reply ammo ({date.today()})** -- tap Search, find a fresh tweet about the player, then paste the variant "
-               "whose vibe fits it as a REPLY. No links, no pitch. NFL/NHL/NBA rows are unvalidated paper signals: "
-               "state the price, not a pick.")
-    embeds = []
+    messages = [{"content": f"**reply ammo** {date.today()} -- pick the variant that fits the tweet. NFL/NHL/NBA rows are "
+                            "unvalidated: state the price, not a pick."}]
     for p in plays:
+        messages.append({"content": f"**{p['sport'].upper()} | {p['player']}** -- [search X]({p['search_url']})",
+                         "flags": _SUPPRESS_EMBEDS})
         variants = p.get("variants") or {"standard": p["snippet"]}
-        body = "\n".join(f"**{style}**\n{_code(text)}" for style, text in variants.items())
-        embeds.append({"title": f"{p['sport'].upper()} | {p['player']}",
-                       "description": f"{body}\n[Search X for {p['player']} (live, {REPLY_MIN_FAVES}+ likes)]({p['search_url']})"})
-    return post_embeds(hook, content, embeds)
+        messages += [{"content": text} for text in variants.values()]
+    return post_messages(hook, messages)
 
 
 def run_reply_ammo():
@@ -901,7 +950,7 @@ def main():
 
     elif mode == "recap":
         print("Fetching recent settled bets and stats...")
-        settled = get_recent_settled()
+        settled = get_recent_settled(limit=200)     # the default 10 rows can cut a busy slate in half
         settled_list = settled if isinstance(settled, list) else settled.get("picks", [])
         stats = get_stats()
 

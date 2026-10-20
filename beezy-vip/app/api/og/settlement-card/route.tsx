@@ -24,6 +24,9 @@ type Row = {
 
 const num = (x: unknown) => { const n = typeof x === "number" ? x : parseFloat(String(x)); return isFinite(n) ? n : 0 };
 const fmtOdds = (o: number) => (o > 0 ? `+${o}` : `${o}`);
+// bets.profit and bets.stake are DOLLARS (EV rows stake a flat $100, model rows a Kelly amount). A "unit" is a flat 1u risked
+// per bet at the flagged price (the site's own "graded at a flat 1 unit"), so a bet's result in units is profit / stake.
+const unitsOf = (r: Row) => { const st = num(r.stake); return st > 0 ? num(r.profit) / st : 0 };
 const fmtU = (u: number) => `${u >= 0 ? "+" : "-"}${Math.abs(u).toFixed(2)}u`;
 const BOOK: Record<string, string> = { draftkings: "DK", fanduel: "FD", betmgm: "MGM", caesars: "CZR", bet365: "365", hardrock: "HR", novig: "NOVIG", kalshi: "KALSHI" };
 const book = (b: string | null) => (b ? BOOK[b.toLowerCase()] ?? b.slice(0, 6).toUpperCase() : "--");
@@ -69,7 +72,7 @@ export async function GET(req: Request) {
   ]);
   const settled = perSport.flat().filter(r => r.result === "win" || r.result === "loss" || r.result === "push");
   const date = wantDate ?? settled.map(r => r.game_date).sort().pop() ?? "";
-  const slate = settled.filter(r => r.game_date === date).sort((a, b) => num(b.profit) - num(a.profit));
+  const slate = settled.filter(r => r.game_date === date).sort((a, b) => unitsOf(b) - unitsOf(a));
   const shown = slate.length > MAX_ROWS
     ? [...slate.slice(0, Math.ceil(MAX_ROWS / 2)), ...slate.slice(-Math.floor(MAX_ROWS / 2))]
     : slate;
@@ -77,7 +80,7 @@ export async function GET(req: Request) {
   const w = slate.filter(r => r.result === "win").length;
   const l = slate.filter(r => r.result === "loss").length;
   const p = slate.filter(r => r.result === "push").length;
-  const net = slate.reduce((a, r) => a + num(r.profit), 0);
+  const net = slate.reduce((a, r) => a + unitsOf(r), 0);
   const hero = slate.find(r => r.result === "win");
   const hl = deep?.ev_headline ?? null;
   const pct = (x: number | null | undefined) => (x == null ? "--" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`);
@@ -118,7 +121,7 @@ export async function GET(req: Request) {
                 </div>
                 <span style={{ display: "flex", width: "110px", justifyContent: "flex-end", fontSize: "14px", color: "#f3f4f6" }}>{`${book(r.book)} ${fmtOdds(num(r.odds))}`}</span>
                 <span style={{ display: "flex", width: "70px", justifyContent: "flex-end", fontSize: "13px", color: "#9ca3af" }}>{r.edge == null ? "--" : `+${num(r.edge) < 2 ? (num(r.edge) * 100).toFixed(1) : num(r.edge).toFixed(1)}%`}</span>
-                <span style={{ display: "flex", width: "86px", justifyContent: "flex-end", fontSize: "15px", fontWeight: 800, color: c }}>{fmtU(num(r.profit))}</span>
+                <span style={{ display: "flex", width: "86px", justifyContent: "flex-end", fontSize: "15px", fontWeight: 800, color: c }}>{fmtU(unitsOf(r))}</span>
               </div>
             );
           })}
@@ -136,7 +139,7 @@ export async function GET(req: Request) {
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <span style={{ display: "flex", fontSize: "11px", color: "#7d8596", letterSpacing: "1.5px" }}>BIGGEST HIT</span>
             <span style={{ display: "flex", fontSize: "14px", color: "#f3f4f6" }}>
-              {hero ? `${hero.player ?? prop(hero)} (${fmtOdds(num(hero.odds))}, ${fmtU(num(hero.profit))})` : "--"}
+              {hero ? `${hero.player ?? prop(hero)} (${fmtOdds(num(hero.odds))}, ${fmtU(unitsOf(hero))})` : "--"}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
