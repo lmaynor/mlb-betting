@@ -298,7 +298,7 @@ export function CheatSheetClient({ players, games, gamesLocked, today, yesterday
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>WHAT IS THIS</div>
             <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: '0 0 10px' }}>
-              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in public; NFL, NHL and NBA rows are projections and are marked UNVALIDATED. Game picks are a separate, paid set.
+              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
             <p style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.6, margin: 0 }}>
               Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
