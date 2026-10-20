@@ -95,3 +95,22 @@ Reproduce: `python -m nba.games.evaluate ... --train-from 2018 --avail --out rep
 
 ## Injury bank (provisioned 2026-10-20)
 `nba-injury-bank` Cloud Run Job (feeds image) + Scheduler `*/30 14-23,0-4 * * *` UTC polls the ESPN injury list (JSON; no PDFs, no poppler) change-only into `gs://.../NBA/injuries/espn/{ET day}/injuries_{HHMMSS}.csv` + `latest.json` heartbeat. First execution succeeded (93 rows: 40 Out, 53 Day-To-Day, with injury detail and expected return date). Forward-only: there is no history, so evaluation still needs weeks of banked snapshots (`injury_bank.state_asof`).
+
+---
+
+## Addendum 2: soft (off-consensus) book quotes on spreads/totals -- no model involved (`nba/games/soft_lines.py`)
+
+Question: books quote different main lines for the same game (DK -2.5 / FD -1.5 / Caesars -1.0); are the outliers beatable? Method: other books' modal line + median de-vigged probability fix a normal margin/total distribution (sigma 13.6 / 18.0, integer-margin continuity so whole-number lines carry a push); each book's quote is priced against it; bets = quotes with estimated EV >= threshold; **validator = realized ROI on settled games** (flat 1u, game-clustered SE). BettingPros 2021-26, books only (no DFS/exchange/Consensus), >= 6 books per game, quotes stamped <= 10 min after tip.
+
+| | est EV >= 4% | est EV >= 8% |
+|---|---|---|
+| spread | **+7.1%** (se 3.4, n=1,889 bets / 1,066 games) | **+11.6%** (se 4.3, n=1,091) |
+| totals | +4.8% (se 2.8, n=2,983) | +6.8% (se 3.3) |
+
+ROI rises with estimated EV on both, but treat it as a LEAD, not an edge:
+- **Staleness drives it, and a stale quote may not have been bettable.** Spread ROI by quote age before tip: < 30 min +9.3% (se 7.6), 30 min-3 h -3.6%, 3-12 h +6.7%, **> 12 h +15.5% (se 5.2)**. A quote last stamped 12 h before tip with the market moved is either a genuinely soft number the book left up (bettable) or a market that was pulled/suspended (not bettable). BettingPros keeps one last quote per book per day and cannot tell these apart. Fresh quotes only (<= 30 min): spread +4.4% (se 6.3), totals **-8.9%** (se 5.3).
+- Totals are not robust: seasons -28% / +16% / +17% / +10% / -8%, fresh quotes negative. Spreads: 2021 -0.8%, 2022 +9.4%, 2023 +13.6%, 2024 +6.1%, 2025 +8.4% (se 6-9 each).
+- Estimated EV (avg 12%) overstates realized (7%): the normal approximation is crude around key numbers (3, 7, 10) and the consensus includes the quoted book itself.
+- Ties to the MLB soft-line finding (`backtest-roi-vs-clv-soft-line-artifact.md`, soft-line toolkit): intraday soft lines can be real, but closing-snapshot ROI can also be an availability artifact. Needs time-stamped snapshots: the banked ParlayAPI game lines (3x/day) and the hourly `bp-live-nba` feed give that going forward.
+
+**Alt spreads:** not covered. The models output a full margin distribution, so any alt line is priceable, but (a) we do not bank alt ladders (`PARLAY_GAME_MARKETS = h2h/spreads/totals`; alternates were left out for credit cost), (b) the BettingPros crawl is the MAIN line per book. Alt prices are one-sided with heavy vig, so the realistic test is the same soft-quote audit on an alt ladder once it is banked.

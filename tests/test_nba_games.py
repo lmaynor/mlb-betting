@@ -183,3 +183,23 @@ def test_availability_flags_a_fresh_absence_and_resets_each_season():
     assert av.loc["g2", "av_missing_min"] == pytest.approx(34.0) and av.loc["g2", "av_new_missing_min"] == pytest.approx(34.0)
     assert av.loc["g2", "av_top_pts"] == pytest.approx(20.0)
     assert av.loc["g3", "av_missing_min"] == 0          # new season: roster resets, a departure is not an absence
+
+
+def test_soft_line_win_push_probabilities():
+    from nba.games import soft_lines as SL
+    mu = np.array([3.0, 3.0])
+    pa, pp, pb = SL._win_push(mu, 12.0, np.array([2.5, 2.0]))         # half line: no push; integer line: push mass
+    assert pp[0] == 0.0 and pp[1] > 0.02
+    assert np.allclose(pa + pp + pb, 1.0)
+    assert pa[1] < pa[0] + 1e-9 or pa[1] > 0                           # sane, finite
+
+
+def test_soft_line_quotes_pair_away_side_on_the_home_line():
+    from nba.games import soft_lines as SL
+    rows = []
+    for b, hl in ((12, -2.5), (13, -1.5)):
+        rows += [{**_long("spread", 1, b, "home", hl, -110), "updated": "2024-02-11 00:20:00", "book": f"b{b}"},
+                 {**_long("spread", 1, b, "away", -hl, -105), "updated": "2024-02-11 00:20:00", "book": f"b{b}"}]
+    q = SL.quotes(pd.DataFrame(rows), "spread")
+    assert len(q) == 2 and set(q["line"]) == {-2.5, -1.5}
+    assert (q["dec_b"] > q["dec_a"]).all()                             # -105 away pays more than -110 home
