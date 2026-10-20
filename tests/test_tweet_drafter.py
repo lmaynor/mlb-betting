@@ -343,13 +343,13 @@ def test_reply_snippet_is_link_free_short_and_factual():
 
 
 def test_reply_snippet_drops_optional_parts_to_fit_and_never_truncates():
-    long_name = "Maximilian Bartholomew Featherstonehaugh-Cholmondeley the Third of Westmorland"
-    c = td.reply_candidates(_feed(nba=[_outlier(player=long_name)]))[0]
-    assert len(td.build_reply_snippet(c, proj_mean=None)) <= td.REPLY_SNIPPET_MAX   # bare sentence fits...
-    text = td.build_reply_snippet(c, proj_mean=34.1)                                # ...but not with the projection added
-    assert text is not None and len(text) <= td.REPLY_SNIPPET_MAX and "closer to" not in text
-    c2 = td.reply_candidates(_feed(nba=[_outlier(player=long_name * 3)]))[0]
-    assert td.build_reply_snippet(c2) is None                                  # does not fit even bare: skipped, not cut
+    def snippet(name_len, proj):
+        c = td.reply_candidates(_feed(nba=[_outlier(player="N" * name_len)]))[0]
+        return td.build_reply_snippet(c, proj_mean=proj)
+    k = next(n for n in range(10, 400) if len(snippet(n, None) or "") > 0 and (snippet(n, 34.1) is None or "closer to" not in snippet(n, 34.1)))
+    # at that name length the bare sentence fits but the projection sentence does not: the projection is dropped, never cut
+    assert len(snippet(k, None)) <= td.REPLY_SNIPPET_MAX and "closer to" not in snippet(k, 34.1)
+    assert snippet(400, None) is None                                          # does not fit even bare: skipped, not truncated
 
 
 @pytest.mark.parametrize("bad", ["see https://x.co", "ping @someone", "beezy", "www.foo.com"])
@@ -407,7 +407,7 @@ def test_reply_candidates_mlb_only_pending_rows_from_todays_slate():
 def test_build_reply_ammo_adds_projection_mean_when_matched():
     feed = _feed(nba=[_outlier()])
     plays = td.build_reply_ammo(feed, {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.12}]}})
-    assert plays[0]["snippet"].endswith("We have him closer to 34.12.")
+    assert plays[0]["snippet"].endswith("We have him closer to 34.1.")      # one decimal, not 34.12
     assert plays[0]["facts"]["proj_mean"] == pytest.approx(34.12)
     assert "closer to" not in td.build_reply_ammo(feed, {})[0]["snippet"]
 
@@ -495,9 +495,9 @@ def _play(**kw):
 
 
 GOOD = {
-    "slow_book": "DraftKings has Luka Over 32.5 points at +115 while the rest of the market is around -108.",
-    "model_first": "We have Luka closer to 34.1 tonight, and DraftKings is still hanging +115 on the Over 32.5.",
-    "deadpan": "Luka Over 32.5 points: DraftKings +115, the other 8 books around -108.",
+    "model_first": "Our model has Luka at 34.1 points against a 32.5 line. DraftKings is at +115, the other 8 books are around -108.",
+    "price_math": "At +115 DraftKings needs 47% to break even; the other 8 books imply 52% on Luka Over 32.5 points.",
+    "short": "Luka Over 32.5 points: DraftKings +115, the other 8 books around -108. We project 34.1.",
 }
 
 
@@ -508,7 +508,7 @@ GOOD = {
     "DraftKings +115 on Luka, full board at beezy.fyi",                                              # brand/link
     "DraftKings +115 on Luka, see https://x.co/a",                                                    # url
     "DraftKings +115 on Luka, the other 40 books are around -108",                                   # invented count
-    "DraftKings +115 on Luka. " + "x" * 200,                                                         # too long
+    "DraftKings +115 on Luka. " + "x" * 240,                                                         # too long
     "",
     None,
     7,
@@ -799,3 +799,116 @@ def test_recap_mode_fetches_enough_rows_not_ten(monkeypatch):
     monkeypatch.setattr(td, "post_drafts_to_discord", lambda *a, **k: "  Discord post ok")
     td.main()
     assert seen["limit"] >= 100
+
+
+# -- Reply reasoning: projection vs line + price math, never trends (2026-10-20) ---------------------------------------------
+
+TREND_TALK = [
+    "Luka has hit 4 of his last 5 and DraftKings is +115",
+    "DraftKings +115 on Luka, he's been on a streak lately",
+    "Luka Over 32.5: over in 6 of his last 10, DraftKings +115",
+    "DraftKings +115 on Luka, the last 5 games say over",
+    "DraftKings +115 on Luka, trending up with a hot hit rate",
+    "DraftKings +115 on Luka, three overs in a row",
+]
+
+
+@pytest.mark.parametrize("text", TREND_TALK)
+def test_trend_and_streak_talk_is_banned_everywhere(text):
+    """A scam-tout tell, per the owner: no last-N, hit rates, streaks or trends in any copy."""
+    assert td.violates_voice(text)
+    assert not td.reply_variant_ok(text, _play()["facts"])
+
+
+def test_recent_form_wording_is_out_of_the_prompts_and_the_persona_forbids_it():
+    for prompt in (td.PERSONA, td.REPLY_SYSTEM_PROMPT):
+        assert "scam touts" in td.PERSONA and "No trends" in td.PERSONA
+    assert "no matchup, injury, pace" in td.REPLY_SYSTEM_PROMPT and "recent-form talk" in td.REPLY_SYSTEM_PROMPT
+    assert td.REPLY_VARIANTS == ("model_first", "price_math", "short") and "slow_book" not in td.REPLY_SYSTEM_PROMPT
+    assert "240 characters" in td.REPLY_SYSTEM_PROMPT and td.REPLY_SNIPPET_MAX == 240
+    assert not td.violates_voice("Sunday's slate went 2-6 last night")        # a day's result is not a trend
+
+
+def test_price_math_numbers():
+    f = _play()["facts"]
+    assert td.breakeven_pct(f) == pytest.approx(46.51, abs=0.01)             # +115 needs 46.5% to break even
+    assert td.breakeven_pct({"american": -110}) == pytest.approx(52.38, abs=0.01)
+    assert td.breakeven_pct({"american": 0}) is None
+    assert td.market_pct(f) == pytest.approx(51.92)
+    assert td.proj_gap(f) == pytest.approx(34.1 - 32.5)
+    assert td.proj_gap(dict(f, proj_mean=None)) is None
+
+
+def test_all_three_reply_styles_pass_the_guards_for_real_numbers():
+    f = _play()["facts"]
+    assert all(td.reply_variant_ok(t, f) for t in GOOD.values())
+    assert td.reply_variant_ok("Our model has Luka at 34.1 against a 32.5 line, 1.6 above it. DraftKings +115.", f)   # the gap is allowed
+    assert not td.reply_variant_ok("Our model gives Luka 63% to go over, DraftKings +115.", f)                      # invented win probability
+    f2 = dict(f, proj_minutes=35.6)
+    assert td.reply_variant_ok("Projected for 36 minutes, we have Luka at 34.1 against 32.5. DraftKings +115.", f2)
+    assert not td.reply_variant_ok("Projected for 36 minutes, we have Luka at 34.1 against 32.5. DraftKings +115.", f)  # no minutes were given
+
+
+def test_prompt_carries_the_math_but_no_form_data():
+    play = _play()
+    play["facts"]["proj_minutes"] = 35.6
+    row = td._fodder_prompt([play]).split("\n")[1]
+    assert row == ("[0] NBA | Luka Doncic Over 32.5 Points | DraftKings is at +115 (needs 47% to break even) | the other 8 books are "
+                   "around -108 (they imply 52%) | our projection: 34.1 against a line of 32.5 (1.6 above it) | projected minutes: 36")
+    assert not any(w in row.lower() for w in ("last", "hit rate", "streak", "trend"))
+    play["facts"]["proj_mean"] = None
+    assert "no projection" in td._fodder_prompt([play])
+
+
+def test_build_reply_ammo_carries_projected_minutes_only_for_minutes_labels():
+    feed = _feed(nba=[_outlier()])
+    rows = lambda label: {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.1, "usage_proj": 35.6, "usage_label": label}]}}
+    assert td.build_reply_ammo(feed, rows("Minutes"))[0]["facts"]["proj_minutes"] == pytest.approx(35.6)
+    assert td.build_reply_ammo(feed, rows("TOI (min)"))[0]["facts"]["proj_minutes"] == pytest.approx(35.6)
+    assert td.build_reply_ammo(feed, rows("Snaps"))[0]["facts"]["proj_minutes"] is None
+    assert td.build_reply_ammo(feed, {})[0]["facts"]["proj_minutes"] is None
+
+
+def test_generate_reply_fodder_returns_the_three_new_styles(monkeypatch):
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
+    assert list(td.generate_reply_fodder([_play()])[0]["variants"]) == ["model_first", "price_math", "short"]
+
+
+def test_model_first_needs_a_projection_and_trend_replies_fall_back(monkeypatch):
+    play = _play()
+    play["facts"]["proj_mean"] = None
+    no_proj = dict(GOOD, short="Luka Over 32.5 points: DraftKings +115, the other 8 books around -108.")
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": no_proj}))
+    assert list(td.generate_reply_fodder([play])[0]["variants"]) == ["price_math", "short"]
+    # a reply that cites a projection the play was not given is rejected, even in an otherwise fine style
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
+    assert list(td.generate_reply_fodder([play])[0]["variants"]) == ["price_math"]
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": {s: TREND_TALK[0] for s in td.REPLY_VARIANTS}}))
+    assert td.generate_reply_fodder([_play()])[0]["variants"] == {"standard": _play()["snippet"]}
+
+
+def test_a_projection_on_the_wrong_side_of_the_line_is_never_cited():
+    """Live 2026-10-20: Strome Under 1.5 SOG with a 1.57 projection. Counts are discrete so the Under can still be right, but a reply
+    saying 'we project 1.57 against 1.5' then backing the Under contradicts itself."""
+    assert td.proj_supports_side(1.44, 1.5, "UNDER") and td.proj_supports_side(7.0, 6.5, "OVER")
+    assert not td.proj_supports_side(1.57, 1.5, "UNDER") and not td.proj_supports_side(6.0, 6.5, "OVER")
+    assert not td.proj_supports_side(None, 1.5, "UNDER") and not td.proj_supports_side(1.0, 1.0, "OVER")      # equal is not support
+    rows = lambda mean: {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": mean, "usage_proj": 35.6, "usage_label": "Minutes"}]}}
+    ok = td.build_reply_ammo(_feed(nba=[_outlier()]), rows(34.1))[0]            # Over 32.5, projection 34.1: supports it
+    assert ok["facts"]["proj_mean"] == pytest.approx(34.1) and "closer to 34.1" in ok["snippet"]
+    bad = td.build_reply_ammo(_feed(nba=[_outlier()]), rows(30.0))[0]           # Over 32.5, projection 30.0: against it
+    assert bad["facts"]["proj_mean"] is None and bad["facts"]["proj_minutes"] is None
+    assert "closer to" not in bad["snippet"] and "30" not in bad["snippet"]
+
+
+def test_reply_prompt_says_never_call_the_market_an_average():
+    assert 'never an "average"' in td.REPLY_SYSTEM_PROMPT
+
+
+def test_projection_is_quoted_to_one_decimal_never_three():
+    f = dict(_play()["facts"], proj_mean=1.442, point=1.5, side="UNDER")
+    assert td.reply_variant_ok("We project 1.4 shots against a 1.5 line. DraftKings +115.", f)
+    assert not td.reply_variant_ok("We project 1.442 shots against a 1.5 line. DraftKings +115.", f)
+    assert "our projection: 1.4 against a line of 1.5" in td._fodder_prompt([dict(_play(), facts=f)])
+    c = dict(f, stat_label="Shots on Goal", stat="sog")
+    assert "closer to 1.4." in td.build_reply_snippet(c, 1.442) and "1.442" not in td.build_reply_snippet(c, 1.442)
