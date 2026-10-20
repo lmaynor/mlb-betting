@@ -16,4 +16,10 @@ describe('settlement-card route source', () => {
     expect(src).toContain('"date"')
     expect(src).toContain('"sport"')
   })
+  it('shows UNITS (profit / stake), never raw dollar profit labelled u', () => {
+    // bets.profit and bets.stake are dollars; printing profit as "u" showed a -$190 day as -190u
+    expect(src).toContain('const unitsOf')
+    expect(src).not.toMatch(/fmtU\(num\(/)
+    expect(src).not.toMatch(/reduce\(\(a, r\) => a \+ num\(r\.profit\)/)
+  })
 })
