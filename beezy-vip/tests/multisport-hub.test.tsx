@@ -52,9 +52,8 @@ describe('unified projections board', () => {
     expect(t.getByText('62')).toBeInTheDocument()
     expect(t.getByText('LEAN')).toBeInTheDocument()
     const cells = [...tr.querySelectorAll('td')].map(td => td.textContent ?? '')
-    expect(cells[1]).toContain('LAL')                       // the player's own team
-    expect(cells[2]).toContain('BOS@LAL')                   // the game: away @ home
-    expect(cells[2]).toContain('CT')                        // with its start time
+    expect(cells[1]).not.toContain('LAL')                   // the player cell is just the name
+    expect(cells[2]).toBe('LAL')                            // the team column: his own team only, no game or opponent
     expect(t.getByText('Over 24.5')).toBeInTheDocument()
     expect(t.getByText('26.3')).toBeInTheDocument()
     expect(t.getByText('60%')).toBeInTheDocument()
@@ -69,7 +68,13 @@ describe('unified projections board', () => {
     expect(t.getByText('MODEL + MARKET')).toBeInTheDocument()
     expect(document.querySelectorAll('thead').length).toBe(1)
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(
-      ['SCORE', 'PLAYER', 'GAME', 'MARKET & LINE', 'MODEL', 'MARKET FAIR', 'FORM', 'BEST PRICE', 'EDGE / EV'])
+      ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', 'MODEL', 'MARKET FAIR', 'FORM', 'BEST PRICE', 'MODEL EDGE', 'PRICE EV'])
+  })
+
+  it('the team column falls back to the matchup only when the feed does not name the player\'s team', () => {
+    render(board([row({ team: null })]))
+    const cell = [...screen.getByText('Jo Doe').closest('tr')!.querySelectorAll('td')][2].textContent ?? ''
+    expect(cell).toContain('BOS@LAL')
   })
 
   it('has no controls of its own: the filter bar above the table is the only set', () => {

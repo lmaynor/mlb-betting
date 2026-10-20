@@ -9,6 +9,7 @@ import { GamesStrip } from '@/components/picks/games-strip'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { ResearchTabs } from '@/components/picks/research-tabs'
 import { SportProjectionsBoard } from '@/components/picks/sport-projections-board'
+import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { getViewer } from '@/lib/auth'
 import { withCounts } from '@/lib/board-games'
 import { applyPickFilters } from '@/lib/board-rows'
@@ -68,6 +69,7 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
         <SportProjectionsBoard sport={league} rows={rows} status={board.status} statusWarn={board.statusWarn}
           emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'} />
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
+        <EdgeEvLegend />
         <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
           MODEL is the projected value for the stat and the probability it goes over the line. Rows with no line yet are projections only;
           nothing here is a recommendation, and {league === 'mlb' ? 'only the highest-edge MLB plays are tracked in the public results' : `${pillar.shortName} projections are unvalidated and not tracked in the public results`}.
