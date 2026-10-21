@@ -5,6 +5,7 @@ import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTo
 import type { Bet, CockpitFeed, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { limitCockpit } from '@/lib/access-feeds'
+import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import { limitBets } from '@/lib/access-bets'
 import { getViewer } from '@/lib/auth'
 import { EdgeClient, type EdgePick } from './edge-client'
@@ -69,10 +70,8 @@ export default async function EdgePage() {
   const cut = cockpitAll ? limitCockpit(cockpitAll.rows, viewer) : null
   const cockpitRaw = cockpitAll && cut ? { ...cockpitAll, rows: cut.rows, locked: cut.locked } : null
 
-  // MLB headshots resolve by name against the roster map, which is server-only: attach ids here (the client keeps them across refreshes)
-  const cockpit: CockpitFeed | null = cockpitRaw
-    ? { ...cockpitRaw, rows: cockpitRaw.rows.map(r => (r.sport === 'mlb' && r.player_id == null && r.player ? { ...r, player_id: playerIdByName('mlb', r.player) } : r)) }
-    : null
+  // Headshots resolve by name against the server-only player maps (MLB by name, NFL by name + team): attach ids here (the client keeps them across refreshes)
+  const cockpit: CockpitFeed | null = cockpitRaw ? { ...cockpitRaw, rows: withHeadshotIds(cockpitRaw.rows) } : null
 
   const gameMap = new Map<number, SlateGame>((slate.games ?? []).map(g => [g.game_pk, g]))
   const players = enrichData.players ?? {}

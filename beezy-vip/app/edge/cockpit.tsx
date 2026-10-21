@@ -125,7 +125,7 @@ export function useCockpitFeed(initial: CockpitFeed | null) {
 // -- small presentational pieces ----------------------------------------------------------------------------------
 function Avatar({ r, size }: { r: CockpitRow; size: number }) {
   const [bad, setBad] = useState(false)
-  const src = r.sport === 'nfl' ? null : headshotUrlById(r.sport, r.player_id)
+  const src = headshotUrlById(r.sport, r.sport === 'nfl' ? r.headshot_id : r.player_id)
   return (
     <span style={{ width: size, height: size, flex: '0 0 auto', borderRadius: size > 48 ? '14px' : '10px', background: '#171a24', border: `1px solid ${HAIR}`, display: 'inline-flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', color: 'var(--fog)', fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
       {src && !bad ? (
