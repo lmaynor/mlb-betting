@@ -3,6 +3,7 @@
  * NBA projection boards. Everything is scored on the same Beezy Score scale and labelled by where it came from, so a
  * tracked MLB pick is never presented as if it were a validated projection.
  */
+import { isOffshore } from '@/lib/offshore'
 import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
 import { betKind, type PickKind } from '@/lib/pick-systems'
@@ -85,6 +86,7 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
   const over = r.side === 'over'
   const odds = over ? r.best_over_odds : r.best_under_odds
   if (odds == null) return null
+  if (isOffshore(over ? r.best_over_book : r.best_under_book)) return null // never point at an offshore book
   return {
     key: `${r.sport}|${r.game_key}|${r.player_norm}|${r.stat}`,
     sport: r.sport,

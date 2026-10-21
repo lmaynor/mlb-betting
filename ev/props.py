@@ -253,8 +253,9 @@ def _all_books(c: PropConsensus, q: Quote) -> list[dict]:
     """Per-book line-shopping strip for one (player, stat, point): every two-sided real book's own American prices and
     de-vigged fair P(over). A one-sided quote that is NOT in the consensus (a 'Yes'-only ladder) is appended with
     under/fair = None so the book that triggered the outlier is always visible."""
-    out = [{"book": b, "over": o, "under": u, "fair": round(f, 4)} for b, o, u, f in c.book_quotes]
-    if q.book not in {r["book"] for r in out}:
+    out = [{"book": b, "over": o, "under": u, "fair": round(f, 4)} for b, o, u, f in c.book_quotes
+           if b not in OFFSHORE_BOOKS]
+    if q.book not in OFFSHORE_BOOKS and q.book not in {r["book"] for r in out}:
         out.append({"book": q.book, "over": q.over, "under": q.under, "fair": None})
     return out
 

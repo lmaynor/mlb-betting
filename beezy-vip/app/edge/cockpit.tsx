@@ -21,6 +21,7 @@ import { americanToDecimal, fairAmerican } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { headshotUrlById } from '@/lib/sport-assets'
+import { isOffshore, onshoreQuotes } from '@/lib/offshore'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
 export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
@@ -314,9 +315,10 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
 // -- Panel 3: multi-book odds matrix -------------------------------------------------------------------------------
 export function OddsMatrix({ r }: { r: CockpitRow }) {
   const under = isUnder(r)
-  const quotes: EvBookQuote[] = r.all_books && r.all_books.length
-    ? r.all_books
-    : r.book && r.american != null
+  const shown = onshoreQuotes(r.all_books)
+  const quotes: EvBookQuote[] = shown.length
+    ? shown
+    : r.book && !isOffshore(r.book) && r.american != null
       ? [{ book: r.book, over: under ? null : r.american, under: under ? r.american : null, fair: null }]
       : []
   if (!quotes.length) return <NoData>No book quotes were captured for this line.</NoData>
@@ -405,7 +407,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
       </Panel>
 
-      <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${r.all_books.length} books` : undefined}>
+      <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
         <OddsMatrix r={r} />
       </Panel>
     </div>

@@ -549,3 +549,9 @@ def test_registry_covers_the_expanded_nfl_nba_nhl_prop_markets():
     for k, v in nhl.items():
         assert stat_of(k, "nhl") == (v, False)
     assert stat_of("player_points", "nba") == ("points", False)       # same key, different sport table
+
+
+def test_book_strip_never_lists_an_offshore_book():
+    out = scan_book_outliers(_pack([_q("bovada", +130, -150), _q("softbook", +110, -135)]))
+    strip = out[0]["all_books"]
+    assert "bovada" not in {r["book"] for r in strip} and "softbook" in {r["book"] for r in strip}
