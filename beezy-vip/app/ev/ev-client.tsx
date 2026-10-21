@@ -1,5 +1,6 @@
 'use client'
 
+import { onshoreQuotes } from '@/lib/offshore'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
@@ -187,7 +188,7 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     team: r.team ?? null,
     lowConf: r.flag === false,
     side: String(r.side).toUpperCase(),
-    allBooks: r.all_books,
+    allBooks: onshoreQuotes(r.all_books),
   }
 }
 

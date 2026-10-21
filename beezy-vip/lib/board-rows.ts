@@ -3,6 +3,7 @@
  * NFL / NHL / NBA board from the daily projection feed (ev/daily_projections.py); the adapters put both into the same
  * columns so a single component renders them with the same density, and ONE filter (`applyPickFilters`) cuts them all.
  */
+import { isOffshore as hideOff, isOffshore } from '@/lib/offshore'
 import { getSystemByStat } from '@/lib/pick-systems'
 import type { MlbProjectionRow } from '@/lib/mlb-projections'
 import { probToAmerican } from '@/lib/odds'
@@ -97,8 +98,8 @@ export function fromSportProjections(rows: SportProjectionRow[]): BoardRow[] {
       nBooks: r.n_books,
       l5: r.has_line ? forSide(r.l5_hit_rate, side) : null,
       l10: r.has_line ? forSide(r.l10_hit_rate, side) : null,
-      odds: side === 'under' ? r.best_under_odds : r.best_over_odds,
-      book: side === 'under' ? r.best_under_book : r.best_over_book,
+      odds: hideOff(side === 'under' ? r.best_under_book : r.best_over_book) ? null : side === 'under' ? r.best_under_odds : r.best_over_odds,
+      book: hideOff(side === 'under' ? r.best_under_book : r.best_over_book) ? null : side === 'under' ? r.best_under_book : r.best_over_book,
       modelEdge: r.model_edge,
       marketEv: r.market_ev,
       confluence: r.confluence,
@@ -186,6 +187,7 @@ export function applyPickFilters(rows: BoardRow[], f: PickFilters): BoardRow[] {
 /** The price the model's side would be struck at (best over / best under across books), or the best over when there is no side. */
 export function sidePrice(r: SportProjectionRow): { odds: number | null; book: string | null; side: 'over' | 'under' } {
   const side = r.side ?? 'over'
+  if (isOffshore(side === 'over' ? r.best_over_book : r.best_under_book)) return { odds: null, book: null, side }
   return side === 'over'
     ? { odds: r.best_over_odds, book: r.best_over_book, side }
     : { odds: r.best_under_odds, book: r.best_under_book, side }
