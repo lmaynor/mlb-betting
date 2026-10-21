@@ -28,6 +28,7 @@ import tweet_drafter as td
 def _no_discord_pacing(monkeypatch):
     """post_messages sleeps between webhook posts; never in tests."""
     monkeypatch.setattr(td.time, "sleep", lambda s: None)
+    monkeypatch.setattr(td, "build_window_summary", lambda: "")      # never call the live API from a test
 
 YESTERDAY = (date.today() - timedelta(days=1)).isoformat()
 TWO_DAYS_AGO = (date.today() - timedelta(days=2)).isoformat()
@@ -430,7 +431,7 @@ def test_main_picks_posts_to_discord_with_card_and_link_reply(monkeypatch):
     monkeypatch.setattr(td, "get_today_picks", lambda: [{"system": "HR", "game": "NYY @ BOS", "bet_type": "HR", "odds": "+450", "edge": "8.2", "stake": "0.4"}])
     monkeypatch.setattr(td, "generate_tweets", lambda prompt: ["hook. beezy.fyi"])
     calls = {}
-    monkeypatch.setattr(td, "post_drafts_to_discord", lambda label, tweets, card_url=None, reply_url=None: calls.update(dc=(label, card_url, reply_url)) or "  Discord post ok")
+    monkeypatch.setattr(td, "post_drafts_to_discord", lambda label, tweets, card_url=None, reply_url=None, **kw: calls.update(dc=(label, card_url, reply_url)) or "  Discord post ok")
     td.main()
     assert calls["dc"] == ("picks", f"{td.BEEZY_SITE_URL}/api/og/picks-card", f"{td.BEEZY_SITE_URL}/picks")
 
@@ -441,7 +442,7 @@ def test_main_recap_card_is_the_settlement_card_for_the_recap_day(monkeypatch):
     monkeypatch.setattr(td, "get_stats", lambda: {"overall": {"roi": 1.0, "total_bets": 10}})
     monkeypatch.setattr(td, "generate_tweets", lambda prompt: ["recap. beezy.fyi"])
     calls = {}
-    monkeypatch.setattr(td, "post_drafts_to_discord", lambda label, tweets, card_url=None, reply_url=None: calls.update(card=card_url, reply=reply_url) or "  Discord post ok")
+    monkeypatch.setattr(td, "post_drafts_to_discord", lambda label, tweets, card_url=None, reply_url=None, **kw: calls.update(card=card_url, reply=reply_url) or "  Discord post ok")
     td.main()
     assert calls["card"] == f"{td.BEEZY_SITE_URL}/api/og/settlement-card?date={YESTERDAY}&sport=all"
     assert calls["reply"] == f"{td.BEEZY_SITE_URL}/results"
@@ -912,3 +913,92 @@ def test_projection_is_quoted_to_one_decimal_never_three():
     assert "our projection: 1.4 against a line of 1.5" in td._fodder_prompt([dict(_play(), facts=f)])
     c = dict(f, stat_label="Shots on Goal", stat="sog")
     assert "closer to 1.4." in td.build_reply_snippet(c, 1.442) and "1.442" not in td.build_reply_snippet(c, 1.442)
+
+
+# -- Stale slates are never recapped (2026-10-21: the 5am recap drafted Monday's results on Wednesday) ----------------------------
+TODAY = date(2026, 10, 21)          # a Wednesday; Tuesday's slate is the only fresh one
+TUESDAY, MONDAY = "2026-10-20", "2026-10-19"
+
+
+def test_slate_is_fresh_allows_yesterday_and_rejects_older_or_unparseable():
+    assert td.slate_is_fresh(TUESDAY, today=TODAY) and td.slate_is_fresh("2026-10-21", today=TODAY)
+    assert not td.slate_is_fresh(MONDAY, today=TODAY)
+    assert not td.slate_is_fresh("garbage", today=TODAY) and not td.slate_is_fresh(None, today=TODAY)
+
+
+def test_recap_and_settlement_refuse_a_stale_slate(monkeypatch):
+    monkeypatch.setattr(td, "central_today", lambda: TODAY)
+    monday = [_bet(MONDAY, "win", 1.0), _bet(MONDAY, "loss", -1.0)]
+    assert td.build_recap_prompt(monday, {"overall": {}}) is None
+    assert td.build_settlement(monday, {}) is None
+    assert "older than" in td.skip_reason(monday) and MONDAY in td.skip_reason(monday)
+    assert td.skip_reason([]) == "No settled bets found -- skipping."
+    tuesday = [_bet(TUESDAY, "win", 1.0)]
+    assert td.build_recap_prompt(tuesday, {"overall": {}}) is not None and td.build_settlement(tuesday, {})["date"] == TUESDAY
+
+
+def test_main_recap_posts_nothing_when_the_newest_slate_is_stale(monkeypatch, capsys):
+    monkeypatch.setattr(td.sys, "argv", ["tweet_drafter.py", "--mode", "recap"])
+    monkeypatch.setattr(td, "central_today", lambda: TODAY)
+    monkeypatch.setattr(td, "get_recent_settled", lambda limit=10, sport=None: [_bet(MONDAY, "win", 1.0)])
+    monkeypatch.setattr(td, "get_stats", lambda: {"overall": {}})
+    monkeypatch.setattr(td, "generate_tweets", lambda prompt: pytest.fail("must not draft a stale recap"))
+    monkeypatch.setattr(td, "post_drafts_to_discord", lambda *a, **k: pytest.fail("must not post a stale recap"))
+    td.main()
+    assert f"Newest graded slate is {MONDAY}" in capsys.readouterr().out
+
+
+def test_settlement_job_skips_a_stale_slate(monkeypatch, capsys):
+    monkeypatch.setattr(td, "central_today", lambda: TODAY)
+    monkeypatch.setattr(td, "get_settled_all_sports", lambda: [_bet(MONDAY, "win", 1.0)])
+    monkeypatch.setattr(td, "get_stats", lambda: {})
+    monkeypatch.setattr(td, "post_settlement_to_discord", lambda *a, **k: pytest.fail("must not post a stale settlement"))
+    td.run_settlement()
+    assert "older than" in capsys.readouterr().out
+
+
+# -- L7 / L30 summary line ------------------------------------------------------------------------------------------------------
+def _win(sport, days=7, **kw):
+    row = {"sport": sport, "days": days, "since": "2026-10-14", "until": "2026-10-21", "bets": 10, "wins": 6, "losses": 4,
+           "pushes": 0, "profit": 120.0, "stake": 1000.0, "units": 1.5}
+    row.update(kw)
+    return row
+
+
+def test_format_window_pools_sports_and_labels_the_span():
+    line = td.format_window(7, [_win("mlb"), _win("nhl", wins=3, losses=1, bets=4, profit=-40.0, stake=400.0, units=-0.4)])
+    assert line == "**L7** (Oct 14-20): 9-5 (64.3%) | +1.10u flat 1u/bet | ROI +5.7% | 14 bets (MLB 6-4, NHL 3-1)"
+
+
+def test_format_window_empty_and_month_crossing():
+    empty = _win("mlb", bets=0, wins=0, losses=0, profit=0.0, stake=0.0, units=0.0, since="2026-09-21", until="2026-10-21")
+    assert td.format_window(30, [empty]) == "**L30** (Sep 21-Oct 20): no graded bets"
+
+
+def test_window_summary_skips_a_window_whole_when_a_sport_is_missing_or_the_backend_is_stale(monkeypatch):
+    def fake(days, sport):
+        if days == 30 and sport == "nba":
+            raise RuntimeError("503")
+        return _win(sport, days)
+    monkeypatch.undo()                                            # the autouse stub replaced build_window_summary
+    real = td.get_window_stats
+    monkeypatch.setattr(td, "get_window_stats", fake)
+    out = td.build_window_summary()
+    assert out.startswith("**L7**") and "L30" not in out          # a pooled line that omits a sport would be wrong, not short
+
+    class Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"overall": {}}                    # an older revision: no `days` echo
+    monkeypatch.setattr(td, "get_window_stats", real)
+    monkeypatch.setattr(td.requests, "get", lambda *a, **k: Resp())
+    assert td.build_window_summary() == ""
+
+
+def test_header_message_carries_the_stats_lines(monkeypatch):
+    sent = []
+    monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://hook.test/t")
+    monkeypatch.setattr(td, "post_messages", lambda hook, messages: sent.extend(messages) or "  Discord post ok")
+    td.post_drafts_to_discord("recap", ["a. beezy.fyi"], stats_line="**L7** x\n**L30** y")
+    assert sent[0]["content"].endswith("\n**L7** x\n**L30** y")
+    td.post_drafts_to_discord("recap", ["a. beezy.fyi"])
+    assert "L7" not in sent[-2]["content"]

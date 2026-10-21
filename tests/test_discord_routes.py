@@ -370,3 +370,18 @@ def test_post_via_bot_sends_daily_thread(monkeypatch):
     assert dr.post_via_bot("card", None, [{"title": "t"}], sport="nba", daily_thread="NBA props signals - Sun Oct 18") is True
     assert seen["url"] == "https://bot.test/internal/post-message"
     assert seen["json"] == {"channel": "nba_card", "embeds": [{"title": "t"}], "daily_thread": {"name": "NBA props signals - Sun Oct 18"}}
+
+
+def test_daily_thread_tag_is_opt_in_and_reaches_the_bot_payload(monkeypatch):
+    sent = []
+
+    class R:
+        status_code = 200
+
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s")
+    monkeypatch.setattr("requests.post", lambda url, json=None, timeout=None, headers=None: sent.append(json) or R())
+    assert dr.post_via_bot("card", "slip", None, sport="nfl", daily_thread="NFL props signals - Sun Oct 25") is True
+    assert dr.post_via_bot("card", "slip", None, sport="nfl", daily_thread="NFL props signals - Sun Oct 25", tag_slip_bots=True) is True
+    assert sent[0]["daily_thread"] == {"name": "NFL props signals - Sun Oct 25"}
+    assert sent[1]["daily_thread"] == {"name": "NFL props signals - Sun Oct 25", "mention_slip_bots": True}

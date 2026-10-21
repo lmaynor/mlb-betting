@@ -889,7 +889,7 @@ def dashboard():
 from mlb.runners.public_api import (
     get_pnl_sparkline,
     get_today_picks, get_picks, get_recent_settled,
-    get_summary_stats, _require_api_key,
+    get_summary_stats, get_window_stats, _require_api_key,
     get_clv_data, get_today_slate,
     get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections,
 )
@@ -1238,6 +1238,27 @@ def public_stats_sparkline():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_stats_sparkline failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/stats/window", methods=["GET", "OPTIONS"])
+def public_stats_window():
+    """Results over the last ?days= completed Central days (default 7) for ?sport= -- the L7 / L30 lines in #tweet-queue."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        stats = get_window_stats(_get_engine(), days=int(request.args.get("days", 7)), sport=request.args.get("sport", "mlb"))
+        resp  = jsonify(stats)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_stats_window failed")
         return jsonify({"error": str(exc)}), 500
 
 

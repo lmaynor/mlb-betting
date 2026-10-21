@@ -109,3 +109,41 @@ def test_get_picks_limit_under_cap_is_unchanged(engine_with_one_settled_bet):
     """A reasonable limit must not be clobbered by the new cap."""
     picks = get_picks(engine_with_one_settled_bet, limit=5)
     assert len(picks) <= 5
+
+
+# -- get_window_stats (L7 / L30 lines in #tweet-queue) ---------------------------------------------------------------------------
+def _settled(tracker, day, pk, result, profit, stake=10.0, sport_system="HR"):
+    bid = tracker.log_bet(game_date=day, game_pk=pk, player=f"P{pk}", away_team="NYY", home_team="BOS", bet_type=f"HR_{pk}",
+                          model_prob=0.2, market_prob=0.1, edge=0.05, kelly_pct=0.02, odds=100, stake=stake,
+                          kelly_triggered=True, paper=True)
+    with tracker.engine.begin() as conn:
+        conn.execute(text("UPDATE bets SET result=:r, profit=:p WHERE id=:id"), {"r": result, "p": profit, "id": bid})
+
+
+def test_window_stats_counts_only_completed_days_inside_the_window(tmp_path):
+    from datetime import date, timedelta
+    from mlb.runners.public_api import get_window_stats
+    today = date.fromisoformat(_ct_today())
+    d = lambda n: (today - timedelta(days=n)).isoformat()      # noqa: E731
+    t = BetTracker(str(tmp_path / "w.db"), "HR")
+    _settled(t, d(1), 1, "win", 10.0)           # yesterday: in L7 and L30
+    _settled(t, d(1), 2, "loss", -10.0)
+    _settled(t, d(7), 3, "win", 20.0, stake=10.0)    # exactly 7 days back: still in L7 (window is [today-7, today))
+    _settled(t, d(8), 4, "loss", -10.0)         # in L30, not L7
+    _settled(t, d(1), 5, "push", 0.0)
+    _settled(t, today.isoformat(), 6, "win", 99.0)   # today is incomplete: never counted
+    w7, w30 = get_window_stats(t.engine, 7), get_window_stats(t.engine, 30)
+    assert (w7["days"], w7["bets"], w7["wins"], w7["losses"], w7["pushes"]) == (7, 4, 2, 1, 1)
+    assert w7["units"] == 2.0 and w7["profit"] == 20.0 and w7["stake"] == 40.0 and w7["roi"] == 50.0 and w7["win_rate"] == 66.7
+    assert (w30["bets"], w30["losses"]) == (5, 2) and w30["since"] == d(30) and w30["until"] == today.isoformat()
+
+
+def test_window_stats_empty_window_and_bad_input(tmp_path):
+    from mlb.runners.public_api import get_window_stats
+    t = BetTracker(str(tmp_path / "e.db"), "HR")
+    out = get_window_stats(t.engine, 7)
+    assert out["bets"] == 0 and out["roi"] is None and out["win_rate"] is None and out["units"] == 0.0
+    with pytest.raises(ValueError):
+        get_window_stats(t.engine, 0)
+    with pytest.raises(ValueError):
+        get_window_stats(t.engine, 7, sport="cricket")

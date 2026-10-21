@@ -36,7 +36,7 @@ import sys
 import json
 import time
 import requests
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
@@ -67,6 +67,35 @@ SETTLEMENT_SPORTS = ("mlb", "nhl", "nba")
 
 WATERMARK = "beezy.fyi"   # plain text, no scheme, no path: the only form of the site name a main tweet may carry
 _CT = ZoneInfo("America/Chicago")
+
+# Recap and settlement describe "the last settled slate". When nothing settled for yesterday (no games, or /settle had not
+# finished) that used to silently become whatever slate was newest -- on 2026-10-21 the 5am recap drafted Monday's results.
+# A slate older than yesterday (Central) is stale and is never drafted.
+RECAP_MAX_AGE_DAYS = 1
+WINDOWS = (7, 30)         # the L7 / L30 summary lines in the header message
+
+
+def central_today():
+    return datetime.now(_CT).date()
+
+
+def slate_is_fresh(day, today=None, max_age_days=RECAP_MAX_AGE_DAYS):
+    """True when `day` (a 'YYYY-MM-DD' game_date) is at most `max_age_days` before today in Central time. An unparseable day is
+    never fresh."""
+    try:
+        d = date.fromisoformat(str(day)[:10])
+    except ValueError:
+        return False
+    return (today or central_today()) - d <= timedelta(days=max_age_days)
+
+def skip_reason(settled):
+    """Why a recap/settlement drafted nothing, for the job log: nothing graded at all, or only a stale slate."""
+    days = [r["game_date"] for r in settled if r.get("game_date") and r.get("result") in ("win", "loss", "push")]
+    if not days:
+        return "No settled bets found -- skipping."
+    return (f"Newest graded slate is {max(days)}, older than {RECAP_MAX_AGE_DAYS} day(s) before {central_today()} (Central) -- "
+            "not drafting a stale recap; skipping.")
+
 
 # ── Brand voice system prompt ─────────────────────────────────────────────────
 
@@ -335,6 +364,8 @@ def build_recap_prompt(settled, stats):
     # present IS the most recently completed, fully-settled slate -- that's
     # what "today's results" actually means for a 5am-ET recap job.
     recap_date = max(p.get("game_date") for p in settled if p.get("game_date"))
+    if not slate_is_fresh(recap_date):
+        return None
 
     recap_settled = [
         p for p in settled
@@ -499,7 +530,7 @@ def require_posted(result):
     return result
 
 
-def post_drafts_to_discord(mode_label, tweets, card_url=None, reply_url=None):
+def post_drafts_to_discord(mode_label, tweets, card_url=None, reply_url=None, stats_line=""):
     """One short header, then each tweet variant as a plain message, then the card image, then the link reply (plain text, link
     unfurl suppressed) to post under your own tweet."""
     from mlb_core.alerts.discord_routes import webhook_for
@@ -507,13 +538,56 @@ def post_drafts_to_discord(mode_label, tweets, card_url=None, reply_url=None):
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
     messages = [{"content": f"**{mode_label}** {date.today()} -- {len(tweets)} drafts, then the card" +
-                            (", then the link reply" if reply_url else "")}]
+                            (", then the link reply" if reply_url else "") + (f"\n{stats_line}" if stats_line else "")}]
     messages += [{"content": t} for t in tweets]
     if card_url:
         messages.append({"embeds": [{"image": {"url": card_url}}]})
     if reply_url:
         messages.append({"content": build_link_reply(mode_label, reply_url), "flags": _SUPPRESS_EMBEDS})
     return post_messages(hook, messages)
+
+
+# -- L7 / L30 summary (operator-facing header line, never fed to Gemini or a tweet) ---------------------------------
+
+def get_window_stats(days, sport):
+    """/api/public/stats/window for one sport. Raises when the backend predates the endpoint or ignores `days`, so a stale
+    revision can never hand back all-time numbers labelled as a window."""
+    resp = requests.get(f"{BEEZY_API_URL}/api/public/stats/window", headers={"X-API-Key": BEEZY_API_KEY},
+                        params={"days": days, "sport": sport}, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("days") != days:
+        raise ValueError(f"window endpoint answered days={data.get('days')!r}, wanted {days}")
+    return data
+
+
+def format_window(days, rows):
+    """One summary line for a window, pooled across the per-sport rows: record, flat units (profit / stake per bet), ROI, bets."""
+    w, l, p = (sum(r[k] for r in rows) for k in ("wins", "losses", "pushes"))
+    bets, units = sum(r["bets"] for r in rows), sum(r["units"] for r in rows)
+    stake, profit = sum(r["stake"] for r in rows), sum(r["profit"] for r in rows)
+    first = date.fromisoformat(min(r["since"] for r in rows))
+    last = date.fromisoformat(max(r["until"] for r in rows)) - timedelta(days=1)
+    span = f"{first:%b} {first.day}-{last.day}" if first.month == last.month else f"{first:%b} {first.day}-{last:%b} {last.day}"
+    if not bets:
+        return f"**L{days}** ({span}): no graded bets"
+    rec = f"{w}-{l}" + (f"-{p}" if p else "")
+    win = f" ({100.0 * w / (w + l):.1f}%)" if w + l else ""
+    roi = f" | ROI {100.0 * profit / stake:+.1f}%" if stake else ""
+    split = ", ".join(f"{r['sport'].upper()} {r['wins']}-{r['losses']}" for r in rows if r["bets"])
+    return f"**L{days}** ({span}): {rec}{win} | {_u(units)} flat 1u/bet{roi} | {bets} bets" + (f" ({split})" if len(rows) > 1 else "")
+
+
+def build_window_summary():
+    """The L7 / L30 lines, or '' when the data is unavailable. A window is skipped whole when any sport fails: a pooled line
+    that quietly omits a sport would be wrong, not just short. Never raises (this is context, not the job's output)."""
+    lines = []
+    for days in WINDOWS:
+        try:
+            lines.append(format_window(days, [get_window_stats(days, sp) for sp in SETTLEMENT_SPORTS]))
+        except Exception as e:  # noqa: BLE001
+            print(f"  L{days} summary unavailable: {e}")
+    return "\n".join(lines)
 
 
 # ── Settlement receipt (deterministic, no Gemini) ─────────────────────────────
@@ -553,6 +627,8 @@ def build_settlement(settled, stats):
     if not dated:
         return None
     day = max(r["game_date"] for r in dated)
+    if not slate_is_fresh(day):
+        return None
     slate = [r for r in dated if r["game_date"] == day]
     ds = day_stats(slate)
     w, l, p, units = ds["w"], ds["l"], ds["p"], ds["units"]
@@ -581,14 +657,14 @@ def build_settlement(settled, stats):
             "reply_url": f"{BEEZY_SITE_URL}/results"}
 
 
-def post_settlement_to_discord(summary, gif):
+def post_settlement_to_discord(summary, gif, stats_line=""):
     """Header, the tweet as a plain message, the receipt card, the link reply, and the GIF when one resolved."""
     from mlb_core.alerts.discord_routes import webhook_for
     hook = webhook_for("tweets")          # DISCORD_WEBHOOK_TWEETS -> DISCORD_WEBHOOK_OPS
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
     messages = [{"content": f"**settlement** {summary['date']} -- tweet, card" + (", link reply" if summary.get("reply_url") else "") +
-                            (", GIF" if gif.get("gif_url") else "")},
+                            (", GIF" if gif.get("gif_url") else "") + (f"\n{stats_line}" if stats_line else "")},
                 {"content": summary["text"]},
                 {"embeds": [{"image": {"url": summary["card_url"]}}]}]
     if summary.get("reply_url"):
@@ -602,13 +678,13 @@ def run_settlement():
     settled = get_settled_all_sports()
     summary = build_settlement(settled, get_stats())
     if not summary:
-        print("No settled bets found -- skipping.")
+        print(skip_reason(settled))
         return
     if violates_voice(summary["text"]):
         raise RuntimeError(f"settlement text violates voice rules: {summary['text']}")
     gif = fetch_celebration_gif(summary["hero"] or {})
     print(f"Settlement tweet: {summary['text']}\nCard: {summary['card_url']}\nGIF: {gif.get('gif_url') or gif.get('search_url')}")
-    print(require_posted(post_settlement_to_discord(summary, gif)))
+    print(require_posted(post_settlement_to_discord(summary, gif, stats_line=build_window_summary())))
 
 
 # -- reply_ammo: link-free replies for big accounts' threads -----------------------------------------------------
@@ -1021,7 +1097,7 @@ def main():
         card_url = f"{BEEZY_SITE_URL}/api/og/settlement-card?date={recap_day}&sport=all" if recap_day else None
 
         if not prompt:
-            print("No settled bets today — skipping.")
+            print(skip_reason(settled_list))
             return
 
     else:
@@ -1035,7 +1111,8 @@ def main():
         print(f"  [{i}] {t}")
 
     print("Posting to Discord #tweet-queue...")
-    print(require_posted(post_drafts_to_discord(label, tweets, card_url=card_url, reply_url=reply_url)))
+    print(require_posted(post_drafts_to_discord(label, tweets, card_url=card_url, reply_url=reply_url,
+                                                stats_line=build_window_summary())))
 
     print("Done.")
 
