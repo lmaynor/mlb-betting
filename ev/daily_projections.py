@@ -69,7 +69,7 @@ import numpy as np
 from scipy.stats import nbinom, norm
 
 from ev import rosters as _rosters
-from ev.props import DFS_BOOKS, build_consensus, parse_event_props
+from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
 from nfl.props import env_adjust as _ea
@@ -489,9 +489,12 @@ def pick_main_line(qs: list):
 
 
 def best_prices(qs_at_point: list) -> dict:
-    """Best over / under American price (highest decimal) and its book among real books at the point."""
+    """Best over / under American price (highest decimal) and its book among real, ONSHORE books at the point (an offshore
+    book is a reference price in the consensus, never the book we point a reader at)."""
     best = {"over": None, "under": None}
     for q in _real(qs_at_point):
+        if q.book in OFFSHORE_BOOKS:
+            continue
         for side, price in (("over", q.over), ("under", q.under)):
             if price is None:
                 continue

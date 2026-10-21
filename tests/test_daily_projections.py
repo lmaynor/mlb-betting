@@ -124,6 +124,15 @@ def test_best_prices_pick_highest_decimal():
     assert best["under"][0] == "betmgm" and best["under"][2] == 100
 
 
+def test_best_prices_never_point_at_an_offshore_book():
+    from ev.props import parse_event_props
+    ev = event([book("draftkings", 105, -125), book("bovada", 150, -110), book("pinnacle", 140, 110), book("fanduel", 120, -150)])
+    q, _ = parse_event_props(ev, "nba")
+    best = dp.best_prices(q)
+    assert best["over"][0] == "fanduel" and best["over"][2] == 120          # bovada +150 / pinnacle +140 are better but offshore
+    assert best["under"][0] not in {"bovada", "pinnacle"}
+
+
 # ----------------------------------------------------------------------------------------------- edge + confluence
 BEST = {"over": ("x", 1.95, -105), "under": ("y", 1.9, -110)}
 

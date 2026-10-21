@@ -30,6 +30,14 @@ from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, d
 
 DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
 
+# Offshore books are never shown as a place to bet (best price, flagged outlier). They still count as REFERENCE prices in the
+# consensus (Pinnacle is the sharpest line in the pack). Same set as mlb_core.odds.sgo.OFFSHORE_BOOKS plus matchbook, kept
+# literal here so ev/ does not import the SGO client.
+OFFSHORE_BOOKS = frozenset({
+    "bovada", "betfair", "pinnacle", "betonline", "betonlineag", "mybookie", "bookmakereu", "heritagesports", "lowvig",
+    "betanysports", "sportsbetting", "betus", "matchbook",
+})
+
 # canonical stat -> every ParlayAPI market key seen (or requested) for it
 STAT_KEYS = {
     "pass_yds": {"player_pass_yds", "player_passing_yards"},
@@ -261,7 +269,7 @@ def scan_book_outliers(quotes: list[Quote], min_books: int = 4, min_ev: float = 
     cons = build_consensus(quotes, devig_method=devig_method)
     out = []
     for q in quotes:
-        if q.book in DFS_BOOKS:
+        if q.book in DFS_BOOKS or q.book in OFFSHORE_BOOKS:
             continue
         c = cons.get((q.player_norm, q.stat, q.point))
         if c is None:

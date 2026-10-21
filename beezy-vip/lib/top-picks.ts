@@ -24,6 +24,8 @@ export interface TopPick {
   who: string
   what: string
   game: string
+  /** the player's own team code (projection rows only); disambiguates headshots for shared names */
+  team?: string | null
   odds: number | null
   book: string | null
   /** fraction (0.08), not percent */
@@ -88,6 +90,7 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
     sport: r.sport,
     who: r.player,
     what: `${over ? 'Over' : 'Under'} ${r.line} ${r.stat_label || propStatLabel(r.stat)}`,
+    team: r.team ?? null,
     game: r.team && r.opp ? `${r.team} v ${r.opp}` : (r.game_key.split(':')[2] ?? '').replace('@', ' @ '),
     odds,
     book: over ? r.best_over_book : r.best_under_book,

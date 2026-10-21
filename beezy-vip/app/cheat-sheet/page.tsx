@@ -54,10 +54,10 @@ function assetSport(bet: Bet): AssetSport | null {
   return s === 'nhl' || s === 'nba' ? s : null
 }
 
-/** Headshot for a player pick (NFL has no headshot source) and team logos for a game pick. */
+/** Headshot for a player pick (NFL: nfl.com image token via the team-keyed map) and team logos for a game pick. */
 function enrich(p: TopPick): CardPick {
   const isPlayer = p.sport !== 'mlb' || !!p.bet?.player
-  const headshotUrl = isPlayer && p.sport !== 'nfl' ? headshotUrlByName(p.sport, p.who) : null
+  const headshotUrl = isPlayer ? headshotUrlByName(p.sport, p.who, p.team) : null
   const bet = p.bet
   const sp = bet ? assetSport(bet) : null
   const logo = (team: string | null) => (sp ? teamLogoUrl(sp, team) : logoUrl(team))
