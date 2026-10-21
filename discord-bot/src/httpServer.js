@@ -51,7 +51,9 @@ export function validatePostPayload(body) {
     if (typeof dailyThread !== 'object' || Array.isArray(dailyThread)) return { ok: false, error: 'daily_thread must be an object' };
     const name = typeof dailyThread.name === 'string' ? dailyThread.name.replace(/\s+/g, ' ').trim() : '';
     if (!name || name.length > 100) return { ok: false, error: 'daily_thread.name must be 1-100 characters' };
-    return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined, dailyThread: { name } } };
+    const mention = dailyThread.mention_slip_bots;
+    if (mention !== undefined && typeof mention !== 'boolean') return { ok: false, error: 'daily_thread.mention_slip_bots must be a boolean' };
+    return { ok: true, value: { channel, content: content || undefined, embeds: embeds || undefined, dailyThread: { name, mentionSlipBots: mention === true } } };
   }
   if (thread !== undefined && thread !== null) {
     if (typeof thread !== 'object' || Array.isArray(thread)) return { ok: false, error: 'thread must be an object' };
@@ -95,7 +97,7 @@ export async function resolveSlipBotIds(guild, names = (process.env.SLIP_BOT_NAM
  * thread per day keeps a busy, unvalidated feed out of the channel itself (the card stays on top, access follows the channel).
  * A thread failure fails the request: the caller falls back to a webhook, so nothing is silently dropped.
  */
-export async function postToDailyThread(channel, value) {
+export async function postToDailyThread(channel, value, slipBotIds = []) {
   if (!channel.threads || typeof channel.threads.create !== 'function') return { status: 'no_threads' };
   const name = value.dailyThread.name;
   let thread;
@@ -108,8 +110,12 @@ export async function postToDailyThread(channel, value) {
     thread = await channel.threads.create({ name, autoArchiveDuration: 1440, type: ChannelType.PublicThread, reason: 'beezy.fyi daily signals thread' });
     created = true;
   }
-  const sent = await thread.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
-  return { status: 'ok', id: sent?.id ?? null, thread: true, created, mentioned: 0 };
+  // A thread cannot hold a thread, so a message that wants the slip bots (GamblyBot, Playbook) carries the mentions inline.
+  const ids = value.dailyThread.mentionSlipBots ? slipBotIds : [];
+  const mentions = ids.map((id) => `<@${id}>`).join(' ');
+  const text = ids.length ? `${mentions} ${value.content || ''}`.trim().slice(0, 2000) : value.content;
+  const sent = await thread.send({ content: text, embeds: value.embeds, allowedMentions: ids.length ? { users: ids } : { parse: [] } });
+  return { status: 'ok', id: sent?.id ?? null, thread: true, created, mentioned: ids.length };
 }
 
 /** Send one message to an allowlisted channel as the bot. Never pings anyone, except the slip bots inside a thread. */
@@ -127,7 +133,7 @@ export async function postMessage(client, guildId, value) {
   const target = [...channels.values()].find((c) => sendable(c) && c.name === name)
     ?? (legacy ? [...channels.values()].find((c) => sendable(c) && c.name === legacy) : undefined);
   if (!target) return { status: 'no_channel' };
-  if (value.dailyThread) return postToDailyThread(target, value);
+  if (value.dailyThread) return postToDailyThread(target, value, value.dailyThread.mentionSlipBots ? await resolveSlipBotIds(guild) : []);
   const sent = await target.send({ content: value.content, embeds: value.embeds, allowedMentions: { parse: [] } });
   const out = { status: 'ok', id: sent?.id ?? null, thread: false, mentioned: 0 };
   if (value.thread && typeof sent?.startThread === 'function') {

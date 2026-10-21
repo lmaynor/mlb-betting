@@ -375,6 +375,37 @@ def get_summary_stats(engine, sport="mlb"):
     }
 
 
+def get_window_stats(engine, days: int, sport: str = "mlb") -> dict:
+    """Settled-bet results over the last `days` completed Central days (game_date in [today - days, today)), one sport.
+
+    Same bet filter as get_recent_settled (kelly_triggered, stake > 0, graded win/loss/push; voids excluded). `units` is the flat
+    1u-per-bet convention the site and tweet drafter use (sum of profit / stake per bet); `roi` is stake-weighted
+    (sum profit / sum stake). Both are None-safe: an empty window is all zeros with roi/win_rate None. The response echoes `days`
+    so a caller talking to an older revision that ignores the parameter can tell."""
+    sport = _sport(sport)
+    days = int(days)
+    if not 1 <= days <= 365:
+        raise ValueError("days must be between 1 and 365")
+    today = _date.fromisoformat(_ct_today())
+    since, until = (today - timedelta(days=days)).isoformat(), today.isoformat()
+    with engine.connect() as conn:
+        r = conn.execute(text(
+            "SELECT COUNT(*) AS bets, "
+            "COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0) AS wins, "
+            "COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0) AS losses, "
+            "COALESCE(SUM(CASE WHEN result = 'push' THEN 1 ELSE 0 END), 0) AS pushes, "
+            "COALESCE(SUM(profit), 0) AS profit, COALESCE(SUM(stake), 0) AS stake, "
+            "COALESCE(SUM(profit / stake), 0) AS units "
+            "FROM bets WHERE sport = :_sport AND result IN ('win', 'loss', 'push') AND kelly_triggered = true AND stake > 0 "
+            "AND game_date >= :_since AND game_date < :_until"
+        ), {"_sport": sport, "_since": since, "_until": until}).mappings().first()
+    d = {k: float(v) if k in ("profit", "stake", "units") else int(v) for k, v in dict(r).items()}
+    decided = d["wins"] + d["losses"]
+    return {"sport": sport, "days": days, "since": since, "until": until, **d,
+            "win_rate": round(100.0 * d["wins"] / decided, 1) if decided else None,
+            "roi": round(100.0 * d["profit"] / d["stake"], 2) if d["stake"] else None}
+
+
 # ---------------------------------------------------------------------------
 # +EV terminal feed + analytics deep dive (added for the beezy.fyi v2 overhaul)
 # ---------------------------------------------------------------------------

@@ -148,3 +148,14 @@ def test_embed_labels_and_routes_to_free_plays_only(monkeypatch):
     monkeypatch.delenv("BEEZY_BOT_URL", raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://hook.test/paid-or-legacy")
     assert fp.post_play(cand("Judge HR", 88), DAY) is False       # never falls back to another channel's webhook
+
+
+def test_free_play_bot_message_has_a_slip_thread(monkeypatch):
+    calls = []
+    monkeypatch.setenv("BEEZY_BOT_URL", "https://bot.test")
+    monkeypatch.setenv("BEEZY_BOT_SECRET", "s")
+    monkeypatch.setattr(fp, "post_via_bot", lambda kind, content, embeds, **kw: calls.append((kind, content, kw)) or True)
+    assert fp.post_play(cand("Judge HR", 88), DAY) is True
+    kind, content, kw = calls[0]
+    assert kind == "free_plays" and content.startswith("Judge HR @")
+    assert kw["thread"] == {"name": content, "content": content}

@@ -349,10 +349,11 @@ def ops_webhook_url():
     return webhook_for("ops") or webhook_for("props_alerts") or ""
 
 
-def post_discord(text: str, embeds=None, *, ops: bool = False) -> bool:
-    """Signals (the default) go to the NFL daily thread under #nfl-card (post_props_signal); run notices go to #ops-alerts."""
+def post_discord(text: str, embeds=None, *, ops: bool = False, tag: bool = False) -> bool:
+    """Signals (the default) go to the NFL daily thread under #nfl-alerts (post_props_signal); run notices go to #ops-alerts.
+    For a signal `text` is the plain copyable slip text; `tag` @mentions GamblyBot + Playbook above it (sportsbook quotes only)."""
     if not ops:
-        ok = post_props_signal("nfl", text, embeds)
+        ok = post_props_signal("nfl", text, embeds, tag_slip_bots=tag)
         if not ok:
             log.warning("NFL props signal not posted (no bot, no admin hook): %s", text[:120])
         return ok
@@ -368,25 +369,44 @@ def post_discord(text: str, embeds=None, *, ops: bool = False) -> bool:
         return False
 
 
-def alert_embed(rows: list) -> list:
-    fields = []
+def _venue_name(r: dict) -> str:
+    return {"novig": "Novig", "prophetx": "ProphetX"}.get(str(r.get("venue") or "kalshi").lower(), "Kalshi")
+
+
+def _kalshi_slip(r: dict) -> str:
+    """Plain text for one Kalshi-join candidate: 'Patrick Mahomes 275+ Pass Yds - buy YES at 43c (Kalshi)'."""
+    from mlb_core.alerts.sport_alerts import stat_name
+    return (f"{r['player']} {int(r['strike'] + 0.5)}+ {stat_name(r['stat'])} - buy {r['side'].upper()} at "
+            f"{r['ask_' + r['side']] * 100:.0f}c ({_venue_name(r)})")
+
+
+def _kalshi_line(r: dict) -> str:
+    from mlb_core.alerts.sport_alerts import stat_name
+    side = r["side"]
+    fair = r["p_over"] if side == "yes" else 1 - r["p_over"]
+    spread = f" | spread {r['spread'] * 100:.0f}c" if r.get("spread") is not None else ""
+    note = " | no pre-game fee" if str(r.get("venue") or "").lower() == "novig" else ""
+    return (f"**{r['player']}** {int(r['strike'] + 0.5)}+ {stat_name(r['stat'])} | buy **{side.upper()}** at "
+            f"**{r['ask_' + side] * 100:.0f}c** on {_venue_name(r)} | net EV **{r['ev_' + side] * 100:+.1f}%** | "
+            f"fair {fair:.1%} | {r['n_books']} books{spread}{note}")
+
+
+def alert_message(rows: list) -> tuple:
+    """(content, embeds) for the Kalshi-join candidates: copyable plain lines + one embed per game, best EV first.
+    These are exchange contracts, not sportsbook slips, so the caller does not tag the slip bots."""
+    from mlb_core.alerts.sport_alerts import LEGEND, matchup
+    from mlb_core.alerts.discord_routes import slip_text
+    ordered = sorted(rows, key=lambda r: -(r["ev_yes"] if r["side"] == "yes" else r["ev_no"]))
+    content = slip_text((_kalshi_slip(r) for r in ordered), limit=1700)
     by_game: dict = {}
-    for r in sorted(rows, key=lambda r: -(r["ev_yes"] if r["side"] == "yes" else r["ev_no"])):
+    for r in ordered:
         by_game.setdefault(r["game_key"], []).append(r)
-    for gk, rs in list(by_game.items())[:20]:
-        lines = []
-        for r in rs[:8]:
-            side = r["side"]
-            ask = r[f"ask_{side}"]
-            fair = r["p_over"] if side == "yes" else 1 - r["p_over"]
-            venue = f"[{r['venue'].upper()}] " if r.get("venue") else ""
-            lines.append(f"{venue}**{r['player']}** {r['stat']} {int(r['strike'] + 0.5)}+  BUY {side.upper()} @ {ask:.2f} | "
-                         f"fair {fair:.2f} | net EV {r['ev_' + side] * 100:+.1f}% | {r['n_books']} bk | "
-                         f"spr {r['spread']} | OI {int(r['oi'] or 0)}" + (" | ZERO pre-game fee" if r.get("venue") == "novig" else ""))
-        fields.append({"name": gk.replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
-    return [with_deep_links({"title": f"NFL props: {len(rows)} Kalshi candidate(s) (SHADOW / unvalidated)",
-                             "description": "Net of Kalshi fee and shrinkage. Paper-tracked on a $1,000 notional bankroll; "
-                                            "NOT a recommendation.", "fields": fields, "color": 0xE6915D})]
+    embeds = [{"title": f"{matchup({'game_key': gk}) or gk} | {len(rs)} Kalshi candidate{'s' if len(rs) != 1 else ''}"[:256],
+               "description": "\n".join(_kalshi_line(r) for r in rs[:8])[:3800], "color": 0xE6915D}
+              for gk, rs in list(by_game.items())[:9]]
+    embeds.append(with_deep_links({"title": "NFL props vs Kalshi",
+                                   "description": f"EV is net of the Kalshi fee and shrinkage. {LEGEND}.", "color": 0x8B949E}))
+    return content, embeds
 
 
 # Sink A alert gates (UNVALIDATED starting points, mirrors ev.sweep_props_alerts): an apparent edge above the cap is
@@ -395,28 +415,13 @@ SINK_A_EV_CAP = 0.15
 SINK_A_MIN_BOOKS = 4
 
 
-def alert_embed_sink_a(outliers: list) -> list:
-    """Admin-channel embed for NFL Sink A book outliers: grouped by game (<= 20), best EV first (<= 8 per game)."""
-    by_game: dict = {}
-    for r in sorted(outliers, key=lambda r: -r["ev"]):
-        by_game.setdefault(r["game_key"], []).append(r)
-    fields = []
-    for gk, rs in list(by_game.items())[:20]:
-        lines = [f"**{r['player']}** {r['stat']} {r['side']} {r['point']:g} @ **{r['book']}** ({int(r['american']):+d})"
-                 f" | fair {r['p_fair']:.1%} | EV **{r['ev'] * 100:+.1f}%** ({r['n_books']} bks)" for r in rs[:8]]
-        fields.append({"name": str(gk).replace("nfl:", ""), "value": "\n".join(lines)[:1000]})
-    return [with_deep_links({"title": f"NFL props Sink A: {len(outliers)} book outlier(s) (SHADOW / unvalidated)",
-                             "description": "A book or exchange quote beating the leave-self-out consensus of the other books. "
-                                            "Evidence only; NOT a recommendation.", "fields": fields, "color": 0x57F287})]
-
-
 def _sink_a_key(r: dict) -> str:
     return f"sinkA|{r['game_key']}|{r['player_norm']}|{r['stat']}|{r['point']}|{r['side']}|{r['book']}"
 
 
 def post_new_sink_a(outliers: list, state: dict, day: str, cfg=None) -> int:
-    """Post credible Sink A outliers not yet notified today (admin webhook only; dedup persisted in GCS beside the
-    Kalshi keys). -> number of outliers actually posted."""
+    """Post credible Sink A outliers not yet notified today (every row to the daily signals thread with the slip bots tagged, the
+    Beezy-Score-gated subset as top-level alerts; dedup persisted in GCS beside the Kalshi keys). -> number of outliers posted."""
     cfg = cfg or props_config()
     notified = notified_set(state, day)
     new = [r for r in outliers
@@ -430,9 +435,11 @@ def post_new_sink_a(outliers: list, state: dict, day: str, cfg=None) -> int:
     member = gate(new)
     if member and post_sport_alerts("nfl", member):
         notified.update(_sink_a_key(r) for r in member)
+    from mlb_core.alerts.sport_alerts import signal_message
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
-        if post_discord(f"NFL props sweep (Sink A): {len(batch)} new book outlier(s)", alert_embed_sink_a(batch)):
+        content, embeds = signal_message(batch, "nfl")
+        if post_discord(content, embeds, tag=True):
             notified.update(_sink_a_key(r) for r in batch)
             sent += len(batch)
     try:
@@ -471,7 +478,8 @@ def post_new(rows: list, state: dict, day: str) -> int:
     ok = True
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
-        if post_discord(f"NFL props sweep: {len(batch)} new candidate(s)", alert_embed(batch)):
+        content, embeds = alert_message(batch)
+        if post_discord(content, embeds):
             notified.update(f"{r['ticker']}|{r['side']}" for r in batch)
         else:
             ok = False

@@ -38,7 +38,7 @@ import pandas as pd
 import requests
 
 from ev.props import parse_event_props, scan_book_outliers
-from mlb_core.alerts.discord_routes import post_props_signal, webhook_for, with_deep_links
+from mlb_core.alerts.discord_routes import post_props_signal, webhook_for
 
 log = logging.getLogger("ev.sweep_props_alerts")
 _ET = ZoneInfo("America/New_York")
@@ -164,30 +164,13 @@ def webhook_url() -> str:
     return webhook_for("props_alerts") or ""
 
 
-def post_discord(text: str, embeds=None, sport: str | None = None) -> bool:
-    """Alerts go into the sport's daily signals thread under its card channel (post_props_signal); log-only when nothing took it."""
-    ok = post_props_signal(sport or "nhl", text, embeds)
+def post_discord(text: str, embeds=None, sport: str | None = None, tag: bool = False) -> bool:
+    """Alerts go into the sport's daily signals thread under its card channel (post_props_signal); log-only when nothing took it.
+    `text` is the plain copyable slip text; `tag` @mentions GamblyBot + Playbook above it."""
+    ok = post_props_signal(sport or "nhl", text, embeds, tag_slip_bots=tag)
     if not ok:
         log.warning("props signal not posted (no bot, no admin hook): %s", text[:120])
     return ok
-
-
-def alert_embed(spec: PropSport, rows: list) -> list:
-    from mlb_core.notify.discord import book_display
-    by_game: dict = {}
-    for r in rows:
-        by_game.setdefault(r["game_key"], []).append(r)
-    fields = []
-    for gk, rs in list(by_game.items())[:20]:
-        lines = []
-        for r in sorted(rs, key=lambda x: -x["ev"])[:8]:
-            lines.append(f"**{r['player']}** {r['stat']} {r['side'][0]} {r['point']:g} @ {r['american']:+d} "
-                         f"({book_display(r['book'])}) | fair {r['p_fair']:.2f} | EV {r['ev'] * 100:+.1f}% | "
-                         f"{r['n_books']} bk")
-        fields.append({"name": gk.split(":", 1)[1], "value": "\n".join(lines)[:1000]})
-    return [with_deep_links({"title": f"{spec.label} props: {len(rows)} soft-line candidate(s) (UNVALIDATED)",
-                             "description": "A book quote beating the consensus of the other books. Evidence-tracked and graded; "
-                                            "NOT a recommendation.", "fields": fields, "color": 0x38BDF8})]
 
 
 def _key(r: dict) -> str:
@@ -206,13 +189,14 @@ def post_new(spec: PropSport, rows: list, day: str, discord: bool = True) -> int
         return 0
     sent = 0
     # Member channel (#<sport>-alerts): the Beezy-Score-gated subset, labelled paper/unvalidated. Admin still gets all.
-    from mlb_core.alerts.sport_alerts import gate, post_sport_alerts
+    from mlb_core.alerts.sport_alerts import gate, post_sport_alerts, signal_message
     member = gate(new)
     if member and post_sport_alerts(spec.sport, member):
         notified.update(_key(r) for r in member)
     for i in range(0, len(new), 20):
         batch = new[i:i + 20]
-        if post_discord(f"{spec.label} props sweep: {len(batch)} new candidate(s)", alert_embed(spec, batch), spec.sport):
+        content, embeds = signal_message(batch, spec.sport)
+        if post_discord(content, embeds, spec.sport, tag=True):
             notified.update(_key(r) for r in batch)
             sent += len(batch)
     try:

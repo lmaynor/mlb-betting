@@ -180,7 +180,10 @@ function makeDailyClient({ existing = [], noThreads = false, failCreate = false 
 
 test('daily_thread payload validation', () => {
   const ok = { channel: 'nfl_card', embeds: [{ title: 'x' }], daily_thread: { name: '  NFL props   signals - Sat Oct 18 ' } };
-  assert.deepEqual(http.validatePostPayload(ok).value.dailyThread, { name: 'NFL props signals - Sat Oct 18' });
+  assert.deepEqual(http.validatePostPayload(ok).value.dailyThread, { name: 'NFL props signals - Sat Oct 18', mentionSlipBots: false });
+  const tagged = http.validatePostPayload({ ...ok, daily_thread: { name: 'n', mention_slip_bots: true } });
+  assert.equal(tagged.value.dailyThread.mentionSlipBots, true);
+  assert.equal(http.validatePostPayload({ ...ok, daily_thread: { name: 'n', mention_slip_bots: 'yes' } }).ok, false, 'must be a boolean');
   assert.equal(http.validatePostPayload({ ...ok, daily_thread: 'x' }).ok, false);
   assert.equal(http.validatePostPayload({ ...ok, daily_thread: { name: '' } }).ok, false);
   assert.equal(http.validatePostPayload({ ...ok, daily_thread: { name: 'n'.repeat(101) } }).ok, false);
@@ -212,4 +215,27 @@ test('reuses an existing active thread of that name and makes a new one for a ne
 test('a channel without threads is a 502 and a failed create propagates, so the caller can fall back (nothing silently dropped)', async () => {
   assert.equal((await http.postMessage(makeDailyClient({ noThreads: true }).client, GUILD, { channel: 'nfl_card', content: 'x', dailyThread: { name: 'n' } })).status, 'no_threads');
   await assert.rejects(http.postMessage(makeDailyClient({ failCreate: true }).client, GUILD, { channel: 'nfl_card', content: 'x', dailyThread: { name: 'n' } }), /Missing Permissions/);
+});
+
+test('daily thread message can tag the real slip bots inline (a thread cannot hold a thread)', async () => {
+  http.resetSlipBotCache();
+  const { client, threads } = makeThreadClient();
+  const posts = [];
+  const guild = await client.guilds.fetch(GUILD);
+  const channel = [...(await guild.channels.fetch()).values()][0];
+  channel.threads = {
+    fetchActive: async () => ({ threads: new Collection() }),
+    create: async (opts) => ({ name: opts.name, archived: false, send: async (m) => { posts.push(m); return { id: 't1' }; } }),
+  };
+  const value = { channel: 'ev_sportsbooks', content: 'Jo Doe Over 24.5 Points @ FanDuel +120', dailyThread: { name: 'd', mentionSlipBots: true } };
+  const out = await http.postMessage(client, GUILD, value);
+  assert.deepEqual([out.status, out.thread, out.mentioned], ['ok', true, 2]);
+  assert.equal(posts[0].content, '<@111111111111111111> <@222222222222222222> Jo Doe Over 24.5 Points @ FanDuel +120');
+  assert.deepEqual(posts[0].allowedMentions, { users: ['111111111111111111', '222222222222222222'] }, 'never the human named Playbook');
+  assert.equal(threads.length, 0);
+  // without the flag nobody is mentioned and the text is untouched
+  const plain = await http.postMessage(client, GUILD, { ...value, dailyThread: { name: 'd' } });
+  assert.equal(plain.mentioned, 0);
+  assert.equal(posts[1].content, 'Jo Doe Over 24.5 Points @ FanDuel +120');
+  assert.deepEqual(posts[1].allowedMentions, { parse: [] });
 });

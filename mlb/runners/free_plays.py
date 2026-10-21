@@ -187,7 +187,8 @@ def post_play(c: dict, day: str) -> bool:
     from mlb_core.notify.discord import book_display, _odds_str
     embed = embed_for(c, day)
     slip = slip_text([f"{c['text']} @ {book_display(c['book'])} {_odds_str(c['odds'])}"])
-    if bot_configured() and post_via_bot("free_plays", slip, [embed]):
+    # the thread is where GamblyBot / Playbook are @mentioned (they only react to a mention on a real bot-user message)
+    if bot_configured() and post_via_bot("free_plays", slip, [embed], thread={"name": slip[:100], "content": slip}):
         return True
     url = webhook_for("free_plays")
     if not url:

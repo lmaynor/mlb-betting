@@ -166,14 +166,15 @@ def slip_text(lines, limit: int = 2000) -> str:
 
 
 def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str | None = None, timeout: float = 15.0,
-                 thread: dict | None = None, daily_thread: str | None = None) -> bool:
+                 thread: dict | None = None, daily_thread: str | None = None, tag_slip_bots: bool = False) -> bool:
     """Post as the bot user. True only when the bot accepted it; False (never raises) so callers fall back to a webhook.
 
     `thread` = {"name": ..., "content": ...}: the bot opens a thread under the message and posts `content` there with the
     slip bots (GamblyBot, Playbook) @mentioned -- they only react to a mention on a real message.
 
     `daily_thread` = a thread name: the bot posts INTO the channel's active thread of that name, creating it first if there is
-    none (one thread per day keeps a busy feed out of the channel itself). Not combined with `thread`."""
+    none (one thread per day keeps a busy feed out of the channel itself). Not combined with `thread`. A thread cannot hold a
+    thread, so `tag_slip_bots=True` has the bot prefix the message with the GamblyBot / Playbook mentions instead."""
     if not bot_configured():
         return False
     import requests
@@ -186,7 +187,7 @@ def post_via_bot(kind: str, content: str | None, embeds: list | None, sport: str
     if thread:
         body["thread"] = {"name": str(thread["name"])[:100], "content": str(thread["content"])[:1800]}
     if daily_thread:
-        body["daily_thread"] = {"name": str(daily_thread)[:100]}
+        body["daily_thread"] = {"name": str(daily_thread)[:100], **({"mention_slip_bots": True} if tag_slip_bots else {})}
     try:
         r = requests.post(f"{base}/internal/post-message", json=body, timeout=timeout,
                           headers={"X-Beezy-Secret": os.environ["BEEZY_BOT_SECRET"].strip()})
@@ -205,12 +206,16 @@ def signals_thread_name(sport: str, now=None) -> str:
     return f"{sport.upper()} props signals - {now.strftime('%a %b')} {now.day}"
 
 
-def post_props_signal(sport: str, content: str | None, embeds: list | None = None, now=None) -> bool:
+def post_props_signal(sport: str, content: str | None, embeds: list | None = None, now=None, tag_slip_bots: bool = False) -> bool:
     """Post an unvalidated props-sweep alert into the sport's daily signals thread (under its card channel, via the bot).
+
+    `content` is the plain copyable slip text; `tag_slip_bots` @mentions GamblyBot + Playbook above it (only meaningful for rows
+    a sportsbook slip can hold -- not a Kalshi contract). The webhook fallback keeps the text but cannot tag a bot.
 
     Falls back to the admin DISCORD_WEBHOOK_ALERTS hook when the bot is unreachable or not configured. NEVER #ops-alerts or a
     +EV channel. Returns False (and the caller logs) when neither took it; never raises."""
-    if post_via_bot("card", content, embeds, sport=sport, daily_thread=signals_thread_name(sport, now)):
+    if post_via_bot("card", content, embeds, sport=sport, daily_thread=signals_thread_name(sport, now),
+                    **({"tag_slip_bots": True} if tag_slip_bots else {})):
         return True
     url = webhook_for("props_alerts")
     if not url:

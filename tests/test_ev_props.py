@@ -188,8 +188,10 @@ def test_alert_embed_and_webhook_never_uses_member_channel(monkeypatch):
     cfg = props_config(env={})
     leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
     r = sw.compute_rows(_parlay_events(leg), {leg.game_key: [(leg, mk)]}, NOW, cfg, 1.0)[0][0]
-    emb = sw.alert_embed([r])
-    assert "SHADOW" in emb[0]["title"] and "BUY YES" in emb[0]["fields"][0]["value"]
+    content, emb = sw.alert_message([r])
+    assert content.startswith(f"{r['player']} ") and "buy YES at 46c (Kalshi)" in content   # plain, copyable, no markdown
+    assert "**" not in content
+    assert "buy **YES** at **46c** on Kalshi" in emb[0]["description"] and "unvalidated" in emb[-1]["description"]
     for k in ("DISCORD_WEBHOOK_ALERTS", "DISCORD_WEBHOOK_OPS", "DISCORD_WEBHOOK_URL"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://example.invalid/picks")      # member channel: must be ignored
@@ -244,7 +246,7 @@ def test_post_new_dedups_and_persists_and_pending_alerts_flow(monkeypatch):
     leg, mk = _leg_and_market(ask_yes=0.46, bid_yes=0.45)
     r = sw.compute_rows(_parlay_events(leg), {leg.game_key: [(leg, mk)]}, NOW, cfg, 1.0)[0][0]
     posts, store = [], {}
-    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append(text) or True)
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None, **kw: posts.append(text) or True)
     monkeypatch.setattr(sw, "_write", lambda data, key: store.__setitem__(key, data))
     monkeypatch.setattr(sw, "_read", lambda key: store.get(key))
     state = {}
@@ -424,7 +426,7 @@ def test_kalshi_403_still_writes_latest_json_with_book_outliers_and_posts_sink_a
     written, posts = {}, []
     monkeypatch.setattr(sw, "_write", lambda data, key: written.__setitem__(key, data))
     monkeypatch.setattr(sw, "_read", lambda key: written.get(key))
-    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append((text, embeds)) or True)
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None, **kw: posts.append((text, embeds)) or True)
     state = {}
     out = sw.run_cycle(_fake_pc(events), _DeadKalshi(), props_config(env={}), 0, 40.0, state)
     assert out["kalshi_reachable"] is False and out["rows"] == 0
@@ -433,8 +435,8 @@ def test_kalshi_403_still_writes_latest_json_with_book_outliers_and_posts_sink_a
     assert latest["rows"] == [] and latest["summary"]["kalshi_reachable"] is False
     assert latest["book_outliers"] and {r["book"] for r in latest["book_outliers"]} == {"softbook"}
     assert all(r["commence"] and r["game_key"] and r["player_norm"] for r in latest["book_outliers"])
-    assert len(posts) == 1 and "Sink A" in posts[0][1][0]["title"] and "SHADOW" in posts[0][1][0]["title"]
-    assert "softbook" in posts[0][1][0]["fields"][0]["value"]
+    assert len(posts) == 1 and "Softbook" in posts[0][0] and "**" not in posts[0][0]       # plain copyable slip text
+    assert "Softbook" in posts[0][1][0]["description"]
     # the dedup keys are persisted and a second cycle (fresh in-memory state, i.e. a restarted task) does not re-alert
     day = datetime.now(timezone.utc).astimezone(sw._ET).date().isoformat()
     assert any(k.startswith("sinkA|") for k in json.loads(written[f"EVSweep/nfl_props/{day}/notified.json"]))
@@ -448,16 +450,16 @@ def test_sink_a_alert_gates_and_embed_shape(monkeypatch):
             "stat": "rec_yds", "point": 63.5, "side": "OVER", "book": "softbook", "american": 115, "p_fair": 0.5,
             "ev": 0.075, "n_books": 5}
     posts, store = [], {}
-    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None: posts.append(embeds) or True)
+    monkeypatch.setattr(sw, "post_discord", lambda text, embeds=None, **kw: posts.append(embeds) or True)
     monkeypatch.setattr(sw, "_write", lambda data, key: store.__setitem__(key, data))
     monkeypatch.setattr(sw, "_read", lambda key: store.get(key))
     thin, huge, low = dict(base, n_books=3), dict(base, ev=0.30), dict(base, ev=0.01)
     assert sw.post_new_sink_a([thin, huge, low], {}, "2026-10-04", cfg) == 0 and posts == []   # none credible
     assert sw.post_new_sink_a([base, thin, huge], {}, "2026-10-04", cfg) == 1
     emb = posts[0][0]
-    assert emb["title"] == "NFL props Sink A: 1 book outlier(s) (SHADOW / unvalidated)" and emb["color"] == 0x57F287
-    assert emb["fields"][0]["name"] == "2026-10-04:IND@WAS"
-    assert emb["fields"][0]["value"] == "**Test Player** rec_yds OVER 63.5 @ **softbook** (+115) | fair 50.0% | EV **+7.5%** (5 bks)"
+    assert emb["title"] == "IND @ WAS | 1 signal"
+    assert emb["description"] == "**Test Player** Over 63.5 Rec Yds | **Softbook +115** | EV **+7.5%** | fair 50.0% | 5 books"
+    assert "unvalidated" in posts[0][-1]["description"]
 
 
 def test_sink_a_never_posts_to_the_member_channel(monkeypatch):
