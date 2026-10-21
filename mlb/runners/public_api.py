@@ -891,6 +891,45 @@ def get_sport_projections(sport, market=None, limit=300, date=None, day=None):
     return out
 
 
+NBA_GAMES_STALE_MINUTES = 480.0      # the board is rebuilt after each odds bank (17:35 / 22:35 / 01:00 UTC); older = flagged stale
+
+
+def get_nba_games_board(day=None):
+    """NBA "our line vs the market" games board (nba/games/board.py -> EVSweep/nba_games/latest.json). Read-only: never computes,
+    never raises on missing data (status 'unavailable', no games). Carries `validated: false`, the accuracy note and NO edge/EV
+    fields by design (docs/analysis/nba_game_models_2026-10-20.md: the market line beat the model on every market). `day` =
+    YYYY-MM-DD keeps the games whose Central start date matches."""
+    day = _proj_day(day, "day")
+    empty = {"sport": "nba", "engine": None, "validated": False, "status": "unavailable", "stale": True, "as_of": None,
+             "lines_as_of": None, "age_minutes": None, "lines_age_minutes": None, "count": 0, "reliable_count": 0,
+             "games": [], "label": None, "accuracy": None}
+    try:
+        from nba.games import board as _board
+        payload = _board.read()
+    except Exception:  # noqa: BLE001 -- serve the empty shape
+        logger.exception("nba games board read failed")
+        return empty
+    if not payload:
+        return empty
+    now = _datetime.now(_timezone.utc)
+    try:
+        age = (now - _datetime.fromisoformat(str(payload.get("ts")))).total_seconds() / 60.0
+    except Exception:  # noqa: BLE001
+        age = None
+    games = payload.get("games") or []
+    if day:
+        from ev import daily_projections as _dp
+        games = [g for g in games if _dp.ct_day(g.get("start")) == day]
+    out = {k: payload.get(k) for k in ("sport", "engine", "validated", "status", "label", "accuracy", "lines_as_of",
+                                       "lines_age_minutes")}
+    out.update(validated=False, as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
+               stale=bool(payload.get("stale")) or age is None or age > NBA_GAMES_STALE_MINUTES, count=len(games),
+               reliable_count=sum(1 for g in games if g.get("reliable")), games=games)
+    if day:
+        out["day"] = day
+    return out
+
+
 def _roi(profit, stake):
     return round(profit / stake * 100.0, 2) if stake else None
 

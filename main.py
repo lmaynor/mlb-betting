@@ -892,6 +892,7 @@ from mlb.runners.public_api import (
     get_summary_stats, _require_api_key,
     get_clv_data, get_today_slate,
     get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections,
+    get_nba_games_board,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1189,6 +1190,29 @@ def public_projections():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_projections failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/nba-games", methods=["GET", "OPTIONS"])
+def public_nba_games():
+    """NBA games board: our model's spread / total / win probability and a fair alt-line ladder next to the market consensus
+    (nba/games/board.py). Informational and UNVALIDATED (no edge or EV fields: the market line beat the model in our walk-forward).
+    `day=YYYY-MM-DD` keeps one Central game day. Status/freshness travel with the payload."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_nba_games_board(day=request.args.get("day") or None)
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # bad day
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_nba_games failed")
         return jsonify({"error": str(exc)}), 500
 
 

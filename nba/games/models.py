@@ -60,6 +60,8 @@ class GameModels:
 def fit(train: pd.DataFrame, kind: str = "ridge", avail: bool = False) -> GameModels:
     """`train` = feature table rows with targets (margin, total, home_win). Rows with no history yet are dropped."""
     t = train.dropna(subset=["h_e_ortg", "a_e_ortg", "lg_total"])
+    if len(t) < 200:
+        raise ValueError(f"only {len(t)} usable training games; refusing to fit (is the history mirror empty?)")
     Xm, Xt = F.margin_matrix(t, avail), F.total_matrix(t, avail)
     m = _reg(kind).fit(Xm, t["margin"])
     tt = _reg(kind).fit(Xt, t["total"])

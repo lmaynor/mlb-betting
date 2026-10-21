@@ -203,3 +203,8 @@ def test_soft_line_quotes_pair_away_side_on_the_home_line():
     q = SL.quotes(pd.DataFrame(rows), "spread")
     assert len(q) == 2 and set(q["line"]) == {-2.5, -1.5}
     assert (q["dec_b"] > q["dec_a"]).all()                             # -105 away pays more than -110 home
+
+
+def test_sharp_reference_without_pinnacle_keeps_join_columns():
+    long = pd.DataFrame([_long("moneyline", 1, 12, "home", np.nan, -150)])
+    assert list(market.sharp_reference(long).columns) == ["date", "home", "away", "pin_p_home", "pin_sp_line", "pin_tot_line"]

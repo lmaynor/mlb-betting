@@ -50,7 +50,9 @@ def upcoming_rows(cons: pd.DataFrame) -> pd.DataFrame:
     return u
 
 
-def score(hist: pd.DataFrame, lines: pd.DataFrame, kind: str = "ridge", train_from: int = 2008) -> pd.DataFrame:
+def slate(hist: pd.DataFrame, lines: pd.DataFrame, kind: str = "ridge", train_from: int = 2008):
+    """-> (frame, fitted models, parlay long frame). One row per upcoming game on the lines feed: model + consensus +
+    edges + early_season flag (+ `scheduled`, the UTC tip from the feed)."""
     long = market.from_parlay(lines)
     cons = market.consensus(long)
     up = upcoming_rows(cons)
@@ -71,6 +73,11 @@ def score(hist: pd.DataFrame, lines: pd.DataFrame, kind: str = "ridge", train_fr
     # slate on 2026-10-19 showed 13-pt and 20-pt gaps to the line, all of it stale ratings). Edges are NOT meaningful there.
     out["early_season"] = out["games_min"] < EARLY_SEASON_GAMES
     out["validated"] = False
+    return out, gm, long
+
+
+def score(hist: pd.DataFrame, lines: pd.DataFrame, kind: str = "ridge", train_from: int = 2008) -> pd.DataFrame:
+    out, _, long = slate(hist, lines, kind, train_from)
     keep = ["date", "home", "away", "mu_margin", "p_ml", "ml_p_home", "edge_ml", "sp_line", "p_cover_model", "sp_p_home",
             "edge_spread", "mu_total", "tot_line", "p_over_model", "tot_p_over", "edge_total", "pin_p_home", "n_books_ml",
             "n_books_sp", "n_books_tot", "games_min", "early_season", "validated"]

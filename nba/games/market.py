@@ -118,7 +118,6 @@ def consensus(bp: pd.DataFrame, grace_min: float = PREGAME_GRACE_MIN) -> pd.Data
 def attach(games: pd.DataFrame, cons: pd.DataFrame) -> pd.DataFrame:
     """Left-join the consensus onto the game/feature table (exact date; a +-1 day fallback for UTC/ET window skew)."""
     key = ["date", "home", "away"]
-    cons = cons.drop(columns=["scheduled"], errors="ignore")
     out = games.merge(cons, on=key, how="left")
     miss = out["event_id"].isna()
     if miss.any():
@@ -174,7 +173,7 @@ def sharp_reference(parlay_long: pd.DataFrame) -> pd.DataFrame:
     """Pinnacle's de-vigged home win prob / spread / total per event (when it quotes), for a side-by-side reference."""
     p = parlay_long[parlay_long["book_kind"] == "sharp"].copy()
     if p.empty:
-        return pd.DataFrame(columns=["event_id", "pin_p_home", "pin_sp_line", "pin_tot_line"])
+        return pd.DataFrame(columns=["date", "home", "away", "pin_p_home", "pin_sp_line", "pin_tot_line"])
     p["book_kind"] = "book"
     c = consensus(p)
     return c.rename(columns={"ml_p_home": "pin_p_home", "sp_line": "pin_sp_line", "tot_line": "pin_tot_line"}).reindex(
