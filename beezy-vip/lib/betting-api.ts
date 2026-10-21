@@ -2,6 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
+import type { NbaGamesBoard } from '@/lib/nba-games'
 import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
 import type { ProjectionSport } from '@/lib/sports'
@@ -268,6 +269,11 @@ export async function apiGetSportProjections(sport: ProjectionSport, opts: { mar
   // `date` = an archived day's board (the day's last pre-game state of every row); omitted = the live board
   if (opts.date) sp.set('date', opts.date)
   return apiFetch<SportProjections>(`/api/public/projections?${sp.toString()}`, 60, `/api/projections?${sp.toString()}`)
+}
+
+/** NBA games board: our line beside the market consensus (informational, unvalidated; see lib/nba-games.ts). */
+export async function apiGetNbaGames(): Promise<NbaGamesBoard> {
+  return apiFetch<NbaGamesBoard>('/api/public/nba-games', 60, '/api/nba-games')
 }
 
 /** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */

@@ -141,11 +141,12 @@ describe('unified projections board', () => {
 })
 
 describe('sport tabs', () => {
-  it.each(['mlb', 'nfl', 'nhl', 'nba'] as const)('%s shows its name, its system count and the same three tabs', sport => {
+  it.each(['mlb', 'nfl', 'nhl', 'nba'] as const)('%s shows its name, its system count and the same tabs (NBA also has GAMES)', sport => {
     render(<SportTabs sport={sport} active="projections" />)
     expect(screen.getByText(SPORT_PILLARS[sport].shortName)).toBeInTheDocument()
     expect(screen.getByText(new RegExp(`${getSystemsBySport(sport).length} Systems`))).toBeInTheDocument()
-    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'PROJECTIONS', 'SYSTEMS'])
+    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(
+      sport === 'nba' ? ['PICKS & +EV', 'PROJECTIONS', 'GAMES', 'SYSTEMS'] : ['PICKS & +EV', 'PROJECTIONS', 'SYSTEMS'])
     expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
     expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('href', `/picks/${sport}/projections`)

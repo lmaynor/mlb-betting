@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getSystemsBySport } from '@/lib/pick-systems'
 import { SPORT_PILLARS, type SportSlug } from '@/lib/sports'
 
-export type SportView = 'picks' | 'projections' | 'systems'
+export type SportView = 'picks' | 'projections' | 'systems' | 'games'
 
 /**
  * The one header strip every sport page shares (MLB, NFL, NHL, NBA, and any sport added to lib/sports.ts): the sport and
@@ -15,6 +15,8 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   const tabs: { id: SportView; label: string; href: string }[] = [
     { id: 'picks', label: 'PICKS & +EV', href: `/picks/${sport}` },
     { id: 'projections', label: 'PROJECTIONS', href: `/picks/${sport}/projections` },
+    // NBA only: our game lines beside the market (informational; backend nba/games/board.py)
+    ...(sport === 'nba' ? [{ id: 'games' as const, label: 'GAMES', href: '/picks/nba/games' }] : []),
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (

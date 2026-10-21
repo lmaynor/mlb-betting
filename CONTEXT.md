@@ -4100,6 +4100,12 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   adapter, BP tricode aliases PHO/NOR/UTH), `evaluate.py` (walk-forward), `score.py` (live slate vs ParlayAPI, `early_season` flag).
   **Verdict NO EDGE on all three markets, 2021-25 (n=6,604): model loses to the line every season, incremental coefficient ~0, ROI -3..-7%.**
   `nba/games/availability.py` = who-actually-missed ceiling features (`evaluate --avail`: closes ~45% of the spread gap, still no edge). **`nba-injury-bank` job + scheduler LIVE since 2026-10-20** (ESPN injury list -> `NBA/injuries/espn/`, every 30 min game hours, forward-only).
+  **Games board (2026-10-20, built, NOT deployed, nothing posted):** `nba/games/board.py` -> `EVSweep/nba_games/latest.json` (our fair spread/total/win%
+  + a fair alt-line ladder next to the ParlayAPI consensus; NO edge/EV fields, `validated:false`, `reliable:false` until both teams have 15 games),
+  `GET /api/public/nba-games` (`mlb/runners/public_api.get_nba_games_board`), `deploy/setup_nba_game_board.sh` (job `nba-game-board` + 3 schedulers after the
+  17:35/22:35/01:00 UTC odds banks; refuses without `CONFIRM_IMAGE_HAS_NBA_GAMES=1`), beezy-vip `/picks/nba/games` (GAMES tab, NBA only; `lib/nba-games.ts`,
+  `components/picks/nba-games-board.tsx`, proxy `/api/nba-games`). `nba/games/board_post.py` = once-a-day #nba-alerts digest, OFF (needs `--post` + bot/webhook secrets;
+  reliable rows only, no edge language). The route is live only after the web SERVICE is redeployed from merged main.
   `docs/analysis/nba_game_models_2026-10-20.md`; crawl gotchas `docs/solutions/integration-issues/bettingpros-nba-game-lines-not-in-props-backfill.md`.
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
