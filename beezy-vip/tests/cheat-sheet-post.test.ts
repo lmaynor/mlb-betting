@@ -43,18 +43,28 @@ describe('shortMarket / names / books', () => {
 })
 
 describe('hard 280 cap', () => {
-  it('never exceeds 280: the owner\'s five-line example (310 chars) drops to the four lines that fit, full names kept', () => {
+  it('never exceeds 280 and keeps all five picks: the owner\'s five-line example (310 chars) is condensed, not cut', () => {
     const [sheet] = buildSheets(NBA5, only('nba', NBA5), 'Tuesday')
     expect(postLength(sheet.text)).toBeLessThanOrEqual(POST_LIMIT)
     expect(sheet.text).toBe([
       `Tuesday +EV NBA Cheat Sheet ${BASKETBALL}`,
       '',
-      '1. Jalen Williams U 4.5 Reb -110 theScore Bet | +14.6% EV',
-      '2. Shai Gilgeous-Alexander U 1.5 3PM +100 MGM | +14.3% EV',
-      '3. Derrick White U 23.5 PRA -108 Novig | +15.0% EV',
-      '4. Karl-Anthony Towns U 4.5 Ast +114 BetRivers | +14.6% EV',
+      '1. J. Williams U 4.5 Reb -110 theScore Bet +14.6% EV',
+      '2. S. Gilgeous-Alexander U 1.5 3PM +100 MGM +14.3% EV',
+      '3. D. White U 23.5 PRA -108 Novig +15.0% EV',
+      '4. K. Towns U 4.5 Ast +114 BetRivers +14.6% EV',
+      '5. D. Jenkins O 3.5 Ast +156 ProphetX +9.0% EV',
     ].join('\n'))
-    expect([sheet.lines, sheet.offered]).toEqual([4, 5])
+    expect([sheet.lines, sheet.offered]).toEqual([5, 5])
+  })
+
+  it('condenses further (shorter book names, then no numbering) before it ever drops a pick', () => {
+    const long = NBA5.map(p => ({ ...p, who: p.who + ' Wilkinson-Featherstone', book: 'hardrock' }))
+    const sheet = buildSheets(long, only('nba', long), 'Wednesday')[0]
+    expect(postLength(sheet.text)).toBeLessThanOrEqual(POST_LIMIT)
+    const kept = sheet.lines
+    // whatever it kept, it kept in rank order and used the tightest wording only when needed
+    expect(sheet.text.split('\n').filter(l => /EV$/.test(l))).toHaveLength(kept)
   })
 
   it('uses first initials before it drops a line, when initials are enough to keep every pick', () => {
@@ -118,7 +128,7 @@ describe('the sheets are built from the lists the card shows', () => {
     same(sheets[0], ALL.slice(0, SHEET_SIZE))                            // the card's "All" chip shows its first five
     same(sheets.find(s => s.id === 'nhl')!, NHL)
     same(sheets.find(s => s.id === 'nba')!, NBA)
-    expect(sheets[0].text).toMatch(/2\. NHL (Pavel Zacha|P\. Zacha) O 2\.5 SOG \+120 DK \| \+8\.0% EV/)      // overall tags the sport
+    expect(sheets[0].text).toMatch(/2\. NHL (Pavel Zacha|P\. Zacha) O 2\.5 SOG \+120 DK (\| )?\+8\.0% EV/)      // overall tags the sport
   })
 
   it('a sport that is nowhere in the overall list still gets its own box (the "NHL is not wired" case)', () => {

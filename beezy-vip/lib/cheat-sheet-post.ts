@@ -12,8 +12,8 @@
  * AND market agree). A model-only pick shows a model-vs-market probability gap, which can sit beside a NEGATIVE price EV, so its
  * line says "edge", and the "+EV" in the header appears only when every listed line is an EV.
  *
- * Hard 280 cap: a sheet is never longer than POST_LIMIT. If it does not fit, first-name initials are used, and only then are the
- * lowest-ranked lines dropped (the UI says how many). The main post carries no link; the link is in LINK_REPLY.
+ * Hard 280 cap: a sheet is never longer than POST_LIMIT. If it does not fit, the wording is condensed step by step (initials, no pipe,
+ * shorter book names, no numbering) so all five picks stay; only if that is still too long are the lowest-ranked lines dropped. The main post carries no link; the link is in LINK_REPLY.
  */
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { bookDisplay } from '@/lib/tokens'
@@ -87,35 +87,53 @@ export function abbrevName(who: string): string {
   return `${parts[0][0]}. ${parts.slice(1).join(' ')}`
 }
 
-function line(p: SheetPick, rank: number, tagSport: boolean, abbrev: boolean): string {
-  const book = bookPostName(p.book)
-  const name = abbrev ? abbrevName(p.who) : p.who
+/** How hard a sheet is condensed. Applied to every line at once so the sheet stays uniform; tried in order, mildest first. */
+interface Fit { abbrev: boolean; tight: boolean; shortBook: boolean; bare: boolean }
+const FITS: Fit[] = [
+  { abbrev: false, tight: false, shortBook: false, bare: false },
+  { abbrev: true, tight: false, shortBook: false, bare: false },   // "J. Williams"
+  { abbrev: true, tight: true, shortBook: false, bare: false },    // "-110 DK +14.6% EV" (no pipe)
+  { abbrev: true, tight: true, shortBook: true, bare: false },     // "theScore Bet" -> "theScore"
+  { abbrev: true, tight: true, shortBook: true, bare: true },      // no blank line, no "1." numbering (order is the rank)
+]
+
+/** The trailing " Bet" of a long book display name ("theScore Bet", "Hard Rock Bet"). Brand shorthand, not an invented code. */
+const shortBookName = (name: string): string => name.replace(/\s+Bet$/i, '')
+
+function line(p: SheetPick, rank: number, tagSport: boolean, fit: Fit): string {
+  let book = bookPostName(p.book)
+  if (fit.shortBook) book = shortBookName(book)
+  const name = fit.abbrev ? abbrevName(p.who) : p.who
   const who = [tagSport ? SPORT_PILLARS[p.sport].shortName : '', name].filter(Boolean).join(' ')
   const price = p.odds == null ? '' : fmtOdds(p.odds)
-  const head = [`${rank}.`, who, shortMarket(p.what), price, book].filter(Boolean).join(' ')
-  const tag = p.edge != null && p.edge > 0 ? ` | +${(p.edge * 100).toFixed(1)}% ${isEvBasis(p) ? 'EV' : 'edge'}` : ''
+  const head = [fit.bare ? '' : `${rank}.`, who, shortMarket(p.what), price, book].filter(Boolean).join(' ')
+  const tag = p.edge != null && p.edge > 0 ? `${fit.tight ? ' ' : ' | '}+${(p.edge * 100).toFixed(1)}% ${isEvBasis(p) ? 'EV' : 'edge'}` : ''
   return `${head}${tag}`
 }
 
-function render(id: 'all' | SportSlug, picks: SheetPick[], weekday: string, abbrev: boolean): string {
+function render(id: 'all' | SportSlug, picks: SheetPick[], weekday: string, fit: Fit): string {
   const name = id === 'all' ? '' : `${SPORT_PILLARS[id].shortName} `
   const emoji = id === 'all' ? '' : ` ${EMOJI[id]}`
   const ev = picks.length > 0 && picks.every(isEvBasis) ? '+EV ' : ''
   const header = `${weekday} ${ev}${name}Cheat Sheet${emoji}`
-  return `${header}\n\n${picks.map((p, i) => line(p, i + 1, id === 'all', abbrev)).join('\n')}`
+  return `${header}${fit.bare ? '\n' : '\n\n'}${picks.map((p, i) => line(p, i + 1, id === 'all', fit)).join('\n')}`
 }
 
-/** Longest sheet <= POST_LIMIT: all lines with full names, then all with initials, then fewer lines (never fewer than one). */
+/**
+ * The sheet with the most picks that fits POST_LIMIT. All five picks are kept by condensing the wording first (initials, no pipe,
+ * shorter book names, no numbering); a pick is dropped only when even the tightest wording does not fit (the UI says how many).
+ */
 function sheetFor(id: 'all' | SportSlug, picks: SheetPick[], weekday: string): Sheet {
   const offered = picks.slice(0, SHEET_SIZE)
+  const label = id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName
   for (let n = offered.length; n >= 1; n--) {
-    for (const abbrev of [false, true]) {
-      const text = render(id, offered.slice(0, n), weekday, abbrev)
-      if (postLength(text) <= POST_LIMIT) return { id, label: id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName, text, lines: n, offered: offered.length }
+    for (const fit of FITS) {
+      const text = render(id, offered.slice(0, n), weekday, fit)
+      if (postLength(text) <= POST_LIMIT) return { id, label, text, lines: n, offered: offered.length }
     }
   }
-  // unreachable in practice (one initialled line is far under 280); the cap is still enforced
-  return { id, label: id === 'all' ? 'OVERALL' : SPORT_PILLARS[id].shortName, text: render(id, offered.slice(0, 1), weekday, true).slice(0, POST_LIMIT), lines: 1, offered: offered.length }
+  // unreachable in practice (one tightly-worded line is far under 280); the cap is still enforced
+  return { id, label, text: render(id, offered.slice(0, 1), weekday, FITS[FITS.length - 1]).slice(0, POST_LIMIT), lines: 1, offered: offered.length }
 }
 
 /**

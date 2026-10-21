@@ -284,6 +284,13 @@ def test_outlier_flags_a_cheap_side_vs_leave_self_out_consensus():
     assert not [x for x in out if x["book"].startswith("b")]
 
 
+def test_outlier_never_flags_an_offshore_book_but_still_uses_it_as_reference():
+    assert scan_book_outliers(_pack([_q("bovada", +110, -135)])) == []                         # offshore is never the flagged book
+    # ... yet Pinnacle's price still counts toward the pack: a 4th reference book lets a soft book clear min_books=4
+    pack = [_q(f"b{i}", -110, -110) for i in range(3)] + [_q("pinnacle", -110, -110), _q("softbook", +110, -135)]
+    assert [r["book"] for r in scan_book_outliers(pack)] == ["softbook"]
+
+
 def test_outlier_leaves_self_out_and_needs_enough_independent_books():
     # a lone book cannot validate itself: 3 others < min_books=4 -> nothing, even though its price is +EV vs the pack
     assert scan_book_outliers(_pack([_q("softbook", +110, -135)], n=3)) == []
@@ -295,8 +302,8 @@ def test_outlier_excludes_dfs_dispersed_and_unpriced_sides():
     disp = [_q("a", -110, -110), _q("b", -250, +200), _q("c", +200, -250), _q("d", -110, -110), _q("e", -250, +200),
             _q("soft", +300, -400)]
     assert scan_book_outliers(disp) == []                                                     # dispersed reference
-    one_sided = _pack([_q("bovada", +130, None)])                                             # 'Yes' ladder: Over only
-    assert [(r["book"], r["side"]) for r in scan_book_outliers(one_sided)] == [("bovada", "OVER")]
+    one_sided = _pack([_q("fanatics", +130, None)])                                             # 'Yes' ladder: Over only
+    assert [(r["book"], r["side"]) for r in scan_book_outliers(one_sided)] == [("fanatics", "OVER")]
 
 
 def test_book_outlier_rows_use_pulled_payload_no_extra_credits():
@@ -511,7 +518,7 @@ def test_pooled_fallback_never_pools_discrete_stats_or_dispersed_curves():
 
 # ---------------- per-book strip for the line-shopping drawer ----------------
 def test_consensus_carries_per_book_american_prices_sorted_by_book():
-    qs = [_q("fanduel", -120, 100), _q("draftkings", -110, -110), _q("underdog", -112, -112), _q("bovada", +130, None)]
+    qs = [_q("fanduel", -120, 100), _q("draftkings", -110, -110), _q("underdog", -112, -112), _q("fanatics", +130, None)]
     c = build_consensus(qs)[("tyler warren", "rec_yds", 64.5)]
     assert [(b, o, u) for b, o, u, _ in c.book_quotes] == [("draftkings", -110, -110), ("fanduel", -120, 100)]
     assert all(0.0 < f < 1.0 for *_, f in c.book_quotes)                       # DFS and one-sided are not in the strip
@@ -523,8 +530,8 @@ def test_outliers_expose_all_books_including_the_quoting_one_sided_book():
     assert [r["book"] for r in ab] == sorted(r["book"] for r in ab) and len(ab) == 6
     soft = next(r for r in ab if r["book"] == "softbook")
     assert soft["over"] == 110 and soft["under"] == -135 and 0.0 < soft["fair"] < 1.0
-    one = scan_book_outliers(_pack([_q("bovada", +130, None)]))[0]["all_books"]
-    assert {"book": "bovada", "over": 130, "under": None, "fair": None} in one and len(one) == 6
+    one = scan_book_outliers(_pack([_q("fanatics", +130, None)]))[0]["all_books"]
+    assert {"book": "fanatics", "over": 130, "under": None, "fair": None} in one and len(one) == 6
 
 
 def test_registry_covers_the_expanded_nfl_nba_nhl_prop_markets():

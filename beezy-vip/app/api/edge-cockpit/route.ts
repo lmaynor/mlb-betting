@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitCockpit } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
+import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import type { CockpitRow } from '@/lib/types'
 
 const API_URL = process.env.BETTING_API_URL ?? ''
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     // Prop-research rows are paid per league (lib/access.ts); cut here so the proxy matches the page.
     if (res.ok && Array.isArray(data?.rows)) {
       const cut = limitCockpit(data.rows as CockpitRow[], await getViewer())
-      return NextResponse.json({ ...data, rows: cut.rows, locked: cut.locked })
+      return NextResponse.json({ ...data, rows: withHeadshotIds(cut.rows), locked: cut.locked })
     }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status })
   } catch {
