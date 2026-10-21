@@ -1,5 +1,6 @@
 'use client'
 
+import { isOffshore } from '@/lib/offshore'
 import { useMemo } from 'react'
 import Link from 'next/link'
 import { LockedNotice } from '@/components/picks/locked-notice'
@@ -68,7 +69,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
             <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: '1px solid #1e2230' }}>{h}</th>))}</tr>
         </thead>
         <tbody>
-          {rows.slice(0, 60).map(r => {
+          {rows.filter(r => !isOffshore(r.book)).slice(0, 60).map(r => {
             const b = bookDisplay(r.book)
             const point = r.point ?? r.line
             return (

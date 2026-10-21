@@ -453,10 +453,11 @@ def _book_strip(raw):
     drawer, or None. Untrusted shape (it round-trips through JSON in GCS): anything malformed is dropped, not raised."""
     if not isinstance(raw, list):
         return None
+    from ev.props import OFFSHORE_BOOKS
     out = []
     for b in raw:
-        if not isinstance(b, dict) or not b.get("book"):
-            continue
+        if not isinstance(b, dict) or not b.get("book") or str(b["book"]).lower() in OFFSHORE_BOOKS:
+            continue                                  # offshore books are never shown, even from older stored snapshots
         over, under, fair = _f(b.get("over")), _f(b.get("under")), _f(b.get("fair"))
         ok = lambda x: x is not None and x == x and x != 0          # noqa: E731 -- finite, non-zero American price
         out.append({"book": str(b["book"]), "over": int(over) if ok(over) else None,
@@ -472,6 +473,9 @@ def _outlier_row(r, sport, now, age_min=None, credible=None):
     ev, american = _f(r.get("ev")), _f(r.get("american"))
     if ev is None or american is None or american == 0:
         return None
+    from ev.props import OFFSHORE_BOOKS
+    if str(r.get("book") or "").lower() in OFFSHORE_BOOKS:
+        return None                                   # never point a reader at an offshore book (older stored rows too)
     mins_now = None
     try:
         mins_now = (_datetime.fromisoformat(str(r.get("commence"))) - now).total_seconds() / 60.0

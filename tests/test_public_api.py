@@ -693,8 +693,7 @@ def test_outlier_rows_pass_the_per_book_strip_through_and_sanitise_it(monkeypatc
     _store(monkeypatch, {"EVSweep/nfl_props/latest.json": snap})
     got = {r["book"]: r for r in api._nfl_feed(0.02, 50)["book_outliers"]}
     assert got["fanduel"]["all_books"] == [
-        {"book": "draftkings", "over": -110, "under": -110, "fair": 0.5},
-        {"book": "bovada", "over": 130, "under": None, "fair": None},
+        {"book": "draftkings", "over": -110, "under": -110, "fair": 0.5},      # bovada (offshore) is dropped from the strip
         {"book": "junk", "over": None, "under": None, "fair": None}]
     assert got["nostrip"]["all_books"] is None and got["bad"]["all_books"] is None
 
