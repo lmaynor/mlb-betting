@@ -89,7 +89,7 @@ export interface ScreenOptions {
   method: DevigMethod
   /** books a viewer can bet at (offshore books and, when set, anything outside My Books are excluded); null = no cut */
   bettable: ReadonlySet<string> | null
-  /** fewest reference books behind a fair value; below it the row is dropped */
+  /** fewest reference books behind a fair value; below it the row is still listed (prices only) with no fair value / EV */
   minRef: number
   side: SideFilter
 }
@@ -104,13 +104,15 @@ export interface ScreenRow {
   bestAmerican: number
   /** books quoting this exact best price on the target side */
   bestTies: string[]
-  pFair: number
+  /** null = fewer than `minRef` reference books priced this line both ways: a price-comparison row with no fair value */
+  pFair: number | null
   nRef: number
-  /** fair value of the side as American odds */
-  fairAmerican: number
+  /** fair value of the side as American odds (null with pFair) */
+  fairAmerican: number | null
   /** de-vigged implied probability of the best price (before vig removal it is just 1/decimal) */
   implied: number
-  ev: number
+  /** null with pFair */
+  ev: number | null
 }
 
 function fairAmericanOf(p: number): number {
@@ -166,14 +168,19 @@ export function buildScreenRows(rows: BoardRow[], opts: ScreenOptions): ScreenRo
       // leave-self-out: the best book never anchors its own price (same result as fairOver(..., best.book))
       const mine = own.get(best.book)
       const nRef = mine == null ? n : n - 1
-      if (nRef < 1 || nRef < opts.minRef) continue
-      const pOver = (mine == null ? sum : sum - mine) / nRef
-      const pFair = side === 'OVER' ? pOver : 1 - pOver
-      if (!(pFair > 0 && pFair < 1)) continue
       const dec = americanToDecimal(best.american)
+      const label = `${side === 'OVER' ? 'o' : 'u'}${row.line}`
+      // Too few reference books to price it: still a line worth comparing, so list it without a fair value or EV.
+      const pOver = nRef >= 1 && nRef >= opts.minRef ? (mine == null ? sum : sum - mine) / nRef : null
+      const pFair = pOver == null ? null : side === 'OVER' ? pOver : 1 - pOver
+      if (pFair == null || !(pFair > 0 && pFair < 1)) {
+        out.push({ key: `${row.key}|${side}`, row, side, label, bestBook: best.book, bestAmerican: best.american, bestTies: best.ties,
+          pFair: null, nRef: Math.max(nRef, 0), fairAmerican: null, implied: 1 / dec, ev: null })
+        continue
+      }
       out.push({
         key: `${row.key}|${side}`, row, side,
-        label: `${side === 'OVER' ? 'o' : 'u'}${row.line}`,
+        label,
         bestBook: best.book, bestAmerican: best.american, bestTies: best.ties,
         pFair, nRef, fairAmerican: fairAmericanOf(pFair),
         implied: 1 / dec, ev: pFair * dec - 1,

@@ -52,19 +52,27 @@ describe('buildScreenRows', () => {
     const out = buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa', 'novig'], side: 'over' })
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ side: 'OVER', label: 'o24.5', bestBook: 'draftkings', bestAmerican: 110, nRef: 3 })
-    expect(out[0].ev).toBeCloseTo(out[0].pFair * 2.1 - 1, 9)
-    expect(out[0].ev).toBeGreaterThan(0.03)
+    expect(out[0].ev!).toBeCloseTo(out[0].pFair! * 2.1 - 1, 9)
+    expect(out[0].ev!).toBeGreaterThan(0.03)
   })
-  it('drops a row whose reference set is thinner than minRef', () => {
-    expect(buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa'], minRef: 3 })).toHaveLength(0)
-    expect(buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa'], minRef: 2 }).length).toBeGreaterThan(0)
+  it('lists a row whose reference set is thinner than minRef as prices only (no fair value, no EV)', () => {
+    const thin = buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa'], minRef: 3, side: 'over' })
+    expect(thin).toHaveLength(1)
+    expect(thin[0]).toMatchObject({ pFair: null, ev: null, fairAmerican: null, nRef: 2, bestBook: 'draftkings', bestAmerican: 110 })
+    expect(buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa'], minRef: 2, side: 'over' })[0].ev).not.toBeNull()
+  })
+  it('lists a one-sided or unreferenced line (no two-sided book at all) with nRef 0', () => {
+    const yes = row([B('fanduel', 120, null), B('draftkings', 115, null)])
+    const out = buildScreenRows([yes], { ...opts, side: 'both' })
+    expect(out.map(x => x.side)).toEqual(['OVER'])               // no under price anywhere: that side has no row
+    expect(out[0]).toMatchObject({ ev: null, pFair: null, nRef: 0, bestBook: 'fanduel' })
   })
   it('never anchors a book to its own price', () => {
     const solo = row([B('pinnacle', 150, -170), B('circa', -110, -110), B('novig', -110, -110), B('fanduel', -110, -110)])
     const out = buildScreenRows([solo], { ...opts, refs: ['pinnacle', 'circa', 'novig'], minRef: 2, side: 'over' })
     expect(out[0].bestBook).toBe('pinnacle')
     expect(out[0].nRef).toBe(2)
-    expect(out[0].pFair).toBeCloseTo(0.5, 6)
+    expect(out[0].pFair!).toBeCloseTo(0.5, 6)
   })
   it('bettable cut removes offshore books from best price but they still anchor fair value', () => {
     const out = buildScreenRows([r], { ...opts, refs: ['pinnacle', 'circa', 'novig'], bettable: new Set(['draftkings', 'fanduel']), side: 'under' })
@@ -83,9 +91,10 @@ describe('buildScreenRows matches the per-book definition', () => {
   it.each(['proportional', 'power'] as const)('fairOver with leave-self-out agrees (%s)', method => {
     for (const refs of [[], ['pinnacle', 'novig', 'draftkings']]) {
       for (const r of buildScreenRows(rows, { ...opts, refs, method, minRef: 1 })) {
-        const f = fairOver(r.row.books, refs.length ? new Set(refs) : null, method, r.bestBook)!
+        const f = fairOver(r.row.books, refs.length ? new Set(refs) : null, method, r.bestBook)
+        if (!f) { expect(r.pFair).toBeNull(); expect(r.nRef).toBe(0); continue }
         expect(r.nRef).toBe(f.n)
-        expect(r.pFair).toBeCloseTo(r.side === 'OVER' ? f.pOver : 1 - f.pOver, 12)
+        expect(r.pFair!).toBeCloseTo(r.side === 'OVER' ? f.pOver : 1 - f.pOver, 12)
       }
     }
   })

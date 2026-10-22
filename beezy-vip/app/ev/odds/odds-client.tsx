@@ -32,6 +32,7 @@ const MIN_EV = [
   { label: '5%+', v: 0.05 },
 ]
 const PAGE = 150
+const MIN_REF = 3          // reference books needed behind a fair value
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
 const POLL_MS = 3 * 60_000
 
@@ -119,11 +120,12 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
   }, [allRows, stat, game, deferredQ])
 
   const screen = useMemo(() => {
-    const rows = buildScreenRows(filtered, { refs, method, bettable, minRef: 3, side }).filter(r => r.ev >= minEv)
+    // a row with no fair value has no EV: it only shows under MIN EV = All (price comparison), never as a +EV row
+    const rows = buildScreenRows(filtered, { refs, method, bettable, minRef: MIN_REF, side }).filter(r => (r.ev == null ? minEv < 0 : r.ev >= minEv))
     const by: Record<SortKey, (a: ScreenRow, b: ScreenRow) => number> = {
-      ev: (a, b) => b.ev - a.ev,
-      time: (a, b) => a.row.commence.localeCompare(b.row.commence) || b.ev - a.ev,
-      player: (a, b) => a.row.player.localeCompare(b.row.player) || b.ev - a.ev,
+      ev: (a, b) => (b.ev ?? -Infinity) - (a.ev ?? -Infinity),
+      time: (a, b) => a.row.commence.localeCompare(b.row.commence) || (b.ev ?? -Infinity) - (a.ev ?? -Infinity),
+      player: (a, b) => a.row.player.localeCompare(b.row.player) || (b.ev ?? -Infinity) - (a.ev ?? -Infinity),
     }
     return rows.sort(by[sort])
   }, [filtered, refs, method, bettable, side, minEv, sort])
@@ -133,6 +135,9 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
     const sources = [...new Set(active.flatMap(s => boards[s]!.lines_source))]
     return { age: ages.length ? Math.max(...ages) : null, stale: active.some(s => boards[s]!.stale), sources }
   }, [active, boards])
+
+  // no board at all, or every board the API answered with is flagged unavailable (the banker has not written it yet)
+  const unpublished = active.length === 0 || active.every(s => boards[s]!.status === 'unavailable')
 
   const refWeight = refs.length ? Math.round(100 / refs.length) : null
   const refSet = useMemo(() => new Set(refs), [refs])
@@ -208,10 +213,12 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
         </div>
       </section>
 
-      {allRows.length === 0 ? (
-        <Empty title="No prop prices yet" body="Prices are banked every 30 minutes while games are on the board. Nothing is posted for the NFL, NHL or NBA right now." />
+      {unpublished ? (
+        <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
+      ) : allRows.length === 0 ? (
+        <Empty title="No prop prices posted" body="No book has posted NFL, NHL or NBA player props for the games on the board yet." />
       ) : screen.length === 0 ? (
-        <Empty title="Nothing clears these filters" body="Lower the minimum EV, widen the devig books, or clear the prop and game filters. Rows need at least three devig books quoting the line." />
+        <Empty title="Nothing clears these filters" body="Set MIN EV to All to see every line, widen the devig books, or clear the prop and game filters. A +EV row needs at least three devig books pricing the line both ways." />
       ) : (
         <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
           <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -263,14 +270,23 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
 function Row({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string; offshore: boolean }[]; bankroll: number }) {
   const best = bookDisplay(r.bestBook)
   const dec = r.implied > 0 ? 1 / r.implied : 1
-  const size = kellySizing(bankroll, r.pFair, dec)
+  const size = r.pFair == null ? null : kellySizing(bankroll, r.pFair, dec)
   const byBook = new Map(r.row.books.map(b => [b.book, b]))
-  const evColor = r.ev > 0 ? 'var(--signal)' : 'var(--fog)'
+  const evColor = r.ev != null && r.ev > 0 ? 'var(--signal)' : 'var(--fog)'
   return (
     <tr data-row="odds">
       <td className="odds-ev">
-        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</div>
-        <div className="mono odds-sub" title={`${r.nRef} devig books`}>FV {r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
+        {r.ev == null || r.fairAmerican == null ? (
+          <>
+            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--fog)' }}>--</div>
+            <div className="mono odds-sub" title={`Only ${r.nRef} devig book${r.nRef === 1 ? '' : 's'} priced this line both ways; ${MIN_REF} are needed for a fair value`}>{r.nRef} of {MIN_REF} bk</div>
+          </>
+        ) : (
+          <>
+            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</div>
+            <div className="mono odds-sub" title={`${r.nRef} devig books`}>FV {r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
+          </>
+        )}
       </td>
       <td>
         <span style={{ fontSize: '10.5px', fontWeight: 700, color: best.color, background: best.bg, border: `1px solid ${best.color}55`, borderRadius: '6px', padding: '1px 6px', marginRight: '6px' }}>{best.short}</span>
@@ -286,7 +302,7 @@ function Row({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string; o
       </td>
       <td style={{ textAlign: 'right' }}><span className="mono" style={{ fontSize: '12px', color: 'var(--silver)' }}>{(r.implied * 100).toFixed(1)}%</span></td>
       <td style={{ textAlign: 'right' }}>
-        <span className="mono" style={{ fontSize: '12px', color: size.dollars > 0 ? 'var(--chalk)' : 'var(--fog)' }}>{size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</span>
+        <span className="mono" style={{ fontSize: '12px', color: size && size.dollars > 0 ? 'var(--chalk)' : 'var(--fog)' }}>{size && size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</span>
       </td>
       {columns.map(c => {
         const q = byBook.get(c.key)
