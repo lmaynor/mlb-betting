@@ -33,11 +33,16 @@ export const metadata: Metadata = {
     'Quantitative models, prop research and a live +EV terminal across MLB, NFL, NHL and NBA. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
-    images: [{ url: '/api/og?title=Quantitative+Models+%26+%2BEV+Terminal&sub=Paper-tracked.+Every+result+public.', width: 1200, height: 630 }],
+    images: [{ url: '/brand/og-card.jpg', width: 2000, height: 1056, alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
     siteName: 'beezy.fyi',
     type:     'website',
   },
-  twitter: { card: 'summary_large_image', site: '@beezy_fyi', creator: '@beezy_fyi' },
+  twitter: {
+    card:    'summary_large_image',
+    site:    '@beezy_fyi',
+    creator: '@beezy_fyi',
+    images:  [{ url: '/brand/og-card.jpg', alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
