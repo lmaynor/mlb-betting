@@ -91,3 +91,20 @@ describe('information architecture', () => {
     expect(routeExists('/sports/nfl')).toBe(true)
   })
 })
+
+describe('scanner tabs', () => {
+  const scanner = SECTIONS.find(s => s.id === 'scanner')!
+  const odds = scanner.tabs.find(t => t.href === '/ev/odds')!
+  const terminal = scanner.tabs.find(t => t.href === '/ev')!
+  it('lists the odds screen between the terminal and prop research', () => {
+    expect(scanner.tabs.map(t => t.label)).toEqual(['+EV Terminal', 'Odds Screen', 'Prop Research'])
+  })
+  it('lights exactly one tab on /ev and on /ev/odds', () => {
+    expect([tabActive('/ev', null, terminal), tabActive('/ev', null, odds)]).toEqual([true, false])
+    expect([tabActive('/ev/odds', null, terminal), tabActive('/ev/odds', null, odds)]).toEqual([false, true])
+  })
+  it('keeps /ev/odds in the Scanner section and the +EV Terminal nav item', () => {
+    expect(sectionFor('/ev/odds')?.id).toBe('scanner')
+    expect(navActive('/ev/odds', NAV.find(n => n.href === '/ev')!)).toBe(true)
+  })
+})

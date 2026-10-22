@@ -926,6 +926,50 @@ def get_sport_projections(sport, market=None, limit=300, date=None, day=None):
     return out
 
 
+def get_odds_board(sport, day=None, stat=None, limit=2000):
+    """Full per-book prop price matrix for one of nfl / nhl / nba (ValueError otherwise): the data behind /ev/odds. One row
+    per game x player x stat x line with every real book's American over / under price (`books`), NO fair value (the screen
+    de-vigs the viewer's chosen reference books). Read from the precomputed GCS file (ev/odds_board.py), never computed on
+    a request; a missing board answers `status: 'unavailable'` with no rows. Every row is unvalidated."""
+    sport = (sport or "").lower()
+    if sport not in _PROJ_SPORTS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {_PROJ_SPORTS}")
+    limit = max(1, min(int(limit), 3000))
+    day = _proj_day(day, "day")
+    from ev import daily_projections as _dp
+    from ev import odds_board as _ob
+    now = _datetime.now(_timezone.utc)
+    empty = {"sport": sport, "validated": False, "status": "unavailable", "stale": True, "as_of": None, "age_minutes": None,
+             "count": 0, "rows": [], "books": [], "offshore_books": [], "stats": [], "games": [], "lines_source": [],
+             "lines_age_minutes": None, "summary": {}}
+    try:
+        payload = _ob.read_board(sport)
+    except Exception:  # noqa: BLE001 -- serve the empty shape
+        logger.exception("odds board read failed for %s", sport)
+        payload = None
+    if not payload:
+        return empty
+    age = _ob.board_age_min(payload, now)
+    rows, games = payload.get("rows") or [], payload.get("games") or []
+    if day:
+        rows = [r for r in rows if _dp.ct_day(r.get("commence")) == day]
+        games = [g for g in games if _dp.ct_day(g.get("start")) == day]
+    if stat:
+        rows = [r for r in rows if r.get("stat") == str(stat).lower()]
+    started = now.isoformat()
+    rows = [r for r in rows if str(r.get("commence")) > started]       # a cached board outlives game starts
+    games = [g for g in games if str(g.get("start")) > started]
+    books = sorted({b["book"] for r in rows for b in r.get("books") or []})
+    out = {k: payload.get(k) for k in ("sport", "status", "stats", "summary", "lines_age_minutes", "lines_source")}
+    out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
+               stale=age is None or age > _ob.STALE_MINUTES, count=len(rows), rows=rows[:limit], games=games,
+               books=books, offshore_books=[b for b in payload.get("offshore_books") or [] if b in books], validated=False)
+    out["lines_source"] = out["lines_source"] or []
+    if day:
+        out["day"] = day
+    return out
+
+
 def _roi(profit, stake):
     return round(profit / stake * 100.0, 2) if stake else None
 

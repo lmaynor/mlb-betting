@@ -891,7 +891,7 @@ from mlb.runners.public_api import (
     get_today_picks, get_picks, get_recent_settled,
     get_summary_stats, get_window_stats, _require_api_key,
     get_clv_data, get_today_slate,
-    get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections,
+    get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections, get_odds_board,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1189,6 +1189,33 @@ def public_projections():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         logger.exception("public_projections failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/odds/board", methods=["GET", "OPTIONS"])
+def public_odds_board():
+    """/ev/odds screen feed: every real book's over/under price per NFL / NHL / NBA prop line (ev/odds_board.py), no fair
+    value (the screen de-vigs the viewer's reference books). `day=YYYY-MM-DD` keeps one Central game day, `stat=` one market."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_odds_board(
+            request.args.get("sport", ""),
+            day=request.args.get("day") or None,
+            stat=request.args.get("stat") or None,
+            limit=int(request.args.get("limit", 2000)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # unknown sport / bad limit / bad day
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_odds_board failed")
         return jsonify({"error": str(exc)}), 500
 
 

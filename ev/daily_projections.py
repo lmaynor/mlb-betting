@@ -1085,6 +1085,10 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
                          "line_rows": len(line_rows), "confluence": sum(1 for r in line_rows if r["confluence"]),
                          "rows_cut": cut, "games": len(game_list),
                          "roster": None if roster is None else roster.summary()})
+    if write and events:
+        # the /ev/odds screen's full per-book matrix rides the same compute: same unioned events, no extra credits
+        from ev import odds_board as _ob
+        _ob.write_board(_ob.build_board(sport, events, now, meta), sport)
     return _finish(base, sport, write, now)
 
 
