@@ -6,6 +6,8 @@
  */
 import { canViewFull, FREE_PREVIEW_ROWS, type Env, type Viewer } from '@/lib/access'
 import type { CockpitRow, EvFeed } from '@/lib/types'
+import type { OddsBoard } from '@/lib/odds-screen'
+import { isLeague } from '@/lib/tiers'
 
 /** Total live +EV rows a non-Pro viewer sees across every sport: the best by EV. */
 export function limitEvFeed(feed: EvFeed, viewer: Viewer, today: string, env?: Env): { feed: EvFeed; locked: number } {
@@ -43,4 +45,17 @@ export function limitCockpit(rows: CockpitRow[], viewer: Viewer, env?: Env): { r
   const keep = new Set(closed.slice().sort((a, b) => (b.ev ?? -1) - (a.ev ?? -1)).slice(0, FREE_PREVIEW_ROWS.cockpit))
   const closedSet = new Set(closed)
   return { rows: rows.filter(r => !closedSet.has(r) || keep.has(r)), locked: closed.length - keep.size }
+}
+
+/**
+ * The odds screen (/ev/odds) is the +EV Terminal's table view, so it is Pro only like the terminal: everyone else gets the
+ * FREE_PREVIEW_ROWS.ev_terminal best-covered lines (most books quoting) per sport. `locked` is how many were withheld.
+ */
+export function limitOddsBoard(board: OddsBoard, viewer: Viewer, env?: Env): { board: OddsBoard; locked: number } {
+  const sport = isLeague(board.sport) ? board.sport : 'nfl'
+  if (canViewFull(viewer, 'ev_terminal', sport, env)) return { board, locked: 0 }
+  const keep = board.rows.slice().sort((a, b) => b.books.length - a.books.length).slice(0, FREE_PREVIEW_ROWS.ev_terminal)
+  const kept = new Set(keep)
+  const rows = board.rows.filter(r => kept.has(r))
+  return { board: { ...board, rows, count: rows.length }, locked: board.rows.length - rows.length }
 }

@@ -2,7 +2,7 @@
  * Information architecture: the ONE place that says which pages exist in the top nav and which pages are views of
  * the same section. Five questions, five nav items; everything else is a tab inside one of them.
  *
- *   Scanner  what is mispriced right now?     /ev (table)            + /edge (prop research view)
+ *   Scanner  what is mispriced right now?     /ev (table)            + /ev/odds (every book's price) + /edge (prop research view)
  *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games + /picks/history + /cheat-sheet
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
@@ -19,7 +19,7 @@ export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string
 export const SECTIONS: Section[] = [
   {
     id: 'scanner', prefixes: ['/ev', '/edge'],
-    tabs: [{ label: '+EV Terminal', href: '/ev' }, { label: 'Prop Research', href: '/edge' }],
+    tabs: [{ label: '+EV Terminal', href: '/ev' }, { label: 'Odds Screen', href: '/ev/odds' }, { label: 'Prop Research', href: '/edge' }],
   },
   {
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.
@@ -70,6 +70,7 @@ export function tabActive(pathname: string, tabParam: string | null, tab: Sectio
   const want = query ? new URLSearchParams(query).get('tab') : null
   if (path === '/analytics') return pathname === '/analytics' && (tabParam ?? 'bankroll') === want
   if (path === '/picks') return pathname === '/picks'
+  if (path === '/ev') return pathname === '/ev'   // /ev/odds is its own tab
   return under(pathname, path)
 }
 
