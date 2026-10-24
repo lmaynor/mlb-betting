@@ -10,7 +10,7 @@ export interface SitemapEntry {
 }
 
 const STATIC_PATHS = [
-  '/', '/picks', '/picks/games', '/picks/history', '/ev', '/edge', '/analytics', '/cheat-sheet', '/pricing',
+  '/', '/picks', '/picks/games', '/picks/history', '/ev', '/edge', '/analytics', '/cheat-sheet', '/pricing', '/about', '/compare/oddsjam-alternative',
   '/tools', '/tools/boost-ev', '/tools/odds-calculator', '/tools/kelly-calculator', '/results', '/models', '/learn',
 ]
 

@@ -1,6 +1,8 @@
 import type { Article } from '@/lib/articles-static'
 import { plainSummary } from '@/lib/markdown'
 import { DISCORD_URL, X_URL } from '@/lib/links'
+import { PRE_LAUNCH } from '@/lib/launch'
+import { PLANS } from '@/lib/plans'
 
 export const SITE_URL = 'https://beezy.fyi'
 export const SITE_NAME = 'beezy.fyi'
@@ -18,6 +20,9 @@ export const ORGANIZATION_LD = {
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
   sameAs: [X_URL, DISCORD_URL],
+  description:
+    'beezy.fyi is a quantitative sports betting analytics site: a +EV odds scanner, player prop projections and a public results ledger for NFL, NBA, NHL and MLB. Not affiliated with PicksBeezy, Breezy HR or beezy.net.',
+  disambiguatingDescription: 'Independent sports betting analytics publication at beezy.fyi.',
 }
 
 export const WEBSITE_LD = {
@@ -52,4 +57,36 @@ export function articleLd(a: Article) {
 /** "Oct 19, 2026" in Central Time, the zone every beezy.fyi record is kept in. Pass `now` for tests. */
 export function asOfLabel(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(now)
+}
+
+/**
+ * Pricing as schema.org offers, built from PLANS so the numbers cannot drift from the page. Pre-launch the plans are
+ * not purchasable yet, so availability is PreOrder rather than InStock.
+ */
+export function pricingLd() {
+  const availability = `https://schema.org/${PRE_LAUNCH ? 'PreOrder' : 'InStock'}`
+  const offer = (name: string, price: number) => ({
+    '@type': 'Offer', name, price: price.toFixed(2), priceCurrency: 'USD', availability, url: `${SITE_URL}/pricing`,
+  })
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'beezy.fyi',
+    applicationCategory: 'SportsApplication',
+    operatingSystem: 'Web',
+    url: SITE_URL,
+    publisher: { '@id': `${SITE_URL}/#organization` },
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'USD',
+      lowPrice: PLANS.single.price.toFixed(2),
+      highPrice: PLANS.annual.price.toFixed(2),
+      offerCount: 3,
+      offers: [
+        offer('Single-Sport Pass (per month)', PLANS.single.price),
+        offer('All-Access Pro (per month)', PLANS.monthly.price),
+        offer('All-Access Pro Annual (per year)', PLANS.annual.price),
+      ],
+    },
+  }
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PRE_LAUNCH } from '@/lib/launch'
+import { PLANS, ANNUAL_PER_MONTH, ANNUAL_SAVINGS_PCT } from '@/lib/plans'
 import { DISCORD_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
@@ -16,14 +17,7 @@ const CheckoutButton = dynamic(
 
 const SURFACE = SURFACE_CARD
 
-/** Plan copy lives in one object so the tests can pin prices and the annual-savings arithmetic. */
-export const PLANS = {
-  single: { price: 19, period: '/mo' },
-  monthly: { price: 39, period: '/mo' },
-  annual: { price: 299, period: '/yr' },
-} as const
-export const ANNUAL_PER_MONTH = PLANS.annual.price / 12                                   // 24.92
-export const ANNUAL_SAVINGS_PCT = Math.round((1 - PLANS.annual.price / (PLANS.monthly.price * 12)) * 100)   // 36
+export { PLANS, ANNUAL_PER_MONTH, ANNUAL_SAVINGS_PCT }
 
 const LEAGUE_LABEL = Object.fromEntries(LEAGUES.map(l => [l, SPORT_PILLARS[l].shortName])) as Record<League, string>
 // Existing display order first; a league added to lib/sports.ts is appended, so it appears in the picker without an edit here.

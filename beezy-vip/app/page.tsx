@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { Hero }             from '@/components/landing/hero'
 import { CommandCenter }     from '@/components/landing/command-center'
@@ -8,6 +9,12 @@ import { RecentPicksTable } from '@/components/landing/recent-picks-table'
 import { DiscordFollowCTA } from '@/components/landing/discord-follow-cta'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: { absolute: 'beezy.fyi \u2014 Quantitative Sports Betting Analytics & +EV Scanner' },
+  description:
+    'Find mispriced sportsbook lines with beezy.fyi. Market-derived +EV alerts, player prop projections and a public paper-tracked results ledger for NFL, NBA, NHL and MLB.',
+}
 
 export default function HomePage() {
   return (
