@@ -1002,3 +1002,122 @@ def test_header_message_carries_the_stats_lines(monkeypatch):
     assert sent[0]["content"].endswith("\n**L7** x\n**L30** y")
     td.post_drafts_to_discord("recap", ["a. beezy.fyi"])
     assert "L7" not in sent[-2]["content"]
+
+
+# reply_ammo analysis (dossier + three parts) ---------------------------------------------------------------------------------
+
+ENGINE_ROW = {"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.1, "proj_raw": 35.0, "calib_mult": 0.9743,
+              "opp_factor": 1.04, "usage_proj": 36.2, "usage_label": "Minutes", "n_games": 40, "szn_avg": 31.0,
+              "proj_p10": 26.0, "proj_p90": 42.0}
+
+
+def _eplay(**engine):
+    feed = _feed(nba=[_outlier()])
+    row = {**ENGINE_ROW, **engine}
+    return td.build_reply_ammo(feed, {"nba": {"rows": [row]}})[0]
+
+
+def test_projection_terms_sum_exactly_to_the_gap_to_the_line():
+    f = _eplay()["facts"]
+    terms = td.projection_terms(f)
+    assert sum(v for _, v in terms) == pytest.approx(34.1 - 32.5)
+    assert [lab for lab, _ in terms][0] == "the season average against the line"
+
+
+def test_projection_terms_without_a_season_average_use_the_base_projection():
+    terms = td.projection_terms(_eplay(szn_avg=None)["facts"])
+    assert terms[0][0] == "the base projection against the line"
+    assert sum(v for _, v in terms) == pytest.approx(34.1 - 32.5)
+
+
+def test_plays_without_an_engine_row_get_no_dossier_or_analysis(monkeypatch):
+    play = td.build_reply_ammo(_feed(nba=[_outlier()]), {})[0]
+    assert play["facts"]["engine"] is None and td.build_dossier(play["facts"]) is None
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: pytest.fail("no dossier, no Gemini call"))
+    assert "analysis" not in td.generate_analyses([play])[0]
+
+
+def test_engine_row_survives_even_when_the_projection_sits_against_the_pick():
+    play = _eplay(proj_mean=31.0, proj_raw=32.0)
+    assert play["facts"]["proj_mean"] is None and play["facts"]["engine"]["proj_mean"] == 31.0   # public copy hides it
+    d = td.build_dossier(play["facts"])
+    assert not d["supports"] and "sits against the Over" in d["text"]
+    assert "other side of the line" in td.template_analysis(play["facts"], d)["thin"]
+
+
+def test_dossier_text_carries_the_drivers_and_the_market():
+    d = td.build_dossier(_eplay()["facts"])
+    for needle in ("Our projection is 34.1 against a line of 32.5", "Biggest push toward the Over", "Opponent factor: 1.04",
+                   "Projected minutes: 36.2", "built on 40 games", "10th to 90th percentile range is 26.0 to 42.0",
+                   "needs 47% to break even", "the other 8 books imply 52%"):
+        assert needle in d["text"]
+
+
+def test_template_analysis_passes_the_guard_it_holds_gemini_to():
+    for kw in ({}, {"szn_avg": None}, {"proj_p10": 33.0, "proj_p90": 40.0}, {"proj_mean": 31.0, "proj_raw": 32.0}, {"n_games": 8}):
+        play = _eplay(**kw)
+        d = td.build_dossier(play["facts"])
+        parts = td.template_analysis(play["facts"], d)
+        assert td.analysis_ok(parts, play["facts"], d), (kw, parts)
+
+
+GOOD_ANALYSIS = {
+    "read": "We project 34.1 against a line of 32.5. The season average of 31.0 is below the line, but recent weighting and usage lift it.",
+    "market": "DraftKings is at +115, which needs 47% to break even; the other 8 books imply 52%.",
+    "thin": "The line sits inside our range of 26.0 to 42.0, so the projection alone does not settle it.",
+}
+
+
+def test_analysis_ok_accepts_a_grounded_analysis_and_rejects_invented_or_unsafe_ones():
+    play = _eplay()
+    f, d = play["facts"], td.build_dossier(play["facts"])
+    assert td.analysis_ok(GOOD_ANALYSIS, f, d)
+    bad = [
+        {**GOOD_ANALYSIS, "read": "We project 34.1 against 32.5 and give Luka a 63% chance to go over."},     # invented probability
+        {**GOOD_ANALYSIS, "thin": "He has hit this in 4 of his last 5."},                                      # form talk
+        {**GOOD_ANALYSIS, "market": "DraftKings is cheap against the other books."},                            # no real price
+        {**GOOD_ANALYSIS, "market": "DraftKings is at +115. See https://x.co/a"},                              # link
+        {**GOOD_ANALYSIS, "thin": "Full breakdown at beezy.fyi"},                                              # brand
+        {**GOOD_ANALYSIS, "thin": "x" * 400},                                                                  # too long
+        {k: v for k, v in GOOD_ANALYSIS.items() if k != "thin"},                                               # missing part
+        {**GOOD_ANALYSIS, "read": "We project 35.9 against 32.5."},                                            # number not in dossier
+        "not a dict", None,
+    ]
+    assert not any(td.analysis_ok(b, f, d) for b in bad)
+
+
+def test_generate_analyses_is_one_call_prompt_holds_only_the_dossier_and_bad_replies_fall_back(monkeypatch):
+    seen = []
+    monkeypatch.setattr(td, "_gemini_json_text", lambda system, user, max_tokens=0: seen.append((system, user)) or json.dumps(
+        {"0": GOOD_ANALYSIS, "1": {"read": "x", "market": "y", "thin": "z"}}))
+    plays = [_eplay(), td.build_reply_ammo(_feed(nba=[_outlier()]), {})[0]]
+    out = td.generate_analyses([plays[0], dict(plays[1], player="Nobody")])
+    assert len(seen) == 1 and seen[0][0] == td.ANALYSIS_SYSTEM_PROMPT
+    assert "Our projection is 34.1 against a line of 32.5" in seen[0][1] and "http" not in seen[0][1] and "beezy" not in seen[0][1].lower()
+    assert out[0]["analysis"]["source"] == "gemini" and out[0]["analysis"]["market"] == GOOD_ANALYSIS["market"]
+    assert "analysis" not in out[1]
+
+
+def test_generate_analyses_falls_back_to_the_template_when_gemini_is_down_or_wrong(monkeypatch):
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    assert td.generate_analyses([_eplay()])[0]["analysis"]["source"] == "template"
+    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: json.dumps({"0": {"read": "63% chance", "market": "+115", "thin": "n"}}))
+    assert td.generate_analyses([_eplay()])[0]["analysis"]["source"] == "template"
+
+
+def test_reply_ammo_posts_the_analysis_after_the_variants(monkeypatch):
+    monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
+    play = dict(_eplay(), variants=dict(GOOD), analysis={**GOOD_ANALYSIS, "source": "gemini"})
+    with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
+        td.post_reply_ammo_to_discord([play])
+    last = _posted(post)[-1]
+    assert last["flags"] == 4 and last["content"].startswith("**analysis** (gemini)\nWe project 34.1")
+    assert td.ANALYSIS_NOTE in last["content"] and "beezy" not in last["content"].lower().replace("**analysis**", "")
+
+
+def test_engine_accuracy_reads_the_replay_file_and_tolerates_absence(monkeypatch):
+    nfl = td._engine_accuracy("nfl", "rec_yds")
+    assert nfl and nfl[0] < nfl[1]
+    assert td._engine_accuracy("nfl", "nope") is None
+    monkeypatch.setattr(td, "_ACCURACY_PATHS", ("/nonexistent/x.json",))
+    assert td._engine_accuracy("nfl", "rec_yds") is None

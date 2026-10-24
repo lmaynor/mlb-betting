@@ -63,6 +63,23 @@ the gap to the line (`proj_gap`) and projected minutes. It never states a win pr
 unvalidated). Two live-found rules: a projection on the wrong side of the line is not cited (`proj_supports_side`: "we project 1.57
 against 1.5" followed by the Under reads as self-contradiction), and the other books are "around +109", never an "average".
 
+## Analysis: a three-part read from the engine's own components (2026-10-23)
+
+reply_ammo plays are book-vs-consensus price gaps, not model picks, so the replies alone only state a price. For NFL/NHL/NBA plays
+that have a projection row, `generate_analyses()` adds an operator-facing analysis (separate Discord message after the variants):
+`read` (our projection vs the line and its biggest driver), `market` (the book's price vs what the other books imply) and `thin`
+(the honest weak point). "Model weights" here are the `empirical_ewm_v2` terms, not learned weights: `projection_terms()` splits
+`proj_mean - line` EXACTLY into season average vs line, recent weighting and usage vs season average, opponent adjustment
+(`proj_raw - proj_raw/opp_factor`) and calibration scale (`proj_mean - proj_raw`). `build_dossier()` renders those, the 10th-90th
+range, history length, break-even vs implied probability and the engine's out-of-sample MAE (`engine-accuracy.json`, copied into
+the image by the Dockerfile; optional) as plain text. ONE batched Gemini call writes the prose and `analysis_ok()` rejects any part
+with a number not in that play's dossier, a link, an out-of-voice phrase, or a market part without the book's real price; a rejected
+or failed reply becomes `template_analysis()`. Rules kept: no last-N or streak talk (the season average is allowed, last-5/10 never),
+no win probability for our model, and every analysis is posted with `ANALYSIS_NOTE` (accuracy evidence only, no tracked record
+against prices). The public reply still hides a projection that sits against the pick; the analysis does the opposite on purpose and
+says so in `thin`. MLB plays have no engine row and get no analysis; a booster-level (SHAP) version for MLB model systems is the
+follow-up.
+
 ## Gemini reliability
 
 `_gemini_json_text()` asks for JSON mode (`responseMimeType`, plus a string-array schema for the tweet drafts) with a 4096-token

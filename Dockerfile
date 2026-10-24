@@ -36,6 +36,8 @@ COPY ev/            ./ev/
 COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py
 COPY main.py          .
 COPY tweet_drafter.py .
+# Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).
+COPY beezy-vip/lib/engine-accuracy.json ./engine-accuracy.json
 COPY setup.py         .
 
 # Install mlb_core as a package (eliminates all sys.path hacks). --no-deps is REQUIRED:
