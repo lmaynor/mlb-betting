@@ -984,24 +984,225 @@ def generate_reply_fodder(plays):
     return out
 
 
+# -- reply_ammo analysis: a three-part read built from the projection engine's own components ---------------------------
+# The reply variants above state a price. The analysis explains what is behind the number: where our projection sits against the
+# line, which engine component (season level, recent weighting/usage, opponent, calibration) moves it, what the price implies,
+# and where the case is thin. The dossier is computed here, deterministically; Gemini only turns it into prose and may use no number
+# that is not in it (analysis_ok). NFL/NHL/NBA only: the engine there is a recency-weighted average with a usage and an opponent
+# term, so "the weights" are those terms. MLB plays carry no engine row and get no analysis yet.
+
+ENGINE_FIELDS = ("proj_mean", "proj_raw", "calib_mult", "opp_factor", "usage_proj", "usage_label", "n_games", "szn_avg",
+                 "proj_p10", "proj_p90")
+ANALYSIS_PART_MAX = 320
+ANALYSIS_PARTS = ("read", "market", "thin")
+ANALYSIS_NOTE = "Accuracy evidence only: this projection has no tracked record against prices."
+
+_ACCURACY_PATHS = (os.path.join(os.path.dirname(os.path.abspath(__file__)), "engine-accuracy.json"),
+                   os.path.join(os.path.dirname(os.path.abspath(__file__)), "beezy-vip", "lib", "engine-accuracy.json"))
+
+
+def _engine_accuracy(sport, stat):
+    """(engine MAE, plain-average MAE) from the out-of-sample replay, or None when the file or the stat is absent."""
+    for path in _ACCURACY_PATHS:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                s = ((json.load(fh).get(sport) or {}).get("stats") or {}).get(stat)
+        except (OSError, ValueError):
+            continue
+        if s and _num(s.get("mae")) is not None and _num(s.get("baselineMae")) is not None:
+            return float(s["mae"]), float(s["baselineMae"])
+    return None
+
+
+def _fmt_term(v):
+    return "no change" if abs(v) < 0.05 else f"{v:+.1f}"
+
+
+def projection_terms(f):
+    """The projection's gap to the line, split exactly into the engine's components: [(label, value)] in stat units, summing to
+    proj_mean - line. season level -> recent weighting and usage -> opponent -> calibration. None without an engine row."""
+    e, line = f.get("engine"), f.get("point")
+    if not e or e.get("proj_mean") is None or e.get("proj_raw") is None or line is None:
+        return None
+    mu, raw = e["proj_mean"], e["proj_raw"]
+    opp = e.get("opp_factor") or 1.0
+    base = raw / opp if opp else raw
+    terms = []
+    if e.get("szn_avg") is not None:
+        terms += [("the season average against the line", e["szn_avg"] - line),
+                  ("recent weighting and usage against the season average", base - e["szn_avg"])]
+    else:
+        terms.append(("the base projection against the line", base - line))
+    terms += [("the opponent adjustment", raw - base), ("the calibration scale", mu - raw)]
+    return terms
+
+
+def build_dossier(f, sport=None):
+    """Facts for one play, as {"text": numbered lines for the prompt, "supports": bool, "driver", "against"} or None when the play
+    has no engine row. Every number Gemini may use is in `text`."""
+    terms = projection_terms(f)
+    if terms is None:
+        return None
+    e, line, side = f["engine"], f["point"], str(f["side"]).upper()
+    mu = e["proj_mean"]
+    gap = mu - line
+    supports = proj_supports_side(mu, line, side)
+    toward = [(lab, v if side == "OVER" else -v) for lab, v in terms]      # positive = pushes toward the pick
+    driver = max(toward, key=lambda t: t[1])
+    against = min(toward, key=lambda t: t[1])
+    pick = "Over" if side == "OVER" else "Under"
+    lines = [f"Pick: {_play_head(f)} at {_book_name(f)} {_odds(f['american'])}.",
+             f"Our projection is {mu:.1f} against a line of {line:g}, {abs(gap):.1f} {'above' if gap > 0 else 'below'} it, "
+             f"which {'supports' if supports else 'sits against'} the {pick}."]
+    if e.get("szn_avg") is not None:
+        lines.append(f"Season average: {e['szn_avg']:.1f}.")
+    for lab, v in terms:
+        lines.append(f"- {lab}: {_fmt_term(v)}")
+    if driver[1] >= 0.05:
+        lines.append(f"Biggest push toward the {pick}: {driver[0]} ({abs(driver[1]):.1f} in its favor).")
+    if against[1] <= -0.05:
+        lines.append(f"Biggest push against the {pick}: {against[0]} ({abs(against[1]):.1f} against it).")
+    if e.get("opp_factor") is not None:
+        lines.append(f"Opponent factor: {e['opp_factor']:.2f}; calibration scale: {(e.get('calib_mult') or 1.0):.2f}.")
+    if e.get("usage_proj") is not None and e.get("usage_label"):
+        lines.append(f"Projected {str(e['usage_label']).lower()}: {e['usage_proj']:.1f}.")
+    if e.get("n_games"):
+        lines.append(f"The projection is built on {int(e['n_games'])} games of history.")
+    inside = None
+    if e.get("proj_p10") is not None and e.get("proj_p90") is not None:
+        inside = e["proj_p10"] <= line <= e["proj_p90"]
+        lines.append(f"Our 10th to 90th percentile range is {e['proj_p10']:.1f} to {e['proj_p90']:.1f}; the line is "
+                     f"{'inside' if inside else 'outside'} it.")
+    be, mk = breakeven_pct(f), market_pct(f)
+    lines.append(f"The price needs {be:.0f}% to break even; the other {f['n_books']} books imply {mk:.0f}% "
+                 f"(about {_odds(prob_to_american(f['p_fair']))}), a gap of {mk - be:.1f} points.")
+    acc = _engine_accuracy(sport or f.get("sport"), f.get("stat"))
+    if acc:
+        lines.append(f"In past seasons this projection missed {f['stat_label']} by {acc[0]:.2f} on average; a plain recent-games "
+                     f"average missed by {acc[1]:.2f}.")
+    return {"text": "\n".join(lines), "supports": supports, "inside": inside, "driver": driver, "against": against,
+            "gap": gap, "mu": mu}
+
+
+def template_analysis(f, dossier):
+    """The deterministic three-part analysis (also the fallback when Gemini is down or rejected)."""
+    pick = "Over" if str(f["side"]).upper() == "OVER" else "Under"
+    mu, line, gap = dossier["mu"], f["point"], dossier["gap"]
+    read = f"We project {mu:.1f} against a line of {f['point']:g}, {abs(gap):.1f} {'above' if gap > 0 else 'below'} it."
+    drv = dossier["driver"]
+    if drv[1] >= 0.05:
+        read += f" The biggest push toward the {pick} is {drv[0]} ({abs(drv[1]):.1f} in its favor)."
+    be, mk = breakeven_pct(f), market_pct(f)
+    market = (f"{_book_name(f)} is at {_odds(f['american'])}, which needs {be:.0f}% to break even; "
+              f"the other {f['n_books']} books imply {mk:.0f}%.")
+    e, ag = f["engine"], dossier["against"]
+    if not dossier["supports"]:
+        thin = "Our projection is on the other side of the line, so this rests on the price gap alone."
+    elif dossier["inside"]:
+        thin = f"The line sits inside our range of {e['proj_p10']:.1f} to {e['proj_p90']:.1f}, so the projection alone does not settle it."
+    elif ag[1] <= -0.05:
+        thin = f"{ag[0].capitalize()} pulls the other way ({abs(ag[1]):.1f} against it)."
+    elif e.get("n_games") and e["n_games"] < 15:
+        thin = f"It rests on only {int(e['n_games'])} games of history."
+    else:
+        thin = "The price gap comes from other books, so a stale quote would look exactly like this."
+    return {"read": read, "market": market, "thin": thin}
+
+
+def analysis_allowed_numbers(f, dossier):
+    out = _allowed_numbers(f)
+    for tok in _NUM_RE.findall(dossier["text"]):
+        out.update({tok, tok.lstrip("+-")})
+    return out
+
+
+def analysis_ok(parts, f, dossier):
+    """A Gemini analysis is usable only if it has all three parts, each link-free, in voice and short, the market part quotes the
+    book's real price, and no part contains a number that is not in the dossier."""
+    if not isinstance(parts, dict):
+        return False
+    allowed = analysis_allowed_numbers(f, dossier)
+    for key in ANALYSIS_PARTS:
+        text = parts.get(key)
+        if not isinstance(text, str):
+            return False
+        text = text.strip()
+        if not text or len(text) > ANALYSIS_PART_MAX or not is_link_free(text) or violates_voice(text):
+            return False
+        if not all(tok in allowed or tok.lstrip("+-") in allowed for tok in _NUM_RE.findall(text)):
+            return False
+    return _odds(f["american"]) in parts["market"]
+
+
+ANALYSIS_SYSTEM_PROMPT = PERSONA + """
+You write a short ANALYSIS of one betting prop for the account's operator, who may use it as a thread or a quote. For each play you
+get a dossier of facts. Write exactly three parts, each 1-2 sentences and at most 300 characters:
+- read: what our projection says and what drives it. Name the biggest driver from the dossier (season level, recent weighting and
+  usage, the opponent, or the calibration scale) and say it in plain words
+- market: the book's price against what the other books imply
+- thin: the honest weak point: the strongest thing in the dossier that cuts against the pick, a line inside our range, a small
+  sample, or a projection on the other side of the line. Never leave it generic
+Rules: use ONLY numbers that appear in that play's dossier, written the way they appear; invent nothing, no matchup, injury, pace,
+weather or form talk; never state a win probability for our model; no link, no site name, no @handle, no hashtag; the other books
+are "around +109", never an "average". Do not call anything a lock or a sure thing.
+
+Return ONLY JSON: {"<play id>": {"read": "...", "market": "...", "thin": "..."}, ...}
+"""
+
+
+def _analysis_prompt(items):
+    blocks = [f"[{i}] {p['sport'].upper()}\n{d['text']}" for i, p, d in items]
+    return "Dossiers:\n\n" + "\n\n".join(blocks) + "\n\nWrite the analyses."
+
+
+def generate_analyses(plays):
+    """Add `analysis` ({read, market, thin, source}) to every play that has an engine row. ONE batched Gemini call; a play whose
+    reply fails analysis_ok (or any Gemini failure) gets the deterministic template instead. Plays without an engine row get none."""
+    out = [dict(p) for p in plays]
+    items = []
+    for i, p in enumerate(out):
+        d = build_dossier(p["facts"], p["sport"])
+        if d:
+            p["dossier"] = d
+            items.append((i, p, d))
+    if not items:
+        return out
+    try:
+        data = json.loads(_gemini_json_text(ANALYSIS_SYSTEM_PROMPT, _analysis_prompt(items), max_tokens=6144))
+    except Exception as e:  # noqa: BLE001 -- fall back to templates
+        print(f"  Gemini analysis failed ({e}); using templates")
+        data = {}
+    for i, p, d in items:
+        mine = data.get(str(i)) if isinstance(data, dict) else None
+        if analysis_ok(mine, p["facts"], d):
+            p["analysis"] = {**{k: mine[k].strip() for k in ANALYSIS_PARTS}, "source": "gemini"}
+        else:
+            p["analysis"] = {**template_analysis(p["facts"], d), "source": "template"}
+    return out
+
+
 def build_reply_ammo(feed, projections=None):
     """[{sport, player, snippet, facts, search_url}] for the day's top plays (`snippet` = the deterministic reply). `projections` = {sport: projection payload}; a matching
     (player, stat) row adds our projection mean to the snippet. Plays that cannot be written within the limits are skipped."""
-    proj_idx = {}
+    proj_idx, engine_idx = {}, {}
     for sp, payload in (projections or {}).items():
         for r in (payload or {}).get("rows") or []:
             if r.get("proj_mean") is not None:
                 usage = _num(r.get("usage_proj")) if str(r.get("usage_label") or "").lower() in _MINUTES_LABELS else None
-                proj_idx[(sp, r.get("player_norm"), r.get("stat"))] = (_num(r.get("proj_mean")), usage)
+                key = (sp, r.get("player_norm"), r.get("stat"))
+                proj_idx[key] = (_num(r.get("proj_mean")), usage)
+                engine_idx[key] = {k: (r.get(k) if k == "usage_label" else _num(r.get(k))) for k in ENGINE_FIELDS}
     plays = []
     for c in select_reply_plays(reply_candidates(feed)):
-        proj_mean, minutes = proj_idx.get((c["sport"], c.get("player_norm"), c["stat"]), (None, None))
+        key = (c["sport"], c.get("player_norm"), c["stat"])
+        proj_mean, minutes = proj_idx.get(key, (None, None))
+        engine = engine_idx.get(key)
         if not proj_supports_side(proj_mean, c.get("point"), c.get("side")):
             proj_mean, minutes = None, None          # do not cite a projection that sits against the pick (see proj_supports_side)
         snippet = build_reply_snippet(c, proj_mean)
         if snippet:
             plays.append({"sport": c["sport"], "player": c["player"], "snippet": snippet,
-                          "facts": {**c, "proj_mean": proj_mean, "proj_minutes": minutes},
+                          "facts": {**c, "proj_mean": proj_mean, "proj_minutes": minutes, "engine": engine},
                           "search_url": build_x_search_url(f"{c['player']} min_faves:{REPLY_MIN_FAVES}")})
     return plays
 
@@ -1019,6 +1220,10 @@ def post_reply_ammo_to_discord(plays):
                          "flags": _SUPPRESS_EMBEDS})
         variants = p.get("variants") or {"standard": p["snippet"]}
         messages += [{"content": text} for text in variants.values()]
+        an = p.get("analysis")
+        if an:
+            messages.append({"content": f"**analysis** ({an['source']})\n{an['read']}\n{an['market']}\n{an['thin']}\n_{ANALYSIS_NOTE}_",
+                             "flags": _SUPPRESS_EMBEDS})
     return post_messages(hook, messages)
 
 
@@ -1035,10 +1240,13 @@ def run_reply_ammo():
         print("No credible price gaps right now -- no reply ammo.")
         return
     plays = generate_reply_fodder(plays)
+    plays = generate_analyses(plays)
     for i, p in enumerate(plays, 1):
         print(f"  [{i}] {p['sport']} | {p['player']}")
         for style, text in p["variants"].items():
             print(f"      {style}: {text}")
+        if p.get("analysis"):
+            print(f"      analysis ({p['analysis']['source']}): " + " ".join(p["analysis"][k] for k in ANALYSIS_PARTS))
         print(f"      {p['search_url']}")
     print(require_posted(post_reply_ammo_to_discord(plays)))
 
