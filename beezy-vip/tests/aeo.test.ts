@@ -106,3 +106,23 @@ describe('asOfLabel', () => {
     expect(asOfLabel(new Date('2026-10-20T12:00:00Z'))).toBe('Oct 20, 2026')
   })
 })
+
+describe('pricing JSON-LD and entity pages', () => {
+  it('quotes the real plan prices and is PreOrder while PRE_LAUNCH', () => {
+    const { pricingLd } = require('../lib/seo')
+    const ld = pricingLd()
+    expect(ld.offers.lowPrice).toBe('19.00')
+    expect(ld.offers.highPrice).toBe('299.00')
+    expect(ld.offers.offers.map((o: { price: string }) => o.price)).toEqual(['19.00', '39.00', '299.00'])
+    expect(ld.offers.offers[0].availability).toBe('https://schema.org/PreOrder')
+  })
+
+  it('lists /about and the compare page in the sitemap, and serves the IndexNow key file', () => {
+    const xml = buildSitemapXml()
+    expect(xml).toContain('<loc>https://beezy.fyi/about</loc>')
+    expect(xml).toContain('<loc>https://beezy.fyi/compare/oddsjam-alternative</loc>')
+    const py = readFileSync(join(__dirname, '../../scripts/submit_indexnow.py'), 'utf8')
+    const key = /^KEY = "([0-9a-f]{32})"/m.exec(py)![1]
+    expect(readFileSync(join(__dirname, `../public/${key}.txt`), 'utf8')).toBe(key)
+  })
+})
