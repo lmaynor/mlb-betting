@@ -28,9 +28,9 @@ export default function CompareOddsJamAlternativePage() {
       <div className="article-body">
         <p>
           Sports betting tools fall into three groups: odds scanners, prop research tools and bet trackers. beezy.fyi is
-          a scanner that also publishes its own projections and a public results ledger. Competitor prices below link to each vendor's
-          page and are list prices as publicly listed in October 2026; some vendors price per day or toggle between
-          monthly and annual billing, and so confirm current pricing with the vendor. Prices were read from each vendor's page on October 24, 2026.
+          a scanner that also publishes its own projections and a public results ledger. Competitor prices below link to each vendor&apos;s
+          page and were read from those pages on October 24, 2026. Some vendors price per day or toggle between monthly
+          and annual billing, and prices change, so confirm current pricing with the vendor.
         </p>
       </div>
       <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
