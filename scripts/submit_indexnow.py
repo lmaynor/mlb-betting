@@ -11,7 +11,7 @@ import sys
 import urllib.request
 
 HOST = "beezy.fyi"
-KEY = "d039ed888265634b2c6ed8d90133d6ce"
+KEY = "a7f6f4624a6f7373c776fcc2275fd71c"
 ENDPOINT = "https://api.indexnow.org/indexnow"
 
 
