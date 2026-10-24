@@ -13,11 +13,12 @@ const td = { padding: '8px 10px', fontSize: '13px', color: '#d1d5db', borderBott
 
 const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
   { tool: 'beezy.fyi', price: `$${PLANS.single.price}/mo one league, $${PLANS.monthly.price}/mo all four, $${PLANS.annual.price}/yr (pre-launch)`, what: 'Market-consensus +EV scanner plus projection models; public paper-tracked ledger', href: '/pricing' },
-  { tool: 'OddsJam', price: 'Positive EV Global listed at $499/mo; Platinum $499.99/mo list', what: 'Odds comparison and +EV / arbitrage scanning across books; results are tracked by the user', href: 'https://oddsjam.com/subscribe' },
+  { tool: 'OddsJam', price: 'Positive EV Global $399.99/mo shown ($499 struck through); Sharp Money $6.60/day; Platinum $13.60 to $20/day', what: 'Odds comparison and +EV / arbitrage scanning across 100+ books; results are tracked by the user', href: 'https://oddsjam.com/subscribe' },
   { tool: 'Props.cash', price: '$19.99/mo or $199.99/yr, all sports', what: 'Prop research built around hit rates and historical trends', href: 'https://props.cash/' },
-  { tool: 'Outlier', price: 'See vendor site', what: 'Prop research built around hit rates and historical trends', href: 'https://outlier.bet/' },
-  { tool: 'Unabated', price: 'Props+ $99/mo, Premium $199/mo, Concierge $799/mo', what: 'Market-implied line and fair-price tools aimed at sharp bettors', href: 'https://unabated.com/pricing' },
-  { tool: 'Pikkit', price: 'Free core app; Pro $29.99/mo or $199.99/yr', what: 'Bet tracking and closing line value measurement; it does not generate picks', href: 'https://pikkit.com/pro' },
+  { tool: 'Outlier', price: 'Free tier; Premium $19.99/mo; Premium+ $29.99/mo; Pro $79.99/mo', what: 'Prop insights, odds comparison and line movement; EV+ indicators and arbitrage feed on higher tiers', href: 'https://www.outlier.bet/#plans' },
+  { tool: 'Unabated', price: 'Props+ $99/mo, Premium $199/mo, Concierge $799/mo', what: 'Market-implied line and fair-price tools aimed at sharp bettors', href: 'https://tools.unabated.com/pricing' },
+  { tool: 'Pikkit', price: 'Free core app; Pro $29.99/mo or $199.99/yr', what: 'Bet tracking, line shopping and closing line value; it does not generate picks', href: 'https://pikkit.com/pro' },
+  { tool: 'Betstamp', price: 'Free app; PRO Main $249/mo ($149/mo billed annually); Props and Live tiers contact sales', what: 'Odds comparison, bet tracking with ROI and CLV, and a pro odds screen with edge detection', href: 'https://www.betstamp.com/pro' },
 ]
 
 export default function CompareOddsJamAlternativePage() {
@@ -28,8 +29,8 @@ export default function CompareOddsJamAlternativePage() {
         <p>
           Sports betting tools fall into three groups: odds scanners, prop research tools and bet trackers. beezy.fyi is
           a scanner that also publishes its own projections and a public results ledger. Competitor prices below link to each vendor's
-          page and are list prices as publicly listed in October 2026; some vendor pages were last updated
-          earlier, so confirm current pricing with the vendor.
+          page and are list prices as publicly listed in October 2026; some vendors price per day or toggle between
+          monthly and annual billing, and so confirm current pricing with the vendor. Prices were read from each vendor's page on October 24, 2026.
         </p>
       </div>
       <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
@@ -54,7 +55,7 @@ export default function CompareOddsJamAlternativePage() {
         </p>
         <h2>beezy.fyi vs Props.cash and Outlier</h2>
         <p>
-          Those tools show how often a player has cleared a line recently. beezy.fyi projects tonight&apos;s outcome from
+          Those tools center on trends, hit rates and odds comparison. beezy.fyi projects tonight&apos;s outcome from
           minutes, usage and official injury reports instead of recent hit rate.
         </p>
         <h2>beezy.fyi vs Unabated</h2>
@@ -64,8 +65,8 @@ export default function CompareOddsJamAlternativePage() {
         </p>
         <h2>beezy.fyi vs Pikkit and Betstamp</h2>
         <p>
-          Pikkit and Betstamp (Betstamp pricing not listed above) track bets and closing line value. They are complements: beezy.fyi finds prices, they
-          measure how your bets did.
+          Pikkit and Betstamp track bets, ROI and closing line value, and Betstamp also offers a pro odds screen. beezy.fyi differs
+          by publishing its own projections and a public ledger of every flagged play.
         </p>
         <p>Prices and descriptions reflect each vendor's public pages as of October 2026 and may have changed. <a href="/pricing">beezy.fyi pricing</a>.</p>
       </div>
