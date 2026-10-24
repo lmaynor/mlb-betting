@@ -6,7 +6,7 @@ import Link from 'next/link'
 import type { Bet, EvBookOutlierRow, EvBookQuote, EvFeed, EvHeadline, EvMlbRow, EvNflRow, EvPropsBlock } from '@/lib/types'
 import { apiGetEvFeed } from '@/lib/betting-api'
 import { beezyscore, scoreTier, TIER_META } from '@/lib/beezy-score'
-import { BOOK_META, bookDisplay, CARD_STYLE, SURFACE_CARD, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
+import { BOOK_META, bookDisplay, canonBook, CARD_STYLE, SURFACE_CARD, pickLabel, SYSTEM_COLOR, SYSTEM_LABEL, teamAbbrev, resolveEvUnderlying } from '@/lib/tokens'
 import { matchesMyBooks, useMyBooks } from '@/lib/use-my-books'
 import { americanToDecimal, fairAmerican, fmtMoney, fmtPct, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
@@ -102,7 +102,7 @@ function mlbRow(r: EvMlbRow): Row {
     matchup,
     when: r.game_date,
     title,
-    bookKey: (r.book ?? '').toLowerCase(),
+    bookKey: canonBook(r.book),
     priceMain: formatOdds(r.odds),
     priceSub: book.isExchange ? 'exchange' : 'sportsbook',
     fairProb: r.model_prob,
@@ -132,7 +132,7 @@ function nflRow(r: EvNflRow): Row {
     matchup: gm,
     when,
     title,
-    bookKey: r.venue.toLowerCase(),
+    bookKey: canonBook(r.venue),
     priceMain: `${Math.round(r.ask * 100)}\u00a2`,
     priceSub: `ask on ${book.label}`,
     fairProb: r.fair_prob,
@@ -171,7 +171,7 @@ function bookOutlierRow(r: EvBookOutlierRow, sport: 'nfl' | 'nhl' | 'nba'): Row 
     matchup,
     when,
     title,
-    bookKey: r.book.toLowerCase(),
+    bookKey: canonBook(r.book),
     priceMain,
     priceSub: book.isExchange ? 'exchange (preview)' : 'sportsbook (preview)',
     fairProb: r.p_fair,
