@@ -433,21 +433,22 @@ export const BOOK_META: Record<string, BookMeta> = {
   kalshi:     bookMeta('Kalshi',      'KAL',  '#00d2a0', true),
   novig:      bookMeta('Novig',       'NOV',  '#38bdf8', true),
   prophetx:   bookMeta('ProphetX',    'PRX',  '#8b5cf6', true),
-  sugarhouse: bookMeta('SugarHouse',  'SUG',  '#3d7bd9'),
   underdog:   bookMeta('Underdog',    'UND',  '#facc15'),
   parx:       bookMeta('Parx',        'PAR',  '#53d337'),
   pointsbet:  bookMeta('PointsBet',   'PTB',  '#ff5a4f'),
 }
 
-/** PartyCasino is a BetMGM skin (same prices). It exists only in backend data; the UI shows it as BetMGM. */
+/** Backend-only skins: PartyCasino is a BetMGM skin and SugarHouse a BetRivers clone (same prices). The UI shows the parent book. */
+const BOOK_SKINS: Record<string, string> = { partycasino: 'betmgm', 'party casino': 'betmgm', sugarhouse: 'betrivers' }
 export function canonBook(book: string | null | undefined): string {
   const key = (book ?? '').toLowerCase()
-  return key === 'partycasino' || key === 'party casino' ? 'betmgm' : key
+  return BOOK_SKINS[key] ?? key
 }
 
 /** Display name for a raw book string (a betmgm-keyed lookup for PartyCasino, the raw string otherwise). */
 export function bookText(book: string | null | undefined): string {
-  return canonBook(book) === 'betmgm' && (book ?? '').toLowerCase() !== 'betmgm' ? BOOK_META.betmgm.label : (book ?? '')
+  const canon = canonBook(book)
+  return canon !== (book ?? '').toLowerCase() ? BOOK_META[canon].label : (book ?? '')
 }
 
 export function bookDisplay(book: string | null | undefined): BookMeta {

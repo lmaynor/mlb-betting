@@ -93,8 +93,8 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
   // Every book with a price in the current sport selection, sharp books first, then by how many lines it quotes.
   const bookList = useMemo(() => {
     const counts = new Map<string, number>()
-    // PartyCasino is a BetMGM skin with identical prices: one BetMGM column, not two.
-    for (const r of allRows) for (const b of r.books) if (b.book !== 'partycasino') counts.set(b.book, (counts.get(b.book) ?? 0) + 1)
+    // PartyCasino (BetMGM) and SugarHouse (BetRivers) are skins with identical prices: one column each, not two.
+    for (const r of allRows) for (const b of r.books) if (canonBook(b.book) === b.book) counts.set(b.book, (counts.get(b.book) ?? 0) + 1)
     const rank = (k: string) => { const i = BOOK_ORDER.indexOf(k); return i < 0 ? BOOK_ORDER.length : i }
     return [...counts.keys()].sort((a, b) => rank(a) - rank(b) || (counts.get(b)! - counts.get(a)!) || a.localeCompare(b))
       .map(k => ({ key: k, n: counts.get(k)!, offshore: offshore.has(k) }))
