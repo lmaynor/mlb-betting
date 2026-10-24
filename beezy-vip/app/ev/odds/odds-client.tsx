@@ -226,7 +226,7 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
             <thead>
               <tr>
                 <th scope="col" className="odds-ev">EV</th>
-                <th scope="col" style={{ textAlign: 'left' }}>BEST</th>
+                <th scope="col" style={{ textAlign: 'center' }}>BEST</th>
                 <th scope="col" style={{ textAlign: 'left', minWidth: '210px' }}>PROP</th>
                 <th scope="col" style={{ textAlign: 'left' }}>GAME</th>
                 <th scope="col" style={{ textAlign: 'right' }}>IMPL</th>
@@ -236,7 +236,7 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
                   const isRef = refSet.has(c.key)
                   return (
                     <th key={c.key} scope="col" className="odds-book" title={`${b.label}${c.offshore ? ' (offshore: reference only)' : ''}`}>
-                      <BookLogo book={c.key} size={22} />
+                      <BookLogo book={c.key} size={34} style={{ display: 'block', margin: '0 auto 2px' }} />
                       <span className="mono odds-sub">{isRef && refWeight != null ? `${refWeight}%` : c.offshore ? 'ref' : '\u00a0'}</span>
                     </th>
                   )
@@ -305,8 +305,8 @@ function Row({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string; o
           </>
         )}
       </td>
-      <td>
-        <BookLogo book={r.bestBook} size={18} style={{ marginRight: '6px' }} />
+      <td style={{ textAlign: 'center' }}>
+        <BookLogo book={r.bestBook} size={30} style={{ display: 'block', margin: '0 auto 3px' }} />
         <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{formatOdds(r.bestAmerican)}</span>
       </td>
       <td>
@@ -412,7 +412,7 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
               return (
                 <label key={b.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', fontSize: '12px', color: 'var(--silver)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} />
-                  <span style={{ minWidth: '34px', display: 'inline-flex' }}><BookLogo book={b.key} size={18} /></span>
+                  <span style={{ minWidth: '28px', display: 'inline-flex', justifyContent: 'center' }}><BookLogo book={b.key} size={24} /></span>
                   <span style={{ flex: 1 }}>{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
                   <span className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>{b.n}</span>
                 </label>
