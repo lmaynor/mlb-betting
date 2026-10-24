@@ -433,7 +433,8 @@ export const BOOK_META: Record<string, BookMeta> = {
   kalshi:     bookMeta('Kalshi',      'KAL',  '#00d2a0', true),
   novig:      bookMeta('Novig',       'NOV',  '#38bdf8', true),
   prophetx:   bookMeta('ProphetX',    'PRX',  '#8b5cf6', true),
-  partycasino: bookMeta('Party Casino', 'PTY', '#c4a35a'),
+  // PartyCasino is a BetMGM skin (same prices), so it shows as BetMGM
+  partycasino: bookMeta('BetMGM',      'MGM',  '#c4a35a'),
   sugarhouse: bookMeta('SugarHouse',  'SUG',  '#3d7bd9'),
   underdog:   bookMeta('Underdog',    'UND',  '#facc15'),
   parx:       bookMeta('Parx',        'PAR',  '#53d337'),
