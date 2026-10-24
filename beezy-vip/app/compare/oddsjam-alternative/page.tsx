@@ -11,12 +11,13 @@ export const metadata: Metadata = {
 const th = { textAlign: 'left' as const, padding: '8px 10px', fontSize: '12px', color: '#7d8596', borderBottom: '1px solid #1e2230', position: 'sticky' as const, top: 0, background: '#11131a' }
 const td = { padding: '8px 10px', fontSize: '13px', color: '#d1d5db', borderBottom: '1px solid #1e2230', verticalAlign: 'top' as const }
 
-const ROWS: [string, string, string][] = [
-  ['beezy.fyi', `$${PLANS.single.price}/mo one league, $${PLANS.monthly.price}/mo all four`, 'Market-consensus +EV scanner plus projection models; public paper-tracked ledger'],
-  ['OddsJam', 'Several tiers; see oddsjam.com', 'Odds comparison and +EV / arbitrage scanning across books; results are tracked by the user'],
-  ['Props.cash, Outlier', 'See each site', 'Prop research built around hit rates and historical trends'],
-  ['Unabated', 'See unabated.com', 'Market-implied line and fair-price tools aimed at sharp bettors'],
-  ['Pikkit, Betstamp', 'See each site', 'Bet tracking and closing line value measurement; they do not generate picks'],
+const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
+  { tool: 'beezy.fyi', price: `$${PLANS.single.price}/mo one league, $${PLANS.monthly.price}/mo all four, $${PLANS.annual.price}/yr (pre-launch)`, what: 'Market-consensus +EV scanner plus projection models; public paper-tracked ledger', href: '/pricing' },
+  { tool: 'OddsJam', price: 'Positive EV Global listed at $499/mo; Platinum $499.99/mo list', what: 'Odds comparison and +EV / arbitrage scanning across books; results are tracked by the user', href: 'https://oddsjam.com/subscribe' },
+  { tool: 'Props.cash', price: '$19.99/mo or $199.99/yr, all sports', what: 'Prop research built around hit rates and historical trends', href: 'https://props.cash/' },
+  { tool: 'Outlier', price: 'See vendor site', what: 'Prop research built around hit rates and historical trends', href: 'https://outlier.bet/' },
+  { tool: 'Unabated', price: 'Props+ $99/mo, Premium $199/mo, Concierge $799/mo', what: 'Market-implied line and fair-price tools aimed at sharp bettors', href: 'https://unabated.com/pricing' },
+  { tool: 'Pikkit', price: 'Free core app; Pro $29.99/mo or $199.99/yr', what: 'Bet tracking and closing line value measurement; it does not generate picks', href: 'https://pikkit.com/pro' },
 ]
 
 export default function CompareOddsJamAlternativePage() {
@@ -26,16 +27,20 @@ export default function CompareOddsJamAlternativePage() {
       <div className="article-body">
         <p>
           Sports betting tools fall into three groups: odds scanners, prop research tools and bet trackers. beezy.fyi is
-          a scanner that also publishes its own projections and a public results ledger. Competitor pricing changes often,
-          so this page links to each vendor rather than quoting their prices.
+          a scanner that also publishes its own projections and a public results ledger. Competitor prices below link to each vendor's
+          page and are list prices as publicly listed in October 2026; some vendor pages were last updated
+          earlier, so confirm current pricing with the vendor.
         </p>
       </div>
       <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr><th style={th}>Tool</th><th style={th}>Price</th><th style={th}>What it is</th></tr></thead>
           <tbody>
-            {ROWS.map(([a, b, c]) => (
-              <tr key={a}><td style={{ ...td, fontWeight: 600 }}>{a}</td><td style={td}>{b}</td><td style={td}>{c}</td></tr>
+            {ROWS.map(r => (
+              <tr key={r.tool}>
+                <td style={{ ...td, fontWeight: 600 }}>{r.href ? <a href={r.href}>{r.tool}</a> : r.tool}</td>
+                <td style={td}>{r.price}</td><td style={td}>{r.what}</td>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -59,10 +64,10 @@ export default function CompareOddsJamAlternativePage() {
         </p>
         <h2>beezy.fyi vs Pikkit and Betstamp</h2>
         <p>
-          Pikkit and Betstamp track bets and closing line value. They are complements: beezy.fyi finds prices, they
+          Pikkit and Betstamp (Betstamp pricing not listed above) track bets and closing line value. They are complements: beezy.fyi finds prices, they
           measure how your bets did.
         </p>
-        <p>Comparisons reflect each product as publicly described, as of October 2026. <a href="/pricing">beezy.fyi pricing</a>.</p>
+        <p>Prices and descriptions reflect each vendor's public pages as of October 2026 and may have changed. <a href="/pricing">beezy.fyi pricing</a>.</p>
       </div>
     </div>
   )
