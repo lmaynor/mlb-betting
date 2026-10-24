@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
-import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying } from '@/lib/tokens'
+import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying, bookText } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey } from '@/lib/dates'
@@ -220,7 +220,7 @@ function TableRow({ bet }: { bet: Bet }) {
         {fmtEdge(bet.edge)}
       </div>
       <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', color: 'var(--silver)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {bet.book ?? '--'}{((bet as { bookCount?: number }).bookCount ?? 1) > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
+        {bet.book ? bookText(bet.book) : '--'}{((bet as { bookCount?: number }).bookCount ?? 1) > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
       </div>
       <div style={{ padding: '10px 6px' }}><ResultPill result={bet.result} /></div>
       <div style={{ padding: '10px 6px' }}><PnL profit={bet.profit ?? null} result={bet.result} stake={bet.stake} /></div>
@@ -299,7 +299,7 @@ function BetCard({ bet }: { bet: Bet }) {
         {[
           { label: 'ODDS', value: fmtOdds(bet.odds), strong: true, sub: impliedLabel(bet.odds) },
           { label: 'EDGE', value: fmtEdge(bet.edge), strong: true, color: 'var(--signal)' },
-          { label: 'BOOK', value: bet.book ?? '--' },
+          { label: 'BOOK', value: bet.book ? bookText(bet.book) : '--' },
         ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
             <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>

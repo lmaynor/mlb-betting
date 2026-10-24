@@ -8,7 +8,7 @@ import { LINK_REPLY, POST_LIMIT, postLength, SHEET_SIZE, type Sheet } from '@/li
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
-import { SYSTEM_COLOR } from '@/lib/tokens'
+import { SYSTEM_COLOR, bookText } from '@/lib/tokens'
 import type { TopPick } from '@/lib/top-picks'
 
 /** A top pick plus the images the card shows. */
@@ -46,7 +46,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const bullets = splitNotes(pick.bet?.notes)
   const isGame = !pick.what // game picks carry the matchup, not a player
   const market = isGame ? pick.game : pick.what
-  const price = [fmtOdds(pick.odds), pick.book].filter(Boolean).join(DOT)
+  const price = [fmtOdds(pick.odds), bookText(pick.book)].filter(Boolean).join(DOT)
   const meta = [price, isGame ? '' : pick.game].filter(Boolean).join(DOT)
   // Projection rows carry no analyst notes, so the expanded view falls back to the matchup.
   const details = bullets.length ? bullets.slice(0, 3) : [pick.game].filter(Boolean)

@@ -3,7 +3,7 @@ import { OgBrandBadge } from "@/lib/og-brand";
 import { apiGetAnalyticsDeepDive, apiGetEvFeed } from "@/lib/betting-api";
 import { formatOdds } from "@/lib/odds";
 import { propStatLabel, SPORT_PILLARS } from "@/lib/sports";
-import { bookDisplay, BOOK_META, pickLabel, SYSTEM_LABEL } from "@/lib/tokens";
+import { bookDisplay, BOOK_META, canonBook, pickLabel, SYSTEM_LABEL } from "@/lib/tokens";
 import type { AnalyticsDeepDive, Bet, EvBookOutlierRow, EvFeed, EvMlbRow, EvNflRow } from "@/lib/types";
 
 export const runtime = "edge";
@@ -60,7 +60,7 @@ function mlbPlay(r: EvMlbRow): Play {
     sport: "mlb", shadow: false, lowConf: false,
     title: pickLabel(mlbBet(r)),
     matchup: `${r.away_team ?? ""} @ ${r.home_team ?? ""}`.trim(),
-    bookKey: (r.book ?? "").toLowerCase(),
+    bookKey: canonBook(r.book),
     price: formatOdds(r.odds),
     ev: r.edge ?? 0,
   };
@@ -72,7 +72,7 @@ function nflKalshiPlay(r: EvNflRow): Play {
     sport: "nfl", shadow: true, lowConf: r.flag === false,
     title: `${r.player ?? "?"} ${r.side === "OVER" ? "Over" : "Under"} ${r.strike ?? ""} ${stat}`.replace(/\s+/g, " ").trim(),
     matchup: gameKeyMatchup(r.game_key),
-    bookKey: r.venue.toLowerCase(),
+    bookKey: canonBook(r.venue),
     price: `${Math.round(r.ask * 100)}\u00a2`,
     ev: r.net_ev,
   };
@@ -84,7 +84,7 @@ function outlierPlay(r: EvBookOutlierRow, sport: "nfl" | "nhl" | "nba"): Play {
     sport, shadow: true, lowConf: r.flag === false,
     title: `${r.player} ${String(r.side).toUpperCase() === "OVER" ? "Over" : "Under"} ${point ?? ""} ${propStatLabel(r.stat ?? r.market)}`.replace(/\s+/g, " ").trim(),
     matchup: gameKeyMatchup(r.game_key) || (r.away_team && r.home_team ? `${r.away_team} @ ${r.home_team}` : ""),
-    bookKey: r.book.toLowerCase(),
+    bookKey: canonBook(r.book),
     price: formatOdds(r.american),
     ev: r.ev,
   };
@@ -107,7 +107,7 @@ function collectPlays(feed: EvFeed | null): Play[] {
 /** Distinct venues actually present in the feed payload (book keys incl. all_books quotes; exchanges counted separately). */
 function venuesInFeed(feed: EvFeed | null): { total: number; exchanges: number } {
   const keys = new Set<string>();
-  const add = (k: string | null | undefined) => { const v = (k ?? "").trim().toLowerCase(); if (v) keys.add(v); };
+  const add = (k: string | null | undefined) => { const v = canonBook((k ?? "").trim()); if (v) keys.add(v); };
   for (const r of feed?.mlb?.rows ?? []) add(r.book);
   for (const r of feed?.nfl?.rows ?? []) add(r.venue);
   const outliers: EvBookOutlierRow[] = [

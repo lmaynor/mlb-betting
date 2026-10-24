@@ -6,7 +6,7 @@ import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
-import { B, SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel } from '@/lib/tokens'
+import { B, SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel, bookText } from '@/lib/tokens'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats, BankrollPoint } from '@/lib/types'
@@ -197,7 +197,7 @@ function exportCSV(bets: Bet[]) {
       b.game_date, b.system, game, pickLabel(b),
       b.odds ?? '', b.edge != null ? `${(b.edge * 100).toFixed(1)}%` : '',
       b.stake != null && b.stake > 0 ? b.stake.toFixed(0) : '',
-      (b as any).book ?? '', b.result ?? 'pending', pnl,
+      bookText((b as any).book), b.result ?? 'pending', pnl,
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
   })
   const csv  = [headers.join(','), ...rows].join('\n')
@@ -241,7 +241,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
         {[
           { label: 'Odds', value: formatOdds(bet.odds), color: 'var(--ash)' },
           { label: 'Edge', value: bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--', color: 'var(--signal)' },
-          { label: 'Book', value: bet.book ?? '--', color: 'var(--silver)' },
+          { label: 'Book', value: bet.book ? bookText(bet.book) : '--', color: 'var(--silver)' },
         ].map(item => (
           <div key={item.label} style={{ minWidth: 0 }}>
             <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>{item.label}</div>
@@ -666,7 +666,7 @@ export function ResultsClient({
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}
                 </div>
                 <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: 'var(--fog)', textTransform: 'capitalize' }}>
-                  {bet.book ?? '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
+                  {bet.book ? bookText(bet.book) : '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
                 </div>
                 <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
                 <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} stake={bet.stake} result={bet.result} /></div>

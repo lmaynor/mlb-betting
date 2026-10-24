@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ResearchTabs } from '@/components/picks/research-tabs'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
-import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc } from '@/lib/tokens'
+import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookText } from '@/lib/tokens'
 import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
 
 export interface EdgePick extends Bet {
@@ -656,7 +656,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
             {isGame ? null : <span>{p.away_team} @ {p.home_team}</span>}
             <span className="edge-strong" style={{ color }}>{betTypeLabel(p.bet_type, p.system)}</span>
             {p.matchup?.startTime && <span>{p.matchup.startTime}</span>}
-            {p.book && <span className="edge-book">{p.book}</span>}
+            {p.book && <span className="edge-book">{bookText(p.book)}</span>}
           </div>
         </div>
       </div>
@@ -669,7 +669,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
           <span className="edge-alert-flash" aria-hidden>+EV</span>
           <div className="edge-alert-body">
             <div className="edge-alert-h">
-              Live line alert &middot; <b>{p.alert.book}</b>
+              Live line alert &middot; <b>{bookText(p.alert.book)}</b>
               {p.alert.american != null && <span className="mono"> {fmtOdds(p.alert.american)}</span>}
               {p.alert.selection && <span className="edge-alert-dim"> {p.alert.selection}{p.alert.line != null ? ` ${p.alert.line}` : ''}</span>}
             </div>
@@ -1159,7 +1159,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                         <span className="edge-row-odds">{fmtOdds(p.odds)}</span>
                         {p.matchup?.startTime && <span className="edge-row-time">{p.matchup.startTime}</span>}
                         {p.alert?.ev != null && (
-                          <span className="edge-row-alert" title={`Live outlier: ${p.alert.book} ${p.alert.american != null ? fmtOdds(p.alert.american) : ''} = +${(p.alert.ev * 100).toFixed(1)}% EV vs consensus`}>
+                          <span className="edge-row-alert" title={`Live outlier: ${bookText(p.alert.book)} ${p.alert.american != null ? fmtOdds(p.alert.american) : ''} = +${(p.alert.ev * 100).toFixed(1)}% EV vs consensus`}>
                             +EV {(p.alert.ev * 100).toFixed(1)}%
                           </span>
                         )}
