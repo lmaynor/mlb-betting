@@ -48,8 +48,8 @@ and the model parroted them in every draft, and the recap prompt itself said "th
 size", which produced defensive boasting. Those phrases are now in `BANNED_PHRASES` and out of the prompts; do not put catchphrases
 in a prompt as examples. `de-vigged`, `consensus fair` and `proj_mean` stay banned.
 
-`reply_ammo` asks Gemini ONCE (batched) for `model_first` / `price_math` / `short` replies per play (up to 240 chars), and a reply is used only if
-`reply_variant_ok()` passes: link-free, in voice, <= 180 chars, quotes the book's real price, and contains no number that was not
+`reply_ammo` asks Gemini ONCE (batched) for `price_check` / `pushback` / `driver_note` replies per play (up to 240 chars; see the angles section below), and a reply is used only if
+`reply_variant_ok()` passes: link-free, in voice, <= 240 chars, reads like a person, quotes a real price, and contains no number that was not
 given for that play. A conversational model will invent a price if you let it. A play with no usable reply (or Gemini down) falls
 back to the deterministic `build_reply_snippet()`.
 
@@ -63,22 +63,35 @@ the gap to the line (`proj_gap`) and projected minutes. It never states a win pr
 unvalidated). Two live-found rules: a projection on the wrong side of the line is not cited (`proj_supports_side`: "we project 1.57
 against 1.5" followed by the Under reads as self-contradiction), and the other books are "around +109", never an "average".
 
-## Analysis: a three-part read from the engine's own components (2026-10-23)
+## Reply angles: one call, three replies built for the parent tweet (2026-10-25)
 
-reply_ammo plays are book-vs-consensus price gaps, not model picks, so the replies alone only state a price. For NFL/NHL/NBA plays
-that have a projection row, `generate_analyses()` adds an operator-facing analysis (separate Discord message after the variants):
-`read` (our projection vs the line and its biggest driver), `market` (the book's price vs what the other books imply) and `thin`
-(the honest weak point). "Model weights" here are the `empirical_ewm_v2` terms, not learned weights: `projection_terms()` splits
-`proj_mean - line` EXACTLY into season average vs line, recent weighting and usage vs season average, opponent adjustment
-(`proj_raw - proj_raw/opp_factor`) and calibration scale (`proj_mean - proj_raw`). `build_dossier()` renders those, the 10th-90th
-range, history length, break-even vs implied probability and the engine's out-of-sample MAE (`engine-accuracy.json`, copied into
-the image by the Dockerfile; optional) as plain text. ONE batched Gemini call writes the prose and `analysis_ok()` rejects any part
-with a number not in that play's dossier, a link, an out-of-voice phrase, or a market part without the book's real price; a rejected
-or failed reply becomes `template_analysis()`. Rules kept: no last-N or streak talk (the season average is allowed, last-5/10 never),
-no win probability for our model, and every analysis is posted with `ANALYSIS_NOTE` (accuracy evidence only, no tracked record
-against prices). The public reply still hides a projection that sits against the pick; the analysis does the opposite on purpose and
-says so in `thin`. MLB plays have no engine row and get no analysis; a booster-level (SHAP) version for MLB model systems is the
-follow-up.
+The 2026-10-23 three-part analysis (read / market / thin) and its second Gemini call are gone: nobody replies to a tweet with a mini-essay,
+and the operator wants something copy-pasteable. `generate_reply_fodder()` now makes ONE batched call per run with each play's full
+dossier and gets three replies per play, matched to the tweet the operator finds: `price_check` (the tweet agrees with our side: shop the
+number, names the book and its price), `pushback` (the tweet takes the other side: where the other books price our side plus one fact),
+`driver_note` (our projection, its main driver, the price and the caveat in connected clauses; skipped for a play with no projection).
+Discord posts each as a plain message with the angle in the webhook `username`, so Copy Text still gives exactly the reply.
+
+- **Engine numbers in betting words.** `build_dossier()` prints the season average, the projected usage (`projected for 36.2 minutes` /
+  `usage of 7.2 targets`), a matchup note (`opp_factor` > 1.03 -> "a soft matchup bump (+1.3)", < 0.97 -> "a tough matchup downgrade
+  (-1.8)", the number is `proj_raw - proj_raw/opp_factor`) and the 10th-90th range. `calib_mult`, "recent weighting" and "the
+  opponent adjustment" are NOT passed on: a reply that says "the calibration scale" reads as a script. `projection_terms()` is the
+  projection before the calibration step for the same reason.
+- **Engine numbers are public only next to a supporting projection.** `_engine_numbers()` (merged into `_allowed_numbers()`: season average,
+  p10, p90, usage, matchup delta, n_games only when it is a thin-sample caveat) is empty when `proj_mean` was hidden by
+  `proj_supports_side`; the dossier is None then and the prompt says "No projection."
+- **Caveats are computed, not left to the model.** `reply_caveats()`: line inside our 10th-90th range, season average on the other side of
+  the line, fewer than 15 games. They go into the prompt as "Caveat to work in" and the prompt tells the model to weave them in.
+- **Structure guards (`reads_like_a_template`), enforced on output, not just asked for:** no colon anywhere, no opening on the player's
+  name (the parent tweet named them; the old `<Player> <Over/Under> <line>: <Book> is <odds>` shape is the EV-bot tell), at most two
+  sentences, no sentence under five words, and a connective (because / while / when / though / so / with / a semicolon). The deterministic
+  fallback snippet is book-first and passes the same guards. A missing or rejected `price_check` is filled with that snippet.
+- **No line-movement claims.** We hold no line history, so the prompt forbids "steamed" / "moved"; `pushback` may only quote the market's
+  price for OUR side (the other side's price is not in the data and would fail the number guard anyway).
+- **Two search links per play:** `[big tweets]` (`<player> min_faves:20`) and `[betting threads]` (`"<player>" (<line> OR prop OR over OR under OR
+  line) min_faves:5 -filter:retweets`), the second for mid-sized accounts posting the exact line.
+- `engine-accuracy.json` is no longer read by `tweet_drafter` (its MAE line fed only the removed analysis); the Dockerfile copy is harmless.
+  MLB plays still have no engine row, so their `driver_note` is skipped.
 
 ## Gemini reliability
 
