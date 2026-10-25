@@ -1573,12 +1573,12 @@ plus Sunday `10,40 6-12` / `10 0-5,13-23`), `bp-live-nba` (`15 * * 10-12,1-6 *`)
 deterministic #GamblingX text + `beezy-vip` `/api/og/settlement-card` PNG + celebration GIF -> Discord `DISCORD_WEBHOOK_TWEETS`
 else `DISCORD_WEBHOOK_OPS`; NOT provisioned as a Job yet), `reply_ammo` (added 2026-10-19: deterministic link-free reply snippets for
 the day's top book-vs-consensus price gaps across sports + X live-search links -> Discord `#tweet-queue`; Job `mlb-tweet-reply-ammo`, scheduler `mlb-tweet-reply-ammo-schedule` 22:45 UTC via `deploy/setup_tweet_jobs.sh`, provisioning pending),
-`reply_ammo` also posts a three-part analysis (read / market / thin) per NFL/NHL/NBA play from the projection engine's components (2026-10-23; see the convention doc), MLB none yet; `steam` (not built). Every Gemini draft passes `violates_voice()` (banned phrases, >1 emoji). **Link policy (2026-10-19):** a main tweet
+`reply_ammo` is ONE Gemini call writing three reply angles per play (price_check / pushback / driver_note) from a plain-language dossier of the projection (2026-10-25; replaced the 2026-10-23 three-part analysis; see the convention doc); `steam` (not built). Every Gemini draft passes `violates_voice()` (banned phrases, >1 emoji). **Link policy (2026-10-19):** a main tweet
 never carries a URL (X throttles small accounts that do) -- it ends with the plain `beezy.fyi` watermark and `strip_urls()` enforces that
 on Gemini output; the clickable link is a reply the operator posts under it (the Discord message carries the text). **Typefully was removed 2026-10-19:**
 picks / recap / settlement / reply_ammo all go ONLY to `#tweet-queue` (OG card + copyable text + 1-tap `x.com/intent` link) and a failed or
 skipped post fails the job; nothing posts to X automatically. See
-**Voice (2026-10-20):** plain, specific, no stock phrases (`PERSONA`); `reply_ammo` gets 3 Gemini styles per play, each validated
+**Voice (2026-10-20):** plain, specific, no stock phrases (`PERSONA`); `reply_ammo` gets 3 Gemini angles per play, each validated
 against the play's real numbers, with a deterministic fallback. **Units:** tweet/card results are flat 1u per bet = `profit/stake` (both
 are dollars; never print `bets.profit` as `u`). Discord posts are plain copy-ready messages, no intent links. docs/solutions/conventions/tweet-link-policy-and-reply-ammo.md.
 

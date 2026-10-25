@@ -337,18 +337,20 @@ def test_stat_labels_mirror_the_projection_engine():
 def test_reply_snippet_is_link_free_short_and_factual():
     c = td.reply_candidates(_feed(nba=[_outlier()]))[0]
     text = td.build_reply_snippet(c, proj_mean=34.1)
-    assert text == ("Luka Doncic Over 32.5 Points: DraftKings is hanging +115 while the other 8 books are around -108. "
-                    "We have him closer to 34.1.")
+    assert text == ("DraftKings is still hanging +115 on the Over 32.5 points if you shop around; "
+                    "the other 8 books are near -108, and we have him closer to 34.1.")
     assert len(text) <= td.REPLY_SNIPPET_MAX
     assert td.is_link_free(text) and not td.violates_voice(text)
+    assert td.reply_variant_ok(text, c | {"proj_mean": 34.1}, "price_check")      # the fallback passes the guards it is a fallback for
+    assert ":" not in text and not td.opens_with_player(text, c)
 
 
 def test_reply_snippet_drops_optional_parts_to_fit_and_never_truncates():
-    def snippet(name_len, proj):
-        c = td.reply_candidates(_feed(nba=[_outlier(player="N" * name_len)]))[0]
+    def snippet(name_len, proj):      # the player is not in the reply any more; a long stat name is what makes it long
+        c = td.reply_candidates(_feed(nba=[_outlier(stat="s" * name_len)]))[0]
         return td.build_reply_snippet(c, proj_mean=proj)
     k = next(n for n in range(10, 400) if len(snippet(n, None) or "") > 0 and (snippet(n, 34.1) is None or "closer to" not in snippet(n, 34.1)))
-    # at that name length the bare sentence fits but the projection sentence does not: the projection is dropped, never cut
+    # at that stat-name length the bare sentence fits but the projection sentence does not: the projection is dropped, never cut
     assert len(snippet(k, None)) <= td.REPLY_SNIPPET_MAX and "closer to" not in snippet(k, 34.1)
     assert snippet(400, None) is None                                          # does not fit even bare: skipped, not truncated
 
@@ -373,6 +375,9 @@ def test_reply_ammo_snippets_never_contain_links_or_the_brand_and_search_urls_ar
         assert (parts.scheme, parts.netloc, parts.path) == ("https", "x.com", "/search")
         q = parse_qs(parts.query)
         assert q["q"] == [f"{p['player']} min_faves:{td.REPLY_MIN_FAVES}"] and q["f"] == ["live"]
+        tq = parse_qs(urlparse(p["thread_url"]).query)
+        assert tq["q"] == [f'"{p["player"]}" ({p["facts"]["point"]:g} OR prop OR over OR under OR line) '
+                           f'min_faves:{td.REPLY_THREAD_MIN_FAVES} -filter:retweets'] and tq["f"] == ["live"]
 
 
 def test_select_reply_plays_ranks_by_ev_caps_per_sport_and_dedups():
@@ -402,13 +407,13 @@ def test_reply_candidates_mlb_only_pending_rows_from_todays_slate():
                                            {**base, "bet_type": "HR"}]))
     assert len(cands) == 1 and cands[0]["stat_label"] == "Ks" and cands[0]["point"] == 7.5 and cands[0]["side"] == "OVER"
     snippet = td.build_reply_snippet(cands[0])
-    assert snippet.startswith("Gerrit Cole Over 7.5 Ks: DraftKings is hanging +105")
+    assert snippet.startswith("DraftKings is still hanging +105 on the Over 7.5 ks if you shop around")
 
 
 def test_build_reply_ammo_adds_projection_mean_when_matched():
     feed = _feed(nba=[_outlier()])
     plays = td.build_reply_ammo(feed, {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.12}]}})
-    assert plays[0]["snippet"].endswith("We have him closer to 34.1.")      # one decimal, not 34.12
+    assert plays[0]["snippet"].endswith("and we have him closer to 34.1.")      # one decimal, not 34.12
     assert plays[0]["facts"]["proj_mean"] == pytest.approx(34.12)
     assert "closer to" not in td.build_reply_ammo(feed, {})[0]["snippet"]
 
@@ -496,9 +501,9 @@ def _play(**kw):
 
 
 GOOD = {
-    "model_first": "Our model has Luka at 34.1 points against a 32.5 line. DraftKings is at +115, the other 8 books are around -108.",
-    "price_math": "At +115 DraftKings needs 47% to break even; the other 8 books imply 52% on Luka Over 32.5 points.",
-    "short": "Luka Over 32.5 points: DraftKings +115, the other 8 books around -108. We project 34.1.",
+    "price_check": "DraftKings is still hanging +115 on the over if you shop around, while the other 8 books are near -108.",
+    "pushback": "Hard to back the under when the other 8 books are sitting near -108 on the over and we project 34.1.",
+    "driver_note": "We have him closer to 34.1 against a 32.5 line, so DraftKings at +115 looks better than the other 8 books near -108.",
 }
 
 
@@ -509,7 +514,7 @@ GOOD = {
     "DraftKings +115 on Luka, full board at beezy.fyi",                                              # brand/link
     "DraftKings +115 on Luka, see https://x.co/a",                                                    # url
     "DraftKings +115 on Luka, the other 40 books are around -108",                                   # invented count
-    "DraftKings +115 on Luka. " + "x" * 240,                                                         # too long
+    "DraftKings +115 on Luka while others sit near -108. " + "x" * 240,                              # too long
     "",
     None,
     7,
@@ -522,12 +527,12 @@ def _gemini_reply(payload):
     return lambda *a, **k: json.dumps(payload)
 
 
-def test_generate_reply_fodder_skips_model_first_without_a_projection(monkeypatch):
+def test_generate_reply_fodder_skips_driver_note_without_a_projection(monkeypatch):
     play = _play()
     play["facts"]["proj_mean"] = None
     play["snippet"] = td.build_reply_snippet(play["facts"])
     monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
-    assert "model_first" not in td.generate_reply_fodder([play])[0]["variants"]
+    assert "driver_note" not in td.generate_reply_fodder([play])[0]["variants"]
 
 
 def test_generate_reply_fodder_is_one_batched_call_and_prompt_carries_only_given_facts(monkeypatch):
@@ -537,8 +542,8 @@ def test_generate_reply_fodder_is_one_batched_call_and_prompt_carries_only_given
     assert len(seen) == 1
     system, user, _ = seen[0]
     assert system == td.REPLY_SYSTEM_PROMPT
-    assert "[0] NBA | Luka Doncic Over 32.5 Points | DraftKings is at +115" in user and "[1] NBA | Jayson Tatum" in user
-    assert "our projection: 34.1" in user and "http" not in user and "beezy" not in user.lower()
+    assert "[0] NBA\nPick: Luka Doncic Over 32.5 Points at DraftKings +115" in user and "[1] NBA\nPick: Jayson Tatum" in user
+    assert "Our projection is 34.1 against a line of 32.5" in user and "http" not in user and "beezy" not in user.lower()
 
 
 
@@ -705,11 +710,14 @@ def test_run_settlement_posts_units_not_dollars(monkeypatch):
 def test_reply_ammo_posts_a_header_then_plain_variants_per_play(monkeypatch):
     monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
     play = dict(_play(), variants=dict(GOOD))
+    play["thread_url"] = "https://x.com/search?q=b"
     with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
         td.post_reply_ammo_to_discord([play])
     msgs = _posted(post)
-    assert msgs[1]["content"].startswith("**NBA | Luka Doncic** -- [search X](https://x.com/search") and msgs[1]["flags"] == 4
+    assert msgs[1]["content"] == ("**NBA | Luka Doncic** -- [big tweets](https://x.com/search?q=a) / "
+                                  "[betting threads](https://x.com/search?q=b)") and msgs[1]["flags"] == 4
     assert [m["content"] for m in msgs[2:]] == list(GOOD.values())             # each reply is exactly its text
+    assert [m["username"] for m in msgs[2:]] == ["price check", "pushback", "driver note"]   # the angle rides in the author name
     assert "```" not in json.dumps(msgs)
 
 
@@ -718,7 +726,8 @@ def test_reply_ammo_without_variants_falls_back_to_the_plain_snippet(monkeypatch
     play = _play()
     with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
         td.post_reply_ammo_to_discord([play])
-    assert _posted(post)[-1] == {"content": play["snippet"]}
+    assert _posted(post)[-1] == {"content": play["snippet"], "username": "price check"}
+    assert "betting threads" not in _posted(post)[1]["content"]
 
 
 def test_run_reply_ammo_posts_via_plain_messages(monkeypatch):
@@ -729,7 +738,7 @@ def test_run_reply_ammo_posts_via_plain_messages(monkeypatch):
     with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
         td.run_reply_ammo()
     contents = [m.get("content", "") for m in _posted(post)]
-    assert sum("search X" in c for c in contents) == 2 and any(c.startswith("Luka Doncic Over 32.5") for c in contents)
+    assert sum("big tweets" in c for c in contents) == 2 and any(c.startswith("DraftKings is still hanging +115") for c in contents)
 
 
 # Gemini hardening ------------------------------------------------------------------------------------------------------
@@ -824,8 +833,9 @@ def test_trend_and_streak_talk_is_banned_everywhere(text):
 def test_recent_form_wording_is_out_of_the_prompts_and_the_persona_forbids_it():
     for prompt in (td.PERSONA, td.REPLY_SYSTEM_PROMPT):
         assert "scam touts" in td.PERSONA and "No trends" in td.PERSONA
-    assert "no matchup, injury, pace" in td.REPLY_SYSTEM_PROMPT and "recent-form talk" in td.REPLY_SYSTEM_PROMPT
-    assert td.REPLY_VARIANTS == ("model_first", "price_math", "short") and "slow_book" not in td.REPLY_SYSTEM_PROMPT
+    assert "No injury, pace, weather or recent-form talk" in td.REPLY_SYSTEM_PROMPT
+    assert "no matchup talk unless the play lists a matchup note" in td.REPLY_SYSTEM_PROMPT
+    assert td.REPLY_VARIANTS == ("price_check", "pushback", "driver_note") and "slow_book" not in td.REPLY_SYSTEM_PROMPT
     assert "240 characters" in td.REPLY_SYSTEM_PROMPT and td.REPLY_SNIPPET_MAX == 240
     assert not td.violates_voice("Sunday's slate went 2-6 last night")        # a day's result is not a trend
 
@@ -840,25 +850,56 @@ def test_price_math_numbers():
     assert td.proj_gap(dict(f, proj_mean=None)) is None
 
 
-def test_all_three_reply_styles_pass_the_guards_for_real_numbers():
+def test_all_three_reply_angles_pass_the_guards_for_real_numbers():
     f = _play()["facts"]
-    assert all(td.reply_variant_ok(t, f) for t in GOOD.values())
-    assert td.reply_variant_ok("Our model has Luka at 34.1 against a 32.5 line, 1.6 above it. DraftKings +115.", f)   # the gap is allowed
-    assert not td.reply_variant_ok("Our model gives Luka 63% to go over, DraftKings +115.", f)                      # invented win probability
-    f2 = dict(f, proj_minutes=35.6)
-    assert td.reply_variant_ok("Projected for 36 minutes, we have Luka at 34.1 against 32.5. DraftKings +115.", f2)
-    assert not td.reply_variant_ok("Projected for 36 minutes, we have Luka at 34.1 against 32.5. DraftKings +115.", f)  # no minutes were given
+    assert all(td.reply_variant_ok(t, f, style) for style, t in GOOD.items())
+    ok = "We have him closer to 34.1 against a 32.5 line, 1.6 above it, so DraftKings at +115 is worth a look."
+    assert td.reply_variant_ok(ok, f)                                                                           # the gap is allowed
+    assert not td.reply_variant_ok("We give Luka 63% to go over, so DraftKings at +115 is worth a look.", f)    # invented win probability
+    mins = "Projected for 36 minutes, we have Luka at 34.1 against 32.5, so DraftKings at +115 is worth a look."
+    assert td.reply_variant_ok(mins, dict(f, proj_minutes=35.6)) and not td.reply_variant_ok(mins, f)           # no minutes were given
 
 
-def test_prompt_carries_the_math_but_no_form_data():
+def test_price_check_must_name_the_book_and_its_price_but_pushback_may_quote_the_market():
+    f = _play()["facts"]
+    only_market = "Hard to back the under when the other 8 books are sitting near -108 on the over."
+    assert td.reply_variant_ok(only_market, f, "pushback")
+    assert not td.reply_variant_ok(only_market, f, "price_check")
+    assert not td.reply_variant_ok("Somebody is still hanging +115 if you shop around, while the other 8 books are near -108.", f, "price_check")
+
+
+@pytest.mark.parametrize("bot", [
+    "Luka Doncic Over 32.5 Points: DraftKings is hanging +115 while the other 8 books are around -108.",       # the EV-ticker template
+    "DraftKings +115 on the over: the other 8 books are near -108 while this one is soft.",                    # a colon anywhere
+    "Luka is worth a look at DraftKings +115 while the other 8 books are near -108.",                          # opens on the player
+    "Doncic is priced at DraftKings +115 while the other 8 books are near -108.",                              # opens on the surname
+    "DraftKings is at +115. The other 8 books are near -108.",                                                 # no connective
+    "Worth a shop. DraftKings has +115 while the other 8 books sit near -108.",                                # choppy fragment
+    "DraftKings is at +115 while the rest sit near -108. We like it. It is soft. Shop it.",                    # too many sentences
+])
+def test_reply_variant_ok_rejects_bot_structure(bot):
+    assert td.reads_like_a_template(bot, _play()["facts"]) and not td.reply_variant_ok(bot, _play()["facts"])
+
+
+def test_the_prompt_bans_the_player_line_opener_and_asks_for_connectives_and_caveats():
+    p = td.REPLY_SYSTEM_PROMPT
+    assert "NEVER open with the player's name" in p and "no colons anywhere" in p
+    for word in ("because", "while", "even with", "though", "semicolon"):
+        assert word in p
+    assert "weave it into the sentence" in p and "never say a line" in p
+    assert "steamed" in p and "no line-movement data" in p       # we hold no line history, so the model may not claim movement
+
+
+def test_prompt_carries_the_price_math_and_the_projection_but_no_form_data():
     play = _play()
     play["facts"]["proj_minutes"] = 35.6
-    row = td._fodder_prompt([play]).split("\n")[1]
-    assert row == ("[0] NBA | Luka Doncic Over 32.5 Points | DraftKings is at +115 (needs 47% to break even) | the other 8 books are "
-                   "around -108 (they imply 52%) | our projection: 34.1 against a line of 32.5 (1.6 above it) | projected minutes: 36")
-    assert not any(w in row.lower() for w in ("last", "hit rate", "streak", "trend"))
+    block = td._fodder_prompt([play]).split("\n\n")[1]
+    assert block == ("[0] NBA\nPick: Luka Doncic Over 32.5 Points at DraftKings +115, which needs 47% to break even.\n"
+                     "The other 8 books are around -108 (they imply 52%).\n"
+                     "Our projection is 34.1 against a line of 32.5, 1.6 above it.")
+    assert not any(w in block.lower() for w in ("last", "hit rate", "streak", "trend"))
     play["facts"]["proj_mean"] = None
-    assert "no projection" in td._fodder_prompt([play])
+    assert "No projection." in td._fodder_prompt([play])
 
 
 def test_build_reply_ammo_carries_projected_minutes_only_for_minutes_labels():
@@ -870,22 +911,26 @@ def test_build_reply_ammo_carries_projected_minutes_only_for_minutes_labels():
     assert td.build_reply_ammo(feed, {})[0]["facts"]["proj_minutes"] is None
 
 
-def test_generate_reply_fodder_returns_the_three_new_styles(monkeypatch):
+def test_generate_reply_fodder_returns_the_three_angles(monkeypatch):
     monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
-    assert list(td.generate_reply_fodder([_play()])[0]["variants"]) == ["model_first", "price_math", "short"]
+    assert td.generate_reply_fodder([_play()])[0]["variants"] == GOOD
 
 
-def test_model_first_needs_a_projection_and_trend_replies_fall_back(monkeypatch):
+def test_driver_note_needs_a_projection_and_bad_replies_fall_back_to_the_snippet(monkeypatch):
     play = _play()
     play["facts"]["proj_mean"] = None
-    no_proj = dict(GOOD, short="Luka Over 32.5 points: DraftKings +115, the other 8 books around -108.")
-    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": no_proj}))
-    assert list(td.generate_reply_fodder([play])[0]["variants"]) == ["price_math", "short"]
-    # a reply that cites a projection the play was not given is rejected, even in an otherwise fine style
-    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": GOOD}))
-    assert list(td.generate_reply_fodder([play])[0]["variants"]) == ["price_math"]
+    play["snippet"] = td.build_reply_snippet(play["facts"])
+    market_only = "Hard to back the under when the other 8 books are sitting near -108 on the over."
+    bad_check = "Luka Over 32.5 points: DraftKings +115, the other 8 books around -108."
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": dict(GOOD, price_check=bad_check, pushback=market_only)}))
+    v = td.generate_reply_fodder([play])[0]["variants"]
+    # the bad price_check is replaced by the deterministic snippet, driver_note is skipped (no projection), the grounded pushback stays
+    assert v == {"price_check": play["snippet"], "pushback": market_only}
+    # GOOD's pushback and driver_note cite a projection this play was not given: rejected, only the snippet is left
+    monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": dict(GOOD, price_check=bad_check)}))
+    assert td.generate_reply_fodder([play])[0]["variants"] == {"price_check": play["snippet"]}
     monkeypatch.setattr(td, "_gemini_json_text", _gemini_reply({"0": {s: TREND_TALK[0] for s in td.REPLY_VARIANTS}}))
-    assert td.generate_reply_fodder([_play()])[0]["variants"] == {"standard": _play()["snippet"]}
+    assert td.generate_reply_fodder([_play()])[0]["variants"] == {"price_check": _play()["snippet"]}
 
 
 def test_a_projection_on_the_wrong_side_of_the_line_is_never_cited():
@@ -908,9 +953,9 @@ def test_reply_prompt_says_never_call_the_market_an_average():
 
 def test_projection_is_quoted_to_one_decimal_never_three():
     f = dict(_play()["facts"], proj_mean=1.442, point=1.5, side="UNDER")
-    assert td.reply_variant_ok("We project 1.4 shots against a 1.5 line. DraftKings +115.", f)
-    assert not td.reply_variant_ok("We project 1.442 shots against a 1.5 line. DraftKings +115.", f)
-    assert "our projection: 1.4 against a line of 1.5" in td._fodder_prompt([dict(_play(), facts=f)])
+    assert td.reply_variant_ok("We project 1.4 shots against a 1.5 line, so DraftKings +115 is worth a shop.", f)
+    assert not td.reply_variant_ok("We project 1.442 shots against a 1.5 line, so DraftKings +115 is worth a shop.", f)
+    assert "Our projection is 1.4 against a line of 1.5" in td._fodder_prompt([dict(_play(), facts=f)])
     c = dict(f, stat_label="Shots on Goal", stat="sog")
     assert "closer to 1.4." in td.build_reply_snippet(c, 1.442) and "1.442" not in td.build_reply_snippet(c, 1.442)
 
@@ -1004,11 +1049,12 @@ def test_header_message_carries_the_stats_lines(monkeypatch):
     assert "L7" not in sent[-2]["content"]
 
 
-# reply_ammo analysis (dossier + three parts) ---------------------------------------------------------------------------------
+# reply_ammo dossier: engine numbers in betting words, caveats, one call (2026-10-25) ----------------------------------------------
 
 ENGINE_ROW = {"player_norm": "luka doncic", "stat": "points", "proj_mean": 34.1, "proj_raw": 35.0, "calib_mult": 0.9743,
               "opp_factor": 1.04, "usage_proj": 36.2, "usage_label": "Minutes", "n_games": 40, "szn_avg": 31.0,
               "proj_p10": 26.0, "proj_p90": 42.0}
+JARGON = ("calibration", "calib", "recent weighting", "opponent adjustment", "opponent factor", "proj_raw", "multiplier")
 
 
 def _eplay(**engine):
@@ -1017,107 +1063,83 @@ def _eplay(**engine):
     return td.build_reply_ammo(feed, {"nba": {"rows": [row]}})[0]
 
 
-def test_projection_terms_sum_exactly_to_the_gap_to_the_line():
+def test_projection_terms_are_human_and_leave_the_calibration_step_out():
     f = _eplay()["facts"]
     terms = td.projection_terms(f)
-    assert sum(v for _, v in terms) == pytest.approx(34.1 - 32.5)
-    assert [lab for lab, _ in terms][0] == "the season average against the line"
+    assert [lab for lab, _ in terms] == ["the season average against the line", "the projected workload against the season average",
+                                         "the matchup"]
+    assert sum(v for _, v in terms) == pytest.approx(35.0 - 32.5)         # the projection before calibration, which is never mentioned
 
 
 def test_projection_terms_without_a_season_average_use_the_base_projection():
     terms = td.projection_terms(_eplay(szn_avg=None)["facts"])
     assert terms[0][0] == "the base projection against the line"
-    assert sum(v for _, v in terms) == pytest.approx(34.1 - 32.5)
+    assert sum(v for _, v in terms) == pytest.approx(35.0 - 32.5)
 
 
-def test_plays_without_an_engine_row_get_no_dossier_or_analysis(monkeypatch):
+def test_dossier_text_speaks_betting_not_engine_internals():
+    d = td.build_dossier(_eplay()["facts"])
+    for needle in ("Our projection is 34.1 against a line of 32.5, 1.6 above it", "Season average is 31.0", "Projected for 36.2 minutes",
+                   "Matchup note: a soft matchup bump (+1.3)", "Biggest push toward the Over: the projected workload",
+                   "10th to 90th percentile range is 26.0 to 42.0; the line is inside it"):
+        assert needle in d["text"], needle
+    assert not any(j in d["text"].lower() for j in JARGON) and "0.97" not in d["text"] and "1.04" not in d["text"]
+    prompt = td._fodder_prompt([_eplay()])
+    assert not any(j in prompt.lower() for j in JARGON) and not any(j in td.REPLY_SYSTEM_PROMPT.lower() for j in JARGON[:3])
+
+
+@pytest.mark.parametrize("opp,note", [(1.04, "a soft matchup bump (+1.3)"), (0.95, "a tough matchup downgrade (-1.8)")])
+def test_opponent_factor_becomes_a_matchup_note_only_outside_the_neutral_band(opp, note):
+    e = dict(ENGINE_ROW, opp_factor=opp)
+    assert td._matchup(e)[0] == note
+    assert td._matchup(dict(ENGINE_ROW, opp_factor=1.0)) is None and td._matchup(dict(ENGINE_ROW, opp_factor=1.02)) is None
+    assert td._matchup(dict(ENGINE_ROW, opp_factor=None)) is None
+
+
+def test_usage_phrase_names_the_unit():
+    assert td._usage_phrase({"usage_proj": 18.24, "usage_label": "TOI (min)"}) == "projected for 18.2 minutes"
+    assert td._usage_phrase({"usage_proj": 7.2, "usage_label": "Targets"}) == "projected usage of 7.2 targets"
+    assert td._usage_phrase({"usage_proj": 7.2, "usage_label": None}) is None and td._usage_phrase({}) is None
+
+
+def test_caveats_come_from_the_range_the_season_average_and_the_sample():
+    f = _eplay()["facts"]       # Over 32.5: the line is inside 26-42 and the 31.0 season average is below it
+    assert td.reply_caveats(f) == ["the line sits inside our range of 26.0 to 42.0",
+                                   "the 31.0 season average is on the other side of the line"]
+    assert "Caveat to work in: the line sits inside our range" in td.build_dossier(f)["text"]
+    clean = _eplay(szn_avg=33.0, proj_p10=33.0, proj_p90=40.0, n_games=40)["facts"]
+    assert td.reply_caveats(clean) == [] and "Caveat" not in td.build_dossier(clean)["text"]
+    assert td.reply_caveats(_eplay(szn_avg=33.0, proj_p10=33.0, proj_p90=40.0, n_games=8)["facts"]) == ["it rests on only 8 games of history"]
+
+
+def test_engine_numbers_are_quotable_only_next_to_a_projection_that_supports_the_pick():
+    f = _eplay()["facts"]
+    short = "Season average is 31.0, but on 36 projected minutes we have him closer to 34.1 with DraftKings at +115."
+    assert td.reply_variant_ok(short, f)
+    for n in ("31.0", "26.0", "42.0", "36.2", "36", "+1.3", "1.3"):
+        assert n in td._allowed_numbers(f), n
+    hidden = _eplay(proj_mean=31.0, proj_raw=32.0)["facts"]       # the projection sits against the Over: engine numbers stay private
+    assert hidden["proj_mean"] is None and hidden["engine"]["szn_avg"] == 31.0
+    assert not {"31.0", "26.0", "42.0", "36.2"} & td._allowed_numbers(hidden)
+    assert td.build_dossier(hidden) is None and "No projection." in td._fodder_prompt([dict(_eplay(), facts=hidden)])
+    assert not td.reply_variant_ok(short, hidden)
+
+
+def test_plays_without_an_engine_row_still_get_price_math_and_no_dossier():
     play = td.build_reply_ammo(_feed(nba=[_outlier()]), {})[0]
     assert play["facts"]["engine"] is None and td.build_dossier(play["facts"]) is None
-    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: pytest.fail("no dossier, no Gemini call"))
-    assert "analysis" not in td.generate_analyses([play])[0]
+    assert td.projection_terms(play["facts"]) is None and td.reply_caveats(play["facts"]) == []
+    assert "No projection." in td._fodder_prompt([play])
 
 
-def test_engine_row_survives_even_when_the_projection_sits_against_the_pick():
-    play = _eplay(proj_mean=31.0, proj_raw=32.0)
-    assert play["facts"]["proj_mean"] is None and play["facts"]["engine"]["proj_mean"] == 31.0   # public copy hides it
-    d = td.build_dossier(play["facts"])
-    assert not d["supports"] and "sits against the Over" in d["text"]
-    assert "other side of the line" in td.template_analysis(play["facts"], d)["thin"]
-
-
-def test_dossier_text_carries_the_drivers_and_the_market():
-    d = td.build_dossier(_eplay()["facts"])
-    for needle in ("Our projection is 34.1 against a line of 32.5", "Biggest push toward the Over", "Opponent factor: 1.04",
-                   "Projected minutes: 36.2", "built on 40 games", "10th to 90th percentile range is 26.0 to 42.0",
-                   "needs 47% to break even", "the other 8 books imply 52%"):
-        assert needle in d["text"]
-
-
-def test_template_analysis_passes_the_guard_it_holds_gemini_to():
-    for kw in ({}, {"szn_avg": None}, {"proj_p10": 33.0, "proj_p90": 40.0}, {"proj_mean": 31.0, "proj_raw": 32.0}, {"n_games": 8}):
-        play = _eplay(**kw)
-        d = td.build_dossier(play["facts"])
-        parts = td.template_analysis(play["facts"], d)
-        assert td.analysis_ok(parts, play["facts"], d), (kw, parts)
-
-
-GOOD_ANALYSIS = {
-    "read": "We project 34.1 against a line of 32.5. The season average of 31.0 is below the line, but recent weighting and usage lift it.",
-    "market": "DraftKings is at +115, which needs 47% to break even; the other 8 books imply 52%.",
-    "thin": "The line sits inside our range of 26.0 to 42.0, so the projection alone does not settle it.",
-}
-
-
-def test_analysis_ok_accepts_a_grounded_analysis_and_rejects_invented_or_unsafe_ones():
-    play = _eplay()
-    f, d = play["facts"], td.build_dossier(play["facts"])
-    assert td.analysis_ok(GOOD_ANALYSIS, f, d)
-    bad = [
-        {**GOOD_ANALYSIS, "read": "We project 34.1 against 32.5 and give Luka a 63% chance to go over."},     # invented probability
-        {**GOOD_ANALYSIS, "thin": "He has hit this in 4 of his last 5."},                                      # form talk
-        {**GOOD_ANALYSIS, "market": "DraftKings is cheap against the other books."},                            # no real price
-        {**GOOD_ANALYSIS, "market": "DraftKings is at +115. See https://x.co/a"},                              # link
-        {**GOOD_ANALYSIS, "thin": "Full breakdown at beezy.fyi"},                                              # brand
-        {**GOOD_ANALYSIS, "thin": "x" * 400},                                                                  # too long
-        {k: v for k, v in GOOD_ANALYSIS.items() if k != "thin"},                                               # missing part
-        {**GOOD_ANALYSIS, "read": "We project 35.9 against 32.5."},                                            # number not in dossier
-        "not a dict", None,
-    ]
-    assert not any(td.analysis_ok(b, f, d) for b in bad)
-
-
-def test_generate_analyses_is_one_call_prompt_holds_only_the_dossier_and_bad_replies_fall_back(monkeypatch):
-    seen = []
-    monkeypatch.setattr(td, "_gemini_json_text", lambda system, user, max_tokens=0: seen.append((system, user)) or json.dumps(
-        {"0": GOOD_ANALYSIS, "1": {"read": "x", "market": "y", "thin": "z"}}))
-    plays = [_eplay(), td.build_reply_ammo(_feed(nba=[_outlier()]), {})[0]]
-    out = td.generate_analyses([plays[0], dict(plays[1], player="Nobody")])
-    assert len(seen) == 1 and seen[0][0] == td.ANALYSIS_SYSTEM_PROMPT
-    assert "Our projection is 34.1 against a line of 32.5" in seen[0][1] and "http" not in seen[0][1] and "beezy" not in seen[0][1].lower()
-    assert out[0]["analysis"]["source"] == "gemini" and out[0]["analysis"]["market"] == GOOD_ANALYSIS["market"]
-    assert "analysis" not in out[1]
-
-
-def test_generate_analyses_falls_back_to_the_template_when_gemini_is_down_or_wrong(monkeypatch):
-    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
-    assert td.generate_analyses([_eplay()])[0]["analysis"]["source"] == "template"
-    monkeypatch.setattr(td, "_gemini_json_text", lambda *a, **k: json.dumps({"0": {"read": "63% chance", "market": "+115", "thin": "n"}}))
-    assert td.generate_analyses([_eplay()])[0]["analysis"]["source"] == "template"
-
-
-def test_reply_ammo_posts_the_analysis_after_the_variants(monkeypatch):
+def test_there_is_one_gemini_call_and_no_separate_analysis_step(monkeypatch):
+    assert not hasattr(td, "generate_analyses") and not hasattr(td, "ANALYSIS_SYSTEM_PROMPT")
     monkeypatch.setenv("DISCORD_WEBHOOK_TWEETS", "https://discord.test/hook")
-    play = dict(_eplay(), variants=dict(GOOD), analysis={**GOOD_ANALYSIS, "source": "gemini"})
+    monkeypatch.setattr(td, "get_ev_feed", lambda *a, **k: _feed(nba=[_outlier()]))
+    monkeypatch.setattr(td, "get_projections", lambda sp: {"rows": [ENGINE_ROW]})
+    calls = []
+    monkeypatch.setattr(td, "_gemini_json_text", lambda system, user, max_tokens=0: calls.append(system) or json.dumps({"0": GOOD}))
     with patch.object(td.requests, "post", return_value=MagicMock(status_code=204)) as post:
-        td.post_reply_ammo_to_discord([play])
-    last = _posted(post)[-1]
-    assert last["flags"] == 4 and last["content"].startswith("**analysis** (gemini)\nWe project 34.1")
-    assert td.ANALYSIS_NOTE in last["content"] and "beezy" not in last["content"].lower().replace("**analysis**", "")
-
-
-def test_engine_accuracy_reads_the_replay_file_and_tolerates_absence(monkeypatch):
-    nfl = td._engine_accuracy("nfl", "rec_yds")
-    assert nfl and nfl[0] < nfl[1]
-    assert td._engine_accuracy("nfl", "nope") is None
-    monkeypatch.setattr(td, "_ACCURACY_PATHS", ("/nonexistent/x.json",))
-    assert td._engine_accuracy("nfl", "rec_yds") is None
+        td.run_reply_ammo()
+    assert calls == [td.REPLY_SYSTEM_PROMPT]
+    assert not any("analysis" in m.get("content", "") for m in _posted(post))
