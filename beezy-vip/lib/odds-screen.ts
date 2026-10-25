@@ -7,12 +7,18 @@
  * consensus uses the median; the mean is what lets a viewer weight a chosen set of sharp books). A book never anchors its
  * own price: when the best price sits at a reference book, that book is left out of the fair value (leave-self-out, the
  * same rule as ev.props.scan_book_outliers).
+ *
+ * Two more views read the same rows (v1.1): ARBITRAGE (`computeRowArb`: the best over and the best under at two different
+ * books, Kalshi's taker fee taken off its leg) and ALT & LONGSHOTS (`computeLongshotMetrics`: the lottery-ticket over and
+ * the fade-it under, priced against the reference books or, for a line too thinly quoted to de-vig, the player's curve).
  */
 import { americanToDecimal } from '@/lib/ev-math'
 import { americanToImpliedProb } from '@/lib/odds'
 
 export type DevigMethod = 'proportional' | 'power'
 export type SideFilter = 'both' | 'over' | 'under'
+export type OddsScreenMode = 'ev' | 'arb' | 'longshots'
+export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
 export interface BoardBook { book: string; over: number | null; under: number | null }
 export interface BoardRow {
@@ -28,6 +34,14 @@ export interface BoardRow {
   stat: string
   line: number
   books: BoardBook[]
+  /** off the player's modal line by >= 1, or quoted only through alternate / one-sided ladder markets (ev/odds_board.py) */
+  is_alt?: boolean
+  /** the line most books price two-sided for this player and stat */
+  modal_point?: number | null
+  /** fair P(over) from the player's own multi-rung curve at this line; a fallback for lines too thin to de-vig */
+  curve_fair_over?: number | null
+  /** rungs behind the curve */
+  curve_n?: number
 }
 export interface OddsBoard {
   sport: string
@@ -115,7 +129,7 @@ export interface ScreenRow {
   ev: number | null
 }
 
-function fairAmericanOf(p: number): number {
+export function fairAmericanOf(p: number): number {
   return p >= 0.5 ? -Math.round((p / (1 - p)) * 100) : Math.round(((1 - p) / p) * 100)
 }
 
@@ -198,4 +212,262 @@ export const STAT_LABEL: Record<string, string> = {
   blocked_shots: 'Blocks (shots)', rebounds: 'Rebounds', threes: '3PM', pra: 'Pts+Reb+Ast', pr: 'Pts+Reb', pa: 'Pts+Ast',
   ra: 'Reb+Ast', steals: 'Steals', blocks: 'Blocks', turnovers: 'Turnovers', stocks: 'Stl+Blk', minutes: 'Minutes',
   hits: 'Hits', pim: 'PIM', pp_points: 'PP Points',
+}
+
+// ---------------------------------------------------------------------------------------------------------- ARBITRAGE
+
+/** Exchanges whose quotes the Arbitrage view can leave out. Only Kalshi's fee is modelled (Novig charges no pre-game taker
+ * fee); another exchange's commission is not, so its price is taken as quoted. */
+export const EXCHANGE_BOOKS: ReadonlySet<string> = new Set(['kalshi', 'novig', 'prophetx'])
+export const KALSHI_FEE_RATE = 0.07
+
+/** Decimal payout of a Kalshi contract bought at `dec` once its taker fee (0.07 * p * (1 - p) per contract) is paid. */
+export function kalshiEffectiveDecimal(dec: number): number {
+  const p = 1 / dec
+  return 1 / (p + KALSHI_FEE_RATE * p * (1 - p))
+}
+
+export interface ArbResult {
+  /** true when the NET margin is positive: both legs together pay more than the outlay whichever side wins */
+  hasArb: boolean
+  /** Gross margin on the outlay, in percent: (1 / (1/decOver + 1/decUnder) - 1) * 100. Positive = risk-free profit. */
+  arbPct: number
+  /** The same after Kalshi's taker fee on a Kalshi leg (equals arbPct when neither leg is Kalshi). */
+  netArbPct: number
+  bestOverBook: string
+  bestOverAm: number
+  bestOverDec: number
+  bestUnderBook: string
+  bestUnderAm: number
+  bestUnderDec: number
+  /** true when a leg is at Kalshi, so the net figures differ from the gross ones */
+  feeLeg: boolean
+  /** Stake split of a $100 outlay that pays the same on either outcome (net of the Kalshi fee). */
+  stakeOverPer100: number
+  stakeUnderPer100: number
+  /** Locked profit on that $100, net of the fee. */
+  guaranteedProfitPer100: number
+}
+
+/**
+ * The best two-way arbitrage on one line: the best over and the best under at two DIFFERENT books (when one book holds
+ * both, the better of its runner-up pairings). `visible` = books the viewer can bet at (null = all); `includeExchanges` =
+ * false leaves Kalshi / Novig / ProphetX out. Kalshi's taker fee is taken off its leg before the legs are compared, so the
+ * pair chosen, the stake split and the locked profit are all net. null when no two books price opposite sides.
+ *
+ * Runs once per row on every filter change over thousands of rows, so it keeps the two best legs per side in locals
+ * (effective decimal, book index) instead of allocating leg objects.
+ */
+export function computeRowArb(row: BoardRow, visible: ReadonlySet<string> | null, includeExchanges = true): ArbResult | null {
+  const books = row.books
+  // per side: best and runner-up effective decimal (fee-adjusted) and the index of the book behind each
+  let oE1 = 0, oE2 = 0, oI1 = -1, oI2 = -1
+  let uE1 = 0, uE2 = 0, uI1 = -1, uI2 = -1
+  for (let i = 0; i < books.length; i++) {
+    const b = books[i]
+    if (visible && !visible.has(b.book)) continue
+    if (!includeExchanges && EXCHANGE_BOOKS.has(b.book)) continue
+    const kalshi = b.book === 'kalshi'
+    const o = b.over
+    if (o != null && isFinite(o) && o !== 0) {
+      const dec = americanToDecimal(o)
+      const e = kalshi ? kalshiEffectiveDecimal(dec) : dec
+      if (e > oE1) { oE2 = oE1; oI2 = oI1; oE1 = e; oI1 = i } else if (e > oE2) { oE2 = e; oI2 = i }
+    }
+    const u = b.under
+    if (u != null && isFinite(u) && u !== 0) {
+      const dec = americanToDecimal(u)
+      const e = kalshi ? kalshiEffectiveDecimal(dec) : dec
+      if (e > uE1) { uE2 = uE1; uI2 = uI1; uE1 = e; uI1 = i } else if (e > uE2) { uE2 = e; uI2 = i }
+    }
+  }
+  if (oI1 < 0 || uI1 < 0) return null
+  // the best over / under pairing across two different books (top two per side covers every candidate)
+  let oi = -1, ui = -1, oe = 0, inv = Infinity
+  const tryPair = (i: number, ie: number, j: number, je: number) => {
+    if (i < 0 || j < 0 || i === j) return
+    const v = 1 / ie + 1 / je
+    if (v < inv) { inv = v; oi = i; ui = j; oe = ie }
+  }
+  tryPair(oI1, oE1, uI1, uE1)
+  tryPair(oI1, oE1, uI2, uE2)
+  tryPair(oI2, oE2, uI1, uE1)
+  tryPair(oI2, oE2, uI2, uE2)
+  if (oi < 0) return null
+  const ob = books[oi]
+  const ub = books[ui]
+  const decO = americanToDecimal(ob.over as number)
+  const decU = americanToDecimal(ub.under as number)
+  const grossInv = 1 / decO + 1 / decU
+  const netArbPct = (1 / inv - 1) * 100
+  const stakeOver = (100 * (1 / oe)) / inv
+  return {
+    hasArb: netArbPct > 0,
+    arbPct: (1 / grossInv - 1) * 100,
+    netArbPct,
+    bestOverBook: ob.book, bestOverAm: ob.over as number, bestOverDec: decO,
+    bestUnderBook: ub.book, bestUnderAm: ub.under as number, bestUnderDec: decU,
+    feeLeg: ob.book === 'kalshi' || ub.book === 'kalshi',
+    stakeOverPer100: stakeOver,
+    stakeUnderPer100: 100 - stakeOver,
+    guaranteedProfitPer100: stakeOver * oe - 100,
+  }
+}
+
+export interface ArbRow { key: string; row: BoardRow; arb: ArbResult }
+
+/** Every line whose net margin is above `minNetArbPct` (percent; 0 = live arbs, -1.5 = near arbs). */
+export function buildArbRows(rows: BoardRow[], opts: { bettable: ReadonlySet<string> | null; includeExchanges: boolean; minNetArbPct: number }): ArbRow[] {
+  const out: ArbRow[] = []
+  for (const row of rows) {
+    const arb = computeRowArb(row, opts.bettable, opts.includeExchanges)
+    if (arb && arb.netArbPct > opts.minNetArbPct) out.push({ key: row.key, row, arb })
+  }
+  return out
+}
+
+// ------------------------------------------------------------------------------------------------ ALT & LONGSHOTS
+
+/** A row is a longshot row when the lottery-ticket over pays at least this (American) or its fair P(over) is this low. */
+export const LONGSHOT_MIN_AMERICAN = 200
+export const LONGSHOT_MAX_FAIR = 0.333
+
+export interface LongshotMetrics {
+  isLongshotRow: boolean
+  isAltLine: boolean
+  /** Best OVER price at a bettable book: the lottery-ticket side. */
+  bestOverBook: string | null
+  bestOverAm: number | null
+  /** Best UNDER / NO price at a bettable book: the fade (house) side. */
+  bestUnderBook: string | null
+  bestUnderAm: number | null
+  /** Fair P(over): the reference books' de-vigged mean when >= minRef of them price this exact line both ways, else the curve. */
+  fairOverProb: number | null
+  /** The same for the under side, with ITS best book left out of the average (equals 1 - fairOverProb unless the two best prices sit at different reference books). */
+  fairUnderProb: number | null
+  fairSource: 'consensus' | 'curve' | null
+  /** reference books behind the consensus fair value (0 when the curve is used) */
+  nRef: number
+  /** implied probability of each best price (1 / decimal) */
+  overImplied: number | null
+  underImplied: number | null
+  /** EV% of taking the longshot OVER at bestOverAm. */
+  overEvPct: number | null
+  /** EV% of fading it: buying the UNDER / NO at bestUnderAm. */
+  fadeUnderEvPct: number | null
+}
+
+export interface LongshotOptions {
+  refs: readonly string[]
+  method: DevigMethod
+  bettable: ReadonlySet<string> | null
+  /** fewest reference books for a consensus fair value; below it the curve (when allowed) stands in */
+  minRef: number
+  useCurve: boolean
+}
+
+interface FairPick { p: number; source: 'consensus' | 'curve'; n: number }
+
+interface Best { i: number; book: string; am: number; dec: number }
+
+/** The best bettable price on a side (higher decimal wins) with the index of its book; no tie list, unlike bestPrice. */
+function bestOnSide(books: BoardBook[], side: 'OVER' | 'UNDER', bettable: ReadonlySet<string> | null): Best | null {
+  let best: Best | null = null
+  for (let i = 0; i < books.length; i++) {
+    const b = books[i]
+    if (bettable && !bettable.has(b.book)) continue
+    const a = side === 'OVER' ? b.over : b.under
+    if (a == null || !isFinite(a) || a === 0) continue
+    const dec = americanToDecimal(a)
+    if (!best || dec > best.dec) best = { i, book: b.book, am: a, dec }
+  }
+  return best
+}
+
+export function computeLongshotMetrics(row: BoardRow, opts: LongshotOptions, refSet?: ReadonlySet<string> | null): LongshotMetrics {
+  const refs = refSet !== undefined ? refSet : opts.refs.length ? new Set(opts.refs) : null
+  const books = row.books
+  const fairs = rowFairs(row, opts.method)
+  let sum = 0
+  let n = 0
+  for (let i = 0; i < books.length; i++) {
+    const p = fairs[i]
+    if (p == null || (refs && !refs.has(books[i].book))) continue
+    sum += p
+    n += 1
+  }
+  const curve = opts.useCurve && row.curve_fair_over != null && row.curve_fair_over > 0 && row.curve_fair_over < 1 ? row.curve_fair_over : null
+  // fair P(over) with the book whose price is being judged (index `own`) left out; the curve when the books are too few
+  const fairFor = (own: number): FairPick | null => {
+    let s = sum
+    let k = n
+    const mine = fairs[own]
+    if (mine != null && (!refs || refs.has(books[own].book))) { s -= mine; k -= 1 }
+    if (k >= 1 && k >= opts.minRef) {
+      const p = s / k
+      if (p > 0 && p < 1) return { p, source: 'consensus', n: k }
+    }
+    return curve != null ? { p: curve, source: 'curve', n: 0 } : null
+  }
+  const bo = bestOnSide(books, 'OVER', opts.bettable)
+  const bu = bestOnSide(books, 'UNDER', opts.bettable)
+  const overFair = bo ? fairFor(bo.i) : null
+  const underFair = bu ? fairFor(bu.i) : null
+  const head = overFair ?? underFair
+  const fairOverProb = head ? head.p : null
+  const isAltLine = row.is_alt === true
+  return {
+    isLongshotRow: isAltLine || (bo != null && bo.am >= LONGSHOT_MIN_AMERICAN) || (fairOverProb != null && fairOverProb <= LONGSHOT_MAX_FAIR),
+    isAltLine,
+    bestOverBook: bo ? bo.book : null,
+    bestOverAm: bo ? bo.am : null,
+    bestUnderBook: bu ? bu.book : null,
+    bestUnderAm: bu ? bu.am : null,
+    fairOverProb,
+    fairUnderProb: underFair ? 1 - underFair.p : overFair ? 1 - overFair.p : null,
+    fairSource: head ? head.source : null,
+    nRef: head ? head.n : 0,
+    overImplied: bo ? 1 / bo.dec : null,
+    underImplied: bu ? 1 / bu.dec : null,
+    overEvPct: overFair && bo ? (overFair.p * bo.dec - 1) * 100 : null,
+    fadeUnderEvPct: underFair && bu ? ((1 - underFair.p) * bu.dec - 1) * 100 : null,
+  }
+}
+
+export interface LongshotRow {
+  key: string
+  row: BoardRow
+  m: LongshotMetrics
+  /** the side with the higher EV (null when neither side has a fair value) */
+  side: 'OVER' | 'UNDER' | null
+  /** that side's EV in percent */
+  bestEv: number | null
+}
+
+export interface LongshotScreenOptions extends LongshotOptions {
+  sub: LongshotSubfilter
+  /** fraction (0.02 = 2%): the Snipe / Fade sub-filters keep EV at or above it */
+  minEv: number
+  /** fewest American odds of the longshot over (0 = no cut) */
+  minOverAm: number
+}
+
+export function buildLongshotRows(rows: BoardRow[], opts: LongshotScreenOptions): LongshotRow[] {
+  const refSet = opts.refs.length ? new Set(opts.refs) : null
+  const floor = opts.minEv * 100
+  const out: LongshotRow[] = []
+  for (const row of rows) {
+    const m = computeLongshotMetrics(row, opts, refSet)
+    if (!m.isLongshotRow) continue
+    if (opts.minOverAm > 0 && !(m.bestOverAm != null && m.bestOverAm >= opts.minOverAm)) continue
+    const o = m.overEvPct
+    const f = m.fadeUnderEvPct
+    if (opts.sub === 'plus_ev_over' && !(o != null && o >= floor)) continue
+    if (opts.sub === 'fade_under' && !(f != null && f >= floor)) continue
+    // a Snipe / Fade view shows its own side; All shows whichever side pays more
+    const side: LongshotRow['side'] = opts.sub === 'plus_ev_over' ? 'OVER' : opts.sub === 'fade_under' ? 'UNDER'
+      : o == null && f == null ? null : f == null || (o != null && o >= f) ? 'OVER' : 'UNDER'
+    out.push({ key: row.key, row, m, side, bestEv: side === 'OVER' ? o : side === 'UNDER' ? f : null })
+  }
+  return out
 }
