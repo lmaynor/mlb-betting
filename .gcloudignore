@@ -5,8 +5,13 @@
 .git
 .gitignore
 
-# Vercel frontend -- not part of the Cloud Run image
-beezy-vip/
+# Vercel frontend -- not part of the Cloud Run image. The one exception is the engine-accuracy table the Dockerfile COPYs
+# (tweet_drafter reads it); a gitignore-style file cannot re-include a file under an excluded directory, so exclude the
+# directory CONTENTS level by level.
+beezy-vip/*
+!beezy-vip/lib/
+beezy-vip/lib/*
+!beezy-vip/lib/engine-accuracy.json
 
 # Notebooks and local dev artifacts
 *.ipynb
