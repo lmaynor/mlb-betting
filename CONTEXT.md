@@ -3499,7 +3499,8 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   `scripts/novig_kalshi_scan.py` measure the QUOTED hedged opportunity only, not realised P&L.
 - **Kalshi RFQ maker / combo lay engine (2026-10-25; code + offline tests only, nothing run on any exchange).**
   `mlb/execution/kalshi/rfq_client.py` + `rfq_maker.py`, `ev/kalshi_rfq_pricer.py`, `scripts/kalshi_rfq_daemon.py`
-  (`--mode record|shadow|live`). DEMO only (production refused, guard kept); live also needs `KALSHI_RFQ_LIVE=1`; kill
+  (`--mode record|shadow|live`). Quoting is DEMO only (production refused, guard kept); live also needs `KALSHI_RFQ_LIVE=1`;
+  env flips `KALSHI_RFQ_ENV` (demo|production-readonly = GET-only record mode) / `KALSHI_RFQ_MODE`; kill
   switch key `kill_reason:kalshi_rfq` (own key, manual reset). Combos (every combo is an HVM: 3 s confirm window) are
   LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
   format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for

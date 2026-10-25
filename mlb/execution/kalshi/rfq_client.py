@@ -30,13 +30,15 @@ import random
 import time
 
 from mlb.execution.kalshi.client import (
-    KalshiAPIError, KalshiClient, ProductionNotEnabled, sign,
+    KalshiAPIError, KalshiClient, PROD_READONLY_ENV, ProductionNotEnabled, sign,
 )
 
 log = logging.getLogger("kalshi_exec.rfq")
 
 WS_PATH = "/trade-api/ws/v2"
-WS_URLS = {"demo": "wss://external-api-ws.demo.kalshi.co" + WS_PATH}
+WS_URLS = {"demo": "wss://external-api-ws.demo.kalshi.co" + WS_PATH,
+           # the stream only ever SUBSCRIBES (receive-only); quoting goes through REST, which the read-only client lacks
+           PROD_READONLY_ENV: "wss://external-api-ws.kalshi.com" + WS_PATH}
 CONFIRM_TIMEOUT_S = 2.0          # must beat the 3 s HVM / combo confirm window
 MAX_QUOTE_PRICE = 0.99
 
@@ -63,17 +65,9 @@ def validate_quote_prices(yes_bid_fp: str, no_bid_fp: str) -> tuple[str, str]:
     return f"{y:.4f}", f"{n:.4f}"
 
 
-class RFQClient(KalshiClient):
-    """Signed REST methods for /communications/*. Demo only (inherited guard + an explicit one here)."""
+class _RFQReads:
+    """GET-only /communications queries, shared by the demo quoting client and the read-only production client."""
 
-    def __init__(self, env: str, key_id: str | None, private_key_pem: bytes | None, **kw):
-        if env != "demo":
-            raise ProductionNotEnabled(
-                f"RFQ client env {env!r} refused: RFQ quoting is DEMO-only until the owner explicitly "
-                "enables production.")
-        super().__init__(env, key_id, private_key_pem, **kw)
-
-    # ---- queries ----
     def get_rfqs(self, status: str = "open", ticker: str | None = None, limit: int = 100) -> list[dict]:
         out: list[dict] = []
         cursor = None
@@ -90,6 +84,27 @@ class RFQClient(KalshiClient):
                 break
         return out[:limit]
 
+
+class RFQReadOnlyClient(_RFQReads, KalshiClient):
+    """Signed GETs against PRODUCTION for tape recording. It has NO create_quote / confirm_quote / delete_quote, and
+    KalshiClient.request() refuses every non-GET method for this env before touching the network -- two independent
+    layers, so it cannot send a quote."""
+
+    def __init__(self, key_id: str | None, private_key_pem: bytes | None, **kw):
+        super().__init__(PROD_READONLY_ENV, key_id, private_key_pem, **kw)
+
+
+class RFQClient(_RFQReads, KalshiClient):
+    """Signed REST methods for /communications/*. Demo only (inherited guard + an explicit one here)."""
+
+    def __init__(self, env: str, key_id: str | None, private_key_pem: bytes | None, **kw):
+        if env != "demo":
+            raise ProductionNotEnabled(
+                f"RFQ client env {env!r} refused: RFQ quoting is DEMO-only until the owner explicitly "
+                "enables production.")
+        super().__init__(env, key_id, private_key_pem, **kw)
+
+    # ---- queries ----
     def get_quotes(self, status: str = "open") -> list[dict]:
         data = self.request("GET", "/communications/quotes", params={"status": status})
         return data.get("quotes", []) or []
@@ -144,7 +159,7 @@ class KalshiRFQStream:
     def __init__(self, env: str, key_id: str, private_key, on_event, *, connect=None, sleep=asyncio.sleep,
                  ping_interval: float = 10.0, max_attempts: int | None = None):
         if env not in WS_URLS:
-            raise ProductionNotEnabled(f"RFQ stream env {env!r} refused: demo only.")
+            raise ProductionNotEnabled(f"RFQ stream env {env!r} refused: demo / production-readonly only.")
         self.url, self.key_id, self._key, self.on_event = WS_URLS[env], key_id, private_key, on_event
         self._connect, self._sleep = connect, sleep
         self.ping_interval, self.max_attempts = ping_interval, max_attempts
@@ -210,5 +225,5 @@ class KalshiRFQStream:
             await self._sleep(backoff_delay(attempt))
 
 
-__all__ = ["RFQClient", "KalshiRFQStream", "KalshiAPIError", "QuoteInvariantError", "validate_quote_prices",
+__all__ = ["RFQClient", "RFQReadOnlyClient", "KalshiRFQStream", "KalshiAPIError", "QuoteInvariantError", "validate_quote_prices",
            "ws_headers", "backoff_delay", "WS_URLS", "CONFIRM_TIMEOUT_S"]

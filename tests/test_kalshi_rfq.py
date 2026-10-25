@@ -634,3 +634,88 @@ def test_new_files_are_ascii_only(path):
     with open(os.path.join(root, path), encoding="utf-8") as fh:
         text = fh.read()
     assert text.isascii(), [c for c in text if ord(c) > 127][:5]
+
+
+# ------------------------------------------------------------------------------------------ read-only production
+def _daemon():
+    import importlib.util
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    spec = importlib.util.spec_from_file_location("kalshi_rfq_daemon", os.path.join(root, "scripts", "kalshi_rfq_daemon.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_readonly_prod_client_cannot_send_anything(pem):
+    from mlb.execution.kalshi.client import KalshiClient, PROD_READONLY_ENV
+    from mlb.execution.kalshi.rfq_client import RFQReadOnlyClient
+    s = FakeSession([FakeResp(200, {"rfqs": [{"id": "r"}], "cursor": ""})])
+    c = RFQReadOnlyClient("kid", pem, session=s)
+    assert c.env == PROD_READONLY_ENV and "external-api.kalshi.com" in c.base_url
+    assert c.get_rfqs() == [{"id": "r"}] and s.calls[0][0] == "GET"
+    for name in ("create_quote", "confirm_quote", "delete_quote"):
+        assert not hasattr(RFQReadOnlyClient, name)                                           # no quoting API at all
+    for method, path in (("POST", "/communications/quotes"), ("PUT", "/communications/quotes/q/confirm"),
+                         ("DELETE", "/communications/quotes/q"), ("POST", "/portfolio/events/orders")):
+        with pytest.raises(ProductionNotEnabled):
+            c.request(method, path, body={})
+    with pytest.raises(ProductionNotEnabled):
+        c.create_order(ticker="T", client_order_id="x", book_side="bid", count=1, price=0.5)   # inherited helper, same guard
+    assert len(s.calls) == 1                                                                   # nothing but the one GET
+    with pytest.raises(ProductionNotEnabled):
+        KalshiClient(PROD_READONLY_ENV, None, None)                                           # needs credentials
+
+
+def test_plain_production_env_is_still_refused(pem):
+    from mlb.execution.kalshi.client import KalshiClient
+    with pytest.raises(ProductionNotEnabled):
+        KalshiClient("production", "k", pem)
+    with pytest.raises(ProductionNotEnabled):
+        RFQClient("production-readonly", "k", pem)               # the QUOTING client never accepts the prod env
+
+
+def test_readonly_prod_stream_is_receive_only_url(pem):
+    from mlb.execution.kalshi.client import load_private_key
+    st = KalshiRFQStream("production-readonly", "kid", load_private_key(pem), lambda *a: None)
+    assert st.url == "wss://external-api-ws.kalshi.com/trade-api/ws/v2"
+
+
+class _Args:
+    def __init__(self, env=None, mode=None):
+        self.env, self.mode = env, mode
+
+
+def test_daemon_env_flips_and_refusals():
+    d = _daemon()
+    assert d.resolve_run(_Args(), {}) == ("demo", "record")
+    assert d.resolve_run(_Args(), {"KALSHI_RFQ_ENV": "production-readonly"}) == ("production-readonly", "record")
+    assert d.resolve_run(_Args(), {"KALSHI_RFQ_MODE": "shadow"}) == ("demo", "shadow")
+    assert d.resolve_run(_Args(mode="record"), {"KALSHI_RFQ_MODE": "shadow"}) == ("demo", "record")     # CLI wins
+    for env, mode in (("production-readonly", "shadow"), ("production-readonly", "live")):
+        with pytest.raises(SystemExit):
+            d.resolve_run(_Args(env, mode), {"KALSHI_RFQ_LIVE": "1"})                  # prod can never quote, flag or not
+    with pytest.raises(SystemExit):
+        d.resolve_run(_Args(), {"KALSHI_RFQ_ENV": "production"})
+    with pytest.raises(SystemExit):
+        d.resolve_run(_Args(mode="live"), {})                                           # live is not armed
+    with pytest.raises(SystemExit):
+        d.resolve_run(_Args(mode="live"), {"KALSHI_RFQ_LIVE": "0"})
+    assert d.resolve_run(_Args(mode="live"), {"KALSHI_RFQ_LIVE": "1"}) == ("demo", "live")
+    assert d.resolve_run(_Args(), {"KALSHI_RFQ_MODE": "live", "KALSHI_RFQ_LIVE": "1"}) == ("demo", "live")
+
+
+def test_daemon_prod_credentials_are_separate_from_demo(tmp_path, monkeypatch):
+    d = _daemon()
+    for k in ("KALSHI_API_KEY_ID", "KALSHI_PRIVATE_KEY_PATH", "KALSHI_PROD_API_KEY_ID", "KALSHI_PROD_PRIVATE_KEY_PATH",
+              "KEXEC_ENV_FILE", "KALSHI_ENV"):
+        monkeypatch.delenv(k, raising=False)
+    key = tmp_path / "k.pem"
+    key.write_bytes(b"PEM")
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"KALSHI_API_KEY_ID=demo-id\nKALSHI_PRIVATE_KEY_PATH={key}\n")
+    with pytest.raises(SystemExit):                                                     # demo creds must NOT satisfy prod
+        d.load_credentials(str(env_file), "production-readonly")
+    env_file.write_text(f"KALSHI_PROD_API_KEY_ID=prod-id\nKALSHI_PROD_PRIVATE_KEY_PATH={key}\n")
+    assert d.load_credentials(str(env_file), "production-readonly") == ("prod-id", b"PEM")
+    with pytest.raises(SystemExit):                                                     # and prod creds don't satisfy demo
+        d.load_credentials(str(env_file), "demo")

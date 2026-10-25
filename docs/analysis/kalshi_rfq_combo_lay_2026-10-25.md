@@ -22,10 +22,8 @@ shadow modes exist to answer it at $0 risk before anything is sent.
 | `mlb/execution/kalshi/client.py` | `request()` gained `max_retries` / `paced` kwargs (defaults unchanged) so confirm can skip backoff and pacing |
 
 ## Deviations from the pasted spec (and why)
-1. **Demo only.** The executor refuses production in code (`ProductionNotEnabled`); that guard is kept. The spec's
-   `wss://api.elections.kalshi.com` is not wired. Consequence: `record` mode sees whatever RFQ flow the DEMO exchange
-   has, which is probably thin. Getting real retail RFQ tape needs an explicit owner decision to allow a READ-ONLY
-   production key; that is deliberately not decided here.
+1. **Quoting is demo only.** The executor refuses production in code (`ProductionNotEnabled`); that guard is kept for
+   every order / quote / confirm path. Real RFQ tape comes from a separate READ-ONLY production mode (below).
 2. **Wire format from the live docs (2026-10-25), not the spec**: quote body is `{rfq_id, yes_bid, no_bid,
    rest_remainder[, post_only]}`; there is no `replace_existing` (a new quote replaces the old one server-side);
    confirm is `PUT /communications/rfqs/{rfq_id}/quotes/{quote_id}/confirm` (the bare quote path is deprecated);
@@ -63,12 +61,34 @@ shadow modes exist to answer it at $0 risk before anything is sent.
 consensus join for them yet) -- a combo containing any unmapped leg is rejected whole, by design.
 `--hot-games-file` is a JSON list of game_keys flagged by a lineup/injury feed (no such feed is wired automatically).
 
+## Read-only production recorder
+`KALSHI_RFQ_ENV=production-readonly` (or `--env production-readonly`) records the REAL RFQ flow. It cannot send a
+quote, by three independent layers:
+1. `RFQReadOnlyClient` has no `create_quote` / `confirm_quote` / `delete_quote` methods at all.
+2. `KalshiClient.request()` raises `ProductionNotEnabled` for any non-GET method on this env BEFORE any network call
+   (so even the inherited `create_order` helper is dead).
+3. The daemon refuses every mode but `record` for this env, whatever `KALSHI_RFQ_LIVE` says; the WebSocket only
+   subscribes.
+Credentials are separate from the demo ones: `KALSHI_PROD_API_KEY_ID` / `KALSHI_PROD_PRIVATE_KEY_PATH` (demo creds never
+satisfy it and vice versa). Tape goes to `data/kalshi_rfq/production/`. The production REST host
+(`external-api.kalshi.com`) and WS host come from the docs and the market-maker repo; not yet exercised.
+
+## Env flips
+| Env | Values | Effect |
+|---|---|---|
+| `KALSHI_RFQ_ENV` | `demo` (default), `production-readonly` | which exchange the daemon connects to |
+| `KALSHI_RFQ_MODE` | `record` (default), `shadow`, `live` | run mode (CLI `--mode` wins) |
+| `KALSHI_RFQ_LIVE` | `1` | arms `live`; without it `--mode live` refuses to start (checked in the daemon AND in `RFQMaker`) |
+Going live on the DEMO exchange is therefore `KALSHI_RFQ_MODE=live KALSHI_RFQ_LIVE=1`, no code change. There is
+deliberately NO env that enables quoting on production: that is a code change plus the verification list below.
+
 ## Running
 ```
 pip install websockets                        # only the daemon's stream needs it
 python scripts/kalshi_rfq_daemon.py --mode record --feed path/to/latest.json
 python scripts/kalshi_rfq_daemon.py --mode shadow
 KALSHI_RFQ_LIVE=1 python scripts/kalshi_rfq_daemon.py --mode live      # DEMO exchange only
+KALSHI_RFQ_ENV=production-readonly python scripts/kalshi_rfq_daemon.py --mode record   # real tape, GET-only
 python scripts/kalshi_rfq_daemon.py --reset-kill                        # kill switch is manual-reset-only
 ```
 Kill switch key: `kill_reason:kalshi_rfq` (own key; never halts the other venues in the same ledger).

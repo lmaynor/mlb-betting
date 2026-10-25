@@ -32,6 +32,10 @@ BASE_URLS = {"demo": "https://external-api.demo.kalshi.co/trade-api/v2"}
 # mode to see what real books look like. Never used for orders.
 PUBLIC_PROD_DATA_URL = "https://api.elections.kalshi.com/trade-api/v2"
 PUBLIC_DATA_ENV = "public-data"
+# SIGNED but GET-ONLY production access (RFQ tape recording). request() refuses every non-GET method for this env
+# BEFORE any network call, so no order / quote / confirm / cancel can leave this client even by mistake.
+PROD_READONLY_ENV = "production-readonly"
+PROD_READONLY_URL = "https://external-api.kalshi.com/trade-api/v2"
 
 
 class ProductionNotEnabled(RuntimeError):
@@ -86,6 +90,10 @@ class KalshiClient:
             if key_id or private_key_pem:
                 raise ProductionNotEnabled("public-data client must carry no credentials")
             base_url = base_url or PUBLIC_PROD_DATA_URL        # read-only, cannot sign
+        elif env == PROD_READONLY_ENV:
+            if not (key_id and private_key_pem):
+                raise ProductionNotEnabled("read-only production client needs credentials (signed GETs)")
+            base_url = base_url or PROD_READONLY_URL
         elif env != "demo":
             raise ProductionNotEnabled(
                 f"KALSHI env {env!r} refused: this executor is DEMO-only until the owner "
@@ -118,6 +126,10 @@ class KalshiClient:
         # NEVER be blindly retried; the caller reconciles from the venue instead.
         # `max_retries` / `paced` let a latency-critical caller (RFQ confirm, 3s window) opt out of
         # the backoff sleeps and the inter-request pacing; defaults are unchanged for everyone else.
+        if self.env == PROD_READONLY_ENV and method.upper() != "GET":
+            raise ProductionNotEnabled(
+                f"{method.upper()} {path} refused: the production client is READ-ONLY (GET only); "
+                "production quoting/ordering is not enabled.")
         idempotent = method.upper() == "GET"
         retries = self.max_retries if max_retries is None else max_retries
         for attempt in range(retries + 1):
