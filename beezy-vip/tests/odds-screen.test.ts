@@ -1,4 +1,7 @@
-import { bestPrice, buildScreenRows, devigOver, fairOver, type BoardRow } from '@/lib/odds-screen'
+import {
+  bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeRowArb, devigOver, fairOver,
+  kalshiEffectiveDecimal, type BoardRow,
+} from '@/lib/odds-screen'
 
 const row = (books: BoardRow['books'], line = 24.5): BoardRow => ({
   key: `g|jo|points|${line}`, game_key: 'nba:2026-10-21:BOS@LAL', commence: '2026-10-22T01:00:00+00:00', away: 'BOS', home: 'LAL',
@@ -97,5 +100,121 @@ describe('buildScreenRows matches the per-book definition', () => {
         expect(r.pFair!).toBeCloseTo(r.side === 'OVER' ? f.pOver : 1 - f.pOver, 12)
       }
     }
+  })
+})
+
+// --------------------------------------------------------------------------------------------- arbitrage / longshots
+describe('computeRowArb', () => {
+  it('finds a true two-way arb across two books and splits $100 into equal payouts', () => {
+    const a = computeRowArb(row([B('fanduel', 120, -140), B('draftkings', -150, -105)]), null)!
+    expect(a).toMatchObject({ hasArb: true, bestOverBook: 'fanduel', bestOverAm: 120, bestUnderBook: 'draftkings', bestUnderAm: -105, feeLeg: false })
+    const inv = 1 / 2.2 + 1 / (1 + 100 / 105)
+    expect(a.arbPct).toBeCloseTo((1 / inv - 1) * 100, 9)
+    expect(a.netArbPct).toBeCloseTo(a.arbPct, 9)
+    expect(a.arbPct).toBeGreaterThan(0)
+    expect(a.stakeOverPer100 + a.stakeUnderPer100).toBeCloseTo(100, 9)
+    expect(a.stakeOverPer100 * 2.2).toBeCloseTo(a.stakeUnderPer100 * (1 + 100 / 105), 9)         // equal payout either way
+    expect(a.guaranteedProfitPer100).toBeCloseTo(a.stakeOverPer100 * 2.2 - 100, 9)
+    expect(a.guaranteedProfitPer100).toBeCloseTo(a.arbPct, 9)                                    // $100 outlay: profit $ = margin %
+  })
+  it('never pairs a book with itself', () => {
+    // one book is the best over AND the best under: a "hold" below 100% in one book is not an arb across two
+    expect(computeRowArb(row([B('fanduel', 130, 120)]), null)).toBeNull()
+    const a = computeRowArb(row([B('fanduel', 130, 125), B('draftkings', -150, -135)]), null)!
+    expect(a.bestOverBook).not.toBe(a.bestUnderBook)
+    expect(a).toMatchObject({ bestOverBook: 'fanduel', bestUnderBook: 'draftkings', hasArb: false })
+    expect(a.netArbPct).toBeLessThan(0)
+  })
+  it('takes a Kalshi leg fee off the net margin only', () => {
+    const r = row([B('kalshi', 130, -400), B('draftkings', -180, -105)])
+    const a = computeRowArb(r, null)!
+    expect(a.feeLeg).toBe(true)
+    expect(a.bestOverBook).toBe('kalshi')
+    expect(a.netArbPct).toBeLessThan(a.arbPct)
+    const p = 1 / 2.3
+    expect(kalshiEffectiveDecimal(2.3)).toBeCloseTo(1 / (p + 0.07 * p * (1 - p)), 12)
+    const inv = 1 / kalshiEffectiveDecimal(2.3) + 1 / (1 + 100 / 105)
+    expect(a.netArbPct).toBeCloseTo((1 / inv - 1) * 100, 9)
+    expect(a.guaranteedProfitPer100).toBeCloseTo(a.netArbPct, 9)
+    expect(computeRowArb(r, null, false)).toBeNull()                          // exchanges off: only draftkings is left
+  })
+  it('respects the bettable set and falls back to the runner-up when one book holds both best prices', () => {
+    const r = row([B('fanduel', 125, 120), B('draftkings', 110, -125), B('betmgm', -130, 105)])
+    const a = computeRowArb(r, null)!
+    expect(a.bestOverBook).not.toBe(a.bestUnderBook)
+    expect(a.bestOverBook === 'fanduel' || a.bestUnderBook === 'fanduel').toBe(true)
+    expect(computeRowArb(r, new Set(['draftkings']))).toBeNull()
+  })
+  it('buildArbRows keeps live and near arbs by the net margin', () => {
+    const live = row([B('fanduel', 120, -140), B('draftkings', -150, -105)], 10.5)
+    const near = row([B('fanduel', 105, -140), B('draftkings', -150, -105)], 11.5)       // -0.8%
+    const dead = row([B('fanduel', -110, -110), B('draftkings', -110, -110)], 12.5)
+    const o = { bettable: null, includeExchanges: true }
+    expect(buildArbRows([live, near, dead], { ...o, minNetArbPct: 0 }).map(x => x.row.line)).toEqual([10.5])
+    expect(buildArbRows([live, near, dead], { ...o, minNetArbPct: -1.5 }).map(x => x.row.line)).toEqual([10.5, 11.5])
+  })
+})
+
+describe('computeLongshotMetrics', () => {
+  const lo = { refs: [] as string[], method: 'proportional' as const, bettable: null, minRef: 2, useCurve: true }
+  // four books agree the over is a ~20% shot; FanDuel pays +420 on it; Novig sells the under at -250
+  const books = [B('draftkings', 380, -520), B('betmgm', 400, -560), B('caesars', 360, -480), B('pinnacle', 390, -540),
+    B('fanduel', 420, null), B('novig', null, -250)]
+  const alt = (b: BoardRow['books'], extra: Partial<BoardRow> = {}): BoardRow => ({ ...row(b, 79.5), ...extra })
+
+  it('classifies a +250 over, an alt line, or a fair P(over) <= 33.3% as a longshot row; a coin flip is not one', () => {
+    expect(computeLongshotMetrics(row([B('a', 250, -300), B('b', 240, -300)]), lo).isLongshotRow).toBe(true)
+    expect(computeLongshotMetrics(alt([B('a', 150, -170), B('b', 140, -170)], { is_alt: true }), lo)).toMatchObject({ isLongshotRow: true, isAltLine: true })
+    expect(computeLongshotMetrics(row([B('a', -110, -110), B('b', -110, -110)]), lo).isLongshotRow).toBe(false)
+    expect(computeLongshotMetrics(row([B('a', 190, -230), B('b', 190, -230), B('c', 190, -230)]), lo).isLongshotRow).toBe(true)     // fair ~0.33, price under +200
+  })
+  it('prices the snipe-over and the fade-under against the consensus with each best book left out', () => {
+    const m = computeLongshotMetrics(alt(books), lo)
+    expect(m).toMatchObject({ bestOverBook: 'fanduel', bestOverAm: 420, bestUnderBook: 'novig', bestUnderAm: -250, fairSource: 'consensus', nRef: 4 })
+    const ps = [[380, -520], [400, -560], [360, -480], [390, -540]].map(([o, u]) => { const a = 100 / (o + 100), b = -u / (-u + 100); return a / (a + b) })
+    const p = ps.reduce((x, y) => x + y, 0) / 4
+    expect(m.fairOverProb!).toBeCloseTo(p, 9)
+    expect(m.overEvPct!).toBeCloseTo((p * 5.2 - 1) * 100, 9)
+    expect(m.fadeUnderEvPct!).toBeCloseTo(((1 - p) * 1.4 - 1) * 100, 9)
+    expect(m.overImplied!).toBeCloseTo(1 / 5.2, 9)
+    expect(m.overEvPct!).toBeGreaterThan(0)
+  })
+  it('falls back to the curve when too few reference books price the exact line, and not when the curve is off', () => {
+    const thin = alt([B('fanduel', 600, null), B('draftkings', 500, -800)], { curve_fair_over: 0.2 })
+    const m = computeLongshotMetrics(thin, lo)
+    expect(m).toMatchObject({ fairSource: 'curve', nRef: 0, bestOverBook: 'fanduel', bestOverAm: 600 })
+    expect(m.fairOverProb).toBe(0.2)
+    expect(m.overEvPct!).toBeCloseTo((0.2 * 7 - 1) * 100, 9)
+    expect(m.fadeUnderEvPct!).toBeCloseTo((0.8 * (1 + 100 / 800) - 1) * 100, 9)
+    expect(computeLongshotMetrics(thin, { ...lo, useCurve: false })).toMatchObject({ fairOverProb: null, fairSource: null, overEvPct: null, fadeUnderEvPct: null })
+    expect(computeLongshotMetrics(alt([B('fanduel', 600, null)]), lo).fairOverProb).toBeNull()                 // no curve on the row: no fair value
+  })
+  it('buildLongshotRows filters by sub-view, EV floor and odds range, and orders sides by EV', () => {
+    const rows = [alt(books, { key: 'a' }), alt([B('fanduel', 600, null), B('draftkings', 500, -800)], { key: 'b', curve_fair_over: 0.2, is_alt: true }), row([B('a', -110, -110), B('b', -110, -110)])]
+    const o = { ...lo, sub: 'all' as const, minEv: 0, minOverAm: 0 }
+    expect(buildLongshotRows(rows, o).map(r => r.key).sort()).toEqual(['a', 'b'])
+    expect(buildLongshotRows(rows, { ...o, minOverAm: 500 }).map(r => r.key)).toEqual(['b'])
+    expect(buildLongshotRows(rows, { ...o, sub: 'plus_ev_over', minEv: 0.1 }).map(r => r.key)).toEqual(['b'])
+    expect(buildLongshotRows(rows, { ...o, sub: 'fade_under', minEv: 0 }).every(r => r.side === 'UNDER' && r.m.fadeUnderEvPct! >= 0)).toBe(true)
+  })
+})
+
+describe('warm mode switching at 9,000 rows', () => {
+  const px = [-130, -120, -115, -110, -105, 100, 105, 110, 120, 250, 400, -300, -600]
+  let seed = 7
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+  const books = ['pinnacle', 'novig', 'kalshi', 'draftkings', 'fanduel', 'betmgm', 'caesars', 'espnbet', 'bet365', 'hardrock']
+  const rows: BoardRow[] = Array.from({ length: 9000 }, (_, i) => ({
+    ...row(books.filter(() => rnd() < 0.7).map(b => B(b, px[Math.floor(rnd() * px.length)], rnd() < 0.1 ? null : px[Math.floor(rnd() * px.length)])), i), key: `r${i}`,
+    is_alt: rnd() < 0.3, curve_fair_over: rnd() < 0.5 ? 0.05 + rnd() * 0.5 : null,
+  }))
+  const bettable = new Set(books.filter(b => b !== 'pinnacle'))
+  const lo = { refs: [] as string[], method: 'proportional' as const, bettable, minRef: 2, useCurve: true }
+  it('rebuilds each view in under 50 ms once the de-vig is warm (the screen rebuilds the active view only)', () => {
+    buildLongshotRows(rows, { ...lo, sub: 'all', minEv: 0, minOverAm: 0 })                    // warms the per-row de-vig memo
+    // best of 7: the full suite runs test files in parallel, and a noisy neighbour should not read as a slow rebuild
+    const ms = (f: () => void) => { let best = Infinity; for (let i = 0; i < 7; i++) { const t0 = performance.now(); f(); best = Math.min(best, performance.now() - t0) } return best }
+    expect(ms(() => buildArbRows(rows, { bettable, includeExchanges: true, minNetArbPct: -1.5 }))).toBeLessThan(50)
+    expect(ms(() => buildLongshotRows(rows, { ...lo, sub: 'plus_ev_over', minEv: 0.02, minOverAm: 200 }))).toBeLessThan(50)
   })
 })
