@@ -3497,6 +3497,13 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   Still evidence-only: nothing here is sized or scored on the site.
 - Market-making on Kalshi NFL props is -EV (docs/analysis/market_making_2026-10-12.md); `mm_*` columns in
   `scripts/novig_kalshi_scan.py` measure the QUOTED hedged opportunity only, not realised P&L.
+- **Kalshi RFQ maker / combo lay engine (2026-10-25; code + offline tests only, nothing run on any exchange).**
+  `mlb/execution/kalshi/rfq_client.py` + `rfq_maker.py`, `ev/kalshi_rfq_pricer.py`, `scripts/kalshi_rfq_daemon.py`
+  (`--mode record|shadow|live`). DEMO only (production refused, guard kept); live also needs `KALSHI_RFQ_LIVE=1`; kill
+  switch key `kill_reason:kalshi_rfq` (own key, manual reset). Combos (every combo is an HVM: 3 s confirm window) are
+  LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
+  format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for
+  the deviations and the demo-exchange verification list (`accepted_side` semantics first).
 - **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
   Kalshi blocks its egress IP (`kalshi_ok=False`, the legs are empty), and that is exactly when the laptop does the
   Kalshi join. `props_exec.build_latest_local` now computes it too (never fatal) and `publish_local` writes

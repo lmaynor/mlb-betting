@@ -111,19 +111,24 @@ class KalshiClient:
                 "KALSHI-ACCESS-SIGNATURE": sign(self._key, ts + method.upper() + full)}
 
     def request(self, method: str, path: str, params: dict | None = None,
-                body: dict | None = None, auth: bool = True, timeout: float = 15.0) -> dict:
+                body: dict | None = None, auth: bool = True, timeout: float = 15.0,
+                max_retries: int | None = None, paced: bool = True) -> dict:
         # Retry policy: 429 is rejected BEFORE processing, so it is safe to retry for any method.
         # 5xx/timeouts are retried for GET only -- a POST (order) with an ambiguous outcome must
         # NEVER be blindly retried; the caller reconciles from the venue instead.
+        # `max_retries` / `paced` let a latency-critical caller (RFQ confirm, 3s window) opt out of
+        # the backoff sleeps and the inter-request pacing; defaults are unchanged for everyone else.
         idempotent = method.upper() == "GET"
-        for attempt in range(self.max_retries + 1):
-            self._pace()
+        retries = self.max_retries if max_retries is None else max_retries
+        for attempt in range(retries + 1):
+            if paced:
+                self._pace()
             headers = self._auth_headers(method, path) if auth else {}      # fresh timestamp each try
             try:
                 r = self._s.request(method, self.base_url + path, params=params, json=body,
                                     headers=headers, timeout=timeout)
             except requests.RequestException:
-                if idempotent and attempt < self.max_retries:
+                if idempotent and attempt < retries:
                     time.sleep(self._backoff(attempt))
                     continue
                 raise
@@ -131,7 +136,7 @@ class KalshiClient:
             # satisfied" page (seen 2026-10-04; the same call succeeds minutes later). Safe to retry for GET only.
             cdn_block = (idempotent and r.status_code == 403 and "could not be satisfied" in (r.text or "")[:2000])
             retryable = r.status_code == 429 or cdn_block or (idempotent and r.status_code in (500, 502, 503, 504))
-            if retryable and attempt < self.max_retries:
+            if retryable and attempt < retries:
                 time.sleep(self._backoff(attempt, r.headers.get("Retry-After")))
                 continue
             if r.status_code >= 400:

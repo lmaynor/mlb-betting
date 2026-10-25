@@ -64,3 +64,6 @@ unused
 # Accidentally-committed local export trees (e.g. Windows Baseball_Data paths).
 *Baseball_Data*
 AuxData/
+
+# Kalshi RFQ shadow tape (scripts/kalshi_rfq_daemon.py --mode record)
+data/kalshi_rfq/
