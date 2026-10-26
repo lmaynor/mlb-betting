@@ -76,8 +76,10 @@ describe('design-system debt guards', () => {
     expect(hero).toMatch(/SURFACE_CARD/)
     expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
     expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
-    // the legal paper-mode disclosure stays in the footer
-    expect(read('components/layout/footer.tsx')).toMatch(/PAPER MODE/)
+    // the legal disclosure stays in the footer, as one muted paragraph (no PAPER MODE callout box)
+    const footer = read('components/layout/footer.tsx')
+    expect(footer).toMatch(/riskDisclaimer/)
+    expect(footer).not.toMatch(/PAPER MODE/)
   })
 
   it('primary buttons shift colour on hover and never glow', () => {
