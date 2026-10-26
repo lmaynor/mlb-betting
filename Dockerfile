@@ -34,6 +34,8 @@ COPY ev/            ./ev/
 # One-off ops script reused by mlb.analysis.ev_remediate (Cloud Run Job
 # mlb-ev-remediate). Only this file -- the rest of scripts/ is local/ops tooling.
 COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py
+# Kalshi RFQ recorder (Cloud Run Job mlb-kalshi-rfq-recorder, deploy/setup_kalshi_rfq_recorder.sh): production-readonly, GET-only.
+COPY scripts/kalshi_rfq_daemon.py ./scripts/kalshi_rfq_daemon.py
 COPY main.py          .
 COPY tweet_drafter.py .
 # Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).

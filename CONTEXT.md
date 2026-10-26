@@ -3507,6 +3507,9 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
   format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for
   the deviations and the demo-exchange verification list (`accepted_side` semantics first).
+  **GCP recorder (2026-10-25):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
+  daily 10:00 UTC scheduler, tape -> `Kalshi/rfq_tape/production/{day}/*.jsonl`, creds from Secret Manager (`kalshi-prod-api-key-id`,
+  `kalshi-prod-private-key`). Fails loud if the stream never connects (Kalshi CDN may block Cloud Run egress -- unverified).
 - **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
   Kalshi blocks its egress IP (`kalshi_ok=False`, the legs are empty), and that is exactly when the laptop does the
   Kalshi join. `props_exec.build_latest_local` now computes it too (never fatal) and `publish_local` writes

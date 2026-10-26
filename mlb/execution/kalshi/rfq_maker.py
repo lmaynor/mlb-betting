@@ -468,17 +468,61 @@ class RFQTape:
     the follow-up runs -- what actually traded on that market afterwards. Costs $0 at risk and measures our
     theoretical market share and mark-out before any live quote exists."""
 
-    def __init__(self, directory: str = "data/kalshi_rfq", clock=time.time):
+    def __init__(self, directory: str = "data/kalshi_rfq", clock=time.time, *, storage_prefix: str | None = None,
+                 writer=None, flush_sec: float = 30.0):
+        """Local JSONL by default. With `storage_prefix` (e.g. 'Kalshi/rfq_tape/production') records are buffered and
+        written as immutable chunk objects {prefix}/{day}/{HHMMSS}_{n}.jsonl through `writer(bytes, key)` (default
+        mlb_core.storage.write_bytes): GCS objects are not appendable and a Cloud Run Job's disk dies with it, so the
+        buffer is flushed every `flush_sec` and by flush() at shutdown. A failed write keeps the buffer for the next try."""
         self.dir, self._clock = directory, clock
+        self.prefix, self._writer, self.flush_sec = storage_prefix, writer, flush_sec
+        self._buf: list[str] = []
+        self._seq = 0
+        self._last_flush = clock()
+        self._lock = threading.Lock()
 
     def path(self) -> str:
         day = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
         return os.path.join(self.dir, f"rfq_tape_{day}.jsonl")
 
     def append(self, record: dict) -> None:
-        os.makedirs(self.dir, exist_ok=True)
-        with open(self.path(), "a", encoding="ascii") as fh:
-            fh.write(json.dumps(record, default=str, sort_keys=True, ensure_ascii=True) + "\n")
+        line = json.dumps(record, default=str, sort_keys=True, ensure_ascii=True) + "\n"
+        if self.prefix is None:
+            os.makedirs(self.dir, exist_ok=True)
+            with open(self.path(), "a", encoding="ascii") as fh:
+                fh.write(line)
+            return
+        with self._lock:
+            self._buf.append(line)
+            due = self._clock() - self._last_flush >= self.flush_sec
+        if due:
+            self.flush()
+
+    def flush(self) -> int:
+        """Write the buffered records as one chunk object. -> records written (0 when empty / local mode / failed)."""
+        if self.prefix is None:
+            return 0
+        with self._lock:
+            if not self._buf:
+                self._last_flush = self._clock()
+                return 0
+            lines, self._buf = self._buf, []
+            self._seq += 1
+            seq = self._seq
+        ts = datetime.fromtimestamp(self._clock(), timezone.utc)
+        key = f"{self.prefix}/{ts.date().isoformat()}/{ts.strftime('%H%M%S')}_{seq:05d}.jsonl"
+        try:
+            writer = self._writer
+            if writer is None:
+                from mlb_core.storage import write_bytes as writer
+            writer("".join(lines).encode("ascii"), key)
+        except Exception as e:                                          # noqa: BLE001 -- keep the records, retry next flush
+            log.warning("tape flush to %s failed (%d records kept): %r", key, len(lines), e)
+            with self._lock:
+                self._buf = lines + self._buf
+            return 0
+        self._last_flush = self._clock()
+        return len(lines)
 
     def record_rfq(self, rfq_msg: dict, decision) -> None:
         self.append({"kind": "rfq", "ts": self._clock(), "rfq": rfq_msg, "plan": decision.action,
