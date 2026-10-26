@@ -19,7 +19,7 @@ export async function Hero() {
           style={{ padding: '36px 36px', borderRight: B, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
         >
           <span className="mono" style={{ alignSelf: 'flex-start', marginBottom: '16px', fontSize: '10px', fontWeight: 600, letterSpacing: '0.06em', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '999px', padding: '4px 10px' }}>
-            NFL &middot; NBA &middot; NHL &middot; MLB &middot; KALSHI &amp; NOVIG
+            NFL &middot; NBA &middot; NHL &middot; MLB
           </span>
 
           <h1 className="dell-display hero-h1" style={{ fontSize: '40px', lineHeight: 1.06, color: 'var(--chalk)', marginBottom: '14px', letterSpacing: '-0.025em' }}>
