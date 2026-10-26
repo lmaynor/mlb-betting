@@ -475,3 +475,131 @@ export function buildLongshotRows(rows: BoardRow[], opts: LongshotScreenOptions)
   }
   return out
 }
+
+// ---------------------------------------------------------------------------------------------------------- MIDDLES
+
+/**
+ * A middle: the OVER of a lower line and the UNDER of a higher line on the same player and stat. If the stat lands strictly
+ * between the two lines both bets win; anywhere else exactly one wins, and with near-even prices the hedge costs only the
+ * combined hold. It is NOT risk-free (the miss costs `missPct`), it is a cheap lottery ticket on the window.
+ */
+export interface MiddleResult {
+  key: string
+  low: BoardRow
+  high: BoardRow
+  overBook: string
+  overAm: number
+  underBook: string
+  underAm: number
+  /** high line minus low line: the width of the window in points */
+  gap: number
+  /** profit on the outlay, percent, when the stat lands OUTSIDE the window (one leg wins). Negative = the cost of the hedge. */
+  missPct: number
+  /** profit on the outlay, percent, when it lands INSIDE the window (both legs win) */
+  hitPct: number
+  /** chance the window must hit for the middle to break even: inverse-sum minus one (0 when the two legs already arb) */
+  breakevenProb: number
+  /** stake split of $100 that pays the same on either single win (net of the Kalshi fee) */
+  stakeOverPer100: number
+  stakeUnderPer100: number
+  /** fair P(window) = fair P(over low) - fair P(over high) from the reference books (curve when allowed); null without both */
+  midProb: number | null
+  /** EV on the outlay at midProb, percent */
+  midEvPct: number | null
+  feeLeg: boolean
+}
+
+export interface MiddleOptions {
+  bettable: ReadonlySet<string> | null
+  includeExchanges: boolean
+  /** keep middles whose miss costs at most this many percent of the outlay (5 = a -5% miss) */
+  maxCostPct: number
+  /** narrowest window kept, in points */
+  minGap: number
+  refs: readonly string[]
+  method: DevigMethod
+  minRef: number
+  useCurve: boolean
+}
+
+interface EffPrice { i: number; book: string; am: number; dec: number; eff: number }
+
+function bestEff(row: BoardRow, side: 'OVER' | 'UNDER', visible: ReadonlySet<string> | null, includeExchanges: boolean): EffPrice | null {
+  let best: EffPrice | null = null
+  const books = row.books
+  for (let i = 0; i < books.length; i++) {
+    const b = books[i]
+    if (visible && !visible.has(b.book)) continue
+    if (!includeExchanges && EXCHANGE_BOOKS.has(b.book)) continue
+    const am = side === 'OVER' ? b.over : b.under
+    if (am == null || !isFinite(am) || am === 0) continue
+    const dec = americanToDecimal(am)
+    const eff = b.book === 'kalshi' ? kalshiEffectiveDecimal(dec) : dec
+    if (!best || eff > best.eff) best = { i, book: b.book, am, dec, eff }
+  }
+  return best
+}
+
+/** Fair P(over) of one line from the reference books with `exclude` (the leg's own book) left out; the curve when too few. */
+function fairOverAt(row: BoardRow, method: DevigMethod, refs: ReadonlySet<string> | null, exclude: number, minRef: number, useCurve: boolean): number | null {
+  const fairs = rowFairs(row, method)
+  let sum = 0
+  let n = 0
+  for (let i = 0; i < row.books.length; i++) {
+    const p = fairs[i]
+    if (p == null || i === exclude || (refs && !refs.has(row.books[i].book))) continue
+    sum += p
+    n += 1
+  }
+  if (n >= 1 && n >= minRef) { const p = sum / n; if (p > 0 && p < 1) return p }
+  const c = row.curve_fair_over
+  return useCurve && c != null && c > 0 && c < 1 ? c : null
+}
+
+/**
+ * Every middle on the board: for each player and stat, each pair of lines (low < high) priced as the best over on the low line
+ * and the best under on the high line. Kept when the window is at least `minGap` wide and a miss costs at most `maxCostPct`.
+ * Sorted by estimated EV where the reference books (or curve) price both lines, else by the lowest break-even chance.
+ */
+export function computeMiddles(rows: BoardRow[], opts: MiddleOptions): MiddleResult[] {
+  const groups = new Map<string, BoardRow[]>()
+  for (const r of rows) {
+    const k = `${r.game_key}|${r.player_norm}|${r.stat}`
+    const g = groups.get(k)
+    if (g) g.push(r)
+    else groups.set(k, [r])
+  }
+  const refs = opts.refs.length ? new Set(opts.refs) : null
+  const out: MiddleResult[] = []
+  for (const g of groups.values()) {
+    if (g.length < 2) continue
+    g.sort((a, b) => a.line - b.line)
+    const overs = g.map(r => bestEff(r, 'OVER', opts.bettable, opts.includeExchanges))
+    const unders = g.map(r => bestEff(r, 'UNDER', opts.bettable, opts.includeExchanges))
+    for (let a = 0; a < g.length; a++) {
+      const o = overs[a]
+      if (!o) continue
+      for (let b = a + 1; b < g.length; b++) {
+        const u = unders[b]
+        const gap = g[b].line - g[a].line
+        if (!u || gap < opts.minGap) continue
+        const inv = 1 / o.eff + 1 / u.eff
+        const missPct = (1 / inv - 1) * 100
+        if (missPct < -opts.maxCostPct) continue
+        const stakeOver = (100 * (1 / o.eff)) / inv
+        const pLow = fairOverAt(g[a], opts.method, refs, o.i, opts.minRef, opts.useCurve)
+        const pHigh = fairOverAt(g[b], opts.method, refs, u.i, opts.minRef, opts.useCurve)
+        const midProb = pLow != null && pHigh != null && pLow > pHigh ? pLow - pHigh : null
+        out.push({
+          key: `${g[a].key}>${g[b].line}`, low: g[a], high: g[b],
+          overBook: o.book, overAm: o.am, underBook: u.book, underAm: u.am,
+          gap, missPct, hitPct: (2 / inv - 1) * 100, breakevenProb: Math.max(inv - 1, 0),
+          stakeOverPer100: stakeOver, stakeUnderPer100: 100 - stakeOver,
+          midProb, midEvPct: midProb == null ? null : ((1 + midProb) / inv - 1) * 100,
+          feeLeg: o.book === 'kalshi' || u.book === 'kalshi',
+        })
+      }
+    }
+  }
+  return out.sort((x, y) => (y.midEvPct ?? -Infinity) - (x.midEvPct ?? -Infinity) || x.breakevenProb - y.breakevenProb || y.gap - x.gap)
+}
