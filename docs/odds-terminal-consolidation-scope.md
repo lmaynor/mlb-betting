@@ -1,6 +1,6 @@
 # Odds Terminal (consolidated) - scope
 
-Status: proposal, nothing built. Folds the +EV Terminal (`/ev`, `beezy-vip/app/ev/ev-client.tsx`, 669 lines) into the Odds Screen
+Status: built on PR #119 (option a: backend MLB board, terminal removed). Canonical URL is `/ev`; `/ev/odds` redirects. Folds the +EV Terminal (`/ev`, `beezy-vip/app/ev/ev-client.tsx`, 669 lines) into the Odds Screen
 (`/ev/odds`, `odds-client.tsx`, ~830 lines). The screen is the better surface: every book side by side, fair value from the
 reference books the user picks, three modes (Standard, Arbitrage, Alt & Longshots), Kelly sizing.
 
