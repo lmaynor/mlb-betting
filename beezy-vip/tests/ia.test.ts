@@ -26,7 +26,7 @@ describe('information architecture', () => {
   })
 
   it('the five nav questions are the only top-level items', () => {
-    expect(NAV.map(n => n.label)).toEqual(['Home', '+EV Terminal', 'Picks', 'Results', 'Tools'])
+    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Tools'])
   })
 
   it('Prop Research is a view of the Scanner, Analytics and Models are views of Results, Daily Card of Picks', () => {
@@ -94,17 +94,17 @@ describe('information architecture', () => {
 
 describe('scanner tabs', () => {
   const scanner = SECTIONS.find(s => s.id === 'scanner')!
-  const odds = scanner.tabs.find(t => t.href === '/ev/odds')!
   const terminal = scanner.tabs.find(t => t.href === '/ev')!
-  it('lists the odds screen between the terminal and prop research', () => {
-    expect(scanner.tabs.map(t => t.label)).toEqual(['+EV Terminal', 'Odds Screen', 'Prop Research'])
+  const research = scanner.tabs.find(t => t.href === '/edge')!
+  it('lists the Odds Terminal then prop research', () => {
+    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Prop Research'])
   })
-  it('lights exactly one tab on /ev and on /ev/odds', () => {
-    expect([tabActive('/ev', null, terminal), tabActive('/ev', null, odds)]).toEqual([true, false])
-    expect([tabActive('/ev/odds', null, terminal), tabActive('/ev/odds', null, odds)]).toEqual([false, true])
+  it('lights exactly one tab on /ev and on /edge', () => {
+    expect([tabActive('/ev', null, terminal), tabActive('/ev', null, research)]).toEqual([true, false])
+    expect([tabActive('/edge', null, terminal), tabActive('/edge', null, research)]).toEqual([false, true])
   })
-  it('keeps /ev/odds in the Scanner section and the +EV Terminal nav item', () => {
-    expect(sectionFor('/ev/odds')?.id).toBe('scanner')
-    expect(navActive('/ev/odds', NAV.find(n => n.href === '/ev')!)).toBe(true)
+  it('keeps /ev in the Scanner section and the Odds Terminal nav item', () => {
+    expect(sectionFor('/ev')?.id).toBe('scanner')
+    expect(navActive('/ev', NAV.find(n => n.href === '/ev')!)).toBe(true)
   })
 })

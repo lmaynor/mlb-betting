@@ -4,7 +4,7 @@
 
 import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
 import { siteDateKey } from '@/lib/dates'
-import type { ProjectionSport } from '@/lib/sports'
+import type { ProjectionSport, SportSlug } from '@/lib/sports'
 import type { OddsBoard } from '@/lib/odds-screen'
 
 function normalizeApiUrl(value: string) {
@@ -271,8 +271,8 @@ export async function apiGetSportProjections(sport: ProjectionSport, opts: { mar
   return apiFetch<SportProjections>(`/api/public/projections?${sp.toString()}`, 60, `/api/projections?${sp.toString()}`)
 }
 
-/** Every book's over / under price per NFL / NHL / NBA prop line (the /ev/odds screen): raw prices, no fair value. */
-export async function apiGetOddsBoard(sport: ProjectionSport, opts: { day?: string; stat?: string; limit?: number } = {}): Promise<OddsBoard> {
+/** Every book's over / under price per NFL / NHL / NBA / MLB prop line (the /ev Odds Terminal): raw prices, no fair value. */
+export async function apiGetOddsBoard(sport: SportSlug, opts: { day?: string; stat?: string; limit?: number } = {}): Promise<OddsBoard> {
   const sp = new URLSearchParams({ sport })
   if (opts.day) sp.set('day', opts.day)
   if (opts.stat) sp.set('stat', opts.stat)

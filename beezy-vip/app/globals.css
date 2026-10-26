@@ -590,7 +590,7 @@ a { color: inherit; }
 .ev-table tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 1100px) { .ev-table-wrap { overflow-x: auto; } .ev-table th { position: static; } }
 
-/* ── /ev/odds screen: one row per prop side, one narrow column per book ────────────────────────── */
+/* ── /ev Odds Terminal: one row per prop side, one narrow column per book ────────────────────────── */
 .odds-table th { position: sticky; top: 131px; z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
 .odds-table td { padding: 7px 10px; vertical-align: middle; border-bottom: 1px solid #151822; white-space: nowrap; }
 .odds-table tbody tr { transition: background-color 120ms ease; }

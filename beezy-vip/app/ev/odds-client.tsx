@@ -9,7 +9,12 @@ import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
 import { LIVE_SPORTS } from '@/lib/sports'
-import type { ProjectionSport } from '@/lib/sports'
+import type { SportSlug } from '@/lib/sports'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import type { HeadshotSport } from '@/lib/sport-assets'
+import { LedgerStrip } from './ledger-strip'
+import type { EvHeadline } from '@/lib/types'
+import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import {
   buildArbRows, buildLongshotRows, buildScreenRows, fairAmericanOf, STAT_LABEL,
@@ -17,7 +22,7 @@ import {
   type OddsScreenMode, type ScreenRow, type SideFilter,
 } from '@/lib/odds-screen'
 
-type SportFilter = 'all' | ProjectionSport
+type SportFilter = 'all' | SportSlug
 type SortKey = 'ev' | 'time' | 'player'
 type LinesFilter = 'main' | 'all'
 type ArbView = 'live' | 'near'
@@ -26,7 +31,7 @@ const HAIR = '#1e2230'
 const GREEN = '#57F287'
 const SKY = '#38bdf8'
 const VIOLET = '#a78bfa'
-const SPORT_KEYS: ProjectionSport[] = ['nfl', 'nhl', 'nba']
+const SPORT_KEYS: SportSlug[] = ['nfl', 'nhl', 'nba', 'mlb']
 // Sharp-first column order; any book not listed follows by how many lines it quotes.
 const BOOK_ORDER = ['pinnacle', 'novig', 'prophetx', 'kalshi', 'draftkings', 'fanduel', 'betmgm', 'caesars', 'espnbet', 'thescore', 'fanatics', 'hardrock', 'betrivers', 'bet365']
 const SHARP_PRESET = ['pinnacle', 'novig', 'prophetx']
@@ -103,7 +108,7 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'longshots', label: 'Alt & Longshots' },
 ]
 
-export function OddsClient({ initial, initialLocked }: { initial: Partial<Record<ProjectionSport, OddsBoard>>; initialLocked: number }) {
+export function OddsClient({ initial, initialLocked, headline }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null }) {
   const [boards, setBoards] = useState(initial)
   const [locked, setLocked] = useState(initialLocked)
   const [loading, setLoading] = useState(false)
@@ -134,7 +139,7 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
     setLoading(true)
     try {
       const next = await Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null)))
-      const out: Partial<Record<ProjectionSport, OddsBoard>> = {}
+      const out: Partial<Record<SportSlug, OddsBoard>> = {}
       let lk = 0
       next.forEach((b, i) => { if (b) { out[SPORT_KEYS[i]] = b; lk += b.locked ?? 0 } })
       if (Object.keys(out).length) {
@@ -267,7 +272,7 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
   return (
     <div style={{ maxWidth: '1680px', margin: '0 auto', padding: '20px 24px 64px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Odds Screen</h1>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Odds Terminal</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontSize: '12px', color: meta.stale ? '#facc15' : 'var(--fog)' }}>
             {nRows} ROWS &middot; LINES {ageLabel(meta.age).toUpperCase()} OLD{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
@@ -275,6 +280,8 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
           <button onClick={refresh} disabled={loading} className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: '12px' }}>{loading ? 'Refreshing...' : 'Refresh'}</button>
         </div>
       </div>
+
+      <LedgerStrip h={headline} />
 
       <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
         <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -292,7 +299,7 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
           </PillGroup>
           <Field label="SPORT">
             <PillGroup>
-              {(['all', ...LIVE_SPORTS.map(p => p.slug).filter((s): s is ProjectionSport => s !== 'mlb')] as SportFilter[]).map(s => (
+              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
                 <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
               ))}
             </PillGroup>
@@ -496,23 +503,6 @@ export function OddsClient({ initial, initialLocked }: { initial: Partial<Record
   )
 }
 
-/** Book logo from /logos/books/<key>.png; falls back to the colored short-code chip when no PNG is shipped for that book. */
-function BookLogo({ book, size, style }: { book: string; size: number; style?: React.CSSProperties }) {
-  const [missing, setMissing] = useState(false)
-  const meta = bookDisplay(book)
-  if (missing) {
-    return <span style={{ fontSize: '10.5px', fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.color}55`, borderRadius: '6px', padding: '1px 6px', ...style }}>{meta.short}</span>
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/logos/books/${canonBook(book)}.png`} alt={meta.label} title={meta.label}
-      width={size} height={size} loading="lazy" onError={() => setMissing(true)}
-      style={{ width: size, height: size, objectFit: 'contain', borderRadius: '4px', verticalAlign: 'middle', ...style }}
-    />
-  )
-}
-
 type CellState = 'best' | 'arb' | undefined
 
 /**
@@ -554,8 +544,15 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
   return (
     <>
       <td className="odds-prop">
-        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)', lineHeight: 1.3 }}>{row.player}</div>
-        <div className="mono odds-sub" style={{ fontSize: '11px' }}>{label} {STAT_LABEL[row.stat] ?? row.stat}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ flexShrink: 0, width: 30, height: 30, display: 'inline-flex' }}>
+            <PlayerHeadshot sport={row.game_key.split(':')[0] as HeadshotSport} id={row.headshot_id} name={row.player} size={30} />
+          </span>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)', lineHeight: 1.3 }}>{row.player}</div>
+            <div className="mono odds-sub" style={{ fontSize: '11px' }}>{label} {STAT_LABEL[row.stat] ?? row.stat}</div>
+          </div>
+        </div>
       </td>
       <td>
         <div className="mono" style={{ fontSize: '11.5px', color: 'var(--silver)' }}>{row.away} @ {row.home}</div>

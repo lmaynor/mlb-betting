@@ -30,6 +30,8 @@ export interface BoardRow {
   player: string
   player_norm: string
   player_id?: number | string | null
+  /** headshot image id resolved server-side by name (lib/odds-headshots.ts); the feed's player_id is not an image id */
+  headshot_id?: number | string | null
   team?: string | null
   stat: string
   line: number
@@ -212,6 +214,8 @@ export const STAT_LABEL: Record<string, string> = {
   blocked_shots: 'Blocks (shots)', rebounds: 'Rebounds', threes: '3PM', pra: 'Pts+Reb+Ast', pr: 'Pts+Reb', pa: 'Pts+Ast',
   ra: 'Reb+Ast', steals: 'Steals', blocks: 'Blocks', turnovers: 'Turnovers', stocks: 'Stl+Blk', minutes: 'Minutes',
   hits: 'Hits', pim: 'PIM', pp_points: 'PP Points',
+  home_runs: 'Home Runs', strikeouts: 'Strikeouts', outs: 'Pitcher Outs', total_bases: 'Total Bases', earned_runs: 'Earned Runs',
+  stolen_bases: 'Stolen Bases',
 }
 
 // ---------------------------------------------------------------------------------------------------------- ARBITRAGE

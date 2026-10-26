@@ -1,26 +1,36 @@
 import type { Metadata } from 'next'
-import { apiGetEvFeed, apiGetAnalyticsDeepDive } from '@/lib/betting-api'
-import { limitEvFeed } from '@/lib/access-feeds'
+import { apiGetAnalyticsDeepDive, apiGetOddsBoard } from '@/lib/betting-api'
+import { limitOddsBoard } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
-import { siteDateKey } from '@/lib/dates'
-import { EvClient } from './ev-client'
+import { withHeadshots } from '@/lib/odds-headshots'
+import type { OddsBoard } from '@/lib/odds-screen'
+import type { SportSlug } from '@/lib/sports'
+import { OddsClient } from './odds-client'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '+EV Terminal',
+  title: 'Odds Terminal',
   description:
-    'Soft-line +EV alerts priced against a sharp consensus, with a public paper track record. Sizing at your bankroll, filtered by book and edge.',
+    'Every sportsbook and exchange price for NFL, NBA, NHL and MLB player props side by side, with fair value and EV from the reference books you choose, arbitrage and alt-line longshots.',
 }
 
-export default async function EvPage() {
-  const [raw, analytics, viewer] = await Promise.all([
-    apiGetEvFeed({ minEv: 0.02, limit: 150 }).catch(() => null),
-    apiGetAnalyticsDeepDive().catch(() => null),
+const SPORTS: SportSlug[] = ['nfl', 'nhl', 'nba', 'mlb']
+
+export default async function OddsPage() {
+  const [boards, viewer, deep] = await Promise.all([
+    Promise.all(SPORTS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null))),
     getViewer(),
+    apiGetAnalyticsDeepDive('EV').catch(() => null),
   ])
-  // Live rows are the Pro surface (lib/access.ts), cut here so they are never in the payload; the settled record stays public.
-  const cut = raw ? limitEvFeed(raw, viewer, siteDateKey()) : null
-  const feed = cut ? { ...cut.feed, locked: cut.locked } : null
-  return <EvClient initialFeed={feed} headline={analytics?.ev_headline ?? null} />
+  // Pro surface (lib/access.ts): cut here so withheld rows are never in the payload.
+  let locked = 0
+  const cut: Partial<Record<SportSlug, OddsBoard>> = {}
+  boards.forEach((b, i) => {
+    if (!b) return
+    const c = limitOddsBoard(b, viewer)
+    locked += c.locked
+    cut[SPORTS[i]] = withHeadshots(c.board)
+  })
+  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} />
 }

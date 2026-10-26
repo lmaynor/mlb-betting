@@ -927,17 +927,17 @@ def get_sport_projections(sport, market=None, limit=300, date=None, day=None):
 
 
 def get_odds_board(sport, day=None, stat=None, limit=2000):
-    """Full per-book prop price matrix for one of nfl / nhl / nba (ValueError otherwise): the data behind /ev/odds. One row
+    """Full per-book prop price matrix for one of nfl / nhl / nba / mlb (ValueError otherwise): the data behind /ev/odds. One row
     per game x player x stat x line with every real book's American over / under price (`books`), NO fair value (the screen
     de-vigs the viewer's chosen reference books). Read from the precomputed GCS file (ev/odds_board.py), never computed on
     a request; a missing board answers `status: 'unavailable'` with no rows. Every row is unvalidated."""
-    sport = (sport or "").lower()
-    if sport not in _PROJ_SPORTS:
-        raise ValueError(f"unknown sport {sport!r}; expected one of {_PROJ_SPORTS}")
-    limit = max(1, min(int(limit), 3000))
-    day = _proj_day(day, "day")
     from ev import daily_projections as _dp
     from ev import odds_board as _ob
+    sport = (sport or "").lower()
+    if sport not in _ob.SPORTS:
+        raise ValueError(f"unknown sport {sport!r}; expected one of {_ob.SPORTS}")
+    limit = max(1, min(int(limit), 3000))
+    day = _proj_day(day, "day")
     now = _datetime.now(_timezone.utc)
     empty = {"sport": sport, "validated": False, "status": "unavailable", "stale": True, "as_of": None, "age_minutes": None,
              "count": 0, "rows": [], "books": [], "offshore_books": [], "stats": [], "games": [], "lines_source": [],

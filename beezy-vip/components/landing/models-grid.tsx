@@ -1,104 +1,69 @@
 import { apiGetStats, apiGetSparklineBySystem } from '@/lib/betting-api'
 import Link from 'next/link'
-import { SYSTEM_COLOR } from '@/lib/tokens'
+import { SYSTEM_COLOR, SURFACE_CARD } from '@/lib/tokens'
+import { SPORT_LIST } from '@/lib/sports'
 import { ModelsGridClient, type SystemCard } from './models-grid-client'
+import { SectionHeader } from './section-header'
 
-// Per-system metadata. Identity color comes from the shared SYSTEM_COLOR
-// taxonomy in tokens.ts; cards stay neutral (balanced color usage) with the
-// system hue carried on the badge + sparkline only.
 const META: Record<string, { name: string; desc: string; href: string }> = {
-  NRFI:        { name: 'No Run First Inning',   desc: 'Starter ERA, ump K-rate, weather, and park factors combine to predict scoreless first innings.', href: '/picks/mlb/nrfi' },
-  HR:          { name: 'Home Run Props',         desc: 'Launch angle, exit velocity, and barrel rate vs. pitcher HR/9.',                                href: '/picks/mlb/hr' },
-  F5:          { name: 'First 5 Innings',        desc: 'Starting pitcher quality, bullpen rest, and lineup data for F5 moneylines.',                    href: '/picks/mlb/f5' },
-  K:           { name: 'Strikeout Props',         desc: 'SwStr%, zone rate, and opponent K% to project starter strikeout over/unders.',                 href: '/picks/mlb/k' },
-  OUTS:        { name: 'Pitcher Outs Props',     desc: 'Negative-binomial projection of outs recorded, priced against the best available pitcher-outs line.',                           href: '/picks/mlb/outs' },
-  GAME:        { name: 'Full Game',              desc: 'Full-game moneyline from starter, bullpen fatigue and lineup features. Log-only until it has 200 bets.',                       href: '/picks/mlb/game' },
-  F3:          { name: 'First 3 Innings',         desc: 'Early-game starter window for openers, short leashes, and lineup-top exposure.',               href: '/picks/mlb/f3' },
-  F1H:         { name: 'First Half',              desc: 'First-half (innings 1-4) moneyline built from the F5 model. Log-only.',                         href: '/picks/mlb/f1h' },
-  F7:          { name: 'First 7 Innings',         desc: 'Late starter and bridge-relief pricing before full bullpen exposure.',                         href: '/picks/mlb/f7' },
-  BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Pitcher shape, zone, chase, and batter whiff profile for batter K props.',                     href: '/picks/mlb/batter-k' },
-  BATTER_TB:   { name: 'Total Bases',            desc: 'Contact quality, matchup, lineup slot, and park context for total-base props.',                href: '/picks/mlb/batter-tb' },
-  BATTER_HITS: { name: 'Hits Props',             desc: 'Contact rate, expected average, platoon split, and park context for hits props.',              href: '/picks/mlb/batter-hits' },
-  SB:          { name: 'Stolen Base Props',      desc: 'On-base rate, sprint speed, and attempt history vs. opposing pitcher hold and catcher pop time for stolen-base props.', href: '/picks/mlb/sb' },
-  PITCHER_ER:  { name: 'Pitcher ER Props',       desc: 'Starter quality, opponent run creation, weather, and leash for earned-runs props.',            href: '/picks/mlb/pitcher-er' },
-  '1I':        { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing for home, away, or draw outcomes.',                             href: '/picks/mlb/1i' },
+  NRFI:        { name: 'No Run First Inning',   desc: 'Scoreless first innings.', href: '/picks/mlb/nrfi' },
+  HR:          { name: 'Home Run Props',         desc: 'Launch angle, exit velocity and barrel rate vs. pitcher HR/9.', href: '/picks/mlb/hr' },
+  F5:          { name: 'First 5 Innings',        desc: 'F5 moneylines.', href: '/picks/mlb/f5' },
+  K:           { name: 'Strikeout Props',         desc: 'Starter strikeout over/unders.', href: '/picks/mlb/k' },
+  OUTS:        { name: 'Pitcher Outs Props',     desc: 'Negative-binomial outs projection.', href: '/picks/mlb/outs' },
+  GAME:        { name: 'Full Game',              desc: 'Full-game moneyline. Log-only until 200 bets.', href: '/picks/mlb/game' },
+  F3:          { name: 'First 3 Innings',         desc: 'Early-game starter window.', href: '/picks/mlb/f3' },
+  F1H:         { name: 'First Half',              desc: 'Innings 1-4 moneyline. Log-only.', href: '/picks/mlb/f1h' },
+  F7:          { name: 'First 7 Innings',         desc: 'Late starter and bridge-relief pricing.', href: '/picks/mlb/f7' },
+  BATTER_K:    { name: 'Batter Strikeouts',       desc: 'Batter K props.', href: '/picks/mlb/batter-k' },
+  BATTER_TB:   { name: 'Total Bases',            desc: 'Total-base props.', href: '/picks/mlb/batter-tb' },
+  BATTER_HITS: { name: 'Hits Props',             desc: 'Hits props.', href: '/picks/mlb/batter-hits' },
+  SB:          { name: 'Stolen Base Props',      desc: 'Stolen-base props.', href: '/picks/mlb/sb' },
+  PITCHER_ER:  { name: 'Pitcher ER Props',       desc: 'Earned-runs props.', href: '/picks/mlb/pitcher-er' },
+  '1I':        { name: 'First Inning Moneyline', desc: 'Three-way first-inning pricing.', href: '/picks/mlb/1i' },
 }
 
 export async function ModelsGrid() {
-  let stats: Array<{ system: string; win_rate: number; roi: number | null; total_bets: number }> = []
-  const sparklines: Record<string, Awaited<ReturnType<typeof apiGetSparklineBySystem>>> = {}
+  let systems: SystemCard[] = []
   try {
-    const db = await apiGetStats().then(s => s.bySystem)
-    stats = db.map(s => ({
+    const stats = (await apiGetStats()).bySystem.map(s => ({
       system: s.system, win_rate: parseFloat(String(s.win_rate)),
       roi: s.roi == null ? null : parseFloat(String(s.roi)), total_bets: parseInt(String(s.total_bets)),
     }))
-    const sparklineResults = await Promise.allSettled(
-      stats.map(s => apiGetSparklineBySystem(s.system, 30))
-    )
-    sparklineResults.forEach((r, i) => {
-      if (r.status === 'fulfilled') sparklines[stats[i].system] = r.value
-    })
-  } catch { /* API unavailable -- render empty */ }
-
-  if (stats.length === 0) return (
-    <section style={{ padding: '56px 0 0' }}>
-      <SectionHeader />
-      <div style={{ border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', padding: '48px', textAlign: 'center', background: 'var(--graphite)' }}>
-        <p className="times" style={{ fontSize: '14px', color: 'var(--fog)' }}>Loading systems&hellip;</p>
-      </div>
-    </section>
-  )
-
-  // Sort gate-cleared systems first, then by ROI -- strongest signal leads,
-  // noise (low-volume outliers) sinks to the bottom of the still-complete grid.
-  const systems: SystemCard[] = stats
-    .filter(s => META[s.system])
-    .sort((a, b) => {
-      const ag = a.total_bets >= 200 ? 1 : 0
-      const bg = b.total_bets >= 200 ? 1 : 0
-      if (ag !== bg) return bg - ag
-      return (b.roi ?? -Infinity) - (a.roi ?? -Infinity)
-    })
-    .map(s => {
-      const meta = META[s.system]
-      return {
-        system: s.system,
-        name: meta.name,
-        desc: meta.desc,
-        href: meta.href,
-        tint: SYSTEM_COLOR[s.system] ?? 'var(--silver)',
-        win_rate: s.win_rate,
-        roi: s.roi,
-        total_bets: s.total_bets,
-        sparkline: sparklines[s.system] ?? null,
-      }
-    })
+    const sl = await Promise.allSettled(stats.map(s => apiGetSparklineBySystem(s.system, 30)))
+    systems = stats.filter(s => META[s.system])
+      .sort((a, b) => {
+        const ag = a.total_bets >= 200 ? 1 : 0, bg = b.total_bets >= 200 ? 1 : 0
+        return ag !== bg ? bg - ag : (b.roi ?? -Infinity) - (a.roi ?? -Infinity)
+      })
+      .map(s => {
+        const i = stats.indexOf(s), r = sl[i]
+        return { system: s.system, ...META[s.system], tint: SYSTEM_COLOR[s.system] ?? 'var(--silver)', win_rate: s.win_rate, roi: s.roi, total_bets: s.total_bets, sparkline: r.status === 'fulfilled' ? r.value : null }
+      })
+  } catch { /* API unavailable: league cards still render */ }
 
   return (
-    <section style={{ padding: '56px 0 0' }}>
-      <SectionHeader />
-      <ModelsGridClient systems={systems} />
-    </section>
-  )
-}
-
-function SectionHeader() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '24px', gap: '16px' }}>
-      <div>
-        <h2 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>Active systems</h2>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)', marginTop: '8px' }}>
-          Every model we run, with its live paper record. Tap a system for the method and stats.
-        </p>
+    <section style={{ paddingTop: '32px' }}>
+      <SectionHeader title="Coverage by league & system" href="/picks" link="Explore all models &rarr;" />
+      <div className="models-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+        {SPORT_LIST.map(p => (
+          <Link key={p.slug} href={`/picks/${p.slug}`} style={{ ...SURFACE_CARD, padding: '14px', textDecoration: 'none', borderLeft: `3px solid ${p.accent}`, display: 'block' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: p.accent }}>{p.shortName}</span>
+              <span className="mono" style={{ fontSize: '10px', color: '#7d8596' }}>{p.seasonBadge}</span>
+            </div>
+            <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#9ca3af' }}>
+              {p.markets.filter(m => m.kind === 'prop' || m.kind === 'game').slice(0, 6).map(m => m.label.replace(/ O\/U| \(Yes\/No\)/, '')).join(' \u00b7 ')}
+            </div>
+          </Link>
+        ))}
       </div>
-      <Link
-        href="/models"
-        className="times"
-        style={{ fontSize: '14px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
-      >
-        Full methodology &rarr;
-      </Link>
-    </div>
+      {systems.length > 0 && (
+        <details style={{ ...SURFACE_CARD, marginTop: '10px', padding: '10px 14px' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--silver)' }}>MLB system records ({systems.length})</summary>
+          <div style={{ marginTop: '12px' }}><ModelsGridClient systems={systems} /></div>
+        </details>
+      )}
+    </section>
   )
 }

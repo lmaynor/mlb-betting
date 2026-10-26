@@ -36,7 +36,7 @@ export function Footer() {
             </div>
           </div>
           {[
-            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Prop Research','/edge'],['Top 10 Picks','/picks'],['Picks History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
+            { title: 'Picks',   links: [['Odds Terminal','/ev'],['Prop Research','/edge'],['Top 10 Picks','/picks'],['Picks History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
             { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
@@ -63,21 +63,8 @@ export function Footer() {
           ))}
         </div>
 
-        {/* Paper mode callout */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', border: '1px solid var(--win-border)', borderRadius: 'var(--radius-lg)', marginBottom: '24px', background: 'var(--win-wash)' }}>
-          <span
-            className="dell-heading"
-            style={{ fontSize: '10px', letterSpacing: '0.08em', color: 'var(--signal)', flexShrink: 0, background: 'color-mix(in oklab, var(--signal) 18%, var(--carbon))', padding: '4px 8px', borderRadius: 'var(--radius-pill)' }}
-          >
-            PAPER MODE
-          </span>
-          <p className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55 }}>
-            Beezy.FYI is in pre-launch paper mode. No real money is being wagered or transacted. Paid plans are not open yet.
-          </p>
-        </div>
-
         <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '20px' }}>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '6px', lineHeight: 1.55 }}>{SITE_CONFIG.riskDisclaimer}</p>
+          <p className="times" style={{ fontSize: '11px', color: '#7d8596', marginBottom: '6px', lineHeight: 1.55 }}>{SITE_CONFIG.riskDisclaimer} Plans and results are paper-tracked and hypothetical; no real money is wagered through beezy.fyi.</p>
           <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>
             &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> beezy.fyi. Independent quantitative sports analytics.
           </p>

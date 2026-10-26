@@ -307,7 +307,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Footer note */}
       <div style={{ marginTop: '16px' }}>
         <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.6 }}>
-          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" style={{ color: 'var(--link)' }}>+EV Terminal</a>.
+          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</a>.
           Refreshes every 5 minutes.
         </p>
       </div>

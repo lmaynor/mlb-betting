@@ -1300,7 +1300,7 @@ def get_daily_projections(sport: str, limit: int = MAX_ROWS, allow_compute: bool
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    ap.add_argument("--sport", choices=[*SPORTS, "all"], default="all")
+    ap.add_argument("--sport", choices=[*SPORTS, "mlb", "all"], default="all")
     ap.add_argument("--all", action="store_true", help="every sport (the default; spelled out for the scheduled job)")
     ap.add_argument("--write-gcs", action="store_true",
                     help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
@@ -1309,8 +1309,17 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.write_gcs and a.no_write:
         ap.error("--write-gcs and --no-write are mutually exclusive")
-    sports = SPORTS if (a.all or a.sport == "all") else (a.sport,)
+    everything = a.all or a.sport == "all"
+    sports = SPORTS if everything else (() if a.sport == "mlb" else (a.sport,))
     failed = []
+    if everything or a.sport == "mlb":
+        # MLB has no projection board: only the odds-board matrix, read from the snapshot job's banked props
+        from ev import odds_board as _ob
+        try:
+            b = _ob.run_mlb(write=not a.no_write)
+            print(f"mlb: odds board status={b['status']} rows={b['count']} summary={json.dumps(b.get('summary'), default=str)}")
+        except Exception:                                                              # noqa: BLE001
+            log.exception("mlb odds board failed")
     for sp in sports:
         # the job path: synchronous compute, one sport at a time; a failing sport never costs the others their refresh
         try:
