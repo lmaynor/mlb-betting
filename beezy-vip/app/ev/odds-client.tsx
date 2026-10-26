@@ -17,15 +17,15 @@ import type { EvHeadline } from '@/lib/types'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import {
-  buildArbRows, buildLongshotRows, buildScreenRows, fairAmericanOf, STAT_LABEL,
-  type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type OddsBoard,
+  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, fairAmericanOf, STAT_LABEL,
+  type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
   type OddsScreenMode, type ScreenRow, type SideFilter,
 } from '@/lib/odds-screen'
 
 type SportFilter = 'all' | SportSlug
 type SortKey = 'ev' | 'time' | 'player'
 type LinesFilter = 'main' | 'all'
-type ArbView = 'live' | 'near'
+type ArbView = 'live' | 'near' | 'middle'
 
 const HAIR = '#1e2230'
 const GREEN = '#57F287'
@@ -54,6 +54,9 @@ const MIN_REF = 3          // reference books needed behind a fair value on the 
 const LONGSHOT_MIN_REF = 2 // ... on the Alt & Longshots view, where a line is rarely quoted by many books
 const CELL_EDGE = 0.015    // a book cell is tinted when its price beats the row's fair value by this much EV
 const NEAR_ARB_PCT = -1.5
+const MID_COST = [2, 5, 8]                       // the most a missed middle may cost, percent of the outlay
+const MID_GAP = [{ label: 'ANY', v: 0 }, { label: '2+', v: 2 }, { label: '3+', v: 3 }, { label: '5+', v: 5 }]
+const MIDDLE_MIN_REF = 2
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
 const POLL_MS = 3 * 60_000
 
@@ -128,6 +131,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const [arbView, setArbView] = useState<ArbView>('live')
   const [exchanges, setExchanges] = useState(true)
   const [outlayText, setOutlayText] = useState('100')
+  const [midCost, setMidCost] = useState(5)
+  const [midGap, setMidGap] = useState(0)
   const [copied, setCopied] = useState<string | null>(null)
   const [longSub, setLongSub] = useState<LongshotSubfilter>('all')
   const [oddsMin, setOddsMin] = useState(0)
@@ -207,10 +212,16 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
 
   // ---- Arbitrage: one row per line, best margin first
   const arbs = useMemo(() => {
-    if (mode !== 'arb') return []
+    if (mode !== 'arb' || arbView === 'middle') return []
     const all = buildArbRows(filtered, { bettable, includeExchanges: exchanges, minNetArbPct: NEAR_ARB_PCT })
     return (arbView === 'live' ? all.filter(r => r.arb.netArbPct > 0) : all).sort((a, b) => b.arb.netArbPct - a.arb.netArbPct)
   }, [mode, filtered, bettable, exchanges, arbView])
+
+  // ---- Middles: the over of a lower line + the under of a higher line, same player and stat
+  const middles = useMemo(() => {
+    if (mode !== 'arb' || arbView !== 'middle') return []
+    return computeMiddles(filtered, { bettable, includeExchanges: exchanges, maxCostPct: midCost, minGap: midGap, refs, method, minRef: MIDDLE_MIN_REF, useCurve })
+  }, [mode, arbView, filtered, bettable, exchanges, midCost, midGap, refs, method, useCurve])
 
   // ---- Alt & Longshots: one row per line, best EV (either side) first
   const longshots = useMemo(() => {
@@ -235,7 +246,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     }
   }, [dBadgeIn])
 
-  const nRows = mode === 'ev' ? screen.length : mode === 'arb' ? arbs.length : longshots.length
+  const nRows = mode === 'ev' ? screen.length : mode === 'arb' ? (arbView === 'middle' ? middles.length : arbs.length) : longshots.length
 
   const meta = useMemo(() => {
     const ages = active.map(s => boards[s]!.age_minutes).filter((n): n is number => n != null)
@@ -261,7 +272,20 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     }
   }, [outlay])
 
-  const emptyBody = mode === 'arb'
+  const copyMiddle = useCallback(async (m: MiddleResult) => {
+    const k = outlay / 100
+    const text = `${m.low.player} ${STAT_LABEL[m.low.stat] ?? m.low.stat} middle ${m.low.line}-${m.high.line}: OVER ${m.low.line} ${formatOdds(m.overAm)} ${bookDisplay(m.overBook).label} ${usd(m.stakeOverPer100 * k)}`
+      + ` / UNDER ${m.high.line} ${formatOdds(m.underAm)} ${bookDisplay(m.underBook).label} ${usd(m.stakeUnderPer100 * k)}`
+      + ` = ${m.missPct < 0 ? '-' : '+'}${usd(Math.abs(m.missPct) / 100 * outlay)} if one leg wins, +${usd(m.hitPct / 100 * outlay)} if it lands inside`
+    if (await copyText(text)) {
+      setCopied(m.key)
+      setTimeout(() => setCopied(c => (c === m.key ? null : c)), 1500)
+    }
+  }, [outlay])
+
+  const emptyBody = mode === 'arb' && arbView === 'middle'
+    ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
+    : mode === 'arb'
     ? { title: arbView === 'live' ? 'No live arbitrage on the board' : 'No near arbitrage on the board',
         body: 'A live arb needs the best over and the best under at two different books to pay more than the outlay together. Try Near Arbs, include exchanges, or widen the books you can bet at.' }
     : mode === 'longshots'
@@ -377,8 +401,23 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                 <PillGroup>
                   <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                   <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
+                  <Pill active={arbView === 'middle'} onClick={() => { setArbView('middle'); setLimit(PAGE) }} title="Over a lower line plus under a higher line: both win if the result lands between them, a small known cost otherwise">MIDDLES</Pill>
                 </PillGroup>
               </Field>
+              {arbView === 'middle' && (
+                <>
+                  <Field label="MAX COST">
+                    <PillGroup>
+                      {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
+                    </PillGroup>
+                  </Field>
+                  <Field label="WINDOW">
+                    <PillGroup>
+                      {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
+                    </PillGroup>
+                  </Field>
+                </>
+              )}
               <Field label="EXCHANGES">
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
@@ -444,7 +483,14 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                     <th scope="col" style={{ textAlign: 'right' }} title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes">KELLY / LINE</th>
                   </>
                 )}
-                {mode === 'arb' && (
+                {mode === 'arb' && arbView === 'middle' && (
+                  <>
+                    <th scope="col" className="odds-ev" title="Width of the window between the two lines, and what a miss and a hit pay">MIDDLE</th>
+                    <th scope="col" className="odds-ev">LEGS</th>
+                    <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
+                  </>
+                )}
+                {mode === 'arb' && arbView !== 'middle' && (
                   <>
                     <th scope="col" className="odds-ev" title="Margin on the outlay with the best over and under at two different books, net of Kalshi's fee">ARB / HOLD</th>
                     <th scope="col" className="odds-ev">HEDGE LEGS</th>
@@ -472,7 +518,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             </thead>
             <tbody>
               {mode === 'ev' && screen.slice(0, limit).map(r => <EvRow key={r.key} r={r} columns={columns} bankroll={bankroll} />)}
-              {mode === 'arb' && arbs.slice(0, limit).map(r => <ArbTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyHedge} />)}
+              {mode === 'arb' && arbView === 'middle' && middles.slice(0, limit).map(r => <MiddleTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyMiddle} />)}
+              {mode === 'arb' && arbView !== 'middle' && arbs.slice(0, limit).map(r => <ArbTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyHedge} />)}
               {mode === 'longshots' && longshots.slice(0, limit).map(r => <LongshotTableRow key={r.key} r={r} columns={columns} />)}
             </tbody>
           </table>
@@ -489,7 +536,12 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         {mode === 'ev' && <>Each cell is a book&apos;s price on the row&apos;s side above its price on the other side; green marks the best bettable price and a tint marks a book
           beating the fair price by 1.5% or more. FV is the fair price from the reference books you pick, averaged with equal weight after each book&apos;s vig is removed;
           a book is never measured against its own line. EV is fair probability times payout minus one at the best price.</>}
-        {mode === 'arb' && <>Each cell is a book&apos;s over price above its under price; the green outline marks the two legs of the best hedge. Stakes lock the same payout on
+        {mode === 'arb' && arbView === 'middle' && <>A middle is the over of a lower line plus the under of a higher line: if the result lands strictly between them both bets win,
+          anywhere else one wins and one loses, so it is a small known cost for a chance at a double win, not a risk-free bet. Stakes equalise the payout when only one leg wins.
+          BREAK-EVEN is the chance the window must hit for the middle to pay for itself; P(WINDOW) is the reference books&apos; own estimate from the two lines (or the player&apos;s
+          curve), so it is only as good as those prices. Each cell shows the over of the lower line above the under of the higher line; green outlines mark the two legs.
+          Kalshi&apos;s taker fee is taken off a Kalshi leg. Confirm both lines before placing either, and mind each book&apos;s limits and grading rules.</>}
+        {mode === 'arb' && arbView !== 'middle' && <>Each cell is a book&apos;s over price above its under price; the green outline marks the two legs of the best hedge. Stakes lock the same payout on
           either outcome. Kalshi&apos;s taker fee (0.07 &times; p &times; (1 &minus; p) per contract) is taken off its leg; other exchange commissions are not modelled.
           Prop arbs are often a stale quote or a mismatched line: confirm both legs before placing either, and mind each book&apos;s limits and grading rules.</>}
         {mode === 'longshots' && <>Each cell is a book&apos;s over price above its under price. Alt lines are rungs off the player&apos;s main line. FAIR ANCHOR is the reference
@@ -659,6 +711,56 @@ function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
         return (
           <PriceCell key={c.key} top={q ? q.over : null} bottom={q ? q.under : null}
             topState={c.key === a.bestOverBook ? 'arb' : undefined} bottomState={c.key === a.bestUnderBook ? 'arb' : undefined} />
+        )
+      })}
+    </tr>
+  )
+}
+
+function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
+  r: MiddleResult; columns: { key: string; offshore: boolean }[]; outlay: number; copied: boolean; onCopy: (r: MiddleResult) => void
+}) {
+  const k = outlay / 100
+  const low = new Map(r.low.books.map(b => [b.book, b]))
+  const high = new Map(r.high.books.map(b => [b.book, b]))
+  const free = r.missPct >= 0
+  return (
+    <tr data-row="odds">
+      <PropCells row={r.low} label={`o${r.low.line} / u${r.high.line}`} />
+      <td className="odds-ev">
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: free ? GREEN : SKY }}
+          title={r.feeLeg ? "Net of Kalshi's taker fee" : 'Both legs win only if the result lands strictly between the two lines'}>
+          {r.gap % 1 === 0 ? r.gap : r.gap.toFixed(1)} PT WINDOW
+        </div>
+        <div className="mono odds-sub" title="Profit on the outlay if one leg wins (a miss) and if both win (inside the window)">
+          MISS {signed(r.missPct)}% &middot; HIT {signed(r.hitPct)}%
+        </div>
+      </td>
+      <td className="odds-ev">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="mono" style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--chalk)', minWidth: '104px' }}>OVER {r.low.line} {formatOdds(r.overAm)}</span>
+          <BookTag book={r.overBook} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+          <span className="mono" style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--chalk)', minWidth: '104px' }}>UNDER {r.high.line} {formatOdds(r.underAm)}</span>
+          <BookTag book={r.underBook} />
+        </div>
+      </td>
+      <td className="odds-ev">
+        <div className="mono" style={{ fontSize: '12px', color: 'var(--chalk)' }}>{usd(r.stakeOverPer100 * k)} Over / {usd(r.stakeUnderPer100 * k)} Under</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+          <span className="mono odds-sub" title="The chance the window must hit for the middle to break even; the estimate comes from the reference books' fair price at each line">
+            BREAK-EVEN {(r.breakevenProb * 100).toFixed(1)}%{r.midProb != null ? ` \u00b7 P(WINDOW) ${(r.midProb * 100).toFixed(1)}%` : ''}
+          </span>
+          <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '10.5px' }}>{copied ? 'Copied' : 'Copy middle'}</button>
+        </div>
+      </td>
+      {columns.map(c => {
+        const o = low.get(c.key)
+        const u = high.get(c.key)
+        return (
+          <PriceCell key={c.key} top={o ? o.over : null} bottom={u ? u.under : null}
+            topState={c.key === r.overBook ? 'arb' : undefined} bottomState={c.key === r.underBook ? 'arb' : undefined} />
         )
       })}
     </tr>

@@ -1,6 +1,6 @@
 import {
   bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeRowArb, devigOver, fairOver,
-  kalshiEffectiveDecimal, type BoardRow,
+  computeMiddles, kalshiEffectiveDecimal, type BoardRow,
 } from '@/lib/odds-screen'
 
 const row = (books: BoardRow['books'], line = 24.5): BoardRow => ({
@@ -216,5 +216,75 @@ describe('warm mode switching at 9,000 rows', () => {
     const ms = (f: () => void) => { let best = Infinity; for (let i = 0; i < 7; i++) { const t0 = performance.now(); f(); best = Math.min(best, performance.now() - t0) } return best }
     expect(ms(() => buildArbRows(rows, { bettable, includeExchanges: true, minNetArbPct: -1.5 }))).toBeLessThan(50)
     expect(ms(() => buildLongshotRows(rows, { ...lo, sub: 'plus_ev_over', minEv: 0.02, minOverAm: 200 }))).toBeLessThan(50)
+  })
+})
+
+describe('computeMiddles', () => {
+  const mk = (line: number, books: BoardRow['books'], extra: Partial<BoardRow> = {}): BoardRow => ({ ...row(books, line), key: `k|${line}`, ...extra })
+  const mid = (o: Partial<Parameters<typeof computeMiddles>[1]> = {}) => ({
+    bettable: null, includeExchanges: true, maxCostPct: 5, minGap: 0, refs: [] as string[], method: 'proportional' as const, minRef: 2, useCurve: true, ...o,
+  })
+  // over 23.5 at FanDuel (-105) and under 25.5 at DraftKings (-105): a 2-point window for ~ -2.4% on a miss
+  const lowRow = mk(23.5, [B('fanduel', -105, -125), B('betmgm', -115, -105)])
+  const highRow = mk(25.5, [B('draftkings', 120, -105), B('caesars', 110, -110)])
+
+  it('pairs the best over of the low line with the best under of the high line and prices the miss and the hit', () => {
+    const m = computeMiddles([lowRow, highRow], mid())
+    expect(m).toHaveLength(1)
+    expect(m[0]).toMatchObject({ overBook: 'fanduel', overAm: -105, underBook: 'draftkings', underAm: -105, gap: 2, feeLeg: false })
+    const dec = 1 + 100 / 105
+    const inv = 2 / dec
+    expect(m[0].missPct).toBeCloseTo((1 / inv - 1) * 100, 9)
+    expect(m[0].hitPct).toBeCloseTo((2 / inv - 1) * 100, 9)
+    expect(m[0].breakevenProb).toBeCloseTo(inv - 1, 9)
+    expect(m[0].stakeOverPer100).toBeCloseTo(50, 9)
+    // zero-EV check: at the break-even chance the hedge is exactly flat
+    const p = m[0].breakevenProb
+    expect(p * (m[0].hitPct / 100) + (1 - p) * (m[0].missPct / 100)).toBeCloseTo(0, 9)
+  })
+  it('never forms a window the wrong way round, and respects the cost and gap filters', () => {
+    // over of the HIGHER line with under of the LOWER line wins nothing in the window and loses outside it: not a middle
+    expect(computeMiddles([mk(21.5, [B('draftkings', null, -105)]), mk(23.5, [B('fanduel', -105, null)])], mid())).toHaveLength(0)
+    expect(computeMiddles([lowRow, highRow], mid({ maxCostPct: 1 }))).toHaveLength(0)
+    expect(computeMiddles([lowRow, highRow], mid({ minGap: 3 }))).toHaveLength(0)
+    expect(computeMiddles([lowRow, highRow], mid({ bettable: new Set(['fanduel']) }))).toHaveLength(0)
+  })
+  it('a pair of legs that already arbs has a zero break-even chance and a positive miss', () => {
+    const m = computeMiddles([mk(23.5, [B('fanduel', 130, -150)]), mk(25.5, [B('draftkings', 120, 105)])], mid())
+    expect(m[0].missPct).toBeGreaterThan(0)
+    expect(m[0].breakevenProb).toBe(0)
+  })
+  it('estimates the window chance and EV from the fair price of each line, and falls back to the curve', () => {
+    const lo = mk(23.5, [B('fanduel', -105, -125), B('a', -150, 130), B('b', -150, 130)])
+    const hi = mk(25.5, [B('draftkings', 130, -105), B('a', 150, -170), B('b', 150, -170)])
+    const m = computeMiddles([lo, hi], mid())[0]
+    expect(m.midProb).not.toBeNull()
+    expect(m.midProb!).toBeGreaterThan(0)
+    expect(m.midEvPct!).toBeCloseTo(((1 + m.midProb!) / (2 / (1 + 100 / 105)) - 1) * 100, 9)
+    const thin = computeMiddles([{ ...lowRow, curve_fair_over: 0.6 }, { ...highRow, curve_fair_over: 0.4 }], mid())[0]
+    expect(thin.midProb!).toBeCloseTo(0.2, 9)
+    expect(computeMiddles([{ ...lowRow, curve_fair_over: 0.6 }, { ...highRow, curve_fair_over: 0.4 }], mid({ useCurve: false }))[0].midProb).toBeNull()
+  })
+  it('takes the Kalshi fee off a Kalshi leg and drops it with exchanges off', () => {
+    const lo = mk(23.5, [B('kalshi', -105, null)])
+    const hi = mk(25.5, [B('draftkings', null, -105)])
+    const withK = computeMiddles([lo, hi], mid())[0]
+    expect(withK.feeLeg).toBe(true)
+    expect(withK.missPct).toBeLessThan(computeMiddles([mk(23.5, [B('fanduel', -105, null)]), hi], mid())[0].missPct)
+    expect(computeMiddles([lo, hi], mid({ includeExchanges: false }))).toHaveLength(0)
+  })
+  it('scans 9,000 rows in under 50 ms', () => {
+    const books = ['pinnacle', 'novig', 'kalshi', 'draftkings', 'fanduel', 'betmgm', 'caesars', 'espnbet']
+    let s = 3
+    const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647 }
+    const rows: BoardRow[] = Array.from({ length: 9000 }, (_, i) => ({
+      ...row(books.filter(() => rnd() < 0.7).map(b => B(b, -130 + Math.floor(rnd() * 60), rnd() < 0.1 ? null : -130 + Math.floor(rnd() * 60))), 20.5 + (i % 6)),
+      key: `m${i}`, game_key: `g${Math.floor(i / 6)}`, player_norm: `p${Math.floor(i / 6)}`,
+    }))
+    const o = mid({ maxCostPct: 8 })
+    computeMiddles(rows, o)
+    let best = Infinity
+    for (let i = 0; i < 7; i++) { const t0 = performance.now(); computeMiddles(rows, o); best = Math.min(best, performance.now() - t0) }
+    expect(best).toBeLessThan(50)
   })
 })
