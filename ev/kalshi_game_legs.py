@@ -30,6 +30,17 @@ from mlb_core.alerts.discord_routes import BOOK_ALIASES, canonical_book
 from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
 
 _ET = ZoneInfo("America/New_York")
+_ND = statistics.NormalDist()
+
+# Rung interpolation for spreads / totals. Books quote one or two lines per game; Kalshi lists EVERY half-point rung ("wins by over
+# 3.5 / 4.5 / ... / 17.5"). Between and beside the quoted lines the margin / total is modelled as Normal(mu, sd) with mu fitted to the
+# books' de-vigged probabilities. UNVALIDATED: the sd values are rough league-typical figures, not fitted to this repo's data; rows are
+# tagged pooled=True, inherit the thinnest anchor's n_books, and carry extra dispersion that grows with the distance from the nearest
+# quoted line, so the leg gate rejects the far ones. Nothing beyond GAME_INTERP_MAX_SD standard deviations from a quoted line is emitted.
+GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "total": 18.0}, "nhl": {"margin": 2.3}}
+GAME_INTERP_MAX_SD = 1.0
+DISP_PER_SD = 0.02
+P_LO, P_HI = 0.01, 0.99
 PARLAY_SPORT_KEYS = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "nhl": "icehockey_nhl"}
 _MON = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
 EXCLUDED_BOOKS = DFS_BOOKS | {"kalshi"}
@@ -113,6 +124,56 @@ def _spreads(book: dict, home: str, away: str) -> dict:
     return out
 
 
+def _interp_total_rows(sport: str, tot: dict) -> list[tuple]:
+    """[(N, x, p_over, n_books, disp)] for every half-point rung near the quoted total lines that is NOT itself quoted."""
+    sd = GAME_SD.get(sport, {}).get("total")
+    if not tot or not sd:
+        return []
+    anchors = [(pt, float(statistics.median(v)), len(v), _mad(v)) for pt, v in tot.items()]
+    mu = float(statistics.median(pt - sd * _ND.inv_cdf(1.0 - p) for pt, p, _, _ in anchors))
+    n, d0 = min(a[2] for a in anchors), max(a[3] for a in anchors)
+    lo, hi = min(a[0] for a in anchors) - sd * GAME_INTERP_MAX_SD, max(a[0] for a in anchors) + sd * GAME_INTERP_MAX_SD
+    out = []
+    for N in range(max(1, int(lo + 0.5)), int(hi + 0.5) + 1):
+        x = N - 0.5
+        if x in tot or not (lo <= x <= hi):
+            continue
+        p = 1.0 - _ND.cdf((x - mu) / sd)
+        if P_LO <= p <= P_HI:
+            dist = min(abs(x - a[0]) for a in anchors) / sd
+            out.append((N, x, p, n, d0 + DISP_PER_SD * dist))
+    return out
+
+
+def _interp_spread_rows(sport: str, spr: dict, home_n: str) -> list[tuple]:
+    """[(is_home, N, x, p, n_books, disp)]: P(team wins by over x) for every half-point rung near the quoted spreads (both teams)."""
+    sd = GAME_SD.get(sport, {}).get("margin")
+    if not spr or not sd:
+        return []
+    anchors = [(fav, line, float(statistics.median(v)), len(v), _mad(v)) for (fav, line), v in spr.items()]
+    m_homes = []
+    for fav, line, p, _, _ in anchors:                       # P(fav margin > line) = p  ->  fav mean margin
+        m_fav = line - sd * _ND.inv_cdf(1.0 - p)
+        m_homes.append(m_fav if fav == home_n else -m_fav)
+    m_home = float(statistics.median(m_homes))
+    n, d0 = min(a[3] for a in anchors), max(a[4] for a in anchors)
+    out = []
+    for is_home in (True, False):
+        m_t = m_home if is_home else -m_home
+        for N in range(1, 61):
+            x = N - 0.5
+            # distance in LINE space: this team's rung is its line -x; each quoted spread is that team's line -L (favourite) or +L
+            dist = min(abs(-x - (-a[1] if (a[0] == home_n) == is_home else a[1])) for a in anchors) / sd
+            if dist > GAME_INTERP_MAX_SD:
+                continue
+            if any(a[1] == x and (a[0] == home_n) == is_home for a in anchors):
+                continue                                      # quoted directly
+            p = 1.0 - _ND.cdf((x - m_t) / sd)
+            if P_LO <= p <= P_HI:
+                out.append((is_home, N, x, p, n, d0 + DISP_PER_SD * dist))
+    return out
+
+
 def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[list[dict], dict]:
     """ParlayAPI slate events (h2h / spreads / totals) -> ([feed row per Kalshi market], stats). `now` stamps updated_ts.
 
@@ -123,7 +184,8 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
     adapter = ADAPTERS[sport]
     team_code = team_code or team_code_fn(sport)
     rows: list[dict] = []
-    stats = {"events": 0, "games_priced": 0, "dropped_unknown_team": 0, "dropped_thin": 0, "spread_rows": 0, "total_rows": 0}
+    stats = {"events": 0, "games_priced": 0, "dropped_unknown_team": 0, "dropped_thin": 0, "spread_rows": 0, "total_rows": 0,
+             "spread_interp": 0, "total_interp": 0}
     for ev in slate or []:
         stats["events"] += 1
         home_n, away_n = ev.get("home_team"), ev.get("away_team")
@@ -178,6 +240,16 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
             code = home if fav_name == home_n else away
             add(f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}", "game_spread", "spread", line, vals)
             stats["spread_rows"] += 1
+        for N, x, p, n, disp in _interp_total_rows(sport, tot):
+            rows.append({"ticker": f"{adapter.series('total')}-{tail}-{N}", "sport": sport, "game_key": gk,
+                         "market_class": "game_total", "player_norm": None, "stat": "total", "strike": x, "p_yes": p,
+                         "n_books": n, "disp": disp, "pooled": True, "updated_ts": now})
+            stats["total_interp"] += 1
+        for is_home, N, x, p, n, disp in _interp_spread_rows(sport, spr, home_n):
+            rows.append({"ticker": f"{adapter.series('spread')}-{tail}-{home if is_home else away}{N}", "sport": sport,
+                         "game_key": gk, "market_class": "game_spread", "player_norm": None, "stat": "spread", "strike": x,
+                         "p_yes": p, "n_books": n, "disp": disp, "pooled": True, "updated_ts": now})
+            stats["spread_interp"] += 1
         if ml or tot or spr:
             stats["games_priced"] += 1
         else:

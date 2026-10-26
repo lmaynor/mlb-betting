@@ -1063,8 +1063,8 @@ def test_slate_rows_emit_spreads_and_totals_with_kalshi_grammar():
     assert sp["p_yes"] == pytest.approx(0.5)                           # -110/-110 de-vigs to a coin flip
     tot = by["KXNFLTOTAL-26OCT25BUFKC-48"]                           # Over 47.5 == strike N=48
     assert tot["market_class"] == "game_total" and tot["strike"] == 47.5 and tot["p_yes"] == pytest.approx(0.5)
-    assert not any(t.endswith("-3") or t.endswith("-KC3") or t.endswith("-49") for t in by)    # whole-number lines never map
-    assert stats["spread_rows"] == 1 and stats["total_rows"] == 1
+    assert not by["KXNFLTOTAL-26OCT25BUFKC-48"].get("pooled")                      # the quoted line is direct, not interpolated
+    assert stats["spread_rows"] == 1 and stats["total_rows"] == 1                    # whole-number lines (3.0, 48.0) are never direct rows
     legs = [leg_from_row(r, NOW) for r in rows]
     assert {l.market_class for l in legs} == {"game_ml", "game_spread", "game_total"}
 
@@ -1119,3 +1119,71 @@ def test_attach_prop_indices_clears_the_resolution_cache():
     ev = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum", "player_points", [24.5])
     b.attach_prop_indices({"nba": build_sport_prop_index("nba", [ev], now_dt, NOW)[0]})
     assert b.get(t, NOW) is not None                                                 # the earlier miss was not remembered
+
+
+# ------------------------------------------------------------------------------------------ rung interpolation + reasons
+def _rows_by_ticker(event, sport="nfl"):
+    from ev.kalshi_game_legs import slate_rows
+    rows, stats = slate_rows([event], sport, NOW)
+    return {r["ticker"]: r for r in rows}, stats
+
+
+def test_totals_are_interpolated_monotone_and_tagged_pooled():
+    by, stats = _rows_by_ticker(_full_event("Kansas City Chiefs", "Buffalo Bills"))
+    tot = sorted((r["strike"], r) for t, r in by.items() if t.startswith("KXNFLTOTAL"))
+    ps = [r["p_yes"] for _, r in tot]
+    assert ps == sorted(ps, reverse=True)                                            # P(Over x) falls as x rises
+    assert stats["total_interp"] > 10 and by["KXNFLTOTAL-26OCT25BUFKC-50"]["pooled"] is True
+    assert by["KXNFLTOTAL-26OCT25BUFKC-50"]["p_yes"] < 0.5 < by["KXNFLTOTAL-26OCT25BUFKC-46"]["p_yes"]
+    assert by["KXNFLTOTAL-26OCT25BUFKC-48"]["p_yes"] == pytest.approx(0.5)           # the quoted line is untouched
+    assert by["KXNFLTOTAL-26OCT25BUFKC-60"]["disp"] > by["KXNFLTOTAL-26OCT25BUFKC-50"]["disp"]    # farther => more dispersion
+    assert max(r["strike"] for _, r in tot) <= 47.5 + 12.0 + 1e-9                    # never past 1 sd from a quoted line
+
+
+def test_spreads_interpolate_for_both_teams_and_agree_with_the_moneyline():
+    by, stats = _rows_by_ticker(_full_event("Kansas City Chiefs", "Buffalo Bills"))
+    kc = {int(t.rsplit("KC", 1)[1]): r for t, r in by.items() if "-KC" in t and t.startswith("KXNFLSPREAD")}
+    buf = {int(t.rsplit("BUF", 1)[1]): r for t, r in by.items() if "-BUF" in t and t.startswith("KXNFLSPREAD")}
+    assert [kc[n]["p_yes"] for n in sorted(kc)] == sorted((kc[n]["p_yes"] for n in kc), reverse=True)      # monotone in the margin
+    assert kc[4]["p_yes"] == pytest.approx(0.5) and not kc[4].get("pooled") and kc[5]["pooled"] and kc[2]["pooled"]
+    assert kc[1]["p_yes"] > 0.5 > buf[1]["p_yes"]                                    # KC (the favourite) wins by over 0.5 more often
+    assert 0.94 < kc[1]["p_yes"] + buf[1]["p_yes"] < 1.0                               # the missing mass is a margin inside +-0.5 (a tie)
+    assert stats["spread_interp"] > 10 and max(kc) <= 17                              # bounded to ~1 sd (13.5) around the quoted line
+
+
+def test_nhl_puck_line_interpolates_with_a_small_sd_and_never_emits_totals():
+    ev = _full_event("Los Angeles Kings", "Toronto Maple Leafs")
+    for b in ev["bookmakers"]:
+        b["markets"][1]["outcomes"] = [{"name": "Los Angeles Kings", "price": 150, "point": -1.5},
+                                       {"name": "Toronto Maple Leafs", "price": -180, "point": 1.5}]
+    by, stats = _rows_by_ticker(ev, "nhl")
+    spreads = {t: r for t, r in by.items() if t.startswith("KXNHLSPREAD")}
+    assert any(r.get("pooled") for r in spreads.values()) and max(r["strike"] for r in spreads.values()) <= 4.5   # sd 2.3
+    assert not any(t.startswith("KXNHLTOTAL") for t in by) and stats["total_interp"] == 0
+
+
+def test_interpolated_game_legs_price_a_combo_end_to_end():
+    from ev.kalshi_game_legs import slate_rows
+    rows, _ = slate_rows([_full_event("Kansas City Chiefs", "Buffalo Bills"),
+                          _full_event("Dallas Cowboys", "Philadelphia Eagles")], "nfl", NOW)
+    b = InMemoryFairBook(clock=lambda: NOW)
+    b.load_rows(rows, NOW)
+    t = ["KXNFLSPREAD-26OCT25BUFKC-KC8", "KXNFLSPREAD-26OCT25PHIDAL-DAL10", "KXNFLTOTAL-26OCT25BUFKC-55"]
+    leg = b.get(t[0], NOW)
+    assert leg.pooled and leg.market_class == "game_spread"
+    d = KalshiRFQPricer(b).price(combo_rfq(["KXNFLSPREAD-26OCT25BUFKC-KC8", "KXNFLSPREAD-26OCT25PHIDAL-DAL10",
+                                             "KXNFLSPREAD-26OCT25PHIDAL-PHI9"]), NOW)
+    assert d.notes["n_priced"] >= 2                                                  # same-game pair => SGP gate may apply, legs priced
+
+
+def test_unmapped_reasons_for_game_tickers():
+    from ev.kalshi_game_legs import slate_rows
+    rows, _ = slate_rows([_full_event("Kansas City Chiefs", "Buffalo Bills")], "nfl", NOW)
+    b = InMemoryFairBook(clock=lambda: NOW)
+    b.load_rows(rows, NOW)
+    assert b.why_unmapped("KXNFLSPREAD-26OCT25BUFKC-KC30") == "no_rung"             # we price that game, not that rung
+    assert b.why_unmapped("KXNFLGAME-26NOV01PHIWAS-WAS") == "no_game_line"           # covered league, game not on our slate
+    assert b.why_unmapped("KXNCAAFSPREAD-26OCT31NWORE-ORE10") == "sport_not_covered"
+    assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"
+    assert b.why_unmapped("KXBTC15M-26OCT251945-45") == "unknown_series"
+    assert b.why_unmapped("KXNFLGAME-26OCT25BUFKC-KC") is None                       # priced
