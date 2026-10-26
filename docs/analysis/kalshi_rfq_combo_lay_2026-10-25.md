@@ -82,6 +82,27 @@ satisfy it and vice versa). Tape goes to `data/kalshi_rfq/production/`. The prod
 Going live on the DEMO exchange is therefore `KALSHI_RFQ_MODE=live KALSHI_RFQ_LIVE=1`, no code change. There is
 deliberately NO env that enables quoting on production: that is a code change plus the verification list below.
 
+## Coverage, widened gates, unpriced legs (2026-10-26)
+The first demo tape (361 RFQs, 2,697 legs, ~12 RFQs/min) had ZERO priceable legs: the flow is NBA props (~2,100 legs) and
+game winners (NFL/NBA/NCAAF/NHL), the feed was NFL player props. Widening the gates changes nothing until legs map.
+* `ev/kalshi_game_legs.py`: game-winner fair values from ONE ParlayAPI h2h slate pull per sport (1 credit each), built as
+  `KX<LG>GAME-<YY><MON><DD><AWAY><HOME>-<CODE>` tickers and round-tripped through `ev.kalshi_map.parse_event`; Kalshi and DFS
+  books excluded; unknown team / 3-way / no usable book drops the game. NFL, NBA, NHL only.
+  **Credits**: sports x 86400 / `--game-reload-sec` per day (default nfl+nba hourly = 48/day). ParlayAPI had ~7.4k credits left
+  on 2026-10-26, so do not shorten this casually.
+* Leg gates widened: `min_books` 3->2, `max_disp` 0.06->0.08, `max_staleness_sec` 600->1500 (the feeds refresh every 10-15 min, so
+  600 s rejected live legs part of every cycle). Still unvalidated.
+* `max_unpriced_legs` (default 0 = strict; demo job uses 2): an unpriceable leg is DROPPED from the joint, a sound upper bound on
+  P(YES) (a leg is <= 1), so the lay only gets more conservative. A HOT leg always rejects. Edge still scales with ALL legs.
+* Every combo decision now records per-leg status (`notes.legs_status`: OK or the gate that failed) in the tape, so "some legs fail"
+  is visible instead of one `REJ_COMBO_LEG_UNVALIDATED`.
+* **Edge cap (deviation from spec)**: the spec's edge is `k * 1.5c`, linear in legs: a 14-leg combo demanded 21c (NO bid ~0.78 vs a
+  fair ~0.998), so a long combo could never fill. Now `min(max_combo_edge=6c, max(3.5c, k*1.5c))`.
+* `max_legs` 5 -> 16 (the demo flow has 14- and 16-leg combos).
+* Replay of the OLD tape against today's feed priced 13 of 2,697 legs: most game legs were for games already in progress or over
+  (the slate is upcoming games), and NBA props have no mapper. That is a timing/coverage limit of replaying, not a verdict;
+  a fresh run is the test. Remaining gap: a Kalshi NBA prop mapper + NBA prop consensus (the bulk of the long combos).
+
 ## Running it in GCP (read-only recorder)
 `deploy/setup_kalshi_rfq_recorder.sh` provisions Cloud Run Job `mlb-kalshi-rfq-recorder` (`--env production-readonly --mode record`)
 plus a daily scheduler (10:00 UTC). One ~23h40m execution per day: the daemon exits cleanly at `--max-runtime-sec` and the

@@ -529,7 +529,7 @@ class RFQTape:
                      "reason": decision.reason, "yes_bid": decision.yes_bid, "no_bid": decision.no_bid,
                      "p_yes_true": decision.p_yes_true, "p_yes_cons": decision.p_yes_cons,
                      "ev_per_contract": decision.ev_per_contract, "roi": decision.roi_on_collateral,
-                     "legs": list(decision.legs)})
+                     "legs": list(decision.legs), "notes": decision.notes})
 
     def record_trades(self, rfq_id: str, market_ticker: str, trades: list[dict], since_ts: float) -> None:
         self.append({"kind": "followup", "ts": self._clock(), "rfq_id": rfq_id, "market_ticker": market_ticker,

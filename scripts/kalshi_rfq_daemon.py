@@ -34,6 +34,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from ev.kalshi_game_legs import fetch_game_rows  # noqa: E402
 from ev.kalshi_rfq_pricer import (  # noqa: E402
     InMemoryFairBook, KalshiRFQPricer, PricerConfig, load_feed_rows,
 )
@@ -87,16 +88,56 @@ def load_credentials(env_file: str | None, rfq_env: str = "demo") -> tuple[str, 
         return vals[id_k], fh.read()
 
 
+class FeedState:
+    """The fair book is the union of two feeds that refresh on different clocks: the props file (cheap, every --reload-sec)
+    and the game-winner slate pulls (1 ParlayAPI credit per sport per pull, every --game-reload-sec). Each refresh swaps the
+    whole book atomically with the latest rows of BOTH."""
+
+    def __init__(self, book: InMemoryFairBook, feed: str, hot_file: str | None, game_client=None, game_sports=()):
+        self.book, self.feed, self.hot_file = book, feed, hot_file
+        self.game_client, self.game_sports = game_client, tuple(game_sports)
+        self.props_rows: list[dict] = []
+        self.game_rows: list[dict] = []
+
+    def _apply(self) -> int:
+        n = self.book.load_rows(self.props_rows + self.game_rows)
+        if self.hot_file and os.path.exists(self.hot_file):
+            with open(self.hot_file) as fh:
+                for gk in json.load(fh) or []:
+                    self.book.mark_hot(str(gk))
+        return n
+
+    def refresh_props(self) -> int:
+        rows, published = load_feed_rows(self.feed)
+        self.props_rows = [dict(r, updated_ts=published) for r in rows] if published else rows
+        return self._apply()
+
+    def refresh_games(self) -> int:
+        if self.game_client is None or not self.game_sports:
+            return len(self.book)
+        rows, stats = fetch_game_rows(self.game_client, self.game_sports, time.time())
+        if rows:                                           # a failed pull keeps the previous rows (staleness gate ages them out)
+            self.game_rows = rows
+        log.info("game legs: %d rows | %s", len(rows), json.dumps(stats, default=str))
+        return self._apply()
+
+
 def refresh_book(book: InMemoryFairBook, feed: str, hot_file: str | None) -> int:
-    rows, published = load_feed_rows(feed)
-    if published:
-        rows = [dict(r, updated_ts=published) for r in rows]
-    n = book.load_rows(rows)
-    if hot_file and os.path.exists(hot_file):
-        with open(hot_file) as fh:
-            for gk in json.load(fh) or []:
-                book.mark_hot(str(gk))
-    return n
+    """Props-only refresh (kept for callers/tests that have no game feed)."""
+    return FeedState(book, feed, hot_file).refresh_props()
+
+
+def make_game_client(sports: str):
+    """ParlayAPI client for the game-winner pulls, or None (with a warning) when there is no key / no sports."""
+    # ':' and ';' also separate (gcloud --set-env-vars splits on commas, so the job passes 'nfl:nba:nhl')
+    sports = tuple(x for x in (sports or "").replace(" ", "").replace(":", ",").replace(";", ",").split(",") if x)
+    if not sports:
+        return None, ()
+    if not os.environ.get("PARLAY_API_KEY"):
+        log.warning("PARLAY_API_KEY not set: game-winner legs disabled (props feed only)")
+        return None, ()
+    from nba.odds.parlayapi import ParlayApiClient
+    return ParlayApiClient(), sports
 
 
 async def amain(args) -> int:
@@ -108,15 +149,21 @@ async def amain(args) -> int:
     client = RFQReadOnlyClient(key_id, pem) if rfq_env == PROD_READONLY_ENV else RFQClient("demo", key_id, pem)
     log.info("RFQ daemon: env=%s mode=%s client=%s", rfq_env, mode, type(client).__name__)
     book = InMemoryFairBook()
-    try:
-        n = refresh_book(book, args.feed, args.hot_games_file)
-        log.info("fair book loaded: %d legs from %s", n, args.feed)
-    except Exception as e:                                 # noqa: BLE001 -- the tape needs no fair book: start empty
-        if mode != "record":
-            raise
-        log.warning("fair book unavailable at start (%r): recording raw RFQs with an empty book; reload retries", e)
+    game_client, game_sports = make_game_client(
+        args.game_sports if args.game_sports is not None else os.environ.get("KALSHI_RFQ_GAME_SPORTS", "nfl,nba"))
+    feed = FeedState(book, args.feed, args.hot_games_file, game_client, game_sports)
+    for what, fn in (("props", feed.refresh_props), ("games", feed.refresh_games)):
+        try:
+            log.info("fair book after %s refresh: %d legs", what, fn())
+        except Exception as e:                             # noqa: BLE001 -- the tape needs no fair book: start empty
+            if mode != "record":
+                raise
+            log.warning("%s feed unavailable at start (%r): recording raw RFQs with what loaded; reload retries", what, e)
+    max_unpriced = args.max_unpriced_legs if args.max_unpriced_legs is not None else int(
+        os.environ.get("KALSHI_RFQ_MAX_UNPRICED_LEGS", "0"))
     pricer = KalshiRFQPricer(book, PricerConfig(allow_same_game_combos=args.allow_same_game,
-                                                quote_single_leg=args.quote_single_leg))
+                                                quote_single_leg=args.quote_single_leg, max_unpriced_legs=max_unpriced))
+    log.info("pricer: max_unpriced_legs=%d game_sports=%s", max_unpriced, list(game_sports))
     loop = asyncio.get_running_loop()
     tape_dir = args.tape_dir or ("data/kalshi_rfq" if rfq_env == "demo" else "data/kalshi_rfq/production")
     tape_prefix = args.tape_gcs_prefix or os.environ.get("KALSHI_RFQ_TAPE_PREFIX") or None
@@ -154,9 +201,17 @@ async def amain(args) -> int:
         while True:
             await asyncio.sleep(args.reload_sec)
             try:
-                await asyncio.to_thread(refresh_book, book, args.feed, args.hot_games_file)
+                await asyncio.to_thread(feed.refresh_props)
             except Exception as e:                         # noqa: BLE001 -- keep the last good book; staleness gate rejects
                 log.warning("fair book reload failed (keeping previous): %r", e)
+
+    async def reload_games():
+        while True:
+            await asyncio.sleep(args.game_reload_sec)
+            try:
+                await asyncio.to_thread(feed.refresh_games)
+            except Exception as e:                         # noqa: BLE001
+                log.warning("game legs reload failed (keeping previous): %r", e)
 
     async def flusher():
         while True:
@@ -181,7 +236,7 @@ async def amain(args) -> int:
         else:
             await asyncio.Event().wait()
 
-    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), flusher(), watchdog()))
+    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), reload_games(), flusher(), watchdog()))
     stop_task = asyncio.ensure_future(deadline())
     for sig in (signal.SIGTERM, signal.SIGINT):            # Cloud Run sends SIGTERM on shutdown: flush the tape first
         try:
@@ -220,6 +275,13 @@ def main(argv=None) -> int:
                     help="exit cleanly after N seconds (Cloud Run Job: just under the task timeout); 0 = run forever")
     ap.add_argument("--poll-sec", type=float, default=5.0)
     ap.add_argument("--reload-sec", type=float, default=60.0)
+    ap.add_argument("--game-sports", default=None,
+                    help="comma list of nfl,nba,nhl game-winner legs priced from ParlayAPI h2h (needs PARLAY_API_KEY; 1 credit/"
+                         "sport/pull). Default $KALSHI_RFQ_GAME_SPORTS or nfl,nba; '' disables")
+    ap.add_argument("--game-reload-sec", type=float, default=3600.0, help="slate pull cadence (credits: sports * 86400/N per day)")
+    ap.add_argument("--max-unpriced-legs", type=int, default=None,
+                    help="drop up to N unpriceable legs from a combo and price the rest as an upper bound (default "
+                         "$KALSHI_RFQ_MAX_UNPRICED_LEGS or 0 = strict)")
     ap.add_argument("--allow-same-game", action="store_true", help="quote same-game combos (SGP); off until shadow markouts")
     ap.add_argument("--quote-single-leg", action="store_true", help="also quote single-market RFQs (off by default)")
     ap.add_argument("--reset-kill", action="store_true", help="clear kill_reason:kalshi_rfq and exit (manual reset only)")

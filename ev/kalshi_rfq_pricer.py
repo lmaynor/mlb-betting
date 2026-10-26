@@ -64,9 +64,11 @@ SGP_CORR_TABLE = {
 
 @dataclass(frozen=True)
 class PricerConfig:
-    min_books: int = 3
-    max_disp: float = 0.06
-    max_staleness_sec: float = 600.0
+    # Leg gates were widened 2026-10-26 (3 / 0.06 / 600 s -> 2 / 0.08 / 1500 s): the feeds refresh every ~10-15 min, so a 600 s
+    # staleness limit rejected live legs part of every cycle. Still UNVALIDATED -- the tape's per-leg status shows what binds.
+    min_books: int = 2
+    max_disp: float = 0.08
+    max_staleness_sec: float = 1500.0
     base_half_spread: float = 0.020
     size_addon_cap: float = 0.03
     size_addon_per_500: float = 0.005
@@ -75,10 +77,17 @@ class PricerConfig:
     tick: float = 0.01
     quote_single_leg: bool = False          # single-leg props are -EV to make passively (market_making_2026-10-12)
     allow_same_game_combos: bool = False
-    max_legs: int = 5
+    max_legs: int = 16
+    # A combo may carry up to this many legs we cannot price (unmapped / thin / dispersed / stale). Such a leg is DROPPED from
+    # the joint, which is a sound UPPER bound on P(YES) (a leg's probability is <= 1), so the lay quote only gets more
+    # conservative. 0 = strict (any unpriced leg rejects the combo). A HOT (scratch/injury) leg always rejects the combo.
+    max_unpriced_legs: int = 0
     longshot_max_p: float = 0.35
     per_leg_edge: float = 0.015
     min_combo_edge: float = 0.035
+    # The spec's edge is k * per_leg_edge, which is LINEAR in legs: a 14-leg combo would demand 21c, i.e. a NO bid of ~0.78 against
+    # a fair ~0.998, which nobody accepts -- the lay could never fill by construction. Cap it (UNVALIDATED; tape will say).
+    max_combo_edge: float = 0.06
     leg_safety_pad: float = 0.008
     min_collateral_roi: float = 0.030
     sgp_pair_buffer: float = 0.025
@@ -357,48 +366,54 @@ class KalshiRFQPricer:
         if len({l.ticker for l in rfq.legs}) != k:
             return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, why="duplicate leg ticker")
         resolved: list[tuple[LegFairValue, str, float]] = []
+        status: list[dict] = []                    # one entry per leg, ALWAYS recorded: shows which gate binds, and how many
+        hot = bad_side = False
         for l in rfq.legs:
             fv = self.book.get(l.ticker, now)
             bad = self.leg_gate(fv, now)
             if bad is None and l.side not in ("yes", "no"):
-                bad = f"unknown side {l.side!r}"
-            if bad:
-                return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, ticker=l.ticker, why=bad)
-            p = fv.p_true_yes if l.side == "yes" else 1.0 - fv.p_true_yes
-            resolved.append((fv, l.side, p))
+                bad, bad_side = f"unknown side {l.side!r}", True
+            status.append({"ticker": l.ticker, "status": bad or "OK"})
+            hot = hot or bad == REJ_HOT_LINEUP_SCRATCH
+            if bad is None:
+                resolved.append((fv, l.side, fv.p_true_yes if l.side == "yes" else 1.0 - fv.p_true_yes))
+        n_unpriced = k - len(resolved)
+        notes = {"legs_status": status, "n_priced": len(resolved), "n_unpriced": n_unpriced}
+        if hot or bad_side or not resolved or n_unpriced > cfg.max_unpriced_legs:
+            return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, **notes)
 
         groups: dict[str, list[tuple[LegFairValue, str, float]]] = {}
         for item in resolved:
             groups.setdefault(item[0].game_key, []).append(item)
         sgp = any(len(g) > 1 for g in groups.values())
         if sgp and not cfg.allow_same_game_combos:
-            return _reject(rfq.rfq_id, "combo", REJ_SGP_DISABLED)
+            return _reject(rfq.rfq_id, "combo", REJ_SGP_DISABLED, **notes)
         for g in groups.values():
             players = [fv.player_norm for fv, _, _ in g if fv.player_norm]
             if len(players) != len(set(players)):
-                return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER)
+                return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER, **notes)
 
         p_true = self._joint(groups, pad=0.0)
         p_cons = self._joint(groups, pad=cfg.leg_safety_pad)
         if p_cons > cfg.longshot_max_p:
-            return _reject(rfq.rfq_id, "combo", REJ_COMBO_NOT_LONGSHOT, p_cons=round(p_cons, 4))
-        edge = max(cfg.min_combo_edge, k * cfg.per_leg_edge)
+            return _reject(rfq.rfq_id, "combo", REJ_COMBO_NOT_LONGSHOT, p_cons=round(p_cons, 4), **notes)
+        edge = min(cfg.max_combo_edge, max(cfg.min_combo_edge, k * cfg.per_leg_edge))
         no_bid = min(0.99, floor_to_tick((1.0 - p_cons) - edge, cfg.tick))
         if no_bid <= 0.0:
-            return _reject(rfq.rfq_id, "combo", REJ_NO_EDGE, p_cons=round(p_cons, 4))
+            return _reject(rfq.rfq_id, "combo", REJ_NO_EDGE, p_cons=round(p_cons, 4), **notes)
         ev = (1.0 - p_true) - no_bid
         fee = taker_fee(no_bid, 100, cfg.fee_mult) / 100.0
         roi = (ev - fee) / no_bid
         snaps = tuple(_snap(fv, side, p) for fv, side, p in resolved)
+        notes.update(k=k, same_game=sgp, fee_reserve=round(fee, 5), bounded=n_unpriced > 0)
         if roi < cfg.min_collateral_roi:
             return QuoteDecision("REJECT", REJ_LOW_ROI, rfq.rfq_id, "combo", 0.0, no_bid, p_true, p_cons, edge, ev, roi,
-                                 legs=snaps, notes={"fee_reserve": round(fee, 5)})
+                                 legs=snaps, notes=notes)
         contracts = rfq.contracts
         if contracts is None and rfq.target_cost:
             contracts = rfq.target_cost / max(1.0 - no_bid, cfg.tick)   # requester pays (1 - no_bid) per YES contract
         return QuoteDecision("QUOTE", "PLAN", rfq.rfq_id, "combo", 0.0, no_bid, p_true, p_cons, edge, ev, roi,
-                             contracts, (contracts or 0.0) * no_bid, snaps,
-                             {"k": k, "same_game": sgp, "fee_reserve": round(fee, 5)})
+                             contracts, (contracts or 0.0) * no_bid, snaps, notes)
 
     def _joint(self, groups: dict, pad: float) -> float:
         """P(every leg wins). Independent across games; Gaussian copula + per-pair buffer inside a game."""
