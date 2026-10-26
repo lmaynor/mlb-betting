@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     'Quantitative models, prop research and a live +EV terminal across MLB, NFL, NHL and NBA. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
   openGraph: {
-    images: [{ url: '/brand/og-card.jpg', width: 2000, height: 1056, alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
+    images: [{ url: '/brand/og-card.jpg?v=2', width: 2000, height: 1056, alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
     siteName: 'beezy.fyi',
     type:     'website',
   },
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     card:    'summary_large_image',
     site:    '@beezy_fyi',
     creator: '@beezy_fyi',
-    images:  [{ url: '/brand/og-card.jpg', alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
+    images:  [{ url: '/brand/og-card.jpg?v=2', alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
   },
 }
 
