@@ -3510,6 +3510,10 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   **GCP recorder (2026-10-25):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
   daily 10:00 UTC scheduler, tape -> `Kalshi/rfq_tape/production/{day}/*.jsonl`, creds from Secret Manager (`kalshi-prod-api-key-id`,
   `kalshi-prod-private-key`). Fails loud if the stream never connects (Kalshi CDN may block Cloud Run egress -- unverified).
+  **Props/spreads/totals (2026-10-26):** `ev/kalshi_props.parse_prop_ticker` + `ev/kalshi_rfq_props.PropFairIndex` resolve NFL/NBA/NHL player-prop legs
+  from the ticker alone against the banked prop feeds (zero credits); `ev/kalshi_game_legs.slate_rows` also emits SPREAD/TOTAL (NHL totals never).
+  Game pulls cost 1 credit per market per sport; the daemon enforces `--max-daily-game-credits` (default 120). Verified prop series are listed
+  in the analysis doc (the original spec's NHL/NBA series guesses mostly do not exist on Kalshi).
 - **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
   Kalshi blocks its egress IP (`kalshi_ok=False`, the legs are empty), and that is exactly when the laptop does the
   Kalshi join. `props_exec.build_latest_local` now computes it too (never fatal) and `publish_local` writes
