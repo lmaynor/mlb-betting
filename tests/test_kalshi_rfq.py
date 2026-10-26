@@ -252,9 +252,9 @@ def test_single_leg_size_addon_and_inventory_skew():
 
 @pytest.mark.parametrize("leg,reason", [
     (None, "REJ_UNMAPPED_TICKER"),
-    (mk_leg(n=2), "REJ_LOW_BOOKS"),
-    (mk_leg(disp=0.07), "REJ_HIGH_DISPERSION"),
-    (mk_leg(ts=NOW - 601), "REJ_STALE_CONSENSUS"),
+    (mk_leg(n=1), "REJ_LOW_BOOKS"),
+    (mk_leg(disp=0.09), "REJ_HIGH_DISPERSION"),
+    (mk_leg(ts=NOW - 1501), "REJ_STALE_CONSENSUS"),
 ])
 def test_single_leg_fail_closed_gates(leg, reason):
     p = KalshiRFQPricer(book_of(*([leg] if leg else [])), PricerConfig(quote_single_leg=True))
@@ -312,8 +312,8 @@ def test_combo_not_a_longshot_is_rejected():
 
 @pytest.mark.parametrize("mutate,why", [
     (lambda ls: ls[:2], "missing leg"),
-    (lambda ls: [replace(ls[0], n_books=2)] + ls[1:], "thin"),
-    (lambda ls: [mk_leg("T1", ls[0].game_key, "p1", ts=NOW - 700)] + ls[1:], "stale"),
+    (lambda ls: [replace(ls[0], n_books=1)] + ls[1:], "thin"),
+    (lambda ls: [mk_leg("T1", ls[0].game_key, "p1", ts=NOW - 1600)] + ls[1:], "stale"),
     (lambda ls: [mk_leg("T1", ls[0].game_key, "p1", disp=0.09)] + ls[1:], "dispersed"),
 ])
 def test_combo_any_bad_leg_rejects_everything(mutate, why):
@@ -628,7 +628,7 @@ def test_recorder_writes_tape_and_schedules_followup(tmp_path):
 
 # ------------------------------------------------------------------------------------------ hygiene
 @pytest.mark.parametrize("path", ["mlb/execution/kalshi/rfq_client.py", "mlb/execution/kalshi/rfq_maker.py",
-                                  "ev/kalshi_rfq_pricer.py", "scripts/kalshi_rfq_daemon.py", "tests/test_kalshi_rfq.py"])
+                                  "ev/kalshi_rfq_pricer.py", "scripts/kalshi_rfq_daemon.py", "tests/test_kalshi_rfq.py", "ev/kalshi_game_legs.py"])
 def test_new_files_are_ascii_only(path):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, path), encoding="utf-8") as fh:
@@ -773,3 +773,140 @@ def test_recorder_job_script_and_image_wiring():
     assert "kalshi-demo-api-key-id" in sh and 'SCHED=""' in sh      # demo variant: own secrets, no scheduler
     assert "kalshi_rfq_daemon.py" in open(os.path.join(root, "Dockerfile"), encoding="utf-8").read()
     assert "websockets==" in open(os.path.join(root, "requirements.txt"), encoding="utf-8").read()
+
+
+# ------------------------------------------------------------------------------------------ unpriced legs / diagnostics
+def test_widened_gates_accept_borderline_legs():
+    legs = [mk_leg("T1", "nfl:2026-10-25:A1@B1", "p1", n=2, disp=0.075, ts=NOW - 1400)] + three_cross_game()[1:]
+    d = KalshiRFQPricer(book_of(*legs)).price(combo_rfq(["T1", "T2", "T3"]), NOW)
+    assert d.quoted                                                          # 2 books / 7.5pp / 23 min old now pass
+
+
+def test_every_combo_decision_records_per_leg_status():
+    legs = three_cross_game()[:2] + [mk_leg("T3", "nfl:2026-10-25:A3@B3", "p3", n=1)]
+    d = KalshiRFQPricer(book_of(*legs)).price(combo_rfq(["T1", "T2", "T3", "TX"]), NOW)
+    assert d.reason == "REJ_COMBO_LEG_UNVALIDATED"
+    assert [x["status"] for x in d.notes["legs_status"]] == ["OK", "OK", "REJ_LOW_BOOKS", "REJ_UNMAPPED_TICKER"]
+    assert d.notes["n_priced"] == 2 and d.notes["n_unpriced"] == 2
+
+
+def test_unpriced_legs_are_dropped_as_an_upper_bound_up_to_the_limit():
+    legs = three_cross_game()[:2]                                           # T3 is not in the book
+    rfq = combo_rfq(["T1", "T2", "T3"])
+    assert KalshiRFQPricer(book_of(*legs)).price(rfq, NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"      # strict by default
+    p = KalshiRFQPricer(book_of(*legs), PricerConfig(max_unpriced_legs=1))
+    d = p.price(rfq, NOW)
+    assert d.quoted and d.notes["bounded"] and d.notes["n_unpriced"] == 1
+    assert d.p_yes_true == pytest.approx(0.25)                              # the unknown leg contributes a factor of 1.0
+    assert d.p_yes_cons == pytest.approx(0.508 ** 2)
+    assert d.no_bid == floor_to_tick((1 - 0.508 ** 2) - 0.045)              # edge still scales with ALL 3 legs
+    assert d.legs and len(d.legs) == 2                                      # last-look baseline covers only priced legs
+    two_missing = KalshiRFQPricer(book_of(*legs[:1]), PricerConfig(max_unpriced_legs=1))
+    assert two_missing.price(rfq, NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"                          # over the limit
+    none_priced = KalshiRFQPricer(book_of(), PricerConfig(max_unpriced_legs=9))
+    assert none_priced.price(rfq, NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"                          # nothing to anchor on
+
+
+def test_hot_leg_always_rejects_even_when_unpriced_legs_are_allowed():
+    b = book_of(*three_cross_game()[:2])
+    b.mark_hot("nfl:2026-10-25:A2@B2", now=NOW)
+    d = KalshiRFQPricer(b, PricerConfig(max_unpriced_legs=5)).price(combo_rfq(["T1", "T2", "T3"]), NOW)
+    assert d.reason == "REJ_COMBO_LEG_UNVALIDATED"
+    assert "REJ_HOT_LINEUP_SCRATCH" in [x["status"] for x in d.notes["legs_status"]]
+
+
+def test_long_combo_with_a_few_unpriced_legs_quotes_a_conservative_lay():
+    legs = [mk_leg(f"T{i}", f"nfl:2026-10-25:A{i}@B{i}", f"p{i}", p=0.6) for i in range(1, 13)]
+    tickers = [l.ticker for l in legs] + ["X1", "X2"]                       # 14 legs, 2 unpriceable
+    d = KalshiRFQPricer(book_of(*legs), PricerConfig(max_unpriced_legs=2)).price(combo_rfq(tickers), NOW)
+    assert d.quoted and d.notes["n_unpriced"] == 2 and d.no_bid >= 0.9
+
+
+def test_combo_edge_is_capped_so_long_combos_can_fill():
+    legs = [mk_leg(f"T{i}", f"nfl:2026-10-25:A{i}@B{i}", f"p{i}", p=0.5) for i in range(1, 9)]
+    d = KalshiRFQPricer(book_of(*legs)).price(combo_rfq([l.ticker for l in legs]), NOW)
+    assert d.edge == pytest.approx(0.06)                                    # 8 legs * 1.5c = 12c, capped
+    assert d.no_bid >= 0.93
+
+
+def test_tape_records_notes(tmp_path):
+    tape = RFQTape(str(tmp_path), clock=lambda: NOW)
+    rec = RFQRecorder(KalshiRFQPricer(book_of(*three_cross_game()[:2])), tape, clock=lambda: NOW)
+    rec.on_event("rfq_created", combo_rfq(["T1", "T2", "T3"], "r1", 10.0), NOW)
+    line = json.loads(open(tape.path()).readline())
+    assert line["notes"]["n_unpriced"] == 1 and line["notes"]["legs_status"][2]["status"] == "REJ_UNMAPPED_TICKER"
+
+
+# ------------------------------------------------------------------------------------------ game-winner legs
+def _slate_event(home="Kansas City Chiefs", away="Buffalo Bills", commence="2026-10-26T00:20:00Z", books=None):
+    def book(key, ph, pa):
+        return {"key": key, "markets": [{"key": "h2h", "outcomes": [{"name": home, "price": ph}, {"name": away, "price": pa}]}]}
+    return {"id": "e1", "home_team": home, "away_team": away, "commence_time": commence,
+            "bookmakers": books if books is not None else [book("draftkings", -150, 130), book("fanduel", -155, 135),
+                                                            book("betmgm", -145, 125), book("kalshi", -300, 250),
+                                                            book("prizepicks", -110, -110)]}
+
+
+def test_slate_rows_build_kalshi_tickers_and_leave_kalshi_and_dfs_out():
+    from ev.kalshi_game_legs import slate_rows
+    rows, stats = slate_rows([_slate_event()], "nfl", NOW)
+    by = {r["ticker"]: r for r in rows}
+    # 2026-10-26T00:20Z is the evening of Oct 25 in ET: the Kalshi event date is the ET date
+    assert set(by) == {"KXNFLGAME-26OCT25BUFKC-KC", "KXNFLGAME-26OCT25BUFKC-BUF"}
+    kc, buf = by["KXNFLGAME-26OCT25BUFKC-KC"], by["KXNFLGAME-26OCT25BUFKC-BUF"]
+    assert kc["n_books"] == 3 and kc["market_class"] == "game_ml" and kc["game_key"] == "nfl:2026-10-25:BUF@KC"
+    assert kc["p_yes"] + buf["p_yes"] == pytest.approx(1.0) and 0.55 < kc["p_yes"] < 0.65   # ~-150 favourite, de-vigged
+    assert stats["games_priced"] == 1
+    lf = leg_from_row(kc, NOW)
+    assert lf.player_norm is None and lf.stat == "ml" and lf.sport == "nfl"
+
+
+def test_slate_rows_fail_closed_on_unknown_team_three_way_and_no_books():
+    from ev.kalshi_game_legs import slate_rows
+    unknown = _slate_event(home="Springfield Isotopes")
+    three_way = _slate_event(books=[{"key": "draftkings", "markets": [{"key": "h2h", "outcomes": [
+        {"name": "Kansas City Chiefs", "price": -150}, {"name": "Buffalo Bills", "price": 130}, {"name": "Draw", "price": 900}]}]}])
+    only_kalshi = _slate_event(books=[{"key": "kalshi", "markets": [{"key": "h2h", "outcomes": [
+        {"name": "Kansas City Chiefs", "price": -150}, {"name": "Buffalo Bills", "price": 130}]}]}])
+    rows, stats = slate_rows([unknown, three_way, only_kalshi], "nfl", NOW)
+    assert rows == [] and stats["dropped_unknown_team"] == 1 and stats["dropped_thin"] == 2
+
+
+def test_game_rows_feed_the_pricer_end_to_end():
+    from ev.kalshi_game_legs import slate_rows
+    rows, _ = slate_rows([_slate_event(), _slate_event(home="Dallas Cowboys", away="Philadelphia Eagles")], "nfl", NOW)
+    b = InMemoryFairBook(clock=lambda: NOW)
+    b.load_rows(rows, NOW)
+    t1, t2 = "KXNFLGAME-26OCT25BUFKC-BUF", "KXNFLGAME-26OCT25PHIDAL-PHI"
+    assert b.get(t1, NOW) is not None and b.get(t2, NOW) is not None
+    d = KalshiRFQPricer(b).price(combo_rfq([t1, t2]), NOW)
+    assert d.notes["n_priced"] == 2 and d.reason in ("PLAN", "REJ_COMBO_NOT_LONGSHOT", "REJ_LOW_ROI")
+
+
+def test_fetch_game_rows_skips_a_failing_sport():
+    from ev.kalshi_game_legs import fetch_game_rows
+
+    class C:
+        def get_slate(self, key, markets=None):
+            if key == "basketball_nba":
+                raise RuntimeError("boom")
+            return [_slate_event()]
+    rows, stats = fetch_game_rows(C(), ["nfl", "nba"], NOW)
+    assert len(rows) == 2 and "error" in stats["nba"] and stats["nfl"]["games_priced"] == 1
+
+
+def test_daemon_game_sports_parsing_and_feed_state(monkeypatch):
+    d = _daemon()
+    monkeypatch.delenv("PARLAY_API_KEY", raising=False)
+    assert d.make_game_client("nfl:nba")[1] == ()                           # no key: disabled, not a crash
+    assert d.make_game_client("")[1] == ()
+    book = InMemoryFairBook(clock=lambda: NOW)
+
+    class C:
+        def get_slate(self, key, markets=None):
+            return [_slate_event()]
+    fs = d.FeedState(book, "unused", None, C(), ("nfl",))
+    fs.props_rows = [{"ticker": "KXNFLRECYDS-X", "p_over": 0.4, "n_books": 3, "disp": 0.01, "game_key": GK}]
+    assert fs.refresh_games() == 3                                          # 1 prop leg + 2 game legs in ONE swap
+    fs.props_rows = []
+    assert fs.refresh_games() == 2
