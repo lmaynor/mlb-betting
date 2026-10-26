@@ -133,6 +133,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const [outlayText, setOutlayText] = useState('100')
   const [midCost, setMidCost] = useState(5)
   const [midGap, setMidGap] = useState(0)
+  const [midPosEv, setMidPosEv] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const [longSub, setLongSub] = useState<LongshotSubfilter>('all')
   const [oddsMin, setOddsMin] = useState(0)
@@ -220,8 +221,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   // ---- Middles: the over of a lower line + the under of a higher line, same player and stat
   const middles = useMemo(() => {
     if (mode !== 'arb' || arbView !== 'middle') return []
-    return computeMiddles(filtered, { bettable, includeExchanges: exchanges, maxCostPct: midCost, minGap: midGap, refs, method, minRef: MIDDLE_MIN_REF, useCurve })
-  }, [mode, arbView, filtered, bettable, exchanges, midCost, midGap, refs, method, useCurve])
+    return computeMiddles(filtered, { bettable, includeExchanges: exchanges, maxCostPct: midCost, minGap: midGap, onlyPositiveEv: midPosEv, refs, method, minRef: MIDDLE_MIN_REF, useCurve })
+  }, [mode, arbView, filtered, bettable, exchanges, midCost, midGap, midPosEv, refs, method, useCurve])
 
   // ---- Alt & Longshots: one row per line, best EV (either side) first
   const longshots = useMemo(() => {
@@ -409,6 +410,11 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   <Field label="MAX COST">
                     <PillGroup>
                       {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
+                    </PillGroup>
+                  </Field>
+                  <Field label="VALUE">
+                    <PillGroup>
+                      <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
                     </PillGroup>
                   </Field>
                   <Field label="WINDOW">

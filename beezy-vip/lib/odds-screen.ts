@@ -516,6 +516,8 @@ export interface MiddleOptions {
   maxCostPct: number
   /** narrowest window kept, in points */
   minGap: number
+  /** keep only middles whose estimated EV (from the fair price of each line) is positive */
+  onlyPositiveEv?: boolean
   refs: readonly string[]
   method: DevigMethod
   minRef: number
@@ -533,6 +535,9 @@ function bestEff(row: BoardRow, side: 'OVER' | 'UNDER', visible: ReadonlySet<str
     if (!includeExchanges && EXCHANGE_BOOKS.has(b.book)) continue
     const am = side === 'OVER' ? b.over : b.under
     if (am == null || !isFinite(am) || am === 0) continue
+    // A one-sided quote at a whole-number line is a milestone ladder rung ("N+"), whose point is not an over/under line (a
+    // "0" rung at +800 is not P(over 0)): only half-point lines, or a book's own two-sided market, make a middle leg.
+    if ((b.over == null || b.under == null) && Math.abs(row.line % 1) !== 0.5) continue
     const dec = americanToDecimal(am)
     const eff = b.book === 'kalshi' ? kalshiEffectiveDecimal(dec) : dec
     if (!best || eff > best.eff) best = { i, book: b.book, am, dec, eff }
@@ -576,6 +581,8 @@ export function computeMiddles(rows: BoardRow[], opts: MiddleOptions): MiddleRes
     g.sort((a, b) => a.line - b.line)
     const overs = g.map(r => bestEff(r, 'OVER', opts.bettable, opts.includeExchanges))
     const unders = g.map(r => bestEff(r, 'UNDER', opts.bettable, opts.includeExchanges))
+    const lowFair: (number | null | undefined)[] = new Array(g.length)
+    const highFair: (number | null | undefined)[] = new Array(g.length)
     for (let a = 0; a < g.length; a++) {
       const o = overs[a]
       if (!o) continue
@@ -587,9 +594,13 @@ export function computeMiddles(rows: BoardRow[], opts: MiddleOptions): MiddleRes
         const missPct = (1 / inv - 1) * 100
         if (missPct < -opts.maxCostPct) continue
         const stakeOver = (100 * (1 / o.eff)) / inv
-        const pLow = fairOverAt(g[a], opts.method, refs, o.i, opts.minRef, opts.useCurve)
-        const pHigh = fairOverAt(g[b], opts.method, refs, u.i, opts.minRef, opts.useCurve)
+        // a line's fair value depends only on its own best leg's book, so it is computed once per line, not once per pair
+        if (lowFair[a] === undefined) lowFair[a] = fairOverAt(g[a], opts.method, refs, o.i, opts.minRef, opts.useCurve)
+        if (highFair[b] === undefined) highFair[b] = fairOverAt(g[b], opts.method, refs, u.i, opts.minRef, opts.useCurve)
+        const pLow = lowFair[a]
+        const pHigh = highFair[b]
         const midProb = pLow != null && pHigh != null && pLow > pHigh ? pLow - pHigh : null
+        if (opts.onlyPositiveEv && !(midProb != null && (1 + midProb) / inv - 1 > 0)) continue
         out.push({
           key: `${g[a].key}>${g[b].line}`, low: g[a], high: g[b],
           overBook: o.book, overAm: o.am, underBook: u.book, underAm: u.am,

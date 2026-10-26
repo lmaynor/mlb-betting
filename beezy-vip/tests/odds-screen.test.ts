@@ -265,6 +265,19 @@ describe('computeMiddles', () => {
     expect(thin.midProb!).toBeCloseTo(0.2, 9)
     expect(computeMiddles([{ ...lowRow, curve_fair_over: 0.6 }, { ...highRow, curve_fair_over: 0.4 }], mid({ useCurve: false }))[0].midProb).toBeNull()
   })
+  it('ignores one-sided quotes at whole-number lines (milestone ladder rungs) but keeps half-point ladder overs', () => {
+    const under = mk(1.5, [B('novig', -488, 217)])
+    expect(computeMiddles([mk(0, [B('fanduel', 800, null)]), under], mid({ maxCostPct: 500 }))).toHaveLength(0)
+    expect(computeMiddles([mk(0.5, [B('fanduel', 800, null)]), under], mid({ maxCostPct: 500 }))).toHaveLength(1)
+    expect(computeMiddles([mk(0, [B('fanduel', 800, -1500)]), under], mid({ maxCostPct: 500 }))).toHaveLength(1)   // two-sided: a real market
+  })
+  it('+EV only keeps middles whose estimated window chance beats break-even', () => {
+    const lo = { ...lowRow, curve_fair_over: 0.6 }
+    const hi = (c: number) => ({ ...highRow, curve_fair_over: c })
+    expect(computeMiddles([lo, hi(0.4)], mid({ onlyPositiveEv: true }))).toHaveLength(1)     // 20% window vs ~2.4% break-even
+    expect(computeMiddles([lo, hi(0.59)], mid({ onlyPositiveEv: true }))).toHaveLength(0)    // 1%: below break-even
+    expect(computeMiddles([lowRow, highRow], mid({ onlyPositiveEv: true, minRef: 5, useCurve: false }))).toHaveLength(0)  // no estimate, no claim
+  })
   it('takes the Kalshi fee off a Kalshi leg and drops it with exchanges off', () => {
     const lo = mk(23.5, [B('kalshi', -105, null)])
     const hi = mk(25.5, [B('draftkings', null, -105)])
