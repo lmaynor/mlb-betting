@@ -26,6 +26,7 @@ Conventions that differ from the pasted spec (deliberate):
 from __future__ import annotations
 
 import math
+import re
 import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -36,6 +37,9 @@ import numpy as np
 
 from mlb.execution.kalshi.fees import taker_fee
 from mlb_core.risk.calibration import market_blend_prob
+
+_GAME_SERIES = re.compile(r"^KX([A-Z0-9]+?)(?:GAME|SPREAD|TOTAL)-")
+_COVERED_LEAGUES = {"NFL": "nfl", "NBA": "nba", "NHL": "nhl"}
 
 # ---- reject codes -------------------------------------------------------------------------------------
 REJ_UNMAPPED_TICKER = "REJ_UNMAPPED_TICKER"
@@ -177,6 +181,7 @@ class InMemoryFairBook:
     def __init__(self, hot_ttl_sec: float = 300.0, clock: Callable[[], float] = time.time):
         self._legs: dict[str, LegFairValue] = {}
         self._hot: dict[str, float] = {}            # game_key -> hot-until epoch
+        self._game_keys: set = set()                # game_keys that have ANY game-market row (for the unmapped reason)
         self._prop_indices: dict = {}               # sport -> ev.kalshi_rfq_props.PropFairIndex (ticker-resolved player props)
         self._dyn: dict[str, tuple] = {}            # per-attach cache: ticker -> (leg | None, why); misses are cached too
         self.hot_ttl_sec, self._clock = hot_ttl_sec, clock
@@ -186,6 +191,7 @@ class InMemoryFairBook:
 
     def replace_all(self, legs) -> int:
         new = {leg.ticker: leg for leg in legs}
+        self._game_keys = {leg.game_key for leg in new.values() if leg.market_class.startswith("game_")}
         self._legs = new                             # single reference swap: readers see old or new, never partial
         return len(new)
 
@@ -218,8 +224,27 @@ class InMemoryFairBook:
         return out
 
     def why_unmapped(self, ticker: str) -> str | None:
-        """Why a ticker has no fair value ('no_game', 'no_player', 'no_rung', 'not_a_prop_ticker', ...), for the tape."""
-        return None if ticker in self._legs else self._resolve_prop_why(ticker)[1]
+        """Why a ticker has no fair value, for the tape: player props -> no_game / no_player / ambiguous_player / team_mismatch /
+        no_stat / no_rung; game markets -> no_rung (we price that game, not that rung) / no_game_line (a covered league, but no
+        line for that game: not on the slate yet, started, or a team we cannot map) / sport_not_covered; else unknown_series."""
+        if ticker in self._legs:
+            return None
+        why = self._resolve_prop_why(ticker)[1]
+        if why not in ("not_a_prop_ticker", "no_sport_index"):
+            return why
+        m = _GAME_SERIES.match(ticker or "")
+        if not m:
+            return "unknown_series"
+        sport = _COVERED_LEAGUES.get(m.group(1))
+        if sport is None:
+            return "sport_not_covered"
+        from ev.kalshi_map import game_key, parse_event
+        from ev.sports import ADAPTERS
+        parts = ticker.split("-")
+        parsed = parse_event(ADAPTERS[sport], f"{parts[0]}-{parts[1]}") if len(parts) >= 2 else None
+        if not isinstance(parsed, tuple):
+            return "no_game_line"
+        return "no_rung" if game_key(sport, *parsed) in self._game_keys else "no_game_line"
 
     def upsert(self, leg: LegFairValue) -> None:
         self._legs[leg.ticker] = leg

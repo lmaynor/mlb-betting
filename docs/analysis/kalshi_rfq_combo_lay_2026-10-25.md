@@ -132,6 +132,17 @@ The demo flow is ~78% NBA player props plus game winners/spreads/totals, so the 
 * Prop freshness is whatever the banks give: `odds-bank-{nba,nhl}-props` run twice a day, `bp-live-*` hourly in season. The
   index stamps `updated_ts` from the feed's own age, so a stale bank is rejected by the staleness gate, not silently priced.
 
+## Rung interpolation + reasons (2026-10-26, evening)
+The midday demo run priced 3 of 192 legs. Besides coverage (college, soccer, games days out), spread/total legs missed because Kalshi
+lists EVERY half-point rung ("wins by over 3.5 ... 17.5") while books quote one or two lines. `ev/kalshi_game_legs.py` now interpolates:
+margin (spreads) / total is Normal(mu, sd) with mu fitted to the books' de-vigged probabilities (median across anchors). Rows are
+`pooled=True`, `n_books` = the thinnest anchor's, `disp` = widest anchor MAD + 0.02 per sd of distance from the nearest quoted line,
+and nothing beyond 1.0 sd from a quoted line is emitted. **sd values are UNVALIDATED rough league figures** (NFL margin 13.5 / total 12,
+NBA 12 / 18, NHL margin 2.3, NHL totals still disabled): replace with fitted values once the tape grades them. Sanity: KC -3.5 coin flip
+-> KC 'wins by over 0.5' 0.59 vs the moneyline 0.60; monotone in the rung; both teams' ladders agree.
+The tape's per-leg `why` is now meaningful for game tickers: `no_rung` (we price that game, not that rung), `no_game_line` (covered league,
+game not on the slate / started / unmappable team), `sport_not_covered` (NCAAF, soccer, ...), `unknown_series`.
+
 ## Running it in GCP (read-only recorder)
 `deploy/setup_kalshi_rfq_recorder.sh` provisions Cloud Run Job `mlb-kalshi-rfq-recorder` (`--env production-readonly --mode record`)
 plus a daily scheduler (10:00 UTC). One ~23h40m execution per day: the daemon exits cleanly at `--max-runtime-sec` and the
