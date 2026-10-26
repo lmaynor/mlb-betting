@@ -101,6 +101,8 @@ scheduler starts the next, leaving a ~20 min gap. A Job, not a Service: the daem
 * **Feed**: `--feed` defaults to `EVSweep/nfl_props/latest.json` (NFL only). Missing at start is tolerated in record mode (raw RFQs
   are still taped; the reload loop retries).
 * `websockets==14.1` was added to `requirements.txt`, so the next image build re-runs the dependency layer once.
+* **Demo variant** (`RFQ_ENV=demo ./deploy/setup_kalshi_rfq_recorder.sh`): job `mlb-kalshi-rfq-recorder-demo`, secrets `kalshi-demo-api-key-id` /
+  `kalshi-demo-private-key`, no scheduler, 30 min cap, tape under `Kalshi/rfq_tape/demo/`. A plumbing test only (demo has little RFQ flow).
 * Pause: `PAUSE=1 PROJECT_ID=... ./deploy/setup_kalshi_rfq_recorder.sh`. No env in the script can arm quoting.
 
 ## Running

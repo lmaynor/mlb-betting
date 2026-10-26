@@ -770,5 +770,6 @@ def test_recorder_job_script_and_image_wiring():
     assert "production-readonly" in sh and "KALSHI_RFQ_MODE=record" in sh
     assert "KALSHI_RFQ_LIVE" not in sh                                # no way to arm quoting from the provisioning script
     assert "--max-retries=0" in sh
+    assert "kalshi-demo-api-key-id" in sh and 'SCHED=""' in sh      # demo variant: own secrets, no scheduler
     assert "kalshi_rfq_daemon.py" in open(os.path.join(root, "Dockerfile"), encoding="utf-8").read()
     assert "websockets==" in open(os.path.join(root, "requirements.txt"), encoding="utf-8").read()
