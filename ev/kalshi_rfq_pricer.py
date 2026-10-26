@@ -177,6 +177,8 @@ class InMemoryFairBook:
     def __init__(self, hot_ttl_sec: float = 300.0, clock: Callable[[], float] = time.time):
         self._legs: dict[str, LegFairValue] = {}
         self._hot: dict[str, float] = {}            # game_key -> hot-until epoch
+        self._prop_indices: dict = {}               # sport -> ev.kalshi_rfq_props.PropFairIndex (ticker-resolved player props)
+        self._dyn: dict[str, tuple] = {}            # per-attach cache: ticker -> (leg | None, why); misses are cached too
         self.hot_ttl_sec, self._clock = hot_ttl_sec, clock
 
     def __len__(self) -> int:
@@ -191,6 +193,34 @@ class InMemoryFairBook:
         now = self._clock() if now is None else now
         return self.replace_all([lf for lf in (leg_from_row(r, now) for r in rows) if lf is not None])
 
+    def attach_prop_indices(self, indices: dict) -> None:
+        """Swap in the per-sport prop indices (and drop the resolution cache, which is only valid for one set of indices)."""
+        self._dyn = {}
+        self._prop_indices = dict(indices or {})
+
+    def _resolve_prop(self, ticker: str):
+        return self._resolve_prop_why(ticker)[0]
+
+    def _resolve_prop_why(self, ticker: str) -> tuple:
+        if ticker in self._dyn:
+            return self._dyn[ticker]
+        out: tuple = (None, "not_a_prop_ticker")
+        if self._prop_indices:
+            from ev.kalshi_props import ParsedPropTicker, parse_prop_ticker
+            parsed = parse_prop_ticker(ticker)
+            if not isinstance(parsed, ParsedPropTicker):
+                out = (None, "not_a_prop_ticker")
+            elif parsed.sport not in self._prop_indices:
+                out = (None, "no_sport_index")
+            else:
+                out = self._prop_indices[parsed.sport].resolve_why(parsed)
+        self._dyn[ticker] = out
+        return out
+
+    def why_unmapped(self, ticker: str) -> str | None:
+        """Why a ticker has no fair value ('no_game', 'no_player', 'no_rung', 'not_a_prop_ticker', ...), for the tape."""
+        return None if ticker in self._legs else self._resolve_prop_why(ticker)[1]
+
     def upsert(self, leg: LegFairValue) -> None:
         self._legs[leg.ticker] = leg
 
@@ -204,6 +234,8 @@ class InMemoryFairBook:
 
     def get(self, ticker: str, now: float | None = None) -> LegFairValue | None:
         leg = self._legs.get(ticker)
+        if leg is None:
+            leg = self._resolve_prop(ticker)          # direct feed rows win; otherwise resolve a player prop from its ticker
         if leg is None:
             return None
         return replace(leg, is_hot_scratch=True) if self.is_hot(leg.game_key, now) else leg
@@ -374,6 +406,8 @@ class KalshiRFQPricer:
             if bad is None and l.side not in ("yes", "no"):
                 bad, bad_side = f"unknown side {l.side!r}", True
             status.append({"ticker": l.ticker, "status": bad or "OK"})
+            if bad == REJ_UNMAPPED_TICKER:
+                status[-1]["why"] = self.book.why_unmapped(l.ticker)
             hot = hot or bad == REJ_HOT_LINEUP_SCRATCH
             if bad is None:
                 resolved.append((fv, l.side, fv.p_true_yes if l.side == "yes" else 1.0 - fv.p_true_yes))

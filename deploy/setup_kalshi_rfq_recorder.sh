@@ -74,7 +74,7 @@ done
 flags=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
   --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest,${SECRET_MAP}"
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},KALSHI_RFQ_ENV=${RFQ_ENV},KALSHI_RFQ_MODE=record,KALSHI_RFQ_TAPE_PREFIX=${TAPE_PREFIX},KALSHI_RFQ_MAX_UNPRICED_LEGS=${MAX_UNPRICED_LEGS},KALSHI_RFQ_GAME_SPORTS=nfl:nba"
+  --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},KALSHI_RFQ_ENV=${RFQ_ENV},KALSHI_RFQ_MODE=record,KALSHI_RFQ_TAPE_PREFIX=${TAPE_PREFIX},KALSHI_RFQ_MAX_UNPRICED_LEGS=${MAX_UNPRICED_LEGS},KALSHI_RFQ_GAME_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_MARKETS=h2h:spreads:totals,KALSHI_RFQ_PROP_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_BUDGET=${GAME_BUDGET:-120}"
   --command="python"
   --args="scripts/kalshi_rfq_daemon.py,--mode,record,--env,${RFQ_ENV},--max-runtime-sec,${MAX_RUNTIME_SEC}"
   --memory=512Mi --cpu=1 --task-timeout=${TASK_TIMEOUT} --max-retries=0 --parallelism=1 --tasks=1 --quiet

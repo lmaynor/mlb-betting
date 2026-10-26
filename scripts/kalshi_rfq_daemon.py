@@ -35,6 +35,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ev.kalshi_game_legs import fetch_game_rows  # noqa: E402
+from ev.kalshi_rfq_props import load_all_prop_indices  # noqa: E402
 from ev.kalshi_rfq_pricer import (  # noqa: E402
     InMemoryFairBook, KalshiRFQPricer, PricerConfig, load_feed_rows,
 )
@@ -93,9 +94,12 @@ class FeedState:
     and the game-winner slate pulls (1 ParlayAPI credit per sport per pull, every --game-reload-sec). Each refresh swaps the
     whole book atomically with the latest rows of BOTH."""
 
-    def __init__(self, book: InMemoryFairBook, feed: str, hot_file: str | None, game_client=None, game_sports=()):
+    def __init__(self, book: InMemoryFairBook, feed: str, hot_file: str | None, game_client=None, game_sports=(),
+                 prop_sports=(), game_markets=("h2h", "spreads", "totals"), prop_loader=None):
         self.book, self.feed, self.hot_file = book, feed, hot_file
         self.game_client, self.game_sports = game_client, tuple(game_sports)
+        self.prop_sports, self.game_markets = tuple(prop_sports), tuple(game_markets)
+        self._prop_loader = prop_loader or load_all_prop_indices
         self.props_rows: list[dict] = []
         self.game_rows: list[dict] = []
 
@@ -108,14 +112,28 @@ class FeedState:
         return n
 
     def refresh_props(self) -> int:
-        rows, published = load_feed_rows(self.feed)
-        self.props_rows = [dict(r, updated_ts=published) for r in rows] if published else rows
+        """Props = the sweep file's Kalshi-joined NFL rows (direct tickers) PLUS the banked NFL/NBA/NHL prop feeds indexed for
+        resolution from the ticker alone (zero ParlayAPI credits). Either may be missing; the other still loads."""
+        err = None
+        try:
+            rows, published = load_feed_rows(self.feed)
+            self.props_rows = [dict(r, updated_ts=published) for r in rows] if published else rows
+        except Exception as e:                             # noqa: BLE001
+            err = e
+            log.warning("props file %s unavailable: %r", self.feed, e)
+        if self.prop_sports:
+            indices, stats = self._prop_loader(self.prop_sports)
+            if indices:                                    # keep the previous indices if every sport failed this time
+                self.book.attach_prop_indices(indices)
+            log.info("prop indices: %s", json.dumps(stats, default=str))
+        elif err is not None:
+            raise err
         return self._apply()
 
     def refresh_games(self) -> int:
         if self.game_client is None or not self.game_sports:
             return len(self.book)
-        rows, stats = fetch_game_rows(self.game_client, self.game_sports, time.time())
+        rows, stats = fetch_game_rows(self.game_client, self.game_sports, time.time(), self.game_markets)
         if rows:                                           # a failed pull keeps the previous rows (staleness gate ages them out)
             self.game_rows = rows
         log.info("game legs: %d rows | %s", len(rows), json.dumps(stats, default=str))
@@ -150,8 +168,20 @@ async def amain(args) -> int:
     log.info("RFQ daemon: env=%s mode=%s client=%s", rfq_env, mode, type(client).__name__)
     book = InMemoryFairBook()
     game_client, game_sports = make_game_client(
-        args.game_sports if args.game_sports is not None else os.environ.get("KALSHI_RFQ_GAME_SPORTS", "nfl,nba"))
-    feed = FeedState(book, args.feed, args.hot_games_file, game_client, game_sports)
+        args.game_sports if args.game_sports is not None else os.environ.get("KALSHI_RFQ_GAME_SPORTS", "nfl,nba,nhl"))
+    prop_sports = tuple(x for x in (args.prop_sports if args.prop_sports is not None else os.environ.get(
+        "KALSHI_RFQ_PROP_SPORTS", "nfl,nba,nhl")).replace(":", ",").replace(";", ",").replace(" ", "").split(",") if x)
+    game_markets = tuple(x for x in (args.game_markets or os.environ.get("KALSHI_RFQ_GAME_MARKETS", "h2h,spreads,totals"))
+                         .replace(":", ",").replace(";", ",").replace(" ", "").split(",") if x)
+    # ParlayAPI bills 1 credit per market per sport per pull. Stretch the cadence to honour a daily budget instead of burning the pool.
+    budget = args.max_daily_game_credits if args.max_daily_game_credits is not None else float(
+        os.environ.get("KALSHI_RFQ_GAME_BUDGET", "120"))
+    per_pull = max(len(game_sports) * len(game_markets), 1)
+    args.game_reload_sec = max(args.game_reload_sec, per_pull * 86400.0 / max(budget, 1.0))
+    log.info("game legs: %d sports x %d markets = %d credits/pull, every %.0fs = ~%.0f credits/day (budget %.0f); props from %s",
+             len(game_sports), len(game_markets), per_pull, args.game_reload_sec, per_pull * 86400.0 / args.game_reload_sec,
+             budget, list(prop_sports))
+    feed = FeedState(book, args.feed, args.hot_games_file, game_client, game_sports, prop_sports, game_markets)
     for what, fn in (("props", feed.refresh_props), ("games", feed.refresh_games)):
         try:
             log.info("fair book after %s refresh: %d legs", what, fn())
@@ -277,8 +307,15 @@ def main(argv=None) -> int:
     ap.add_argument("--reload-sec", type=float, default=60.0)
     ap.add_argument("--game-sports", default=None,
                     help="comma list of nfl,nba,nhl game-winner legs priced from ParlayAPI h2h (needs PARLAY_API_KEY; 1 credit/"
-                         "sport/pull). Default $KALSHI_RFQ_GAME_SPORTS or nfl,nba; '' disables")
-    ap.add_argument("--game-reload-sec", type=float, default=3600.0, help="slate pull cadence (credits: sports * 86400/N per day)")
+                         "sport/pull). Default $KALSHI_RFQ_GAME_SPORTS or nfl,nba,nhl; '' disables")
+    ap.add_argument("--game-markets", default=None, help="ParlayAPI game markets to pull (default $KALSHI_RFQ_GAME_MARKETS or "
+                    "h2h,spreads,totals; 1 credit per market per sport per pull)")
+    ap.add_argument("--game-reload-sec", type=float, default=3600.0,
+                    help="minimum slate pull cadence; stretched automatically to fit --max-daily-game-credits")
+    ap.add_argument("--max-daily-game-credits", type=float, default=None,
+                    help="ParlayAPI credit budget per day for game legs (default $KALSHI_RFQ_GAME_BUDGET or 120)")
+    ap.add_argument("--prop-sports", default=None, help="comma list of nfl,nba,nhl banked prop feeds indexed for ticker resolution "
+                    "(zero credits; default $KALSHI_RFQ_PROP_SPORTS or nfl,nba,nhl; '' disables)")
     ap.add_argument("--max-unpriced-legs", type=int, default=None,
                     help="drop up to N unpriceable legs from a combo and price the rest as an upper bound (default "
                          "$KALSHI_RFQ_MAX_UNPRICED_LEGS or 0 = strict)")

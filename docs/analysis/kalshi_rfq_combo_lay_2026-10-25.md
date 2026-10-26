@@ -103,6 +103,35 @@ game winners (NFL/NBA/NCAAF/NHL), the feed was NFL player props. Widening the ga
   (the slate is upcoming games), and NBA props have no mapper. That is a timing/coverage limit of replaying, not a verdict;
   a fresh run is the test. Remaining gap: a Kalshi NBA prop mapper + NBA prop consensus (the bulk of the long combos).
 
+## Multi-sport props, spreads and totals (2026-10-26)
+The demo flow is ~78% NBA player props plus game winners/spreads/totals, so the fair book now resolves those from the TICKER alone
+(no Kalshi REST catalog, which is 403'd on Cloud Run egress and would be dozens of calls):
+* `ev/kalshi_props.py`: `parse_prop_ticker` (`<SERIES>-<YYMONDD><AWAY><HOME>-<TEAM><INITIAL><SURNAME><JERSEY>-<N>`, N+ == Over N-0.5),
+  `kalshi_player_codes` / `match_player_code` (first initial + surname letters; hyphens vanish; Kalshi DROPS non-ASCII letters,
+  Nygard -> NYGRD; exactly one match or None), `register_series`.
+* **Series verified against the public API 2026-10-26** (the spec's guesses for NHL/NBA were mostly wrong): NFL `PASSYDS RSHYDS RECYDS
+  REC PASSTDS PASSINT PASSATT TD`; NBA `PTS REB AST 3PT PRA STL BLK`; NHL `GOAL PTS AST SAVE`. They do NOT exist: `KXNHLSOG/SHOTS/BLK`,
+  `KXNBAPR/PA/RA`, `KXNFLANYTD`. `KXNFLTD` maps only the 1+ rung (anytime TD has no two-sided book market, so it stays unpriced).
+* `ev/kalshi_rfq_props.py`: `PropFairIndex` built from `ev.daily_projections.load_events` (ParlayAPI bank + BettingPros live; ZERO credits).
+  Exact rung with >= 2 two-sided books -> their de-vigged median; otherwise `ev.odds_board.fit_curve` over the player's rungs
+  (pooled=True; interpolates, extrapolates at most the anchors' own span; flat curve never extrapolates); a single-book rung comes back
+  with n_books=1 so the gate says LOW_BOOKS. Ambiguous player code, a team hint that contradicts the ticker, an unresolvable team, a
+  started game -> None. DFS and Kalshi never enter a consensus. Misses carry a reason in the tape (`why`: no_game / no_player /
+  ambiguous_player / team_mismatch / no_stat / no_rung).
+* `InMemoryFairBook.get` falls back to the index for any prop ticker (cached; cache cleared on `attach_prop_indices`).
+* `ev/kalshi_game_legs.py` now also emits `KX<LG>SPREAD-<tail>-<CODE><N>` (CODE -(N-0.5), de-vigged vs the other side) and
+  `KX<LG>TOTAL-<tail>-<N>` (Over N-0.5). NHL totals are never emitted (`NHL.disabled`: shootout counts as a goal on Kalshi).
+  Half-point lines only. NHL crosswalk added (repo LAK/NJD/SJS/TBL -> Kalshi LA/NJ/SJ/TB; the earlier game-winner loader was
+  silently dropping those games).
+* **Live check against ~2,000 OPEN Kalshi prop markets**: resolvable share is roughly 10-25% per series (e.g. NBA points 61 of 346,
+  NHL points 57 of 132). The misses are mostly `no_rung`: Kalshi lists every N for a player while books quote a few rungs and the curve
+  will not extrapolate past its own span; that is the intended fail-closed behaviour, and exactly the "some legs fail, not all" regime.
+* **Credits**: game pulls cost 1 credit PER MARKET per sport (3 markets x 3 sports = 9/pull). The daemon now honours a daily budget
+  (`--max-daily-game-credits`, default 120) by stretching the pull cadence (9 credits/pull -> every ~1.8 h). Props cost nothing.
+  Game lines are NOT banked for NFL/NBA/NHL (only MLB, paused), so there is no zero-credit source for them.
+* Prop freshness is whatever the banks give: `odds-bank-{nba,nhl}-props` run twice a day, `bp-live-*` hourly in season. The
+  index stamps `updated_ts` from the feed's own age, so a stale bank is rejected by the staleness gate, not silently priced.
+
 ## Running it in GCP (read-only recorder)
 `deploy/setup_kalshi_rfq_recorder.sh` provisions Cloud Run Job `mlb-kalshi-rfq-recorder` (`--env production-readonly --mode record`)
 plus a daily scheduler (10:00 UTC). One ~23h40m execution per day: the daemon exits cleanly at `--max-runtime-sec` and the

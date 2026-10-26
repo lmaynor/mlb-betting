@@ -628,7 +628,7 @@ def test_recorder_writes_tape_and_schedules_followup(tmp_path):
 
 # ------------------------------------------------------------------------------------------ hygiene
 @pytest.mark.parametrize("path", ["mlb/execution/kalshi/rfq_client.py", "mlb/execution/kalshi/rfq_maker.py",
-                                  "ev/kalshi_rfq_pricer.py", "scripts/kalshi_rfq_daemon.py", "tests/test_kalshi_rfq.py", "ev/kalshi_game_legs.py"])
+                                  "ev/kalshi_rfq_pricer.py", "scripts/kalshi_rfq_daemon.py", "tests/test_kalshi_rfq.py", "ev/kalshi_game_legs.py", "ev/kalshi_rfq_props.py", "ev/kalshi_props.py", "ev/sports/__init__.py"])
 def test_new_files_are_ascii_only(path):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, path), encoding="utf-8") as fh:
@@ -910,3 +910,212 @@ def test_daemon_game_sports_parsing_and_feed_state(monkeypatch):
     assert fs.refresh_games() == 3                                          # 1 prop leg + 2 game legs in ONE swap
     fs.props_rows = []
     assert fs.refresh_games() == 2
+
+
+# ------------------------------------------------------------------------------------------ multi-sport props + spreads/totals
+def test_parse_prop_ticker_real_kalshi_grammar():
+    from ev.kalshi_props import MapFail, parse_prop_ticker
+    p = parse_prop_ticker("KXNBA3PT-26OCT25DETPHI-DETDROBINSON55-1")
+    assert (p.sport, p.team, p.player_code, p.jersey, p.stat, p.n, p.strike) == ("nba", "DET", "drobinson", "55", "threes", 1, 0.5)
+    assert p.game_key == "nba:2026-10-25:DET@PHI"
+    p = parse_prop_ticker("KXNBAAST-26OCT25LACOKC-OKCSGILGEOUSALEXANDER2-8")           # hyphen in the surname vanishes
+    assert (p.team, p.player_code, p.strike) == ("OKC", "sgilgeousalexander", 7.5)
+    p = parse_prop_ticker("KXNFLRECYDS-26OCT25KCSEA-SEAJSMITHNJIGBA11-50")
+    assert (p.sport, p.team, p.stat, p.strike, p.game_key) == ("nfl", "SEA", "rec_yds", 49.5, "nfl:2026-10-25:KC@SEA")
+    p = parse_prop_ticker("KXNHLPTS-26OCT26DETEDM-DETMBRANDSEGGNYGRD28-2")
+    assert (p.sport, p.stat, p.player_code, p.strike) == ("nhl", "points", "mbrandseggnygrd", 1.5)
+    assert parse_prop_ticker("KXNFLTD-26OCT25KCSEA-KCPMAHOMES15-1").strike == 0.5
+    for bad in ("KXNFLTD-26OCT26DALPHI-DALLSCHOONMAKER86-2",          # only the 1+ rung maps for anytime TD
+                "KXNBAGAME-26OCT25DETPHI-PHI",                        # not a prop ticker
+                "KXNHLSOG-26OCT26DETEDM-DETMBRANDSEGGNYGRD28-3",      # series that does not exist on Kalshi
+                "KXNBAPTS-26OCT25DETPHI-BOSJTATUM0-25",               # player token starts with neither team
+                "KXNBAPTS-26OCT25DETPHI-DETDROBINSON55-0",
+                "KXNBAPTS-26XXX25DETPHI-DETDROBINSON55-5"):
+        assert isinstance(parse_prop_ticker(bad), MapFail), bad
+
+
+def test_match_player_code_fails_closed():
+    from ev.kalshi_props import kalshi_player_codes, match_player_code
+    assert match_player_code("PHI", "tmaxey", ["tyrese maxey", "jared mccain"]) == "tyrese maxey"
+    assert match_player_code("OKC", "sgilgeousalexander", ["shai gilgeous alexander"]) == "shai gilgeous alexander"
+    assert match_player_code("DET", "jwilliams", ["jaylin williams", "jalen williams"]) is None        # two J. Williams: never guess
+    assert match_player_code("DET", "zzz", ["jalen brunson"]) is None
+    assert match_player_code("DET", "", ["jalen brunson"]) is None
+    # Kalshi drops non-ASCII letters (Nygard -> NYGRD) where the folded name keeps the 'a'
+    assert match_player_code("DET", "mbrandseggnygrd", ["michael brandsegg nygard"],
+                             {"michael brandsegg nygard": "Michael Brandsegg-Nyg\u00e5rd"}) == "michael brandsegg nygard"
+    assert "jjacksonjr" in kalshi_player_codes("jaren jackson", "Jaren Jackson Jr.")
+
+
+def _nba_event(home, away, player, stat_key, points, books=("draftkings", "fanduel", "betmgm"), over=-110, under=-110, prices=None):
+    out = []
+    for b in books:
+        outs = []
+        for pt in points:
+            o, u = (prices or {}).get(pt, (over, under))
+            outs += [{"name": "Over", "description": player, "price": o, "point": pt},
+                     {"name": "Under", "description": player, "price": u, "point": pt}]
+        out.append({"key": b, "markets": [{"key": stat_key, "outcomes": outs}]})
+    return {"id": "x", "home_team": home, "away_team": away, "commence_time": "2026-10-27T00:00:00Z", "bookmakers": out}
+
+
+def _prop_book(events_by_sport, now_dt):
+    from ev.kalshi_rfq_props import build_sport_prop_index
+    b = InMemoryFairBook(clock=lambda: NOW)
+    idx = {sp: build_sport_prop_index(sp, evs, now_dt, NOW)[0] for sp, evs in events_by_sport.items()}
+    b.attach_prop_indices(idx)
+    return b
+
+
+def test_prop_index_resolves_exact_curve_and_thin_rungs_from_the_ticker():
+    from datetime import datetime, timezone
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    ev = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum", "player_points", [22.5, 24.5, 26.5],
+                    prices={22.5: (-160, 135), 24.5: (-110, -110), 26.5: (135, -160)})
+    ev["bookmakers"][2]["markets"][0]["outcomes"] = [o for o in ev["bookmakers"][2]["markets"][0]["outcomes"] if o["point"] == 24.5]
+    thin = _nba_event("Milwaukee Bucks", "Boston Celtics", "Derrick White", "player_points", [12.5], books=("fanduel",))
+    ev["bookmakers"] += thin["bookmakers"]
+    ev["bookmakers"][-1]["markets"][0]["outcomes"] = [dict(o, description="Derrick White") for o in ev["bookmakers"][-1]["markets"][0]["outcomes"]]
+    b = _prop_book({"nba": [ev]}, now_dt)
+    exact = b.get("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25", NOW)                        # 25+ == Over 24.5
+    assert exact.stat == "points" and not exact.pooled and exact.n_books == 3 and exact.p_cons_yes == pytest.approx(0.5)
+    assert exact.player_norm == "jayson tatum" and exact.market_class == "player_prop"
+    far = b.get("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-28", NOW)                          # 27.5: only the curve can speak (anchors 22.5..26.5)
+    assert far is not None and far.pooled and far.n_books >= 2 and far.p_cons_yes <= 0.5
+    assert b.get("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-60", NOW) is None                  # far beyond the curve's span: unmapped
+    assert b.why_unmapped("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-60") == "no_rung"
+    assert b.get("KXNBAPTS-26OCT26BOSMIL-BOSDWHITE9-13", NOW).n_books == 1             # thin leg is returned so the gate says LOW_BOOKS
+    assert b.why_unmapped("KXNBAPTS-26OCT26BOSMIL-BOSXNOBODY1-10") == "no_player"
+    assert b.why_unmapped("KXNBAPTS-26OCT27BOSMIL-BOSJTATUM0-25") == "no_game"
+    assert b.why_unmapped("KXNBAREB-26OCT26BOSMIL-BOSJTATUM0-8") == "no_stat"
+
+
+def test_prop_index_team_hint_and_started_games_fail_closed():
+    from datetime import datetime, timezone
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    ev = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum (BOS)", "player_points", [24.5])
+    b = _prop_book({"nba": [ev]}, now_dt)
+    assert b.get("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25", NOW) is not None
+    assert b.get("KXNBAPTS-26OCT26BOSMIL-MILJTATUM0-25", NOW) is None                  # books say BOS; the ticker says MIL
+    assert b.why_unmapped("KXNBAPTS-26OCT26BOSMIL-MILJTATUM0-25") == "team_mismatch"
+    late = datetime(2026, 10, 27, 1, tzinfo=timezone.utc)                              # tip-off has passed: no live pricing
+    assert _prop_book({"nba": [ev]}, late).get("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25", NOW) is None
+
+
+def test_two_players_sharing_a_code_on_one_team_are_not_guessed():
+    from datetime import datetime, timezone
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    ev = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jaylin Williams", "player_points", [10.5])
+    other = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jalen Williams", "player_points", [18.5])
+    ev["bookmakers"][0]["markets"][0]["outcomes"] += other["bookmakers"][0]["markets"][0]["outcomes"]
+    b = _prop_book({"nba": [ev]}, now_dt)
+    assert b.get("KXNBAPTS-26OCT26BOSMIL-BOSJWILLIAMS5-11", NOW) is None
+    assert b.why_unmapped("KXNBAPTS-26OCT26BOSMIL-BOSJWILLIAMS5-11") == "ambiguous_player"
+
+
+def test_nba_prop_and_game_winner_combo_is_quoted_with_nothing_unpriced():
+    from datetime import datetime, timezone
+    from ev.kalshi_game_legs import slate_rows
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    e1 = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum", "player_points", [24.5])
+    e2 = _nba_event("Denver Nuggets", "Los Angeles Lakers", "Nikola Jokic", "player_rebounds", [11.5])
+    b = _prop_book({"nba": [e1, e2]}, now_dt)
+    game = {"id": "g", "home_team": "Phoenix Suns", "away_team": "Golden State Warriors", "commence_time": "2026-10-27T02:00:00Z",
+            "bookmakers": [{"key": k, "markets": [{"key": "h2h", "outcomes": [{"name": "Phoenix Suns", "price": 140},
+                                                                              {"name": "Golden State Warriors", "price": -160}]}]}
+                           for k in ("draftkings", "fanduel", "betmgm")]}
+    rows, _ = slate_rows([game], "nba", NOW)
+    b.load_rows(rows, NOW)
+    legs = ["KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25", "KXNBAREB-26OCT26LALDEN-DENNJOKIC15-12", "KXNBAGAME-26OCT26GSWPHX-PHX"]
+    d = KalshiRFQPricer(b).price(combo_rfq(legs, contracts=20), NOW)
+    assert d.quoted and d.notes["n_unpriced"] == 0 and d.notes["n_priced"] == 3
+    assert d.yes_bid == 0.0 and d.no_bid > 0.0
+
+
+def test_unmapped_leg_status_carries_the_reason():
+    from datetime import datetime, timezone
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    b = _prop_book({"nba": [_nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum", "player_points", [24.5])]}, now_dt)
+    d = KalshiRFQPricer(b).price(combo_rfq(["KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25", "KXNBAPTS-26OCT26BOSMIL-BOSZZZ1-10"]), NOW)
+    assert [x["status"] for x in d.notes["legs_status"]] == ["OK", "REJ_UNMAPPED_TICKER"]
+    assert d.notes["legs_status"][1]["why"] == "no_player"
+
+
+def _full_event(home, away, commence="2026-10-26T00:20:00Z"):
+    def book(key):
+        return {"key": key, "markets": [
+            {"key": "h2h", "outcomes": [{"name": home, "price": -150}, {"name": away, "price": 130}]},
+            {"key": "spreads", "outcomes": [{"name": home, "price": -110, "point": -3.5}, {"name": away, "price": -110, "point": 3.5},
+                                            {"name": home, "price": 150, "point": -3.0}, {"name": away, "price": -170, "point": 3.0}]},
+            {"key": "totals", "outcomes": [{"name": "Over", "price": -110, "point": 47.5}, {"name": "Under", "price": -110, "point": 47.5},
+                                           {"name": "Over", "price": -105, "point": 48.0}, {"name": "Under", "price": -115, "point": 48.0}]}]}
+    return {"id": "e", "home_team": home, "away_team": away, "commence_time": commence,
+            "bookmakers": [book(k) for k in ("draftkings", "fanduel", "betmgm")]}
+
+
+def test_slate_rows_emit_spreads_and_totals_with_kalshi_grammar():
+    from ev.kalshi_game_legs import slate_rows
+    rows, stats = slate_rows([_full_event("Kansas City Chiefs", "Buffalo Bills")], "nfl", NOW)
+    by = {r["ticker"]: r for r in rows}
+    assert "KXNFLGAME-26OCT25BUFKC-KC" in by
+    sp = by["KXNFLSPREAD-26OCT25BUFKC-KC4"]                          # KC -3.5  ==  "KC wins by over 3.5"  == strike N=4
+    assert sp["market_class"] == "game_spread" and sp["strike"] == 3.5 and sp["n_books"] == 3
+    assert sp["p_yes"] == pytest.approx(0.5)                           # -110/-110 de-vigs to a coin flip
+    tot = by["KXNFLTOTAL-26OCT25BUFKC-48"]                           # Over 47.5 == strike N=48
+    assert tot["market_class"] == "game_total" and tot["strike"] == 47.5 and tot["p_yes"] == pytest.approx(0.5)
+    assert not any(t.endswith("-3") or t.endswith("-KC3") or t.endswith("-49") for t in by)    # whole-number lines never map
+    assert stats["spread_rows"] == 1 and stats["total_rows"] == 1
+    legs = [leg_from_row(r, NOW) for r in rows]
+    assert {l.market_class for l in legs} == {"game_ml", "game_spread", "game_total"}
+
+
+def test_nhl_totals_are_never_emitted_and_the_crosswalk_maps_los_angeles():
+    from ev.kalshi_game_legs import slate_rows
+    from ev.sports import kalshi_code
+    assert kalshi_code("nhl", "LAK") == "LA" and kalshi_code("nhl", "TBL") == "TB" and kalshi_code("nhl", "VGK") == "VGK"
+    assert kalshi_code("nhl", "XXX") is None and kalshi_code("nfl", "JAC") == "JAC"
+    rows, stats = slate_rows([_full_event("Los Angeles Kings", "Toronto Maple Leafs")], "nhl", NOW)
+    tickers = {r["ticker"] for r in rows}
+    assert not any(t.startswith("KXNHLTOTAL") for t in tickers) and stats["total_rows"] == 0
+    assert any(t.startswith("KXNHLGAME-26OCT25TORLA-") for t in tickers)             # Kalshi code LA, not LAK
+    assert any(t.startswith("KXNHLSPREAD-26OCT25TORLA-LA4") for t in tickers)
+
+
+def test_fetch_game_rows_requests_all_markets_by_default():
+    from ev.kalshi_game_legs import fetch_game_rows
+    seen = []
+
+    class C:
+        def get_slate(self, key, markets=None):
+            seen.append(markets)
+            return []
+    fetch_game_rows(C(), ["nfl"], NOW)
+    fetch_game_rows(C(), ["nfl"], NOW, markets=("h2h",))
+    assert seen == [["h2h", "spreads", "totals"], ["h2h"]]
+
+
+def test_feed_state_loads_prop_indices_and_survives_a_missing_props_file():
+    d = _daemon()
+    book = InMemoryFairBook(clock=lambda: NOW)
+    calls = []
+
+    def loader(sports):
+        calls.append(tuple(sports))
+        return {}, {"nba": {"events": 0}}
+    fs = d.FeedState(book, "/nonexistent/latest.json", None, prop_sports=("nba", "nhl"), prop_loader=loader)
+    assert fs.refresh_props() == 0 and calls == [("nba", "nhl")]                     # props file missing: logged, not fatal
+    strict = d.FeedState(book, "/nonexistent/latest.json", None)
+    with pytest.raises(Exception):
+        strict.refresh_props()                                                       # no prop sports and no file: nothing to load
+
+
+def test_attach_prop_indices_clears_the_resolution_cache():
+    from datetime import datetime, timezone
+    now_dt = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    b = _prop_book({}, now_dt)
+    t = "KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-25"
+    assert b.get(t, NOW) is None
+    from ev.kalshi_rfq_props import build_sport_prop_index
+    ev = _nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum", "player_points", [24.5])
+    b.attach_prop_indices({"nba": build_sport_prop_index("nba", [ev], now_dt, NOW)[0]})
+    assert b.get(t, NOW) is not None                                                 # the earlier miss was not remembered
