@@ -82,6 +82,29 @@ satisfy it and vice versa). Tape goes to `data/kalshi_rfq/production/`. The prod
 Going live on the DEMO exchange is therefore `KALSHI_RFQ_MODE=live KALSHI_RFQ_LIVE=1`, no code change. There is
 deliberately NO env that enables quoting on production: that is a code change plus the verification list below.
 
+## Running it in GCP (read-only recorder)
+`deploy/setup_kalshi_rfq_recorder.sh` provisions Cloud Run Job `mlb-kalshi-rfq-recorder` (`--env production-readonly --mode record`)
+plus a daily scheduler (10:00 UTC). One ~23h40m execution per day: the daemon exits cleanly at `--max-runtime-sec` and the
+scheduler starts the next, leaving a ~20 min gap. A Job, not a Service: the daemon serves no HTTP port.
+* **Credentials** come from Secret Manager (`kalshi-prod-api-key-id`, `kalshi-prod-private-key`) as env vars
+  (`KALSHI_PROD_PRIVATE_KEY_PEM` holds the PEM, no key file on disk). The script checks the secrets exist and grants the job SA
+  read on exactly those two; it never touches a value. Use a read-only Kalshi key if the UI offers one.
+* **Tape** is written as immutable chunk objects `Kalshi/rfq_tape/production/{UTC day}/{HHMMSS}_{n}.jsonl` (GCS objects are not
+  appendable and the job's disk dies with it), flushed every 30 s and on SIGTERM / clean exit. A failed write keeps the buffer.
+  Every RFQ is recorded (single-market and combo, covered by the fair book or not), so the tape also measures how much of the
+  flow we could even price.
+* **Fails loud**: `max-retries=0`, and if the WebSocket has not connected within 120 s the job raises (`RFQ stream never connected
+  in 120 s`). A `heartbeat:` line every 5 min (connects, RFQs seen, book legs) separates a quiet market from a dead feed.
+* **Open risk -- egress**: Kalshi's CDN has 403'd shared Cloud Run egress IPs before (CONTEXT 15.11; the NFL sweep falls back to a
+  laptop for that reason). The signed API host and the WS host may or may not behave the same. First execution answers it; if
+  blocked, the options are a static egress IP (VPC connector + Cloud NAT) or a small GCE VM. Do not assume it works.
+* **Feed**: `--feed` defaults to `EVSweep/nfl_props/latest.json` (NFL only). Missing at start is tolerated in record mode (raw RFQs
+  are still taped; the reload loop retries).
+* `websockets==14.1` was added to `requirements.txt`, so the next image build re-runs the dependency layer once.
+* **Demo variant** (`RFQ_ENV=demo ./deploy/setup_kalshi_rfq_recorder.sh`): job `mlb-kalshi-rfq-recorder-demo`, secrets `kalshi-demo-api-key-id` /
+  `kalshi-demo-private-key`, no scheduler, 30 min cap, tape under `Kalshi/rfq_tape/demo/`. A plumbing test only (demo has little RFQ flow).
+* Pause: `PAUSE=1 PROJECT_ID=... ./deploy/setup_kalshi_rfq_recorder.sh`. No env in the script can arm quoting.
+
 ## Running
 ```
 pip install websockets                        # only the daemon's stream needs it

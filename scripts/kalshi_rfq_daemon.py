@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import sys
 import time
 
@@ -75,8 +76,13 @@ def load_credentials(env_file: str | None, rfq_env: str = "demo") -> tuple[str, 
             vals.setdefault(k, v)
     if not prod and vals.get("KALSHI_ENV", "demo") != "demo":
         raise SystemExit(f"refusing: KALSHI_ENV={vals.get('KALSHI_ENV')!r} (RFQ quoting is demo-only)")
+    # Cloud Run: the PEM arrives as an env var from Secret Manager (no key file on disk); a file path still works locally.
+    pem_k = "KALSHI_PROD_PRIVATE_KEY_PEM" if prod else "KALSHI_PRIVATE_KEY_PEM"
+    pem_env = os.environ.get(pem_k)
+    if vals.get(id_k) and pem_env:
+        return vals[id_k], pem_env.encode()
     if not (vals.get(id_k) and vals.get(path_k)):
-        raise SystemExit(f"{rfq_env} credentials not found ({id_k} / {path_k})")
+        raise SystemExit(f"{rfq_env} credentials not found ({id_k} / {path_k} or {pem_k})")
     with open(os.path.expanduser(vals[path_k]), "rb") as fh:
         return vals[id_k], fh.read()
 
@@ -102,14 +108,21 @@ async def amain(args) -> int:
     client = RFQReadOnlyClient(key_id, pem) if rfq_env == PROD_READONLY_ENV else RFQClient("demo", key_id, pem)
     log.info("RFQ daemon: env=%s mode=%s client=%s", rfq_env, mode, type(client).__name__)
     book = InMemoryFairBook()
-    n = refresh_book(book, args.feed, args.hot_games_file)
-    log.info("fair book loaded: %d legs from %s", n, args.feed)
+    try:
+        n = refresh_book(book, args.feed, args.hot_games_file)
+        log.info("fair book loaded: %d legs from %s", n, args.feed)
+    except Exception as e:                                 # noqa: BLE001 -- the tape needs no fair book: start empty
+        if mode != "record":
+            raise
+        log.warning("fair book unavailable at start (%r): recording raw RFQs with an empty book; reload retries", e)
     pricer = KalshiRFQPricer(book, PricerConfig(allow_same_game_combos=args.allow_same_game,
                                                 quote_single_leg=args.quote_single_leg))
     loop = asyncio.get_running_loop()
     tape_dir = args.tape_dir or ("data/kalshi_rfq" if rfq_env == "demo" else "data/kalshi_rfq/production")
+    tape_prefix = args.tape_gcs_prefix or os.environ.get("KALSHI_RFQ_TAPE_PREFIX") or None
+    tape = RFQTape(tape_dir, storage_prefix=tape_prefix)
     if mode == "record":
-        handler = RFQRecorder(pricer, RFQTape(tape_dir), client,
+        handler = RFQRecorder(pricer, tape, client,
                               schedule=lambda delay, fn: loop.call_later(delay, lambda: loop.run_in_executor(None, fn)))
         maker = None
     else:
@@ -120,7 +133,10 @@ async def amain(args) -> int:
         if gate.killed:
             log.error("RFQ kill switch is SET (%s); no quotes until reset", gate.kill_reason)
 
+    seen = {"n": 0}
+
     async def on_event(typ, msg, ts):                      # REST calls block: keep them off the event loop
+        seen["n"] += typ == "rfq_created"
         await asyncio.to_thread(handler.on_event, typ, msg, ts)
 
     stream = KalshiRFQStream(rfq_env, key_id, load_private_key(pem), on_event)
@@ -142,10 +158,46 @@ async def amain(args) -> int:
             except Exception as e:                         # noqa: BLE001 -- keep the last good book; staleness gate rejects
                 log.warning("fair book reload failed (keeping previous): %r", e)
 
+    async def flusher():
+        while True:
+            await asyncio.sleep(max(5.0, tape.flush_sec / 2))
+            await asyncio.to_thread(tape.flush)
+
+    async def watchdog():
+        """Fail LOUD instead of idling silently: no WebSocket connection within 120 s means blocked egress (Kalshi's CDN
+        403s some shared cloud IPs) or bad credentials. Then a heartbeat so a quiet market is distinguishable from a dead feed."""
+        await asyncio.sleep(120)
+        if stream.connects == 0:
+            raise RuntimeError("RFQ stream never connected in 120 s: egress blocked or credentials rejected")
+        while True:
+            log.info("heartbeat: connects=%d rfqs_seen=%d book_legs=%d", stream.connects, seen["n"], len(book))
+            await asyncio.sleep(300)
+
+    async def deadline():
+        if args.max_runtime_sec:
+            await asyncio.sleep(args.max_runtime_sec)
+            log.info("max runtime %.0fs reached: exiting cleanly so the scheduler can start a fresh execution",
+                     args.max_runtime_sec)
+        else:
+            await asyncio.Event().wait()
+
+    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), flusher(), watchdog()))
+    stop_task = asyncio.ensure_future(deadline())
+    for sig in (signal.SIGTERM, signal.SIGINT):            # Cloud Run sends SIGTERM on shutdown: flush the tape first
+        try:
+            loop.add_signal_handler(sig, stop_task.cancel)
+        except (NotImplementedError, RuntimeError):
+            pass
     try:
-        await asyncio.gather(stream.run(), poll(), reload())
+        done, _ = await asyncio.wait({main_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+        if main_task in done:
+            main_task.result()                             # re-raise a watchdog / stream failure
     finally:
         stream.stop()
+        for t in (main_task, stop_task):
+            t.cancel()
+        await asyncio.gather(main_task, stop_task, return_exceptions=True)
+        await asyncio.to_thread(tape.flush)
         if maker is not None and live:
             log.info("shutdown: cancelled %d open quotes", maker.cancel_all_open_quotes())
     return 0
@@ -161,6 +213,11 @@ def main(argv=None) -> int:
     ap.add_argument("--env-file", default=None)
     ap.add_argument("--db", default=None, help="ledger sqlite (default: KEXEC_DB / ~/.kalshi_exec/ledger.sqlite)")
     ap.add_argument("--tape-dir", default=None, help="default data/kalshi_rfq (production-readonly: data/kalshi_rfq/production)")
+    ap.add_argument("--tape-gcs-prefix", default=None,
+                    help="write the tape as chunk objects under this storage prefix (default $KALSHI_RFQ_TAPE_PREFIX; "
+                         "unset = local JSONL)")
+    ap.add_argument("--max-runtime-sec", type=float, default=0.0,
+                    help="exit cleanly after N seconds (Cloud Run Job: just under the task timeout); 0 = run forever")
     ap.add_argument("--poll-sec", type=float, default=5.0)
     ap.add_argument("--reload-sec", type=float, default=60.0)
     ap.add_argument("--allow-same-game", action="store_true", help="quote same-game combos (SGP); off until shadow markouts")

@@ -719,3 +719,57 @@ def test_daemon_prod_credentials_are_separate_from_demo(tmp_path, monkeypatch):
     assert d.load_credentials(str(env_file), "production-readonly") == ("prod-id", b"PEM")
     with pytest.raises(SystemExit):                                                     # and prod creds don't satisfy demo
         d.load_credentials(str(env_file), "demo")
+
+
+# ------------------------------------------------------------------------------------------ GCP recorder
+def test_tape_chunks_to_storage_and_keeps_records_when_a_write_fails():
+    t = [NOW]
+    writes, fail = [], [True]
+
+    def writer(data, key):
+        if fail[0]:
+            raise OSError("gcs down")
+        writes.append((key, data))
+
+    tape = RFQTape(clock=lambda: t[0], storage_prefix="Kalshi/rfq_tape/production", writer=writer, flush_sec=30)
+    tape.append({"kind": "rfq", "n": 1})
+    assert tape.flush() == 0 and writes == []                       # failed write: nothing lost
+    tape.append({"kind": "rfq", "n": 2})
+    fail[0] = False
+    assert tape.flush() == 2
+    key, data = writes[0]
+    assert key.startswith("Kalshi/rfq_tape/production/2027-01-15/") and key.endswith("_00002.jsonl")
+    assert [json.loads(l)["n"] for l in data.decode().splitlines()] == [1, 2]
+    assert tape.flush() == 0                                        # empty buffer: no empty objects
+    t[0] += 31                                                      # time-based flush on append
+    tape.append({"kind": "rfq", "n": 3})
+    assert len(writes) == 2
+
+
+def test_tape_local_mode_unchanged_and_flush_is_noop(tmp_path):
+    tape = RFQTape(str(tmp_path), clock=lambda: NOW)
+    tape.append({"a": 1})
+    assert tape.flush() == 0 and os.path.exists(tape.path())
+
+
+def test_daemon_reads_pem_from_env_for_cloud_run(monkeypatch):
+    d = _daemon()
+    for k in ("KALSHI_PROD_API_KEY_ID", "KALSHI_PROD_PRIVATE_KEY_PATH", "KEXEC_ENV_FILE", "KALSHI_PROD_PRIVATE_KEY_PEM"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("KALSHI_PROD_API_KEY_ID", "prod-id")
+    monkeypatch.setenv("KALSHI_PROD_PRIVATE_KEY_PEM", "-----BEGIN-----\nabc\n-----END-----")
+    assert d.load_credentials(None, "production-readonly") == ("prod-id", b"-----BEGIN-----\nabc\n-----END-----")
+    with pytest.raises(SystemExit):                                  # the PEM env var is prod-only, never satisfies demo
+        d.load_credentials(None, "demo")
+
+
+def test_recorder_job_script_and_image_wiring():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sh = open(os.path.join(root, "deploy", "setup_kalshi_rfq_recorder.sh"), encoding="utf-8").read()
+    assert sh.isascii()
+    assert "production-readonly" in sh and "KALSHI_RFQ_MODE=record" in sh
+    assert "KALSHI_RFQ_LIVE" not in sh                                # no way to arm quoting from the provisioning script
+    assert "--max-retries=0" in sh
+    assert "kalshi-demo-api-key-id" in sh and 'SCHED=""' in sh      # demo variant: own secrets, no scheduler
+    assert "kalshi_rfq_daemon.py" in open(os.path.join(root, "Dockerfile"), encoding="utf-8").read()
+    assert "websockets==" in open(os.path.join(root, "requirements.txt"), encoding="utf-8").read()

@@ -14,3 +14,5 @@ pytz==2024.2
 scipy==1.15.2
 pybaseball==2.2.7
 gunicorn==23.0.0
+# Kalshi RFQ stream (scripts/kalshi_rfq_daemon.py); lazy-imported, so only the recorder job needs it
+websockets==14.1
