@@ -73,6 +73,14 @@ STAT_KEYS_BY_SPORT = {
         "steals": {"player_steals"}, "blocks": {"player_blocks"}, "turnovers": {"player_turnovers"},
         "stocks": {"player_steals_blocks"}, "minutes": {"player_minutes"},
     },
+    # MLB (2026-10-26): only the odds board reads this table (ev/odds_board.py); the +EV sweep and the projection boards do not
+    # run MLB through ev/props. Keys are the ones the snapshot job requests (nba/config.py PARLAY_PROP_MARKETS["baseball_mlb"]);
+    # player_home_runs is a Yes/No market (one-sided "Yes" at 0.5), the rest are Over/Under.
+    "mlb": {
+        "home_runs": {"player_home_runs"}, "strikeouts": {"player_strikeouts"}, "outs": {"player_outs"},
+        "hits": {"player_hits"}, "total_bases": {"player_total_bases"}, "earned_runs": {"player_earned_runs"},
+        "stolen_bases": {"player_stolen_bases"},
+    },
 }
 _KEY_TO_STAT_BY_SPORT = {sp: {k: st for st, ks in tbl.items() for k in ks} for sp, tbl in STAT_KEYS_BY_SPORT.items()}
 

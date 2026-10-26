@@ -86,7 +86,7 @@ def test_public_odds_board_serves_filters_and_never_computes(monkeypatch):
     gone = pa.get_odds_board("nfl")
     assert gone["status"] == "unavailable" and gone["rows"] == []
     with pytest.raises(ValueError):
-        pa.get_odds_board("mlb")
+        pa.get_odds_board("nhl2")
     with pytest.raises(ValueError):
         pa.get_odds_board("nba", day="10/17/2026")
 
@@ -100,7 +100,7 @@ def test_route_wires_params(monkeypatch):
         assert c.get("/api/public/odds/board?sport=nba&day=2026-10-21&stat=points&limit=50").status_code == 200
         g.assert_called_once_with("nba", day="2026-10-21", stat="points", limit=50)
     with patch("main.get_odds_board", side_effect=ValueError("bad")):
-        assert c.get("/api/public/odds/board?sport=mlb").status_code == 400
+        assert c.get("/api/public/odds/board?sport=nhl2").status_code == 400
 
 
 # ------------------------------------------------------------------------------------- alt lines, curve, row priority
@@ -197,3 +197,59 @@ def test_board_payload_carries_alt_fields_and_summary_counts():
     b = ob.build_board("nba", [event(LADDER)], NOW)
     assert {"is_alt", "modal_point", "curve_fair_over", "curve_n"} <= set(b["rows"][0])
     assert b["summary"]["alt_rows"] == 2 and b["summary"]["curve_rows"] == 3
+
+
+# ------------------------------------------------------------------------------------------------------------- MLB
+MLB_FAIR = [book(b, -115, -105, point=5.5, player="Gerrit Cole", mkey="player_strikeouts")
+            for b in ("draftkings", "fanduel", "betmgm")]
+
+
+def mlb_event(books, eid="m1", start=START):
+    return event(books, start=start, away="New York Yankees", home="Boston Red Sox") | {"id": eid}
+
+
+def test_mlb_board_maps_markets_and_teams():
+    yes = {"key": "caesars", "markets": [{"key": "player_home_runs", "outcomes": [
+        {"name": "Yes", "description": "Aaron Judge", "price": 320, "point": 0.5}]}]}
+    b = ob.build_board("mlb", [mlb_event([*MLB_FAIR, yes, book("fanduel", 300, -400, point=0.5, player="Aaron Judge", mkey="player_home_runs")])], NOW)
+    rows = {(r["player"], r["stat"]): r for r in b["rows"]}
+    k = rows[("Gerrit Cole", "strikeouts")]
+    assert k["line"] == 5.5 and k["away"] == "NYY" and k["home"] == "BOS" and k["game_key"].startswith("mlb:")
+    hr = rows[("Aaron Judge", "home_runs")]
+    assert {q["book"]: q["over"] for q in hr["books"]} == {"caesars": 320, "fanduel": 300}
+    assert b["stats"] == ["home_runs", "strikeouts"]
+
+
+def test_load_mlb_events_takes_the_newest_snapshot_per_day(monkeypatch):
+    import json
+    import mlb_core.storage as st
+    import ev.odds_board as obm
+    files = {
+        "OddsAccum/baseball_mlb/raw/2026-10-15/props_1500.json": json.dumps([mlb_event(MLB_FAIR, "old")]),
+        "OddsAccum/baseball_mlb/raw/2026-10-15/props_1700.json": json.dumps([mlb_event(MLB_FAIR, "new")]),
+        "OddsAccum/baseball_mlb/raw/2026-10-15/game_lines_1700.json": "[]",
+    }
+    monkeypatch.setattr(st, "list_keys", lambda prefix: [k for k in files if k.startswith(prefix)])
+    monkeypatch.setattr(st, "read_bytes", lambda key: files[key].encode())
+    monkeypatch.setattr(st, "stat", lambda key: {"mtime_utc": NOW - timedelta(minutes=20)})
+    events, meta = obm.load_mlb_events(NOW)
+    assert [e["id"] for e in events] == ["new"] and meta["age_min"] == 20.0
+    monkeypatch.setattr(st, "list_keys", lambda prefix: [])
+    assert obm.load_mlb_events(NOW)[0] is None
+
+
+def test_run_mlb_writes_only_when_there_is_a_snapshot(monkeypatch, mem_storage):
+    monkeypatch.setattr(ob, "load_mlb_events", lambda now: ([mlb_event(MLB_FAIR)], {"age_min": 5.0, "lines_source": ["parlayapi"]}))
+    out = ob.run_mlb(NOW)
+    assert out["status"] == "live" and "EVSweep/mlb_props/odds_board_latest.json" in mem_storage
+    mem_storage.clear()
+    monkeypatch.setattr(ob, "load_mlb_events", lambda now: (None, {"reason": "none"}))
+    assert ob.run_mlb(NOW)["status"] == "unavailable" and not mem_storage
+
+
+def test_public_odds_board_accepts_mlb(monkeypatch):
+    fut = datetime.now(timezone.utc) + timedelta(hours=5)
+    board = ob.build_board("mlb", [mlb_event(MLB_FAIR, start=fut)], datetime.now(timezone.utc))
+    monkeypatch.setattr(ob, "read_board", lambda sp: board)
+    out = pa.get_odds_board("MLB", stat="strikeouts")
+    assert out["count"] == 1 and out["sport"] == "mlb"

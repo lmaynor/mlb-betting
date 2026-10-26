@@ -1,5 +1,5 @@
 """
-ev.odds_board -- the full per-book price matrix behind the /ev/odds screen (NFL / NHL / NBA player props).
+ev.odds_board -- the full per-book price matrix behind the /ev/odds screen (NFL / NHL / NBA / MLB player props).
 
 Every other prop surface exports one price (the best) or only the books of a FLAGGED outlier (`all_books`). The screen
 needs every real book's two-sided price for every posted line, +EV or not, so this module keeps what
@@ -34,7 +34,8 @@ from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, d
 
 log = logging.getLogger("ev.odds_board")
 
-SPORTS = ("nfl", "nhl", "nba")
+SPORTS = ("nfl", "nhl", "nba", "mlb")
+MLB_RAW_PREFIX = "OddsAccum/baseball_mlb/raw"   # props_{HHMM}.json: a list of ParlayAPI single-event odds objects, banked by the snapshot job
 OUT_KEY = "EVSweep/{sport}_props/odds_board_latest.json"
 MAX_ROWS = 3000                      # main lines first, then actionable alts; nearest game first within a tier
 MIN_BOOKS = 2                        # a one-book line is not a comparison (an actionable alt rung is the exception)
@@ -183,7 +184,14 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
     by >= 2 books or are actionable against the curve, then the remaining multi-book alt rungs."""
     meta = meta or {}
     # imported here, not at module top: ev.daily_projections imports this module lazily from run_sport
-    from ev.daily_projections import canon_team, game_key_of
+    from ev.daily_projections import canon_team as _canon_team, game_key_of
+
+    def canon_team(sp, x):
+        # ev.daily_projections.canon_team knows nfl / nhl / nba; MLB names resolve through the snapshot job's own resolver
+        if sp == "mlb":
+            from mlb_core.odds.dk_scraper import resolve_team
+            return resolve_team(str(x)) if x else None
+        return _canon_team(sp, x)
 
     rows: dict = {}
     n_events = n_started = 0
@@ -290,6 +298,62 @@ def write_board(payload: dict, sport: str) -> None:
         storage.write_bytes(json.dumps(payload, default=str).encode(), OUT_KEY.format(sport=sport))
     except Exception as exc:                                                           # noqa: BLE001
         log.warning("odds board write failed for %s: %s", sport, exc)
+
+
+def load_mlb_events(now: datetime) -> tuple[list | None, dict]:
+    """The newest banked MLB prop snapshot for today and tomorrow (Eastern) -> (events | None, meta).
+
+    MLB is not part of the 30-minute projections compute, so its events come from the odds snapshot job's own bank
+    (OddsAccum/baseball_mlb/raw/{date}/props_{HHMM}.json, ~8 pulls a day, no extra credits). Two dates are read because the
+    evening pulls also bank tomorrow's slate; within a date the newest file wins, and an event id seen twice keeps the newer."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from mlb_core import storage
+    et = ZoneInfo("America/New_York")
+    events: dict = {}
+    newest_key, newest_stamp = None, ""
+    for d in sorted({(now + timedelta(days=n)).astimezone(et).date().isoformat() for n in (0, 1)}):
+        files = [k for k in storage.list_keys(f"{MLB_RAW_PREFIX}/{d}/") if k.rsplit("/", 1)[-1].startswith("props_")]
+        if not files:
+            continue
+        key = max(files, key=lambda k: k.rsplit("/", 1)[-1])
+        try:
+            batch = json.loads(storage.read_bytes(key))
+        except Exception:                                                              # noqa: BLE001
+            continue
+        for obj in batch if isinstance(batch, list) else []:
+            if isinstance(obj, dict):
+                events[obj.get("id") or f"{key}:{len(events)}"] = obj
+        if d + key.rsplit("_", 1)[-1] > newest_stamp:
+            newest_stamp, newest_key = d + key.rsplit("_", 1)[-1], key
+    if not events:
+        return None, {"reason": "no MLB prop snapshot banked for today/tomorrow"}
+    age = None
+    try:
+        st = storage.stat(newest_key) or {}
+        age = (now - st["mtime_utc"]).total_seconds() / 60.0 if st.get("mtime_utc") else None
+    except Exception:                                                                  # noqa: BLE001
+        age = None
+    return list(events.values()), {"age_min": None if age is None else round(age, 1), "lines_source": ["parlayapi"],
+                                    "banked_events": len(events)}
+
+
+def run_mlb(now: datetime | None = None, write: bool = True) -> dict:
+    """Build (and by default write) the MLB board from the banked snapshot. Best-effort like the other sports' boards:
+    no snapshot -> an 'unavailable' payload that write_board skips."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        events, meta = load_mlb_events(now)
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("mlb lines unavailable: %s", exc)
+        events, meta = None, {"reason": str(exc)[:200]}
+    if not events:
+        return {"sport": "mlb", "ts": now.isoformat(), "validated": False, "status": "unavailable", "rows": [], "count": 0,
+                "summary": meta}
+    payload = build_board("mlb", events, now, meta)
+    if write:
+        write_board(payload, "mlb")
+    return payload
 
 
 def read_board(sport: str) -> dict | None:
