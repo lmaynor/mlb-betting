@@ -48,7 +48,7 @@ export function limitCockpit(rows: CockpitRow[], viewer: Viewer, env?: Env): { r
 }
 
 /**
- * The odds screen (/ev/odds) is the +EV Terminal's table view, so it is Pro only like the terminal: everyone else gets the
+ * The Odds Terminal (/ev) is Pro only: everyone else gets the
  * FREE_PREVIEW_ROWS.ev_terminal best-covered lines (most books quoting) per sport. `locked` is how many were withheld.
  */
 export function limitOddsBoard(board: OddsBoard, viewer: Viewer, env?: Env): { board: OddsBoard; locked: number } {

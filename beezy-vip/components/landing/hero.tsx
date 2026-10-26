@@ -32,8 +32,8 @@ export async function Hero() {
           </p>
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-            <Link href="/ev" className="btn btn-primary">Launch +EV Terminal &rarr;</Link>
-            <Link href="/ev/odds" className="btn btn-ghost">Explore Odds Screen</Link>
+            <Link href="/ev" className="btn btn-primary">Open Odds Terminal &rarr;</Link>
+            <Link href="/picks" className="btn btn-ghost">Today&apos;s picks</Link>
           </div>
 
           <span className="mono" style={{ fontSize: '11px', color: '#7d8596' }}>

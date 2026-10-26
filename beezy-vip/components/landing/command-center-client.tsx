@@ -21,7 +21,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '12px' }}>
         <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Today&apos;s top plays</h2>
         <span style={{ display: 'flex', gap: '14px' }}>
-          <Link href="/ev" style={{ color: 'var(--link)', fontSize: '12px', fontWeight: 600 }}>+EV terminal &rarr;</Link>
+          <Link href="/ev" style={{ color: 'var(--link)', fontSize: '12px', fontWeight: 600 }}>Odds Terminal &rarr;</Link>
           <Link href="/picks" style={{ color: 'var(--link)', fontSize: '12px', fontWeight: 600 }}>All picks &rarr;</Link>
         </span>
       </div>

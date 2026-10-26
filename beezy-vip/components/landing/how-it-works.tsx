@@ -2,7 +2,7 @@ import { SURFACE_CARD } from '@/lib/tokens'
 
 const STEPS = [
   { num: '01', title: 'Two ways to find a play', desc: 'The scanner checks books, Kalshi and Novig every 15 minutes against de-vigged consensus. Models score props each morning.' },
-  { num: '02', title: 'Plays publish as found', desc: 'Scanner plays post to the +EV Terminal all day. The model card publishes after the ~11:00 AM CT run.' },
+  { num: '02', title: 'Plays publish as found', desc: 'Scanner plays post to the Odds Terminal all day. The model card publishes after the ~11:00 AM CT run.' },
   { num: '03', title: 'You place what fits', desc: 'Beezy flags the edge and a Kelly-sized stake. We never take or hold wagers.' },
   { num: '04', title: 'Results settle in public', desc: 'Every pick grades overnight at the flagged price. Wins, losses, pushes and voids stay on the record.' },
 ]

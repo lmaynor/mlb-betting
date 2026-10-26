@@ -21,7 +21,7 @@ describe('no-slop-ui', () => {
     for (const l of hover) expect(l).not.toMatch(/transform/)
   })
   it.each([
-    'app/ev/ev-client.tsx', 'app/analytics/analytics-client.tsx', 'components/picks/market-prices.tsx', 'components/picks/sport-projections-board.tsx', 'components/picks/sport-tabs.tsx',
+    'app/ev/odds-client.tsx', 'app/analytics/analytics-client.tsx', 'components/picks/market-prices.tsx', 'components/picks/sport-projections-board.tsx', 'components/picks/sport-tabs.tsx',
     'components/picks/sport-board-page.tsx', 'components/picks/system-page.tsx', 'components/picks/system-methodology.tsx',
     'components/picks/systems-table.tsx', 'components/picks/filter-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx',
   ])('%s: no eyebrow+mood header, no gradient header, no card-per-row stack', (f) => {

@@ -1116,7 +1116,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           {picks.length === 0 ? (
             <>
               <p className="edge-empty-h">No model picks scored yet today.</p>
-              <p className="edge-empty-s">The model card publishes after the ~11:00 AM CT run. Live +EV alerts are in the <a href="/ev" className="edge-link">+EV Terminal</a>, and past picks are in <a href="/results" className="edge-link">Results</a>.</p>
+              <p className="edge-empty-s">The model card publishes after the ~11:00 AM CT run. Live +EV alerts are in the <a href="/ev" className="edge-link">Odds Terminal</a>, and past picks are in <a href="/results" className="edge-link">Results</a>.</p>
             </>
           ) : (
             <>

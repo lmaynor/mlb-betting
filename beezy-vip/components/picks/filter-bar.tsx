@@ -131,7 +131,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
         <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)' }}>Clear {active}</button>
       )}
       {my.books.length === 0 && bookValue === 'MY' && (
-        <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>+EV terminal</Link> first.</span>
+        <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
       )}
     </AlignedBar>
   )

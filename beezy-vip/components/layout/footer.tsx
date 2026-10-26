@@ -36,7 +36,7 @@ export function Footer() {
             </div>
           </div>
           {[
-            { title: 'Picks',   links: [['+EV Terminal','/ev'],['Prop Research','/edge'],['Top 10 Picks','/picks'],['Picks History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
+            { title: 'Picks',   links: [['Odds Terminal','/ev'],['Prop Research','/edge'],['Top 10 Picks','/picks'],['Picks History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
             { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
             { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
