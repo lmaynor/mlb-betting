@@ -46,20 +46,22 @@ describe('information architecture', () => {
     expect(tabActive('/analytics', 'books', bankroll)).toBe(false)
   })
 
-  it('Picks tabs are the all-sports views only: Top 10 player picks, Game picks, History, Daily Card', () => {
+  it('Picks tabs are the all-sports views only: Daily Card, Top Signals, Game Lines, Graded History', () => {
     const picks = SECTIONS.find(x => x.id === 'picks')!
-    expect(picks.tabs.map(t => t.label)).toEqual(['Top 10', 'Game picks', 'History', 'Daily Card'])
+    expect(picks.tabs.map(t => t.label)).toEqual(['Daily Card', 'Top Signals', 'Game Lines', 'Graded History'])
     expect(sectionFor('/picks')?.id).toBe('picks')
     expect(sectionFor('/picks/games')?.id).toBe('picks')
     expect(sectionFor('/picks/history')?.id).toBe('picks')
+    expect(sectionFor('/cheat-sheet')?.id).toBe('picks')
     // MLB and the other sports are chosen in the ribbon and carry their own headers, not the strip
     expect(sectionFor('/picks/mlb')).toBeNull()
     expect(sectionFor('/picks/mlb/hr')).toBeNull()
     expect(sectionFor('/sports/nfl')).toBeNull()
-    expect(tabActive('/picks', null, picks.tabs[0])).toBe(true)
-    expect(tabActive('/picks/history', null, picks.tabs[0])).toBe(false)
-    expect(tabActive('/picks/games', null, picks.tabs[1])).toBe(true)
-    expect(tabActive('/picks/history', null, picks.tabs[2])).toBe(true)
+    expect(tabActive('/cheat-sheet', null, picks.tabs[0])).toBe(true)
+    expect(tabActive('/picks', null, picks.tabs[1])).toBe(true)
+    expect(tabActive('/picks/history', null, picks.tabs[1])).toBe(false)
+    expect(tabActive('/picks/games', null, picks.tabs[2])).toBe(true)
+    expect(tabActive('/picks/history', null, picks.tabs[3])).toBe(true)
   })
 
   it('Picks stays lit in the top nav on MLB and the other sport pages', () => {

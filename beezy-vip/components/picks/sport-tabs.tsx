@@ -14,7 +14,7 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   const n = getSystemsBySport(sport).length
   const tabs: { id: SportView; label: string; href: string }[] = [
     { id: 'picks', label: 'PICKS & +EV', href: `/picks/${sport}` },
-    { id: 'projections', label: 'PROJECTIONS', href: `/picks/${sport}/projections` },
+    { id: 'projections', label: 'ALL PROJECTIONS', href: `/picks/${sport}/projections` },
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (

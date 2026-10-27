@@ -25,6 +25,10 @@ from mlb_core.alerts.beezy_score import beezy_score, tier
 from mlb_core.alerts.discord_routes import (
     bot_configured, post_via_bot, slip_text, webhook_for, with_deep_links,
 )
+from ev.daily_card import (
+    build_daily_card, is_ev_outlier, is_official_card_play,
+    load_locked_card, save_locked_card,
+)
 
 log = logging.getLogger("mlb_core.alerts.sport_alerts")
 

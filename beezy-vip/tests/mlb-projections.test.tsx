@@ -112,7 +112,7 @@ describe('MLB projections on the unified board', () => {
 
   it('sport tabs mark the current view and link the three views of MLB', () => {
     render(<SportTabs sport="mlb" active="projections" />)
-    expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', '/picks/mlb')
   })

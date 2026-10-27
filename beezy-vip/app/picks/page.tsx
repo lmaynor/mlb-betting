@@ -9,36 +9,76 @@ import { siteDateKey, formatDateKey } from '@/lib/dates'
 import { sportHref } from '@/lib/ia'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
 import { LIVE_SPORTS } from '@/lib/sports'
-import { filterTopPicks } from '@/lib/top-picks'
+import { filterTopPicks, isOfficialCardPlay, isEvOutlier } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
 
 export const metadata: Metadata = {
-  title: 'Top 10 Player Picks',
-  description: 'The ten highest-scoring player picks across MLB, NFL, NHL and NBA right now, ranked by Beezy Score. Free.',
+  title: 'Top Signals',
+  description: 'Top +EV Outliers and Confluence Plays across MLB, NFL, NHL and NBA right now, ranked by Beezy Score. Free.',
 }
 
 export default async function TopPicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const date = siteDateKey()
-  const filters = parsePickFilters(await searchParams)
+  const rawParams = await searchParams
+  const filters = parsePickFilters(rawParams)
+  const tierParam = rawParams.tier || 'all'
   const { candidates } = await loadTopPlayerPicks(date)
   // The ten best of what the filters leave: "NFL" is the ten best NFL picks, not the NFL rows inside the overall ten.
   const top = filterTopPicks(candidates, filters)
   const filtered = activeFilterCount(filters) > 0
 
-  const showResult = top.some(p => p.result != null)
+  const actionable = top.filter(p => isOfficialCardPlay(p) || isEvOutlier(p))
+  const displayPicks = tierParam === 'official'
+    ? top.filter(isOfficialCardPlay)
+    : tierParam === 'outliers'
+    ? top.filter(isEvOutlier)
+    : (actionable.length > 0 ? actionable : top)
+
+  const showResult = displayPicks.some(p => p.result != null)
 
   return (
     <div>
       <FilterBar sport="all" />
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top 10 player picks</h1>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top Signals</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' }}>
+            <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', letterSpacing: '0.06em' }}>TIER:</span>
+            {[
+              { id: 'all', label: 'All Actionable' },
+              { id: 'official', label: 'Official Plays Only' },
+              { id: 'outliers', label: '+EV Outliers' },
+            ].map(t => {
+              const active = tierParam === t.id
+              const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
+              return (
+                <Link
+                  key={t.id}
+                  href={`/picks?${q}`}
+                  className="mono"
+                  style={{
+                    fontSize: '11px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    textDecoration: 'none',
+                    background: active ? '#1e2230' : 'transparent',
+                    border: `1px solid ${active ? '#38bdf8' : '#1e2230'}`,
+                    color: active ? 'var(--chalk)' : 'var(--fog)',
+                  }}
+                >
+                  {t.label}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>
           {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
         </span>
       </div>
 
-      {top.length === 0 ? (
+      {displayPicks.length === 0 ? (
         <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center' }}>
           <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
           <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
@@ -47,7 +87,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
           </div>
         </div>
       ) : (
-        <TopPicksTable picks={top} showResult={showResult} />
+        <TopPicksTable picks={displayPicks} showResult={showResult} />
       )}
 
       <div style={{ display: 'flex', gap: '8px 20px', flexWrap: 'wrap', alignItems: 'baseline', margin: '12px 2px 0', fontSize: '12.5px' }}>

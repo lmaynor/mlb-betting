@@ -4,7 +4,7 @@ import { scoreTier, TIER_META } from '@/lib/beezy-score'
 import { bookDisplay, SURFACE_CARD, TABLE_TD, TABLE_TH } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { sportHref } from '@/lib/ia'
-import type { PickBasis, TopPick } from '@/lib/top-picks'
+import { isOfficialCardPlay, isEvOutlier, type PickBasis, type TopPick } from '@/lib/top-picks'
 
 const SURFACE = SURFACE_CARD
 const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
@@ -36,9 +36,10 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
         <tbody>
           {picks.map((p, i) => {
             const pillar = SPORT_PILLARS[p.sport]
-            const tier = TIER_META[scoreTier(p.score)]
             const b = p.book ? bookDisplay(p.book) : null
             const res = p.result ? RESULT[p.result] : null
+            const isOfficial = isOfficialCardPlay(p)
+            const isOutlier = isEvOutlier(p)
             return (
               <tr key={p.key} className="sys-row">
                 <td style={{ ...TD, whiteSpace: 'nowrap' }}>
@@ -58,7 +59,14 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                   )}
                 </td>
                 <td style={TD}>
-                  <span className="mono" title={`${tier.label}. Beezy Score is a 0-100 strength score, not a win probability.`} style={{ color: tier.color, fontWeight: 700 }}>{p.score}</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    {isOfficial ? (
+                      <span className="dell-heading" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                    ) : isOutlier ? (
+                      <span className="dell-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                    ) : null}
+                    <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--silver)', fontWeight: 700 }}>{p.score}</span>
+                  </div>
                 </td>
                 <td className="mono" style={{ ...TD, color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{fmtEdge(p.edge)}</td>
                 <td className="mono" style={{ ...TD, color: 'var(--silver)', whiteSpace: 'nowrap' }}>{p.game || '--'}</td>

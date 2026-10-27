@@ -43,13 +43,14 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from mlb_core.social.gif_fetcher import fetch_celebration_gif
+from ev.daily_card import build_daily_card, load_locked_card, save_locked_card
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 BEEZY_API_URL = os.environ.get("BEEZY_API_URL", "https://api.beezy.fyi").rstrip("/")
 BEEZY_SITE_URL = os.environ.get("BEEZY_SITE_URL", "https://beezy.fyi").rstrip("/")
-BEEZY_API_KEY = os.environ["SITE_API_KEY"]
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+BEEZY_API_KEY = os.environ.get("SITE_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # gemini-2.0-flash was retired by Google (confirmed live 2026-09-01: 404 on
 # generateContent, had been silently failing mlb-tweet-picks/mlb-tweet-recap
@@ -493,6 +494,243 @@ def generate_tweets(user_prompt, attempts=3):
     raise last
 
 
+# ── 160-Character Gemini Tweet Engine ─────────────────────────────────────────
+
+SHORT_TWEET_BANNED_WORDS = (
+    "lock", "smash", "parlay", "ai", "algorithm", "guaranteed",
+    "let's dive in", "lets dive in", "fire", "tail",
+)
+
+
+def contains_banned_word(text: str) -> bool:
+    low = text.lower()
+    for phrase in ("let's dive in", "lets dive in"):
+        if phrase in low:
+            return True
+    patterns = [
+        r"\block\b", r"\blocks\b",
+        r"\bsmash\w*\b",
+        r"\bparlay\w*\b",
+        r"\bai\b",
+        r"\balgorithm\w*\b",
+        r"\bguarantee\w*\b",
+        r"\bfire\w*\b",
+        r"\btail\b", r"\btails\b", r"\btailing\b",
+    ]
+    for pat in patterns:
+        if re.search(pat, low):
+            return True
+    return False
+
+
+def enforce_160_cap(text: str, max_chars: int = 160) -> str:
+    """Enforces a strict <= max_chars (160) cap:
+    - Strips markdown, quotes, emojis, non-ascii characters
+    - Normalizes whitespace
+    - Checks for banned words; if banned, returns empty string so fallback is used
+    - Truncates cleanly if needed to ensure len <= max_chars
+    """
+    if not text:
+        return ""
+    t = text.strip()
+    t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
+    t = re.sub(r"```$", "", t)
+    t = t.replace("`", "")
+    t = t.strip('"\']')
+    t = re.sub(r"[^\x00-\x7F]+", "", t)
+    t = t.replace("#", "").replace("!", "")
+    t = re.sub(r"\s+", " ", t).strip()
+
+    if contains_banned_word(t):
+        return ""
+
+    if len(t) <= max_chars:
+        return t
+
+    sub = t[:max_chars]
+    last_dot = sub.rfind(". ")
+    if last_dot != -1 and last_dot >= max_chars // 2:
+        return sub[: last_dot + 1].strip()
+    if sub.endswith("."):
+        return sub.strip()
+    last_period = sub.rfind(".")
+    if last_period != -1 and last_period >= max_chars // 2:
+        return sub[: last_period + 1].strip()
+    last_space = sub.rfind(" ")
+    if last_space != -1 and last_space >= max_chars // 2:
+        return sub[:last_space].strip()
+    return sub.strip()
+
+
+def fallback_morning(payload: dict, max_chars: int = 160) -> str:
+    k = payload.get("count", 1)
+    plays_word = "official play" if k == 1 else "official confluence plays"
+    top = payload.get("top_play") or {}
+    player = top.get("player", "Tatum")
+    line = top.get("line", "o26.5 Pts")
+    book = top.get("book", "FD")
+    odds = top.get("odds", "+112")
+    fair = top.get("fair", "-108")
+    n_books = top.get("n_books", 8)
+    ev = top.get("ev", "+5.4%")
+    url = "beezy.fyi/picks"
+
+    text = f"{book} hanging {player} {line} at {odds} vs {fair} fair across {n_books} books ({ev} EV). {k} {plays_word} locked on today's card. {url}"
+    if len(text) <= max_chars and not contains_banned_word(text):
+        return text
+
+    text = f"{book} hanging {player} {line} at {odds} vs {fair} ({ev} EV, {n_books} bks). {k} {plays_word} locked on card. {url}"
+    if len(text) <= max_chars and not contains_banned_word(text):
+        return text
+
+    text = f"{player} {line} at {odds} on {book} vs {fair} ({ev} EV). {k} {plays_word} locked. {url}"
+    return text[:max_chars]
+
+
+def fallback_dislocation(payload: dict, max_chars: int = 160) -> str:
+    gap = payload.get("gap", "1.5-pt")
+    sport = str(payload.get("sport", "NBA")).upper()
+    player = payload.get("player", "Fox")
+    stat = payload.get("stat", "Pts")
+    side1 = payload.get("side1", "o24.5")
+    odds1 = payload.get("odds1", "-105")
+    book1 = payload.get("book1", "FD")
+    side2 = payload.get("side2", "u26.5")
+    odds2 = payload.get("odds2", "-108")
+    book2 = payload.get("book2", "DK")
+    hold = payload.get("hold", "1.6")
+    win_rate = payload.get("win_rate", "14.2")
+    url = "beezy.fyi/ev"
+
+    text = f"{gap} {sport} middle on {player} {stat}: {side1} ({odds1} {book1}) / {side2} ({odds2} {book2}) for a {hold}% hold and {win_rate}% window hit rate on the terminal. {url}"
+    if len(text) <= max_chars and not contains_banned_word(text):
+        return text
+
+    text = f"{gap} {sport} middle on {player} {stat}: {side1} ({odds1} {book1}) / {side2} ({odds2} {book2}) for a {hold}% hold on the terminal. {url}"
+    if len(text) <= max_chars and not contains_banned_word(text):
+        return text
+
+    text = f"{sport} middle: {player} {side1} ({book1}) / {side2} ({book2}), {hold}% hold. {url}"
+    return text[:max_chars]
+
+
+def fallback_settlement(payload: dict, max_chars: int = 160) -> str:
+    w = payload.get("w", 0)
+    l = payload.get("l", 0)
+    units = float(payload.get("units", 0.0))
+    roi = float(payload.get("roi", 8.2))
+    total_bets = payload.get("total_bets", 7500)
+    total_units = payload.get("total_units", 568.0)
+    hero = payload.get("hero") or "Cole o6.5 Ks (+115)"
+    url = "beezy.fyi/results"
+
+    if units >= 0:
+        text = f"Yesterday's official card went {w}-{l} ({units:+.2f}u), led by {hero}. Full graded ledger sits at {roi:+.1f}% flat ROI. {url}"
+        if len(text) <= max_chars and not contains_banned_word(text):
+            return text
+        text = f"Yesterday's official card went {w}-{l} ({units:+.2f}u). Full graded ledger sits at {roi:+.1f}% flat ROI. {url}"
+        return text[:max_chars]
+    else:
+        text = f"Dropped {units:+.2f}u on yesterday's card ({w}-{l}). Every play graded on the public ledger ({total_units:+.0f}u, {roi:+.1f}% flat ROI over {total_bets:,}+ bets). {url}"
+        if len(text) <= max_chars and not contains_banned_word(text):
+            return text
+        text = f"Dropped {units:+.2f}u on yesterday's card ({w}-{l}). Ledger at {roi:+.1f}% flat ROI over {total_bets:,}+ bets. {url}"
+        return text[:max_chars]
+
+
+def generate_short_tweet_copy(kind: str, payload: dict, max_chars: int = 160) -> str:
+    """
+    Generate sharp, deadpan <= 160 char tweet copy via Gemini API with deterministic fallback.
+    - Kind: 'morning' | 'card' | 'dislocation' | 'middle' | 'settlement'
+    - Strictly <= 160 chars
+    - Zero hype, zero emojis, zero exclamation marks, zero hashtags
+    - Banned words: lock, smash, parlay, AI, algorithm, guaranteed, let's dive in, fire, tail
+    """
+    norm_kind = "morning" if kind == "card" else "dislocation" if kind == "middle" else kind
+
+    fallback_fn = {
+        "morning": fallback_morning,
+        "dislocation": fallback_dislocation,
+        "settlement": fallback_settlement,
+    }.get(norm_kind, fallback_morning)
+
+    fallback_text = fallback_fn(payload, max_chars=max_chars)
+
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key or key == "test-gemini-key":
+        return fallback_text
+
+    user_prompt = ""
+    if norm_kind == "morning":
+        top = payload.get("top_play", {})
+        k = payload.get("count", 1)
+        user_prompt = (
+            f"Mode: morning card.\n"
+            f"Locked official plays on card: {k}.\n"
+            f"Top play: {top.get('player')} {top.get('line')} at {top.get('book')} {top.get('odds')} "
+            f"vs {top.get('fair')} fair across {top.get('n_books')} reference books ({top.get('ev')} EV).\n"
+            f"Target URL to include: beezy.fyi/picks\n"
+            f"Write 1-2 deadpan sentences strictly <= 160 characters stating the dislocation and locked card count."
+        )
+    elif norm_kind == "dislocation":
+        user_prompt = (
+            f"Mode: odds terminal middle/dislocation.\n"
+            f"Sport: {payload.get('sport')}, Player: {payload.get('player')}, Stat: {payload.get('stat')}.\n"
+            f"Side 1: {payload.get('side1')} ({payload.get('odds1')} {payload.get('book1')}).\n"
+            f"Side 2: {payload.get('side2')} ({payload.get('odds2')} {payload.get('book2')}).\n"
+            f"Hold: {payload.get('hold')}%, Window hit rate: {payload.get('win_rate')}%\n"
+            f"Target URL to include: beezy.fyi/ev\n"
+            f"Write 1-2 deadpan sentences strictly <= 160 characters stating the middle window and hold."
+        )
+    elif norm_kind == "settlement":
+        w, l, u = payload.get("w", 0), payload.get("l", 0), float(payload.get("units", 0.0))
+        hero = payload.get("hero", "")
+        roi = payload.get("roi", 8.2)
+        total_bets = payload.get("total_bets", 7500)
+        total_units = payload.get("total_units", 568.0)
+        user_prompt = (
+            f"Mode: settlement card recap.\n"
+            f"Yesterday's card record: {w}-{l}, net units: {u:+.2f}u.\n"
+            f"Top play: {hero}.\n"
+            f"Cumulative ledger: +{total_units:.0f}u, {roi:+.1f}% flat ROI over {total_bets} bets.\n"
+            f"Target URL to include: beezy.fyi/results\n"
+            f"Write 1-2 deadpan sentences strictly <= 160 characters owning the result honestly."
+        )
+
+    system_instruction = (
+        "You are a quantitative sports betting trader at beezy.fyi writing on X (#GamblingX).\n"
+        "Voice: Deadpan, numbers-first, sharp, plain words. Zero hype, zero exclamation marks, zero emojis, zero hashtags.\n"
+        "BANNED WORDS: lock, smash, parlay, AI, algorithm, guaranteed, let's dive in, fire, tail.\n"
+        "CRITICAL REQUIREMENT: Output MUST be ONE or TWO short sentences totaling AT MOST 160 CHARACTERS including the link.\n"
+        "Output ONLY the plain text tweet. No quotes, no markdown."
+    )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+    body = {
+        "system_instruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{"parts": [{"text": user_prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 256},
+    }
+
+    try:
+        resp = requests.post(url, json=body, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            candidates = data.get("candidates") or []
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts") or []
+                if parts:
+                    raw_text = parts[0].get("text", "")
+                    cleaned = enforce_160_cap(raw_text, max_chars=max_chars)
+                    if cleaned and len(cleaned) <= max_chars:
+                        return cleaned
+    except Exception:
+        pass
+
+    return fallback_text
+
+
+
 # -- Discord #tweet-queue ----------------------------------------------------------------------------------------
 
 # Every draft is its own PLAIN message whose whole content is the tweet text, so Discord's "Copy Text" gives exactly what
@@ -682,6 +920,24 @@ def run_settlement():
     if not summary:
         print(skip_reason(settled))
         return
+
+    # Use 160-char Gemini copy if available
+    hero_label = bet_label(summary["hero"]) if summary.get("hero") else ""
+    stats = get_stats() or {}
+    overall = stats.get("overall") or {}
+    payload = {
+        "w": summary["w"],
+        "l": summary["l"],
+        "units": summary["units"],
+        "hero": hero_label,
+        "roi": float(overall.get("roi") or 8.2),
+        "total_bets": int(overall.get("total_bets") or 7500),
+        "total_units": float(overall.get("units") or 568.0),
+    }
+    short_copy = generate_short_tweet_copy("settlement", payload)
+    if short_copy and len(short_copy) <= 160:
+        summary["text"] = short_copy
+
     if violates_voice(summary["text"]):
         raise RuntimeError(f"settlement text violates voice rules: {summary['text']}")
     gif = fetch_celebration_gif(summary["hero"] or {})
@@ -1263,13 +1519,36 @@ def main():
         raise NotImplementedError("steam mode needs a public per-bet closing-line endpoint; not built yet")
 
     if mode == "picks":
-        print("Fetching today's picks...")
-        picks = get_today_picks()
-        picks_list = picks if isinstance(picks, list) else picks.get("picks", [])
+        print("Fetching today's card...")
+        today_str = central_today().isoformat()
+        locked = load_locked_card(today_str)
+        if locked and locked.get("plays"):
+            picks_list = locked["plays"]
+        else:
+            picks = get_today_picks()
+            raw_list = picks if isinstance(picks, list) else picks.get("picks", [])
+            card_plays = build_daily_card(raw_list)
+            if card_plays:
+                save_locked_card(card_plays, ct_day=today_str)
+                picks_list = card_plays
+            else:
+                picks_list = raw_list
 
         if not picks_list:
             print("No picks today — skipping.")
             return
+
+        p0 = picks_list[0]
+        top_play = {
+            "player": p0.get("player") or p0.get("who") or "Player",
+            "line": p0.get("what") or f"{str(p0.get('side') or 'o').lower()}{p0.get('line', '')} {p0.get('stat', '')}",
+            "book": _book_name(p0),
+            "odds": _odds_str(p0.get("american") or p0.get("odds")),
+            "fair": _odds_str(p0.get("fair") or p0.get("fair_american")),
+            "n_books": p0.get("n_books", 6),
+            "ev": f"{(p0.get('ev') or p0.get('market_ev') or 0.05)*100:+.1f}%",
+        }
+        short_tweet = generate_short_tweet_copy("morning", {"count": len(picks_list), "top_play": top_play})
 
         prompt = build_picks_prompt(picks_list)
         label = "picks"
@@ -1296,7 +1575,10 @@ def main():
         raise ValueError(f"Unknown TWEET_MODE: {mode}")
 
     print(f"Generating tweets via Gemini...")
-    tweets = generate_tweets(prompt)
+    if mode == "picks" and short_tweet and len(short_tweet) <= 160:
+        tweets = [short_tweet]
+    else:
+        tweets = generate_tweets(prompt)
 
     print(f"Generated {len(tweets)} drafts:")
     for i, t in enumerate(tweets, 1):

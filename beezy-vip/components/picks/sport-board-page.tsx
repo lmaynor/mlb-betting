@@ -33,13 +33,33 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
 }) {
   const pillar = SPORT_PILLARS[sport]
   const tracked = pillar.board === 'tracked'
-  const f = parsePickFilters(await searchParams)
+  const rawParams = await searchParams
+  const f = parsePickFilters(rawParams)
+  const tierParam = rawParams.tier || 'all'
   const board = await loadSportBoard(sport, await getViewer(), { day: f.day, date: f.date, view, kind })
   const copy = COPY[view]
   const today = siteDateKey()
 
-  // The picks view of a projection sport lists priced rows only; MLB's rows are all picks already, and projections lists everything.
-  const base = view === 'picks' && !tracked ? pickRows(board.rows) : board.rows
+  const isRowOfficial = (r: import('@/lib/board-rows').BoardRow) =>
+    (r.marketEv ?? 0) >= 0.03 && (r.marketEv ?? 0) <= 0.10 && r.score >= 68 && (r.sport === 'mlb' ? r.isPick !== false : (!!r.confluence && (r.nBooks == null || r.nBooks >= 4) && (r.modelEdge == null || r.modelEdge >= 0.015)))
+  const isRowOutlier = (r: import('@/lib/board-rows').BoardRow) =>
+    (r.marketEv ?? 0) >= 0.025 && (r.marketEv ?? 0) <= 0.15 && (r.nBooks == null || r.nBooks >= 3) && !isRowOfficial(r)
+
+  // In picks view, default to actionable rows (Official + EV Outliers) sorted with Official first
+  let base = view === 'picks' && !tracked ? pickRows(board.rows) : board.rows
+  if (view === 'picks') {
+    const actionable = base.filter(r => isRowOfficial(r) || isRowOutlier(r))
+    if (tierParam === 'official') {
+      base = base.filter(isRowOfficial)
+    } else if (tierParam === 'outliers') {
+      base = base.filter(isRowOutlier)
+    } else if (actionable.length > 0) {
+      base = actionable
+    }
+    // Sort Official Plays first
+    base = [...base].sort((a, b) => (Number(isRowOfficial(b)) - Number(isRowOfficial(a))) || (b.score - a.score))
+  }
+
   const rows = applyPickFilters(base, f)
   const games = withCounts(board.games, base)
   const filtered = activeFilterCount(f) > 0
@@ -74,6 +94,37 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
           </div>
           <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>
+        {view === 'picks' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', letterSpacing: '0.06em' }}>TIER:</span>
+            {[
+              { id: 'all', label: 'All Actionable' },
+              { id: 'official', label: 'Official Plays Only' },
+              { id: 'outliers', label: '+EV Outliers' },
+            ].map(t => {
+              const active = tierParam === t.id
+              const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
+              return (
+                <Link
+                  key={t.id}
+                  href={`/picks/${sport}?${q}`}
+                  className="mono"
+                  style={{
+                    fontSize: '11px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    textDecoration: 'none',
+                    background: active ? '#1e2230' : 'transparent',
+                    border: `1px solid ${active ? pillar.accent : '#1e2230'}`,
+                    color: active ? 'var(--chalk)' : 'var(--fog)',
+                  }}
+                >
+                  {t.label}
+                </Link>
+              )
+            })}
+          </div>
+        )}
         <SportProjectionsBoard sport={sport} rows={rows} status={board.status} statusWarn={board.statusWarn} emptyBody={emptyBody} />
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${copy.what}`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         {!tracked && view === 'picks' && f.day === 'today' && (
