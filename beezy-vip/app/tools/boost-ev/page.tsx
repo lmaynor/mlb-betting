@@ -43,18 +43,18 @@ export default function BoostEvPage() {
 
       <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
         <div style={{ marginBottom: '16px' }}>
-          <label style={labelStyle}>Boosted line you&apos;re offered (American)</label>
-          <input type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
+          <label htmlFor="boosted" style={labelStyle}>Boosted line you&apos;re offered (American)</label>
+          <input id="boosted" type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
           {validBoost && <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>Implied: {formatProb(americanToImpliedProb(bo))}</p>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-            <label style={labelStyle}>Normal price, your side</label>
-            <input type="number" value={sideOdds} onChange={e => setSideOdds(e.target.value)} placeholder="+110" style={inputStyle} />
+            <label htmlFor="sideOdds" style={labelStyle}>Normal price, your side</label>
+            <input id="sideOdds" type="number" value={sideOdds} onChange={e => setSideOdds(e.target.value)} placeholder="+110" style={inputStyle} />
           </div>
           <div>
-            <label style={labelStyle}>Normal price, other side</label>
-            <input type="number" value={otherOdds} onChange={e => setOtherOdds(e.target.value)} placeholder="-130" style={inputStyle} />
+            <label htmlFor="otherOdds" style={labelStyle}>Normal price, other side</label>
+            <input id="otherOdds" type="number" value={otherOdds} onChange={e => setOtherOdds(e.target.value)} placeholder="-130" style={inputStyle} />
           </div>
         </div>
         {fairProb != null && (
@@ -64,7 +64,7 @@ export default function BoostEvPage() {
         )}
       </div>
 
-      {ev != null && kellyPct != null && (
+      {ev != null && kellyPct != null ? (
         <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
             <div style={{ padding: '20px', borderRight: B }}>
@@ -89,6 +89,10 @@ export default function BoostEvPage() {
                 : 'Negative EV: even boosted, this price is below fair value. Skip it.'}
             </p>
           </div>
+        </div>
+      ) : (
+        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+          Enter the boosted price and two-way market lines above to compute Expected Value and Kelly sizing.
         </div>
       )}
     </div>

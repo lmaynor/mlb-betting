@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { PLANS, ANNUAL_PER_MONTH, ANNUAL_SAVINGS_PCT } from '@/lib/plans'
@@ -83,6 +84,21 @@ export function PricingSection() {
         <span style={{ fontSize: '12.5px', color: 'var(--fog)' }}>
           {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime in 1 click.'}
         </span>
+      </div>
+
+      <div style={{ ...SURFACE, padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderLeft: '3px solid var(--signal)' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--signal)' }}>EXPLORER TIER</span>
+            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>$0 / Free Forever</span>
+          </div>
+          <div style={{ fontSize: '12.5px', color: 'var(--silver)', marginTop: '3px' }}>
+            Daily Top 10 cross-sport picks, full public results ledger, odds & vig calculator, and Kelly sizing. No account or credit card required.
+          </div>
+        </div>
+        <Link href="/picks" style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '7px 14px', borderRadius: '6px', background: 'var(--surface-elevated)', border: '1px solid #1e2230', color: 'var(--chalk)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          Browse free picks &rarr;
+        </Link>
       </div>
 
       <div className="pricing-grid">

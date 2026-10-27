@@ -195,8 +195,9 @@ const chip = (on: boolean): React.CSSProperties => ({
  * The shareable Daily Card. It is the free Top 10 player picks (same list as /picks), with a Game picks toggle that follows the
  * game-picks access policy. Players can be narrowed to one sport; sports are never blended inside a sport filter.
  */
-export function CheatSheetClient({ sheets, sportPicks, players, games, gamesLocked, today, yesterday }: {
+export function CheatSheetClient({ sheets, canPost = false, sportPicks, players, games, gamesLocked, today, yesterday }: {
   sheets: Sheet[]
+  canPost?: boolean
   /** the best picks per sport (the overall Top 10 can be all one sport); the sport chips and the POST TO X boxes read these */
   sportPicks: Partial<Record<SportSlug, CardPick[]>>
   players: CardPick[]
@@ -317,11 +318,11 @@ export function CheatSheetClient({ sheets, sportPicks, players, games, gamesLock
         </div>
 
         {/* Mobile: the sidebar is hidden on phones, so the POST TO X sheets sit under the card */}
-        <div className="cheat-sheet-mobile-post"><PostToX sheets={sheets} /></div>
+        {canPost && <div className="cheat-sheet-mobile-post"><PostToX sheets={sheets} /></div>}
 
         {/* Desktop sidebar */}
         <aside className="cheat-sheet-sidebar">
-          <PostToX sheets={sheets} />
+          {canPost && <PostToX sheets={sheets} />}
 
           <div style={{ border: '1px solid var(--basalt)', background: 'var(--graphite)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
             <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '10px' }}>WHAT IS THIS</div>

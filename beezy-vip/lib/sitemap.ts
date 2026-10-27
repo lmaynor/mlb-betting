@@ -1,7 +1,9 @@
 import { ARTICLES } from '@/lib/articles-static'
+import { MODEL_SPECS } from '@/lib/model-specs'
 import { PICK_SYSTEMS } from '@/lib/pick-systems'
 import { SPORT_SLUGS } from '@/lib/sports'
 import { SITE_URL } from '@/lib/seo'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export interface SitemapEntry {
   path: string
@@ -10,19 +12,29 @@ export interface SitemapEntry {
 }
 
 const STATIC_PATHS = [
-  '/', '/picks', '/picks/games', '/picks/history', '/ev', '/edge', '/analytics', '/cheat-sheet', '/pricing', '/about', '/compare/oddsjam-alternative',
+  '/', '/picks', '/picks/games', '/picks/history', '/ev', '/edge', '/edge/projections', '/analytics', '/cheat-sheet', '/pricing', '/about', '/compare/oddsjam-alternative',
   '/tools', '/tools/boost-ev', '/tools/odds-calculator', '/tools/kelly-calculator', '/results', '/models', '/learn',
+]
+
+const LEGAL_PATHS = [
+  '/legal/terms',
+  '/legal/privacy',
+  '/legal/refunds',
+  '/legal/responsible-gambling',
 ]
 
 export function sitemapEntries(): SitemapEntry[] {
   // Pick-system and model pages come from the registry so a new system is listed automatically.
   const sportPaths = SPORT_SLUGS.flatMap(sport => [`/picks/${sport}`, `/picks/${sport}/projections`, `/picks/${sport}/systems`])
   const systemPaths = PICK_SYSTEMS.map(s => `/picks/${s.sport}/${s.slug}`)
+  const modelPaths = MODEL_SPECS.map(m => `/models/${m.slug}`)
   const learn: SitemapEntry[] = ARTICLES.map(a => ({ path: `/learn/${a.slug}`, lastmod: a.dateModified }))
+  const legal: SitemapEntry[] = LEGAL_PATHS.map(path => ({ path, lastmod: SITE_CONFIG.legalUpdated }))
   // The /learn index changes when any article does.
   const learnIndex = ARTICLES.map(a => a.dateModified).sort().pop()
   return [
-    ...[...STATIC_PATHS, ...sportPaths, ...systemPaths].map((path): SitemapEntry => (path === '/learn' ? { path, lastmod: learnIndex } : { path })),
+    ...[...STATIC_PATHS, ...sportPaths, ...systemPaths, ...modelPaths].map((path): SitemapEntry => (path === '/learn' ? { path, lastmod: learnIndex } : { path })),
+    ...legal,
     ...learn,
   ]
 }

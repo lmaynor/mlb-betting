@@ -4,7 +4,7 @@ import { apiGetStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR } from '@/lib/tokens'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Join Beezy.FYI' }
+export const metadata: Metadata = { title: 'Join beezy.fyi' }
 
 import { PRE_LAUNCH } from '@/lib/launch'
 import { DISCORD_URL } from '@/lib/links'

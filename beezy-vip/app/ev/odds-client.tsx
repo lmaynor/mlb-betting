@@ -16,6 +16,7 @@ import { LedgerStrip } from './ledger-strip'
 import type { EvHeadline } from '@/lib/types'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { PRE_LAUNCH } from '@/lib/launch'
 import {
   buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, fairAmericanOf, STAT_LABEL,
   type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
@@ -306,6 +307,16 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         </div>
       </div>
 
+      {PRE_LAUNCH && (
+        <div style={{ ...SURFACE_CARD, padding: '10px 16px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderColor: 'rgba(87,242,135,0.35)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', color: 'var(--signal)', background: 'var(--brand-dim)', padding: '3px 8px', borderRadius: '4px' }}>PRE-LAUNCH PREVIEW</span>
+            <span style={{ fontSize: '12.5px', color: 'var(--silver)' }}>The full Odds Terminal is unlocked for early visitors (included in All-Access Pro at launch).</span>
+          </div>
+          <Link href="/pricing" style={{ fontSize: '11.5px', color: 'var(--signal)', textDecoration: 'none', fontWeight: 600 }}>Lock pre-launch pricing &rarr;</Link>
+        </div>
+      )}
+
       <LedgerStrip h={headline} />
 
       <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
@@ -533,7 +544,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       )}
       {nRows > limit && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
-          <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setLimit(l => l + PAGE)}>Show {Math.min(PAGE, nRows - limit)} more of {nRows - limit}</button>
+          <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setLimit(l => l + PAGE)}>Show {Math.min(PAGE, nRows - limit)} more ({nRows - limit} remaining)</button>
         </div>
       )}
       <LockedNotice locked={locked} shown={allRows.length} what="prop lines" plan="The odds screen is part of All-Access Pro." />
