@@ -1143,3 +1143,113 @@ def test_there_is_one_gemini_call_and_no_separate_analysis_step(monkeypatch):
         td.run_reply_ammo()
     assert calls == [td.REPLY_SYSTEM_PROMPT]
     assert not any("analysis" in m.get("content", "") for m in _posted(post))
+
+
+# ── 160-Character Tweet Engine Tests ──────────────────────────────────────────
+
+def test_enforce_160_cap_strips_markdown_and_emojis():
+    raw = '```json\n"FD hanging Tatum o26.5 Pts at +112 vs -108 fair! 🔥 #GamblingX beezy.fyi/picks"\n```'
+    clean = td.enforce_160_cap(raw, max_chars=160)
+    assert len(clean) <= 160
+    assert "```" not in clean
+    assert "🔥" not in clean
+    assert "!" not in clean
+    assert "#" not in clean
+    assert clean.startswith("FD hanging Tatum o26.5 Pts")
+
+
+@pytest.mark.parametrize("banned", [
+    "lock", "smash", "parlay", "AI", "algorithm", "guaranteed", "let's dive in", "fire", "tail",
+])
+def test_enforce_160_cap_blocks_banned_words(banned):
+    bad = f"This pick is an absolute {banned} tonight on the slate. beezy.fyi/picks"
+    assert td.enforce_160_cap(bad, max_chars=160) == ""
+
+
+def test_enforce_160_cap_allows_locked_and_retail():
+    ok1 = "3 official confluence plays locked on today's card. beezy.fyi/picks"
+    assert td.enforce_160_cap(ok1, max_chars=160) == ok1
+
+    ok2 = "Retail books are hanging -115 on the over. beezy.fyi/picks"
+    assert td.enforce_160_cap(ok2, max_chars=160) == ok2
+
+
+@pytest.mark.parametrize("k", [1, 3, 5])
+def test_generate_short_tweet_copy_morning_lengths_and_voice(k):
+    top = {
+        "player": "Jayson Tatum",
+        "line": "o26.5 Pts",
+        "book": "FanDuel",
+        "odds": "+112",
+        "fair": "-108",
+        "n_books": 8,
+        "ev": "+5.4%",
+    }
+    copy = td.generate_short_tweet_copy("morning", {"count": k, "top_play": top})
+    assert len(copy) <= 160
+    assert not td.contains_banned_word(copy)
+    assert "beezy.fyi/picks" in copy
+    assert "Tatum" in copy
+    assert f"{k} official" in copy
+
+
+def test_generate_short_tweet_copy_dislocation():
+    payload = {
+        "gap": "1.5-pt",
+        "sport": "NBA",
+        "player": "Fox",
+        "stat": "Pts",
+        "side1": "o24.5",
+        "odds1": "-105",
+        "book1": "FD",
+        "side2": "u26.5",
+        "odds2": "-108",
+        "book2": "DK",
+        "hold": "1.6",
+        "win_rate": "14.2",
+    }
+    copy = td.generate_short_tweet_copy("dislocation", payload)
+    assert len(copy) <= 160
+    assert not td.contains_banned_word(copy)
+    assert "beezy.fyi/ev" in copy
+    assert "Fox Pts" in copy
+    assert "1.6% hold" in copy
+
+
+def test_generate_short_tweet_copy_settlement_winning_day():
+    payload = {
+        "w": 3,
+        "l": 1,
+        "units": 2.18,
+        "hero": "Cole o6.5 Ks (+115)",
+        "roi": 8.2,
+        "total_bets": 7500,
+        "total_units": 568.0,
+    }
+    copy = td.generate_short_tweet_copy("settlement", payload)
+    assert len(copy) <= 160
+    assert not td.contains_banned_word(copy)
+    assert "beezy.fyi/results" in copy
+    assert "3-1" in copy
+    assert "+2.18u" in copy
+    assert "+8.2% flat ROI" in copy
+
+
+def test_generate_short_tweet_copy_settlement_losing_day():
+    payload = {
+        "w": 1,
+        "l": 3,
+        "units": -1.40,
+        "hero": "",
+        "roi": 8.1,
+        "total_bets": 7500,
+        "total_units": 568.0,
+    }
+    copy = td.generate_short_tweet_copy("settlement", payload)
+    assert len(copy) <= 160
+    assert not td.contains_banned_word(copy)
+    assert "beezy.fyi/results" in copy
+    assert "1-3" in copy
+    assert "-1.40u" in copy
+    assert "+8.1% flat ROI" in copy
+

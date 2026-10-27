@@ -65,17 +65,23 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
           <thead><tr>{heads.map(h => <th key={h} className="dell-heading" title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
-              const t = r.score > 0 ? TIER_META[scoreTier(r.score)] : null
               const b = r.book ? bookDisplay(r.book) : null
               const fair = fairAmerican(r.pFair)
+              const ev = r.marketEv ?? 0
+              const isOfficial = ev >= 0.03 && ev <= 0.10 && r.score >= 68 && (r.sport === 'mlb' ? r.isPick !== false : (!!r.confluence && (r.nBooks == null || r.nBooks >= 4) && (r.modelEdge == null || r.modelEdge >= 0.015)))
+              const isOutlier = ev >= 0.025 && ev <= 0.15 && (r.nBooks == null || r.nBooks >= 3) && !isOfficial
               return (
                 <tr key={r.key} className="sys-row">
                   <td style={TD}>
-                    {t ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px' }}>
-                        <span className="mono" style={{ color: t.color, fontWeight: 700 }}>{r.score}</span>
-                        <span className="dell-heading" style={{ fontSize: '10px', color: t.color }}>{t.label}</span>
-                      </span>
+                    {r.score > 0 ? (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {isOfficial ? (
+                          <span className="dell-heading" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                        ) : isOutlier ? (
+                          <span className="dell-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                        ) : null}
+                        <span className="mono" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--silver)', fontWeight: 700 }}>{r.score}</span>
+                      </div>
                     ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                   </td>
                   <td style={TD}>

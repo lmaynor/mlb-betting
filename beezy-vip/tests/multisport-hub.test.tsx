@@ -50,7 +50,7 @@ describe('unified projections board', () => {
     const tr = screen.getByText('Jo Doe').closest('tr')!
     const t = within(tr)
     expect(t.getByText('62')).toBeInTheDocument()
-    expect(t.getByText('LEAN')).toBeInTheDocument()
+    expect(t.getByText('+EV OUTLIER')).toBeInTheDocument()
     const cells = [...tr.querySelectorAll('td')].map(td => td.textContent ?? '')
     expect(cells[1]).not.toContain('LAL')                   // the player cell is just the name
     expect(cells[2]).toBe('LAL')                            // the team column: his own team only, no game or opponent
@@ -145,10 +145,10 @@ describe('sport tabs', () => {
     render(<SportTabs sport={sport} active="projections" />)
     expect(screen.getByText(SPORT_PILLARS[sport].shortName)).toBeInTheDocument()
     expect(screen.getByText(new RegExp(`${getSystemsBySport(sport).length} Systems`))).toBeInTheDocument()
-    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'PROJECTIONS', 'SYSTEMS'])
-    expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'ALL PROJECTIONS', 'SYSTEMS'])
+    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
-    expect(screen.getByRole('link', { name: 'PROJECTIONS' })).toHaveAttribute('href', `/picks/${sport}/projections`)
+    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('href', `/picks/${sport}/projections`)
     expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('href', `/picks/${sport}/systems`)
   })
   it('the header counts match the specified systems per sport', () => {

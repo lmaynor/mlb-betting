@@ -45,10 +45,10 @@ const MIN_EV = [
   { label: '5%+', v: 0.05 },
 ]
 const ODDS_MIN = [
-  { label: 'ANY', v: 0 },
-  { label: '+200', v: 200 },
-  { label: '+350', v: 350 },
-  { label: '+500', v: 500 },
+  { label: 'All Alts', v: 0 },
+  { label: '+200+', v: 200 },
+  { label: '+350+', v: 350 },
+  { label: '+500+', v: 500 },
 ]
 const PAGE = 150
 const MIN_REF = 3          // reference books needed behind a fair value on the Standard view
@@ -107,9 +107,9 @@ function fairText(p: number | null): string {
 }
 
 const MODES: { key: OddsScreenMode; label: string }[] = [
-  { key: 'ev', label: 'Standard +EV' },
-  { key: 'arb', label: 'Arbitrage' },
-  { key: 'longshots', label: 'Alt & Longshots' },
+  { key: 'ev', label: '+EV Scanner' },
+  { key: 'arb', label: 'Arb & Middles' },
+  { key: 'longshots', label: 'Alt Lines & Tail (+200+)' },
 ]
 
 export function OddsClient({ initial, initialLocked, headline }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null }) {
@@ -388,8 +388,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             <>
               <Field label="LINES">
                 <PillGroup>
-                  <Pill active={lines === 'main'} onClick={() => setLines('main')} title="Hide lines off the player's main line by a point or more, and alternate-market rungs">MAIN ONLY</Pill>
-                  <Pill active={lines === 'all'} onClick={() => setLines('all')}>ALL LINES (INCL. ALTS)</Pill>
+                  <Pill active={lines === 'main'} onClick={() => setLines('main')} title="Standard over/under line quoted by most sportsbooks">Main Lines</Pill>
+                  <Pill active={lines === 'all'} onClick={() => setLines('all')} title="Includes alternate milestone rungs and shifted lines">Main + Alt Ladders</Pill>
                 </PillGroup>
               </Field>
               <Field label="O/U">
@@ -455,12 +455,12 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             <>
               <Field label="STRATEGY">
                 <PillGroup>
-                  <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">ALL (+200+ / ALTS)</Pill>
-                  <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Snipe over: longshot overs priced above their fair value (the +EV tail)">SNIPE OVER</Pill>
-                  <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="Fade under / lay NO: buy the under or NO where the tail is overpriced (the +EV house side)">FADE UNDER / LAY NO</Pill>
+                  <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">All Tail Lines</Pill>
+                  <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Longshot Over/Yes price pays more than its true fair probability">Buy Over (+EV Milestone)</Pill>
+                  <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="House-side play: fade an overpriced retail milestone by buying Under or Exchange NO">Lay the Longshot (Buy Under / NO)</Pill>
                 </PillGroup>
               </Field>
-              <Field label="OVER PAYS">
+              <Field label="MIN PAYOUT">
                 <PillGroup>
                   {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
                 </PillGroup>
@@ -470,9 +470,10 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
                 </PillGroup>
               </Field>
-              <Field label="FAIR VALUE">
+              <Field label="FAIR SOURCE">
                 <PillGroup>
-                  <Pill active={useCurve} onClick={() => setUseCurve(v => !v)} title="Where fewer than two reference books price the exact line, use the fair probability read off the player's own multi-line curve">CURVE-FITTED FAIR</Pill>
+                  <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
+                  <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
                 </PillGroup>
               </Field>
             </>
@@ -600,16 +601,20 @@ function PriceCell({ top, bottom, topState, bottomState, tint, best }: {
   )
 }
 
-function TierPill({ alt }: { alt: boolean }) {
+function TierPill({ alt, modalPoint }: { alt: boolean; modalPoint?: number | null }) {
+  const tip = alt
+    ? (modalPoint != null ? `Main line: ${modalPoint}` : 'An alternate line: a point or more off the main line')
+    : 'The main line'
   return (
-    <span className="mono" title={alt ? 'An alternate line: a point or more off the main line, or quoted only as a ladder rung' : 'The main line'}
-      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? '#3a4156' : HAIR}`, color: alt ? 'var(--silver)' : 'var(--fog)' }}>
-      {alt ? 'ALT' : 'MAIN'}
+    <span className="mono" title={tip}
+      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? '#3a4156' : HAIR}`, color: alt ? '#9ca3af' : 'var(--fog)' }}>
+      {alt ? '[ALT]' : 'MAIN'}
     </span>
   )
 }
 
 function PropCells({ row, label }: { row: BoardRow; label: string }) {
+  const mainLineTip = row.modal_point != null ? `Main line: ${row.modal_point}` : undefined
   return (
     <>
       <td className="odds-prop">
@@ -619,7 +624,12 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
           </span>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)', lineHeight: 1.3 }}>{row.player}</div>
-            <div className="mono odds-sub" style={{ fontSize: '11px' }}>{label} {STAT_LABEL[row.stat] ?? row.stat}</div>
+            <div className="mono odds-sub" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span>{label} {STAT_LABEL[row.stat] ?? row.stat}</span>
+              {row.is_alt === true && (
+                <span title={mainLineTip} style={{ fontSize: '10px', color: '#9ca3af', fontFamily: 'var(--font-mono), monospace' }}>[ALT]</span>
+              )}
+            </div>
           </div>
         </div>
       </td>
@@ -665,7 +675,7 @@ function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string;
       </td>
       <td style={{ textAlign: 'right' }}>
         <div className="mono" style={{ fontSize: '12px', color: size && size.dollars > 0 ? 'var(--chalk)' : 'var(--fog)' }}>{size && size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</div>
-        <div style={{ marginTop: '2px' }}><TierPill alt={r.row.is_alt === true} /></div>
+        <div style={{ marginTop: '2px' }}><TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} /></div>
       </td>
       {columns.map(c => {
         const q = byBook.get(c.key)
@@ -814,10 +824,10 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
             <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
             <div className="mono odds-sub" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               {m.fairSource === 'curve' ? (
-                <span title={`Fit from ${r.row.curve_n ?? 0} rung${r.row.curve_n === 1 ? '' : 's'} of this player's own lines; an unvalidated estimate`}
-                  style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>CURVE</span>
+                <span title={`Implied from player's main line (${r.row.modal_point ?? 'main'}) across reference books`}
+                  style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>EST. FAIR</span>
               ) : <span>{m.nRef} BKS</span>}
-              <TierPill alt={m.isAltLine} />
+              <TierPill alt={m.isAltLine} modalPoint={r.row.modal_point} />
             </div>
           </>
         )}

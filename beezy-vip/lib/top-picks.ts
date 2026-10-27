@@ -38,6 +38,10 @@ export interface TopPick {
   result: Bet['result']
   /** the underlying bet, for tracked MLB rows */
   bet?: Bet
+  nBooks?: number | null
+  confluence?: boolean
+  modelEdge?: number | null
+  marketEv?: number | null
 }
 
 const edgeFraction = (e: number | null | undefined): number | null => {
@@ -69,6 +73,7 @@ export function fromBet(bet: Bet): TopPick {
     tracked: true,
     result: bet.result,
     bet,
+    confluence: bet.system !== 'EV',
   }
 }
 
@@ -101,7 +106,85 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
     basis: r.confluence ? 'confluence' : 'projection',
     tracked: false,
     result: null,
+    nBooks: r.n_books ?? null,
+    confluence: !!r.confluence,
+    modelEdge: r.model_edge ?? null,
+    marketEv: r.market_ev ?? null,
   }
+}
+
+/**
+ * Strict Tier 1 Official Card Gate:
+ * - Projections: confluence = true, nBooks >= 4, 3%-10% EV, modelEdge >= 1.5%, score >= 68.
+ * - MLB: validated != false, 3%-10% edge, score >= 68.
+ */
+export function isOfficialCardPlay(p: TopPick): boolean {
+  const edge = p.edge ?? 0
+  if (edge < 0.03 || edge > 0.10) return false
+  if (p.score < 68) return false
+
+  if (p.sport === 'mlb') {
+    if (p.bet && p.bet.validated === false) return false
+    return true
+  }
+
+  if (!p.confluence && p.basis !== 'confluence') return false
+  if (p.nBooks != null && p.nBooks < 4) return false
+  if (p.modelEdge != null && p.modelEdge < 0.015) return false
+
+  return true
+}
+
+/** Tier 2: Live +EV Outliers (market EV >= 3% without confluence or sitting outside card cap) */
+export function isEvOutlier(p: TopPick): boolean {
+  const edge = p.edge ?? 0
+  if (edge < 0.025 || edge > 0.15) return false
+  if (p.nBooks != null && p.nBooks < 3) return false
+  return !isOfficialCardPlay(p)
+}
+
+/**
+ * Dynamic 1..5 Daily Card Builder:
+ * Deduplicates max 1 play per player, max 2 plays per game, returns 1..5 plays without padding.
+ */
+export function buildDailyCard(picks: TopPick[]): TopPick[] {
+  const qualified = picks.filter(isOfficialCardPlay)
+
+  // Max 1 play per player (highest score)
+  const byPlayer = new Map<string, TopPick>()
+  for (const p of qualified) {
+    const key = (p.who || p.key).trim().toLowerCase()
+    const curr = byPlayer.get(key)
+    if (!curr || p.score > curr.score || (p.score === curr.score && (p.edge ?? 0) > (curr.edge ?? 0))) {
+      byPlayer.set(key, p)
+    }
+  }
+
+  const playerDeduped = Array.from(byPlayer.values())
+  playerDeduped.sort((a, b) =>
+    (Number(b.confluence || b.basis === 'confluence') - Number(a.confluence || a.basis === 'confluence')) ||
+    (b.score - a.score) ||
+    ((b.nBooks ?? 0) - (a.nBooks ?? 0)) ||
+    ((b.edge ?? 0) - (a.edge ?? 0))
+  )
+
+  // Max 2 plays per game
+  const gameCounts = new Map<string, number>()
+  const gameDeduped: TopPick[] = []
+  for (const p of playerDeduped) {
+    const g = (p.game || '').trim().toLowerCase()
+    if (!g) {
+      gameDeduped.push(p)
+      continue
+    }
+    const c = gameCounts.get(g) ?? 0
+    if (c < 2) {
+      gameCounts.set(g, c + 1)
+      gameDeduped.push(p)
+    }
+  }
+
+  return gameDeduped.slice(0, 5)
 }
 
 /**

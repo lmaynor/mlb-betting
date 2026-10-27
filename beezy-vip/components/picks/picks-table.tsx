@@ -65,26 +65,31 @@ function PnL({ profit, result, stake }: { profit: number | null; result: string 
 
 function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'center' }) {
   const score = beezyscore(bet)
-  const tier = scoreTier(score)
-  const color = TIER_COLOR[tier]
+  const edge = Math.abs(bet.edge ?? 0) < 2 ? (bet.edge ?? 0) : (bet.edge ?? 0) / 100
+  const isOfficial = edge >= 0.03 && edge <= 0.10 && score >= 68 && bet.validated !== false
+  const isOutlier = edge >= 0.025 && edge <= 0.15 && !isOfficial && bet.system === 'EV'
+  const badgeColor = isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : undefined
+  const badgeLabel = isOfficial ? 'OFFICIAL PLAY' : isOutlier ? '+EV OUTLIER' : null
 
   return (
     <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', gap: '2px' }}>
-      <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color, lineHeight: 1 }}>
+      <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color: badgeColor ?? 'var(--silver)', lineHeight: 1 }}>
         {score}
       </span>
-      <span className="dell-heading" style={{
-        fontSize: '10px',
-        letterSpacing: '0.08em',
-        padding: '2px 5px',
-        borderRadius: 'var(--radius-pill)',
-        border: `1px solid ${color}`,
-        background: `color-mix(in oklab, ${color} 14%, var(--carbon))`,
-        color,
-        whiteSpace: 'nowrap',
-      }}>
-        {TIER_LABEL[tier]}
-      </span>
+      {badgeLabel && badgeColor && (
+        <span className="dell-heading" style={{
+          fontSize: '10px',
+          letterSpacing: '0.06em',
+          padding: '2px 5px',
+          borderRadius: 'var(--radius-pill)',
+          border: `1px solid ${badgeColor}`,
+          background: `color-mix(in oklab, ${badgeColor} 14%, var(--carbon))`,
+          color: badgeColor,
+          whiteSpace: 'nowrap',
+        }}>
+          {badgeLabel}
+        </span>
+      )}
     </div>
   )
 }

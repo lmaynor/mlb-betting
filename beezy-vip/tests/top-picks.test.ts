@@ -1,4 +1,15 @@
-import { flatUnits, fromBet, fromProjection, rankTopPicks, recordOf, topFromBets, type TopPick } from '../lib/top-picks'
+import {
+  buildDailyCard,
+  flatUnits,
+  fromBet,
+  fromProjection,
+  isEvOutlier,
+  isOfficialCardPlay,
+  rankTopPicks,
+  recordOf,
+  topFromBets,
+  type TopPick,
+} from '../lib/top-picks'
 import type { Bet, SportProjectionRow } from '../lib/types'
 
 const bet = (o: Partial<Bet>): Bet => ({
@@ -86,5 +97,65 @@ describe('top picks', () => {
       { odds: 100, result: 'push' }, { odds: 100, result: 'void' }, { odds: 100, result: null },
     ])
     expect(r).toEqual({ wins: 2, losses: 1, pushes: 1, graded: 4, pending: 1, units: 1 + 0.5 - 1 })
+  })
+
+  it('isOfficialCardPlay enforces sweet-spot EV 3-10%, score >= 68, confluence, 4+ books', () => {
+    const ok: TopPick = {
+      key: 'nba|1', sport: 'nba', who: 'Tatum', what: 'Over 26.5 Pts', game: 'BOS @ NYK',
+      odds: 112, book: 'fanduel', edge: 0.054, score: 74, basis: 'confluence', tracked: false,
+      result: null, nBooks: 6, confluence: true, modelEdge: 0.032,
+    }
+    expect(isOfficialCardPlay(ok)).toBe(true)
+
+    // Adverse selection cap: edge > 10% rejected
+    expect(isOfficialCardPlay({ ...ok, edge: 0.12 })).toBe(false)
+    // Edge < 3% rejected
+    expect(isOfficialCardPlay({ ...ok, edge: 0.02 })).toBe(false)
+    // Score < 68 rejected
+    expect(isOfficialCardPlay({ ...ok, score: 65 })).toBe(false)
+    // nBooks < 4 rejected
+    expect(isOfficialCardPlay({ ...ok, nBooks: 3 })).toBe(false)
+    // Confluence required for projections
+    expect(isOfficialCardPlay({ ...ok, confluence: false, basis: 'projection' })).toBe(false)
+  })
+
+  it('isEvOutlier identifies soft book market outliers without confluence', () => {
+    const outlier: TopPick = {
+      key: 'nba|2', sport: 'nba', who: 'Brown', what: 'Over 22.5 Pts', game: 'BOS @ NYK',
+      odds: 105, book: 'draftkings', edge: 0.05, score: 62, basis: 'projection', tracked: false,
+      result: null, nBooks: 4, confluence: false,
+    }
+    expect(isEvOutlier(outlier)).toBe(true)
+
+    // Confluence play in official gate is not an outlier
+    const official: TopPick = { ...outlier, score: 72, confluence: true, basis: 'confluence', modelEdge: 0.02 }
+    expect(isEvOutlier(official)).toBe(false)
+  })
+
+  it('buildDailyCard returns dynamic 1..5 plays without padding and deduplicates player/game', () => {
+    const p1: TopPick = {
+      key: 'p1', sport: 'nba', who: 'Tatum', what: 'Over 26.5 Pts', game: 'BOS @ NYK',
+      odds: 110, book: 'fanduel', edge: 0.05, score: 75, basis: 'confluence', tracked: false,
+      result: null, nBooks: 5, confluence: true, modelEdge: 0.03,
+    }
+    const p1_reb: TopPick = {
+      ...p1, key: 'p1_reb', what: 'Over 8.5 Reb', score: 72,
+    }
+    const p2: TopPick = {
+      key: 'p2', sport: 'nba', who: 'Brunson', what: 'Over 25.5 Pts', game: 'BOS @ NYK',
+      odds: -105, book: 'draftkings', edge: 0.045, score: 70, basis: 'confluence', tracked: false,
+      result: null, nBooks: 5, confluence: true, modelEdge: 0.02,
+    }
+    const p3: TopPick = {
+      key: 'p3', sport: 'nba', who: 'Towns', what: 'Over 21.5 Pts', game: 'BOS @ NYK',
+      odds: -110, book: 'betmgm', edge: 0.04, score: 69, basis: 'confluence', tracked: false,
+      result: null, nBooks: 5, confluence: true, modelEdge: 0.02,
+    }
+
+    // p1 has 2 props -> only best (p1 pts, score 75) kept
+    // BOS @ NYK has 3 players (Tatum, Brunson, Towns) -> only top 2 kept (Tatum, Brunson)
+    const card = buildDailyCard([p1, p1_reb, p2, p3])
+    expect(card).toHaveLength(2)
+    expect(card.map(p => p.who)).toEqual(['Tatum', 'Brunson'])
   })
 })

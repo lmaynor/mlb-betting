@@ -9,7 +9,7 @@ import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { SYSTEM_COLOR, bookText } from '@/lib/tokens'
-import type { TopPick } from '@/lib/top-picks'
+import { isOfficialCardPlay, isEvOutlier, type TopPick } from '@/lib/top-picks'
 
 /** A top pick plus the images the card shows. */
 export interface CardPick extends TopPick {
@@ -107,10 +107,14 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         )}
       </div>
 
-      <div title={`${TIER_LABEL[scoreTier(pick.score)]}. Beezy Score is a 0-100 strength score, not a win probability.`}
+      <div title={`Beezy Score ${pick.score}. Not a win probability.`}
         style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
         <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
-        <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '999px', border: `1px solid ${tierColor}`, color: tierColor }}>{TIER_LABEL[scoreTier(pick.score)]}</span>
+        {isOfficialCardPlay(pick) ? (
+          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #57F287', background: 'rgba(87,242,135,0.12)', color: '#57F287', whiteSpace: 'nowrap' }}>OFFICIAL PLAY</span>
+        ) : isEvOutlier(pick) ? (
+          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #38bdf8', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', whiteSpace: 'nowrap' }}>+EV OUTLIER</span>
+        ) : null}
       </div>
     </div>
   )
@@ -243,6 +247,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <BrandWordmark size="lg" />
                 <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
                 <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', marginTop: '5px' }}>{today}</div>
+                <div style={{ fontSize: '11.5px', color: 'var(--silver)', lineHeight: 1.45, marginTop: '8px' }}>
+                  Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
+                </div>
+                <div className="mono" style={{ fontSize: '10.5px', color: '#57F287', background: 'rgba(87,242,135,0.08)', border: '1px solid rgba(87,242,135,0.22)', borderRadius: '4px', padding: '5px 8px', marginTop: '8px' }}>
+                  {shown.length} Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
+                </div>
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
                 style={{ fontSize: '10px', letterSpacing: '0.08em', color: allExpanded ? 'var(--chalk)' : 'var(--fog)', background: 'transparent', border: `1px solid ${allExpanded ? 'var(--steel)' : 'var(--basalt)'}`, padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>

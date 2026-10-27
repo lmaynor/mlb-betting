@@ -25,10 +25,10 @@ export const SECTIONS: Section[] = [
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.
     id: 'picks', prefixes: ['/picks/history', '/picks/games', '/cheat-sheet'], exact: ['/picks'],
     tabs: [
-      { label: 'Top 10', href: '/picks' },
-      { label: 'Game picks', href: '/picks/games' },
-      { label: 'History', href: '/picks/history' },
       { label: 'Daily Card', href: '/cheat-sheet' },
+      { label: 'Top Signals', href: '/picks' },
+      { label: 'Game Lines', href: '/picks/games' },
+      { label: 'Graded History', href: '/picks/history' },
     ],
   },
   {
