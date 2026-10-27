@@ -13,7 +13,7 @@ export const SITE_CONFIG = {
   supportEmail: 'support@beezy.fyi',
   xHandle: '@beezy_fyi',
   xUrl: X_URL,
-  discordInviteUrl: process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || DISCORD_URL,
+  discordInviteUrl: DISCORD_URL,
   operatorStatement:
     'beezy.fyi is an independent quantitative sports analytics publication operated by an individual sole proprietor.',
   riskDisclaimer:

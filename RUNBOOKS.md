@@ -495,7 +495,7 @@ served from Vercel edge runtime + two Cloud Run jobs that generate tweet
 drafts via Gemini and post picks cards to Discord.
 
 Twitter handle: @beezy_fyi
-Discord invite: discord.gg/HfMYCmbmE
+Discord invite: discord.gg/sWNKxh6jJX (configured via NEXT_PUBLIC_DISCORD_INVITE_URL)
 Site: https://beezy.fyi
 Public API: https://api.beezy.fyi
 
@@ -629,13 +629,14 @@ Frontend null-guards this -- old JSON strings show as-is. Not worth backfilling.
 - No hype, no LOCK, no CASH IT
 - Think Bloomberg terminal meets someone who actually knows what they are doing
 - Always include beezy.fyi in at least one variant
-- Always include discord.gg/HfMYCmbmE in at least one variant
+- Always include discord.gg/sWNKxh6jJX in at least one variant
 
 ### Website domain wiring
 
 The public site is `https://beezy.fyi`; `https://www.beezy.fyi` redirects to
 the apex. Vercel should keep:
 - `NEXT_PUBLIC_BASE_URL=https://beezy.fyi`
+- `NEXT_PUBLIC_DISCORD_INVITE_URL=https://discord.gg/sWNKxh6jJX`
 - `BETTING_API_URL=https://api.beezy.fyi`
 
 The Cloud Run public API should keep Secret Manager `site-origin` set to:
