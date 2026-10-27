@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { OgBrandBadge } from "@/lib/og-brand";
 import { headshotUrlById } from "@/lib/sport-assets";
+import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
@@ -231,7 +232,7 @@ export async function GET() {
           <div style={{ display:"flex", width:"1px", height:"32px", background:"#1e2230" }} />
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:"3px" }}>
             <span style={{ fontSize:"9px", color:"#7d8596", letterSpacing:"2px" }}>COMMUNITY</span>
-            <span style={{ fontSize:"18px", color:"#8b92f0", fontWeight:800 }}>discord.gg/HfMYCmbmE</span>
+            <span style={{ fontSize:"18px", color:"#8b92f0", fontWeight:800 }}>{DISCORD_INVITE_LABEL}</span>
           </div>
         </div>
       </div>

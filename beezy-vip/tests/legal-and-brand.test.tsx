@@ -125,7 +125,7 @@ describe('brand wiring', () => {
     expect(read('app/manifest.ts')).toContain('/icon-512.png')
     const layout = read('app/layout.tsx')
     expect(layout).toContain("new URL('https://beezy.fyi')")
-    expect(layout).toContain("site: '@beezy_fyi'")
+    expect(layout).toMatch(/site:\s+'@beezy_fyi'/)
   })
 
   it('icon.svg and the generated PNGs exist', () => {
