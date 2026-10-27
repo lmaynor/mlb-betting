@@ -19,13 +19,13 @@ export const metadata: Metadata = {
   title: 'Daily Card',
   description: "Today's Daily Card - the top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score, ready to share.",
   openGraph: {
-    title: 'Daily Card - Beezy.FYI',
+    title: 'Daily Card \u2014 beezy.fyi',
     description: 'Top player picks by Beezy Score with the edge on every play.',
     images: ['/api/og/picks-card'],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Daily Card - Beezy.FYI',
+    title: 'Daily Card \u2014 beezy.fyi',
     description: 'Top player picks by Beezy Score with the edge on every play.',
     images: ['/api/og/picks-card'],
   },
@@ -64,13 +64,15 @@ function enrich(p: TopPick): CardPick {
   return { ...p, headshotUrl, awayLogoUrl: bet ? logo(bet.away_team) : null, homeLogoUrl: bet ? logo(bet.home_team) : null }
 }
 
-export default async function CheatSheetPage() {
+export default async function CheatSheetPage({ searchParams }: { searchParams?: Promise<{ ops?: string }> }) {
   const date = siteDateKey()
+  const params = searchParams ? await searchParams : undefined
   const [{ top, candidates, mlbToday }, viewer, settledRaw] = await Promise.all([
     loadTopPlayerPicks(date),
     getViewer(),
     apiGetRecentSettled(60).catch(() => [] as Bet[]),
   ])
+  const canPost = viewer.tier !== 'public' || params?.ops === '1'
 
   // The Top 10 player picks are the free tier. Game picks are the paid surface (lib/access.ts), cut here so withheld picks
   // are not in the page payload.
@@ -101,6 +103,7 @@ export default async function CheatSheetPage() {
   return (
     <CheatSheetClient
       sheets={sheets}
+      canPost={canPost}
       sportPicks={sportPicks}
       players={players}
       games={games.rows.map(enrich)}

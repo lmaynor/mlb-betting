@@ -7,8 +7,8 @@ import type { Metadata } from 'next'
 import { asOfLabel } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title:       'Results -- All Settled Bets',
-  description: 'Every settled paper bet from the Beezy.FYI MLB models and the +EV scanner. Full P&L history, win rates, and edge vs ROI.',
+  title:       'Results \u2014 All Settled Bets',
+  description: 'Every settled paper bet from the beezy.fyi MLB models and the +EV scanner. Full P&L history, win rates, and edge vs ROI.',
 }
 
 export default async function ResultsPage() {

@@ -26,8 +26,8 @@ export default function OddsCalculatorPage() {
 
       <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div><label style={labelStyle}>Side 1 (American)</label><input type="number" value={odds1} onChange={e => setOdds1(e.target.value)} placeholder="-115" style={inputStyle} /></div>
-          <div><label style={labelStyle}>Side 2 (American)</label><input type="number" value={odds2} onChange={e => setOdds2(e.target.value)} placeholder="+105" style={inputStyle} /></div>
+          <div><label htmlFor="odds1" style={labelStyle}>Side 1 (American)</label><input id="odds1" type="number" value={odds1} onChange={e => setOdds1(e.target.value)} placeholder="-110" style={inputStyle} /></div>
+          <div><label htmlFor="odds2" style={labelStyle}>Side 2 (American)</label><input id="odds2" type="number" value={odds2} onChange={e => setOdds2(e.target.value)} placeholder="-110" style={inputStyle} /></div>
         </div>
       </div>
 

@@ -121,7 +121,7 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     slug: 'nhl',
     name: 'National Hockey League',
     shortName: 'NHL',
-    seasonBadge: '6 PROP PROJECTIONS + +EV SCANNER',
+    seasonBadge: '7 PROP SYSTEMS (6 ACTIVE) + +EV SCANNER',
     status: 'live',
     board: 'projection',
     accent: '#38bdf8',

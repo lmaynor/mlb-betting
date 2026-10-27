@@ -47,7 +47,13 @@ function ClerkNav() {
     <NavShell
       isSignedIn={!!isSignedIn}
       userButton={<UserButton />}
-      signIn={<SignInButton mode="modal"><button style={SIGN_IN_STYLE}>Sign In</button></SignInButton>}
+      signIn={
+        PRE_LAUNCH ? (
+          <Link href="/login" style={{ ...SIGN_IN_STYLE, textDecoration: 'none' }}>Sign In</Link>
+        ) : (
+          <SignInButton mode="modal"><button style={SIGN_IN_STYLE}>Sign In</button></SignInButton>
+        )
+      }
     />
   )
 }

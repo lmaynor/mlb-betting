@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
@@ -278,6 +278,8 @@ export function ResultsClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page,    setPage]    = useState(0)
   const [onePerProp, setOnePerProp] = useState(true)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const PAGE_SIZE = 30
 
@@ -358,16 +360,18 @@ export function ResultsClient({
               <span className="mono" style={{ fontSize: '10px', color: '#f3f4f6' }}>-- models, paper stakes</span>
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={curve} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(1, Math.floor(curve.length / 7))} />
-              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toLocaleString()}`} width={68} />
-              <Tooltip contentStyle={{ background: '#171a24', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#7d8596' }} formatter={(v) => money(Number(v))} />
-              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="ev_flat_cum" name="+EV alerts (flat $100)" stroke="#57f287" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="models_cum" name="Models (paper stakes)" stroke="#f3f4f6" strokeWidth={2} dot={false} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {mounted && (
+            <ResponsiveContainer width="100%" height={220} minWidth={0} minHeight={220}>
+              <LineChart data={curve} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(1, Math.floor(curve.length / 7))} />
+                <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toLocaleString()}`} width={68} />
+                <Tooltip contentStyle={{ background: '#171a24', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#7d8596' }} formatter={(v) => money(Number(v))} />
+                <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="ev_flat_cum" name="+EV alerts (flat $100)" stroke="#57f287" strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line type="monotone" dataKey="models_cum" name="Models (paper stakes)" stroke="#f3f4f6" strokeWidth={2} dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       )}
 
@@ -391,25 +395,27 @@ export function ResultsClient({
               </span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={pnlRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
-                tickLine={false} axisLine={false} tickFormatter={fmtDate}
-                interval={Math.floor(pnlRows.length / 6)} />
-              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
-                tickLine={false} axisLine={false}
-                tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(0)}`} width={60} />
-              <Tooltip content={<PnLTooltip />} />
-              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
-              <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
-              <Area dataKey="dd_bot" fill="#ec6a6a26" stroke="none" legendType="none" />
-              {chartSystems.map(s => (
-                <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#9ca3af'}
-                  strokeWidth={1} dot={false} connectNulls strokeOpacity={0.6} />
-              ))}
-              <Line type="monotone" dataKey="ALL" stroke="#f3f4f6" strokeWidth={2.5} dot={false} connectNulls />
-            </ComposedChart>
-          </ResponsiveContainer>
+          {mounted && (
+            <ResponsiveContainer width="100%" height={200} minWidth={0} minHeight={200}>
+              <ComposedChart data={pnlRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
+                  tickLine={false} axisLine={false} tickFormatter={fmtDate}
+                  interval={Math.floor(pnlRows.length / 6)} />
+                <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
+                  tickLine={false} axisLine={false}
+                  tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(0)}`} width={60} />
+                <Tooltip content={<PnLTooltip />} />
+                <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
+                <Area dataKey="dd_top" fill="transparent" stroke="none" legendType="none" />
+                <Area dataKey="dd_bot" fill="#ec6a6a26" stroke="none" legendType="none" />
+                {chartSystems.map(s => (
+                  <Line key={s} type="monotone" dataKey={s} stroke={PILL[s] ?? '#9ca3af'}
+                    strokeWidth={1} dot={false} connectNulls strokeOpacity={0.6} />
+                ))}
+                <Line type="monotone" dataKey="ALL" stroke="#f3f4f6" strokeWidth={2.5} dot={false} connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
         </div>
       )}
 
@@ -428,20 +434,22 @@ export function ResultsClient({
               <span className="mono" style={{ fontSize: '10px', color: 'var(--link)' }}>-- realized ROI</span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={edgeRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-              <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
-                tickLine={false} axisLine={false} tickFormatter={fmtDate}
-                interval={Math.floor(edgeRows.length / 6)} />
-              <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
-                tickLine={false} axisLine={false}
-                tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} width={44} />
-              <Tooltip content={<EdgeTooltip />} />
-              <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="edge" stroke="#57f287" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="roi"  stroke="#38bdf8" strokeWidth={1.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {mounted && (
+            <ResponsiveContainer width="100%" height={140} minWidth={0} minHeight={140}>
+              <LineChart data={edgeRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
+                  tickLine={false} axisLine={false} tickFormatter={fmtDate}
+                  interval={Math.floor(edgeRows.length / 6)} />
+                <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
+                  tickLine={false} axisLine={false}
+                  tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} width={44} />
+                <Tooltip content={<EdgeTooltip />} />
+                <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="edge" stroke="#57f287" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="roi"  stroke="#38bdf8" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       )}
 

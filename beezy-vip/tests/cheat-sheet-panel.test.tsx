@@ -35,8 +35,8 @@ const NHL: CardPick[] = [
 const SPORT_PICKS = { nba: NBA, nhl: NHL }
 const SHEETS = buildSheets(NBA.slice(0, SHEET_SIZE), { nba: NBA.slice(0, SHEET_SIZE), nhl: NHL.slice(0, SHEET_SIZE) }, 'Tuesday')
 
-function renderCard() {
-  const view = render(<CheatSheetClient sheets={SHEETS} sportPicks={SPORT_PICKS} players={NBA} games={[]} gamesLocked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} />)
+function renderCard(canPost = true) {
+  const view = render(<CheatSheetClient canPost={canPost} sheets={SHEETS} sportPicks={SPORT_PICKS} players={NBA} games={[]} gamesLocked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} />)
   const card = view.container.querySelector('.cheat-sheet-layout > div') as HTMLElement
   const mobile = view.container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
   const sidebar = view.container.querySelector('.cheat-sheet-sidebar') as HTMLElement
@@ -127,6 +127,12 @@ describe('POST TO X panel', () => {
     for (const ta of within(mobile).getAllByRole('textbox')) {
       if (ta.getAttribute('aria-label') !== 'Link reply') expect((ta as HTMLTextAreaElement).value).not.toMatch(/https?:\/\//)
     }
+  })
+
+  it('hides POST TO X when canPost is false', () => {
+    const { mobile, sidebar } = renderCard(false)
+    expect(mobile).toBeNull()
+    expect(sidebar.textContent).not.toContain('POST TO X')
   })
 })
 

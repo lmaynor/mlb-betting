@@ -79,7 +79,7 @@ NRFI has a lower hit rate (55–60%) than some other props, but the odds are usu
 kelly_pct = (hit_rate * odds_ratio - 1) / (odds_ratio - 1)
 \`\`\`
 
-For a 57% edge at -110 odds, you're looking at roughly 2–3% Kelly. Don't overbett just because the market is liquid.
+For a 57% edge at -110 odds, you're looking at roughly 2–3% Kelly. Don't overbet just because the market is liquid.
 
 ## The Data
 

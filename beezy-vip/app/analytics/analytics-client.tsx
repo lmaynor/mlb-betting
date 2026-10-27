@@ -25,6 +25,8 @@ const SYSTEM_CHIPS = ['EV', 'ALL', 'NRFI', 'HR', 'K', 'OUTS', 'F5', 'GAME', 'BAT
 const tipStyle = { background: '#171a24', border: `1px solid ${GRID}`, borderRadius: 8, fontSize: 12, color: '#f3f4f6' }
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   // The tab lives in the URL (?tab=) and is chosen from the Results section tabs under the nav, so it is linkable.
   const sp = useSearchParams()
   const tabParam = sp.get('tab')
@@ -57,9 +59,9 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
       {!data ? (
         <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center', color: 'var(--fog)' }}>Analytics are unavailable right now.</div>
       ) : tab === 'bankroll' ? (
-        <Bankroll data={data} bankroll={bankroll} setBankroll={setBankroll} fraction={fraction} setFraction={setFraction} />
+        <Bankroll data={data} bankroll={bankroll} setBankroll={setBankroll} fraction={fraction} setFraction={setFraction} mounted={mounted} />
       ) : tab === 'calibration' ? (
-        <Calibration data={data} system={system} setSystem={setSystem} />
+        <Calibration data={data} system={system} setSystem={setSystem} mounted={mounted} />
       ) : tab === 'books' ? (
         <Books data={data} system={system} setSystem={setSystem} />
       ) : (
@@ -98,8 +100,8 @@ function SystemChips({ system, setSystem }: { system: string; setSystem: (s: str
 
 // -- 1. Bankroll simulator ------------------------------------------------------
 
-function Bankroll({ data, bankroll, setBankroll, fraction, setFraction }: {
-  data: AnalyticsDeepDive; bankroll: number; setBankroll: (n: number) => void; fraction: number; setFraction: (n: number) => void
+function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted }: {
+  data: AnalyticsDeepDive; bankroll: number; setBankroll: (n: number) => void; fraction: number; setFraction: (n: number) => void; mounted: boolean
 }) {
   const h = data.ev_headline
   const rows = data.bankroll_curve.map(p => ({
@@ -125,21 +127,23 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction }: {
           <Big label="FLAT ROI" value={h.flat_roi_pct == null ? '--' : `${h.flat_roi_pct > 0 ? '+' : ''}${h.flat_roi_pct.toFixed(2)}%`} />
         </div>
         <div style={{ height: 320 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={rows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gk" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#57f287" stopOpacity={0.3} /><stop offset="100%" stopColor="#57f287" stopOpacity={0} /></linearGradient>
-              </defs>
-              <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
-              <XAxis dataKey="date" stroke={AXIS} tick={{ fontSize: 11 }} minTickGap={24} />
-              <YAxis stroke={AXIS} tick={{ fontSize: 11 }} tickFormatter={v => `$${Number(v).toLocaleString()}`} width={64} />
-              <Tooltip contentStyle={tipStyle} formatter={(v) => fmtMoney(Number(v))} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="EV Kelly" stroke="#57f287" strokeWidth={2} fill="url(#gk)" dot={false} isAnimationActive={false} />
-              <Area type="monotone" dataKey="EV flat $100" stroke="#38bdf8" strokeWidth={1.75} fill="none" dot={false} isAnimationActive={false} />
-              <Area type="monotone" dataKey="MLB models (as staked)" stroke="#f59e0b" strokeWidth={1.75} fill="none" dot={false} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {mounted && (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
+              <AreaChart data={rows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gk" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#57f287" stopOpacity={0.3} /><stop offset="100%" stopColor="#57f287" stopOpacity={0} /></linearGradient>
+                </defs>
+                <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
+                <XAxis dataKey="date" stroke={AXIS} tick={{ fontSize: 11 }} minTickGap={24} />
+                <YAxis stroke={AXIS} tick={{ fontSize: 11 }} tickFormatter={v => `$${Number(v).toLocaleString()}`} width={64} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => fmtMoney(Number(v))} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Area type="monotone" dataKey="EV Kelly" stroke="#57f287" strokeWidth={2} fill="url(#gk)" dot={false} isAnimationActive={false} />
+                <Area type="monotone" dataKey="EV flat $100" stroke="#38bdf8" strokeWidth={1.75} fill="none" dot={false} isAnimationActive={false} />
+                <Area type="monotone" dataKey="MLB models (as staked)" stroke="#f59e0b" strokeWidth={1.75} fill="none" dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.6 }}>
           {h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts: the same prop flagged at several books
@@ -172,7 +176,7 @@ function Big({ label, value }: { label: string; value: string }) {
 
 // -- 2. Edge calibration --------------------------------------------------------
 
-function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; system: string; setSystem: (s: string) => void }) {
+function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeepDive; system: string; setSystem: (s: string) => void; mounted: boolean }) {
   const rows = data.edge_buckets
   const chart = rows.map(b => ({ bucket: b.bucket, 'Realized hit rate': b.hit_rate, 'Avg model probability': b.avg_model_prob, 'Avg market probability': b.avg_market_prob }))
   return (
@@ -180,18 +184,20 @@ function Calibration({ data, system, setSystem }: { data: AnalyticsDeepDive; sys
       <Panel title="ADVERSE SELECTION: REALIZED RESULTS BY CLAIMED EDGE" sub="Graded bets grouped by the edge the system claimed at bet time. If real edge exists, realized ROI should hold or rise with claimed edge. If it falls, the biggest apparent edges are model error (the winner's curse).">
         <SystemChips system={system} setSystem={setSystem} />
         <div style={{ height: 260, marginBottom: '14px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chart} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
-              <XAxis dataKey="bucket" stroke={AXIS} tick={{ fontSize: 11 }} />
-              <YAxis stroke={AXIS} tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} domain={[0, 100]} width={44} />
-              <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Realized hit rate" fill="#57f287" isAnimationActive={false} />
-              <Bar dataKey="Avg model probability" fill="#38bdf8" isAnimationActive={false} />
-              <Bar dataKey="Avg market probability" fill="#4b5469" isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
+          {mounted && (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
+              <BarChart data={chart} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke={GRID} strokeDasharray="3 3" />
+                <XAxis dataKey="bucket" stroke={AXIS} tick={{ fontSize: 11 }} />
+                <YAxis stroke={AXIS} tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} domain={[0, 100]} width={44} />
+                <Tooltip contentStyle={tipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Realized hit rate" fill="#57f287" isAnimationActive={false} />
+                <Bar dataKey="Avg model probability" fill="#38bdf8" isAnimationActive={false} />
+                <Bar dataKey="Avg market probability" fill="#4b5469" isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px', fontSize: '13px' }}>
