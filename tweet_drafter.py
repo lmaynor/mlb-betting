@@ -494,7 +494,7 @@ def generate_tweets(user_prompt, attempts=3):
     raise last
 
 
-# ── 160-Character Gemini Tweet Engine ─────────────────────────────────────────
+# 160-Character Gemini Tweet Engine
 
 SHORT_TWEET_BANNED_WORDS = (
     "lock", "smash", "parlay", "ai", "algorithm", "guaranteed",

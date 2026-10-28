@@ -81,7 +81,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
           fontSize: '10px',
           letterSpacing: '0.06em',
           padding: '2px 5px',
-          borderRadius: 'var(--radius-pill)',
+          borderRadius: '4px',
           border: `1px solid ${badgeColor}`,
           background: `color-mix(in oklab, ${badgeColor} 14%, var(--carbon))`,
           color: badgeColor,
