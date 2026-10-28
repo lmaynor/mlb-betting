@@ -56,7 +56,6 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
     } else if (actionable.length > 0) {
       base = actionable
     }
-    // Sort Official Plays first
     base = [...base].sort((a, b) => (Number(isRowOfficial(b)) - Number(isRowOfficial(a))) || (b.score - a.score))
   }
 
@@ -111,12 +110,16 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
                   className="mono"
                   style={{
                     fontSize: '11px',
-                    padding: '4px 8px',
+                    minHeight: '44px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '8px 12px',
                     borderRadius: '4px',
                     textDecoration: 'none',
                     background: active ? '#1e2230' : 'transparent',
                     border: `1px solid ${active ? pillar.accent : '#1e2230'}`,
                     color: active ? 'var(--chalk)' : 'var(--fog)',
+                    boxSizing: 'border-box',
                   }}
                 >
                   {t.label}

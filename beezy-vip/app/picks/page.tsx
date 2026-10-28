@@ -43,7 +43,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top Signals</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
             <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', letterSpacing: '0.06em' }}>TIER:</span>
             {[
               { id: 'all', label: 'All Actionable' },
@@ -59,12 +59,16 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
                   className="mono"
                   style={{
                     fontSize: '11px',
-                    padding: '4px 8px',
+                    minHeight: '44px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '8px 12px',
                     borderRadius: '4px',
                     textDecoration: 'none',
                     background: active ? '#1e2230' : 'transparent',
                     border: `1px solid ${active ? '#38bdf8' : '#1e2230'}`,
                     color: active ? 'var(--chalk)' : 'var(--fog)',
+                    boxSizing: 'border-box',
                   }}
                 >
                   {t.label}

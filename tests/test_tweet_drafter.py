@@ -1145,7 +1145,7 @@ def test_there_is_one_gemini_call_and_no_separate_analysis_step(monkeypatch):
     assert not any("analysis" in m.get("content", "") for m in _posted(post))
 
 
-# ── 160-Character Tweet Engine Tests ──────────────────────────────────────────
+# 160-Character Tweet Engine Tests
 
 def test_enforce_160_cap_strips_markdown_and_emojis():
     raw = '```json\n"FD hanging Tatum o26.5 Pts at +112 vs -108 fair! 🔥 #GamblingX beezy.fyi/picks"\n```'

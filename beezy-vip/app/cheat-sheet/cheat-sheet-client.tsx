@@ -250,8 +250,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <div style={{ fontSize: '11.5px', color: 'var(--silver)', lineHeight: 1.45, marginTop: '8px' }}>
                   Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
                 </div>
-                <div className="mono" style={{ fontSize: '10.5px', color: '#57F287', background: 'rgba(87,242,135,0.08)', border: '1px solid rgba(87,242,135,0.22)', borderRadius: '4px', padding: '5px 8px', marginTop: '8px' }}>
-                  {shown.length} Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
+                <div style={{ fontSize: '11px', color: '#57F287', background: 'rgba(87,242,135,0.08)', border: '1px solid rgba(87,242,135,0.22)', borderRadius: '4px', padding: '6px 10px', marginTop: '8px', lineHeight: 1.4 }}>
+                  <span className="mono" style={{ fontWeight: 700 }}>{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
                 </div>
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
