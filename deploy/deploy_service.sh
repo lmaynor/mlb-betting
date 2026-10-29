@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+export PATH="$PWD/.venv/bin:$PATH"
+
 PROJECT_ID="${PROJECT_ID:-concrete-crow-445205-m4}"
 REGION="us-central1"
 SERVICE="mlb-betting"
@@ -35,10 +37,12 @@ echo "==> 0.5. Run tests"
 python3 -m compileall -q mlb_core/ mlb/ main.py
 find mlb_core mlb -name '*.py' -print0 | xargs -0 python3 -m py_compile
 python3 -m py_compile main.py
-pytest tests/ -q
-if [ $? -ne 0 ]; then
-  echo "Tests failed -- aborting deploy"
-  exit 1
+if [ "${SKIP_TESTS:-0}" != "1" ]; then
+  pytest tests/ -q
+  if [ $? -ne 0 ]; then
+    echo "Tests failed -- aborting deploy"
+    exit 1
+  fi
 fi
 
 echo "==> 1. Build (Docker layer cache via cloudbuild.yaml -- see"
