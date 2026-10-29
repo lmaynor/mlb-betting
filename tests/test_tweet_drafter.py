@@ -1253,3 +1253,179 @@ def test_generate_short_tweet_copy_settlement_losing_day():
     assert "-1.40u" in copy
     assert "+8.1% flat ROI" in copy
 
+
+# Deep Analytical Tweet & Reply Engine Tests (Step 5)
+
+def test_reply_variant_ok_targeted_price_and_fact_guard():
+    f = _eplay()["facts"]  # Luka Over 32.5: +115 DraftKings, 8 books near -108, proj 34.1, 36.2 min, szn 31.0
+    f["all_books"] = [{"book": "draftkings", "over": 115, "under": -135},
+                      {"book": "betmgm", "over": -118, "under": -102}]
+
+    # 1. Accepts valid quant specifics: cents, 3-pointers, minutes, ordinals, small integers
+    valid_quant = (
+        "DraftKings is hanging +115 on Over 32.5 points while the other books sit near -108; "
+        "that is an 18-cent gap with his 3-pointers falling over 36 projected minutes."
+    )
+    assert td.reply_variant_ok(valid_quant, f, "price_check")
+
+    valid_pushback = (
+        "Hard to back the under in the 2nd half when 8 books are sitting near -108 on the over "
+        "and our projection sits at 34.1."
+    )
+    assert td.reply_variant_ok(valid_pushback, f, "pushback")
+
+    # 2. Rejects hallucinated American odds (+999, -250)
+    hallucinated_odds = (
+        "DraftKings is hanging +999 on Over 32.5 points while the other books sit near -108."
+    )
+    assert not td.reply_variant_ok(hallucinated_odds, f, "price_check")
+
+    hallucinated_neg_odds = (
+        "DraftKings is hanging +115 while the consensus is sitting near -250 on the over."
+    )
+    assert not td.reply_variant_ok(hallucinated_neg_odds, f, "price_check")
+
+    # 3. Rejects false precision (>= 3 decimals)
+    false_precision = (
+        "DraftKings is hanging +115 on Over 32.5 points and our projection sits at 34.125."
+    )
+    assert not td.reply_variant_ok(false_precision, f, "price_check")
+
+    # 4. Rejects hallucinated win rates (63% when breakeven is ~47%, market is ~52%, EV is ~5.4%)
+    hallucinated_win_rate = (
+        "DraftKings hanging +115 on Over 32.5 points gives us a 63% win rate tonight."
+    )
+    assert not td.reply_variant_ok(hallucinated_win_rate, f, "price_check")
+
+
+def test_reply_variant_ok_requires_substance_for_driver_note():
+    f = _eplay()["facts"]
+
+    # driver_note without projection/usage/matchup/season substance rejected
+    fluff_driver = "DraftKings is hanging +115 while 8 books sit near -108 because the price is simply too high."
+    assert not td.reply_variant_ok(fluff_driver, f, "driver_note")
+
+    # driver_note with projection and range substance accepted
+    substance_driver = (
+        "We project 34.1 points against 32.5 based on 36 projected minutes, though the line "
+        "sits inside his 26-42 distribution window; DraftKings hanging +115 is the outlier."
+    )
+    assert td.reply_variant_ok(substance_driver, f, "driver_note")
+
+
+def test_build_dossier_includes_opp_efficiency_and_named_books():
+    f = _eplay()["facts"]
+    f["engine"]["opp"] = "MIL"
+    f["all_books"] = [
+        {"book": "draftkings", "over": 115, "under": -135},
+        {"book": "betmgm", "over": -118, "under": -102},
+        {"book": "pinnacle", "over": -116, "under": -104},
+    ]
+
+    d = td.build_dossier(f)
+    assert d is not None
+    assert "Matchup vs MIL: a soft matchup bump (+1.3)." in d["text"]
+    assert "Efficiency rate: 0.94 points per min." in d["text"]
+    assert "Market reference books: BetMGM -118, Pinnacle -116." in d["text"]
+
+
+def test_build_dossier_mlb_extracts_notes_and_probs():
+    mlb_fact = {
+        "sport": "mlb",
+        "player": "Gerrit Cole",
+        "point": 7.5,
+        "side": "OVER",
+        "book": "draftkings",
+        "american": 105,
+        "notes": "Cole 31.4% K rate vs BOS .210 BA",
+        "model_prob": 0.58,
+        "market_prob": 0.52,
+        "all_books": [
+            {"book": "draftkings", "over": 105, "under": -125},
+            {"book": "fanduel", "over": -115, "under": -105},
+        ],
+    }
+    d = td.build_dossier(mlb_fact, sport="mlb")
+    assert d is not None
+    assert "Model notes: Cole 31.4% K rate vs BOS .210 BA." in d["text"]
+    assert "Model win prob is 58.0% vs 52.0% implied by market." in d["text"]
+    assert "Market reference books: FanDuel -115." in d["text"]
+
+
+def test_build_reply_snippet_analytical_thesis_when_engine_provided():
+    c = td.reply_candidates(_feed(nba=[_outlier()]))[0]
+    engine = {
+        "usage_proj": 36.2,
+        "usage_label": "Minutes",
+        "szn_avg": 31.0,
+    }
+    enriched = td.build_reply_snippet(c, proj_mean=34.1, engine=engine)
+    assert enriched is not None
+    assert "We project 34.1 points here (36.2 projected minutes vs a 31.0 season avg)" in enriched
+    assert "DraftKings hanging +115 on the Over 32.5 stands out" in enriched
+    assert "the other 8 books sit near -108" in enriched
+
+
+def test_enrich_picks_with_projections():
+    picks = [
+        {"player": "Luka Doncic", "stat": "points", "line": 32.5, "side": "OVER", "odds": 115, "book": "draftkings"},
+    ]
+    projections = {
+        "nba": {
+            "rows": [
+                {
+                    "player_norm": "luka doncic",
+                    "player": "Luka Doncic",
+                    "stat": "points",
+                    "proj_mean": 34.1,
+                    "usage_proj": 36.2,
+                    "usage_label": "Minutes",
+                    "szn_avg": 31.0,
+                    "opp": "MIL",
+                    "proj_p10": 26.0,
+                    "proj_p90": 42.0,
+                    "all_books": [{"book": "fanduel", "over": -115, "under": -105}],
+                }
+            ]
+        }
+    }
+    enriched = td.enrich_picks_with_projections(picks, projections)
+    p = enriched[0]
+    assert p["proj_mean"] == pytest.approx(34.1)
+    assert p["usage_proj"] == pytest.approx(36.2)
+    assert p["szn_avg"] == pytest.approx(31.0)
+    assert p["opp"] == "MIL"
+    assert p["all_books"] is not None
+
+
+def test_main_picks_mode_generates_three_drafts(monkeypatch):
+    monkeypatch.setattr(td.sys, "argv", ["tweet_drafter.py", "--mode", "picks"])
+    picks = [{"player": "Luka Doncic", "line": 32.5, "side": "OVER", "odds": 115, "book": "draftkings", "stat": "points"}]
+    monkeypatch.setattr(td, "get_today_picks", lambda: picks)
+    monkeypatch.setattr(td, "load_locked_card", lambda dt: {"plays": picks})
+    monkeypatch.setattr(td, "get_projections", lambda sp: {"rows": []})
+
+    deep_drafts = [
+        "Spotlight: Luka Doncic usage and matchup point to over 32.5 at DraftKings +115.\nbeezy.fyi",
+        "Multi-card breakdown: Luka Doncic +115 stands out against consensus -108.\nbeezy.fyi",
+    ]
+    monkeypatch.setattr(td, "generate_tweets", lambda prompt: deep_drafts)
+
+    captured_tweets = []
+    monkeypatch.setattr(td, "post_drafts_to_discord", lambda label, tweets, **kw: captured_tweets.extend(tweets) or "  Discord post ok")
+
+    td.main()
+    assert len(captured_tweets) == 3
+    assert captured_tweets[0] == deep_drafts[0]
+    assert captured_tweets[1] == deep_drafts[1]
+    assert "beezy.fyi/picks" in captured_tweets[2]
+    assert len(captured_tweets[2]) <= 160
+
+
+def test_forwarder_module_executes_and_reexports():
+    import mlb.runners.tweet_drafter as forwarder
+    assert hasattr(forwarder, "main")
+    assert hasattr(forwarder, "build_reply_ammo")
+    assert hasattr(forwarder, "generate_short_tweet_copy")
+
+
