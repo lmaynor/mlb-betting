@@ -16,6 +16,12 @@ from mlb_core.tracking.bet_tracker import BetTracker, ensure_proj_mean_column
 TODAY = datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
 
 
+@pytest.fixture(autouse=True)
+def _sync_today():
+    global TODAY
+    TODAY = public_api._ct_today()
+
+
 def _bet(t, **kw):
     base = dict(game_date=TODAY, game_pk=1, player="Gerrit Cole", away_team="NYY", home_team="BOS",
                 bet_type="K_OVER_5.5", model_prob=0.6, market_prob=0.5, edge=0.05, kelly_pct=0.01, odds=110,

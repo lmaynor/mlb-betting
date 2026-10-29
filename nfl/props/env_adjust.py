@@ -57,17 +57,28 @@ def env_features(implied_total, team_spread):
 
 
 def game_env_table(schedules: pd.DataFrame) -> pd.DataFrame:
-    """schedules -> one row per (game_id, team): canonical team / opp, kickoff date, implied_total, team_spread.
-    Rows without both lines keep NaN (the adjustment is then skipped, never guessed)."""
+    """schedules -> one row per (game_id, team): canonical team / opp, kickoff date, implied_total, team_spread,
+    roof, wind, temp. Rows without both lines keep NaN (the adjustment is then skipped, never guessed)."""
     s = schedules
     rows = []
+    has_roof = "roof" in s.columns
+    has_wind = "wind" in s.columns
+    has_temp = "temp" in s.columns
     for side, other, sign in (("home", "away", 1.0), ("away", "home", -1.0)):
         spread = sign * pd.to_numeric(s["spread_line"], errors="coerce")
         total = pd.to_numeric(s["total_line"], errors="coerce")
-        rows.append(pd.DataFrame({
+        d = {
             "game_id": s["game_id"], "season": s["season"], "week": s["week"], "gameday": s["gameday"].astype(str),
             "team": s[f"{side}_team"].map(canon), "opp": s[f"{other}_team"].map(canon),
-            "team_spread": spread, "implied_total": total / 2.0 + spread / 2.0}))
+            "team_spread": spread, "implied_total": total / 2.0 + spread / 2.0,
+        }
+        if has_roof:
+            d["roof"] = s["roof"]
+        if has_wind:
+            d["wind"] = pd.to_numeric(s["wind"], errors="coerce")
+        if has_temp:
+            d["temp"] = pd.to_numeric(s["temp"], errors="coerce")
+        rows.append(pd.DataFrame(d))
     return pd.concat(rows, ignore_index=True)
 
 
@@ -119,15 +130,45 @@ def adjust(mu, x1, x2, coef: Optional[dict]):
     return mu * np.exp(eta)
 
 
-def multiplier(coef: Optional[dict], implied_total=None, team_spread=None) -> float:
-    """Scalar calibration factor for one player-game (the serving path); 1.0 with no coefficients."""
-    if not coef:
+def weather_multiplier(stat: str, wind_mph: Optional[float] = None, roof: Optional[str] = None, temp_f: Optional[float] = None) -> float:
+    """Multiplier on stat expected value from stadium weather.
+    - Indoors (dome / closed roof): 1.0 (neutral environment)
+    - Outdoors with wind >= 15 mph:
+      * Passing yards, pass attempts, passing TDs, receiving yards decrease by ~0.8% per mph over 12 mph (up to -20%)
+      * Rush attempts and rush yards increase by ~0.5% per mph over 12 mph (up to +10%)
+    - Cold temperature (< 32F):
+      * Slight drag on deep passing (-3%)
+    """
+    if roof and str(roof).lower() in ("dome", "closed"):
         return 1.0
-    if "k" in coef:
-        return float(coef["k"])
-    x1, x2 = env_features([np.nan if implied_total is None else implied_total],
-                          [np.nan if team_spread is None else team_spread])
-    return float(adjust([1.0], x1, x2, coef)[0])
+    mult = 1.0
+    wind = float(wind_mph) if wind_mph is not None and math.isfinite(wind_mph) else 0.0
+    stat_k = str(stat).lower()
+    if wind >= 15.0:
+        excess = min(wind - 12.0, 20.0)
+        if any(w in stat_k for w in ("pass", "rec_yds", "receptions")):
+            mult *= max(0.80, 1.0 - 0.008 * excess)
+        elif any(w in stat_k for w in ("rush", "carries")):
+            mult *= min(1.12, 1.0 + 0.005 * excess)
+    if temp_f is not None and math.isfinite(temp_f) and temp_f < 32.0:
+        if any(w in stat_k for w in ("pass_yds", "rec_yds")):
+            mult *= 0.97
+    return round(mult, 4)
+
+
+def multiplier(coef: Optional[dict], implied_total=None, team_spread=None,
+               wind_mph=None, roof=None, temp_f=None, stat: str = "") -> float:
+    """Scalar calibration factor for one player-game (the serving path); 1.0 with no coefficients."""
+    base = 1.0
+    if coef:
+        if "k" in coef:
+            base = float(coef["k"])
+        else:
+            x1, x2 = env_features([np.nan if implied_total is None else implied_total],
+                                  [np.nan if team_spread is None else team_spread])
+            base = float(adjust([1.0], x1, x2, coef)[0])
+    w_mult = weather_multiplier(stat, wind_mph=wind_mph, roof=roof, temp_f=temp_f) if stat else 1.0
+    return float(base * w_mult)
 
 
 def load_calibration(path: str = CALIB_PATH) -> dict:

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_SPORT = "mlb"
-VALID_SPORTS = ("mlb", "nhl", "nba")
+VALID_SPORTS = ("mlb", "nhl", "nba", "nfl")
 
 
 def norm_sport(sport) -> str:

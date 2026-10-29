@@ -623,6 +623,114 @@ def _settle_pitcher_er(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     return results
 
 
+def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[dict]:
+    """Settle NFL, NBA, and NHL bets against official league box scores."""
+    outcomes: list[dict] = []
+    if pending_winter.empty:
+        return outcomes
+
+    import json
+    from mlb_core.data.player_names import norm_name
+
+    game_cache: dict = {}
+
+    for _, bet in pending_winter.iterrows():
+        bid = int(bet["id"])
+        sport = str(bet.get("sport") or "").lower()
+        gdate = str(bet.get("game_date") or settle_date)
+        away = str(bet.get("away_team") or "")
+        home = str(bet.get("home_team") or "")
+        player = str(bet.get("player") or "")
+        btype = str(bet.get("bet_type") or "")
+        odds = int(bet.get("odds") or -110)
+        stake = float(bet.get("stake") or 1.0)
+        notes_str = str(bet.get("notes") or "")
+
+        stat, side, point = None, None, None
+        if "{" in notes_str:
+            try:
+                nd = json.loads(notes_str)
+                stat = nd.get("stat")
+                side = nd.get("side")
+                point = float(nd.get("point")) if nd.get("point") is not None else None
+            except Exception:
+                pass
+        if not stat or not side or point is None:
+            parts = btype.rsplit("_", 2)
+            if len(parts) == 3:
+                stat, side, pt_str = parts
+                try:
+                    point = float(pt_str)
+                except ValueError:
+                    point = None
+
+        if not stat or not side or point is None:
+            logger.warning(f"settle winter: unable to parse bet_type='{btype}' id={bid}")
+            continue
+
+        result = None
+        if sport in ("nhl", "nba"):
+            from ev.grade_props import nhl_actuals, nba_actuals
+            ckey = (sport, gdate, away, home)
+            if ckey not in game_cache:
+                try:
+                    game_cache[ckey] = nhl_actuals(gdate, away, home) if sport == "nhl" else nba_actuals(gdate, away, home)
+                except Exception as e:
+                    logger.warning(f"settle winter: {sport} actuals fetch failed for {ckey}: {e}")
+                    game_cache[ckey] = None
+            game = game_cache.get(ckey)
+            if not game or not game.get("final"):
+                continue
+
+            matched_stat_val = None
+            player_played = False
+            p_dict = game.get("players", {})
+            target_norm = norm_name(player)
+
+            for pid, pdata in p_dict.items():
+                pname = pdata.get("name") or pdata.get("full_name") or ""
+                if (pname and norm_name(pname) == target_norm) or str(pid) == str(bet.get("game_pk")):
+                    player_played = pdata.get("_played", True)
+                    matched_stat_val = pdata.get(stat)
+                    break
+
+            if matched_stat_val is None and not player_played:
+                # Player not found in boxscore of a final game -> void
+                result = "void"
+            elif not player_played:
+                result = "void"
+            elif matched_stat_val is not None:
+                if matched_stat_val == point:
+                    result = "push"
+                elif str(side).lower() == "over":
+                    result = "win" if matched_stat_val > point else "loss"
+                else:
+                    result = "win" if matched_stat_val < point else "loss"
+
+        elif sport == "nfl":
+            try:
+                from nfl.props.grade import grade_detail
+                from nfl.data.read import load
+                stats_df = load("player_stats", seasons=[int(gdate[:4])])
+                row_match = None
+                if stats_df is not None and not stats_df.empty:
+                    p_match = stats_df[stats_df["player_name"].map(norm_name) == norm_name(player)]
+                    if not p_match.empty:
+                        row_match = p_match.iloc[-1].to_dict()
+                if row_match:
+                    gr = grade_detail(stat, point, side, row_match, game_final=True, played=True)
+                    result = gr.result
+            except Exception as e:
+                logger.warning(f"settle winter: nfl grade failed for bet {bid}: {e}")
+
+        if result in ("win", "loss", "push", "void"):
+            profit = _calc_profit(stake, odds, result)
+            outcomes.append({"id": bid, "result": result, "profit": profit})
+            logger.info(f"settle winter: {sport.upper()} {player} {btype} -> {result} ({profit:+.2f}u)")
+
+    return outcomes
+
+
 # ── Main run ──────────────────────────────────────────────────────────────────
 
 def run(settle_date: str = None) -> dict:
@@ -645,7 +753,7 @@ def run(settle_date: str = None) -> dict:
         engine = _make_engine(db_path="unused")
         with engine.connect() as conn:
             pending_all = pd.read_sql(
-                text("SELECT * FROM bets WHERE result IS NULL AND game_date <= :d AND sport = 'mlb'"),
+                text("SELECT * FROM bets WHERE result IS NULL AND game_date <= :d"),
                 conn, params={"d": settle_date},
             )
     except Exception as e:
@@ -658,97 +766,112 @@ def run(settle_date: str = None) -> dict:
         logger.info(f"settle: no pending bets for {settle_date} or earlier")
         return {"status": "ok", "settle_date": settle_date, "settled": 0}
 
-    today_count = (pending_all["game_date"] == settle_date).sum()
-    retry_count = (pending_all["game_date"] < settle_date).sum()
-    original_pending_count = len(pending_all)
-    logger.info(f"settle: {today_count} bets for {settle_date}, "
-                f"{retry_count} stale pending bets being retried")
-    for gd, grp in pending_all.groupby("game_date"):
-        logger.info(
-            f"settle: pending breakdown -- game_date={gd} | "
-            f"{len(grp)} bets | systems={grp['system'].unique().tolist()}"
-        )
+    # Settle NFL, NBA, and NHL winter sports bets
+    all_outcomes: list[dict] = []
+    winter_pending = pending_all[pending_all["sport"].isin(["nfl", "nba", "nhl"])]
+    if not winter_pending.empty:
+        logger.info(f"settle: settling {len(winter_pending)} NFL/NBA/NHL bets")
+        try:
+            winter_outcomes = _settle_winter_bets(winter_pending, settle_date)
+            all_outcomes.extend(winter_outcomes)
+            logger.info(f"settle: settled {len(winter_outcomes)} NFL/NBA/NHL bets")
+        except Exception as e:
+            logger.error(f"settle: winter bets settlement failed: {e}")
 
-    # Fetch game results in parallel
-    all_game_pks = set(pd.to_numeric(pending_all["game_pk"], errors="coerce").dropna().astype(int))
-    logger.info(f"settle: fetching MLB API results for {len(all_game_pks)} game_pks")
-    game_cache: dict = {}
+    mlb_pending = pending_all[pending_all["sport"] == "mlb"]
+    if mlb_pending.empty:
+        logger.info("settle: no pending MLB bets")
+    else:
+        today_count = (mlb_pending["game_date"] == settle_date).sum()
+        retry_count = (mlb_pending["game_date"] < settle_date).sum()
+        logger.info(f"settle: {today_count} MLB bets for {settle_date}, "
+                    f"{retry_count} stale pending bets being retried")
+        for gd, grp in mlb_pending.groupby("game_date"):
+            logger.info(
+                f"settle: pending MLB breakdown -- game_date={gd} | "
+                f"{len(grp)} bets | systems={grp['system'].unique().tolist()}"
+            )
 
-    _MAX_WORKERS = min(8, len(all_game_pks)) if all_game_pks else 1
-    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-        future_to_gpk = {pool.submit(fetch_game_result, gpk): gpk
-                         for gpk in sorted(all_game_pks)}
-        for future in as_completed(future_to_gpk):
-            gpk = future_to_gpk[future]
+        # Fetch game results in parallel
+        all_game_pks = set(pd.to_numeric(mlb_pending["game_pk"], errors="coerce").dropna().astype(int))
+        logger.info(f"settle: fetching MLB API results for {len(all_game_pks)} game_pks")
+        game_cache: dict = {}
+
+        _MAX_WORKERS = min(8, len(all_game_pks)) if all_game_pks else 1
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            future_to_gpk = {pool.submit(fetch_game_result, gpk): gpk
+                             for gpk in sorted(all_game_pks)}
+            for future in as_completed(future_to_gpk):
+                gpk = future_to_gpk[future]
+                try:
+                    game_cache[gpk] = future.result()
+                except Exception as e:
+                    logger.warning(f"settle: fetch_game_result({gpk}) raised: {e}")
+                    game_cache[gpk] = None
+                logger.info(f"settle: game_pk={gpk} final={game_cache[gpk] is not None}")
+
+        stale_void_outcomes = _void_stale_nonfinal_bets(mlb_pending, game_cache, settle_date)
+        if stale_void_outcomes:
+            stale_void_ids = {int(o["id"]) for o in stale_void_outcomes}
+            mlb_pending = mlb_pending[~mlb_pending["id"].astype(int).isin(stale_void_ids)]
+            logger.info(f"settle: auto-voided {len(stale_void_outcomes)} stale non-final MLB bets")
+            all_outcomes.extend(stale_void_outcomes)
+
+        # Dispatch to per-system settlers
+        SYSTEM_MAP = {
+            "NRFI":       _settle_nrfi,
+            "1IOU":       _settle_nrfi,
+            "1I":         _settle_nrfi,   # 1I_AWAY/HOME/DRAW settled by same linescore logic
+            "F5":         _settle_f5,
+            "HR":         _settle_hr,
+            "K":          _settle_k,
+            "OUTS":       _settle_k,
+            "F3":         lambda p, c: _settle_innings_window(p, c, "F3"),
+            "F1H":        lambda p, c: _settle_innings_window(p, c, "F1H"),
+            "F7":         lambda p, c: _settle_innings_window(p, c, "F7"),
+            "GAME":       lambda p, c: _settle_innings_window(p, c, "GAME"),
+            "BATTER_K":   _settle_batter_props,
+            "BATTER_TB":  _settle_batter_props,
+            "BATTER_HITS":_settle_batter_props,
+            "SB":         _settle_batter_props,   # stolen bases, added 2026-08-20
+            "PITCHER_ER": _settle_pitcher_er,
+            "EV":         _settle_ev,   # mlb.runners.fast_alert_loop's posted +EV alerts
+        }
+
+        # Group batter props so they are settled together (single pass over boxscore)
+        BATTER_PROP_SYSTEMS = {"BATTER_K", "BATTER_TB", "BATTER_HITS", "SB"}
+
+        batter_prop_pending = mlb_pending[mlb_pending["system"].isin(BATTER_PROP_SYSTEMS)]
+        non_batter_pending  = mlb_pending[~mlb_pending["system"].isin(BATTER_PROP_SYSTEMS)]
+
+        for system, grp in non_batter_pending.groupby("system"):
+            sys = system.upper()
+            settler = SYSTEM_MAP.get(sys)
+            if settler is None:
+                logger.warning(f"settle: unknown system '{system}' -- skipping")
+                continue
+            logger.info(f"settle: processing {sys} -- {len(grp)} bets")
             try:
-                game_cache[gpk] = future.result()
+                outcomes = settler(grp, game_cache)
             except Exception as e:
-                logger.warning(f"settle: fetch_game_result({gpk}) raised: {e}")
-                game_cache[gpk] = None
-            logger.info(f"settle: game_pk={gpk} final={game_cache[gpk] is not None}")
-
-    stale_void_outcomes = _void_stale_nonfinal_bets(pending_all, game_cache, settle_date)
-    if stale_void_outcomes:
-        stale_void_ids = {int(o["id"]) for o in stale_void_outcomes}
-        pending_all = pending_all[~pending_all["id"].astype(int).isin(stale_void_ids)]
-        logger.info(f"settle: auto-voided {len(stale_void_outcomes)} stale non-final bets")
-
-    # Dispatch to per-system settlers
-    SYSTEM_MAP = {
-        "NRFI":       _settle_nrfi,
-        "1IOU":       _settle_nrfi,
-        "1I":         _settle_nrfi,   # 1I_AWAY/HOME/DRAW settled by same linescore logic
-        "F5":         _settle_f5,
-        "HR":         _settle_hr,
-        "K":          _settle_k,
-        "OUTS":       _settle_k,
-        "F3":         lambda p, c: _settle_innings_window(p, c, "F3"),
-        "F1H":        lambda p, c: _settle_innings_window(p, c, "F1H"),
-        "F7":         lambda p, c: _settle_innings_window(p, c, "F7"),
-        "GAME":       lambda p, c: _settle_innings_window(p, c, "GAME"),
-        "BATTER_K":   _settle_batter_props,
-        "BATTER_TB":  _settle_batter_props,
-        "BATTER_HITS":_settle_batter_props,
-        "SB":         _settle_batter_props,   # stolen bases, added 2026-08-20
-        "PITCHER_ER": _settle_pitcher_er,
-        "EV":         _settle_ev,   # mlb.runners.fast_alert_loop's posted +EV alerts
-    }
-
-    # Group batter props so they are settled together (single pass over boxscore)
-    BATTER_PROP_SYSTEMS = {"BATTER_K", "BATTER_TB", "BATTER_HITS", "SB"}
-
-    all_outcomes: list[dict] = list(stale_void_outcomes)
-    batter_prop_pending = pending_all[pending_all["system"].isin(BATTER_PROP_SYSTEMS)]
-    non_batter_pending  = pending_all[~pending_all["system"].isin(BATTER_PROP_SYSTEMS)]
-
-    for system, grp in non_batter_pending.groupby("system"):
-        sys = system.upper()
-        settler = SYSTEM_MAP.get(sys)
-        if settler is None:
-            logger.warning(f"settle: unknown system '{system}' -- skipping")
-            continue
-        logger.info(f"settle: processing {sys} -- {len(grp)} bets")
-        try:
-            outcomes = settler(grp, game_cache)
-        except Exception as e:
-            msg = f"settle: {sys} settler raised: {e}"
-            logger.error(msg)
-            post_ops_alert(msg, run_date=settle_date)
-            continue
-        logger.info(f"settle: {sys} -> {len(outcomes)} settled "
-                    f"({len(grp) - len(outcomes)} still pending)")
-        all_outcomes.extend(outcomes)
-
-    if not batter_prop_pending.empty:
-        logger.info(f"settle: processing batter props -- {len(batter_prop_pending)} bets")
-        try:
-            outcomes = _settle_batter_props(batter_prop_pending, game_cache)
+                msg = f"settle: {sys} settler raised: {e}"
+                logger.error(msg)
+                post_ops_alert(msg, run_date=settle_date)
+                continue
+            logger.info(f"settle: {sys} -> {len(outcomes)} settled "
+                        f"({len(grp) - len(outcomes)} still pending)")
             all_outcomes.extend(outcomes)
-            logger.info(f"settle: batter props -> {len(outcomes)} settled")
-        except Exception as e:
-            msg = f"settle: batter_props settler raised: {e}"
-            logger.error(msg)
-            post_ops_alert(msg, run_date=settle_date)
+
+        if not batter_prop_pending.empty:
+            logger.info(f"settle: processing batter props -- {len(batter_prop_pending)} bets")
+            try:
+                outcomes = _settle_batter_props(batter_prop_pending, game_cache)
+                all_outcomes.extend(outcomes)
+                logger.info(f"settle: batter props -> {len(outcomes)} settled")
+            except Exception as e:
+                msg = f"settle: batter_props settler raised: {e}"
+                logger.error(msg)
+                post_ops_alert(msg, run_date=settle_date)
 
     # Write outcomes to DB
     if all_outcomes:
@@ -810,7 +933,9 @@ def run(settle_date: str = None) -> dict:
             "pending":  int(len(rows[rows["result"].isna()])),
         }
 
-    post_all_systems_summary(system_stats, settle_date=settle_date)
+    from mlb_core.config import is_mlb_offseason
+    if not is_mlb_offseason() or not mlb_pending.empty:
+        post_all_systems_summary(system_stats, settle_date=settle_date)
 
     return {
         "status":      "ok",

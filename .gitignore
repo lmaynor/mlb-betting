@@ -67,3 +67,4 @@ AuxData/
 
 # Kalshi RFQ shadow tape (scripts/kalshi_rfq_daemon.py --mode record)
 data/kalshi_rfq/
+EV_Alerts/

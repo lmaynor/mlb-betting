@@ -165,6 +165,11 @@ def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
     possible from a webhook)."""
     if not rows:
         return False
+    # Log gated official alerts into the unified bets ledger
+    try:
+        log_sport_alert_bets(sport, rows)
+    except Exception as e:
+        log.warning("log_sport_alert_bets(%s) error: %r", sport, e)
     shown = rows[:MAX_ALERTS]
     embeds = [alert_embed(r) for r in shown]
     if bot_configured():
@@ -188,3 +193,53 @@ def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
     except Exception as e:  # noqa: BLE001 -- a Discord outage must not break the sweep
         log.warning("%s alerts webhook failed: %r", sport, e)
         return False
+
+
+def log_sport_alert_bets(sport: str, rows: list[dict]) -> int:
+    """Log gated sport alerts to the unified bets table so they enter the official public results record."""
+    if not rows:
+        return 0
+    from datetime import date
+    import json
+    from mlb_core.tracking import BetTracker
+    from mlb_core.odds.utils import american_to_implied_prob
+    db_path = os.environ.get("MLB_DB_URL") or os.environ.get("DB_URL") or "EV_Alerts/data/ev_bets.db"
+    tracker = BetTracker(db_path, system="EV", sport=sport)
+    logged = 0
+    for r in rows:
+        try:
+            player = r.get("player") or r.get("player_name") or f"{r.get('away', '')} @ {r.get('home', '')}"
+            stat = r.get("stat") or "stat"
+            side = str(r.get("side") or "over").lower()
+            point = r.get("point")
+            bet_type = f"{stat}_{side}_{point}" if point is not None else f"{stat}_{side}"
+            commence = r.get("commence") or r.get("ts") or ""
+            game_date = str(r.get("game_date") or (commence[:10] if len(commence) >= 10 else None) or date.today().isoformat())
+            odds = int(r.get("american") or r.get("odds") or -110)
+            mkt_prob = american_to_implied_prob(odds)
+            fair_prob = float(r.get("fair") or r.get("consensus_fair") or ((1.0 / r["fair_decimal"]) if r.get("fair_decimal") else (mkt_prob + float(r.get("ev", 0.0)))))
+            edge = float(r.get("ev") or (fair_prob - mkt_prob))
+            bid = tracker.log_bet(
+                game_date=game_date,
+                player=player,
+                away_team=r.get("away") or r.get("away_team"),
+                home_team=r.get("home") or r.get("home_team"),
+                bet_type=bet_type,
+                model_prob=fair_prob,
+                market_prob=mkt_prob,
+                edge=edge,
+                odds=odds,
+                stake=1.0,
+                kelly_triggered=True,
+                paper=True,
+                book=r.get("book"),
+                proj_mean=float(r["proj_mean"]) if r.get("proj_mean") is not None else None,
+                notes=json.dumps({"stat": stat, "point": point, "side": side, "n_books": r.get("n_books")}),
+            )
+            if bid > 0:
+                logged += 1
+        except Exception as e:
+            log.warning("failed to log %s bet: %r", sport, e)
+    if logged:
+        log.info("logged %d %s bet(s) to public bets table", logged, sport)
+    return logged

@@ -216,17 +216,49 @@ def calibration(sport: str, stat: str) -> dict | None:
     return _CALIB.get(stat)
 
 
+class EnvTuple(tuple):
+    """2-tuple (implied_total, team_spread) that also exposes wind, roof, and temp attributes."""
+    def __new__(cls, implied_total, team_spread, wind=None, roof=None, temp=None):
+        return super().__new__(cls, (float(implied_total), float(team_spread)))
+
+    def __init__(self, implied_total, team_spread, wind=None, roof=None, temp=None):
+        self.implied_total = float(implied_total)
+        self.team_spread = float(team_spread)
+        self.wind = wind
+        self.roof = roof
+        self.temp = temp
+
+
 def _load_env_lines() -> dict:
     try:
         from nfl.data.read import load
-        t = _ea.game_env_table(load("schedules", columns=["game_id", "season", "week", "gameday", "home_team",
-                                                           "away_team", "spread_line", "total_line"]))
+        cols = ["game_id", "season", "week", "gameday", "home_team", "away_team", "spread_line", "total_line"]
+        try:
+            sched = load("schedules", columns=cols + ["roof", "wind", "temp"])
+        except Exception:
+            sched = load("schedules", columns=cols)
+        t = _ea.game_env_table(sched)
     except Exception as exc:                                                            # noqa: BLE001
         log.info("nfl schedule lines unavailable (%s): game term falls back to the scale", exc)
         return {}
     t = t[t["implied_total"].notna() & t["team_spread"].notna()]
-    return {(tm, str(gd)[:10]): (float(it), float(sp))
-            for tm, gd, it, sp in zip(t["team"], t["gameday"], t["implied_total"], t["team_spread"])}
+    has_w = "wind" in t.columns
+    has_r = "roof" in t.columns
+    has_tp = "temp" in t.columns
+    return {
+        (tm, str(gd)[:10]): EnvTuple(
+            it, sp,
+            wind=float(w) if has_w and pd.notna(w) else None,
+            roof=str(r) if has_r and pd.notna(r) else None,
+            temp=float(tp) if has_tp and pd.notna(tp) else None,
+        )
+        for tm, gd, it, sp, w, r, tp in zip(
+            t["team"], t["gameday"], t["implied_total"], t["team_spread"],
+            t["wind"] if has_w else [None] * len(t),
+            t["roof"] if has_r else [None] * len(t),
+            t["temp"] if has_tp else [None] * len(t),
+        )
+    }
 
 
 # ------------------------------------------------------------------------------------------------------ game logs
@@ -296,7 +328,7 @@ class GameLogs:
         return canon_team(self.sport, raw)
 
     def env_lines(self) -> dict:
-        """{(canonical team, ET kickoff date): (implied_team_total, team_spread)} from the mirrored schedules, NFL only
+        """{(canonical team, ET kickoff date): (implied_team_total, team_spread, ...)} from the mirrored schedules, NFL only
         ({} for other sports or when the mirror is unreadable: the game term then falls back to the scale alone)."""
         if self.sport != "nfl":
             return {}
@@ -304,6 +336,28 @@ class GameLogs:
             if self._env is None:
                 self._env = _load_env_lines()
             return self._env
+
+    def nba_absences(self) -> dict:
+        """{team_code: {player_norm: P(absent)}} from the latest NBA injury report."""
+        if self.sport != "nba":
+            return {}
+        with self._lock:
+            if not hasattr(self, "_nba_abs") or self._nba_abs is None:
+                self._nba_abs = {}
+                try:
+                    from nba.data import espn_injuries
+                    from mlb_core.data.player_names import norm_name
+                    frame = espn_injuries.fetch_injuries()
+                    if frame.attrs.get("ok", False):
+                        out = {}
+                        for code, p, st in zip(frame["team_abbrev"], frame["player"], frame["status"]):
+                            w = float(espn_injuries.STATUS_ABSENCE_PROB.get(st, 0.0))
+                            if w > 0:
+                                out.setdefault(code, {})[norm_name(p)] = w
+                        self._nba_abs = out
+                except Exception as e:
+                    log.info("nba injuries fetch failed: %s", e)
+            return self._nba_abs
 
     def latest_date(self) -> str | None:
         """Newest game date in the master (YYYY-MM-DD; NFL: 'season Wweek')."""
@@ -629,11 +683,42 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     if proj is None:
         return None
     mu_raw = proj["mu"]
+
+    # 1. NBA injury scratch & teammate usage redistribution
+    if sport == "nba" and team is not None:
+        team_abs = logs.nba_absences().get(team, {})
+        if team_abs.get(pn, 0.0) >= 0.8:
+            return None
+        teammate_abs_wt = sum(w for p, w in team_abs.items() if p != pn)
+        if teammate_abs_wt > 0:
+            nba_boost = min(1.20, 1.0 + 0.04 * min(teammate_abs_wt, 4.0))
+            mu_raw = mu_raw * nba_boost
+
+    # 2. NHL xG shot quality & finishing regression
+    if sport == "nhl" and stat in ("goals", "points"):
+        recent_goals = sum(float(r[0]) for r in rows[-15:] if isinstance(r, (list, tuple)) and len(r) > 0 and r[0] is not None)
+        recent_sog = sum(float(r[1]) for r in rows[-15:] if isinstance(r, (list, tuple)) and len(r) > 1 and r[1] is not None)
+        if recent_sog >= 15.0:
+            fin_ratio = (recent_goals + 3.0) / (recent_sog * 0.100 + 3.0)
+            regress = float(np.clip(1.0 / (0.4 * fin_ratio + 0.6), 0.85, 1.15)) if stat == "goals" else float(np.clip(1.0 / (0.6 * fin_ratio + 0.4), 0.90, 1.10))
+            mu_raw = mu_raw * regress
+
+    # 3. NFL dynamic game environment + stadium weather
     coef = calibration(sport, stat)
-    lines = None
-    if coef and "b0" in coef and team is not None and start is not None:
-        lines = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat()))
-    mult = _ea.multiplier(coef, *(lines or (None, None))) if coef else 1.0
+    mult = 1.0
+    if sport == "nfl" and team is not None and start is not None:
+        env = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat()))
+        if env is not None:
+            it, sp = env[0], env[1]
+            wind = getattr(env, "wind", None)
+            roof = getattr(env, "roof", None)
+            temp = getattr(env, "temp", None)
+            mult = _ea.multiplier(coef, implied_total=it, team_spread=sp, wind_mph=wind, roof=roof, temp_f=temp, stat=stat)
+        elif coef:
+            mult = _ea.multiplier(coef, stat=stat)
+    elif coef:
+        mult = _ea.multiplier(coef)
+
     mu = mu_raw * mult
     p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
     p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)

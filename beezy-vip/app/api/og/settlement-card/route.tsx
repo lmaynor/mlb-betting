@@ -14,7 +14,7 @@ const WIN = "#57f287";
 const LOSS = "#ef4444";
 const FLAT = "#9ca3af";
 const MAX_ROWS = 7;
-const SPORTS = ["mlb", "nhl", "nba"];
+const SPORTS = ["mlb", "nhl", "nba", "nfl"];
 
 type Row = {
   sport: string; system: string; game_date: string; bet_type: string; player: string | null
