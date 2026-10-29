@@ -52,7 +52,7 @@ def _require_db_url() -> str:
 
 
 def _off_season() -> bool:
-    """True Dec 1 - Feb 14 (no MLB games; spring training starts late Feb).
+    """True post-World Series through March 19 (resumes March 20, 4 days before Opening Day).
 
     Scheduler jobs fire year-round; the heavy handlers no-op with 202 in this
     window instead of fetching odds / building features for an empty slate.
@@ -61,12 +61,25 @@ def _off_season() -> bool:
     if os.environ.get("MLB_FORCE_RUN") == "1":
         return False
     today = datetime.now(_CT).date()
-    return today.month in (12, 1) or (today.month == 2 and today.day < 15)
+    # Off-season:
+    # - Full months: Nov, Dec, Jan, Feb
+    # - Late Oct: Oct 29 through Oct 31 (post-World Series)
+    # - Early March: March 1 through March 19 (resumes March 20)
+    if today.month in (11, 12, 1, 2):
+        return True
+    if today.month == 10 and today.day >= 29:
+        return True
+    if today.month == 3 and today.day < 20:
+        return True
+    return False
 
 
 def _off_season_response():
-    return jsonify({"status": "skipped",
-                    "reason": "off-season (set MLB_FORCE_RUN=1 to override)"}), 202
+    return jsonify({
+        "status": "skipped",
+        "reason": "off_season",
+        "message": "MLB off-season (Oct 29 - Mar 19). Resumes March 20. Set MLB_FORCE_RUN=1 to override.",
+    }), 202
 
 
 VALID_SYSTEMS = {"1IOU", "HR", "F5", "K", "BATTER_HITS", "GAME", "BATTER_TB", "SB", "1I"}
@@ -314,6 +327,8 @@ def settle_handler():
     err = _scheduler_auth_required(request)
     if err:
         return err
+    if _off_season():
+        return _off_season_response()
     body        = request.get_json(silent=True) or {}
     settle_date = body.get("settle_date", None)  # optional; defaults to yesterday
     try:
@@ -1918,6 +1933,8 @@ def retrain_weekly():
     err = _scheduler_auth_required(request)
     if err:
         return err
+    if _off_season():
+        return _off_season_response()
 
     try:
         token = _jobs_get_token()
@@ -1951,6 +1968,8 @@ def calibrate_weekly():
     err = _scheduler_auth_required(request)
     if err:
         return err
+    if _off_season():
+        return _off_season_response()
 
     try:
         token = _jobs_get_token()
