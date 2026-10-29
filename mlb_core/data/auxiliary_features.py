@@ -344,12 +344,11 @@ def _nightly_generic(prefix: str, start_year: int, fetch_fn,
     from mlb_core.storage import write_csv
 
     year  = date.today().year
-    month = date.today().month
 
-    if not (3 <= month <= 11):
+    from mlb_core.config import is_mlb_offseason
+    if is_mlb_offseason():
         logger.info(
-            f"auxiliary_features: skipping nightly {source_name} -- "
-            f"off-season (month={month})"
+            f"auxiliary_features: skipping nightly {source_name} -- off-season"
         )
         return {"status": "skipped", "reason": "off_season"}
 
@@ -1329,11 +1328,10 @@ def auxiliary_features_nightly_gcs() -> dict:
     Returns:
         Dict {source: result} for monitoring. result.status = 'ok'|'error'|'skipped'.
     """
-    month = date.today().month
-    if not (3 <= month <= 11):
+    from mlb_core.config import is_mlb_offseason
+    if is_mlb_offseason():
         logger.info(
-            "auxiliary_features: nightly all -- off-season (month=%d), skipping",
-            month,
+            "auxiliary_features: nightly all -- off-season, skipping"
         )
         return {"status": "skipped", "reason": "off_season"}
 

@@ -456,12 +456,11 @@ def savant_leaderboard_nightly_gcs(dataset: str) -> dict:
 
     year = date.today().year
 
-    # Only run during MLB season (March-November)
-    current_month = date.today().month
-    if not (3 <= current_month <= 11):
+    # Only run during MLB season (resumes March 20)
+    from mlb_core.config import is_mlb_offseason
+    if is_mlb_offseason():
         logger.info(
-            f"savant_leaderboards: skipping nightly {dataset} -- "
-            f"off-season (month={current_month})"
+            f"savant_leaderboards: skipping nightly {dataset} -- off-season"
         )
         return {"status": "skipped", "reason": "off_season"}
 

@@ -1,5 +1,7 @@
+from datetime import date
 import os
 from pathlib import Path
+from typing import Optional
 
 # -- GCS (Cloud Run) vs local (Windows) ---------------------------------------
 GCS_BUCKET = os.environ.get("MLB_GCS_BUCKET", "") or os.environ.get("GCS_BUCKET", "")
@@ -17,6 +19,23 @@ ODDS_DIR         = BASE_DATA / "Odds" / "DraftKings"
 SEASON_START_MONTH = 3
 SEASON_END_MONTH   = 11
 TIMEZONE           = "America/New_York"
+
+
+def is_mlb_offseason(target_date: Optional[date] = None) -> bool:
+    """True post-World Series through March 19 (resumes March 20, 4 days before Opening Day).
+
+    Override with MLB_FORCE_RUN=1 (manual backfills, testing).
+    """
+    if os.environ.get("MLB_FORCE_RUN") == "1":
+        return False
+    d = target_date or date.today()
+    if d.month in (11, 12, 1, 2):
+        return True
+    if d.month == 10 and d.day >= 29:
+        return True
+    if d.month == 3 and d.day < 20:
+        return True
+    return False
 
 # Per-year MLB regular-season boundaries (actual Opening Day -> end of
 # regular season). Consolidated 2026-09-04 -- previously hardcoded verbatim
