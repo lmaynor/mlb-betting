@@ -38,12 +38,14 @@ import sys
 import json
 import time
 import requests
+import unicodedata
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from mlb_core.social.gif_fetcher import fetch_celebration_gif
-from ev.daily_card import build_daily_card, load_locked_card, save_locked_card
+from ev.daily_card import build_daily_card, load_locked_card, save_locked_card, parse_ev, OFFSHORE_BOOKS
+from ev.props import norm_name
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -318,13 +320,63 @@ def day_stats(slate):
             "p": sum(r["result"] == "push" for r in slate), "n": len(slate), "units": sum(bet_units(r) for r in slate)}
 
 
+def enrich_picks_with_projections(picks_list, projections=None):
+    """Map each pick in picks_list to matching projection engine row if available."""
+    if not picks_list:
+        return []
+    if not projections or not isinstance(projections, dict):
+        return picks_list
+
+    idx = {}
+    for sp, payload in projections.items():
+        for r in (payload or {}).get("rows") or []:
+            p_norm = r.get("player_norm")
+            p_raw = r.get("player")
+            stat = r.get("stat")
+            if p_norm and stat:
+                idx[(sp, str(p_norm).strip().lower(), stat)] = r
+            if p_raw and stat:
+                idx[(sp, norm_name(str(p_raw)), stat)] = r
+                idx[(norm_name(str(p_raw)), stat)] = r
+
+    enriched = []
+    for p in picks_list:
+        p_copy = dict(p)
+        sp = str(p_copy.get("sport") or "").lower()
+        player = p_copy.get("player") or p_copy.get("who") or ""
+        stat = p_copy.get("stat") or ""
+        p_norm = p_copy.get("player_norm") or norm_name(str(player))
+
+        match = None
+        for key in ((sp, str(p_norm).strip().lower(), stat),
+                    (sp, norm_name(str(player)), stat),
+                    (norm_name(str(player)), stat)):
+            if key in idx:
+                match = idx[key]
+                break
+
+        if match:
+            for k in ("proj_mean", "usage_proj", "opp_factor", "szn_avg", "proj_p10", "proj_p90", "calib_mult"):
+                if p_copy.get(k) is None and match.get(k) is not None:
+                    p_copy[k] = _num(match.get(k))
+            for k in ("usage_label", "opp", "confluence"):
+                if p_copy.get(k) is None and match.get(k) is not None:
+                    p_copy[k] = match.get(k)
+            if not p_copy.get("all_books") and match.get("all_books"):
+                p_copy["all_books"] = match.get("all_books")
+
+        enriched.append(p_copy)
+
+    return enriched
+
+
 def build_picks_prompt(picks):
     if not picks:
         return None
 
     lines = [f"Today's beezy model picks ({date.today().strftime('%b %d')}):\n"]
     for p in picks[:5]:  # cap at 5 so prompt stays tight
-        row = f"  {bet_label(p)} at {_odds_str(p.get('odds'))}"
+        row = f"  {bet_label(p)} at {_odds_str(p.get('odds') or p.get('american'))}"
         if p.get("book"):
             row += f" ({p['book']})"
         try:
@@ -337,16 +389,36 @@ def build_picks_prompt(picks):
             row += f" | edge {edge:.1f}%"
         if p.get("notes"):
             row += f" | {p['notes']}"
+
+        # Analytical mechanism context if present
+        details = []
+        if p.get("proj_mean") is not None:
+            details.append(f"proj {float(p['proj_mean']):.1f}")
+        if p.get("usage_proj") is not None:
+            u_lbl = str(p.get("usage_label") or "min").lower()
+            details.append(f"workload {float(p['usage_proj']):.1f} {u_lbl}")
+        if p.get("szn_avg") is not None:
+            details.append(f"season avg {float(p['szn_avg']):.1f}")
+        if p.get("opp"):
+            details.append(f"vs {p['opp']}")
+        if p.get("all_books"):
+            named = format_named_reference_books(p, max_books=3)
+            if named:
+                details.append(f"market: {named}")
+        if details:
+            row += f" | mechanism: {', '.join(details)}"
         lines.append(row)
 
     lines.append(
-        "\nWrite 3 tweet drafts for @beezy_fyi about today's picks. Each draft is about ONE pick and the math is the "
-        "content; say where the percentage comes from exactly as the data above does (do not call another book's "
-        "number 'our model'). Draft 1 opens with the book and its price, draft 2 opens with the gap between the two "
-        "percentages, draft 3 is the shortest: player, line, price, one clause. Use a different pick in each draft "
-        "when there are several. Aim for under 200 characters. Do not mention stake size. "
-        f"End with the plain-text watermark {WATERMARK} on its own line -- NO https://, NO path, NO other URL "
-        "anywhere in the tweet (the link is added as a separate reply). Under 270 characters, max 1 hashtag, no emojis, "
+        "\nWrite 3 tweet drafts for @beezy_fyi about today's picks. "
+        "The math and analytical mechanism are the content; say where the percentage comes from exactly as the data "
+        "above does (do not call another book's number 'our model'). "
+        "Draft 1 (Deep Mechanism Spotlight): 180-260 characters focusing on the primary play's matchup/usage/efficiency breakdown. "
+        "Draft 2 (Multi-Play Card Breakdown): 180-260 characters synthesizing 2-3 plays on the card with their analytical mechanism. "
+        "Draft 3: shortest hook focusing on player, line, price. "
+        "Do not mention stake size. "
+        f"End each draft with the plain-text watermark {WATERMARK} on its own line -- NO https://, NO path, NO other URL "
+        "anywhere in the tweet (the link is added as a separate reply). Max 1 hashtag, no emojis, "
         "no tout language. Return only a JSON array of 3 strings."
     )
     return "\n".join(lines)
@@ -574,6 +646,16 @@ def fallback_morning(payload: dict, max_chars: int = 160) -> str:
     n_books = top.get("n_books", 8)
     ev = top.get("ev", "+5.4%")
     url = "beezy.fyi/picks"
+    proj = top.get("proj_mean")
+
+    if proj is not None:
+        try:
+            p_val = f"proj {float(proj):.1f}, "
+            text = f"{book} hanging {player} {line} at {odds} ({p_val}vs {fair} across {n_books} bks). {k} {plays_word} locked. {url}"
+            if len(text) <= max_chars and not contains_banned_word(text):
+                return text
+        except (ValueError, TypeError):
+            pass
 
     text = f"{book} hanging {player} {line} at {odds} vs {fair} fair across {n_books} books ({ev} EV). {k} {plays_word} locked on today's card. {url}"
     if len(text) <= max_chars and not contains_banned_word(text):
@@ -664,11 +746,12 @@ def generate_short_tweet_copy(kind: str, payload: dict, max_chars: int = 160) ->
     if norm_kind == "morning":
         top = payload.get("top_play", {})
         k = payload.get("count", 1)
+        proj_str = f" Model projection: {float(top['proj_mean']):.1f}." if top.get("proj_mean") is not None else ""
         user_prompt = (
             f"Mode: morning card.\n"
             f"Locked official plays on card: {k}.\n"
             f"Top play: {top.get('player')} {top.get('line')} at {top.get('book')} {top.get('odds')} "
-            f"vs {top.get('fair')} fair across {top.get('n_books')} reference books ({top.get('ev')} EV).\n"
+            f"vs {top.get('fair')} fair across {top.get('n_books')} reference books ({top.get('ev')} EV).{proj_str}\n"
             f"Target URL to include: beezy.fyi/picks\n"
             f"Write 1-2 deadpan sentences strictly <= 160 characters stating the dislocation and locked card count."
         )
@@ -1027,6 +1110,15 @@ def _num(x):
     return v if v == v else None
 
 
+def _norm_player(name):
+    if not name or not isinstance(name, str):
+        return ""
+    s = name.strip()
+    if ":" in s:
+        s = s.split(":")[-1]
+    return norm_name(s)
+
+
 def reply_candidates(feed):
     """Every credible book-vs-consensus quote in the EV feed as one flat shape. Fail closed: a block that is missing, stale or
     unvalidated-and-unflagged contributes nothing, and a row without a price, a fair probability or a book count is skipped."""
@@ -1037,10 +1129,14 @@ def reply_candidates(feed):
         m = _MLB_BET_RE.match(str(r.get("bet_type") or ""))
         if not m or r.get("result") is not None or r.get("game_date") != today or not r.get("player"):
             continue
-        out.append({"sport": "mlb", "player": r["player"], "player_norm": None, "stat": m.group(1),
-                    "stat_label": _MLB_STATS[m.group(1)], "point": _num(m.group(3)), "side": m.group(2),
-                    "book": r.get("book"), "american": _num(r.get("odds")), "p_fair": _num(r.get("model_prob")),
-                    "ev": _num(r.get("edge")), "n_books": r.get("n_books"), "mins_to_kick": None})
+        p_name = r["player"]
+        out.append({"sport": "mlb", "player": p_name, "player_norm": r.get("player_norm") or norm_name(p_name),
+                    "stat": m.group(1), "stat_label": _MLB_STATS.get(m.group(1), m.group(1)),
+                    "point": _num(m.group(3)), "side": m.group(2), "book": r.get("book"),
+                    "american": _num(r.get("odds")), "p_fair": _num(r.get("model_prob")),
+                    "ev": _num(r.get("edge")), "n_books": r.get("n_books"), "mins_to_kick": None,
+                    "all_books": r.get("all_books") or r.get("books"), "notes": r.get("notes"),
+                    "model_prob": _num(r.get("model_prob")), "market_prob": _num(r.get("market_prob"))})
     for sp in ("nfl", "nhl", "nba"):
         block = feed.get(sp) or {}
         if block.get("stale"):
@@ -1050,11 +1146,13 @@ def reply_candidates(feed):
             if r.get("venue", "book") != "book" or not r.get("flag") or not r.get("player"):
                 continue
             stat = r.get("stat")
-            out.append({"sport": sp, "player": r["player"], "player_norm": r.get("player_norm"), "stat": stat,
-                        "stat_label": STAT_LABELS.get(stat) or str(stat or "").replace("_", " ").title(),
+            p_name = r["player"]
+            out.append({"sport": sp, "player": p_name, "player_norm": r.get("player_norm") or norm_name(p_name),
+                        "stat": stat, "stat_label": STAT_LABELS.get(stat) or str(stat or "").replace("_", " ").title(),
                         "point": _num(r.get("point")), "side": str(r.get("side") or "").upper(), "book": r.get("book"),
                         "american": _num(r.get("american")), "p_fair": _num(r.get("p_fair")), "ev": _num(r.get("ev")),
-                        "n_books": r.get("n_books"), "mins_to_kick": _num(r.get("mins_to_kick"))})
+                        "n_books": r.get("n_books"), "mins_to_kick": _num(r.get("mins_to_kick")),
+                        "all_books": r.get("all_books") or r.get("books")})
     return out
 
 
@@ -1088,6 +1186,69 @@ def _book_name(c):
     return _BOOK_SHORT.get(str(c.get("book") or "").lower()) or str(c.get("book") or "A book").title()
 
 
+def format_named_reference_books(f, max_books=3):
+    """Format up to max_books reference/sharp books from all_books: e.g. 'DraftKings -118, BetMGM -115'."""
+    all_books = f.get("all_books")
+    if not all_books or not isinstance(all_books, (list, tuple)):
+        return ""
+    cand_book = str(f.get("book") or "").strip().lower()
+    cand_side = str(f.get("side") or "").strip().upper()
+
+    entries = []
+    for b in all_books:
+        if not isinstance(b, dict):
+            continue
+        b_name = str(b.get("book") or "").strip().lower()
+        if b_name == cand_book:
+            continue
+        odds_val = None
+        if cand_side == "UNDER" and b.get("under") is not None:
+            odds_val = b.get("under")
+        elif cand_side == "OVER" and b.get("over") is not None:
+            odds_val = b.get("over")
+        elif b.get("american") is not None:
+            odds_val = b.get("american")
+        elif b.get("odds") is not None:
+            odds_val = b.get("odds")
+        elif b.get("over") is not None:
+            odds_val = b.get("over")
+
+        if odds_val is not None:
+            try:
+                odds_int = int(odds_val)
+                label = _book_name(b)
+                entries.append(f"{label} {_odds(odds_int)}")
+            except (ValueError, TypeError):
+                continue
+        if len(entries) >= max_books:
+            break
+
+    return ", ".join(entries)
+
+
+def _known_american_odds(f):
+    """Set of known integer American prices associated with this play."""
+    known = set()
+    for val in (f.get("american"), prob_to_american(f.get("p_fair"))):
+        if val is not None:
+            try:
+                known.add(int(val))
+            except (ValueError, TypeError):
+                pass
+    all_books = f.get("all_books")
+    if isinstance(all_books, (list, tuple)):
+        for b in all_books:
+            if isinstance(b, dict):
+                for k in ("over", "under", "american", "odds"):
+                    v = b.get(k)
+                    if v is not None:
+                        try:
+                            known.add(int(v))
+                        except (ValueError, TypeError):
+                            pass
+    return known
+
+
 def _bet_phrase(c):
     """The bet as it reads mid-sentence, without the player: 'the Under 1.5 shots on goal' / 'anytime TD'."""
     if c["stat"] == "anytime_td":
@@ -1095,7 +1256,7 @@ def _bet_phrase(c):
     return f"the {'Over' if c['side'] == 'OVER' else 'Under'} {c['point']:g} {str(c['stat_label']).lower()}"
 
 
-def build_reply_snippet(c, proj_mean=None):
+def build_reply_snippet(c, proj_mean=None, engine=None):
     """The deterministic price_check reply (<= REPLY_SNIPPET_MAX chars), in plain betting talk. It assumes the tweet it answers
     already named the player, so it opens on the book rather than on '<Player> Over <line>:' (the shape every EV bot uses). The
     projection clause is dropped first when it does not fit; None when even the bare sentence does not fit or the result is not
@@ -1103,6 +1264,31 @@ def build_reply_snippet(c, proj_mean=None):
     fair = prob_to_american(c["p_fair"])
     if fair is None or c.get("point") is None:
         return None
+
+    # Analytical fallback when engine context is available:
+    if engine and proj_mean is not None:
+        szn = engine.get("szn_avg")
+        u_val = engine.get("usage_proj")
+        u_lbl = str(engine.get("usage_label") or "").strip().lower()
+        sub_parts = []
+        if u_val is not None and u_lbl:
+            if u_lbl in _MINUTES_LABELS:
+                sub_parts.append(f"{u_val:.1f} projected minutes")
+            else:
+                sub_parts.append(f"{u_val:.1f} projected {u_lbl}")
+        if szn is not None:
+            sub_parts.append(f"vs a {szn:.1f} season avg")
+        clause = f" ({' '.join(sub_parts)})" if sub_parts else ""
+        stat_name = str(c.get("stat_label") or "").lower()
+        bet_side = f"{'Over' if str(c.get('side')).upper() == 'OVER' else 'Under'} {c['point']:g}"
+
+        enriched = (
+            f"We project {proj_mean:.1f} {stat_name} here{clause}, so {_book_name(c)} hanging {_odds(c['american'])} "
+            f"on the {bet_side} stands out while the other {c['n_books']} books sit near {_odds(fair)}."
+        )
+        if len(enriched) <= REPLY_SNIPPET_MAX and is_link_free(enriched) and not violates_voice(enriched):
+            return enriched
+
     core = (f"{_book_name(c)} is still hanging {_odds(c['american'])} on {_bet_phrase(c)} if you shop around; "
             f"the other {c['n_books']} books are near {_odds(fair)}")
     model = f", and we have him closer to {proj_mean:.1f}" if proj_mean is not None else ""
@@ -1121,7 +1307,7 @@ You write short REPLIES to post under other people's tweets about a player. The 
 never restate them as a header. Hard rules for every reply:
 - 240 characters or fewer, one or two sentences
 - NO link, NO site name, NO @handle, NO hashtag, NO emoji
-- use ONLY the numbers given for that play, written as given; invent nothing. No injury, pace, weather or recent-form talk, and
+- use ONLY the numbers and facts given for that play, written as given; invent nothing. No injury, pace, weather or recent-form talk, and
   no matchup talk unless the play lists a matchup note
 - never state a win probability for OUR model; you may quote our projection, the season average, the projected usage and the range
 - describe the other books as "around +109" or "sitting near +109": it is a de-vigged consensus price, never an "average". You are
@@ -1137,11 +1323,14 @@ How it should read (this is what separates a person from a bot):
 
 Three angles per play; the operator picks the one that fits the tweet being answered:
 - price_check -- for a tweet that agrees with our side. Help its readers get a better number without contradicting the pick: name
-  the book and its price against where the other books sit
-- pushback -- for a tweet on the other side. Polite friction: where the other books price our side, plus one fact from the play
-  (projection, usage, season average, range) that makes the tweet's side harder. Naming a book is optional
-- driver_note -- adds our "why" in two connected clauses: our projection against the line, its main driver (season average,
-  projected usage, matchup note), the price, and the caveat. Skip this key for a play that says "no projection"
+  the book and its price against where the other books sit, and tie it to the volume or matchup reason.
+  Example: "DraftKings is still hanging +115 on the over if you shop around; consensus sits near -108 and his 36-minute projection supports the volume."
+- pushback -- for a tweet on the other side. Respectful friction: where the other books price our side, plus one mechanism from the play
+  (projection, efficiency rate, usage, season average, range) that makes the tweet's side harder.
+  Example: "The under looks tough when consensus has the over priced near -108 and our projection sits at 34.1 on a 31.0 baseline."
+- driver_note -- deep-dive decomposition and caveat in two connected clauses: our projection against the line, its main mechanism
+  (workload, efficiency rate, matchup note), the price, and the caveat. Skip this key for a play that says "no projection".
+  Example: "We project 34.1 points against 32.5 based on 36 projected minutes, though the line still sits inside his 26-42 distribution window; DraftKings hanging +115 is the outlier."
 
 Return ONLY JSON: {"<play id>": {"price_check": "...", "pushback": "...", "driver_note": "..."}, ...}
 """
@@ -1216,7 +1405,11 @@ def _engine_numbers(f):
         return out
     for k in ("szn_avg", "proj_p10", "proj_p90"):
         if e.get(k) is not None:
-            out.add(f"{e[k]:.1f}")
+            try:
+                fv = float(e[k])
+                out.update({f"{fv:.1f}", f"{fv:.0f}", str(int(fv))})
+            except (ValueError, TypeError):
+                out.add(f"{e[k]:.1f}")
     if e.get("usage_proj") is not None:
         out.update({f"{e['usage_proj']:.1f}", f"{e['usage_proj']:.0f}"})
     if e.get("n_games") and e["n_games"] < THIN_SAMPLE_GAMES:        # only printed as a thin-sample caveat
@@ -1252,6 +1445,23 @@ def _allowed_numbers(f):
         out.update({f"{abs(gap):.1f}", f"{abs(gap):g}"})
     if f.get("proj_minutes") is not None:
         out.update({f"{f['proj_minutes']:.0f}", f"{f['proj_minutes']:.1f}"})
+    for b in (f.get("all_books") or []):
+        if isinstance(b, dict):
+            for k in ("over", "under", "american", "odds"):
+                v = b.get(k)
+                if v is not None:
+                    try:
+                        iv = int(v)
+                        out.update({_odds(iv), str(abs(iv)), str(iv)})
+                    except (ValueError, TypeError):
+                        pass
+    e = f.get("engine") or {}
+    if f.get("proj_mean") is not None and e.get("usage_proj"):
+        try:
+            eff = float(f["proj_mean"]) / float(e["usage_proj"])
+            out.update({f"{eff:.2f}", f"{eff:.1f}"})
+        except (ValueError, TypeError, ZeroDivisionError):
+            pass
     return out
 
 
@@ -1278,21 +1488,125 @@ def reads_like_a_template(text, f):
 
 def reply_variant_ok(text, f, style=None):
     """A Gemini reply is usable only if it is link-free, in voice, short, reads like a person (reads_like_a_template), quotes a real
-    price for this play, and contains no number that was not given for it (a conversational model will happily invent one). A
-    price_check must name the book and its price: it exists to help readers shop the number."""
+    price for this play, and passes targeted price and fact verification. A price_check must name the book and its price."""
     if not isinstance(text, str):
         return False
     text = text.strip()
-    if not text or len(text) > REPLY_SNIPPET_MAX or not is_link_free(text) or violates_voice(text):
+    if not text or len(text) < 25 or len(text) > REPLY_SNIPPET_MAX or not is_link_free(text) or violates_voice(text):
         return False
     if reads_like_a_template(text, f):
         return False
-    fair = prob_to_american(f["p_fair"])
-    prices = {_odds(f["american"])} | ({_odds(fair)} if fair is not None and style != "price_check" else set())
-    if not any(p in text for p in prices) or (style == "price_check" and _book_name(f) not in text):
+
+    fair = prob_to_american(f.get("p_fair"))
+    prices = {_odds(f.get("american"))} | ({_odds(fair)} if fair is not None and style != "price_check" else set())
+    if not any(p in text for p in prices if p is not None):
         return False
+    if style == "price_check" and _book_name(f) not in text:
+        return False
+
+    # False precision: reject >= 3 decimal places (e.g. 1.442)
+    if re.search(r"\b\d+\.\d{3,}\b", text):
+        return False
+
+    # Signed 3-4 digit odds tokens ([+-]\d{3,4}\b) must be in known American prices
+    known_odds = _known_american_odds(f)
+    for tok in re.findall(r"([+-]\d{3,4})\b", text):
+        try:
+            val = int(tok)
+            if val not in known_odds:
+                return False
+        except ValueError:
+            return False
+
+    # Percentages in text must not be hallucinated win rates
+    known_pcts = set()
+    for fn in (breakeven_pct, market_pct):
+        p = fn(f)
+        if p is not None:
+            known_pcts.update({round(p), round(p, 1)})
+    if f.get("ev") is not None:
+        ev_p = f["ev"] * 100
+        known_pcts.update({round(ev_p), round(ev_p, 1)})
+    for pct_match in re.findall(r"(\d+(?:\.\d+)?)\s*%", text):
+        try:
+            pval = float(pct_match)
+            if not any(abs(pval - kp) <= 1.5 for kp in known_pcts):
+                return False
+        except ValueError:
+            return False
+
+    # If proj_mean is missing/hidden, projection and engine facts must stay private
+    if f.get("proj_mean") is None:
+        if style == "driver_note":
+            return False
+        if re.search(r"\b(?:closer to|project(?:ed|ion)?|have him|season avg|szn avg)\b", text, re.IGNORECASE):
+            return False
+        allowed = _allowed_numbers(f)
+        for tok in _NUM_RE.findall(text):
+            if tok not in allowed and tok.lstrip("+-") not in allowed:
+                return False
+        return True
+
+    # 2.2 Require analytical substance in driver_note and pushback when proj_mean is present
+    if style == "driver_note":
+        has_substance = False
+        e = f.get("engine") or {}
+        mu_str = f"{f['proj_mean']:.1f}"
+        if mu_str in text or re.search(r"\b(?:project(?:ed|ion)?|closer to|we have him)\b", text, re.IGNORECASE):
+            has_substance = True
+        if not has_substance and re.search(r"\b(?:minutes?|toi|snaps?|targets?|workload|usage)\b", text, re.IGNORECASE):
+            has_substance = True
+        if not has_substance and re.search(r"\b(?:season average|szn avg|baseline)\b", text, re.IGNORECASE):
+            has_substance = True
+        opp = e.get("opp")
+        if not has_substance and (
+            (opp and str(opp).lower() in text.lower())
+            or re.search(r"\b(?:matchup|defense|facing|bump|downgrade)\b", text, re.IGNORECASE)
+        ):
+            has_substance = True
+        if not has_substance and re.search(r"\b(?:percentile|range|floor|ceiling|window)\b", text, re.IGNORECASE):
+            has_substance = True
+        if not has_substance:
+            return False
+
+    if style == "pushback":
+        has_pushback = False
+        if re.search(r"\b(?:other \d+ books|books?|consensus|market|under|over)\b", text, re.IGNORECASE):
+            has_pushback = True
+        if not has_pushback and re.search(r"\b(?:project(?:ed|ion)?|closer to|average|baseline|minutes?)\b", text, re.IGNORECASE):
+            has_pushback = True
+        if not has_pushback:
+            return False
+
+    # Targeted Number Validation: allow quant specifics and context numbers
     allowed = _allowed_numbers(f)
-    return all(tok in allowed or tok.lstrip("+-") in allowed for tok in _NUM_RE.findall(text))
+    for tok in _NUM_RE.findall(text):
+        if tok in allowed or tok.lstrip("+-") in allowed:
+            continue
+        # Cents: "15 cents", "18-cent"
+        if re.search(rf"\b{re.escape(tok)}\s*-?\s*cents?\b", text, re.IGNORECASE):
+            continue
+        # Standard game minutes: 40, 48, 60
+        if tok in ("40", "48", "60") and re.search(rf"\b{re.escape(tok)}\s*min", text, re.IGNORECASE):
+            continue
+        # 3-pointers: 3
+        if tok == "3" and re.search(r"\b3\s*-?\s*(?:pointers?|pts?|s)\b", text, re.IGNORECASE):
+            continue
+        # Ordinals: 1st, 2nd, 3rd, 4th
+        if re.search(rf"\b{re.escape(tok)}\s*(?:st|nd|rd|th)\b", text, re.IGNORECASE):
+            continue
+        # Small integer count <= 10
+        try:
+            if tok.isdigit() and 0 <= int(tok) <= 10:
+                continue
+        except ValueError:
+            pass
+        # Percentage token (validated earlier)
+        if re.search(rf"\b{re.escape(tok)}\s*%", text):
+            continue
+        return False
+
+    return True
 
 
 # -- reply_ammo dossier: the engine's numbers in betting words ------------------------------------------------------------------
@@ -1302,8 +1616,8 @@ def reply_variant_ok(text, f, style=None):
 # the season average, the projected usage and a matchup note are. A reply may quote only numbers printed here (_allowed_numbers).
 # NFL/NHL/NBA only: MLB plays carry no engine row, so they get the price math and no projection facts.
 
-ENGINE_FIELDS = ("proj_mean", "proj_raw", "calib_mult", "opp_factor", "usage_proj", "usage_label", "n_games", "szn_avg",
-                 "proj_p10", "proj_p90")
+ENGINE_FIELDS = ("proj_mean", "proj_raw", "calib_mult", "opp", "opp_factor", "usage_proj", "usage_label", "n_games", "szn_avg",
+                 "proj_p10", "proj_p90", "p_over_model", "p_over_market", "p_over_blend", "confluence")
 THIN_SAMPLE_GAMES = 15
 
 
@@ -1348,8 +1662,24 @@ def build_dossier(f, sport=None):
     """The facts for one play as {"text": lines for the prompt, "driver", "caveats", "inside"}, or None when the play has no
     projection that supports the pick. Every number Gemini may quote about the projection is in `text`."""
     mu, line = f.get("proj_mean"), f.get("point")
-    if mu is None or line is None:
+    sp = str(sport or f.get("sport") or "").lower()
+
+    if mu is None:
+        if sp == "mlb" and (f.get("notes") or f.get("model_prob")):
+            lines = []
+            if f.get("notes"):
+                lines.append(f"Model notes: {f['notes']}.")
+            if f.get("model_prob") is not None and f.get("market_prob") is not None:
+                lines.append(f"Model win prob is {f['model_prob']*100:.1f}% vs {f['market_prob']*100:.1f}% implied by market.")
+            named = format_named_reference_books(f, max_books=3)
+            if named:
+                lines.append(f"Market reference books: {named}.")
+            return {"text": "\n".join(lines), "driver": None, "caveats": [], "inside": None, "gap": None}
         return None
+
+    if line is None:
+        return None
+
     e, side = f.get("engine") or {}, str(f["side"]).upper()
     pick = "Over" if side == "OVER" else "Under"
     gap = mu - line
@@ -1359,9 +1689,32 @@ def build_dossier(f, sport=None):
     usage = _usage_phrase(e)
     if usage:
         lines.append(f"{usage[0].upper()}{usage[1:]}.")
+
+    u_val = e.get("usage_proj")
+    if u_val is not None and u_val > 0:
+        stat_lbl = str(f.get("stat_label") or "").lower()
+        u_lbl = str(e.get("usage_label") or "").strip().lower()
+        unit = "min" if u_lbl in _MINUTES_LABELS else u_lbl or "unit"
+        eff_rate = mu / u_val
+        lines.append(f"Efficiency rate: {eff_rate:.2f} {stat_lbl} per {unit}.")
+
     m = _matchup(e)
+    opp_team = e.get("opp")
     if m:
-        lines.append(f"Matchup note: {m[0]}.")
+        if opp_team:
+            lines.append(f"Matchup vs {opp_team}: {m[0]}.")
+        else:
+            lines.append(f"Matchup note: {m[0]}.")
+    elif opp_team:
+        lines.append(f"Matchup: facing {opp_team}.")
+
+    calib = e.get("calib_mult")
+    if calib is not None:
+        if calib >= 1.03:
+            lines.append("Game environment note: game script and team total shift apply a soft boost.")
+        elif calib <= 0.97:
+            lines.append("Game environment note: game script and team total shift apply a soft drag.")
+
     driver = None
     terms = projection_terms(f)
     if terms:
@@ -1369,7 +1722,22 @@ def build_dossier(f, sport=None):
         driver = max(toward, key=lambda t: t[1])
         if driver[1] >= 0.05:
             lines.append(f"Biggest push toward the {pick}: {driver[0]}.")
+
     inside = None
+    if e.get("proj_p10") is not None and e.get("proj_p90") is not None:
+        inside = e["proj_p10"] <= line <= e["proj_p90"]
+        lines.append(f"Our 10th to 90th percentile range is {e['proj_p10']:.1f} to {e['proj_p90']:.1f}; the line is "
+                     f"{'inside' if inside else 'outside'} it.")
+
+    named_books = format_named_reference_books(f, max_books=3)
+    if named_books:
+        lines.append(f"Market reference books: {named_books}.")
+
+    caveats = reply_caveats(f)
+    if caveats:
+        lines.append("Caveat to work in: " + "; ".join(caveats) + ".")
+
+    return {"text": "\n".join(lines), "driver": driver, "caveats": caveats, "inside": inside, "gap": gap}
     if e.get("proj_p10") is not None and e.get("proj_p90") is not None:
         inside = e["proj_p10"] <= line <= e["proj_p90"]
         lines.append(f"Our 10th to 90th percentile range is {e['proj_p10']:.1f} to {e['proj_p90']:.1f}; the line is "
@@ -1428,16 +1796,80 @@ def build_reply_ammo(feed, projections=None):
         for r in (payload or {}).get("rows") or []:
             if r.get("proj_mean") is not None:
                 usage = _num(r.get("usage_proj")) if str(r.get("usage_label") or "").lower() in _MINUTES_LABELS else None
-                key = (sp, r.get("player_norm"), r.get("stat"))
-                proj_idx[key] = (_num(r.get("proj_mean")), usage)
-                engine_idx[key] = {k: (r.get(k) if k == "usage_label" else _num(r.get(k))) for k in ENGINE_FIELDS}
+                ed = {}
+                for k in ENGINE_FIELDS:
+                    if k in ("usage_label", "opp"):
+                        ed[k] = r.get(k)
+                    elif k == "confluence":
+                        ed[k] = bool(r.get(k)) if r.get(k) is not None else None
+                    else:
+                        ed[k] = _num(r.get(k))
+                ed["main_line"] = _num(r.get("line"))
+
+                keys = []
+                pn = r.get("player_norm")
+                if pn:
+                    keys.append((sp, str(pn).strip().lower(), r.get("stat")))
+                p_raw = r.get("player")
+                if p_raw:
+                    keys.append((sp, norm_name(str(p_raw)), r.get("stat")))
+                    keys.append((sp, _norm_player(str(p_raw)), r.get("stat")))
+
+                for k in keys:
+                    proj_idx[k] = (_num(r.get("proj_mean")), usage)
+                    engine_idx[k] = ed
+
+    candidates = reply_candidates(feed)
+    # If feed has fewer than 5 candidates, allow top confluence == True plays directly from projections
+    if len(candidates) < 5 and projections:
+        conf_plays = []
+        for sp, payload in projections.items():
+            for r in (payload or {}).get("rows") or []:
+                if r.get("confluence") and r.get("line") is not None and r.get("side"):
+                    n_b = r.get("n_books") or 0
+                    if n_b >= REPLY_MIN_BOOKS and r.get("american") and (r.get("market_p_fair") or r.get("p_fair")):
+                        ev_val = parse_ev(r)
+                        if ev_val > 0:
+                            stat = r.get("stat")
+                            conf_plays.append({
+                                "sport": sp,
+                                "player": r.get("player"),
+                                "player_norm": r.get("player_norm") or norm_name(r.get("player")),
+                                "stat": stat,
+                                "stat_label": STAT_LABELS.get(stat) or str(stat or "").replace("_", " ").title(),
+                                "point": _num(r.get("line")),
+                                "side": str(r.get("side")).upper(),
+                                "book": r.get("book"),
+                                "american": _num(r.get("american")),
+                                "p_fair": _num(r.get("market_p_fair") or r.get("p_fair")),
+                                "ev": ev_val,
+                                "n_books": n_b,
+                                "mins_to_kick": None,
+                                "all_books": r.get("all_books"),
+                            })
+        conf_plays.sort(key=lambda x: -(x.get("ev") or 0))
+        seen_cand = {(c["sport"], norm_name(c.get("player")), c["stat"]) for c in candidates}
+        for cp in conf_plays:
+            k = (cp["sport"], norm_name(cp.get("player")), cp["stat"])
+            if k not in seen_cand:
+                seen_cand.add(k)
+                candidates.append(cp)
+
     plays = []
-    for c in select_reply_plays(reply_candidates(feed)):
-        key = (c["sport"], c.get("player_norm"), c["stat"])
+    for c in select_reply_plays(candidates):
+        p_norm = c.get("player_norm") or norm_name(c.get("player"))
+        key = (c["sport"], str(p_norm).strip().lower(), c["stat"])
         proj_mean, minutes = proj_idx.get(key, (None, None))
         engine = engine_idx.get(key)
+        if proj_mean is None:
+            p_fallback = norm_name(c.get("player"))
+            key_fb = (c["sport"], p_fallback, c["stat"])
+            proj_mean, minutes = proj_idx.get(key_fb, (None, None))
+            engine = engine_idx.get(key_fb)
+
         if not proj_supports_side(proj_mean, c.get("point"), c.get("side")):
             proj_mean, minutes = None, None          # do not cite a projection that sits against the pick (see proj_supports_side)
+
         snippet = build_reply_snippet(c, proj_mean)
         if snippet:
             plays.append({"sport": c["sport"], "player": c["player"], "snippet": snippet,
@@ -1535,8 +1967,17 @@ def main():
                 picks_list = raw_list
 
         if not picks_list:
-            print("No picks today — skipping.")
+            print("No picks today - skipping.")
             return
+
+        # Fetch projections to enrich picks_list
+        projections = {}
+        for sp in ("nfl", "nhl", "nba"):
+            try:
+                projections[sp] = get_projections(sp)
+            except Exception:
+                pass
+        picks_list = enrich_picks_with_projections(picks_list, projections)
 
         p0 = picks_list[0]
         top_play = {
@@ -1547,6 +1988,7 @@ def main():
             "fair": _odds_str(p0.get("fair") or p0.get("fair_american")),
             "n_books": p0.get("n_books", 6),
             "ev": f"{(p0.get('ev') or p0.get('market_ev') or 0.05)*100:+.1f}%",
+            "proj_mean": p0.get("proj_mean"),
         }
         short_tweet = generate_short_tweet_copy("morning", {"count": len(picks_list), "top_play": top_play})
 
@@ -1574,9 +2016,16 @@ def main():
     else:
         raise ValueError(f"Unknown TWEET_MODE: {mode}")
 
-    print(f"Generating tweets via Gemini...")
-    if mode == "picks" and short_tweet and len(short_tweet) <= 160:
-        tweets = [short_tweet]
+    print("Generating tweets via Gemini...")
+    if mode == "picks":
+        deep_tweets = generate_tweets(prompt) if prompt else []
+        tweets = []
+        if deep_tweets:
+            tweets.extend(deep_tweets[:2])
+        if short_tweet and len(short_tweet) <= 160:
+            tweets.append(short_tweet)
+        elif not tweets and short_tweet:
+            tweets.append(short_tweet)
     else:
         tweets = generate_tweets(prompt)
 
