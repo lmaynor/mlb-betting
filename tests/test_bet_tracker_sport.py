@@ -36,8 +36,9 @@ def db(tmp_path):
 
 def test_norm_sport():
     assert norm_sport(None) == "mlb" and norm_sport(" NHL ") == "nhl"
+    assert norm_sport("NFL") == "nfl"
     with pytest.raises(ValueError):
-        norm_sport("nfl")                      # not a bets-table sport yet; never silently default a typo
+        norm_sport("cricket")  # unknown sport; never silently default a typo
 
 
 def test_default_tracker_is_mlb_and_unchanged(db):

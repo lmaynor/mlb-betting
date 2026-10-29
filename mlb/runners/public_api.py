@@ -62,7 +62,12 @@ def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
     so every player with a model probability is browsable, not just the
     qualified card."""
     gate = "" if include_all else "AND kelly_triggered = true "
-    sport = _sport(sport)
+    params = {"_today": _ct_today()}
+    if sport and str(sport).strip().lower() != "all":
+        sport_clause = "sport = :_sport AND "
+        params["_sport"] = _sport(sport)
+    else:
+        sport_clause = ""
     _ensure_proj_col(engine)
     with engine.connect() as conn:
         rows = conn.execute(text(
@@ -78,15 +83,18 @@ def get_today_picks(engine, include_all: bool = False, sport: str = "mlb"):
             # back-fill proj_mean for K / OUTS rows logged before proj_mean existed, and is not returned.
             "book, proj_mean, proj_k "
             "FROM bets "
-            f"WHERE sport = :_sport AND game_date = :_today {gate}"
+            f"WHERE {sport_clause}game_date = :_today {gate}"
             "ORDER BY system, created_at DESC"
-        ), {"_today": _ct_today(), "_sport": sport}).mappings().all()
+        ), params).mappings().all()
     return _with_projection(rows)
 
 
 def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, book=None, sport="mlb"):
-    conditions = ["kelly_triggered = true", "sport = :_sport"]
-    params = {"_sport": _sport(sport)}
+    conditions = ["kelly_triggered = true"]
+    params = {}
+    if sport and str(sport).strip().lower() != "all":
+        conditions.append("sport = :_sport")
+        params["_sport"] = _sport(sport)
 
     if system:
         conditions.append("system = :system")

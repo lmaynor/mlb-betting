@@ -16,8 +16,8 @@ PROJECT_ID="${PROJECT_ID:-concrete-crow-445205-m4}"
 REGION="${REGION:-us-central1}"
 DRY_RUN="${DRY_RUN:-0}"
 
-# Suffixes/names of multi-sport tweet jobs that MUST stay active:
-EXCLUDE_REGEX='^(mlb-tweet-picks-schedule|mlb-tweet-recap-schedule|mlb-tweet-reply-ammo-schedule)$'
+# Suffixes/names of multi-sport jobs that MUST stay active for NFL/NBA/NHL:
+EXCLUDE_REGEX='^(mlb-tweet-picks-schedule|mlb-tweet-recap-schedule|mlb-tweet-reply-ammo-schedule|mlb-settle)$'
 
 echo "=== Pausing MLB Scheduler Jobs for Off-Season (Project: $PROJECT_ID, Region: $REGION) ==="
 

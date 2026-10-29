@@ -68,7 +68,7 @@ MODE = os.environ.get("TWEET_MODE", "picks")  # picks|morning|recap|settlement|r
 # Sports with rows in the `bets` table (bet_tracker.VALID_SPORTS). NFL is deliberately absent: NFL is shadow-only, nothing is
 # logged or settled, and /api/public/picks/recent?sport=nfl answers 400. Add it here AND in the settlement-card route's SPORTS
 # only once NFL bets are actually tracked.
-SETTLEMENT_SPORTS = ("mlb", "nhl", "nba")
+SETTLEMENT_SPORTS = ("mlb", "nhl", "nba", "nfl")
 
 WATERMARK = "beezy.fyi"   # plain text, no scheme, no path: the only form of the site name a main tweet may carry
 _CT = ZoneInfo("America/Chicago")

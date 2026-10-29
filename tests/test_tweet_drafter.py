@@ -27,6 +27,11 @@ import tweet_drafter as td
 @pytest.fixture(autouse=True)
 def _no_discord_pacing(monkeypatch):
     """post_messages sleeps between webhook posts; never in tests."""
+    from zoneinfo import ZoneInfo
+    global YESTERDAY, TWO_DAYS_AGO
+    ct_today = datetime.now(ZoneInfo("America/Chicago")).date()
+    YESTERDAY = (ct_today - timedelta(days=1)).isoformat()
+    TWO_DAYS_AGO = (ct_today - timedelta(days=2)).isoformat()
     monkeypatch.setattr(td.time, "sleep", lambda s: None)
     monkeypatch.setattr(td, "build_window_summary", lambda: "")      # never call the live API from a test
 
@@ -297,10 +302,9 @@ def test_post_drafts_to_discord_without_webhook_skips(monkeypatch):
     assert "SKIPPED" in td.post_drafts_to_discord("picks", ["t"])
 
 
-def test_nfl_is_not_a_settlement_sport_because_nfl_bets_are_not_tracked():
-    """bets.sport is mlb|nhl|nba, so /api/public/picks/recent?sport=nfl answers 400 and there is nothing to settle. If NFL
-    bets are ever tracked, add it here AND to the settlement-card route's SPORTS, and flip this test."""
-    assert td.SETTLEMENT_SPORTS == ("mlb", "nhl", "nba")
+def test_nfl_is_settlement_sport_and_tracked():
+    """bets.sport covers mlb|nhl|nba|nfl, so all four sports settle and appear on the public ledger."""
+    assert td.SETTLEMENT_SPORTS == ("mlb", "nhl", "nba", "nfl")
     from mlb_core.tracking.bet_tracker import VALID_SPORTS
     assert set(td.SETTLEMENT_SPORTS) == set(VALID_SPORTS)
 

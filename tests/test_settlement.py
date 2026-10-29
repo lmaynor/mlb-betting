@@ -815,3 +815,48 @@ class TestBetTrackerDedup:
                                      model_prob=0.2048, market_prob=0.16, edge=0.0562,
                                      kelly_pct=0.01)
         assert id_a_again == -1
+
+
+def test_settle_winter_bets():
+    from mlb.runners.settle_bets import _settle_winter_bets
+    import pandas as pd
+    from unittest.mock import patch
+
+    pending = pd.DataFrame([
+        {
+            "id": 101, "sport": "nhl", "game_date": "2026-10-28", "away_team": "TOR", "home_team": "BOS",
+            "player": "Auston Matthews", "bet_type": "sog_over_3.5", "odds": -115, "stake": 10.0, "notes": '{"stat":"sog","point":3.5,"side":"over"}'
+        },
+        {
+            "id": 102, "sport": "nba", "game_date": "2026-10-28", "away_team": "BOS", "home_team": "NYK",
+            "player": "Jayson Tatum", "bet_type": "points_over_26.5", "odds": 110, "stake": 10.0, "notes": '{"stat":"points","point":26.5,"side":"over"}'
+        },
+    ])
+
+    mock_nhl = {
+        "final": True,
+        "players": {
+            8479318: {"name": "Auston Matthews", "sog": 5, "_played": True}
+        }
+    }
+    mock_nba = {
+        "final": True,
+        "players": {
+            4065648: {"name": "Jayson Tatum", "points": 24, "_played": True}
+        }
+    }
+
+    with patch("ev.grade_props.nhl_actuals", return_value=mock_nhl), \
+         patch("ev.grade_props.nba_actuals", return_value=mock_nba):
+        outcomes = _settle_winter_bets(pending, "2026-10-28")
+
+    assert len(outcomes) == 2
+    # NHL bet: 5 sog > 3.5 line -> win, -115 odds -> profit ~ 10 * (100/115) = 8.70
+    assert outcomes[0]["id"] == 101
+    assert outcomes[0]["result"] == "win"
+    assert outcomes[0]["profit"] == 8.70
+
+    # NBA bet: 24 points < 26.5 line -> loss -> profit = -10.0
+    assert outcomes[1]["id"] == 102
+    assert outcomes[1]["result"] == "loss"
+    assert outcomes[1]["profit"] == -10.0

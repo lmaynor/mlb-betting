@@ -327,8 +327,6 @@ def settle_handler():
     err = _scheduler_auth_required(request)
     if err:
         return err
-    if _off_season():
-        return _off_season_response()
     body        = request.get_json(silent=True) or {}
     settle_date = body.get("settle_date", None)  # optional; defaults to yesterday
     try:
