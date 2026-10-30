@@ -4,8 +4,8 @@ import './globals.css'
 
 // Three faces. Variable names are the contract with globals.css and ~1,600 inline styles: --font-inter is the dense UI
 // face (historical name, now Plus Jakarta Sans), --font-display is headings and the wordmark, --font-mono is every number.
-const uiSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-inter', weight: ['400', '500', '600', '700'], display: 'swap' })
-const displaySans = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', weight: ['600', '700'], display: 'swap' })
+const uiSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
+const displaySans = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', display: 'swap' })
 const plexMono = IBM_Plex_Mono({ subsets: ['latin'], variable: '--font-mono', weight: ['400', '500', '600', '700'], display: 'swap' })
 import { ClerkProvider } from '@clerk/nextjs'
 import { AUTH_DISABLED } from '@/lib/auth-mode'

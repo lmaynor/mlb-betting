@@ -5,7 +5,7 @@ import type { Bet } from '@/lib/types'
 /** Player picks (a named player's stat) and game picks (a team or game outcome) are separate products and separate access. */
 export type PickKind = 'player' | 'game'
 
-const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME'])
+const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME', 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL'])
 
 export function kindOfSystem(system: string): PickKind {
   return GAME_SYSTEMS.has(system.toUpperCase()) ? 'game' : 'player'
@@ -184,7 +184,47 @@ const NBA_SYSTEMS: PickSystem[] = [
     description: 'Blocks per game: a low-count market with a wide spread.' }),
 ]
 
-export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_SYSTEMS, ...NBA_SYSTEMS]
+const game = (sport: SportSlug, seed: Seed & { statKey: string; family: string; features: string[] }): PickSystem => {
+  return { market: 'game', ...seed, sport }
+}
+
+const NBA_GAME_SYSTEMS: PickSystem[] = [
+  game('nba', {
+    key: 'NBA_ML',
+    slug: 'ml',
+    name: 'NBA Moneyline',
+    shortName: 'ML',
+    statKey: 'moneyline',
+    family: 'Kalman State-Space + Student-t(nu=10)',
+    shelved: true,
+    features: ['Opponent-adjusted Kalman ratings', 'Pace-neutral Four Factors Z-scores', 'Active roster injury delta', 'Schedule and road B2B fatigue'],
+    description: 'Full-game moneyline priced from Kalman state-space offensive/defensive ratings, Four Factors Z-differentials, and bottom-up active roster injury impact.',
+  }),
+  game('nba', {
+    key: 'NBA_SPREAD',
+    slug: 'spread',
+    name: 'NBA Point Spread',
+    shortName: 'Spread',
+    statKey: 'spread',
+    family: 'Heteroscedastic Student-t Margin Distribution',
+    shelved: true,
+    features: ['Heteroscedastic 3PAr and pace dispersion', 'Continuity-corrected push probabilities', 'Rest differential and road B2B tensor', 'Four Factors matchup efficiency'],
+    description: 'Point spread and alternate rungs priced from a heteroscedastic Student-t distribution with 3PAr and pace dispersion scaling.',
+  }),
+  game('nba', {
+    key: 'NBA_TOTAL',
+    slug: 'total',
+    name: 'NBA Game Total',
+    shortName: 'Total',
+    statKey: 'total',
+    family: 'Heteroscedastic Student-t Total Distribution',
+    shelved: true,
+    features: ['Combined game pace projection', 'Offensive rating sums', 'Injury scoring drag', 'Tempo-scaled score dispersion'],
+    description: 'Game totals and alternate totals priced from joint tempo and efficiency modeling with continuity-corrected integer pushes.',
+  }),
+]
+
+export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_SYSTEMS, ...NBA_GAME_SYSTEMS, ...NBA_SYSTEMS]
 
 export const PICK_SYSTEM_BY_KEY: Record<string, PickSystem> = Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, system]))
 

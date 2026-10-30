@@ -124,9 +124,29 @@ def _spreads(book: dict, home: str, away: str) -> dict:
     return out
 
 
-def _interp_total_rows(sport: str, tot: dict) -> list[tuple]:
+def _get_nba_game_sd(game_key: str) -> dict[str, float]:
+    """Retrieve model-predicted heteroscedastic scale (margin & total) for NBA game if available."""
+    try:
+        from nba.game.run_daily import get_nba_game_predictions
+        preds = get_nba_game_predictions()
+        for g in (preds or {}).get("priced_games", []):
+            if g.get("game_key") == game_key:
+                return {
+                    "margin": float(g.get("sigma_margin", 12.0)),
+                    "total": float(g.get("sigma_total", 18.0)),
+                }
+    except Exception:
+        pass
+    return GAME_SD.get("nba", {})
+
+
+def _interp_total_rows(sport: str, tot: dict, game_key: str | None = None) -> list[tuple]:
     """[(N, x, p_over, n_books, disp)] for every half-point rung near the quoted total lines that is NOT itself quoted."""
     sd = GAME_SD.get(sport, {}).get("total")
+    if sport == "nba" and game_key:
+        dyn = _get_nba_game_sd(game_key)
+        if dyn.get("total"):
+            sd = dyn["total"]
     if not tot or not sd:
         return []
     anchors = [(pt, float(statistics.median(v)), len(v), _mad(v)) for pt, v in tot.items()]
@@ -145,9 +165,13 @@ def _interp_total_rows(sport: str, tot: dict) -> list[tuple]:
     return out
 
 
-def _interp_spread_rows(sport: str, spr: dict, home_n: str) -> list[tuple]:
+def _interp_spread_rows(sport: str, spr: dict, home_n: str, game_key: str | None = None) -> list[tuple]:
     """[(is_home, N, x, p, n_books, disp)]: P(team wins by over x) for every half-point rung near the quoted spreads (both teams)."""
     sd = GAME_SD.get(sport, {}).get("margin")
+    if sport == "nba" and game_key:
+        dyn = _get_nba_game_sd(game_key)
+        if dyn.get("margin"):
+            sd = dyn["margin"]
     if not spr or not sd:
         return []
     anchors = [(fav, line, float(statistics.median(v)), len(v), _mad(v)) for (fav, line), v in spr.items()]
@@ -240,12 +264,12 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
             code = home if fav_name == home_n else away
             add(f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}", "game_spread", "spread", line, vals)
             stats["spread_rows"] += 1
-        for N, x, p, n, disp in _interp_total_rows(sport, tot):
+        for N, x, p, n, disp in _interp_total_rows(sport, tot, game_key=gk):
             rows.append({"ticker": f"{adapter.series('total')}-{tail}-{N}", "sport": sport, "game_key": gk,
                          "market_class": "game_total", "player_norm": None, "stat": "total", "strike": x, "p_yes": p,
                          "n_books": n, "disp": disp, "pooled": True, "updated_ts": now})
             stats["total_interp"] += 1
-        for is_home, N, x, p, n, disp in _interp_spread_rows(sport, spr, home_n):
+        for is_home, N, x, p, n, disp in _interp_spread_rows(sport, spr, home_n, game_key=gk):
             rows.append({"ticker": f"{adapter.series('spread')}-{tail}-{home if is_home else away}{N}", "sport": sport,
                          "game_key": gk, "market_class": "game_spread", "player_norm": None, "stat": "spread", "strike": x,
                          "p_yes": p, "n_books": n, "disp": disp, "pooled": True, "updated_ts": now})
