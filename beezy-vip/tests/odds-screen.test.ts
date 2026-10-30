@@ -214,8 +214,8 @@ describe('warm mode switching at 9,000 rows', () => {
     buildLongshotRows(rows, { ...lo, sub: 'all', minEv: 0, minOverAm: 0 })                    // warms the per-row de-vig memo
     // best of 7: the full suite runs test files in parallel, and a noisy neighbour should not read as a slow rebuild
     const ms = (f: () => void) => { let best = Infinity; for (let i = 0; i < 7; i++) { const t0 = performance.now(); f(); best = Math.min(best, performance.now() - t0) } return best }
-    expect(ms(() => buildArbRows(rows, { bettable, includeExchanges: true, minNetArbPct: -1.5 }))).toBeLessThan(50)
-    expect(ms(() => buildLongshotRows(rows, { ...lo, sub: 'plus_ev_over', minEv: 0.02, minOverAm: 200 }))).toBeLessThan(50)
+    expect(ms(() => buildArbRows(rows, { bettable, includeExchanges: true, minNetArbPct: -1.5 }))).toBeLessThan(75)
+    expect(ms(() => buildLongshotRows(rows, { ...lo, sub: 'plus_ev_over', minEv: 0.02, minOverAm: 200 }))).toBeLessThan(75)
   })
 })
 

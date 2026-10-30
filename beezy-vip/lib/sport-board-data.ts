@@ -16,7 +16,7 @@ import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 import { shapeHub } from '@/lib/hub-data'
 import { fromBets } from '@/lib/mlb-board'
 import { buildMlbProjections } from '@/lib/mlb-projections'
-import { betKind, type PickKind } from '@/lib/pick-systems'
+import { betKind, kindOfSystem, type PickKind } from '@/lib/pick-systems'
 import type { PickDay } from '@/lib/picks-filters'
 import { hasHeadshots } from '@/lib/sport-assets'
 import { playerIdByName } from '@/lib/sport-assets.server'
@@ -132,7 +132,8 @@ export async function loadSportBoard(
     : scoped
   const dayFeed = showingToday && feed ? withFeedOutliersOnDay(feed, ps, date, todayKey) : feed
   const hub = shapeHub(ps, dayFeed, withHeads, viewer)
-  const rows = fromSportProjections(hub.projections?.rows ?? [])
+  const rawRows = fromSportProjections(hub.projections?.rows ?? [])
+  const rows = opts.kind ? rawRows.filter(r => kindOfSystem(r.system) === opts.kind) : rawRows
   const confluenceKeys = (hub.projections?.rows ?? []).filter(r => r.confluence && r.side).map(r => confluenceKey(r.player, r.stat, r.side as string))
   const unavailable = !hub.projections || hub.projections.status === 'unavailable'
   return {

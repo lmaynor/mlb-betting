@@ -100,6 +100,7 @@ export const SYSTEM_COLOR: Record<string, string> = {
   NHL_SAVES: '#2dd4bf', NHL_BLOCKS: '#8fb3d9',
   NBA_PTS: '#818cf8', NBA_REB: '#a78bfa', NBA_AST: '#c4b5fd', NBA_3PM: '#e879f9', NBA_PRA: '#6366f1',
   NBA_PR: '#8b5cf6', NBA_PA: '#a855f7', NBA_RA: '#c084fc', NBA_STL: '#f0abfc', NBA_BLK: '#7c83e8',
+  NBA_ML: '#fb923c', NBA_SPREAD: '#f59e0b', NBA_TOTAL: '#38bdf8',
   // Meta
   KALSHI_EV:   '#00d2a0',   // Kalshi-vs-books mirror alerts (rolled into EV in the DB)
   EV:          '#d97ee0',   // orchid -- new 2026-08-20 (fast_alert_loop +
@@ -152,6 +153,7 @@ export const SYSTEM_LABEL: Record<string, string> = {
   NHL_SAVES: 'Saves', NHL_BLOCKS: 'Blocked Shots',
   NBA_PTS: 'Points', NBA_REB: 'Rebounds', NBA_AST: 'Assists', NBA_3PM: '3-Pointers', NBA_PRA: 'Pts+Reb+Ast',
   NBA_PR: 'Pts+Reb', NBA_PA: 'Pts+Ast', NBA_RA: 'Reb+Ast', NBA_STL: 'Steals', NBA_BLK: 'Blocks',
+  NBA_ML: 'Moneyline', NBA_SPREAD: 'Spread', NBA_TOTAL: 'Game Total',
 }
 
 // Tighter variant for narrow table cells / chips.
@@ -165,7 +167,7 @@ export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   NHL_SOG: 'SOG', NHL_GOALS: 'GOALS', NHL_ASSISTS: 'ASSISTS', NHL_POINTS: 'POINTS', NHL_PP_POINTS: 'PP PTS',
   NHL_SAVES: 'SAVES', NHL_BLOCKS: 'BLOCKS',
   NBA_PTS: 'PTS', NBA_REB: 'REB', NBA_AST: 'AST', NBA_3PM: '3PM', NBA_PRA: 'PRA', NBA_PR: 'PR', NBA_PA: 'PA', NBA_RA: 'RA',
-  NBA_STL: 'STL', NBA_BLK: 'BLK',
+  NBA_STL: 'STL', NBA_BLK: 'BLK', NBA_ML: 'ML', NBA_SPREAD: 'SPREAD', NBA_TOTAL: 'TOTAL',
 }
 
 export function systemLabel(sys: string | null | undefined, short = false): string {

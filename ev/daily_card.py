@@ -267,9 +267,12 @@ def build_daily_card(rows: list[dict[str, Any]], now: datetime | None = None) ->
     # Deduplicate: Max 1 play per player (keep highest beezy score, tie-break higher EV)
     by_player: dict[str, dict[str, Any]] = {}
     for r in qualified:
+        sys = str(r.get("system") or "").upper()
         p = str(r.get("player") or r.get("player_norm") or r.get("who") or "").strip().lower()
         if not p:
             p = f"game_{r.get('game_key') or r.get('id') or id(r)}"
+        elif sys in ("NBA_ML", "NBA_SPREAD", "NBA_TOTAL", "GAME", "NRFI", "F5", "1I"):
+            p = f"{p}_{sys}"
         curr = by_player.get(p)
         if curr is None:
             by_player[p] = r
