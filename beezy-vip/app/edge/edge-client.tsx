@@ -7,6 +7,7 @@ import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookText } from '@/lib/tokens'
 import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
+import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -807,6 +808,8 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
   const [topOnly, setTopOnly] = useState<boolean>(false)
   const [sortBy, setSortBy] = useState<SortKey>('edge')
   const [selectedId, setSelectedId] = useState<number | null>(picks[0]?.id ?? null)
+  const isMobile = useIsMobile(899)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState<boolean>(false)
   const [slip, setSlip] = useState<Slip>({})
   const [slipOpen, setSlipOpen] = useState<boolean>(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -830,11 +833,12 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
 
   const selectPick = useCallback((id: number) => {
     setSelectedId(id)
-    // mobile: the detail panel stacks below the list -- bring it into view
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches) {
+    if (isMobile) {
+      setMobileDetailOpen(true)
+    } else if (typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches) {
       requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     }
-  }, [])
+  }, [isMobile])
 
   const inMode = (p: EdgePick) => mode === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game'
   const modeCount = (m: Mode) => picks.filter(p => m === 'games' ? groupOf(p.system) === 'game' : groupOf(p.system) !== 'game').length
@@ -1233,6 +1237,25 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
         </div>
       )}
       </>
+      )}
+
+      {isMobile && (
+        <MobileBottomSheet
+          open={mobileDetailOpen}
+          onClose={() => setMobileDetailOpen(false)}
+          title={selected ? titleOf(selected) : 'Pick Details'}
+          subtitle={selected ? `${systemLabel(selected.system, true)} \u00b7 ${betTypeLabel(selected.bet_type, selected.system)} \u00b7 ${fmtOdds(selected.odds)}` : undefined}
+          maxHeight="90vh"
+        >
+          {selected && (
+            <Detail
+              p={selected}
+              bankroll={bankroll}
+              inSlip={slip[selected.id] != null}
+              onToggleSlip={stake => toggleSlip(selected.id, stake)}
+            />
+          )}
+        </MobileBottomSheet>
       )}
     </main>
   )
