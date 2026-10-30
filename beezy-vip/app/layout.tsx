@@ -43,6 +43,11 @@ export const metadata: Metadata = {
     creator: '@beezy_fyi',
     images:  [{ url: '/brand/og-card.jpg?v=2', alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'beezy.fyi',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
