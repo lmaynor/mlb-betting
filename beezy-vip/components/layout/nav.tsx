@@ -11,6 +11,7 @@ import { NAV, navActive, sportActive, sportHref } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { PRE_LAUNCH } from '@/lib/launch'
+import { InstallAppButton } from '@/components/layout/install-app-button'
 
 
 const iconBox: React.CSSProperties = {
@@ -96,6 +97,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           </div>
 
           <div className="nav-desktop" style={{ gap: '10px', alignItems: 'center', flexShrink: 0, marginLeft: 'auto' }}>
+            <InstallAppButton />
             <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" style={iconBox}>
               <DiscordMark size={15} color="currentColor" />
             </a>
@@ -126,8 +128,9 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             )}
           </div>
 
-          {/* Mobile: auth + Discord. BottomNav handles routing. */}
+          {/* Mobile: auth + Discord + Install. BottomNav handles routing. */}
           <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <InstallAppButton compact />
             {isSignedIn ? (
               userButton
             ) : (

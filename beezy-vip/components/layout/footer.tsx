@@ -6,6 +6,7 @@ import { XMark } from '@/components/ui/x-mark'
 import { DISCORD_URL } from '@/lib/links'
 import { X_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
+import { InstallAppButton } from '@/components/layout/install-app-button'
 
 const socialBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -33,6 +34,7 @@ export function Footer() {
               <a href={X_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: 'var(--silver)' }} aria-label="Follow Beezy.FYI on X">
                 <XMark size={15} color="currentColor" />
               </a>
+              <InstallAppButton />
             </div>
           </div>
           {[

@@ -16,8 +16,8 @@ describe('source files with typographic characters stay ASCII', () => {
     'app/sports/[sport]/page.tsx',
     'app/api/og/route.tsx', 'app/api/og/ev-recap-card/route.tsx', 'app/api/og/games-card/route.tsx', 'app/api/og/picks-card/route.tsx', 'app/api/og/props-card/route.tsx',
     'app/edge/page.tsx', 'app/edge/edge-client.tsx', 'app/edge/cockpit.tsx', 'app/api/edge-cockpit/route.ts',
-    'components/layout/nav.tsx', 'components/landing/hero.tsx', 'lib/betting-api.ts', 'app/analytics/analytics-client.tsx', 'lib/beezy-score.ts',
-    'tests/sport-assets.test.ts', 'tests/tokens.test.ts', 'tests/ev-terminal-shadow.test.tsx', 'tests/edge-cockpit.test.tsx',
+    'components/layout/nav.tsx', 'components/layout/install-app-button.tsx', 'components/landing/hero.tsx', 'lib/betting-api.ts', 'app/analytics/analytics-client.tsx', 'lib/beezy-score.ts',
+    'tests/sport-assets.test.ts', 'tests/tokens.test.ts', 'tests/ev-terminal-shadow.test.tsx', 'tests/edge-cockpit.test.tsx', 'tests/install-app.test.tsx',
   ]
   it.each(files)('%s', (f) => {
     const text = fs.readFileSync(path.join(root, f), 'utf8')
