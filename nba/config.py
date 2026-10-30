@@ -170,14 +170,19 @@ PARLAY_PROP_MARKETS_ALT = {
 DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
 
 # -- Per-sport monthly ParlayAPI credit budgets (the shared pool is ONE plan; see nba/odds/credit_ledger.py) --
-# Defaults assume the 20k/mo plan that is live as of 2026-10-14 (15.2k left that day, MLB postseason + the NFL
-# sweep still spending). Override per sport with ODDS_BANK_BUDGET_<SPORTKEY> once the 100k plan is applied.
+# Sized to the 100k/mo tier (99,500 budget + 500 reserve floor):
+#   NBA: 45,000 / mo (~1,500/day)
+#   NHL: 40,000 / mo (~1,333/day)
+#   NFL: 14,500 / mo (~483/day)
+# Override per sport with ODDS_BANK_BUDGET_<SPORTKEY>.
 ODDS_BANK_DEFAULT_BUDGET = {
-    "icehockey_nhl": 3000,
-    "basketball_nba": 3000,
+    "icehockey_nhl": 40000,
+    "basketball_nba": 45000,
+    "americanfootball_nfl": 14500,
 }
 # Never spend the shared pool below this many remaining credits (read from x-requests-remaining).
-PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "2500"))
+# Set to 500 reserve floor to push right up to the 100k quota limit.
+PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "500"))
 
 # accumulated-odds lake (sport-namespaced; multi-sport)
 ODDSACCUM_PREFIX = "OddsAccum"

@@ -289,11 +289,11 @@ class SgoClient:
         body = self._get("/v2/account/usage")
         return body.get("data", body)
 
-    def fetch_mlb_slate(self, run_date: str | None = None,
-                         odds_available: bool = True,
-                         limit: int = 50) -> list[dict]:
+    def fetch_slate(self, league_id: str = "MLB", run_date: str | None = None,
+                    odds_available: bool = True,
+                    limit: int = 50) -> list[dict]:
         params: dict = {
-            "leagueID":      "MLB",
+            "leagueID":      league_id.upper(),
             "oddsAvailable": "true" if odds_available else "false",
             "limit":         str(limit),
         }
@@ -301,10 +301,28 @@ class SgoClient:
             starts_after, starts_before = et_day_window(run_date)
             params["startsAfter"]  = starts_after
             params["startsBefore"] = starts_before
-        # Let exceptions propagate — callers (snapshot_odds.py) catch them
-        # and post Discord alerts. Swallowing here made errors invisible.
         body = self._get("/v2/events", params)
         return body.get("data") or []
+
+    def fetch_mlb_slate(self, run_date: str | None = None,
+                         odds_available: bool = True,
+                         limit: int = 50) -> list[dict]:
+        return self.fetch_slate("MLB", run_date, odds_available, limit)
+
+    def fetch_nba_slate(self, run_date: str | None = None,
+                         odds_available: bool = True,
+                         limit: int = 50) -> list[dict]:
+        return self.fetch_slate("NBA", run_date, odds_available, limit)
+
+    def fetch_nhl_slate(self, run_date: str | None = None,
+                         odds_available: bool = True,
+                         limit: int = 50) -> list[dict]:
+        return self.fetch_slate("NHL", run_date, odds_available, limit)
+
+    def fetch_nfl_slate(self, run_date: str | None = None,
+                         odds_available: bool = True,
+                         limit: int = 50) -> list[dict]:
+        return self.fetch_slate("NFL", run_date, odds_available, limit)
 
 
 # ── Snapshot I/O ──────────────────────────────────────────────────────────

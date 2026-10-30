@@ -19,7 +19,9 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
+import time
 
 from ev import bestbook_events as bbe
 
@@ -27,6 +29,13 @@ log = logging.getLogger("bestbook_live_props")
 
 
 def run(sport: str, days: int | None = None, out: str | None = None) -> dict:
+    if os.environ.get("SKIP_STARTUP_JITTER") != "1":
+        jitter = float(os.environ.get("BB_STARTUP_JITTER", "0"))
+        if jitter <= 0:
+            jitter = round(random.uniform(5.0, 30.0), 1)
+        log.info("Anti-detection startup jitter: sleeping %.1fs before BestBook crawl", jitter)
+        time.sleep(jitter)
+
     result = bbe.crawl_sport(sport, days=days)
     ok, why = bbe.publishable(result)
     c = result["counts"]

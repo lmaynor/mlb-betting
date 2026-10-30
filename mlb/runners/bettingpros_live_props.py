@@ -22,7 +22,9 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
+import time
 
 from ev import bettingpros_events as be
 
@@ -30,6 +32,13 @@ log = logging.getLogger("bettingpros_live_props")
 
 
 def run(sport: str, days: int | None = None, out: str | None = None) -> dict:
+    if os.environ.get("SKIP_STARTUP_JITTER") != "1":
+        jitter = float(os.environ.get("BP_STARTUP_JITTER", "0"))
+        if jitter <= 0:
+            jitter = round(random.uniform(5.0, 30.0), 1)
+        log.info("Anti-detection startup jitter: sleeping %.1fs before BettingPros crawl", jitter)
+        time.sleep(jitter)
+
     result = be.crawl_sport(
         sport, days=days, delay=float(os.environ.get("BP_DELAY", "0.8")),
         market_sleep=float(os.environ.get("BP_MARKET_SLEEP", "1.0")),

@@ -6,18 +6,18 @@
 #
 # CREDIT SAFETY (read before changing cadence): every run is metered by nba/odds/credit_ledger.py -- a per-sport
 # monthly budget with a LINEAR pace cap, a per-run cap, and a floor on the shared pool's x-requests-remaining.
-# Defaults: 3000 credits/mo per sport (env ODDS_BANK_BUDGET_<SPORTKEY>), floor 2500 (PARLAY_RESERVE_FLOOR).
-# The schedule below is deliberately a CEILING on cadence -- the guard skips runs that are over pace, so adding
-# a scheduler can never overspend the budget, but it CAN crowd out later-in-the-day runs. The 2026-08-27
-# incident (zombie accumulator schedulers draining the pool) is why the jobs are named odds-bank-* and why
-# `gcloud scheduler jobs list | grep odds-bank` should be the one place to look for them.
+# Sized for the 100k credits/mo plan (99,500 monthly budget + 500 reserve floor):
+#   NBA: 45,000 / mo (~1,500/day)
+#   NHL: 40,000 / mo (~1,333/day)
+#   NFL: 14,500 / mo (~483/day)
+#   Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
 #
-# Cost model (core markets): props ~ 1 + 5 x n_events credits per run; lines = 3 per run.
-#   per sport/day: 2 props runs (~45-55 each) + 3 line runs (3 each) ~ 110 -> ~3.3k/mo -> the pace guard trims it.
-#
-# Cadence (UTC) -- NHL/NBA puck-drop/tip is mostly 23:00-03:00 UTC (7-10pm ET) with some 17:00-20:00 matinees:
-#   props: 17:30 (early lines for the whole slate)  and  22:30 (closing-ish, before the evening block)
-#   lines: 17:30, 22:30, 01:00 (captures late/West-coast closing)
+# Cadence (UTC) -- Captures overnight openers (~11pm ET / 03:30 & 05:00 UTC), morning adjustments, midday,
+# peak pre-lock, and closing lines before tipoff/puck drop:
+#   props: 03:30 (overnight opener 1), 05:00 (overnight opener 2), 12:30 (morning report), 15:30 (shootaround),
+#          17:30 (afternoon), 19:30 (late afternoon), 21:30 (prime pre-lock), 22:30 (East close),
+#          00:30 (mid-evening), 01:30 (West close)
+#   lines: 03:35, 12:35, 17:35, 21:35, 22:35, 01:00
 #
 # Prereqs: the IMAGE (default gcr.io/<project>/mlb-betting-feeds, NOT the production mlb-betting image) must contain
 # nba/odds/credit_ledger.py -- a job runs whatever is in its image, so provisioning against an older image runs the OLD,
@@ -43,14 +43,40 @@ SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # tag|sport_key|kind|cron(UTC)
 SCHEDULES=(
+  # --- NHL Props (10 checkpoints / day incl. overnight openers + closers) ---
+  "nhl|icehockey_nhl|props|30 3 * * *"
+  "nhl|icehockey_nhl|props|0 5 * * *"
+  "nhl|icehockey_nhl|props|30 12 * * *"
+  "nhl|icehockey_nhl|props|30 15 * * *"
   "nhl|icehockey_nhl|props|30 17 * * *"
+  "nhl|icehockey_nhl|props|30 19 * * *"
+  "nhl|icehockey_nhl|props|30 21 * * *"
   "nhl|icehockey_nhl|props|30 22 * * *"
+  "nhl|icehockey_nhl|props|30 0 * * *"
+  "nhl|icehockey_nhl|props|30 1 * * *"
+  # --- NHL Game Lines (6 checkpoints / day) ---
+  "nhl|icehockey_nhl|game_lines|35 3 * * *"
+  "nhl|icehockey_nhl|game_lines|35 12 * * *"
   "nhl|icehockey_nhl|game_lines|35 17 * * *"
+  "nhl|icehockey_nhl|game_lines|35 21 * * *"
   "nhl|icehockey_nhl|game_lines|35 22 * * *"
   "nhl|icehockey_nhl|game_lines|0 1 * * *"
+  # --- NBA Props (10 checkpoints / day incl. overnight openers + closers) ---
+  "nba|basketball_nba|props|30 3 * * *"
+  "nba|basketball_nba|props|0 5 * * *"
+  "nba|basketball_nba|props|30 12 * * *"
+  "nba|basketball_nba|props|30 15 * * *"
   "nba|basketball_nba|props|30 17 * * *"
+  "nba|basketball_nba|props|30 19 * * *"
+  "nba|basketball_nba|props|30 21 * * *"
   "nba|basketball_nba|props|30 22 * * *"
+  "nba|basketball_nba|props|30 0 * * *"
+  "nba|basketball_nba|props|30 1 * * *"
+  # --- NBA Game Lines (6 checkpoints / day) ---
+  "nba|basketball_nba|game_lines|35 3 * * *"
+  "nba|basketball_nba|game_lines|35 12 * * *"
   "nba|basketball_nba|game_lines|35 17 * * *"
+  "nba|basketball_nba|game_lines|35 21 * * *"
   "nba|basketball_nba|game_lines|35 22 * * *"
   "nba|basketball_nba|game_lines|0 1 * * *"
 )
@@ -75,10 +101,10 @@ for row in "${SCHEDULES[@]}"; do
   KIND_TAG="$(printf '%s' "$KIND" | tr '_' '-')"
   JOB="odds-bank-${TAG}-${KIND_TAG}"
   if [[ "$JOBS_DONE" != *" $JOB "* ]]; then
-    ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND},--max-credits,400"
+    ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND},--max-credits,600"
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest"
-           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=45000,ODDS_BANK_BUDGET_ICEHOCKEY_NHL=40000,PARLAY_RESERVE_FLOOR=500"
            --command="python" --args="$ARGS"
            --memory=1Gi --cpu=1 --task-timeout=900 --max-retries=0 --quiet)
     # max-retries=0: a retried props run would re-spend credits; the ledger records the first attempt either way.

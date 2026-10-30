@@ -50,7 +50,9 @@ for row in "${ROWS[@]}"; do
   IFS='|' read -r JOB SPORT TAG CRON <<<"$row"
   if [[ "$JOBS_DONE" != *" $JOB "* ]]; then
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
-           --set-env-vars="BUCKET_NAME=mlb-betting-data"
+           --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
+           --command="python"
            --args="-m,mlb.runners.bestbook_live_props,--sport,$SPORT"
            --task-timeout="900s" --max-retries=1 --memory="1Gi" --cpu="1")
     if gcloud run jobs describe "$JOB" --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then

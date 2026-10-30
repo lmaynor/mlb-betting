@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -381,10 +382,13 @@ def crawl_sport(
             target_games.append(g)
 
     snapshots: dict[str, dict] = {}
-    for g in target_games:
+    for i, g in enumerate(target_games):
         k = g.get("key")
         if k:
             snapshots[k] = bb.fetch_game_snapshot(k)
+            if i < len(target_games) - 1:
+                # Randomized intra-request delay to prevent fixed-interval bot sniffing
+                time.sleep(random.uniform(0.6, 1.8))
 
     events, counts = build_events_from_snapshots(sp, target_games, snapshots, now)
     counts["events_upcoming"] = len(sport_games)

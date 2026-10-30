@@ -86,9 +86,10 @@ def test_unreadable_ledger_fails_closed(monkeypatch):
 
 def test_shared_pool_floor_blocks_and_caps(store):
     d = date(2026, 10, 31)
-    a = credit_ledger.allowance(SPORT, 100, d, remaining_hint=2500)
+    floor = credit_ledger.PARLAY_RESERVE_FLOOR
+    a = credit_ledger.allowance(SPORT, 100, d, remaining_hint=floor)
     assert not a.ok and "floor" in a.reason
-    b = credit_ledger.allowance(SPORT, 100, d, remaining_hint=2550)         # 50 above the floor -> partial
+    b = credit_ledger.allowance(SPORT, 100, d, remaining_hint=floor + 50)         # 50 above the floor -> partial
     assert b.ok and b.credits == 50
 
 
@@ -133,14 +134,16 @@ def test_spend_recorded_even_when_a_call_raises(store, monkeypatch):
 
 
 def test_skipped_when_pool_at_floor(store):
-    c = FakeClient([_evt(1, 2)], remaining="2500")
+    floor = credit_ledger.PARLAY_RESERVE_FLOOR
+    c = FakeClient([_evt(1, 2)], remaining=str(floor))
     res = accumulator.accumulate_props(SPORT, client=c)
     assert res["skipped"] and c.priced == []
 
 
 def test_near_floor_buys_only_what_sits_above_it(store, monkeypatch):
     monkeypatch.setattr(accumulator, "_today_et", lambda: date(2026, 10, 31))
-    c = FakeClient([_evt(i, i + 1) for i in range(1, 6)], remaining="2512")   # 12 credits above the floor
+    floor = credit_ledger.PARLAY_RESERVE_FLOOR
+    c = FakeClient([_evt(i, i + 1) for i in range(1, 6)], remaining=str(floor + 12))   # 12 credits above the floor
     accumulator.accumulate_props(SPORT, client=c, max_credits=400)
     assert len(c.priced) == 2                                                  # 5 markets each -> 10 <= 12
 
