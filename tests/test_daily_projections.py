@@ -19,6 +19,11 @@ def _no_network_or_storage(monkeypatch):
     bucket unless it injects its own stand-in (the tests of those two layers do)."""
     monkeypatch.setattr(dp._rosters, "load", lambda sport, now=None, **k: None)
     monkeypatch.setattr(dp, "write_archive", lambda payload, now: [])
+    try:
+        from nba.data import espn_injuries
+        monkeypatch.setattr(espn_injuries, "fetch_injuries", lambda: None)
+    except Exception:
+        pass
 
 
 # ----------------------------------------------------------------------------------------------- fixtures
