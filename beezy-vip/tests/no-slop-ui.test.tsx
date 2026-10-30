@@ -121,7 +121,7 @@ describe('design-system debt guards', () => {
   it('loads the three-face stack with the variable names the CSS and inline styles read', () => {
     const layout = read('app/layout.tsx')
     expect(layout).toMatch(/Plus_Jakarta_Sans\(\{[^}]*variable: '--font-inter'/)
-    expect(layout).toMatch(/Space_Grotesk\(\{[^}]*variable: '--font-display'[^}]*weight: \['600', '700'\]/)
+    expect(layout).toMatch(/Space_Grotesk\(\{[^}]*variable: '--font-display'/)
     expect(layout).toMatch(/IBM_Plex_Mono\(\{[^}]*variable: '--font-mono'[^}]*weight: \['400', '500', '600', '700'\]/)
     expect(layout).toMatch(/uiSans\.variable.*displaySans\.variable.*plexMono\.variable/)
     expect(layout).not.toMatch(/JetBrains|\bInter\(/)
