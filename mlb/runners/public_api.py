@@ -153,7 +153,13 @@ def get_picks(engine, system=None, date=None, status=None, limit=50, offset=0, b
 
 
 def get_recent_settled(engine, limit=20, sport="mlb"):
-    sport = _sport(sport)
+    limit = max(1, min(int(limit), 100))
+    params = {"limit": limit}
+    if sport and str(sport).strip().lower() != "all":
+        sport_clause = "sport = :_sport AND "
+        params["_sport"] = _sport(sport)
+    else:
+        sport_clause = ""
     _ensure_proj_col(engine)
     with engine.connect() as conn:
         rows = conn.execute(text(
@@ -162,10 +168,10 @@ def get_recent_settled(engine, limit=20, sport="mlb"):
             "edge, kelly_pct, kelly_triggered, result, profit, paper, notes, created_at, book, "
             "closing_odds, clv_pct, morning_odds, line_move_pct, proj_mean, proj_k "
             "FROM bets "
-            "WHERE sport = :_sport AND result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
+            f"WHERE {sport_clause}result IS NOT NULL AND kelly_triggered = true AND stake > 0 "
             "ORDER BY game_date DESC, created_at DESC "
             "LIMIT :limit"
-        ), {"limit": int(limit), "_sport": sport}).mappings().all()
+        ), params).mappings().all()
     return _with_projection(rows)
 
 

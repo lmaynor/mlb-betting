@@ -1012,7 +1012,8 @@ def public_picks_today():
         return err
     try:
         include_all = request.args.get("all") == "1"
-        picks = get_today_picks(_get_engine(), include_all=include_all, sport=request.args.get("sport", "mlb"))
+        sport = request.args.get("sport") or ("all" if _off_season() else "mlb")
+        picks = get_today_picks(_get_engine(), include_all=include_all, sport=sport)
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=60"
@@ -1062,7 +1063,8 @@ def public_picks_recent():
         return err
     try:
         limit = int(request.args.get("limit", 20))
-        picks = get_recent_settled(_get_engine(), limit=limit, sport=request.args.get("sport", "mlb"))
+        sport = request.args.get("sport") or ("all" if _off_season() else "mlb")
+        picks = get_recent_settled(_get_engine(), limit=limit, sport=sport)
         resp  = jsonify({"picks": picks, "count": len(picks)})
         resp.headers.update(_cors_headers())
         resp.headers["Cache-Control"] = "public, max-age=120"

@@ -1,6 +1,6 @@
 import { apiGetEvFeed, apiGetTodayPicks } from '@/lib/betting-api'
 import { siteDateKey } from '@/lib/dates'
-import type { Bet, EvMlbRow } from '@/lib/types'
+import type { Bet, EvBookOutlierRow, EvMlbRow } from '@/lib/types'
 import { CommandCenterClient } from './command-center-client'
 
 function evToBet(r: EvMlbRow): Bet {
@@ -13,12 +13,41 @@ function evToBet(r: EvMlbRow): Bet {
   }
 }
 
+function outlierToBet(r: EvBookOutlierRow, idx: number): Bet {
+  return {
+    id: -(idx + 1000),
+    sport: r.sport ?? null,
+    system: 'EV',
+    game_date: r.commence ? r.commence.split('T')[0] : siteDateKey(),
+    game_pk: 0,
+    bet_type: `${r.stat ?? 'prop'} ${r.side} ${r.point ?? ''}`.trim(),
+    player: r.player,
+    away_team: r.away_team ?? null,
+    home_team: r.home_team ?? null,
+    odds: r.american,
+    stake: 10,
+    model_prob: r.p_fair ?? 0,
+    market_prob: 0,
+    edge: r.ev,
+    kelly_pct: 0.02,
+    kelly_triggered: true,
+    result: null,
+    profit: null,
+    paper: true,
+    book: r.book,
+    notes: null,
+    created_at: new Date().toISOString(),
+  }
+}
+
 export async function CommandCenter() {
   const [picks, feed] = await Promise.all([
-    apiGetTodayPicks().catch(() => [] as Bet[]),
-    apiGetEvFeed({ sport: 'mlb', minEv: 0.03, limit: 40 }).catch(() => null),
+    apiGetTodayPicks('all').catch(() => [] as Bet[]),
+    apiGetEvFeed({ sport: 'all', minEv: 0.03, limit: 40 }).catch(() => null),
   ])
-  // Only today's open alerts: an earlier date means the game is over and just awaiting grading.
-  const ev = (feed?.mlb.rows ?? []).filter(r => r.result == null && r.game_date >= siteDateKey()).map(evToBet)
-  return <CommandCenterClient bets={[...picks.filter(p => p.result == null), ...ev]} />
+  const evMlb = (feed?.mlb?.rows ?? []).filter(r => r.result == null && r.game_date >= siteDateKey()).map(evToBet)
+  const evNfl = (feed?.nfl?.book_outliers ?? []).map(outlierToBet)
+  const evNba = (feed?.nba?.rows ?? []).map(outlierToBet)
+  const evNhl = (feed?.nhl?.rows ?? []).map(outlierToBet)
+  return <CommandCenterClient bets={[...picks.filter(p => p.result == null), ...evMlb, ...evNfl, ...evNba, ...evNhl]} />
 }

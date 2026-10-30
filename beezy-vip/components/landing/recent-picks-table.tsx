@@ -5,6 +5,7 @@ import { formatOdds } from '@/lib/odds'
 import { collapseBooks } from '@/lib/dedupe'
 import { BookLogo } from '@/components/ui/book-logo'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { hasHeadshots, type HeadshotSport } from '@/lib/sport-assets'
 import { playerIdByName } from '@/lib/sport-assets.server'
 import { SectionHeader } from './section-header'
 import type { Bet } from '@/lib/types'
@@ -56,13 +57,14 @@ export async function RecentPicksTable() {
               {rows.map(b => {
                 const pill = SYSTEM_PILL[b.system] ?? SYSTEM_PILL.ALL
                 const res = RESULT[b.result ?? ''] ?? { label: 'OPEN', color: '#7d8596' }
+                const sp: HeadshotSport = b.sport && hasHeadshots(b.sport.toLowerCase()) ? (b.sport.toLowerCase() as HeadshotSport) : 'mlb'
                 return (
                   <tr key={b.id}>
                     <td style={{ ...TD, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '6px', background: pill.bg, color: pill.color, border: pill.border }}>{b.system}</span>
                         <span style={{ flexShrink: 0, width: 30, height: 30, display: 'inline-flex' }}>
-                          {b.player && <PlayerHeadshot sport="mlb" id={playerIdByName('mlb', b.player)} name={b.player} size={30} />}
+                          {b.player && <PlayerHeadshot sport={sp} id={playerIdByName(sp, b.player)} name={b.player} size={30} />}
                         </span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{b.player ?? pickText(b)}</div>
