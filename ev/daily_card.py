@@ -271,7 +271,7 @@ def build_daily_card(rows: list[dict[str, Any]], now: datetime | None = None) ->
         p = str(r.get("player") or r.get("player_norm") or r.get("who") or "").strip().lower()
         if not p:
             p = f"game_{r.get('game_key') or r.get('id') or id(r)}"
-        elif sys in ("NBA_ML", "NBA_SPREAD", "NBA_TOTAL", "GAME", "NRFI", "F5", "1I"):
+        elif sys in ("NBA_ML", "NBA_SPREAD", "NBA_TOTAL", "NHL_ML", "NHL_SPREAD", "NHL_TOTAL", "GAME", "NRFI", "F5", "1I"):
             p = f"{p}_{sys}"
         curr = by_player.get(p)
         if curr is None:

@@ -37,7 +37,7 @@ _ND = statistics.NormalDist()
 # books' de-vigged probabilities. UNVALIDATED: the sd values are rough league-typical figures, not fitted to this repo's data; rows are
 # tagged pooled=True, inherit the thinnest anchor's n_books, and carry extra dispersion that grows with the distance from the nearest
 # quoted line, so the leg gate rejects the far ones. Nothing beyond GAME_INTERP_MAX_SD standard deviations from a quoted line is emitted.
-GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "total": 18.0}, "nhl": {"margin": 2.3}}
+GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "total": 18.0}, "nhl": {"margin": 2.3, "total": 2.5}}
 GAME_INTERP_MAX_SD = 1.0
 DISP_PER_SD = 0.02
 P_LO, P_HI = 0.01, 0.99
@@ -140,11 +140,31 @@ def _get_nba_game_sd(game_key: str) -> dict[str, float]:
     return GAME_SD.get("nba", {})
 
 
+def _get_nhl_game_sd(game_key: str) -> dict[str, float]:
+    """Retrieve model-predicted scale (margin & total) for NHL game if available."""
+    try:
+        from nhl.game.run_daily import get_nhl_game_predictions
+        preds = get_nhl_game_predictions()
+        for g in (preds or {}).get("priced_games", []):
+            if g.get("game_key") == game_key:
+                return {
+                    "margin": float(g.get("sigma_margin", 2.3)),
+                    "total": float(g.get("sigma_total", 2.5)),
+                }
+    except Exception:
+        pass
+    return GAME_SD.get("nhl", {})
+
+
 def _interp_total_rows(sport: str, tot: dict, game_key: str | None = None) -> list[tuple]:
     """[(N, x, p_over, n_books, disp)] for every half-point rung near the quoted total lines that is NOT itself quoted."""
     sd = GAME_SD.get(sport, {}).get("total")
     if sport == "nba" and game_key:
         dyn = _get_nba_game_sd(game_key)
+        if dyn.get("total"):
+            sd = dyn["total"]
+    elif sport == "nhl" and game_key:
+        dyn = _get_nhl_game_sd(game_key)
         if dyn.get("total"):
             sd = dyn["total"]
     if not tot or not sd:
@@ -170,6 +190,10 @@ def _interp_spread_rows(sport: str, spr: dict, home_n: str, game_key: str | None
     sd = GAME_SD.get(sport, {}).get("margin")
     if sport == "nba" and game_key:
         dyn = _get_nba_game_sd(game_key)
+        if dyn.get("margin"):
+            sd = dyn["margin"]
+    elif sport == "nhl" and game_key:
+        dyn = _get_nhl_game_sd(game_key)
         if dyn.get("margin"):
             sd = dyn["margin"]
     if not spr or not sd:
@@ -228,6 +252,17 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
         ml: dict[str, float] = {}
         tot: dict[float, list] = {}
         spr: dict[tuple, list] = {}
+        model_markets: dict[tuple[str, str, float | None], float] = {}
+        if sport == "nhl":
+            try:
+                from nhl.game.run_daily import get_nhl_game_predictions
+                nhl_preds = get_nhl_game_predictions()
+                for pg in (nhl_preds or {}).get("priced_games", []):
+                    if pg.get("game_key") == gk:
+                        for mk in pg.get("markets", []):
+                            model_markets[(mk.get("system"), mk.get("side"), mk.get("line"))] = float(mk.get("p_model"))
+            except Exception:
+                pass
         for b in books:
             raw = str(b.get("key", "")).strip().lower()
             if raw in BOOK_ALIASES and BOOK_ALIASES[raw] in present:
@@ -254,15 +289,28 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
             vals = list(ml.values())
             p_home = float(statistics.median(vals))
             for code, p in ((home, p_home), (away, 1.0 - p_home)):
-                rows.append({"ticker": f"{adapter.series('ml')}-{tail}-{code}", "sport": sport, "game_key": gk,
-                             "market_class": "game_ml", "player_norm": None, "stat": "ml", "strike": 0.0, "p_yes": p,
-                             "n_books": len(vals), "disp": _mad(vals), "updated_ts": now})
+                r_dict = {"ticker": f"{adapter.series('ml')}-{tail}-{code}", "sport": sport, "game_key": gk,
+                          "market_class": "game_ml", "player_norm": None, "stat": "ml", "strike": 0.0, "p_yes": p,
+                          "n_books": len(vals), "disp": _mad(vals), "updated_ts": now}
+                p_mod = model_markets.get(("NHL_ML", "home" if code == home else "away", None))
+                if p_mod is not None:
+                    r_dict["p_model_yes"] = p_mod
+                rows.append(r_dict)
         for pt, vals in tot.items():
             add(f"{adapter.series('total')}-{tail}-{int(pt + 0.5)}", "game_total", "total", pt, vals)
             stats["total_rows"] += 1
         for (fav_name, line), vals in spr.items():
             code = home if fav_name == home_n else away
-            add(f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}", "game_spread", "spread", line, vals)
+            sp_side = "home" if code == home else "away"
+            sp_line = -line if sp_side == "home" else line
+            p_mod = model_markets.get(("NHL_SPREAD", sp_side, sp_line))
+            ticker = f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}"
+            r_dict = {"ticker": ticker, "sport": sport, "game_key": gk, "market_class": "game_spread", "player_norm": None,
+                      "stat": "spread", "strike": line, "p_yes": float(statistics.median(vals)), "n_books": len(vals),
+                      "disp": _mad(vals), "updated_ts": now}
+            if p_mod is not None:
+                r_dict["p_model_yes"] = p_mod
+            rows.append(r_dict)
             stats["spread_rows"] += 1
         for N, x, p, n, disp in _interp_total_rows(sport, tot, game_key=gk):
             rows.append({"ticker": f"{adapter.series('total')}-{tail}-{N}", "sport": sport, "game_key": gk,

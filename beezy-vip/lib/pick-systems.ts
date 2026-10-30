@@ -5,7 +5,7 @@ import type { Bet } from '@/lib/types'
 /** Player picks (a named player's stat) and game picks (a team or game outcome) are separate products and separate access. */
 export type PickKind = 'player' | 'game'
 
-const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME', 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL'])
+const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME', 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL', 'NHL_ML', 'NHL_SPREAD', 'NHL_TOTAL'])
 
 export function kindOfSystem(system: string): PickKind {
   return GAME_SYSTEMS.has(system.toUpperCase()) ? 'game' : 'player'
@@ -224,7 +224,43 @@ const NBA_GAME_SYSTEMS: PickSystem[] = [
   }),
 ]
 
-export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_SYSTEMS, ...NBA_GAME_SYSTEMS, ...NBA_SYSTEMS]
+const NHL_GAME_SYSTEMS: PickSystem[] = [
+  game('nhl', {
+    key: 'NHL_ML',
+    slug: 'ml',
+    name: 'NHL Moneyline',
+    shortName: 'ML',
+    statKey: 'moneyline',
+    family: 'Dixon-Coles + ENG + OT/SO Matrix',
+    shelved: true,
+    features: ['Continuous-time Kalman ratings', 'Starting Goalie GSAx/60 and B2B model', 'Rolling Z-score shot and special teams', 'Late-game empty-net goal operator'],
+    description: 'Full-game moneyline priced from 3-stage Dixon-Coles bivariate score matrix with goalie GSAx and late-game empty-net Markov transitions.',
+  }),
+  game('nhl', {
+    key: 'NHL_SPREAD',
+    slug: 'spread',
+    name: 'NHL Puck Line',
+    shortName: 'Puck Line',
+    statKey: 'spread',
+    family: 'Exact Score Distribution Matrix',
+    shelved: true,
+    features: ['Empty-net goal 2-goal margin shifts', 'OT/SO win cannot cover -1.5 guard', 'Starting goalie GSAx impact', 'Special teams net Z-differential'],
+    description: 'Puck lines (-1.5 / +1.5) and alternate spreads priced with exact empty-net goal shifts and OT/SO non-cover mechanics.',
+  }),
+  game('nhl', {
+    key: 'NHL_TOTAL',
+    slug: 'total',
+    name: 'NHL Game Total',
+    shortName: 'Total',
+    statKey: 'total',
+    family: 'Exact Score Total Distribution',
+    shelved: true,
+    features: ['Pre-empty-net 57-min Poisson grid', 'Late-game 6v5 pulling dynamics', 'Integer push handling at 6.0', 'Shootout-excluded total option'],
+    description: 'Game totals (5.5, 6.0, 6.5) priced from full bivariate score matrix including whole-number push probabilities.',
+  }),
+]
+
+export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_GAME_SYSTEMS, ...NHL_SYSTEMS, ...NBA_GAME_SYSTEMS, ...NBA_SYSTEMS]
 
 export const PICK_SYSTEM_BY_KEY: Record<string, PickSystem> = Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, system]))
 
