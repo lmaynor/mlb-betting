@@ -18,7 +18,7 @@ import { isOffshore } from '@/lib/offshore'
 
 export type DevigMethod = 'proportional' | 'power'
 export type SideFilter = 'both' | 'over' | 'under'
-export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots'
+export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
 export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
 export interface BoardBook { book: string; over: number | null; under: number | null }
@@ -810,4 +810,541 @@ export function computeMiddles(rows: BoardRow[], opts: MiddleOptions): MiddleRes
     }
   }
   return out.sort((x, y) => (y.midEvPct ?? -Infinity) - (x.midEvPct ?? -Infinity) || x.breakevenProb - y.breakevenProb || y.gap - x.gap)
+}
+
+// -----------------------------------------------------------------------------
+// SGP Proxies & Synthetic Combo Engine
+// -----------------------------------------------------------------------------
+
+export interface SgpLeg {
+  stat: string
+  label: string
+  line: number
+  side: 'OVER' | 'UNDER'
+  bookAm: number
+  fairProb: number
+  sid?: string
+  marketId?: string
+  selectionId?: string
+}
+
+export interface SgpProxyRow {
+  key: string
+  archetype: string
+  archetypeLabel: string
+  sport: string
+  player: string
+  player_norm: string
+  player_id?: number | string | null
+  headshot_id?: number | string | null
+  team?: string | null
+  game_key: string
+  commence: string
+  away: string
+  home: string
+  book: string
+  legs: SgpLeg[]
+  naiveSingleProductAm: number
+  estSgpDec: number
+  estSgpAm: number
+  fairJointProb: number
+  fairJointAm: number
+  rhoTrue: number
+  rhoBook: number
+  holdBook: number
+  evPct: number
+  directMarketLabel?: string | null
+  directMarketAm?: number | null
+  directMarketBook?: string | null
+  vsDirectPct?: number | null
+  deeplink?: string | null
+}
+
+export interface SgpProxyOptions {
+  refs: readonly string[]
+  method: DevigMethod
+  bettable: ReadonlySet<string> | null
+  minEvPct: number
+  archetype?: string
+  book?: string
+  useCurve: boolean
+}
+
+/** Standard normal cumulative distribution function (Abramowitz & Stegun 7.1.26, max error 1.5e-7). */
+export function normalCdf(x: number): number {
+  if (x === 0) return 0.5
+  const b1 = 0.319381530
+  const b2 = -0.356563782
+  const b3 = 1.781477937
+  const b4 = -1.821255978
+  const b5 = 1.330274429
+  const p = 0.2316419
+  const absX = Math.abs(x)
+  const t = 1.0 / (1.0 + p * absX)
+  const phi = (1.0 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * absX * absX)
+  const poly = ((((b5 * t + b4) * t + b3) * t + b2) * t + b1) * t
+  const cdf = 1.0 - phi * poly
+  return x > 0 ? cdf : 1.0 - cdf
+}
+
+/** Inverse standard normal CDF (Acklam rational approximation, max error 1.15e-9). */
+export function normalInvCdf(p: number): number {
+  if (p <= 0) return -8.0
+  if (p >= 1) return 8.0
+  if (p === 0.5) return 0.0
+
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01]
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00]
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00]
+
+  const pLow = 0.02425
+  const pHigh = 1.0 - pLow
+
+  if (p < pLow) {
+    const q = Math.sqrt(-2 * Math.log(p))
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+           ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+  }
+  if (p > pHigh) {
+    const q = Math.sqrt(-2 * Math.log(1 - p))
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+  }
+  const q = p - 0.5
+  const r = q * q
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+         (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+}
+
+const GL_X = [0.1488743389816312, 0.4333953941292472, 0.6794095682990244, 0.8650633666889845, 0.9739065285171717]
+const GL_W = [0.2955242247147529, 0.2692667193099963, 0.2190863625159820, 0.1494513491505806, 0.0666713443086881]
+
+export function bivariateNormalCdf(z1: number, z2: number, rho: number): number {
+  const p1 = normalCdf(z1)
+  const p2 = normalCdf(z2)
+  if (Math.abs(rho) < 1e-9) return p1 * p2
+
+  const rClamped = Math.max(-0.999, Math.min(0.999, rho))
+  let integral = 0
+  for (let i = 0; i < 5; i++) {
+    for (const sign of [-1, 1]) {
+      const xi = sign * GL_X[i]
+      const r = 0.5 * rClamped * (xi + 1.0)
+      const w = 0.5 * rClamped * GL_W[i]
+      const denom = Math.max(1e-12, 1.0 - r * r)
+      const exponent = -(z1 * z1 - 2.0 * r * z1 * z2 + z2 * z2) / (2.0 * denom)
+      const phi2 = (1.0 / (2.0 * Math.PI * Math.sqrt(denom))) * Math.exp(exponent)
+      integral += w * phi2
+    }
+  }
+  const val = p1 * p2 + integral
+  const minBound = Math.max(0, p1 + p2 - 1)
+  const maxBound = Math.min(p1, p2)
+  return Math.min(maxBound, Math.max(minBound, val))
+}
+
+export function copulaJoint2D(p1: number, p2: number, rho: number): number {
+  if (Math.abs(rho) < 1e-9) return p1 * p2
+  const z1 = normalInvCdf(p1)
+  const z2 = normalInvCdf(p2)
+  const val = bivariateNormalCdf(z1, z2, rho)
+  if (rho > 0 && val <= p1 * p2) {
+    return Math.min(Math.min(p1, p2), p1 * p2 + 1e-7)
+  }
+  return val
+}
+
+export function buildSgpDeeplinkTs(
+  book: string,
+  gameKey: string,
+  legs: { sid?: string; marketId?: string; selectionId?: string }[]
+): string | null {
+  const b = book.toLowerCase()
+  if (b === 'draftkings' || b === 'dk') {
+    const sids = legs.map(l => l.sid).filter(Boolean)
+    if (sids.length >= 2) return `https://sportsbook.draftkings.com/event/${gameKey}?outcomes=${sids.join(',')}`
+    return `https://sportsbook.draftkings.com`
+  }
+  if (b === 'fanduel' || b === 'fd') {
+    const pairs = legs.filter(l => l.marketId && l.selectionId)
+    if (pairs.length >= 2) {
+      const q = pairs.map((p, i) => `marketId[${i}]=${p.marketId}&selectionId[${i}]=${p.selectionId}`).join('&')
+      return `https://sportsbook.fanduel.com/addToBetslip?${q}`
+    }
+    return `https://sportsbook.fanduel.com`
+  }
+  if (b === 'betmgm') return 'https://sports.betmgm.com'
+  if (b === 'caesars') return 'https://www.caesars.com/sportsbook-and-casino'
+  if (b === 'bet365') return 'https://www.bet365.com/#/AC/B1/'
+  return `https://www.${b}.com`
+}
+
+interface SgpArchDef {
+  key: string
+  label: string
+  sport: string
+  rhoTrue: number
+  rhoBook: number
+  holdBook: number
+}
+
+const SGP_ARCH_DEFS: Record<string, SgpArchDef> = {
+  nba_reb_ast_10_10: {
+    key: 'nba_reb_ast_10_10',
+    label: 'TD PROXY',
+    sport: 'nba',
+    rhoTrue: 0.22,
+    rhoBook: 0.08,
+    holdBook: 0.12,
+  },
+  nba_pts_reb_vs_pr: {
+    key: 'nba_pts_reb_vs_pr',
+    label: 'P+R PROXY',
+    sport: 'nba',
+    rhoTrue: 0.15,
+    rhoBook: 0.06,
+    holdBook: 0.14,
+  },
+  nba_pts_ast_vs_pa: {
+    key: 'nba_pts_ast_vs_pa',
+    label: 'P+A PROXY',
+    sport: 'nba',
+    rhoTrue: 0.18,
+    rhoBook: 0.07,
+    holdBook: 0.14,
+  },
+  nba_reb_ast_vs_ra: {
+    key: 'nba_reb_ast_vs_ra',
+    label: 'R+A PROXY',
+    sport: 'nba',
+    rhoTrue: 0.22,
+    rhoBook: 0.08,
+    holdBook: 0.14,
+  },
+  nba_dd_proxy: {
+    key: 'nba_dd_proxy',
+    label: 'DD PROXY',
+    sport: 'nba',
+    rhoTrue: 0.16,
+    rhoBook: 0.07,
+    holdBook: 0.12,
+  },
+  nhl_goal_ast_vs_pts: {
+    key: 'nhl_goal_ast_vs_pts',
+    label: 'G+A PROXY',
+    sport: 'nhl',
+    rhoTrue: 0.25,
+    rhoBook: 0.10,
+    holdBook: 0.15,
+  },
+  nfl_td_yds_stack: {
+    key: 'nfl_td_yds_stack',
+    label: 'TD+YDS STACK',
+    sport: 'nfl',
+    rhoTrue: 0.32,
+    rhoBook: 0.15,
+    holdBook: 0.15,
+  },
+}
+
+function resolveFairOver(
+  row: BoardRow,
+  method: DevigMethod,
+  refs: ReadonlySet<string> | null,
+  excludeBook: string | null,
+  useCurve: boolean
+): number | null {
+  let sum = 0
+  let n = 0
+  for (const b of row.books) {
+    if (b.book === excludeBook || (refs && !refs.has(b.book))) continue
+    const p = devigOver(b.over, b.under, method)
+    if (p == null) continue
+    sum += p
+    n += 1
+  }
+  if (n >= 1) return sum / n
+  if (useCurve && row.curve_fair_over != null && row.curve_fair_over > 0 && row.curve_fair_over < 1) {
+    return row.curve_fair_over
+  }
+  return null
+}
+
+function getBestPriceOnBoardRow(
+  row: BoardRow,
+  bettable: ReadonlySet<string> | null
+): { book: string; american: number; dec: number } | null {
+  let best: { book: string; american: number; dec: number } | null = null
+  for (const b of row.books) {
+    if (bettable && !bettable.has(b.book)) continue
+    if (b.over == null || !isFinite(b.over) || b.over === 0) continue
+    const dec = americanToDecimal(b.over)
+    if (!best || dec > best.dec) {
+      best = { book: b.book, american: b.over, dec }
+    }
+  }
+  return best
+}
+
+/**
+ * Scan banked BoardRow props for synthetic SGP proxy combinations.
+ */
+export function computeSgpProxies(rows: BoardRow[], opts: SgpProxyOptions): SgpProxyRow[] {
+  const groups = new Map<string, BoardRow[]>()
+  for (const r of rows) {
+    const k = `${r.game_key}|${r.player_norm}`
+    const g = groups.get(k)
+    if (g) g.push(r)
+    else groups.set(k, [r])
+  }
+
+  const refs = opts.refs.length ? new Set(opts.refs) : null
+  const out: SgpProxyRow[] = []
+
+  for (const g of groups.values()) {
+    if (g.length < 2) continue
+    const sample = g[0]
+    const statMap = new Map<string, BoardRow>()
+    for (const r of g) {
+      statMap.set(`${r.stat}|${r.line}`, r)
+    }
+
+    // Candidate 1: NBA Triple-Double Proxy (10+ Reb + 10+ Ast)
+    const reb10 = statMap.get('rebounds|9.5')
+    const ast10 = statMap.get('assists|9.5')
+    if (reb10 && ast10) {
+      const arch = SGP_ARCH_DEFS.nba_reb_ast_10_10
+      if (!opts.archetype || opts.archetype === 'all' || opts.archetype === arch.key) {
+        const directRow = g.find(r => r.stat === 'triple_double' || r.stat === 'td')
+        const directBest = directRow ? getBestPriceOnBoardRow(directRow, opts.bettable) : null
+
+        const booksReb = new Map(reb10.books.filter(b => b.over != null).map(b => [b.book, b]))
+        const booksAst = new Map(ast10.books.filter(b => b.over != null).map(b => [b.book, b]))
+
+        for (const [bName, bReb] of booksReb) {
+          if (opts.bettable && !opts.bettable.has(bName)) continue
+          if (opts.book && opts.book !== 'all' && opts.book !== bName) continue
+          const bAst = booksAst.get(bName)
+          if (!bAst || bAst.over == null || bReb.over == null) continue
+
+          const fReb = resolveFairOver(reb10, opts.method, refs, bName, opts.useCurve)
+          const fAst = resolveFairOver(ast10, opts.method, refs, bName, opts.useCurve)
+          if (fReb == null || fAst == null) continue
+
+          const fairJointProb = copulaJoint2D(fReb, fAst, arch.rhoTrue)
+          const fairJointAm = fairAmericanOf(fairJointProb)
+
+          const qReb = americanToImpliedProb(bReb.over)
+          const qAst = americanToImpliedProb(bAst.over)
+          const pNaive = qReb * qAst
+          if (pNaive <= 0 || (fairJointProb / pNaive) < 0.92) continue
+
+          const pSgp = Math.min(0.99, (1 + arch.holdBook) * copulaJoint2D(qReb, qAst, arch.rhoBook))
+          const estSgpDec = 1 / pSgp
+          const estSgpAm = fairAmericanOf(pSgp)
+          const evPct = (fairJointProb * estSgpDec - 1) * 100
+          if (evPct < opts.minEvPct) continue
+
+          const vsDirectPct = directBest ? ((estSgpDec / directBest.dec) - 1) * 100 : null
+          const legs: SgpLeg[] = [
+            { stat: 'rebounds', label: 'o9.5 Reb', line: 9.5, side: 'OVER', bookAm: bReb.over, fairProb: fReb },
+            { stat: 'assists', label: 'o9.5 Ast', line: 9.5, side: 'OVER', bookAm: bAst.over, fairProb: fAst },
+          ]
+          const deeplink = buildSgpDeeplinkTs(bName, sample.game_key, legs)
+
+          out.push({
+            key: `${sample.game_key}|${sample.player_norm}|${arch.key}|${bName}`,
+            archetype: arch.key,
+            archetypeLabel: arch.label,
+            sport: 'nba',
+            player: sample.player,
+            player_norm: sample.player_norm,
+            player_id: sample.player_id,
+            headshot_id: sample.headshot_id,
+            team: sample.team,
+            game_key: sample.game_key,
+            commence: sample.commence,
+            away: sample.away,
+            home: sample.home,
+            book: bName,
+            legs,
+            naiveSingleProductAm: fairAmericanOf(pNaive),
+            estSgpDec,
+            estSgpAm,
+            fairJointProb,
+            fairJointAm,
+            rhoTrue: arch.rhoTrue,
+            rhoBook: arch.rhoBook,
+            holdBook: arch.holdBook,
+            evPct,
+            directMarketLabel: directBest ? 'Triple-Double' : null,
+            directMarketAm: directBest ? directBest.american : null,
+            directMarketBook: directBest ? directBest.book : null,
+            vsDirectPct,
+            deeplink,
+          })
+        }
+      }
+    }
+
+    // Candidate 2: NBA Points + Rebounds vs PR
+    const mainPts = g.find(r => r.stat === 'points' && !r.is_alt)
+    const mainReb = g.find(r => r.stat === 'rebounds' && !r.is_alt)
+    if (mainPts && mainReb) {
+      const arch = SGP_ARCH_DEFS.nba_pts_reb_vs_pr
+      if (!opts.archetype || opts.archetype === 'all' || opts.archetype === arch.key) {
+        const expectedPr = mainPts.line + mainReb.line
+        const prRow = g.find(r => (r.stat === 'pr' || r.stat === 'points_rebounds') && Math.abs(r.line - expectedPr) <= 1.0)
+        const directBest = prRow ? getBestPriceOnBoardRow(prRow, opts.bettable) : null
+
+        const booksPts = new Map(mainPts.books.filter(b => b.over != null).map(b => [b.book, b]))
+        const booksReb = new Map(mainReb.books.filter(b => b.over != null).map(b => [b.book, b]))
+
+        for (const [bName, bPts] of booksPts) {
+          if (opts.bettable && !opts.bettable.has(bName)) continue
+          if (opts.book && opts.book !== 'all' && opts.book !== bName) continue
+          const bReb = booksReb.get(bName)
+          if (!bReb || bReb.over == null || bPts.over == null) continue
+
+          const fPts = resolveFairOver(mainPts, opts.method, refs, bName, opts.useCurve)
+          const fReb = resolveFairOver(mainReb, opts.method, refs, bName, opts.useCurve)
+          if (fPts == null || fReb == null) continue
+
+          const fairJointProb = copulaJoint2D(fPts, fReb, arch.rhoTrue)
+          const fairJointAm = fairAmericanOf(fairJointProb)
+
+          const qPts = americanToImpliedProb(bPts.over)
+          const qReb = americanToImpliedProb(bReb.over)
+          const pNaive = qPts * qReb
+          if (pNaive <= 0 || (fairJointProb / pNaive) < 0.92) continue
+
+          const pSgp = Math.min(0.99, (1 + arch.holdBook) * copulaJoint2D(qPts, qReb, arch.rhoBook))
+          const estSgpDec = 1 / pSgp
+          const estSgpAm = fairAmericanOf(pSgp)
+          const evPct = (fairJointProb * estSgpDec - 1) * 100
+          if (evPct < opts.minEvPct) continue
+
+          const vsDirectPct = directBest ? ((estSgpDec / directBest.dec) - 1) * 100 : null
+          const legs: SgpLeg[] = [
+            { stat: 'points', label: `o${mainPts.line} Pts`, line: mainPts.line, side: 'OVER', bookAm: bPts.over, fairProb: fPts },
+            { stat: 'rebounds', label: `o${mainReb.line} Reb`, line: mainReb.line, side: 'OVER', bookAm: bReb.over, fairProb: fReb },
+          ]
+          const deeplink = buildSgpDeeplinkTs(bName, sample.game_key, legs)
+
+          out.push({
+            key: `${sample.game_key}|${sample.player_norm}|${arch.key}|${bName}`,
+            archetype: arch.key,
+            archetypeLabel: arch.label,
+            sport: 'nba',
+            player: sample.player,
+            player_norm: sample.player_norm,
+            player_id: sample.player_id,
+            headshot_id: sample.headshot_id,
+            team: sample.team,
+            game_key: sample.game_key,
+            commence: sample.commence,
+            away: sample.away,
+            home: sample.home,
+            book: bName,
+            legs,
+            naiveSingleProductAm: fairAmericanOf(pNaive),
+            estSgpDec,
+            estSgpAm,
+            fairJointProb,
+            fairJointAm,
+            rhoTrue: arch.rhoTrue,
+            rhoBook: arch.rhoBook,
+            holdBook: arch.holdBook,
+            evPct,
+            directMarketLabel: directBest && prRow ? `PR o${prRow.line}` : null,
+            directMarketAm: directBest ? directBest.american : null,
+            directMarketBook: directBest ? directBest.book : null,
+            vsDirectPct,
+            deeplink,
+          })
+        }
+      }
+    }
+
+    // Candidate 3: NHL 1+ Goal + 1+ Assist vs 2+ Points (Points o1.5)
+    const goal05 = statMap.get('goals|0.5')
+    const ast05 = statMap.get('assists|0.5')
+    const pts15 = statMap.get('points|1.5')
+    if (goal05 && ast05) {
+      const arch = SGP_ARCH_DEFS.nhl_goal_ast_vs_pts
+      if (!opts.archetype || opts.archetype === 'all' || opts.archetype === arch.key) {
+        const directBest = pts15 ? getBestPriceOnBoardRow(pts15, opts.bettable) : null
+
+        const booksG = new Map(goal05.books.filter(b => b.over != null).map(b => [b.book, b]))
+        const booksA = new Map(ast05.books.filter(b => b.over != null).map(b => [b.book, b]))
+
+        for (const [bName, bG] of booksG) {
+          if (opts.bettable && !opts.bettable.has(bName)) continue
+          if (opts.book && opts.book !== 'all' && opts.book !== bName) continue
+          const bA = booksA.get(bName)
+          if (!bA || bA.over == null || bG.over == null) continue
+
+          const fG = resolveFairOver(goal05, opts.method, refs, bName, opts.useCurve)
+          const fA = resolveFairOver(ast05, opts.method, refs, bName, opts.useCurve)
+          if (fG == null || fA == null) continue
+
+          const fairJointProb = copulaJoint2D(fG, fA, arch.rhoTrue)
+          const fairJointAm = fairAmericanOf(fairJointProb)
+
+          const qG = americanToImpliedProb(bG.over)
+          const qA = americanToImpliedProb(bA.over)
+          const pNaive = qG * qA
+          if (pNaive <= 0 || (fairJointProb / pNaive) < 0.92) continue
+
+          const pSgp = Math.min(0.99, (1 + arch.holdBook) * copulaJoint2D(qG, qA, arch.rhoBook))
+          const estSgpDec = 1 / pSgp
+          const estSgpAm = fairAmericanOf(pSgp)
+          const evPct = (fairJointProb * estSgpDec - 1) * 100
+          if (evPct < opts.minEvPct) continue
+
+          const vsDirectPct = directBest ? ((estSgpDec / directBest.dec) - 1) * 100 : null
+          const legs: SgpLeg[] = [
+            { stat: 'goals', label: '1+ Goal', line: 0.5, side: 'OVER', bookAm: bG.over, fairProb: fG },
+            { stat: 'assists', label: '1+ Assist', line: 0.5, side: 'OVER', bookAm: bA.over, fairProb: fA },
+          ]
+          const deeplink = buildSgpDeeplinkTs(bName, sample.game_key, legs)
+
+          out.push({
+            key: `${sample.game_key}|${sample.player_norm}|${arch.key}|${bName}`,
+            archetype: arch.key,
+            archetypeLabel: arch.label,
+            sport: 'nhl',
+            player: sample.player,
+            player_norm: sample.player_norm,
+            player_id: sample.player_id,
+            headshot_id: sample.headshot_id,
+            team: sample.team,
+            game_key: sample.game_key,
+            commence: sample.commence,
+            away: sample.away,
+            home: sample.home,
+            book: bName,
+            legs,
+            naiveSingleProductAm: fairAmericanOf(pNaive),
+            estSgpDec,
+            estSgpAm,
+            fairJointProb,
+            fairJointAm,
+            rhoTrue: arch.rhoTrue,
+            rhoBook: arch.rhoBook,
+            holdBook: arch.holdBook,
+            evPct,
+            directMarketLabel: directBest ? 'Over 1.5 Points' : null,
+            directMarketAm: directBest ? directBest.american : null,
+            directMarketBook: directBest ? directBest.book : null,
+            vsDirectPct,
+            deeplink,
+          })
+        }
+      }
+    }
+  }
+
+  return out.sort((a, b) => b.evPct - a.evPct)
 }

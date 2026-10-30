@@ -1,0 +1,62 @@
+{
+  "draftkings|nba_pts_reb_vs_pr": {
+    "archetype": "nba_pts_reb_vs_pr",
+    "book": "draftkings",
+    "hold_book": 0.45,
+    "n": 2,
+    "rho_book": -0.4597,
+    "rmse_decimal": 0.0191,
+    "rmse_implied": 0.001673,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  },
+  "draftkings|nba_reb_ast_10_10": {
+    "archetype": "nba_reb_ast_10_10",
+    "book": "draftkings",
+    "hold_book": 0.3896,
+    "n": 5,
+    "rho_book": -0.0697,
+    "rmse_decimal": 0.1065,
+    "rmse_implied": 0.000488,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  },
+  "draftkings|nhl_goal_ast_vs_pts": {
+    "archetype": "nhl_goal_ast_vs_pts",
+    "book": "draftkings",
+    "hold_book": 0.0455,
+    "n": 3,
+    "rho_book": 0.1028,
+    "rmse_decimal": 0.0062,
+    "rmse_implied": 0.000196,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  },
+  "fanduel|nba_pts_reb_vs_pr": {
+    "archetype": "nba_pts_reb_vs_pr",
+    "book": "fanduel",
+    "hold_book": 0.45,
+    "n": 2,
+    "rho_book": -0.4765,
+    "rmse_decimal": 0.0189,
+    "rmse_implied": 0.00161,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  },
+  "fanduel|nba_reb_ast_10_10": {
+    "archetype": "nba_reb_ast_10_10",
+    "book": "fanduel",
+    "hold_book": 0.45,
+    "n": 5,
+    "rho_book": -0.0891,
+    "rmse_decimal": 0.0926,
+    "rmse_implied": 0.000299,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  },
+  "fanduel|nhl_goal_ast_vs_pts": {
+    "archetype": "nhl_goal_ast_vs_pts",
+    "book": "fanduel",
+    "hold_book": 0.0241,
+    "n": 3,
+    "rho_book": 0.1279,
+    "rmse_decimal": 0.0058,
+    "rmse_implied": 0.000172,
+    "updated_at": "2026-10-30T05:34:53.915567+00:00"
+  }
+}
