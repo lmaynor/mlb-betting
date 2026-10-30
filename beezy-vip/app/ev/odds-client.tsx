@@ -18,6 +18,7 @@ import type { EvHeadline } from '@/lib/types'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { PRE_LAUNCH } from '@/lib/launch'
+import { HorizontalPillStrip, MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import {
   buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, fairAmericanOf, STAT_LABEL,
   type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
@@ -196,6 +197,57 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const [revealMsg, setRevealMsg] = useState<string | null>(null)
   const [bankroll] = useBankroll(1000)
   const myBooks = useMyBooks()
+  const isMobile = useIsMobile(768)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [mobileView, setMobileView] = useState<'cards' | 'table'>('cards')
+  const [inspectItem, setInspectItem] = useState<
+    | { type: 'ev'; row: ScreenRow }
+    | { type: 'arb'; row: ArbRow }
+    | { type: 'middles'; row: MiddleResult }
+    | { type: 'longshots'; row: LongshotRow }
+    | null
+  >(null)
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (sport !== 'all') count++
+    if (stat !== 'all') count++
+    if (game !== 'all') count++
+    if (q.trim() !== '') count++
+    if (refs.length > 0) count++
+    if (mode === 'ev') {
+      if (lines !== 'all') count++
+      if (side !== 'both') count++
+      if (minEv > 0) count++
+      if (sort !== 'ev') count++
+    } else if (mode === 'outliers') {
+      if (outlierGap !== 8) count++
+      if (outlierReqEv) count++
+      if (outlierOddsBand !== 'all') count++
+      if (outlierMinBooks !== 3) count++
+    } else if (mode === 'arb') {
+      if (arbView !== 'live') count++
+      if (!exchanges) count++
+      if (outlayText !== '100') count++
+    } else if (mode === 'middles') {
+      if (midCost !== 5) count++
+      if (midPosEv) count++
+      if (midGap !== 0) count++
+      if (!exchanges) count++
+      if (outlayText !== '100') count++
+    } else if (mode === 'longshots') {
+      if (longSub !== 'all') count++
+      if (oddsMin > 0) count++
+      if (minEv > 0) count++
+      if (!useCurve) count++
+    } else if (mode === 'sgp') {
+      if (sgpArch !== 'all') count++
+      if (sgpMinEv > 0) count++
+      if (sgpBook !== 'all') count++
+      if (!useCurve) count++
+    }
+    return count
+  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook])
 
   useEffect(() => {
     if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
@@ -438,7 +490,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const refsNote = mode === 'longshots' ? 'Two books behind a fair value (the curve stands in below that).' : 'Needs 3 books behind a row.'
 
   return (
-    <div style={{ maxWidth: '1680px', margin: '0 auto', padding: '20px 24px 64px' }}>
+    <div style={{ maxWidth: '1680px', margin: '0 auto', padding: isMobile ? '12px 12px 64px' : '20px 24px 64px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '10px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Odds Terminal</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -461,9 +513,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
 
       <LedgerStrip h={headline} />
 
-      <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
-        <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <PillGroup label="Mode">
+      {isMobile ? (
+        <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
+          <HorizontalPillStrip padding="8px 10px" gap="6px">
             {MODES.map(m => {
               const n = m.key === 'ev' ? counts.ev
                 : m.key === 'outliers' ? counts.outliers
@@ -475,31 +527,627 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
               return (
                 <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                   {m.label}
-                  <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
+                  <span className="mono" style={{ marginLeft: '6px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
                 </Pill>
               )
             })}
-          </PillGroup>
-          <Field label="SPORT">
-            <PillGroup>
+          </HorizontalPillStrip>
+
+          <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
               {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}
+                  style={{
+                    fontFamily: 'var(--font-mono), monospace',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    border: `1px solid ${sport === s ? '#3a4156' : HAIR}`,
+                    background: sport === s ? '#1b1f2b' : 'transparent',
+                    color: sport === s ? '#ffffff' : 'var(--fog)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {s.toUpperCase()}
+                </button>
               ))}
-            </PillGroup>
-          </Field>
-          <Field label="PROP" htmlFor="odds-stat">
-            <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-              options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
-          </Field>
-          <Field label="GAME" htmlFor="odds-game">
-            <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
-              options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
-          </Field>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
+            </HorizontalPillStrip>
+
             <input
-              aria-label="Search player or team" placeholder="Search player / team" value={q} onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
-              style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '190px' }}
+              aria-label="Search player or team"
+              placeholder="Search player / team"
+              value={q}
+              onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
+              style={{
+                background: '#090a0f',
+                color: 'var(--chalk)',
+                border: `1px solid ${HAIR}`,
+                borderRadius: '6px',
+                height: '32px',
+                padding: '0 8px',
+                fontSize: '11.5px',
+                flex: 1,
+                minWidth: '80px',
+              }}
             />
+
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="btn btn-ghost"
+              style={{
+                padding: '5px 10px',
+                fontSize: '11.5px',
+                height: '32px',
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                borderColor: activeFilterCount > 0 ? GREEN : HAIR,
+                color: activeFilterCount > 0 ? GREEN : 'var(--chalk)',
+              }}
+            >
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: '10px',
+                    background: 'rgba(87, 242, 135, 0.15)',
+                    color: GREEN,
+                    padding: '1px 5px',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
+          <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <PillGroup label="Mode">
+              {MODES.map(m => {
+                const n = m.key === 'ev' ? counts.ev
+                  : m.key === 'outliers' ? counts.outliers
+                  : m.key === 'arb' ? counts.arb
+                  : m.key === 'middles' ? counts.middles
+                  : m.key === 'longshots' ? counts.long
+                  : counts.sgp
+                const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0)
+                return (
+                  <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
+                    {m.label}
+                    <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
+                  </Pill>
+                )
+              })}
+            </PillGroup>
+            <Field label="SPORT">
+              <PillGroup>
+                {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
+                  <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
+                ))}
+              </PillGroup>
+            </Field>
+            <Field label="PROP" htmlFor="odds-stat">
+              <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
+                options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+            </Field>
+            <Field label="GAME" htmlFor="odds-game">
+              <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
+                options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+            </Field>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
+              <input
+                aria-label="Search player or team" placeholder="Search player / team" value={q} onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
+                style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '190px' }}
+              />
+              <BookPicker
+                label={`BOOKS (${columns.length})`}
+                books={bookList} selected={[...shownSet]} onChange={next => setShown(next)}
+                presets={[
+                  { label: 'Defaults', keys: defaultShown },
+                  ...(myBooks.enabled ? [{ label: 'My books', keys: myBooks.books }] : []),
+                  { label: 'All', keys: bookList.map(b => b.key) },
+                ]}
+                note="Columns shown and books you can bet at. Offshore books show their price but never count as the best price."
+                align="right"
+              />
+              <BookPicker
+                label={refs.length ? `REFERENCE BOOKS (${refs.length})` : 'REFERENCE BOOKS (ALL)'}
+                books={bookList} selected={refs} onChange={setRefs} emptyMeansAll
+                presets={[{ label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) }]}
+                note={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
+                align="right"
+                header={
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DEVIG</span>
+                    <PillGroup>
+                      <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
+                      <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
+                    </PillGroup>
+                  </div>
+                }
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: '8px 14px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {mode === 'ev' && (
+              <>
+                <Field label="LINES">
+                  <PillGroup>
+                    <Pill active={lines === 'main'} onClick={() => setLines('main')} title="Standard over/under line quoted by most sportsbooks">Main Lines</Pill>
+                    <Pill active={lines === 'all'} onClick={() => setLines('all')} title="Includes alternate milestone rungs and shifted lines">Main + Alt Ladders</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="O/U">
+                  <PillGroup>
+                    {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s === 'both' ? 'BOTH' : s === 'over' ? 'OVER' : 'UNDER'}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="MIN EV">
+                  <PillGroup>
+                    {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="SORT" htmlFor="odds-sort">
+                  <Select id="odds-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
+                </Field>
+              </>
+            )}
+            {mode === 'outliers' && (
+              <>
+                <Field label="MIN GAP">
+                  <PillGroup>
+                    {OUTLIER_GAP_OPTIONS.map(g => (
+                      <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>
+                        {g.label}
+                      </Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="REQUIRE +EV">
+                  <PillGroup>
+                    <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
+                    <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }} title="Require verified positive EV against reference books or player curve">Verified +EV Only</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="ODDS BAND">
+                  <PillGroup>
+                    {OUTLIER_ODDS_OPTIONS.map(b => (
+                      <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>
+                        {b.label}
+                      </Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="MIN BOOKS">
+                  <PillGroup>
+                    {OUTLIER_MIN_BOOKS.map(b => (
+                      <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>
+                        {b.label}
+                      </Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="VIEW">
+                  <PillGroup>
+                    <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
+                    <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
+                  </PillGroup>
+                </Field>
+              </>
+            )}
+            {mode === 'arb' && (
+              <>
+                <Field label="SHOW">
+                  <PillGroup>
+                    <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
+                    <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="EXCHANGES">
+                  <PillGroup>
+                    <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="OUTLAY" htmlFor="odds-outlay">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
+                    <input
+                      id="odds-outlay" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
+                      style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
+                    />
+                  </span>
+                </Field>
+              </>
+            )}
+            {mode === 'middles' && (
+              <>
+                <Field label="MAX COST">
+                  <PillGroup>
+                    {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="VALUE">
+                  <PillGroup>
+                    <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="WINDOW">
+                  <PillGroup>
+                    {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="EXCHANGES">
+                  <PillGroup>
+                    <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="OUTLAY" htmlFor="odds-outlay-mid">
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
+                    <input
+                      id="odds-outlay-mid" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
+                      style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
+                    />
+                  </span>
+                </Field>
+              </>
+            )}
+            {mode === 'longshots' && (
+              <>
+                <Field label="STRATEGY">
+                  <PillGroup>
+                    <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">All Tail Lines</Pill>
+                    <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Longshot Over/Yes price pays more than its true fair probability">Buy Over (+EV Milestone)</Pill>
+                    <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="House-side play: fade an overpriced retail milestone by buying Under or Exchange NO">Lay the Longshot (Buy Under / NO)</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="MIN PAYOUT">
+                  <PillGroup>
+                    {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="MIN EV">
+                  <PillGroup>
+                    {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
+                  </PillGroup>
+                </Field>
+                <Field label="FAIR SOURCE">
+                  <PillGroup>
+                    <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
+                    <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
+                  </PillGroup>
+                </Field>
+              </>
+            )}
+            {mode === 'sgp' && (
+              <>
+                <Field label="ARCHETYPE">
+                  <PillGroup>
+                    {SGP_ARCHETYPE_OPTIONS.map(a => (
+                      <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>
+                        {a.label}
+                      </Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="MIN EV">
+                  <PillGroup>
+                    {SGP_MIN_EV_OPTIONS.map(e => (
+                      <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>
+                        {e.label}
+                      </Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="BOOK" htmlFor="sgp-book">
+                  <Select
+                    id="sgp-book"
+                    value={sgpBook}
+                    onChange={v => { setSgpBook(v); setLimit(PAGE) }}
+                    options={[
+                      { v: 'all', l: 'All Books' },
+                      ...columns.filter(c => !c.offshore).map(c => ({ v: c.key, l: bookDisplay(c.key).label })),
+                    ]}
+                  />
+                </Field>
+                <Field label="FAIR SOURCE">
+                  <PillGroup>
+                    <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
+                    <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
+                  </PillGroup>
+                </Field>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Mobile Filter Sheet */}
+      <MobileBottomSheet
+        open={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        title="Terminal Filters"
+        subtitle={`${MODES.find(m => m.key === mode)?.label} \u00b7 ${nRows} matching lines`}
+        footer={
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setStat('all')
+                setGame('all')
+                setQ('')
+                setMinEv(0)
+                setLines('all')
+                setSide('both')
+                setSort('ev')
+                setRefs([])
+                setOutlierGap(8)
+                setOutlierReqEv(false)
+                setOutlierOddsBand('all')
+                setOutlierMinBooks(3)
+                setArbView('live')
+                setExchanges(true)
+                setOutlayText('100')
+                setMidCost(5)
+                setMidGap(0)
+                setMidPosEv(false)
+                setLongSub('all')
+                setOddsMin(0)
+                setUseCurve(true)
+                setSgpArch('all')
+                setSgpMinEv(0)
+                setSgpBook('all')
+              }}
+              className="btn btn-ghost"
+              style={{ flex: 1, padding: '9px 0', fontSize: '12px' }}
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(false)}
+              className="btn btn-primary"
+              style={{ flex: 2, padding: '9px 0', fontSize: '12px' }}
+            >
+              Show {nRows} Results
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {mode === 'ev' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>LINES</div>
+                <PillGroup>
+                  <Pill active={lines === 'main'} onClick={() => setLines('main')}>Main Lines</Pill>
+                  <Pill active={lines === 'all'} onClick={() => setLines('all')}>Main + Alt Ladders</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>O/U</div>
+                <PillGroup>
+                  {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.toUpperCase()}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN EV</div>
+                <PillGroup>
+                  {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SORT</div>
+                <Select id="mobile-ev-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
+              </div>
+            </>
+          )}
+
+          {mode === 'outliers' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN GAP</div>
+                <PillGroup>
+                  {OUTLIER_GAP_OPTIONS.map(g => (
+                    <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>REQUIRE +EV</div>
+                <PillGroup>
+                  <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
+                  <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }}>Verified +EV Only</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>ODDS BAND</div>
+                <PillGroup>
+                  {OUTLIER_ODDS_OPTIONS.map(b => (
+                    <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>{b.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN BOOKS</div>
+                <PillGroup>
+                  {OUTLIER_MIN_BOOKS.map(b => (
+                    <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>{b.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>VIEW</div>
+                <PillGroup>
+                  <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
+                  <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
+                </PillGroup>
+              </div>
+            </>
+          )}
+
+          {mode === 'arb' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SHOW</div>
+                <PillGroup>
+                  <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
+                  <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>EXCHANGES</div>
+                <PillGroup>
+                  <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>OUTLAY ($)</div>
+                <input
+                  inputMode="decimal"
+                  value={outlayText}
+                  onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '120px', fontFamily: 'var(--font-mono), monospace' }}
+                />
+              </div>
+            </>
+          )}
+
+          {mode === 'middles' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MAX COST</div>
+                <PillGroup>
+                  {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }}>{`${c}%`}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>VALUE</div>
+                <PillGroup>
+                  <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV ONLY</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>WINDOW</div>
+                <PillGroup>
+                  {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>EXCHANGES</div>
+                <PillGroup>
+                  <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>OUTLAY ($)</div>
+                <input
+                  inputMode="decimal"
+                  value={outlayText}
+                  onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '120px', fontFamily: 'var(--font-mono), monospace' }}
+                />
+              </div>
+            </>
+          )}
+
+          {mode === 'longshots' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>STRATEGY</div>
+                <PillGroup>
+                  <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }}>All</Pill>
+                  <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }}>Buy Over</Pill>
+                  <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }}>Fade Under</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN PAYOUT</div>
+                <PillGroup>
+                  {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN EV</div>
+                <PillGroup>
+                  {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>FAIR SOURCE</div>
+                <PillGroup>
+                  <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
+                  <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
+                </PillGroup>
+              </div>
+            </>
+          )}
+
+          {mode === 'sgp' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>ARCHETYPE</div>
+                <PillGroup>
+                  {SGP_ARCHETYPE_OPTIONS.map(a => (
+                    <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>{a.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN EV</div>
+                <PillGroup>
+                  {SGP_MIN_EV_OPTIONS.map(e => (
+                    <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>{e.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>BOOK</div>
+                <Select
+                  id="mobile-sgp-book"
+                  value={sgpBook}
+                  onChange={v => { setSgpBook(v); setLimit(PAGE) }}
+                  options={[
+                    { v: 'all', l: 'All Books' },
+                    ...columns.filter(c => !c.offshore).map(c => ({ v: c.key, l: bookDisplay(c.key).label })),
+                  ]}
+                />
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>FAIR SOURCE</div>
+                <PillGroup>
+                  <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
+                  <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
+                </PillGroup>
+              </div>
+            </>
+          )}
+
+          <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+            <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
+            <Select id="mobile-odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
+              options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+          </div>
+
+          <div>
+            <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
+            <Select id="mobile-odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
+              options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <BookPicker
               label={`BOOKS (${columns.length})`}
               books={bookList} selected={[...shownSet]} onChange={next => setShown(next)}
@@ -508,220 +1156,19 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                 ...(myBooks.enabled ? [{ label: 'My books', keys: myBooks.books }] : []),
                 { label: 'All', keys: bookList.map(b => b.key) },
               ]}
-              note="Columns shown and books you can bet at. Offshore books show their price but never count as the best price."
-              align="right"
+              note="Columns shown and books you can bet at."
+              align="left"
             />
             <BookPicker
               label={refs.length ? `REFERENCE BOOKS (${refs.length})` : 'REFERENCE BOOKS (ALL)'}
               books={bookList} selected={refs} onChange={setRefs} emptyMeansAll
               presets={[{ label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) }]}
-              note={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
-              align="right"
-              header={
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DEVIG</span>
-                  <PillGroup>
-                    <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
-                    <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
-                  </PillGroup>
-                </div>
-              }
+              note="Fair value is the equal-weight average of these books' de-vigged lines."
+              align="left"
             />
           </div>
         </div>
-
-        <div style={{ padding: '8px 14px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {mode === 'ev' && (
-            <>
-              <Field label="LINES">
-                <PillGroup>
-                  <Pill active={lines === 'main'} onClick={() => setLines('main')} title="Standard over/under line quoted by most sportsbooks">Main Lines</Pill>
-                  <Pill active={lines === 'all'} onClick={() => setLines('all')} title="Includes alternate milestone rungs and shifted lines">Main + Alt Ladders</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="O/U">
-                <PillGroup>
-                  {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s === 'both' ? 'BOTH' : s === 'over' ? 'OVER' : 'UNDER'}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="MIN EV">
-                <PillGroup>
-                  {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="SORT" htmlFor="odds-sort">
-                <Select id="odds-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
-              </Field>
-            </>
-          )}
-          {mode === 'outliers' && (
-            <>
-              <Field label="MIN GAP">
-                <PillGroup>
-                  {OUTLIER_GAP_OPTIONS.map(g => (
-                    <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>
-                      {g.label}
-                    </Pill>
-                  ))}
-                </PillGroup>
-              </Field>
-              <Field label="REQUIRE +EV">
-                <PillGroup>
-                  <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
-                  <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }} title="Require verified positive EV against reference books or player curve">Verified +EV Only</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="ODDS BAND">
-                <PillGroup>
-                  {OUTLIER_ODDS_OPTIONS.map(b => (
-                    <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>
-                      {b.label}
-                    </Pill>
-                  ))}
-                </PillGroup>
-              </Field>
-              <Field label="MIN BOOKS">
-                <PillGroup>
-                  {OUTLIER_MIN_BOOKS.map(b => (
-                    <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>
-                      {b.label}
-                    </Pill>
-                  ))}
-                </PillGroup>
-              </Field>
-              <Field label="VIEW">
-                <PillGroup>
-                  <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
-                  <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
-                </PillGroup>
-              </Field>
-            </>
-          )}
-          {mode === 'arb' && (
-            <>
-              <Field label="SHOW">
-                <PillGroup>
-                  <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
-                  <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="EXCHANGES">
-                <PillGroup>
-                  <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="OUTLAY" htmlFor="odds-outlay">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
-                  <input
-                    id="odds-outlay" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
-                    style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
-                  />
-                </span>
-              </Field>
-            </>
-          )}
-          {mode === 'middles' && (
-            <>
-              <Field label="MAX COST">
-                <PillGroup>
-                  {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="VALUE">
-                <PillGroup>
-                  <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="WINDOW">
-                <PillGroup>
-                  {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="EXCHANGES">
-                <PillGroup>
-                  <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="OUTLAY" htmlFor="odds-outlay-mid">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
-                  <input
-                    id="odds-outlay-mid" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
-                    style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
-                  />
-                </span>
-              </Field>
-            </>
-          )}
-          {mode === 'longshots' && (
-            <>
-              <Field label="STRATEGY">
-                <PillGroup>
-                  <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">All Tail Lines</Pill>
-                  <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Longshot Over/Yes price pays more than its true fair probability">Buy Over (+EV Milestone)</Pill>
-                  <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="House-side play: fade an overpriced retail milestone by buying Under or Exchange NO">Lay the Longshot (Buy Under / NO)</Pill>
-                </PillGroup>
-              </Field>
-              <Field label="MIN PAYOUT">
-                <PillGroup>
-                  {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="MIN EV">
-                <PillGroup>
-                  {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
-                </PillGroup>
-              </Field>
-              <Field label="FAIR SOURCE">
-                <PillGroup>
-                  <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
-                  <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
-                </PillGroup>
-              </Field>
-            </>
-          )}
-          {mode === 'sgp' && (
-            <>
-              <Field label="ARCHETYPE">
-                <PillGroup>
-                  {SGP_ARCHETYPE_OPTIONS.map(a => (
-                    <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>
-                      {a.label}
-                    </Pill>
-                  ))}
-                </PillGroup>
-              </Field>
-              <Field label="MIN EV">
-                <PillGroup>
-                  {SGP_MIN_EV_OPTIONS.map(e => (
-                    <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>
-                      {e.label}
-                    </Pill>
-                  ))}
-                </PillGroup>
-              </Field>
-              <Field label="BOOK" htmlFor="sgp-book">
-                <Select
-                  id="sgp-book"
-                  value={sgpBook}
-                  onChange={v => { setSgpBook(v); setLimit(PAGE) }}
-                  options={[
-                    { v: 'all', l: 'All Books' },
-                    ...columns.filter(c => !c.offshore).map(c => ({ v: c.key, l: bookDisplay(c.key).label })),
-                  ]}
-                />
-              </Field>
-              <Field label="FAIR SOURCE">
-                <PillGroup>
-                  <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
-                  <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
-                </PillGroup>
-              </Field>
-            </>
-          )}
-        </div>
-      </section>
+      </MobileBottomSheet>
 
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
@@ -729,15 +1176,173 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
+      ) : isMobile && mobileView === 'cards' ? (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setMobileView('cards')}
+                style={{
+                  fontFamily: 'var(--font-text), sans-serif',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 0,
+                  cursor: 'pointer',
+                  background: '#1b1f2b',
+                  color: '#ffffff',
+                }}
+              >
+                Cards ({nRows})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileView('table')}
+                style={{
+                  fontFamily: 'var(--font-text), sans-serif',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 0,
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  color: 'var(--fog)',
+                }}
+              >
+                Spreadsheet
+              </button>
+            </div>
+            <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
+              {meta.age != null ? ageLabel(meta.age) : ''}
+            </span>
+          </div>
+
+          {mode === 'outliers' ? (
+            <div>
+              {revealMsg && (
+                <div role="status" style={{ ...SURFACE_CARD, padding: '10px 14px', marginBottom: '12px', borderColor: 'rgba(87,242,135,0.4)', color: GREEN, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>{revealMsg}</span>
+                  <button onClick={() => setRevealMsg(null)} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px' }}>Dismiss</button>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+                {outliers.slice(0, limit).map((item, idx) => (
+                  <OutlierCard
+                    key={item.key}
+                    item={item}
+                    isLocked={!revealed.has(item.key) && idx >= 3 && !PRE_LAUNCH}
+                    onReveal={() => handleReveal(item.key)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : mode === 'ev' ? (
+            <div>
+              {screen.slice(0, limit).map(r => (
+                <MobileEvRowCard
+                  key={r.key}
+                  r={r}
+                  bankroll={bankroll}
+                  onInspect={() => setInspectItem({ type: 'ev', row: r })}
+                />
+              ))}
+            </div>
+          ) : mode === 'arb' ? (
+            <div>
+              {arbs.slice(0, limit).map(r => (
+                <MobileArbCard
+                  key={r.key}
+                  r={r}
+                  outlay={outlay}
+                  copied={copied === r.key}
+                  onCopy={copyHedge}
+                  onInspect={() => setInspectItem({ type: 'arb', row: r })}
+                />
+              ))}
+            </div>
+          ) : mode === 'middles' ? (
+            <div>
+              {middles.slice(0, limit).map(r => (
+                <MobileMiddleCard
+                  key={r.key}
+                  r={r}
+                  outlay={outlay}
+                  copied={copied === r.key}
+                  onCopy={copyMiddle}
+                  onInspect={() => setInspectItem({ type: 'middles', row: r })}
+                />
+              ))}
+            </div>
+          ) : mode === 'longshots' ? (
+            <div>
+              {longshots.slice(0, limit).map(r => (
+                <MobileLongshotCard
+                  key={r.key}
+                  r={r}
+                  onInspect={() => setInspectItem({ type: 'longshots', row: r })}
+                />
+              ))}
+            </div>
+          ) : (
+            <div>
+              {sgpProxies.slice(0, limit).map(r => (
+                <MobileSgpCard key={r.key} r={r} />
+              ))}
+            </div>
+          )}
+        </div>
       ) : mode === 'outliers' && outlierView === 'cards' ? (
         <div>
+          {isMobile && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('cards')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: 'var(--fog)',
+                  }}
+                >
+                  Cards ({nRows})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('table')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: '#1b1f2b',
+                    color: '#ffffff',
+                  }}
+                >
+                  Spreadsheet
+                </button>
+              </div>
+            </div>
+          )}
           {revealMsg && (
             <div role="status" style={{ ...SURFACE_CARD, padding: '10px 14px', marginBottom: '12px', borderColor: 'rgba(87,242,135,0.4)', color: GREEN, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>{revealMsg}</span>
               <button onClick={() => setRevealMsg(null)} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px' }}>Dismiss</button>
             </div>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(420px, 1fr))', gap: '14px' }}>
             {outliers.slice(0, limit).map((item, idx) => (
               <OutlierCard
                 key={item.key}
@@ -749,27 +1354,110 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
           </div>
         </div>
       ) : mode === 'sgp' ? (
-        <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
-          <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-                <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>PLAYER &amp; MATCHUP</th>
-                <th scope="col" style={{ textAlign: 'left', minWidth: '280px', padding: '10px 14px' }}>SGP LEGS (SAME BOOK)</th>
-                <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>TRUE CORRELATED FAIR</th>
-                <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>EST. SGP PRICE vs DIRECT</th>
-                <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>EDGE &amp; ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sgpProxies.slice(0, limit).map(r => (
-                <SgpTableRow key={r.key} r={r} />
-              ))}
-            </tbody>
-          </table>
+        <div>
+          {isMobile && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('cards')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: 'var(--fog)',
+                  }}
+                >
+                  Cards ({nRows})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('table')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: '#1b1f2b',
+                    color: '#ffffff',
+                  }}
+                >
+                  Spreadsheet
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+            <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>PLAYER &amp; MATCHUP</th>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '280px', padding: '10px 14px' }}>SGP LEGS (SAME BOOK)</th>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>TRUE CORRELATED FAIR</th>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>EST. SGP PRICE vs DIRECT</th>
+                  <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>EDGE &amp; ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sgpProxies.slice(0, limit).map(r => (
+                  <SgpTableRow key={r.key} r={r} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
-        <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
-          <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div>
+          {isMobile && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('cards')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: 'var(--fog)',
+                  }}
+                >
+                  Cards ({nRows})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileView('table')}
+                  style={{
+                    fontFamily: 'var(--font-text), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 0,
+                    cursor: 'pointer',
+                    background: '#1b1f2b',
+                    color: '#ffffff',
+                  }}
+                >
+                  Spreadsheet
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+            <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th scope="col" className="odds-prop" style={{ textAlign: 'left', minWidth: '210px' }}>PROP</th>
@@ -838,6 +1526,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             </tbody>
           </table>
         </div>
+        </div>
       )}
       {nRows > limit && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
@@ -869,7 +1558,639 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         21+. If gambling is a problem, call 1-800-GAMBLER.{' '}
         <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>
       </p>
+
+      <MobileCompareSheet
+        item={inspectItem}
+        columns={columns}
+        onClose={() => setInspectItem(null)}
+        bankroll={bankroll}
+      />
     </div>
+  )
+}
+
+function MobileEvRowCard({
+  r,
+  bankroll,
+  onInspect,
+}: {
+  r: ScreenRow
+  bankroll: number
+  onInspect: () => void
+}) {
+  const d = r.implied > 0 ? 1 / r.implied : 1
+  const size = r.pFair == null ? null : kellySizing(bankroll, r.pFair, d)
+  const evColor = r.ev != null && r.ev > 0 ? GREEN : 'var(--fog)'
+  const sportSlug = r.row.game_key.split(':')[0] as HeadshotSport
+
+  return (
+    <div
+      style={{
+        ...SURFACE_CARD,
+        padding: '12px',
+        marginBottom: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+          <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.row.player}
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+            {r.row.away} @ {r.row.home} &middot; {startLabel(r.row.commence)}
+          </div>
+        </div>
+        <TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+        <div>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--chalk)' }}>
+            {r.label} {STAT_LABEL[r.row.stat] ?? r.row.stat}
+          </span>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Fair: {r.fairAmerican != null ? (r.fairAmerican > 0 ? `+${r.fairAmerican}` : `${r.fairAmerican}`) : '--'} ({r.nRef} bks)
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>
+            {r.ev == null ? '--' : `${signed(r.ev * 100)}% EV`}
+          </span>
+          {size && size.dollars > 0 && (
+            <div className="mono" style={{ fontSize: '10.5px', color: 'var(--silver)', marginTop: '2px' }}>
+              Kelly {fmtMoney(size.dollars)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <BookLogo book={r.bestBook} size={22} />
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--chalk)' }}>
+              {bookDisplay(r.bestBook).label}
+            </div>
+            <div className="mono" style={{ fontSize: '11px', color: GREEN, fontWeight: 700 }}>
+              {r.side} {formatOdds(r.bestAmerican)}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onInspect}
+          className="btn btn-ghost"
+          style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 600 }}
+        >
+          Compare All Books ({r.row.books.length}) &rarr;
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MobileArbCard({
+  r,
+  outlay,
+  copied,
+  onCopy,
+  onInspect,
+}: {
+  r: ArbRow
+  outlay: number
+  copied: boolean
+  onCopy: (r: ArbRow) => void
+  onInspect: () => void
+}) {
+  const a = r.arb
+  const k = outlay / 100
+  const live = a.netArbPct > 0
+  const profit = a.guaranteedProfitPer100 * k
+  const sportSlug = r.row.game_key.split(':')[0] as HeadshotSport
+
+  return (
+    <div
+      style={{
+        ...SURFACE_CARD,
+        padding: '12px',
+        marginBottom: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+          <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.row.player}
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+            {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
+          </div>
+        </div>
+        <span
+          className="mono"
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '4px',
+            background: live ? 'rgba(87, 242, 135, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+            color: live ? GREEN : SKY,
+            border: `1px solid ${live ? 'rgba(87, 242, 135, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`,
+          }}
+        >
+          {signed(a.netArbPct, 2)}% {live ? 'ARB' : 'HOLD'}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        <div style={{ padding: '8px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BookLogo book={a.bestOverBook} size={18} />
+            <span style={{ fontSize: '11px', color: 'var(--silver)', fontWeight: 600 }}>{bookDisplay(a.bestOverBook).label}</span>
+          </div>
+          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)', marginTop: '4px' }}>
+            OVER {formatOdds(a.bestOverAm)}
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Stake: {usd(a.stakeOverPer100 * k)}
+          </div>
+        </div>
+
+        <div style={{ padding: '8px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BookLogo book={a.bestUnderBook} size={18} />
+            <span style={{ fontSize: '11px', color: 'var(--silver)', fontWeight: 600 }}>{bookDisplay(a.bestUnderBook).label}</span>
+          </div>
+          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)', marginTop: '4px' }}>
+            UNDER {formatOdds(a.bestUnderAm)}
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Stake: {usd(a.stakeUnderPer100 * k)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderTop: `1px solid #151822`, paddingTop: '8px' }}>
+        <span className="mono" style={{ fontSize: '11px', color: live ? GREEN : SKY, fontWeight: 700 }}>
+          {profit >= 0 ? '+' : '-'}{usd(Math.abs(profit))} {live ? 'locked' : 'hold'} on {usd(outlay)}
+        </span>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+          <button type="button" onClick={onInspect} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+            Books &rarr;
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MobileMiddleCard({
+  r,
+  outlay,
+  copied,
+  onCopy,
+  onInspect,
+}: {
+  r: MiddleResult
+  outlay: number
+  copied: boolean
+  onCopy: (r: MiddleResult) => void
+  onInspect: () => void
+}) {
+  const k = outlay / 100
+  const free = r.missPct >= 0
+  const sportSlug = r.low.game_key.split(':')[0] as HeadshotSport
+
+  return (
+    <div
+      style={{
+        ...SURFACE_CARD,
+        padding: '12px',
+        marginBottom: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+          <PlayerHeadshot sport={sportSlug} id={r.low.headshot_id} name={r.low.player} size={34} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.low.player}
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+            {STAT_LABEL[r.low.stat] ?? r.low.stat} &middot; {r.low.away} @ {r.low.home}
+          </div>
+        </div>
+        <span
+          className="mono"
+          style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '4px',
+            background: free ? 'rgba(87, 242, 135, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+            color: free ? GREEN : SKY,
+            border: `1px solid ${free ? 'rgba(87, 242, 135, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`,
+          }}
+        >
+          {r.gap % 1 === 0 ? r.gap : r.gap.toFixed(1)} PT WINDOW
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        <div style={{ padding: '8px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BookLogo book={r.overBook} size={18} />
+            <span style={{ fontSize: '11px', color: 'var(--silver)', fontWeight: 600 }}>{bookDisplay(r.overBook).label}</span>
+          </div>
+          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)', marginTop: '4px' }}>
+            OVER {r.low.line} ({formatOdds(r.overAm)})
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Stake: {usd(r.stakeOverPer100 * k)}
+          </div>
+        </div>
+
+        <div style={{ padding: '8px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BookLogo book={r.underBook} size={18} />
+            <span style={{ fontSize: '11px', color: 'var(--silver)', fontWeight: 600 }}>{bookDisplay(r.underBook).label}</span>
+          </div>
+          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)', marginTop: '4px' }}>
+            UNDER {r.high.line} ({formatOdds(r.underAm)})
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Stake: {usd(r.stakeUnderPer100 * k)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderTop: `1px solid #151822`, paddingTop: '8px' }}>
+        <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>
+          Miss: {signed(r.missPct)}% &middot; Hit: {signed(r.hitPct)}%
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+          <button type="button" onClick={onInspect} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+            Books &rarr;
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MobileLongshotCard({
+  r,
+  onInspect,
+}: {
+  r: LongshotRow
+  onInspect: () => void
+}) {
+  const m = r.m
+  const sportSlug = r.row.game_key.split(':')[0] as HeadshotSport
+  const over = r.side !== 'UNDER'
+  const actionBook = over ? m.bestOverBook : m.bestUnderBook
+  const actionAm = over ? m.bestOverAm : m.bestUnderAm
+  const actionEv = r.bestEv
+  const fairProb = over ? m.fairOverProb : m.fairUnderProb
+  const sideLabel = over ? 'OVER' : 'UNDER'
+
+  return (
+    <div
+      style={{
+        ...SURFACE_CARD,
+        padding: '12px',
+        marginBottom: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+          <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.row.player}
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+            {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
+          </div>
+        </div>
+        <TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+        <div>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--chalk)' }}>
+            Best Play: {sideLabel} {actionAm != null ? formatOdds(actionAm) : '--'}
+          </span>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Fair: {fairText(fairProb)} {m.fairSource === 'curve' ? '(EST. CURVE)' : `(${m.nRef} BKS)`}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: actionEv != null && actionEv > 0 ? GREEN : 'var(--fog)' }}>
+            {actionEv != null ? `${signed(actionEv)}% EV` : '--'}
+          </span>
+          {actionBook && (
+            <div style={{ fontSize: '10.5px', color: 'var(--silver)', marginTop: '2px' }}>
+              @ {bookDisplay(actionBook).label}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={onInspect}
+          className="btn btn-ghost"
+          style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 600 }}
+        >
+          Compare All Books ({r.row.books.length}) &rarr;
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function MobileSgpCard({ r }: { r: SgpProxyRow }) {
+  const isPositive = r.evPct > 0
+  const vsDir = r.vsDirectPct
+  const badgeColor = r.archetype === 'nba_reb_ast_10_10'
+    ? 'rgba(168, 85, 247, 0.2)'
+    : r.archetype.includes('vs_')
+    ? 'rgba(59, 130, 246, 0.2)'
+    : 'rgba(234, 179, 8, 0.2)'
+
+  const badgeTextColor = r.archetype === 'nba_reb_ast_10_10'
+    ? '#c084fc'
+    : r.archetype.includes('vs_')
+    ? '#60a5fa'
+    : '#facc15'
+
+  return (
+    <div
+      style={{
+        ...SURFACE_CARD,
+        padding: '12px',
+        marginBottom: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {r.player}
+            </span>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '1px 5px',
+                borderRadius: '4px',
+                background: badgeColor,
+                color: badgeTextColor,
+                letterSpacing: '0.03em',
+                flexShrink: 0,
+              }}
+            >
+              {r.archetypeLabel}
+            </span>
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+            {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {r.legs.map((leg, idx) => (
+          <span
+            key={idx}
+            className="mono"
+            style={{
+              fontSize: '11px',
+              padding: '2px 7px',
+              borderRadius: '4px',
+              background: '#090a0f',
+              border: `1px solid ${HAIR}`,
+              color: 'var(--chalk)',
+            }}
+          >
+            {leg.label} ({formatOdds(leg.bookAm)})
+          </span>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <BookLogo book={r.book} size={18} />
+            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
+              Est. {formatOdds(r.estSgpAm)}
+            </span>
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Fair: {formatOdds(r.fairJointAm)} ({(r.fairJointProb * 100).toFixed(1)}%)
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <span
+            className="mono"
+            style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              padding: '2px 7px',
+              borderRadius: '4px',
+              background: isPositive ? 'rgba(87, 242, 135, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+              color: isPositive ? GREEN : 'var(--fog)',
+              border: isPositive ? '1px solid rgba(87, 242, 135, 0.3)' : `1px solid ${HAIR}`,
+            }}
+          >
+            {r.evPct > 0 ? `+${r.evPct.toFixed(1)}%` : `${r.evPct.toFixed(1)}%`} EV
+          </span>
+          {vsDir != null && vsDir > 0 && (
+            <div style={{ fontSize: '10px', color: GREEN, marginTop: '2px' }}>
+              +{vsDir.toFixed(1)}% vs direct
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <a
+          href={r.deeplink || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-ghost"
+          style={{
+            padding: '5px 12px',
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--chalk)',
+            border: `1px solid ${HAIR}`,
+            borderRadius: '4px',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          Build SGP on {bookDisplay(r.book).label} &rarr;
+        </a>
+      </div>
+    </div>
+  )
+}
+
+function MobileCompareSheet({
+  item,
+  columns,
+  onClose,
+  bankroll,
+}: {
+  item:
+    | { type: 'ev'; row: ScreenRow }
+    | { type: 'arb'; row: ArbRow }
+    | { type: 'middles'; row: MiddleResult }
+    | { type: 'longshots'; row: LongshotRow }
+    | null
+  columns: { key: string; offshore: boolean }[]
+  onClose: () => void
+  bankroll: number
+}) {
+  if (!item) return null
+
+  const row = item.type === 'middles' ? item.row.low : item.row.row
+  const sportSlug = row.game_key.split(':')[0] as HeadshotSport
+  const byBook = new Map(row.books.map(b => [b.book, b]))
+
+  let title = row.player
+  let subtitle = `${row.away} @ ${row.home} \u00b7 ${startLabel(row.commence)}`
+  if (item.type === 'ev') {
+    title = `${row.player} \u00b7 ${item.row.label} ${STAT_LABEL[row.stat] ?? row.stat}`
+  } else if (item.type === 'middles') {
+    title = `${row.player} \u00b7 o${item.row.low.line} / u${item.row.high.line} ${STAT_LABEL[row.stat] ?? row.stat}`
+  } else if (item.type === 'arb' || item.type === 'longshots') {
+    title = `${row.player} \u00b7 ${row.line} ${STAT_LABEL[row.stat] ?? row.stat}`
+  }
+
+  return (
+    <MobileBottomSheet
+      open={Boolean(item)}
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle}
+      maxHeight="85vh"
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {item.type === 'ev' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+              <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase' }}>Consensus Fair</div>
+              <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--chalk)', marginTop: '2px' }}>
+                {item.row.fairAmerican != null ? (item.row.fairAmerican > 0 ? `+${item.row.fairAmerican}` : `${item.row.fairAmerican}`) : '--'}
+              </div>
+              <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+                {item.row.nRef} reference books
+              </div>
+            </div>
+
+            <div style={{ padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+              <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase' }}>Best Odds &middot; {bookDisplay(item.row.bestBook).label}</div>
+              <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: GREEN, marginTop: '2px' }}>
+                {item.row.side} {formatOdds(item.row.bestAmerican)}
+              </div>
+              <div className="mono" style={{ fontSize: '10.5px', color: GREEN, marginTop: '2px' }}>
+                {item.row.ev != null ? `${signed(item.row.ev * 100)}% EV` : '--'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '8px', letterSpacing: '0.06em' }}>
+            ALL REPORTING BOOKS ({row.books.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {columns.map(c => {
+              const q = byBook.get(c.key)
+              if (!q || (q.over == null && q.under == null)) return null
+              const isBest = item.type === 'ev' && item.row.bestTies.includes(c.key)
+              return (
+                <div
+                  key={c.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    background: isBest ? 'rgba(87, 242, 135, 0.06)' : '#090a0f',
+                    border: `1px solid ${isBest ? 'rgba(87, 242, 135, 0.35)' : HAIR}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <BookLogo book={c.key} size={22} />
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--chalk)' }}>
+                        {bookDisplay(c.key).label}
+                        {c.offshore && <span style={{ fontSize: '10px', color: 'var(--fog)', marginLeft: '4px' }}>(offshore)</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'OVER' ? GREEN : 'var(--chalk)' }}>
+                        O {q.over != null ? formatOdds(q.over) : '--'}
+                      </span>
+                      <span style={{ margin: '0 4px', color: 'var(--fog)' }}>/</span>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'UNDER' ? GREEN : 'var(--chalk)' }}>
+                        U {q.under != null ? formatOdds(q.under) : '--'}
+                      </span>
+                    </div>
+                    {isBest && (
+                      <span className="mono" style={{ fontSize: '10px', fontWeight: 700, color: GREEN, padding: '1px 5px', borderRadius: '3px', background: 'rgba(87, 242, 135, 0.15)' }}>
+                        BEST
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </MobileBottomSheet>
   )
 }
 
