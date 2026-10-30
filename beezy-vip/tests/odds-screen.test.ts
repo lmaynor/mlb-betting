@@ -1,5 +1,5 @@
 import {
-  bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeRowArb, devigOver, fairOver,
+  bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeOutliers, computeRowArb, devigOver, fairOver,
   computeMiddles, kalshiEffectiveDecimal, type BoardRow,
 } from '@/lib/odds-screen'
 
@@ -299,5 +299,68 @@ describe('computeMiddles', () => {
     let best = Infinity
     for (let i = 0; i < 7; i++) { const t0 = performance.now(); computeMiddles(rows, o); best = Math.min(best, performance.now() - t0) }
     expect(best).toBeLessThan(50)
+  })
+})
+
+describe('computeOutliers', () => {
+  const sample = row([
+    B('fanduel', 750, -1100),
+    B('draftkings', 400, -600),
+    B('betmgm', 400, -600),
+    B('caesars', 388, -550),
+    B('betrivers', 420, -650),
+  ])
+
+  it('a book hanging +750 while 4 peers quote +400, +400, +388, +420 is flagged as an outlier with accurate consensus math and bar ratios', () => {
+    const res = computeOutliers([sample], { refs: ['draftkings', 'betmgm', 'caesars', 'betrivers'], method: 'proportional', bettable: null, minPeers: 3, side: 'over' })
+    expect(res).toHaveLength(1)
+    const o = res[0]
+    expect(o.outlierBook).toBe('fanduel')
+    expect(o.outlierAmerican).toBe(750)
+    expect(o.nPeers).toBe(4)
+    expect(o.peers[0].american).toBe(420) // sorted highest peer price first
+    expect(o.peers.every(p => p.barRatio < 1.0 && p.barRatio >= 0.12)).toBe(true)
+    expect(o.payoutPremiumPct).toBeGreaterThan(50)
+    expect(o.trueEvPct).not.toBeNull()
+    expect(o.trueEvPct!).toBeGreaterThan(0)
+    expect(o.marketAvgAmerican).toBeGreaterThan(390)
+    expect(o.marketAvgAmerican).toBeLessThan(420)
+  })
+
+  it('lines with fewer than minPeers books are excluded', () => {
+    const thin = row([B('fanduel', 750, -1100), B('draftkings', 400, -600), B('betmgm', 400, -600)])
+    expect(computeOutliers([thin], { refs: [], method: 'proportional', bettable: null, minPeers: 3, side: 'over' })).toHaveLength(0)
+    expect(computeOutliers([thin], { refs: [], method: 'proportional', bettable: null, minPeers: 2, side: 'over' })).toHaveLength(1)
+  })
+
+  it('two-way ties at the top price are not flagged as a single-book outlier', () => {
+    const tied = row([
+      B('fanduel', 400, -600),
+      B('draftkings', 400, -600),
+      B('betmgm', 300, -400),
+      B('caesars', 280, -350),
+      B('betrivers', 290, -380),
+    ])
+    const res = computeOutliers([tied], { refs: [], method: 'proportional', bettable: null, minPeers: 3, side: 'over' })
+    expect(res).toHaveLength(0)
+  })
+
+  it('offshore books are never selected as outlierBook, and bettable filtering is respected', () => {
+    const withOffshore = row([
+      B('pinnacle', 750, -1100), // offshore
+      B('draftkings', 400, -600),
+      B('betmgm', 400, -600),
+      B('caesars', 388, -550),
+      B('betrivers', 420, -650),
+    ])
+    // Pinnacle cannot be the outlierBook because it is offshore:
+    const resOff = computeOutliers([withOffshore], { refs: [], method: 'proportional', bettable: null, minPeers: 3, side: 'over' })
+    expect(resOff.find(x => x.outlierBook === 'pinnacle')).toBeUndefined()
+
+    // Respects bettable (My Books) constraint for the outlierBook:
+    const myBooksOnly = new Set(['caesars', 'draftkings', 'betrivers'])
+    const resBettable = computeOutliers([sample], { refs: [], method: 'proportional', bettable: myBooksOnly, minPeers: 3, side: 'over' })
+    // FanDuel is not in myBooksOnly, so FanDuel cannot be the outlierBook
+    expect(resBettable.find(x => x.outlierBook === 'fanduel')).toBeUndefined()
   })
 })

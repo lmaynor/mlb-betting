@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { apiGetOddsBoard } from '@/lib/betting-api'
 import { bookDisplay, canonBook, SURFACE_CARD } from '@/lib/tokens'
 import { americanToDecimal, fmtMoney, kellySizing } from '@/lib/ev-math'
@@ -18,15 +19,17 @@ import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { PRE_LAUNCH } from '@/lib/launch'
 import {
-  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, fairAmericanOf, STAT_LABEL,
+  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, fairAmericanOf, STAT_LABEL,
   type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
-  type OddsScreenMode, type ScreenRow, type SideFilter,
+  type OddsScreenMode, type OutlierRow, type ScreenRow, type SideFilter,
 } from '@/lib/odds-screen'
 
 type SportFilter = 'all' | SportSlug
 type SortKey = 'ev' | 'time' | 'player'
 type LinesFilter = 'main' | 'all'
-type ArbView = 'live' | 'near' | 'middle'
+type ArbView = 'live' | 'near'
+type OutlierView = 'cards' | 'table'
+type OutlierOddsBand = 'all' | 'main' | 'plus_money' | 'longshots'
 
 const HAIR = '#1e2230'
 const GREEN = '#57F287'
@@ -58,6 +61,25 @@ const NEAR_ARB_PCT = -1.5
 const MID_COST = [2, 5, 8]                       // the most a missed middle may cost, percent of the outlay
 const MID_GAP = [{ label: 'ANY', v: 0 }, { label: '2+', v: 2 }, { label: '3+', v: 3 }, { label: '5+', v: 5 }]
 const MIDDLE_MIN_REF = 2
+
+const OUTLIER_GAP_OPTIONS = [
+  { label: '+8%+', v: 8 },
+  { label: '+15%+', v: 15 },
+  { label: '+25%+', v: 25 },
+  { label: '+40%+', v: 40 },
+]
+const OUTLIER_ODDS_OPTIONS: { label: string; v: OutlierOddsBand }[] = [
+  { label: 'All Odds', v: 'all' },
+  { label: 'Main Lines (<+200)', v: 'main' },
+  { label: 'Plus Money (+100+)', v: 'plus_money' },
+  { label: 'Tail (+250+)', v: 'longshots' },
+]
+const OUTLIER_MIN_BOOKS = [
+  { label: '3+ Books', v: 3 },
+  { label: '4+ Books', v: 4 },
+  { label: '5+ Books', v: 5 },
+]
+
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
 const POLL_MS = 3 * 60_000
 
@@ -108,15 +130,23 @@ function fairText(p: number | null): string {
 
 const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'ev', label: '+EV Scanner' },
-  { key: 'arb', label: 'Arb & Middles' },
-  { key: 'longshots', label: 'Alt Lines & Tail (+200+)' },
+  { key: 'outliers', label: 'Market Outliers' },
+  { key: 'arb', label: 'Arbitrage' },
+  { key: 'middles', label: 'Middles' },
+  { key: 'longshots', label: 'Alt & Tail Ladders' },
 ]
 
 export function OddsClient({ initial, initialLocked, headline }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null }) {
+  const sp = useSearchParams()
+  const viewParam = sp?.get('view')
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam))
+    ? (viewParam as OddsScreenMode)
+    : 'ev'
+
   const [boards, setBoards] = useState(initial)
   const [locked, setLocked] = useState(initialLocked)
   const [loading, setLoading] = useState(false)
-  const [mode, setMode] = useState<OddsScreenMode>('ev')
+  const [mode, setMode] = useState<OddsScreenMode>(initialMode)
   const [sport, setSport] = useState<SportFilter>('all')
   const [stat, setStat] = useState('all')
   const [game, setGame] = useState('all')
@@ -139,8 +169,42 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const [longSub, setLongSub] = useState<LongshotSubfilter>('all')
   const [oddsMin, setOddsMin] = useState(0)
   const [useCurve, setUseCurve] = useState(true)
+  const [outlierGap, setOutlierGap] = useState(8)
+  const [outlierReqEv, setOutlierReqEv] = useState(false)
+  const [outlierOddsBand, setOutlierOddsBand] = useState<OutlierOddsBand>('all')
+  const [outlierMinBooks, setOutlierMinBooks] = useState(3)
+  const [outlierView, setOutlierView] = useState<OutlierView>('cards')
+  const [revealed, setRevealed] = useState<Set<string>>(new Set())
+  const [revealMsg, setRevealMsg] = useState<string | null>(null)
   const [bankroll] = useBankroll(1000)
   const myBooks = useMyBooks()
+
+  useEffect(() => {
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam)) {
+      setMode(viewParam as OddsScreenMode)
+    }
+  }, [viewParam])
+
+  const switchMode = useCallback((m: OddsScreenMode) => {
+    setMode(m)
+    setLimit(PAGE)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (m === 'ev') url.searchParams.delete('view')
+      else url.searchParams.set('view', m)
+      window.history.replaceState(null, '', url.pathname + url.search)
+    }
+  }, [])
+
+  const handleReveal = useCallback((key: string) => {
+    if (PRE_LAUNCH) {
+      setRevealed(prev => new Set(prev).add(key))
+      setRevealMsg('Pre-launch preview: Book unmasked! All books unlocked for early visitors.')
+      setTimeout(() => setRevealMsg(null), 3500)
+    } else {
+      window.location.href = '/pricing'
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -212,18 +276,34 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     return rows.sort(by[sort])
   }, [mode, filtered, lines, refs, method, bettable, side, minEv, sort])
 
+  // ---- Market Outliers: single-book price dislocations vs peer consensus
+  const outliers = useMemo(() => {
+    if (mode !== 'outliers') return []
+    return computeOutliers(filtered, {
+      refs,
+      method,
+      bettable,
+      minPeers: outlierMinBooks,
+      minPremiumPct: outlierGap,
+      minEvPct: outlierReqEv ? 2.0 : 0,
+      oddsBand: outlierOddsBand,
+      side,
+      useCurve,
+    })
+  }, [mode, filtered, refs, method, bettable, outlierMinBooks, outlierGap, outlierReqEv, outlierOddsBand, side, useCurve])
+
   // ---- Arbitrage: one row per line, best margin first
   const arbs = useMemo(() => {
-    if (mode !== 'arb' || arbView === 'middle') return []
+    if (mode !== 'arb') return []
     const all = buildArbRows(filtered, { bettable, includeExchanges: exchanges, minNetArbPct: NEAR_ARB_PCT })
     return (arbView === 'live' ? all.filter(r => r.arb.netArbPct > 0) : all).sort((a, b) => b.arb.netArbPct - a.arb.netArbPct)
   }, [mode, filtered, bettable, exchanges, arbView])
 
   // ---- Middles: the over of a lower line + the under of a higher line, same player and stat
   const middles = useMemo(() => {
-    if (mode !== 'arb' || arbView !== 'middle') return []
+    if (mode !== 'middles') return []
     return computeMiddles(filtered, { bettable, includeExchanges: exchanges, maxCostPct: midCost, minGap: midGap, onlyPositiveEv: midPosEv, refs, method, minRef: MIDDLE_MIN_REF, useCurve })
-  }, [mode, arbView, filtered, bettable, exchanges, midCost, midGap, midPosEv, refs, method, useCurve])
+  }, [mode, filtered, bettable, exchanges, midCost, midGap, midPosEv, refs, method, useCurve])
 
   // ---- Alt & Longshots: one row per line, best EV (either side) first
   const longshots = useMemo(() => {
@@ -242,13 +322,19 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     const src = d.lines === 'main' ? d.scoped.filter(r => !r.is_alt) : d.scoped
     return {
       ev: buildScreenRows(src, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: MIN_REF, side: d.side }).filter(r => r.ev != null && r.ev >= floor).length,
+      outliers: computeOutliers(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minPeers: 3, minPremiumPct: 8, minEvPct: 0, side: d.side, useCurve: d.useCurve }).length,
       arb: buildArbRows(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, minNetArbPct: 0 }).length,
+      middles: computeMiddles(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, maxCostPct: 5, minGap: 0, onlyPositiveEv: false, refs: d.refs, method: d.method, minRef: MIDDLE_MIN_REF, useCurve: d.useCurve }).length,
       long: buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
         .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length,
     }
   }, [dBadgeIn])
 
-  const nRows = mode === 'ev' ? screen.length : mode === 'arb' ? (arbView === 'middle' ? middles.length : arbs.length) : longshots.length
+  const nRows = mode === 'ev' ? screen.length
+    : mode === 'outliers' ? outliers.length
+    : mode === 'arb' ? arbs.length
+    : mode === 'middles' ? middles.length
+    : longshots.length
 
   const meta = useMemo(() => {
     const ages = active.map(s => boards[s]!.age_minutes).filter((n): n is number => n != null)
@@ -285,7 +371,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     }
   }, [outlay])
 
-  const emptyBody = mode === 'arb' && arbView === 'middle'
+  const emptyBody = mode === 'outliers'
+    ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
+    : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
     ? { title: arbView === 'live' ? 'No live arbitrage on the board' : 'No near arbitrage on the board',
@@ -323,10 +411,14 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
           <PillGroup label="Mode">
             {MODES.map(m => {
-              const n = m.key === 'ev' ? counts.ev : m.key === 'arb' ? counts.arb : counts.long
-              const hot = m.key === 'arb' && n > 0
+              const n = m.key === 'ev' ? counts.ev
+                : m.key === 'outliers' ? counts.outliers
+                : m.key === 'arb' ? counts.arb
+                : m.key === 'middles' ? counts.middles
+                : counts.long
+              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0)
               return (
-                <Pill key={m.key} active={mode === m.key} onClick={() => { setMode(m.key); setLimit(PAGE) }}>
+                <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                   {m.label}
                   <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
                 </Pill>
@@ -407,34 +499,57 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
               </Field>
             </>
           )}
+          {mode === 'outliers' && (
+            <>
+              <Field label="MIN GAP">
+                <PillGroup>
+                  {OUTLIER_GAP_OPTIONS.map(g => (
+                    <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>
+                      {g.label}
+                    </Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="REQUIRE +EV">
+                <PillGroup>
+                  <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
+                  <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }} title="Require verified positive EV against reference books or player curve">Verified +EV Only</Pill>
+                </PillGroup>
+              </Field>
+              <Field label="ODDS BAND">
+                <PillGroup>
+                  {OUTLIER_ODDS_OPTIONS.map(b => (
+                    <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>
+                      {b.label}
+                    </Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="MIN BOOKS">
+                <PillGroup>
+                  {OUTLIER_MIN_BOOKS.map(b => (
+                    <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>
+                      {b.label}
+                    </Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="VIEW">
+                <PillGroup>
+                  <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
+                  <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
+                </PillGroup>
+              </Field>
+            </>
+          )}
           {mode === 'arb' && (
             <>
               <Field label="SHOW">
                 <PillGroup>
                   <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                   <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
-                  <Pill active={arbView === 'middle'} onClick={() => { setArbView('middle'); setLimit(PAGE) }} title="Over a lower line plus under a higher line: both win if the result lands between them, a small known cost otherwise">MIDDLES</Pill>
                 </PillGroup>
               </Field>
-              {arbView === 'middle' && (
-                <>
-                  <Field label="MAX COST">
-                    <PillGroup>
-                      {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
-                    </PillGroup>
-                  </Field>
-                  <Field label="VALUE">
-                    <PillGroup>
-                      <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
-                    </PillGroup>
-                  </Field>
-                  <Field label="WINDOW">
-                    <PillGroup>
-                      {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
-                    </PillGroup>
-                  </Field>
-                </>
-              )}
               <Field label="EXCHANGES">
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
@@ -445,6 +560,39 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
                   <input
                     id="odds-outlay" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
+                    style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
+                  />
+                </span>
+              </Field>
+            </>
+          )}
+          {mode === 'middles' && (
+            <>
+              <Field label="MAX COST">
+                <PillGroup>
+                  {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
+                </PillGroup>
+              </Field>
+              <Field label="VALUE">
+                <PillGroup>
+                  <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
+                </PillGroup>
+              </Field>
+              <Field label="WINDOW">
+                <PillGroup>
+                  {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
+                </PillGroup>
+              </Field>
+              <Field label="EXCHANGES">
+                <PillGroup>
+                  <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
+                </PillGroup>
+              </Field>
+              <Field label="OUTLAY" htmlFor="odds-outlay-mid">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span className="mono" style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
+                  <input
+                    id="odds-outlay-mid" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
                     style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
                   />
                 </span>
@@ -487,6 +635,25 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         <Empty title="No prop prices posted" body="No book has posted NFL, NHL or NBA player props for the games on the board yet." />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
+      ) : mode === 'outliers' && outlierView === 'cards' ? (
+        <div>
+          {revealMsg && (
+            <div role="status" style={{ ...SURFACE_CARD, padding: '10px 14px', marginBottom: '12px', borderColor: 'rgba(87,242,135,0.4)', color: GREEN, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>{revealMsg}</span>
+              <button onClick={() => setRevealMsg(null)} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px' }}>Dismiss</button>
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '14px' }}>
+            {outliers.slice(0, limit).map((item, idx) => (
+              <OutlierCard
+                key={item.key}
+                item={item}
+                isLocked={!revealed.has(item.key) && idx >= 3 && !PRE_LAUNCH}
+                onReveal={() => handleReveal(item.key)}
+              />
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
           <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -501,14 +668,21 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                     <th scope="col" style={{ textAlign: 'right' }} title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes">KELLY / LINE</th>
                   </>
                 )}
-                {mode === 'arb' && arbView === 'middle' && (
+                {mode === 'outliers' && (
+                  <>
+                    <th scope="col" className="odds-ev" title="Average price across all peer books quoting this side">MARKET AVG</th>
+                    <th scope="col" className="odds-ev" title="The single book hanging a number off the market">OUTLIER BOOK</th>
+                    <th scope="col" style={{ textAlign: 'right' }} title="Payout premium above peer average, and de-vigged EV">DISLOCATION</th>
+                  </>
+                )}
+                {mode === 'middles' && (
                   <>
                     <th scope="col" className="odds-ev" title="Width of the window between the two lines, and what a miss and a hit pay">MIDDLE</th>
                     <th scope="col" className="odds-ev">LEGS</th>
                     <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
                   </>
                 )}
-                {mode === 'arb' && arbView !== 'middle' && (
+                {mode === 'arb' && (
                   <>
                     <th scope="col" className="odds-ev" title="Margin on the outlay with the best over and under at two different books, net of Kalshi's fee">ARB / HOLD</th>
                     <th scope="col" className="odds-ev">HEDGE LEGS</th>
@@ -528,7 +702,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   return (
                     <th key={c.key} scope="col" className="odds-book" title={`${b.label}${c.offshore ? ' (offshore: reference only)' : ''}`}>
                       <BookLogo book={c.key} size={34} style={{ display: 'block', margin: '0 auto 2px' }} />
-                      <span className="mono odds-sub">{isRef && refWeight != null && mode !== 'arb' ? `${refWeight}%` : c.offshore ? 'ref' : '\u00a0'}</span>
+                      <span className="mono odds-sub">{isRef && refWeight != null && mode !== 'arb' && mode !== 'middles' ? `${refWeight}%` : c.offshore ? 'ref' : '\u00a0'}</span>
                     </th>
                   )
                 })}
@@ -536,8 +710,17 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             </thead>
             <tbody>
               {mode === 'ev' && screen.slice(0, limit).map(r => <EvRow key={r.key} r={r} columns={columns} bankroll={bankroll} />)}
-              {mode === 'arb' && arbView === 'middle' && middles.slice(0, limit).map(r => <MiddleTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyMiddle} />)}
-              {mode === 'arb' && arbView !== 'middle' && arbs.slice(0, limit).map(r => <ArbTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyHedge} />)}
+              {mode === 'outliers' && outliers.slice(0, limit).map((r, idx) => (
+                <OutlierTableRow
+                  key={r.key}
+                  r={r}
+                  columns={columns}
+                  isLocked={!revealed.has(r.key) && idx >= 3 && !PRE_LAUNCH}
+                  onReveal={() => handleReveal(r.key)}
+                />
+              ))}
+              {mode === 'middles' && middles.slice(0, limit).map(r => <MiddleTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyMiddle} />)}
+              {mode === 'arb' && arbs.slice(0, limit).map(r => <ArbTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyHedge} />)}
               {mode === 'longshots' && longshots.slice(0, limit).map(r => <LongshotTableRow key={r.key} r={r} columns={columns} />)}
             </tbody>
           </table>
@@ -554,12 +737,15 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         {mode === 'ev' && <>Each cell is a book&apos;s price on the row&apos;s side above its price on the other side; green marks the best bettable price and a tint marks a book
           beating the fair price by 1.5% or more. FV is the fair price from the reference books you pick, averaged with equal weight after each book&apos;s vig is removed;
           a book is never measured against its own line. EV is fair probability times payout minus one at the best price.</>}
-        {mode === 'arb' && arbView === 'middle' && <>A middle is the over of a lower line plus the under of a higher line: if the result lands strictly between them both bets win,
+        {mode === 'outliers' && <>Market Outliers visualizes single-book price dislocations where one book hangs odds far above the rest of the market.
+          MARKET AVG is the leave-self-out consensus across peer books. The green bar shows the outlier book&apos;s payout relative to peer books.
+          Verified +EV requires at least two reference books or the player&apos;s multi-line curve confirming positive expected value.</>}
+        {mode === 'middles' && <>A middle is the over of a lower line plus the under of a higher line: if the result lands strictly between them both bets win,
           anywhere else one wins and one loses, so it is a small known cost for a chance at a double win, not a risk-free bet. Stakes equalise the payout when only one leg wins.
           BREAK-EVEN is the chance the window must hit for the middle to pay for itself; P(WINDOW) is the reference books&apos; own estimate from the two lines (or the player&apos;s
           curve), so it is only as good as those prices. Each cell shows the over of the lower line above the under of the higher line; green outlines mark the two legs.
           Kalshi&apos;s taker fee is taken off a Kalshi leg. Confirm both lines before placing either, and mind each book&apos;s limits and grading rules.</>}
-        {mode === 'arb' && arbView !== 'middle' && <>Each cell is a book&apos;s over price above its under price; the green outline marks the two legs of the best hedge. Stakes lock the same payout on
+        {mode === 'arb' && <>Each cell is a book&apos;s over price above its under price; the green outline marks the two legs of the best hedge. Stakes lock the same payout on
           either outcome. Kalshi&apos;s taker fee (0.07 &times; p &times; (1 &minus; p) per contract) is taken off its leg; other exchange commissions are not modelled.
           Prop arbs are often a stale quote or a mismatched line: confirm both legs before placing either, and mind each book&apos;s limits and grading rules.</>}
         {mode === 'longshots' && <>Each cell is a book&apos;s over price above its under price. Alt lines are rungs off the player&apos;s main line. FAIR ANCHOR is the reference
@@ -863,6 +1049,195 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
           <PriceCell key={c.key} top={o} bottom={u} tint={edgeO || edgeU}
             topState={c.key === m.bestOverBook ? 'best' : undefined} bottomState={c.key === m.bestUnderBook ? 'best' : undefined} />
         )
+      })}
+    </tr>
+  )
+}
+
+function OutlierCard({
+  item,
+  isLocked,
+  onReveal,
+}: {
+  item: OutlierRow
+  isLocked: boolean
+  onReveal: () => void
+}) {
+  const sport = item.row.game_key.split(':')[0]
+  const evBadge = item.trueEvPct != null
+    ? `${signed(item.trueEvPct)}% EV \u00b7 +${item.payoutPremiumPct.toFixed(1)}% vs Mkt`
+    : `+${item.payoutPremiumPct.toFixed(1)}% vs Mkt`
+
+  return (
+    <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Row 1: Matchup & Dislocation Pill */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: '#171a24', color: '#9ca3af', border: `1px solid ${HAIR}` }}>
+            {sport.toUpperCase()}
+          </span>
+          <span className="mono" style={{ fontSize: '11.5px', color: 'var(--silver)' }}>
+            {item.row.away} @ {item.row.home} &middot; {startLabel(item.row.commence)}
+          </span>
+        </div>
+        <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color: GREEN, background: 'rgba(87,242,135,0.08)', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(87,242,135,0.25)' }}>
+          {evBadge}
+        </div>
+      </div>
+
+      {/* Row 2: Player, Prop Line & Giant Outlier Price */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ flexShrink: 0, width: 36, height: 36, display: 'inline-flex' }}>
+            <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
+          </span>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#f3f4f6', lineHeight: 1.25 }}>{item.row.player}</div>
+            <div className="mono" style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+              <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
+              {item.row.is_alt === true && (
+                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 4px', borderRadius: '3px', border: '1px solid #3a4156', color: '#9ca3af' }}>[ALT]</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="mono" style={{ fontSize: '24px', fontWeight: 800, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
+            {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
+          </div>
+          <div className="mono" style={{ fontSize: '10px', color: '#7d8596', marginTop: '3px', letterSpacing: '0.04em' }}>OUTLIER PRICE</div>
+        </div>
+      </div>
+
+      {/* Row 3: Target Book / Reveal Control */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: '#090a0f', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
+        {isLocked ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <span style={{ fontSize: '13px', color: '#9ca3af' }}>\ud83d\udd12</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af' }}>Book hidden</span>
+              <span className="mono" style={{ fontSize: '10.5px', color: '#7d8596' }}>({item.nPeers} peer books)</span>
+            </div>
+            <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px', color: GREEN, borderColor: 'rgba(87,242,135,0.3)' }}>
+              Reveal book &rarr;
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookLogo book={item.outlierBook} size={22} />
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--chalk)' }}>{bookDisplay(item.outlierBook).label}</span>
+              <span className="mono" style={{ fontSize: '11px', color: '#7d8596', marginLeft: '4px' }}>Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
+            </div>
+            <span className="mono" style={{ fontSize: '10.5px', color: GREEN, fontWeight: 700, letterSpacing: '0.04em' }}>BEST PRICE</span>
+          </>
+        )}
+      </div>
+
+      {/* Row 4: Horizontal Price Comparison Bar Chart */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '6px', borderTop: '1px solid #151822' }}>
+        {/* Outlier Book Row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+            {isLocked ? <span style={{ fontSize: '12px', color: '#7d8596' }}>\ud83d\udd12</span> : <BookLogo book={item.outlierBook} size={20} />}
+          </div>
+          <div style={{ flex: 1, height: '8px', background: '#171a24', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
+          </div>
+          <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: GREEN, flexShrink: 0 }}>
+            {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
+          </div>
+        </div>
+
+        {/* Peer Books Rows (Up to 5) */}
+        {item.peers.slice(0, 5).map((peer, idx) => (
+          <div key={`${peer.book}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+              <BookLogo book={peer.book} size={20} />
+            </div>
+            <div style={{ flex: 1, height: '8px', background: '#171a24', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
+            </div>
+            <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '11.5px', color: '#9ca3af', flexShrink: 0 }}>
+              {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
+            </div>
+          </div>
+        ))}
+
+        {/* Footer Summary Line */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '11px', color: '#7d8596' }}>
+          <div>
+            <span>Market avg &middot; {item.nPeers} books</span>
+            {item.fairAmerican != null && (
+              <span style={{ marginLeft: '6px' }}>&middot; Fair: {item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`}</span>
+            )}
+          </div>
+          <div className="mono" style={{ color: '#d1d5db', fontWeight: 600 }}>
+            {item.marketAvgAmerican > 0 ? `+${item.marketAvgAmerican}` : `${item.marketAvgAmerican}`}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OutlierTableRow({
+  r,
+  columns,
+  isLocked,
+  onReveal,
+}: {
+  r: OutlierRow
+  columns: { key: string; offshore: boolean }[]
+  isLocked: boolean
+  onReveal: () => void
+}) {
+  const byBook = new Map(r.row.books.map(b => [b.book, b]))
+  const gapColor = r.trueEvPct != null && r.trueEvPct > 0 ? GREEN : SKY
+
+  return (
+    <tr data-row="odds">
+      <PropCells row={r.row} label={r.label} />
+      <td className="odds-ev">
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>
+          {r.marketAvgAmerican > 0 ? `+${r.marketAvgAmerican}` : `${r.marketAvgAmerican}`}
+        </div>
+        <div className="mono odds-sub">
+          {r.nPeers} PEERS &middot; FAIR {r.fairAmerican != null ? (r.fairAmerican > 0 ? `+${r.fairAmerican}` : `${r.fairAmerican}`) : '--'}
+        </div>
+      </td>
+      <td className="odds-ev">
+        {isLocked ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '12px' }}>\ud83d\udd12</span>
+            <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px', color: GREEN }}>Reveal book</button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BookLogo book={r.outlierBook} size={28} />
+            <div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
+                {r.side} {r.outlierAmerican > 0 ? `+${r.outlierAmerican}` : `${r.outlierAmerican}`}
+              </div>
+              <div className="mono odds-sub">{bookDisplay(r.outlierBook).label}</div>
+            </div>
+          </div>
+        )}
+      </td>
+      <td style={{ textAlign: 'right' }}>
+        <div className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: gapColor }}>
+          +{r.payoutPremiumPct.toFixed(1)}% MKT
+        </div>
+        <div className="mono odds-sub" style={{ color: r.trueEvPct != null && r.trueEvPct > 0 ? GREEN : 'var(--fog)' }}>
+          {r.trueEvPct != null ? `${signed(r.trueEvPct)}% EV` : 'NO FAIR EV'}
+        </div>
+      </td>
+      {columns.map(c => {
+        const q = byBook.get(c.key)
+        const target = q ? (r.side === 'OVER' ? q.over : q.under) : null
+        const other = q ? (r.side === 'OVER' ? q.under : q.over) : null
+        const isOutlier = !isLocked && c.key === r.outlierBook
+        return <PriceCell key={c.key} top={target} bottom={other} topState={isOutlier ? 'best' : undefined} best={isOutlier} tint={isOutlier} />
       })}
     </tr>
   )

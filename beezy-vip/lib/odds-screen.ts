@@ -14,10 +14,11 @@
  */
 import { americanToDecimal } from '@/lib/ev-math'
 import { americanToImpliedProb } from '@/lib/odds'
+import { isOffshore } from '@/lib/offshore'
 
 export type DevigMethod = 'proportional' | 'power'
 export type SideFilter = 'both' | 'over' | 'under'
-export type OddsScreenMode = 'ev' | 'arb' | 'longshots'
+export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots'
 export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
 export interface BoardBook { book: string; over: number | null; under: number | null }
@@ -216,6 +217,202 @@ export const STAT_LABEL: Record<string, string> = {
   hits: 'Hits', pim: 'PIM', pp_points: 'PP Points',
   home_runs: 'Home Runs', strikeouts: 'Strikeouts', outs: 'Pitcher Outs', total_bases: 'Total Bases', earned_runs: 'Earned Runs',
   stolen_bases: 'Stolen Bases',
+}
+
+// -------------------------------------------------------------------------------------------------- MARKET OUTLIERS
+
+export interface OutlierPeerQuote {
+  book: string
+  american: number
+  decimal: number
+  impliedProb: number
+  /** 0..1 bar width ratio relative to the outlier book's payout/edge */
+  barRatio: number
+}
+
+export interface OutlierRow {
+  key: string
+  row: BoardRow
+  side: 'OVER' | 'UNDER'
+  label: string
+  outlierBook: string
+  outlierAmerican: number
+  outlierDecimal: number
+  outlierImplied: number
+  /** Leave-self-out peer quotes on the SAME side, sorted best price first */
+  peers: OutlierPeerQuote[]
+  nPeers: number
+  /** Average implied probability across peers -> converted to American odds ("Market avg / N books") */
+  marketAvgAmerican: number
+  marketAvgDecimal: number
+  /** Payout premium vs peer average decimal: (outlierDecimal / marketAvgDecimal - 1) * 100 */
+  payoutPremiumPct: number
+  /** True de-vigged EV% when >= minRef two-sided reference books (or player curve) exist, else null */
+  trueEvPct: number | null
+  fairAmerican: number | null
+  fairSource: 'consensus' | 'curve' | null
+}
+
+export interface OutlierOptions {
+  bettable: ReadonlySet<string> | null
+  refs: readonly string[]
+  method: DevigMethod
+  /** Minimum peer books required on the same side to declare an outlier (default 3) */
+  minPeers?: number
+  /** Minimum payout premium % over the peer average decimal (default 8, i.e. +8% above market avg) */
+  minPremiumPct?: number
+  /** Optional minimum true de-vigged EV% (default 0; when > 0 requires trueEvPct >= minEvPct) */
+  minEvPct?: number
+  side?: SideFilter
+  /** Odds filter: 'all' | 'main' (<= +200) | 'plus_money' (+100+) | 'longshots' (+250+) */
+  oddsBand?: 'all' | 'main' | 'plus_money' | 'longshots'
+  useCurve?: boolean
+  minRef?: number
+}
+
+/**
+ * Identify single-book price dislocations where one bettable book is hanging a number significantly above the
+ * rest of the market on the same side. Leave-self-out math: compares the outlier book's payout to the average
+ * of the remaining peer books, requiring at least minPeers peer quotes and a >= 3% gap over the runner-up book.
+ */
+export function computeOutliers(rows: BoardRow[], opts: OutlierOptions): OutlierRow[] {
+  const minPeers = opts.minPeers ?? 3
+  const minPremiumPct = opts.minPremiumPct ?? 8
+  const minEvPct = opts.minEvPct ?? 0
+  const sideFilter = opts.side ?? 'both'
+  const oddsBand = opts.oddsBand ?? 'all'
+  const useCurve = opts.useCurve ?? true
+  const minRef = opts.minRef ?? 2
+  const refs = opts.refs && opts.refs.length ? new Set(opts.refs) : null
+  const sides: ('OVER' | 'UNDER')[] = sideFilter === 'over' ? ['OVER'] : sideFilter === 'under' ? ['UNDER'] : ['OVER', 'UNDER']
+  const out: OutlierRow[] = []
+
+  for (const row of rows) {
+    const isWholeNumberLine = Math.abs(row.line % 1) !== 0.5
+    const fairs = rowFairs(row, opts.method)
+
+    for (const side of sides) {
+      let bestBook: string | null = null
+      let bestAmerican = 0
+      let bestDecimal = 0
+
+      for (let i = 0; i < row.books.length; i++) {
+        const b = row.books[i]
+        if (isOffshore(b.book)) continue
+        if (opts.bettable && !opts.bettable.has(b.book)) continue
+        const am = side === 'OVER' ? b.over : b.under
+        if (am == null || !isFinite(am) || am === 0) continue
+        if ((b.over == null || b.under == null) && isWholeNumberLine) continue
+
+        const dec = americanToDecimal(am)
+        if (dec > bestDecimal) {
+          bestDecimal = dec
+          bestAmerican = am
+          bestBook = b.book
+        }
+      }
+
+      if (!bestBook) continue
+
+      if (oddsBand === 'main' && bestAmerican > 200) continue
+      if (oddsBand === 'plus_money' && bestAmerican < 100) continue
+      if (oddsBand === 'longshots' && bestAmerican < 250) continue
+
+      const peerList: { book: string; american: number; decimal: number; impliedProb: number }[] = []
+      for (const b of row.books) {
+        if (b.book === bestBook) continue
+        const am = side === 'OVER' ? b.over : b.under
+        if (am == null || !isFinite(am) || am === 0) continue
+        const dec = americanToDecimal(am)
+        peerList.push({ book: b.book, american: am, decimal: dec, impliedProb: 1 / dec })
+      }
+
+      if (peerList.length < minPeers) continue
+
+      peerList.sort((a, b) => b.decimal - a.decimal)
+
+      if (bestDecimal < peerList[0].decimal * 1.03) continue
+
+      const sumImplied = peerList.reduce((acc, p) => acc + p.impliedProb, 0)
+      const meanPeerImplied = sumImplied / peerList.length
+      const marketAvgDecimal = 1 / meanPeerImplied
+      const marketAvgAmerican = fairAmericanOf(meanPeerImplied)
+      const payoutPremiumPct = ((bestDecimal / marketAvgDecimal) - 1) * 100
+
+      if (payoutPremiumPct < minPremiumPct) continue
+
+      let sumFair = 0
+      let nRef = 0
+      for (let i = 0; i < row.books.length; i++) {
+        const b = row.books[i]
+        if (b.book === bestBook) continue
+        if (refs && !refs.has(b.book)) continue
+        const p = fairs[i]
+        if (p == null) continue
+        sumFair += p
+        nRef += 1
+      }
+
+      let pOver: number | null = null
+      let fairSource: 'consensus' | 'curve' | null = null
+      if (nRef >= minRef) {
+        pOver = sumFair / nRef
+        fairSource = 'consensus'
+      } else if (useCurve && row.curve_fair_over != null && row.curve_fair_over > 0 && row.curve_fair_over < 1) {
+        pOver = row.curve_fair_over
+        fairSource = 'curve'
+      }
+
+      let trueEvPct: number | null = null
+      let fairAmerican: number | null = null
+      if (pOver != null) {
+        const pFair = side === 'OVER' ? pOver : 1 - pOver
+        trueEvPct = (pFair * bestDecimal - 1) * 100
+        fairAmerican = fairAmericanOf(pFair)
+      }
+
+      if (minEvPct > 0 && (trueEvPct == null || trueEvPct < minEvPct)) continue
+
+      const outlierNet = Math.max(0.01, bestDecimal - 1)
+      const peers: OutlierPeerQuote[] = peerList.map(p => {
+        const pNet = Math.max(0, p.decimal - 1)
+        const ratio = Math.max(0.12, Math.min(1.0, pNet / outlierNet))
+        return {
+          book: p.book,
+          american: p.american,
+          decimal: p.decimal,
+          impliedProb: p.impliedProb,
+          barRatio: Math.round(ratio * 1000) / 1000,
+        }
+      })
+
+      const label = `${side === 'OVER' ? 'o' : 'u'}${row.line}`
+      out.push({
+        key: `${row.key}|${side}`,
+        row,
+        side,
+        label,
+        outlierBook: bestBook,
+        outlierAmerican: bestAmerican,
+        outlierDecimal: bestDecimal,
+        outlierImplied: 1 / bestDecimal,
+        peers,
+        nPeers: peers.length,
+        marketAvgAmerican,
+        marketAvgDecimal,
+        payoutPremiumPct,
+        trueEvPct,
+        fairAmerican,
+        fairSource,
+      })
+    }
+  }
+
+  return out.sort((a, b) => {
+    const scoreA = a.trueEvPct ?? a.payoutPremiumPct
+    const scoreB = b.trueEvPct ?? b.payoutPremiumPct
+    return scoreB - scoreA || b.payoutPremiumPct - a.payoutPremiumPct
+  })
 }
 
 // ---------------------------------------------------------------------------------------------------------- ARBITRAGE
