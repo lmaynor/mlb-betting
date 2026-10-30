@@ -253,3 +253,25 @@ def test_public_odds_board_accepts_mlb(monkeypatch):
     monkeypatch.setattr(ob, "read_board", lambda sp: board)
     out = pa.get_odds_board("MLB", stat="strikeouts")
     assert out["count"] == 1 and out["sport"] == "mlb"
+
+
+def test_public_odds_board_empty_or_past_games_is_idle_not_stale(monkeypatch):
+    # Old board with games in the past (e.g. offseason MLB)
+    past = datetime.now(timezone.utc) - timedelta(hours=25)
+    board = {
+        "sport": "mlb",
+        "ts": past.isoformat(),
+        "status": "live",
+        "count": 1,
+        "rows": [{"commence": past.isoformat(), "player": "Aaron Judge", "stat": "strikeouts", "books": []}],
+        "games": [{"start": past.isoformat(), "game_key": "old"}],
+        "stats": ["strikeouts"],
+        "lines_source": ["parlayapi"],
+        "lines_age_minutes": 1500.0,
+    }
+    monkeypatch.setattr(ob, "read_board", lambda sp: board)
+    out = pa.get_odds_board("MLB")
+    assert out["count"] == 0
+    assert out["status"] == "idle"
+    assert out["stale"] is False
+

@@ -968,9 +968,13 @@ def get_odds_board(sport, day=None, stat=None, limit=2000):
     rows = [r for r in rows if str(r.get("commence")) > started]       # a cached board outlives game starts
     games = [g for g in games if str(g.get("start")) > started]
     books = sorted({b["book"] for r in rows for b in r.get("books") or []})
+    status = payload.get("status")
+    if not rows and status == "live":
+        status = "idle"
     out = {k: payload.get(k) for k in ("sport", "status", "stats", "summary", "lines_age_minutes", "lines_source")}
+    out["status"] = status
     out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
-               stale=age is None or age > _ob.STALE_MINUTES, count=len(rows), rows=rows[:limit], games=games,
+               stale=(age is None or age > _ob.STALE_MINUTES) if rows else False, count=len(rows), rows=rows[:limit], games=games,
                books=books, offshore_books=[b for b in payload.get("offshore_books") or [] if b in books], validated=False)
     out["lines_source"] = out["lines_source"] or []
     if day:
