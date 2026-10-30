@@ -1,0 +1,21 @@
+book,archetype,leg1_odds,leg2_odds,sgp_odds,leg3_odds,timestamp,source,player,event
+fanduel,nba_reb_ast_10_10,320,410,1650,,2026-10-30T00:00:00Z,initial_seed,Josh Hart,nba_lal_nyk
+fanduel,nba_reb_ast_10_10,260,300,1050,,2026-10-30T00:00:00Z,initial_seed,Luka Doncic,nba_dal_den
+fanduel,nba_reb_ast_10_10,280,320,1180,,2026-10-30T00:00:00Z,initial_seed,Domantas Sabonis,nba_sac_gsw
+fanduel,nba_reb_ast_10_10,300,350,1350,,2026-10-30T00:00:00Z,initial_seed,Giannis Antetokounmpo,nba_mil_bos
+fanduel,nba_reb_ast_10_10,350,420,1850,,2026-10-30T00:00:00Z,initial_seed,Draymond Green,nba_gsw_hou
+draftkings,nba_reb_ast_10_10,310,400,1600,,2026-10-30T00:00:00Z,initial_seed,Josh Hart,nba_lal_nyk
+draftkings,nba_reb_ast_10_10,250,290,1000,,2026-10-30T00:00:00Z,initial_seed,Luka Doncic,nba_dal_den
+draftkings,nba_reb_ast_10_10,270,310,1120,,2026-10-30T00:00:00Z,initial_seed,Domantas Sabonis,nba_sac_gsw
+draftkings,nba_reb_ast_10_10,290,340,1280,,2026-10-30T00:00:00Z,initial_seed,Giannis Antetokounmpo,nba_mil_bos
+draftkings,nba_reb_ast_10_10,340,410,1750,,2026-10-30T00:00:00Z,initial_seed,Draymond Green,nba_gsw_hou
+fanduel,nhl_goal_ast_vs_pts,190,130,480,,2026-10-30T00:00:00Z,initial_seed,Connor McDavid,nhl_edm_cgy
+fanduel,nhl_goal_ast_vs_pts,210,140,540,,2026-10-30T00:00:00Z,initial_seed,Nathan MacKinnon,nhl_col_dal
+fanduel,nhl_goal_ast_vs_pts,175,125,440,,2026-10-30T00:00:00Z,initial_seed,Nikita Kucherov,nhl_tbl_fla
+draftkings,nhl_goal_ast_vs_pts,185,125,460,,2026-10-30T00:00:00Z,initial_seed,Connor McDavid,nhl_edm_cgy
+draftkings,nhl_goal_ast_vs_pts,205,135,520,,2026-10-30T00:00:00Z,initial_seed,Nathan MacKinnon,nhl_col_dal
+draftkings,nhl_goal_ast_vs_pts,170,120,420,,2026-10-30T00:00:00Z,initial_seed,Nikita Kucherov,nhl_tbl_fla
+fanduel,nba_pts_reb_vs_pr,-110,-115,240,,2026-10-30T00:00:00Z,initial_seed,Jayson Tatum,nba_bos_phi
+fanduel,nba_pts_reb_vs_pr,-105,-120,245,,2026-10-30T00:00:00Z,initial_seed,Anthony Davis,nba_lal_lac
+draftkings,nba_pts_reb_vs_pr,-110,-115,235,,2026-10-30T00:00:00Z,initial_seed,Jayson Tatum,nba_bos_phi
+draftkings,nba_pts_reb_vs_pr,-105,-120,240,,2026-10-30T00:00:00Z,initial_seed,Anthony Davis,nba_lal_lac

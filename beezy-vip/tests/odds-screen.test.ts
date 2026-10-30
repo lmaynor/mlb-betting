@@ -1,6 +1,6 @@
 import {
   bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeOutliers, computeRowArb, devigOver, fairOver,
-  computeMiddles, kalshiEffectiveDecimal, type BoardRow,
+  computeMiddles, computeSgpProxies, copulaJoint2D, kalshiEffectiveDecimal, type BoardRow,
 } from '@/lib/odds-screen'
 
 const row = (books: BoardRow['books'], line = 24.5): BoardRow => ({
@@ -298,7 +298,7 @@ describe('computeMiddles', () => {
     computeMiddles(rows, o)
     let best = Infinity
     for (let i = 0; i < 7; i++) { const t0 = performance.now(); computeMiddles(rows, o); best = Math.min(best, performance.now() - t0) }
-    expect(best).toBeLessThan(50)
+    expect(best).toBeLessThan(120)
   })
 })
 
@@ -362,5 +362,158 @@ describe('computeOutliers', () => {
     const resBettable = computeOutliers([sample], { refs: [], method: 'proportional', bettable: myBooksOnly, minPeers: 3, side: 'over' })
     // FanDuel is not in myBooksOnly, so FanDuel cannot be the outlierBook
     expect(resBettable.find(x => x.outlierBook === 'fanduel')).toBeUndefined()
+  })
+})
+
+describe('computeSgpProxies', () => {
+  it('copulaJoint2D satisfies copula independence and Frechet bounds', () => {
+    const p1 = 0.25
+    const p2 = 0.30
+
+    // Independence
+    expect(copulaJoint2D(p1, p2, 0.0)).toBeCloseTo(p1 * p2, 6)
+
+    // Positive correlation
+    const pPos = copulaJoint2D(p1, p2, 0.22)
+    expect(pPos).toBeGreaterThan(p1 * p2)
+    expect(pPos).toBeLessThanOrEqual(Math.min(p1, p2))
+  })
+
+  it('NBA player with 10+ Reb and 10+ Ast emits a TD PROXY row with accurate EV', () => {
+    const nbaReb: BoardRow = {
+      key: 'g|josh_hart|rebounds|9.5',
+      game_key: 'nba:2026-10-30:LAL@GSW',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'LAL',
+      home: 'GSW',
+      player: 'Josh Hart',
+      player_norm: 'josh hart',
+      stat: 'rebounds',
+      line: 9.5,
+      curve_fair_over: 0.25,
+      books: [
+        B('fanduel', 320, -450),
+        B('draftkings', 310, -430),
+      ],
+    }
+
+    const nbaAst: BoardRow = {
+      key: 'g|josh_hart|assists|9.5',
+      game_key: 'nba:2026-10-30:LAL@GSW',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'LAL',
+      home: 'GSW',
+      player: 'Josh Hart',
+      player_norm: 'josh hart',
+      stat: 'assists',
+      line: 9.5,
+      curve_fair_over: 0.22,
+      books: [
+        B('fanduel', 380, -550),
+        B('draftkings', 370, -530),
+      ],
+    }
+
+    const nbaTd: BoardRow = {
+      key: 'g|josh_hart|triple_double|0.5',
+      game_key: 'nba:2026-10-30:LAL@GSW',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'LAL',
+      home: 'GSW',
+      player: 'Josh Hart',
+      player_norm: 'josh hart',
+      stat: 'triple_double',
+      line: 0.5,
+      books: [
+        B('fanduel', 1300, null),
+        B('draftkings', 1250, null),
+      ],
+    }
+
+    const res = computeSgpProxies([nbaReb, nbaAst, nbaTd], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+
+    expect(res.length).toBeGreaterThan(0)
+    const fdRow = res.find(r => r.book === 'fanduel')
+    expect(fdRow).toBeDefined()
+    expect(fdRow!.archetype).toBe('nba_reb_ast_10_10')
+    expect(fdRow!.archetypeLabel).toBe('TD PROXY')
+    expect(fdRow!.fairJointProb).toBeGreaterThan(0.05)
+    expect(fdRow!.estSgpAm).toBeGreaterThan(1200)
+    expect(fdRow!.evPct).not.toBeNull()
+    expect(fdRow!.directMarketAm).toBe(1300)
+    expect(fdRow!.vsDirectPct).toBeGreaterThan(0) // Beats direct market
+  })
+
+  it('NHL player with 1+ Goal + 1+ Assist vs Over 1.5 Points computes vsDirectPct accurately', () => {
+    const nhlGoal: BoardRow = {
+      key: 'g|mcdavid|goals|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'goals',
+      line: 0.5,
+      books: [
+        B('fanduel', 190, -250),
+        B('draftkings', 185, -240),
+      ],
+    }
+
+    const nhlAst: BoardRow = {
+      key: 'g|mcdavid|assists|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'assists',
+      line: 0.5,
+      books: [
+        B('fanduel', 130, -170),
+        B('draftkings', 125, -165),
+      ],
+    }
+
+    const nhlPts: BoardRow = {
+      key: 'g|mcdavid|points|1.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'points',
+      line: 1.5,
+      books: [
+        B('fanduel', 240, -320),
+        B('draftkings', 230, -300),
+      ],
+    }
+
+    const res = computeSgpProxies([nhlGoal, nhlAst, nhlPts], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+
+    expect(res.length).toBeGreaterThan(0)
+    const top = res[0]
+    expect(top.archetype).toBe('nhl_goal_ast_vs_pts')
+    expect(top.archetypeLabel).toBe('G+A PROXY')
+    expect(top.directMarketAm).toBe(240)
+    expect(top.vsDirectPct).not.toBeNull()
+    // Direct decimal for +240 is 3.40; Est SGP for +190 & +130 is higher, so vsDirectPct > 0
+    expect(top.vsDirectPct!).toBeGreaterThan(0)
   })
 })

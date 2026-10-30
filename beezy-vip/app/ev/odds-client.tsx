@@ -19,9 +19,9 @@ import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { PRE_LAUNCH } from '@/lib/launch'
 import {
-  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, fairAmericanOf, STAT_LABEL,
+  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, fairAmericanOf, STAT_LABEL,
   type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
-  type OddsScreenMode, type OutlierRow, type ScreenRow, type SideFilter,
+  type OddsScreenMode, type OutlierRow, type ScreenRow, type SgpProxyRow, type SideFilter,
 } from '@/lib/odds-screen'
 
 type SportFilter = 'all' | SportSlug
@@ -134,12 +134,27 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'arb', label: 'Arbitrage' },
   { key: 'middles', label: 'Middles' },
   { key: 'longshots', label: 'Alt & Tail Ladders' },
+  { key: 'sgp', label: 'SGP Proxies' },
+]
+
+const SGP_ARCHETYPE_OPTIONS = [
+  { v: 'all', label: 'All Proxies' },
+  { v: 'milestones', label: 'TD & DD Milestones' },
+  { v: 'combos', label: 'Stat Combos (P+R / P+A / G+A)' },
+  { v: 'stacks', label: 'TD + Yardage Stacks' },
+]
+
+const SGP_MIN_EV_OPTIONS = [
+  { v: 0, label: 'All' },
+  { v: 2, label: '+2%+' },
+  { v: 5, label: '+5%+' },
+  { v: 10, label: '+10%+' },
 ]
 
 export function OddsClient({ initial, initialLocked, headline }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null }) {
   const sp = useSearchParams()
   const viewParam = sp?.get('view')
-  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam))
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam))
     ? (viewParam as OddsScreenMode)
     : 'ev'
 
@@ -153,6 +168,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const [side, setSide] = useState<SideFilter>('both')
   const [lines, setLines] = useState<LinesFilter>('all')
   const [minEv, setMinEv] = useState(0)
+  const [sgpArch, setSgpArch] = useState<string>('all')
+  const [sgpMinEv, setSgpMinEv] = useState<number>(0)
+  const [sgpBook, setSgpBook] = useState<string>('all')
   const [q, setQ] = useState('')
   const [method, setMethod] = useState<DevigMethod>('proportional')
   const [refs, setRefs] = useState<string[]>([])                 // empty = every book
@@ -180,7 +198,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const myBooks = useMyBooks()
 
   useEffect(() => {
-    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam)) {
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
       setMode(viewParam as OddsScreenMode)
     }
   }, [viewParam])
@@ -312,6 +330,29 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     return rows.sort((a, b) => (b.bestEv ?? -Infinity) - (a.bestEv ?? -Infinity))
   }, [mode, filtered, refs, method, bettable, useCurve, longSub, minEv, oddsMin])
 
+  // ---- SGP Proxies: multi-leg combinations beating direct markets or fair correlated joint value
+  const sgpProxies = useMemo(() => {
+    if (mode !== 'sgp') return []
+    const all = computeSgpProxies(filtered, {
+      refs,
+      method,
+      bettable,
+      minEvPct: sgpMinEv,
+      book: sgpBook === 'all' ? undefined : sgpBook,
+      useCurve,
+    })
+    if (sgpArch === 'milestones') {
+      return all.filter(r => r.archetype === 'nba_reb_ast_10_10' || r.archetype === 'nba_dd_proxy')
+    }
+    if (sgpArch === 'combos') {
+      return all.filter(r => r.archetype.includes('_vs_'))
+    }
+    if (sgpArch === 'stacks') {
+      return all.filter(r => r.archetype.includes('stack'))
+    }
+    return all
+  }, [mode, filtered, refs, method, bettable, sgpMinEv, sgpBook, useCurve, sgpArch])
+
   // Mode badges: counted from deferred inputs so a click paints the table first and the other two counts follow.
   const badgeIn = useMemo(() => ({ scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve }),
     [scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve])
@@ -327,6 +368,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       middles: computeMiddles(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, maxCostPct: 5, minGap: 0, onlyPositiveEv: false, refs: d.refs, method: d.method, minRef: MIDDLE_MIN_REF, useCurve: d.useCurve }).length,
       long: buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
         .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length,
+      sgp: computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve }).length,
     }
   }, [dBadgeIn])
 
@@ -334,7 +376,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     : mode === 'outliers' ? outliers.length
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
-    : longshots.length
+    : mode === 'longshots' ? longshots.length
+    : sgpProxies.length
 
   const meta = useMemo(() => {
     const ages = active.map(s => boards[s]!.age_minutes).filter((n): n is number => n != null)
@@ -373,6 +416,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
 
   const emptyBody = mode === 'outliers'
     ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
+    : mode === 'sgp'
+    ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies scans for multi-leg milestone and stat combinations that beat the book\'s direct pricing or fair correlated joint value. Try lowering the MIN EV floor or switching archetypes.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
@@ -415,8 +460,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                 : m.key === 'outliers' ? counts.outliers
                 : m.key === 'arb' ? counts.arb
                 : m.key === 'middles' ? counts.middles
-                : counts.long
-              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0)
+                : m.key === 'longshots' ? counts.long
+                : counts.sgp
+              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0)
               return (
                 <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                   {m.label}
@@ -626,6 +672,45 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
               </Field>
             </>
           )}
+          {mode === 'sgp' && (
+            <>
+              <Field label="ARCHETYPE">
+                <PillGroup>
+                  {SGP_ARCHETYPE_OPTIONS.map(a => (
+                    <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>
+                      {a.label}
+                    </Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="MIN EV">
+                <PillGroup>
+                  {SGP_MIN_EV_OPTIONS.map(e => (
+                    <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>
+                      {e.label}
+                    </Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="BOOK" htmlFor="sgp-book">
+                <Select
+                  id="sgp-book"
+                  value={sgpBook}
+                  onChange={v => { setSgpBook(v); setLimit(PAGE) }}
+                  options={[
+                    { v: 'all', l: 'All Books' },
+                    ...columns.filter(c => !c.offshore).map(c => ({ v: c.key, l: bookDisplay(c.key).label })),
+                  ]}
+                />
+              </Field>
+              <Field label="FAIR SOURCE">
+                <PillGroup>
+                  <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
+                  <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
+                </PillGroup>
+              </Field>
+            </>
+          )}
         </div>
       </section>
 
@@ -653,6 +738,25 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
               />
             ))}
           </div>
+        </div>
+      ) : mode === 'sgp' ? (
+        <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+          <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
+                <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>PLAYER &amp; MATCHUP</th>
+                <th scope="col" style={{ textAlign: 'left', minWidth: '280px', padding: '10px 14px' }}>SGP LEGS (SAME BOOK)</th>
+                <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>TRUE CORRELATED FAIR</th>
+                <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>EST. SGP PRICE vs DIRECT</th>
+                <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>EDGE &amp; ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sgpProxies.slice(0, limit).map(r => (
+                <SgpTableRow key={r.key} r={r} />
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
@@ -751,6 +855,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         {mode === 'longshots' && <>Each cell is a book&apos;s over price above its under price. Alt lines are rungs off the player&apos;s main line. FAIR ANCHOR is the reference
           books&apos; consensus (N BKS) or, where fewer than two price the exact line, a fair probability read off the player&apos;s own multi-line curve (CURVE). The curve is an
           unvalidated estimate: treat a CURVE edge as a place to look, not a price to trust. Snipe is the longshot over against fair; Fade is the under or NO against fair.</>}
+        {mode === 'sgp' && <>SGP Proxies identifies multi-leg same-game milestone and stat combinations whose synthetic SGP pricing beats official standalone markets or fair joint probability using Gaussian copula correlation. Est. SGP Odds models the target book&apos;s internal SGP builder; True Fair estimates the correlated outcome under empirical stat \u03c1.</>}
         {' '}These are unvalidated market signals, not part of the public track record. Lines move or limit quickly: check the price at the book. Not financial advice.
         21+. If gambling is a problem, call 1-800-GAMBLER.{' '}
         <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>
@@ -1239,6 +1344,161 @@ function OutlierTableRow({
         const isOutlier = !isLocked && c.key === r.outlierBook
         return <PriceCell key={c.key} top={target} bottom={other} topState={isOutlier ? 'best' : undefined} best={isOutlier} tint={isOutlier} />
       })}
+    </tr>
+  )
+}
+
+function SgpTableRow({ r }: { r: SgpProxyRow }) {
+  const isPositive = r.evPct > 0
+  const vsDir = r.vsDirectPct
+  const badgeColor = r.archetype === 'nba_reb_ast_10_10'
+    ? 'rgba(168, 85, 247, 0.2)'
+    : r.archetype.includes('vs_')
+    ? 'rgba(59, 130, 246, 0.2)'
+    : 'rgba(234, 179, 8, 0.2)'
+
+  const badgeTextColor = r.archetype === 'nba_reb_ast_10_10'
+    ? '#c084fc'
+    : r.archetype.includes('vs_')
+    ? '#60a5fa'
+    : '#facc15'
+
+  return (
+    <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
+      <td style={{ padding: '10px 14px', minWidth: '220px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--chalk)', fontSize: '13px' }}>{r.player}</span>
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '1px 5px',
+                borderRadius: '4px',
+                background: badgeColor,
+                color: badgeTextColor,
+                letterSpacing: '0.03em',
+              }}>
+                {r.archetypeLabel}
+              </span>
+            </div>
+            <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+              {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} \u00b7 {startLabel(r.commence)}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style={{ padding: '10px 14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {r.legs.map((leg, idx) => (
+              <span
+                key={idx}
+                className="mono"
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: `1px solid ${HAIR}`,
+                  color: 'var(--chalk)',
+                }}
+              >
+                {leg.label} ({formatOdds(leg.bookAm)})
+              </span>
+            ))}
+            <span style={{ fontSize: '11px', color: 'var(--fog)' }}>
+              @ <span style={{ textTransform: 'capitalize', color: 'var(--chalk)', fontWeight: 500 }}>{bookDisplay(r.book).label}</span>
+            </span>
+          </div>
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>
+            Uncorrelated parlay: {formatOdds(r.naiveSingleProductAm)}
+          </div>
+        </div>
+      </td>
+      <td style={{ padding: '10px 14px' }}>
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)' }}>
+          {formatOdds(r.fairJointAm)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+          <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
+            {(r.fairJointProb * 100).toFixed(1)}% fair
+          </span>
+          <span
+            className="mono"
+            style={{
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '3px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              color: 'var(--fog)',
+            }}
+            title={`Empirical true correlation rho = ${r.rhoTrue}`}
+          >
+            \u03c1={r.rhoTrue > 0 ? `+${r.rhoTrue}` : r.rhoTrue}
+          </span>
+        </div>
+      </td>
+      <td style={{ padding: '10px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <BookLogo book={r.book} size={22} />
+          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
+            Est. SGP: {formatOdds(r.estSgpAm)}
+          </span>
+        </div>
+        {r.directMarketAm != null ? (
+          <div style={{ fontSize: '11px', color: vsDir != null && vsDir > 0 ? GREEN : 'var(--fog)', marginTop: '2px' }}>
+            {vsDir != null && vsDir > 0 ? (
+              <>Beats direct {r.directMarketLabel || 'market'} ({formatOdds(r.directMarketAm)}) by +{vsDir.toFixed(1)}%</>
+            ) : (
+              <>Direct {r.directMarketLabel || 'market'}: {formatOdds(r.directMarketAm)}</>
+            )}
+          </div>
+        ) : (
+          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+            Book copula (\u03c1={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
+          </div>
+        )}
+      </td>
+      <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
+          <span
+            className="mono"
+            style={{
+              fontSize: '12px',
+              fontWeight: 700,
+              padding: '3px 8px',
+              borderRadius: '4px',
+              background: isPositive ? 'rgba(87, 242, 135, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+              color: isPositive ? GREEN : 'var(--fog)',
+              border: isPositive ? '1px solid rgba(87, 242, 135, 0.3)' : `1px solid ${HAIR}`,
+            }}
+          >
+            {r.evPct > 0 ? `+${r.evPct.toFixed(1)}%` : `${r.evPct.toFixed(1)}%`} EV
+          </span>
+          <a
+            href={r.deeplink || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost"
+            style={{
+              padding: '4px 8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--chalk)',
+              border: `1px solid ${HAIR}`,
+              borderRadius: '4px',
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            Build SGP \u2197
+          </a>
+        </div>
+      </td>
     </tr>
   )
 }
