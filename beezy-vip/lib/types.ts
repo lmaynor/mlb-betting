@@ -7,6 +7,7 @@ import type { ProjectionSport } from '@/lib/sports'
 
 export interface Bet {
   id:              number
+  sport?:          string | null
   system:          string
   game_date:       string
   game_pk:         number

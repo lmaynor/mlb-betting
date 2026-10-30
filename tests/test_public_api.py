@@ -507,6 +507,25 @@ def test_deep_dive_is_sport_scoped():
     assert nhl["ev_headline"]["flat_pnl_dollars"] == 150.0
 
 
+def test_get_recent_settled_supports_sport_all(tmp_path):
+    from mlb.runners import public_api as api
+    from mlb_core.tracking.bet_tracker import BetTracker
+    from sqlalchemy import text
+    tracker = BetTracker(tmp_path / "test_settled.db", "EV")
+    eng = tracker.engine
+    with eng.begin() as c:
+        c.execute(text(
+            "INSERT INTO bets (system, sport, game_date, game_pk, bet_type, player, odds, stake, "
+            "model_prob, market_prob, edge, kelly_pct, kelly_triggered, result, profit, paper, book, notes, created_at) "
+            "VALUES ('EV', 'mlb', '2026-10-01', 1, 'HR', 'Judge', 200, 10, .5, .33, .1, .02, 1, 'win', 20.0, 1, 'draftkings', '', '2026-10-01T10:00'), "
+            "       ('EV', 'nhl', '2026-10-02', 2, 'Goal', 'McDavid', 150, 10, .6, .4, .1, .02, 1, 'win', 15.0, 1, 'fanduel', '', '2026-10-02T10:00')"
+        ))
+    mlb_only = api.get_recent_settled(eng, sport="mlb")
+    assert all(r["sport"] == "mlb" for r in mlb_only) and len(mlb_only) == 1
+    all_sports = api.get_recent_settled(eng, sport="all")
+    assert {r["sport"] for r in all_sports} == {"mlb", "nhl"}
+
+
 def test_invalid_sport_is_a_400(client):
     r = client.get("/api/public/picks?sport=cricket", headers={"X-API-Key": VALID_KEY})
     assert r.status_code == 400 and "unknown sport" in r.get_json()["error"]

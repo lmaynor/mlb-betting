@@ -58,17 +58,17 @@ export interface StatsResponse {
 
 // -- Public fetchers --
 
-export async function apiGetTodayPicks(): Promise<Bet[]> {
-  const data = await apiFetch<PicksResponse>(`/api/public/picks?date=${siteDateKey()}`, 60)
+export async function apiGetTodayPicks(sport = 'all'): Promise<Bet[]> {
+  const data = await apiFetch<PicksResponse>(`/api/public/picks?date=${siteDateKey()}&sport=${sport}`, 60)
   return data.picks
 }
 
 // EVERY scored prediction today (kelly_triggered=false rows have stake 0) --
 // The Edge shows the full model board, not just the qualified card.
-export async function apiGetTodayAllPredictions(): Promise<Bet[]> {
+export async function apiGetTodayAllPredictions(sport = 'all'): Promise<Bet[]> {
   if (!API_URL) return []
   try {
-    const res = await fetch(`${API_URL}/api/public/picks/today?all=1`, {
+    const res = await fetch(`${API_URL}/api/public/picks/today?all=1&sport=${sport}`, {
       headers: { 'X-API-Key': API_KEY },
       next: { revalidate: 120 },
     })
@@ -80,8 +80,8 @@ export async function apiGetTodayAllPredictions(): Promise<Bet[]> {
   }
 }
 
-export async function apiGetRecentSettled(limit = 20): Promise<Bet[]> {
-  const data = await apiFetch<PicksResponse>(`/api/public/picks/recent?limit=${limit}`, 120)
+export async function apiGetRecentSettled(limit = 20, sport = 'all'): Promise<Bet[]> {
+  const data = await apiFetch<PicksResponse>(`/api/public/picks/recent?limit=${limit}&sport=${sport}`, 120)
   return data.picks
 }
 

@@ -223,6 +223,7 @@ def get_today_picks():
     resp = requests.get(
         f"{BEEZY_API_URL}/api/public/picks/today",
         headers={"X-API-Key": BEEZY_API_KEY},
+        params={"sport": "all"},
         timeout=10,
     )
     resp.raise_for_status()

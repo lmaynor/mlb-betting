@@ -86,7 +86,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
         <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center' }}>
           <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
           <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
-            {filtered ? 'Clear a filter to widen the list. ' : 'The MLB card publishes after the ~11:00 AM CT model run, and the other sports fill in once sportsbook lines post. '}
+            {filtered ? 'Clear a filter to widen the list. ' : 'Daily boards publish once sportsbook lines post for NFL, NBA, and NHL (MLB resumes in March). '}
             See <Link href="/picks/history" style={{ color: 'var(--link)' }}>past days</Link> in the meantime.
           </div>
         </div>
