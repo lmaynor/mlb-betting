@@ -380,9 +380,18 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     : sgpProxies.length
 
   const meta = useMemo(() => {
-    const ages = active.map(s => boards[s]!.age_minutes).filter((n): n is number => n != null)
-    const sources = [...new Set(active.flatMap(s => boards[s]!.lines_source))]
-    return { age: ages.length ? Math.max(...ages) : null, stale: active.some(s => boards[s]!.stale), sources }
+    const activeWithRows = active.filter(s => (boards[s]?.count ?? 0) > 0)
+    const target = activeWithRows.length > 0 ? activeWithRows : active
+    const hasRows = activeWithRows.length > 0
+    const ages = (hasRows ? target : target.filter(s => boards[s]!.status === 'live'))
+      .map(s => boards[s]!.age_minutes)
+      .filter((n): n is number => n != null)
+    const sources = [...new Set(target.flatMap(s => boards[s]!.lines_source))]
+    return {
+      age: ages.length ? Math.max(...ages) : null,
+      stale: target.some(s => Boolean(boards[s]!.stale && (boards[s]!.count ?? 0) > 0)),
+      sources,
+    }
   }, [active, boards])
 
   // no board at all, or every board the API answered with is flagged unavailable (the banker has not written it yet)
@@ -434,7 +443,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Odds Terminal</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontSize: '12px', color: meta.stale ? '#facc15' : 'var(--fog)' }}>
-            {nRows} ROWS &middot; LINES {ageLabel(meta.age).toUpperCase()} OLD{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
+            {nRows} ROWS &middot; {meta.age != null ? `LINES ${ageLabel(meta.age).toUpperCase()} OLD` : 'OFFSEASON / NO GAMES'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
           </span>
           <button onClick={refresh} disabled={loading} className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: '12px' }}>{loading ? 'Refreshing...' : 'Refresh'}</button>
         </div>
@@ -717,7 +726,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
       ) : allRows.length === 0 ? (
-        <Empty title="No prop prices posted" body="No book has posted NFL, NHL or NBA player props for the games on the board yet." />
+        <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
       ) : mode === 'outliers' && outlierView === 'cards' ? (
