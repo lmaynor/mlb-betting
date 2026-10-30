@@ -41,7 +41,7 @@ def test_every_logo_is_present_valid_and_matches_its_manifest(sport, expected):
     b"<!DOCTYPE svg [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><svg>&x;</svg>",
     b"<html><body>not an svg</body></html>",
     b"<svg>" + b"x" * 300_000 + b"</svg>",
-])
+], ids=["script", "onload", "js_href", "foreign_object", "image_href", "use_href", "xxe", "html", "oversize"])
 def test_svg_validator_rejects_hostile_or_wrong_input(bad):
     assert bsa.validate_svg(bad)[0] is False
 
