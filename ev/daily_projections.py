@@ -926,6 +926,12 @@ def load_bp_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
     return be.read_latest(sport, now, max_age_min)
 
 
+# ---- the third line source: BestBook live (ev.bestbook_events; free backup filler feed, ParlayAPI event shape) -------------
+def load_bestbook_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
+    from ev import bestbook_events as bbe
+    return bbe.read_latest(sport, now, max_age_min)
+
+
 def _event_identity(sport: str, ev: dict) -> tuple | None:
     """(canonical away, canonical home, ET start date): the same game across feeds, whatever the team spelling."""
     try:
@@ -950,15 +956,15 @@ def _book_stat_markets(sport: str, book: dict) -> dict:
 
 def merge_event_pair(sport: str, parlay_ev: dict, bp_ev: dict, parlay_age: float | None, bp_age: float | None,
                      counts: dict) -> dict:
-    """One game seen by both feeds -> a copy of the ParlayAPI event whose bookmakers also carry what only BettingPros
-    has. A (book, stat) present in BOTH goes to the FRESHER feed (strictly fresher BettingPros wins; a tie or an unknown
-    age goes to ParlayAPI) and is never doubled, so a book is counted once per stat in every consensus."""
+    """One game seen by both feeds -> a copy of the base event whose bookmakers also carry what only incoming feed
+    has. A (book, stat) present in BOTH goes to the FRESHER feed (strictly fresher incoming wins; a tie or an unknown
+    age goes to base) and is never doubled, so a book is counted once per stat in every consensus."""
     from mlb_core.alerts.discord_routes import canonical_book
     books: dict = {}                                     # canonical key -> bookmaker dict (copies)
     for b in parlay_ev.get("bookmakers") or []:
         key = canonical_book(b.get("key", ""))
         books[key] = {**b, "markets": list(b.get("markets") or [])}
-    bp_wins = bp_age is not None and parlay_age is not None and bp_age < parlay_age       # unknown age: ParlayAPI
+    bp_wins = bp_age is not None and parlay_age is not None and bp_age < parlay_age       # unknown age: base
     for b in bp_ev.get("bookmakers") or []:
         key = canonical_book(b.get("key", ""))
         mine = books.get(key)
@@ -978,11 +984,14 @@ def merge_event_pair(sport: str, parlay_ev: dict, bp_ev: dict, parlay_age: float
             else:
                 mine["markets"].extend(mkts)
                 counts["book_stats_added"] += 1
-    return {**parlay_ev, "bookmakers": list(books.values()), "sources": ["parlayapi", "bettingpros"]}
+    base_srcs = list(parlay_ev.get("sources") or [parlay_ev.get("source", "parlayapi")])
+    inc_srcs = list(bp_ev.get("sources") or [bp_ev.get("source", "bettingpros")])
+    merged_sources = list(dict.fromkeys(base_srcs + inc_srcs))
+    return {**parlay_ev, "bookmakers": list(books.values()), "sources": merged_sources}
 
 
-def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
-    """(events, meta) of the two feeds, each `(events | None, meta)`.
+def union_events(sport: str, parlay: tuple, bp: tuple, bestbook: tuple | None = None) -> tuple:
+    """(events, meta) of the line feeds, each `(events | None, meta)`.
 
     Which feeds count: those inside the LIVE window (MAX_AGE_MIN); only when none is, every feed inside the carry window
     (the board then flags `lines_stale`). That keeps a 10-hour-old banked snapshot from diluting a fresh feed's
@@ -990,6 +999,8 @@ def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
     whole. `lines_source` lists the feeds used, `age_min` is the NEWEST used feed's age, and a feed that is down or too
     old only shows up under `sources` with its reason: one outage never blanks the board."""
     sources = {"parlayapi": parlay, "bettingpros": bp}
+    if bestbook is not None:
+        sources["bestbook"] = bestbook
     detail = {name: {**(meta or {}), "used": False, "events": len(evs or [])} for name, (evs, meta) in sources.items()}
     avail = {name: evs for name, (evs, _m) in sources.items() if evs}
     if not avail:
@@ -1004,7 +1015,7 @@ def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
     for n in used:
         detail[n]["used"] = True
     ages = [age_of(n) for n in used if age_of(n) is not None]
-    meta = {"age_min": min(ages) if ages else None, "lines_source": [n for n in ("parlayapi", "bettingpros") if n in used],
+    meta = {"age_min": min(ages) if ages else None, "lines_source": [n for n in ("parlayapi", "bettingpros", "bestbook") if n in used],
             "sources": detail}
     if len(used) == 1:
         return avail[used[0]], meta
@@ -1012,23 +1023,30 @@ def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
               "book_stats_from_bp": 0, "book_stats_from_parlay": 0}
     by_id: dict = {}
     out: list = []
-    for ev in avail["parlayapi"]:
+    base_src = "parlayapi" if "parlayapi" in used else used[0]
+    for ev in avail[base_src]:
         out.append(ev)
         ident = _event_identity(sport, ev)
         if ident is not None:
             by_id[ident] = len(out) - 1
     matched: set = set()
-    for ev in avail["bettingpros"]:
-        ident = _event_identity(sport, ev)
-        i = by_id.get(ident) if ident is not None else None
-        if i is None:
-            out.append(ev)
-            counts["games_bp_only"] += 1
-            continue
-        out[i] = merge_event_pair(sport, out[i], ev, age_of("parlayapi"), age_of("bettingpros"), counts)
-        matched.add(i)
-        counts["games_matched"] += 1
-    counts["games_parlay_only"] = len(avail["parlayapi"]) - len(matched)
+    other_sources = [n for n in used if n != base_src]
+    for n in other_sources:
+        for ev in avail[n]:
+            ident = _event_identity(sport, ev)
+            i = by_id.get(ident) if ident is not None else None
+            if i is None:
+                out.append(ev)
+                key_only = "games_bp_only" if n == "bettingpros" else f"games_{n}_only"
+                counts[key_only] = counts.get(key_only, 0) + 1
+                if ident is not None:
+                    by_id[ident] = len(out) - 1
+                continue
+            out[i] = merge_event_pair(sport, out[i], ev, age_of(base_src), age_of(n), counts)
+            matched.add(i)
+            counts["games_matched"] += 1
+    if "parlayapi" in used:
+        counts["games_parlay_only"] = len(avail["parlayapi"]) - len(matched)
     meta["merge"] = counts
     return out, meta
 
@@ -1036,7 +1054,7 @@ def union_events(sport: str, parlay: tuple, bp: tuple) -> tuple:
 def load_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
     """Prop events from EVERY line source -> (events | None, meta); see union_events. Each feed is read inside its own
     guard: an exception or a missing file in one never costs the other."""
-    parlay, bp = (None, {"reason": "not loaded"}), (None, {"reason": "not loaded"})
+    parlay, bp, bb = (None, {"reason": "not loaded"}), (None, {"reason": "not loaded"}), (None, {"reason": "not loaded"})
     try:
         parlay = load_parlay_events(sport, now, max_age_min)
     except Exception as exc:                                                           # noqa: BLE001
@@ -1047,7 +1065,12 @@ def load_events(sport: str, now: datetime, max_age_min: float = MAX_AGE_MIN):
     except Exception as exc:                                                           # noqa: BLE001
         log.warning("%s BettingPros lines unavailable: %s", sport, exc)
         bp = (None, {"reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
-    return union_events(sport, parlay, bp)
+    try:
+        bb = load_bestbook_events(sport, now, max_age_min)
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("%s BestBook lines unavailable: %s", sport, exc)
+        bb = (None, {"reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
+    return union_events(sport, parlay, bp, bb)
 
 
 def _status(has_lines: bool, has_rotation: bool, logs_ok: bool) -> str:
