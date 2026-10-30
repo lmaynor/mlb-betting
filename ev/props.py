@@ -72,6 +72,8 @@ STAT_KEYS_BY_SPORT = {
         "pr": {"player_points_rebounds"}, "pa": {"player_points_assists"}, "ra": {"player_rebounds_assists"},
         "steals": {"player_steals"}, "blocks": {"player_blocks"}, "turnovers": {"player_turnovers"},
         "stocks": {"player_steals_blocks"}, "minutes": {"player_minutes"},
+        "triple_double": {"player_triple_double", "player_triple_doubles"},
+        "double_double": {"player_double_double", "player_double_doubles"},
     },
     # MLB (2026-10-26): only the odds board reads this table (ev/odds_board.py); the +EV sweep and the projection boards do not
     # run MLB through ev/props. Keys are the ones the snapshot job requests (nba/config.py PARLAY_PROP_MARKETS["baseball_mlb"]);
@@ -124,6 +126,10 @@ class Quote:
     over: int | None       # american price; for a one-sided 'Yes' ladder this is the Yes price
     under: int | None
     player_id: object = None   # league id when a roster resolver identified the player (player_norm is then 'id<ID>')
+    over_link: str | None = None
+    under_link: str | None = None
+    over_sid: str | None = None
+    under_sid: str | None = None
 
     @property
     def two_sided(self) -> bool:
@@ -196,12 +202,21 @@ def parse_event_props(event_obj: dict, sport: str = "nfl", resolver=None, team_f
                     else:
                         unresolved["unknown"] += 1
                 rec = cell.setdefault((pn, float(point)),
-                                      {"player": player, "team": team, "over": None, "under": None, "pid": pid})
+                                      {"player": player, "team": team, "over": None, "under": None, "pid": pid,
+                                       "over_link": None, "under_link": None, "over_sid": None, "under_sid": None})
                 if rec[side] is None:                       # first price wins; a book repeats a point rarely
                     rec[side] = int(price)
+                    raw_link = o.get("link") or o.get("deeplink") or None
+                    raw_sid = o.get("sid") or o.get("selection_id") or o.get("outcome_id") or None
+                    if side == "over":
+                        rec["over_link"] = str(raw_link) if raw_link else None
+                        rec["over_sid"] = str(raw_sid) if raw_sid else None
+                    else:
+                        rec["under_link"] = str(raw_link) if raw_link else None
+                        rec["under_sid"] = str(raw_sid) if raw_sid else None
             for (pn, pt), rec in cell.items():
                 quotes.append(Quote(bkey, stat, alt, rec["player"], pn, rec["team"], pt, rec["over"], rec["under"],
-                                    rec["pid"]))
+                                    rec["pid"], rec["over_link"], rec["under_link"], rec["over_sid"], rec["under_sid"]))
     return quotes, {"unmapped_keys": unmapped, "unresolved": unresolved}
 
 

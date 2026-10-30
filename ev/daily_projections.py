@@ -696,8 +696,14 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
 
     # 2. NHL xG shot quality & finishing regression
     if sport == "nhl" and stat in ("goals", "points"):
-        recent_goals = sum(float(r[0]) for r in rows[-15:] if isinstance(r, (list, tuple)) and len(r) > 0 and r[0] is not None)
-        recent_sog = sum(float(r[1]) for r in rows[-15:] if isinstance(r, (list, tuple)) and len(r) > 1 and r[1] is not None)
+        recent_goals = sum(float(r.get("goals") if isinstance(r, dict) else r[0])
+                           for r in rows[-15:]
+                           if ((isinstance(r, dict) and r.get("goals") is not None)
+                               or (isinstance(r, (list, tuple)) and len(r) > 0 and r[0] is not None)))
+        recent_sog = sum(float((r.get("shots") if r.get("shots") is not None else r.get("sog")) if isinstance(r, dict) else r[1])
+                         for r in rows[-15:]
+                         if ((isinstance(r, dict) and (r.get("shots") is not None or r.get("sog") is not None))
+                             or (isinstance(r, (list, tuple)) and len(r) > 1 and r[1] is not None)))
         if recent_sog >= 15.0:
             fin_ratio = (recent_goals + 3.0) / (recent_sog * 0.100 + 3.0)
             regress = float(np.clip(1.0 / (0.4 * fin_ratio + 0.6), 0.85, 1.15)) if stat == "goals" else float(np.clip(1.0 / (0.6 * fin_ratio + 0.4), 0.90, 1.10))

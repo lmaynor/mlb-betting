@@ -58,7 +58,7 @@ PARLAY_KEY = {
     "nba": {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists",
             "threes": "player_threes", "pra": "player_points_rebounds_assists", "pr": "player_points_rebounds",
             "pa": "player_points_assists", "ra": "player_rebounds_assists", "steals": "player_steals",
-            "blocks": "player_blocks"},
+            "blocks": "player_blocks", "triple_double": "player_triple_double", "double_double": "player_double_double"},
 }
 
 # BettingPros team codes ev.daily_projections.canon_team cannot resolve (found probing the 2026-27 NBA slate, 4 of 36
@@ -147,7 +147,10 @@ def quotes_to_bookmakers(quotes: list, sport: str, teams: dict | None = None) ->
 # `label` is the player and `participant` his id). bpp.build_prop_rows reads participants[0] and takes the selection label as
 # the SIDE, so for these markets it yields the first player's name as a "side" and every quote is lost. NFL anytime TD is
 # the one such market among the configured stats (verified 2026-10-17: 13 offers, 4,962 junk rows, zero quotes).
-PER_GAME_PLAYER_MARKETS = {"nfl": frozenset({"anytime_td"})}
+PER_GAME_PLAYER_MARKETS = {
+    "nfl": frozenset({"anytime_td"}),
+    "nba": frozenset({"td", "triple_double", "dd", "double_double"}),
+}
 _NOT_A_PLAYER_POSITIONS = {"DST", "DEF", "TEAM"}
 
 

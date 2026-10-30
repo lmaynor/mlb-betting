@@ -207,6 +207,28 @@ SGP_ARCHETYPES: Dict[str, SgpArchetype] = {
         direct_market="points",
         description="Over 0.5 Goals + Over 0.5 Assists compared against Over 1.5 Points",
     ),
+    "nhl_linemate_pts_stack": SgpArchetype(
+        key="nhl_linemate_pts_stack",
+        name="NHL Linemates 1+ Point Stack",
+        sport="nhl",
+        rho_true=0.32,
+        rho_book_default=0.10,
+        hold_book_default=0.14,
+        label="LINEMATE PTS",
+        direct_market=None,
+        description="Top-line / PP1 same-team skaters Over 0.5 Points stack",
+    ),
+    "nba_teammate_ast_pts_stack": SgpArchetype(
+        key="nba_teammate_ast_pts_stack",
+        name="NBA Playmaker Ast + Scorer Pts Stack",
+        sport="nba",
+        rho_true=0.26,
+        rho_book_default=0.08,
+        hold_book_default=0.14,
+        label="AST+PTS STACK",
+        direct_market=None,
+        description="Primary playmaker Over Assists + top scorer teammate Over Points stack",
+    ),
     "nfl_qb_wr_stack": SgpArchetype(
         key="nfl_qb_wr_stack",
         name="NFL QB Pass Yds + WR Rec Yds Same-Team Stack",
@@ -471,55 +493,138 @@ def fit_book_sgp_params(
 # 6. Deep Link Generator
 # ------------------------------------------------------------------------------
 
-def build_sgp_deeplink(book: str, event_id: str, legs: Sequence[Dict[str, Any]]) -> str:
+SPORT_LEAGUE_URLS: Dict[str, Dict[str, str]] = {
+    "draftkings": {
+        "nba": "https://sportsbook.draftkings.com/leagues/basketball/nba",
+        "nfl": "https://sportsbook.draftkings.com/leagues/football/nfl",
+        "nhl": "https://sportsbook.draftkings.com/leagues/hockey/nhl",
+        "mlb": "https://sportsbook.draftkings.com/leagues/baseball/mlb",
+    },
+    "fanduel": {
+        "nba": "https://sportsbook.fanduel.com/navigation/nba",
+        "nfl": "https://sportsbook.fanduel.com/navigation/nfl",
+        "nhl": "https://sportsbook.fanduel.com/navigation/nhl",
+        "mlb": "https://sportsbook.fanduel.com/navigation/mlb",
+    },
+    "betmgm": {
+        "nba": "https://sports.betmgm.com/en/sports/basketball-7/betting/usa-9/nba-6004",
+        "nfl": "https://sports.betmgm.com/en/sports/football-11/betting/usa-9/nfl-35",
+        "nhl": "https://sports.betmgm.com/en/sports/hockey-12/betting/usa-9/nhl-43",
+        "mlb": "https://sports.betmgm.com/en/sports/baseball-23/betting/usa-9/mlb-75",
+    },
+    "caesars": {
+        "nba": "https://sportsbook.caesars.com/us/il/bet/basketball/events/all",
+        "nfl": "https://sportsbook.caesars.com/us/il/bet/americanfootball/events/all",
+        "nhl": "https://sportsbook.caesars.com/us/il/bet/icehockey/events/all",
+        "mlb": "https://sportsbook.caesars.com/us/il/bet/baseball/events/all",
+    },
+}
+
+
+def _resolve_sport(sport: Optional[str], event_id: str, legs: Sequence[Dict[str, Any]]) -> str:
+    if sport:
+        return str(sport).strip().lower()
+    ev = str(event_id or "").strip().lower()
+    if ":" in ev:
+        prefix = ev.split(":")[0]
+        if prefix in ("nba", "nfl", "nhl", "mlb"):
+            return prefix
+    if "_" in ev:
+        prefix = ev.split("_")[0]
+        if prefix in ("nba", "nfl", "nhl", "mlb"):
+            return prefix
+    for leg in legs:
+        st = str(leg.get("stat", "")).lower()
+        if st in ("points", "rebounds", "assists", "pra", "pr", "pa", "ra", "threes", "triple_double", "double_double"):
+            return "nba"
+        if st in ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td"):
+            return "nfl"
+        if st in ("goals", "sog", "saves", "blocked_shots"):
+            return "nhl"
+    return "nba"
+
+
+def _is_internal_key(event_id: str) -> bool:
+    if not event_id:
+        return True
+    ev = str(event_id).strip()
+    return ":" in ev or "@" in ev or ev.startswith(("nba_", "nfl_", "nhl_", "mlb_"))
+
+
+def build_sgp_deeplink(
+    book: str,
+    event_id: str,
+    legs: Sequence[Dict[str, Any]],
+    sport: Optional[str] = None,
+) -> str:
     """
     Construct sportsbook deep link with multi-outcome betslip parameters.
 
-    DraftKings:
-      https://sportsbook.draftkings.com/event/{event_id}?outcomes={sid_1},{sid_2}
-    FanDuel:
-      https://sportsbook.fanduel.com/addToBetslip?marketId[0]={m1}&selectionId[0]={s1}&marketId[1]={m2}&selectionId[1]={s2}
-    Fallback:
-      Sportsbook event or root URL.
+    Rule 1: Direct link / outcome IDs when available.
+    Rule 2: Never pass internal game_keys ('nba:2026-10-30:BOS@MIL') into /event/ URLs;
+            route to clean sport/league pages instead.
     """
     b = str(book).strip().lower()
     ev_id = str(event_id or "").strip()
+    sp = _resolve_sport(sport, ev_id, legs)
+    is_internal = _is_internal_key(ev_id)
+
+    # Check for direct leg URLs first
+    direct_urls = []
+    for leg in legs:
+        lnk = leg.get("over_link") or leg.get("link") or leg.get("deeplink")
+        if lnk and isinstance(lnk, str) and lnk.startswith("http"):
+            direct_urls.append(lnk)
 
     if b in ("draftkings", "dk"):
         sids = []
         for leg in legs:
-            sid = leg.get("sid") or leg.get("outcome_id") or leg.get("selection_id")
+            sid = leg.get("over_sid") or leg.get("sid") or leg.get("outcome_id") or leg.get("selection_id")
             if sid:
                 sids.append(str(sid))
-        if len(sids) >= 2 and ev_id:
-            return f"https://sportsbook.draftkings.com/event/{ev_id}?outcomes={','.join(sids)}"
-        if ev_id:
-            return f"https://sportsbook.draftkings.com/event/{ev_id}"
-        return "https://sportsbook.draftkings.com"
+        dk_eid = ev_id if not is_internal else None
+        if not dk_eid:
+            for u in direct_urls:
+                if "sportsbook.draftkings.com/event/" in u:
+                    part = u.split("sportsbook.draftkings.com/event/")[1].split("?")[0].split("/")[0]
+                    if part and not _is_internal_key(part):
+                        dk_eid = part
+                        break
+        if len(sids) >= 2 and dk_eid:
+            return f"https://sportsbook.draftkings.com/event/{dk_eid}?outcomes={','.join(sids)}"
+        if dk_eid:
+            return f"https://sportsbook.draftkings.com/event/{dk_eid}"
+        for u in direct_urls:
+            if "sportsbook.draftkings.com" in u:
+                return u
+        return SPORT_LEAGUE_URLS.get("draftkings", {}).get(sp, "https://sportsbook.draftkings.com")
 
     if b in ("fanduel", "fd"):
         pairs = []
         for leg in legs:
             mid = leg.get("market_id") or leg.get("marketId")
-            sid = leg.get("selection_id") or leg.get("selectionId")
+            sid = leg.get("over_sid") or leg.get("selection_id") or leg.get("selectionId") or leg.get("sid")
             if mid and sid:
                 pairs.append((str(mid), str(sid)))
         if len(pairs) >= 2:
             query = "&".join(f"marketId[{i}]={m}&selectionId[{i}]={s}" for i, (m, s) in enumerate(pairs))
             return f"https://sportsbook.fanduel.com/addToBetslip?{query}"
-        if ev_id:
+        for u in direct_urls:
+            if "sportsbook.fanduel.com" in u or "fanduel.com" in u:
+                return u
+        if ev_id and not is_internal:
             return f"https://sportsbook.fanduel.com/event/{ev_id}"
-        return "https://sportsbook.fanduel.com"
+        return SPORT_LEAGUE_URLS.get("fanduel", {}).get(sp, "https://sportsbook.fanduel.com")
 
     if b == "betmgm":
-        if ev_id:
+        if ev_id and not is_internal:
             return f"https://sports.betmgm.com/en/sports/events/{ev_id}"
-        return "https://sports.betmgm.com"
+        return SPORT_LEAGUE_URLS.get("betmgm", {}).get(sp, "https://sports.betmgm.com")
 
     if b == "caesars":
-        if ev_id:
+        if ev_id and not is_internal:
             return f"https://www.caesars.com/sportsbook-and-casino/us/event/{ev_id}"
-        return "https://www.caesars.com/sportsbook-and-casino"
+        return SPORT_LEAGUE_URLS.get("caesars", {}).get(sp, "https://sportsbook.caesars.com")
 
     if b == "bet365":
         return "https://www.bet365.com/#/AC/B1/"
@@ -529,5 +634,14 @@ def build_sgp_deeplink(book: str, event_id: str, legs: Sequence[Dict[str, Any]])
 
     if b == "hardrock":
         return "https://hardrock.bet"
+
+    if b == "novig":
+        return "https://novig.us"
+
+    if b == "prophetx":
+        return "https://prophetx.co"
+
+    if b == "kalshi":
+        return "https://kalshi.com"
 
     return f"https://www.{b}.com"
