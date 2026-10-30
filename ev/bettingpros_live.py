@@ -52,7 +52,9 @@ LABEL_TO_STAT = {
     "nhl": {"goals": "goals", "points": "points", "assists": "assists", "sog": "sog", "saves": "saves",
             "blocks": "blocked_shots"},
     "nba": {"pts": "points", "reb": "rebounds", "ast": "assists", "threes": "threes", "pra": "pra", "pr": "pr",
-            "pa": "pa", "ra": "ra", "stl": "steals", "blk": "blocks"},
+            "pa": "pa", "ra": "ra", "stl": "steals", "blk": "blocks",
+            "td": "triple_double", "triple_double": "triple_double",
+            "dd": "double_double", "double_double": "double_double"},
 }
 # Catalog slug view of the same mapping (documentation / tests): e.g. nfl 'passing-yards' -> 'pass_yds'.
 SLUG_TO_STAT = {sp: {bpp.SPORTS[sp.upper()][lab]: st for lab, st in m.items() if lab in bpp.SPORTS[sp.upper()]}

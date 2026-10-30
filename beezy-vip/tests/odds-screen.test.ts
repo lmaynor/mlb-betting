@@ -1,6 +1,6 @@
 import {
   bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeOutliers, computeRowArb, devigOver, fairOver,
-  computeMiddles, computeSgpProxies, copulaJoint2D, kalshiEffectiveDecimal, type BoardRow,
+  computeMiddles, computeSgpProxies, copulaJoint2D, kalshiEffectiveDecimal, buildSgpDeeplinkTs, type BoardRow,
 } from '@/lib/odds-screen'
 
 const row = (books: BoardRow['books'], line = 24.5): BoardRow => ({
@@ -515,5 +515,98 @@ describe('computeSgpProxies', () => {
     expect(top.vsDirectPct).not.toBeNull()
     // Direct decimal for +240 is 3.40; Est SGP for +190 & +130 is higher, so vsDirectPct > 0
     expect(top.vsDirectPct!).toBeGreaterThan(0)
+  })
+
+  it('NBA TD proxy matches 10.0 whole-number lines on milestone ladders', () => {
+    const reb10: BoardRow = {
+      key: 'g|luka|rebounds|10.0',
+      game_key: 'nba:2026-10-30:DAL@PHX',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'DAL',
+      home: 'PHX',
+      player: 'Luka Doncic',
+      player_norm: 'luka doncic',
+      stat: 'rebounds',
+      line: 10.0,
+      curve_fair_over: 0.35,
+      books: [B('fanduel', 250, -350), B('draftkings', 245, -340)],
+    }
+    const ast10: BoardRow = {
+      key: 'g|luka|assists|10.0',
+      game_key: 'nba:2026-10-30:DAL@PHX',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'DAL',
+      home: 'PHX',
+      player: 'Luka Doncic',
+      player_norm: 'luka doncic',
+      stat: 'assists',
+      line: 10.0,
+      curve_fair_over: 0.40,
+      books: [B('fanduel', 220, -300), B('draftkings', 215, -290)],
+    }
+    const res = computeSgpProxies([reb10, ast10], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+    expect(res.length).toBeGreaterThan(0)
+    expect(res[0].player).toBe('Luka Doncic')
+    expect(res[0].archetype).toBe('nba_reb_ast_10_10')
+  })
+
+  it('NHL teammates on the same team emit a LINEMATE PTS stack', () => {
+    const mcdavidPts: BoardRow = {
+      key: 'g|mcdavid|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'points',
+      line: 0.5,
+      books: [B('fanduel', -350, 270), B('draftkings', -340, 260)],
+    }
+    const draisaitlPts: BoardRow = {
+      key: 'g|draisaitl|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Leon Draisaitl',
+      player_norm: 'leon draisaitl',
+      stat: 'points',
+      line: 0.5,
+      books: [B('fanduel', -280, 220), B('draftkings', -270, 215)],
+    }
+    const res = computeSgpProxies([mcdavidPts, draisaitlPts], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+    const linemate = res.find(r => r.archetype === 'nhl_linemate_pts_stack')
+    expect(linemate).toBeDefined()
+    expect(linemate!.archetypeLabel).toBe('LINEMATE PTS')
+    expect(linemate!.player).toContain('Connor McDavid + Leon Draisaitl')
+    expect(linemate!.rhoTrue).toBe(0.32)
+  })
+
+  it('buildSgpDeeplinkTs never appends internal game_key to /event/ URLs and routes to sport pages', () => {
+    const dkUrl = buildSgpDeeplinkTs('draftkings', 'nba:2026-10-30:BOS@MIL', [], 'nba')
+    expect(dkUrl).not.toContain('/event/nba:')
+    expect(dkUrl).toBe('https://sportsbook.draftkings.com/leagues/basketball/nba')
+
+    const fdUrl = buildSgpDeeplinkTs('fanduel', 'nba:2026-10-30:BOS@MIL', [], 'nba')
+    expect(fdUrl).not.toContain('/event/nba:')
+    expect(fdUrl).toBe('https://sportsbook.fanduel.com/navigation/nba')
+
+    const sidsUrl = buildSgpDeeplinkTs('draftkings', 'event_123', [{ sid: '111' }, { sid: '222' }])
+    expect(sidsUrl).toBe('https://sportsbook.draftkings.com/event/event_123?outcomes=111,222')
   })
 })

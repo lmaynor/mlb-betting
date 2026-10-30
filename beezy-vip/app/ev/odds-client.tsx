@@ -138,10 +138,10 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
 ]
 
 const SGP_ARCHETYPE_OPTIONS = [
-  { v: 'all', label: 'All Proxies' },
-  { v: 'milestones', label: 'TD & DD Milestones' },
-  { v: 'combos', label: 'Stat Combos (P+R / P+A / G+A)' },
-  { v: 'stacks', label: 'TD + Yardage Stacks' },
+  { v: 'all', label: 'All Combos' },
+  { v: 'stacks', label: 'Teammate Stacks (NHL Linemates / QB+WR / PG+Scorer)' },
+  { v: 'milestones', label: 'TD & DD Milestones (10+R/10+A)' },
+  { v: 'combos', label: 'Stat Combos (P+R / P+A / R+A / G+A)' },
 ]
 
 const SGP_MIN_EV_OPTIONS = [
@@ -1450,10 +1450,13 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
         </div>
       </td>
       <td style={{ padding: '10px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <BookLogo book={r.book} size={22} />
           <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
             Est. SGP: {formatOdds(r.estSgpAm)}
+          </span>
+          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 4px', borderRadius: '3px', background: 'rgba(87, 242, 135, 0.1)', color: GREEN, border: '1px solid rgba(87, 242, 135, 0.25)' }}>
+            EST. BOOK SGP
           </span>
         </div>
         {r.directMarketAm != null ? (
@@ -1467,6 +1470,11 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
         ) : (
           <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
             Book copula (\u03c1={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
+          </div>
+        )}
+        {r.runnerUpBooks && r.runnerUpBooks.length > 0 && (
+          <div style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '3px' }}>
+            Also at: {r.runnerUpBooks.map(b => `${bookDisplay(b.book).label} (${b.evPct > 0 ? `+${b.evPct.toFixed(1)}%` : `${b.evPct.toFixed(1)}%`} EV)`).join(', ')}
           </div>
         )}
       </td>

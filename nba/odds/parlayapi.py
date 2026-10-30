@@ -112,7 +112,7 @@ class ParlayApiClient:
         """Player props for ONE event. 1 credit per (event x market).
         Returns the raw single-event odds object, or None."""
         params = {"regions": PARLAY_REGION, "markets": ",".join(markets),
-                  "oddsFormat": "american"}
+                  "oddsFormat": "american", "includeLinks": "true", "includeSids": "true"}
         data = self._get(f"sports/{sport}/events/{event_id}/odds", params)
         self._log_credits(f"props {sport} event={event_id} [{len(markets)} mkts]")
         return data

@@ -140,6 +140,11 @@ def test_build_sgp_deeplink():
     dk_fallback = build_sgp_deeplink("draftkings", "event_999", [])
     assert dk_fallback == "https://sportsbook.draftkings.com/event/event_999"
 
+    # DraftKings internal game_key routing to sport league page (no 404 event URL)
+    dk_league = build_sgp_deeplink("draftkings", "nba:2026-10-30:BOS@MIL", [], sport="nba")
+    assert "/event/nba:" not in dk_league
+    assert dk_league == "https://sportsbook.draftkings.com/leagues/basketball/nba"
+
     # FanDuel multi-outcome deep link
     fd_legs = [
         {"marketId": "1.1001", "selectionId": "2001"},
@@ -151,6 +156,11 @@ def test_build_sgp_deeplink():
     # FanDuel fallback without selectionIds
     fd_fallback = build_sgp_deeplink("fanduel", "event_888", [])
     assert fd_fallback == "https://sportsbook.fanduel.com/event/event_888"
+
+    # FanDuel internal game_key routing to sport navigation page
+    fd_nav = build_sgp_deeplink("fanduel", "nba:2026-10-30:BOS@MIL", [], sport="nba")
+    assert "/event/nba:" not in fd_nav
+    assert fd_nav == "https://sportsbook.fanduel.com/navigation/nba"
 
 
 def test_predict_book_sgp_odds_structure():
@@ -222,3 +232,52 @@ def test_build_sgp_proxy_candidates():
     assert top.direct_best_american == 1300
     assert top.vs_direct_pct is not None
     assert top.vs_direct_pct > 0.0  # Synthetic SGP beats direct market +1300
+    if len(top.runner_up_books or []) > 0:
+        assert top.runner_up_books[0]["book"] in ("fanduel", "draftkings")
+
+
+def test_build_sgp_proxy_teammate_stacks():
+    from ev.sgp_proxy_builder import build_sgp_proxy_candidates
+
+    # NHL Linemates
+    nhl_rows = [
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Connor McDavid",
+            "player_norm": "connor mcdavid",
+            "stat": "points",
+            "line": 0.5,
+            "books": [
+                {"book": "fanduel", "over": -320, "under": 250},
+                {"book": "draftkings", "over": -310, "under": 240},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Leon Draisaitl",
+            "player_norm": "leon draisaitl",
+            "stat": "points",
+            "line": 0.5,
+            "books": [
+                {"book": "fanduel", "-280": None, "over": -280, "under": 220},
+                {"book": "draftkings", "-270": None, "over": -270, "under": 215},
+            ],
+        },
+    ]
+
+    cands = build_sgp_proxy_candidates(nhl_rows, min_ev_pct=-50.0)
+    linemate = next((c for c in cands if c.archetype == "nhl_linemate_pts_stack"), None)
+    assert linemate is not None
+    assert linemate.archetype_label == "LINEMATE PTS"
+    assert "Connor McDavid + Leon Draisaitl" in linemate.player
+    assert linemate.rho_true == 0.32
+    assert "/event/nhl:" not in (linemate.deeplink or "")
+

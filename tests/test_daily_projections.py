@@ -473,6 +473,19 @@ def test_nhl_pp_points_is_a_documented_gap_not_a_projection():
     assert "pp_points" not in cf.supported_stats("nhl")
 
 
+def test_nhl_finishing_regression_on_dict_rows():
+    logs = _depth_logs("nhl", lambda st: 0.5)
+    sdef = _stat_defs("nhl")["goals"]
+    rows = [{"goals": 1.0, "shots": 4.0, "season": 2026, "_opp": "CGY"} for _ in range(20)]
+    row = dp.make_row(
+        sport="nhl", stat="goals", player="Test Skater", pn="test skater",
+        rows=rows, sdef=sdef, logs=logs, line=0.5, cons=None, at_pt=None,
+        team="EDM", opp="CGY", gk="nhl:2026-10-30:EDM@CGY", start=NOW, mins=60,
+    )
+    assert row is not None
+    assert row["proj_mean"] > 0
+
+
 def test_cockpit_form_supports_the_new_volume_stats():
     assert {"pass_completions", "pass_attempts", "rush_attempts", "interceptions"} <= cf.supported_stats("nfl")
     assert {"pr", "pa", "ra", "steals", "blocks"} <= cf.supported_stats("nba")

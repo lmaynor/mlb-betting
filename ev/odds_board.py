@@ -220,6 +220,14 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
                                    "player_id": q.player_id, "team": q.team_hint, "stat": q.stat, "line": q.point,
                                    "books": {}}
             new = {"book": q.book, "over": q.over, "under": q.under, "alt": bool(q.alt)}
+            if q.over_link is not None:
+                new["over_link"] = q.over_link
+            if q.under_link is not None:
+                new["under_link"] = q.under_link
+            if q.over_sid is not None:
+                new["over_sid"] = q.over_sid
+            if q.under_sid is not None:
+                new["under_sid"] = q.under_sid
             old = row["books"].get(q.book)
             if old is None or _prefer(new, old):
                 row["books"][q.book] = new
