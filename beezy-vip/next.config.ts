@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: process.cwd(),
-  },
   // Retired routes. The three /tools redirects were page-level before; /sports/[sport] became /picks/[sport] for every sport (see lib/ia.ts).
   async redirects() {
     return [
