@@ -657,6 +657,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   { label: 'Defaults', keys: defaultShown },
                   ...(myBooks.enabled ? [{ label: 'My books', keys: myBooks.books }] : []),
                   { label: 'All', keys: bookList.map(b => b.key) },
+                  { label: 'None', keys: [] },
                 ]}
                 note="Columns shown and books you can bet at. Offshore books show their price but never count as the best price."
                 align="right"
@@ -664,7 +665,10 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
               <BookPicker
                 label={refs.length ? `REFERENCE BOOKS (${refs.length})` : 'REFERENCE BOOKS (ALL)'}
                 books={bookList} selected={refs} onChange={setRefs} emptyMeansAll
-                presets={[{ label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) }]}
+                presets={[
+                  { label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) },
+                  { label: 'All', keys: [] },
+                ]}
                 note={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
                 align="right"
                 header={
@@ -1137,36 +1141,85 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
 
           <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
             <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
-            <Select id="mobile-odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-              options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+            <select
+              id="mobile-odds-stat"
+              value={stat}
+              onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
+              style={{
+                width: '100%',
+                background: '#090a0f',
+                color: 'var(--chalk)',
+                border: `1px solid ${HAIR}`,
+                borderRadius: '8px',
+                minHeight: '40px',
+                padding: '0 12px',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">All props</option>
+              {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
+            </select>
           </div>
 
           <div>
             <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
-            <Select id="mobile-odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
-              options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+            <select
+              id="mobile-odds-game"
+              value={game}
+              onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
+              style={{
+                width: '100%',
+                background: '#090a0f',
+                color: 'var(--chalk)',
+                border: `1px solid ${HAIR}`,
+                borderRadius: '8px',
+                minHeight: '40px',
+                padding: '0 12px',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">All games</option>
+              {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
+            </select>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <BookPicker
-              label={`BOOKS (${columns.length})`}
-              books={bookList} selected={[...shownSet]} onChange={next => setShown(next)}
-              presets={[
-                { label: 'Defaults', keys: defaultShown },
-                ...(myBooks.enabled ? [{ label: 'My books', keys: myBooks.books }] : []),
-                { label: 'All', keys: bookList.map(b => b.key) },
-              ]}
-              note="Columns shown and books you can bet at."
-              align="left"
-            />
-            <BookPicker
-              label={refs.length ? `REFERENCE BOOKS (${refs.length})` : 'REFERENCE BOOKS (ALL)'}
-              books={bookList} selected={refs} onChange={setRefs} emptyMeansAll
-              presets={[{ label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) }]}
-              note="Fair value is the equal-weight average of these books' de-vigged lines."
-              align="left"
-            />
-          </div>
+          <MobileBookChecklist
+            title="SPORTSBOOKS"
+            subtitle="Columns shown and books you can bet at. Offshore books show price but never count as best."
+            books={bookList}
+            selected={[...shownSet]}
+            onChange={next => setShown(next)}
+            presets={[
+              { label: 'Defaults', keys: defaultShown },
+              ...(myBooks.enabled ? [{ label: 'My books', keys: myBooks.books }] : []),
+              { label: 'All', keys: bookList.map(b => b.key) },
+              { label: 'None', keys: [] },
+            ]}
+          />
+
+          <MobileBookChecklist
+            title="REFERENCE BOOKS"
+            subtitle={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
+            books={bookList}
+            selected={refs}
+            onChange={setRefs}
+            emptyMeansAll
+            presets={[
+              { label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) },
+              { label: 'All', keys: [] },
+            ]}
+            extraHeader={
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DEVIG METHOD</span>
+                <PillGroup>
+                  <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')}>PROPORTIONAL</Pill>
+                  <Pill active={method === 'power'} onClick={() => setMethod('power')}>POWER</Pill>
+                </PillGroup>
+              </div>
+            }
+          />
         </div>
       </MobileBottomSheet>
 
@@ -2901,31 +2954,266 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
   }, [open])
   const on = new Set(selected)
   const toggle = (k: string) => onChange(on.has(k) ? selected.filter(x => x !== k) : [...selected, k])
+  const hasNonePreset = presets.some(p => p.label.toLowerCase() === 'none')
+  const hasAllPreset = presets.some(p => p.label.toLowerCase() === 'all')
+
   return (
     <div ref={box} style={{ position: 'relative' }}>
       <button onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost" style={{ padding: '6px 11px', fontSize: '11.5px', height: '34px' }}>{label}</button>
       {open && (
-        <div role="group" aria-label={label} style={{ position: 'absolute', zIndex: 30, top: '38px', ...(align === 'right' ? { right: 0 } : { left: 0 }), width: '280px', ...SURFACE_CARD, padding: '10px', display: 'grid', gap: '8px' }}>
+        <div role="group" aria-label={label} style={{ position: 'absolute', zIndex: 30, top: '38px', ...(align === 'right' ? { right: 0 } : { left: 0 }), width: '290px', ...SURFACE_CARD, padding: '10px', display: 'grid', gap: '8px' }}>
           {header}
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {presets.map(p => <button key={p.label} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px' }} onClick={() => onChange(p.keys)}>{p.label}</button>)}
-            {emptyMeansAll && <button className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px' }} onClick={() => onChange([])}>All books</button>}
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {presets.map(p => <button key={p.label} type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange(p.keys)}>{p.label}</button>)}
+            {emptyMeansAll && !hasAllPreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange([])}>All</button>}
+            {!emptyMeansAll && !hasAllPreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange(books.map(b => b.key))}>All</button>}
+            {!hasNonePreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange([])}>None</button>}
           </div>
           <div style={{ display: 'grid', gap: '2px', maxHeight: '280px', overflowY: 'auto' }}>
             {books.map(b => {
               const meta = bookDisplay(b.key)
+              const isOnly = on.has(b.key) && on.size === 1
               return (
-                <label key={b.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', fontSize: '12px', color: 'var(--silver)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} />
-                  <span style={{ minWidth: '28px', display: 'inline-flex', justifyContent: 'center' }}><BookLogo book={b.key} size={24} /></span>
-                  <span style={{ flex: 1 }}>{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
-                  <span className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>{b.n}</span>
-                </label>
+                <div
+                  key={b.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '6px',
+                    padding: '3px 6px',
+                    borderRadius: '4px',
+                    background: isOnly ? 'rgba(87, 242, 135, 0.08)' : on.has(b.key) ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: on.has(b.key) ? 'var(--chalk)' : 'var(--silver)', cursor: 'pointer', flex: 1, minWidth: 0 }}>
+                    <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
+                    <span style={{ minWidth: '24px', display: 'inline-flex', justifyContent: 'center' }}><BookLogo book={b.key} size={22} /></span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
+                    <span className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginRight: '2px' }}>{b.n}</span>
+                  </label>
+                  <button
+                    type="button"
+                    title={`Select only ${meta.label}`}
+                    aria-label={`Only ${meta.label}`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onChange([b.key])
+                    }}
+                    style={{
+                      fontSize: '10px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      border: isOnly ? '1px solid var(--signal)' : `1px solid ${HAIR}`,
+                      background: isOnly ? 'var(--win-wash)' : 'transparent',
+                      color: isOnly ? 'var(--signal)' : 'var(--fog)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ONLY
+                  </button>
+                </div>
               )
             })}
           </div>
           <span style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.45 }}>{note}</span>
         </div>
+      )}
+    </div>
+  )
+}
+
+/** Mobile-native SwiftUI style checklist for books with presets, Only buttons and full-width touch targets. */
+function MobileBookChecklist({
+  title,
+  subtitle,
+  books,
+  selected,
+  onChange,
+  presets,
+  emptyMeansAll,
+  extraHeader,
+}: {
+  title: string
+  subtitle?: string
+  books: { key: string; n: number; offshore: boolean }[]
+  selected: string[]
+  onChange: (next: string[]) => void
+  presets: { label: string; keys: string[] }[]
+  emptyMeansAll?: boolean
+  extraHeader?: React.ReactNode
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+  const on = new Set(selected)
+  const toggle = (k: string) => onChange(on.has(k) ? selected.filter(x => x !== k) : [...selected, k])
+  const countLabel = emptyMeansAll && selected.length === 0 ? 'ALL' : `${selected.length}`
+  const hasNonePreset = presets.some(p => p.label.toLowerCase() === 'none')
+  const hasAllPreset = presets.some(p => p.label.toLowerCase() === 'all')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', background: '#090a0f', borderRadius: '8px', border: `1px solid ${HAIR}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button
+          type="button"
+          onClick={() => setCollapsed(v => !v)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          <span className="dell-heading" style={{ fontSize: '11px', color: 'var(--chalk)', letterSpacing: '0.06em' }}>
+            {title} ({countLabel})
+          </span>
+          <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>
+            {collapsed ? '[\u25bc Show]' : '[\u25b2 Hide]'}
+          </span>
+        </button>
+      </div>
+
+      {!collapsed && (
+        <>
+          {extraHeader}
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {presets.map(p => (
+              <button
+                key={p.label}
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '4px 10px', fontSize: '11px', minHeight: '30px' }}
+                onClick={() => onChange(p.keys)}
+              >
+                {p.label}
+              </button>
+            ))}
+            {emptyMeansAll && !hasAllPreset && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '4px 10px', fontSize: '11px', minHeight: '30px' }}
+                onClick={() => onChange([])}
+              >
+                All
+              </button>
+            )}
+            {!emptyMeansAll && !hasAllPreset && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '4px 10px', fontSize: '11px', minHeight: '30px' }}
+                onClick={() => onChange(books.map(b => b.key))}
+              >
+                All
+              </button>
+            )}
+            {!hasNonePreset && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '4px 10px', fontSize: '11px', minHeight: '30px' }}
+                onClick={() => onChange([])}
+              >
+                None
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gap: '4px', maxHeight: '220px', overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingRight: '2px' }}>
+            {books.map(b => {
+              const meta = bookDisplay(b.key)
+              const isOnly = on.has(b.key) && on.size === 1
+              const checked = on.has(b.key)
+              return (
+                <div
+                  key={b.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    minHeight: '42px',
+                    padding: '6px 8px',
+                    borderRadius: '6px',
+                    background: isOnly ? 'rgba(87, 242, 135, 0.08)' : checked ? '#141824' : 'transparent',
+                    border: isOnly ? '1px solid rgba(87, 242, 135, 0.3)' : checked ? '1px solid #1e2536' : '1px solid transparent',
+                  }}
+                >
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      fontSize: '12.5px',
+                      color: checked ? 'var(--chalk)' : 'var(--silver)',
+                      cursor: 'pointer',
+                      flex: 1,
+                      minWidth: 0,
+                      userSelect: 'none',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(b.key)}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--signal)' }}
+                    />
+                    <span style={{ minWidth: '24px', display: 'inline-flex', justifyContent: 'center' }}>
+                      <BookLogo book={b.key} size={24} />
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: checked ? 600 : 400 }}>
+                      {meta.label}{b.offshore ? ' (offshore)' : ''}
+                    </span>
+                    <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginRight: '6px' }}>
+                      {b.n}
+                    </span>
+                  </label>
+
+                  <button
+                    type="button"
+                    title={`Select only ${meta.label}`}
+                    aria-label={`Only ${meta.label}`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onChange([b.key])
+                    }}
+                    style={{
+                      fontSize: '10px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      padding: '4px 8px',
+                      minHeight: '30px',
+                      minWidth: '46px',
+                      borderRadius: '4px',
+                      border: isOnly ? '1px solid var(--signal)' : `1px solid ${HAIR}`,
+                      background: isOnly ? 'var(--win-wash)' : 'transparent',
+                      color: isOnly ? 'var(--signal)' : 'var(--fog)',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ONLY
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {subtitle && (
+            <span style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.45 }}>{subtitle}</span>
+          )}
+        </>
       )}
     </div>
   )
