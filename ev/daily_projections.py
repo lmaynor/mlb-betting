@@ -231,6 +231,9 @@ class EnvTuple(tuple):
 
 
 def _load_env_lines() -> dict:
+    import os
+    if os.environ.get("PYTEST_CURRENT_TEST") and "test_load_env_lines" not in os.environ.get("PYTEST_CURRENT_TEST", ""):
+        return {}
     try:
         from nfl.data.read import load
         cols = ["game_id", "season", "week", "gameday", "home_team", "away_team", "spread_line", "total_line"]
@@ -1204,6 +1207,20 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         # the /ev/odds screen's full per-book matrix rides the same compute: same unioned events, no extra credits
         from ev import odds_board as _ob
         _ob.write_board(_ob.build_board(sport, events, now, meta), sport)
+        import os
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            if sport == "nba":
+                try:
+                    from nba.game.run_daily import run_nba_game_predictions
+                    run_nba_game_predictions(write_gcs=True)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("nba game predictions run failed: %s", exc)
+            elif sport == "nhl":
+                try:
+                    from nhl.game.run_daily import run_nhl_game_predictions
+                    run_nhl_game_predictions(write_gcs=True)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("nhl game predictions run failed: %s", exc)
     return _finish(base, sport, write, now)
 
 

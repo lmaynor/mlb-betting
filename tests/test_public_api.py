@@ -730,3 +730,90 @@ def test_nfl_kalshi_rows_carry_the_pooled_fallback_tag(monkeypatch):
     rows = {r["ticker"]: r for r in api._nfl_feed(0.02, 10)["rows"]}
     assert rows["A"]["consensus_src"] == "pooled" and rows["A"]["interpolated"] is True and rows["A"]["exact_n_books"] == 1
     assert rows["B"]["consensus_src"] == "exact" and rows["B"]["interpolated"] is False and rows["B"]["books"] == "a,b,c,d"
+
+
+def test_get_game_projections_and_market_filter(monkeypatch):
+    from datetime import datetime, timezone
+    from mlb.runners import public_api as api
+    api._GAME_PROJ_CACHE.clear()
+    now = datetime.now(timezone.utc)
+    mock_payload = {
+        "sport": "nba",
+        "status": "live",
+        "engine": "kalman_joint_t_v1",
+        "ts": now.isoformat(),
+        "games": [{"game_key": "nba:2026-10-31:BOS@MIA", "away": "BOS", "home": "MIA", "start": now.isoformat()}],
+        "priced_games": [{
+            "game_key": "nba:2026-10-31:BOS@MIA",
+            "home_team": "MIA",
+            "away_team": "BOS",
+            "game_date": "2026-10-31",
+            "mu_margin": -4.2,
+            "sigma_margin": 11.8,
+            "mu_total": 226.4,
+            "sigma_total": 17.5,
+            "exp_pace": 99.8,
+            "markets": [],
+        }],
+        "rows": [
+            {"sport": "nba", "system": "NBA_SPREAD", "stat": "spread", "side": "home", "line": -3.5, "p_model_side": 0.55},
+            {"sport": "nba", "system": "NBA_TOTAL", "stat": "total", "side": "over", "line": 225.5, "p_model_side": 0.52},
+            {"sport": "nba", "system": "NBA_ML", "stat": "moneyline", "side": "home", "line": None, "p_model_side": 0.62},
+        ],
+    }
+    files = {"EVSweep/nba_games/predictions_latest.json": mock_payload}
+    monkeypatch.setattr("mlb_core.storage.exists", lambda k: k in files)
+    monkeypatch.setattr("mlb_core.storage.read_bytes", lambda k: json.dumps(files[k]).encode())
+
+    # All markets
+    res_all = api.get_game_projections("nba")
+    assert res_all["status"] == "live"
+    assert res_all["count"] == 3
+    assert len(res_all["rows"]) == 3
+    assert len(res_all["priced_games"]) == 1
+
+    # Filter spread
+    res_spread = api.get_game_projections("nba", market="spread")
+    assert res_spread["count"] == 1
+    assert res_spread["rows"][0]["stat"] == "spread"
+
+    # Filter total
+    res_total = api.get_game_projections("nba", market="total")
+    assert res_total["count"] == 1
+    assert res_total["rows"][0]["stat"] == "total"
+
+    # Filter ml
+    res_ml = api.get_game_projections("nba", market="ml")
+    assert res_ml["count"] == 1
+    assert res_ml["rows"][0]["stat"] == "moneyline"
+
+    # Unknown sport
+    import pytest
+    with pytest.raises(ValueError, match="unknown game projections sport"):
+        api.get_game_projections("mlb")
+
+
+def test_public_game_projections_route(client):
+    from unittest.mock import patch
+    # Unauthorized
+    assert client.get("/api/public/games/projections?sport=nhl").status_code == 401
+
+    # Authorized with mock
+    mock_ret = {
+        "sport": "nhl",
+        "status": "live",
+        "engine": "distributional_matrix_v1",
+        "count": 0,
+        "rows": [],
+        "priced_games": [],
+        "games": [],
+        "markets": ["spread", "total", "ml"],
+    }
+    with patch("main.get_game_projections", return_value=mock_ret):
+        res = client.get("/api/public/games/projections?sport=nhl", headers={"X-API-Key": VALID_KEY})
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["sport"] == "nhl"
+        assert data["status"] == "live"
+
+

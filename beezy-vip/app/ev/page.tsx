@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
-import { apiGetAnalyticsDeepDive, apiGetOddsBoard } from '@/lib/betting-api'
+import { apiGetAnalyticsDeepDive, apiGetOddsBoard, apiGetGameProjections } from '@/lib/betting-api'
 import { limitOddsBoard } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
 import { withHeadshots } from '@/lib/odds-headshots'
 import type { OddsBoard } from '@/lib/odds-screen'
 import type { SportSlug } from '@/lib/sports'
+import type { GameProjectionsFeed } from '@/lib/game-lines'
 import { OddsClient } from './odds-client'
 
 export const dynamic = 'force-dynamic'
@@ -18,10 +19,12 @@ export const metadata: Metadata = {
 const SPORTS: SportSlug[] = ['nfl', 'nhl', 'nba', 'mlb']
 
 export default async function OddsPage() {
-  const [boards, viewer, deep] = await Promise.all([
+  const [boards, viewer, deep, nbaGames, nhlGames] = await Promise.all([
     Promise.all(SPORTS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null))),
     getViewer(),
     apiGetAnalyticsDeepDive('EV').catch(() => null),
+    apiGetGameProjections('nba').catch(() => null),
+    apiGetGameProjections('nhl').catch(() => null),
   ])
   // Pro surface (lib/access.ts): cut here so withheld rows are never in the payload.
   let locked = 0
@@ -32,5 +35,9 @@ export default async function OddsPage() {
     locked += c.locked
     cut[SPORTS[i]] = withHeadshots(c.board)
   })
-  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} />
+  const initialGames: Record<string, GameProjectionsFeed | null> = {
+    nba: nbaGames,
+    nhl: nhlGames,
+  }
+  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} initialGames={initialGames} />
 }

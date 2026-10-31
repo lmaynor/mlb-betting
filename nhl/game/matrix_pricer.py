@@ -204,36 +204,38 @@ class DistributionalNHLMatrixEngine:
         matchup: MatchupFeatures,
     ) -> Tuple[float, float]:
         """Synthesize 60-minute regulation scoring intensities lambda_H and lambda_A."""
-        lh = float(kalman_pred.exp_home_goals)
-        la = float(kalman_pred.exp_away_goals)
+        lh = float(np.nan_to_num(kalman_pred.exp_home_goals, nan=3.10))
+        la = float(np.nan_to_num(kalman_pred.exp_away_goals, nan=2.90))
 
         # 1. Goalie GSAx adjustment: each +1.0 GSAx/60 lowers opponent scoring rate by ~0.85 goals
-        lh = lh - 0.85 * float(matchup.away_goalie_gsax_60)
-        la = la - 0.85 * float(matchup.home_goalie_gsax_60)
+        h_gsax = float(np.nan_to_num(matchup.home_goalie_gsax_60, nan=0.0))
+        a_gsax = float(np.nan_to_num(matchup.away_goalie_gsax_60, nan=0.0))
+        lh = lh - 0.85 * a_gsax
+        la = la - 0.85 * h_gsax
 
         # 2. Z-score differential adjustments
-        z = matchup.z_diff
+        z = matchup.z_diff or {}
         delta_h = (
-            0.15 * z.get("xg_share", 0.0)
-            + 0.08 * z.get("sog_share", 0.0)
-            + 0.08 * z.get("pp_goals_per_game", 0.0)
-            - 0.12 * z.get("sh_pct_luck", 0.0)
-            + 0.04 * z.get("blocks_per_60", 0.0)
+            0.15 * float(np.nan_to_num(z.get("xg_share", 0.0), nan=0.0))
+            + 0.08 * float(np.nan_to_num(z.get("sog_share", 0.0), nan=0.0))
+            + 0.08 * float(np.nan_to_num(z.get("pp_goals_per_game", 0.0), nan=0.0))
+            - 0.12 * float(np.nan_to_num(z.get("sh_pct_luck", 0.0), nan=0.0))
+            + 0.04 * float(np.nan_to_num(z.get("blocks_per_60", 0.0), nan=0.0))
         )
         lh += delta_h
         la -= delta_h
 
         # 3. Schedule fatigue and road B2B penalty
         fatigue = matchup.fatigue
-        la += fatigue.road_b2b_penalty  # -0.18 when Away on road B2B
+        la += float(np.nan_to_num(fatigue.road_b2b_penalty, nan=0.0))
 
         # 4. Roster injury drag
-        lh -= max(0.0, float(matchup.home_injury_drag))
-        la -= max(0.0, float(matchup.away_injury_drag))
+        lh -= max(0.0, float(np.nan_to_num(matchup.home_injury_drag, nan=0.0)))
+        la -= max(0.0, float(np.nan_to_num(matchup.away_injury_drag, nan=0.0)))
 
-        # Boundary guard: regulation scoring intensity must be positive
-        lh = float(np.clip(lh, 1.20, 6.00))
-        la = float(np.clip(la, 1.20, 6.00))
+        # Boundary guard: regulation scoring intensity must be positive and finite
+        lh = float(np.clip(np.nan_to_num(lh, nan=3.10), 1.20, 6.00))
+        la = float(np.clip(np.nan_to_num(la, nan=2.90), 1.20, 6.00))
         return lh, la
 
     def compute_score_matrix(
@@ -498,7 +500,8 @@ class DistributionalNHLMatrixEngine:
         total_line = totals_info.get("line")
         if total_line is None:
             # Nearest half-point to expected total (e.g. 5.5, 6.0, 6.5)
-            total_line = round(exp_total * 2.0) / 2.0
+            safe_exp = float(np.nan_to_num(exp_total, nan=6.0))
+            total_line = round(safe_exp * 2.0) / 2.0
 
         p_over_raw, p_under_raw, p_tot_push, p_over_fair_m = matrix.total(float(total_line))
         over_fair = totals_info.get("p_over_fair")

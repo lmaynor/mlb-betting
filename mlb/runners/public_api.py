@@ -988,6 +988,94 @@ def get_odds_board(sport, day=None, stat=None, limit=2000):
     return out
 
 
+_GAME_PROJ_CACHE: dict = {}
+_GAME_PROJ_CACHE_TTL = 300  # 5 minutes
+
+
+def get_game_projections(sport: str, day: str | None = None, market: str | None = None, limit: int = 300) -> dict:
+    """Quantitative game-line projections (Moneyline, Spread/Puck Line, Total) for NBA / NHL.
+    Reads precomputed payload from EVSweep/{sport}_games/predictions_latest.json."""
+    import json as _json
+    import time as _time
+    sport = (sport or "").lower()
+    if sport not in ("nba", "nhl"):
+        raise ValueError(f"unknown game projections sport {sport!r}; expected 'nba' or 'nhl'")
+    limit = max(1, min(int(limit), 500))
+    day = _proj_day(day, "day") if day else None
+    market_filter = str(market).lower().strip() if market else None
+
+    now = _datetime.now(_timezone.utc)
+    key = f"EVSweep/{sport}_games/predictions_latest.json"
+
+    hit = _GAME_PROJ_CACHE.get(sport)
+    if hit and _time.monotonic() - hit[0] < _GAME_PROJ_CACHE_TTL:
+        payload = hit[1]
+    else:
+        try:
+            from mlb_core import storage
+            if storage.exists(key):
+                raw = storage.read_bytes(key)
+                payload = _json.loads(raw.decode("utf-8"))
+                _GAME_PROJ_CACHE[sport] = (_time.monotonic(), payload)
+            else:
+                payload = None
+        except Exception:
+            logger.exception("game projections read failed for %s", sport)
+            payload = None
+
+    empty = {
+        "sport": sport, "status": "unavailable", "engine": None, "as_of": None, "age_minutes": None,
+        "stale": True, "count": 0, "rows": [], "priced_games": [], "games": [], "markets": ["spread", "total", "ml"],
+    }
+    if not payload:
+        return empty
+
+    ts_str = payload.get("ts")
+    age = None
+    if ts_str:
+        try:
+            ts = _datetime.fromisoformat(ts_str)
+            age = max(0.0, (now - ts).total_seconds() / 60.0)
+        except Exception:
+            pass
+
+    rows = payload.get("rows") or []
+    priced_games = payload.get("priced_games") or []
+    games = payload.get("games") or []
+
+    if market_filter and market_filter != "all":
+        def _match_m(r):
+            m = str(r.get("market") or r.get("stat") or r.get("system") or "").lower()
+            if market_filter in ("ml", "moneyline"):
+                return "moneyline" in m or "_ml" in m
+            if market_filter in ("spread", "puck_line", "puckline"):
+                return "spread" in m or "puck" in m
+            if market_filter == "total":
+                return "total" in m
+            return market_filter in m
+        rows = [r for r in rows if _match_m(r)]
+
+    if day:
+        from ev import daily_projections as _dp
+        rows = [r for r in rows if _dp.ct_day(r.get("commence") or r.get("commence_time")) == day]
+        priced_games = [g for g in priced_games if g.get("game_date") == day]
+
+    return {
+        "sport": sport,
+        "status": payload.get("status", "live"),
+        "engine": payload.get("engine"),
+        "as_of": ts_str,
+        "age_minutes": None if age is None else round(age, 1),
+        "stale": (age is None or age > 90) if rows else False,
+        "count": len(rows),
+        "rows": rows[:limit],
+        "priced_games": priced_games,
+        "games": games,
+        "markets": ["spread", "total", "ml"],
+    }
+
+
+
 def _roi(profit, stake):
     return round(profit / stake * 100.0, 2) if stake else None
 

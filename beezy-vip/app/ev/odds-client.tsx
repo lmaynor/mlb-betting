@@ -3,7 +3,8 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { apiGetOddsBoard } from '@/lib/betting-api'
+import { apiGetGameProjections, apiGetOddsBoard } from '@/lib/betting-api'
+import type { GamePricedGame, GameProjectionRow, GameProjectionsFeed, GamePricedMarket } from '@/lib/game-lines'
 import { bookDisplay, canonBook, SURFACE_CARD } from '@/lib/tokens'
 import { americanToDecimal, fmtMoney, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
@@ -136,6 +137,7 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'middles', label: 'Middles' },
   { key: 'longshots', label: 'Alt & Tail Ladders' },
   { key: 'sgp', label: 'SGP Proxies' },
+  { key: 'game_lines', label: 'Game Lines' },
 ]
 
 const SGP_ARCHETYPE_OPTIONS = [
@@ -152,10 +154,10 @@ const SGP_MIN_EV_OPTIONS = [
   { v: 10, label: '+10%+' },
 ]
 
-export function OddsClient({ initial, initialLocked, headline }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null }) {
+export function OddsClient({ initial, initialLocked, headline, initialGames }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; initialGames?: Record<string, GameProjectionsFeed | null> }) {
   const sp = useSearchParams()
   const viewParam = sp?.get('view')
-  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam))
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam))
     ? (viewParam as OddsScreenMode)
     : 'ev'
 
@@ -200,6 +202,13 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const isMobile = useIsMobile(768)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'cards' | 'table'>('cards')
+  const [gamesData, setGamesData] = useState<Record<string, GameProjectionsFeed | null>>(initialGames ?? {})
+  const [gameMarket, setGameMarket] = useState<'all' | 'spread' | 'total' | 'ml'>('all')
+  const [gameMatchup, setGameMatchup] = useState<string>('all')
+  const [gameSport, setGameSport] = useState<'all' | 'nba' | 'nhl'>('all')
+  const [gameSide, setGameSide] = useState<'all' | 'home_over' | 'away_under'>('all')
+  const [gameMinEdge, setGameMinEdge] = useState<number>(0)
+  const [gameView, setGameView] = useState<'cards' | 'table'>('cards')
   const [inspectItem, setInspectItem] = useState<
     | { type: 'ev'; row: ScreenRow }
     | { type: 'arb'; row: ArbRow }
@@ -245,15 +254,23 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       if (sgpMinEv > 0) count++
       if (sgpBook !== 'all') count++
       if (!useCurve) count++
+    } else if (mode === 'game_lines') {
+      if (gameMarket !== 'all') count++
+      if (gameMatchup !== 'all') count++
+      if (gameSport !== 'all') count++
+      if (gameSide !== 'all') count++
+      if (gameMinEdge > 0) count++
     }
     return count
-  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook])
+  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, gameMarket, gameMatchup, gameSport, gameSide, gameMinEdge])
 
-  useEffect(() => {
-    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
+  const [prevViewParam, setPrevViewParam] = useState(viewParam)
+  if (viewParam !== prevViewParam) {
+    setPrevViewParam(viewParam)
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam)) {
       setMode(viewParam as OddsScreenMode)
     }
-  }, [viewParam])
+  }
 
   const switchMode = useCallback((m: OddsScreenMode) => {
     setMode(m)
@@ -279,17 +296,33 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const next = await Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null)))
+      const [nextBoards, nbaG, nhlG] = await Promise.all([
+        Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null))),
+        apiGetGameProjections('nba').catch(() => null),
+        apiGetGameProjections('nhl').catch(() => null),
+      ])
       const out: Partial<Record<SportSlug, OddsBoard>> = {}
       let lk = 0
-      next.forEach((b, i) => { if (b) { out[SPORT_KEYS[i]] = b; lk += b.locked ?? 0 } })
+      nextBoards.forEach((b, i) => { if (b) { out[SPORT_KEYS[i]] = b; lk += b.locked ?? 0 } })
       if (Object.keys(out).length) {
         // identical data (same as_of for every sport): keep the old objects so nothing is recomputed or re-rendered
         setBoards(prev => SPORT_KEYS.every(k => prev[k]?.as_of === out[k]?.as_of) ? prev : out)
         setLocked(lk)
       }
+      setGamesData({ nba: nbaG, nhl: nhlG })
     } finally { setLoading(false) }
   }, [])
+
+  useEffect(() => {
+    if (mode === 'game_lines' && !gamesData.nba && !gamesData.nhl) {
+      Promise.all([
+        apiGetGameProjections('nba').catch(() => null),
+        apiGetGameProjections('nhl').catch(() => null),
+      ]).then(([nbaG, nhlG]) => {
+        setGamesData({ nba: nbaG, nhl: nhlG })
+      })
+    }
+  }, [mode, gamesData.nba, gamesData.nhl])
 
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, POLL_MS)
@@ -405,6 +438,92 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     return all
   }, [mode, filtered, refs, method, bettable, sgpMinEv, sgpBook, useCurve, sgpArch])
 
+  const gameLinesData = useMemo(() => {
+    const sports = gameSport === 'all' ? ['nba', 'nhl'] : [gameSport]
+    const pricedGames: (GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] })[] = []
+    const allRows: GameProjectionRow[] = []
+    const matchups: { key: string; label: string; sport: string }[] = []
+
+    for (const s of ['nba', 'nhl']) {
+      const feed = gamesData[s]
+      if (!feed) continue
+      if (feed.games) {
+        for (const g of feed.games) {
+          matchups.push({
+            key: g.game_key,
+            label: `${g.away} @ ${g.home} (${s.toUpperCase()})`,
+            sport: s,
+          })
+        }
+      }
+    }
+
+    for (const s of sports) {
+      const feed = gamesData[s]
+      if (!feed) continue
+
+      if (feed.priced_games) {
+        for (const g of feed.priced_games) {
+          if (gameMatchup !== 'all' && g.game_key !== gameMatchup) continue
+          if (q) {
+            const ql = q.toLowerCase().trim()
+            const match = `${g.away_team} ${g.home_team}`.toLowerCase().includes(ql)
+            if (!match) continue
+          }
+
+          const filteredMarkets = (g.markets || []).filter(m => {
+            if (gameMarket !== 'all') {
+              const sys = (m.system || '').toLowerCase()
+              if (gameMarket === 'spread' && !sys.includes('spread')) return false
+              if (gameMarket === 'total' && !sys.includes('total')) return false
+              if (gameMarket === 'ml' && !sys.includes('ml')) return false
+            }
+            if (gameSide !== 'all') {
+              const sd = (m.side || '').toLowerCase()
+              if (gameSide === 'home_over' && sd !== 'home' && sd !== 'over') return false
+              if (gameSide === 'away_under' && sd !== 'away' && sd !== 'under') return false
+            }
+            if (gameMinEdge > 0 && (m.model_edge == null || m.model_edge < gameMinEdge)) return false
+            return true
+          })
+
+          if (filteredMarkets.length > 0 || (gameMarket === 'all' && gameMinEdge === 0 && !q)) {
+            pricedGames.push({ ...g, sport: s, filteredMarkets })
+          }
+        }
+      }
+
+      if (feed.rows) {
+        for (const r of feed.rows) {
+          if (gameMatchup !== 'all' && r.game_key !== gameMatchup) continue
+          if (gameMarket !== 'all') {
+            const m = (r.stat || r.system || '').toLowerCase()
+            if (gameMarket === 'spread' && !m.includes('spread') && !m.includes('puck')) continue
+            if (gameMarket === 'total' && !m.includes('total')) continue
+            if (gameMarket === 'ml' && !m.includes('ml') && !m.includes('moneyline')) continue
+          }
+          if (gameSide !== 'all') {
+            const sd = (r.side || '').toLowerCase()
+            if (gameSide === 'home_over' && sd !== 'home' && sd !== 'over') continue
+            if (gameSide === 'away_under' && sd !== 'away' && sd !== 'under') continue
+          }
+          if (gameMinEdge > 0 && (r.model_edge == null || r.model_edge < gameMinEdge)) continue
+          if (q) {
+            const ql = q.toLowerCase().trim()
+            const match = (r.player || '').toLowerCase().includes(ql) ||
+              (r.team || '').toLowerCase().includes(ql) ||
+              (r.opp || '').toLowerCase().includes(ql) ||
+              (r.stat_label || '').toLowerCase().includes(ql)
+            if (!match) continue
+          }
+          allRows.push(r)
+        }
+      }
+    }
+
+    return { pricedGames, rows: allRows, matchupOptions: matchups }
+  }, [gamesData, gameSport, gameMarket, gameMatchup, gameSide, gameMinEdge, q])
+
   // Mode badges: counted from deferred inputs so a click paints the table first and the other two counts follow.
   const badgeIn = useMemo(() => ({ scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve }),
     [scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve])
@@ -421,17 +540,28 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       long: buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
         .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length,
       sgp: computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve }).length,
+      gameLines: gameLinesData.rows.length,
     }
-  }, [dBadgeIn])
+  }, [dBadgeIn, gameLinesData.rows.length])
 
   const nRows = mode === 'ev' ? screen.length
     : mode === 'outliers' ? outliers.length
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
     : mode === 'longshots' ? longshots.length
-    : sgpProxies.length
+    : mode === 'sgp' ? sgpProxies.length
+    : gameLinesData.rows.length
 
   const meta = useMemo(() => {
+    if (mode === 'game_lines') {
+      const gList = Object.values(gamesData).filter((g): g is GameProjectionsFeed => Boolean(g))
+      const ages = gList.map(g => g.age_minutes).filter((n): n is number => n != null)
+      return {
+        age: ages.length ? Math.max(...ages) : null,
+        stale: gList.some(g => g.stale),
+        sources: ['KALMAN_JOINT_T_V1', 'DISTRIBUTIONAL_MATRIX_V1'],
+      }
+    }
     const activeWithRows = active.filter(s => (boards[s]?.count ?? 0) > 0)
     const target = activeWithRows.length > 0 ? activeWithRows : active
     const hasRows = activeWithRows.length > 0
@@ -444,10 +574,12 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
       stale: target.some(s => Boolean(boards[s]!.stale && (boards[s]!.count ?? 0) > 0)),
       sources,
     }
-  }, [active, boards])
+  }, [mode, gamesData, active, boards])
 
   // no board at all, or every board the API answered with is flagged unavailable (the banker has not written it yet)
-  const unpublished = active.length === 0 || active.every(s => boards[s]!.status === 'unavailable')
+  const unpublished = mode === 'game_lines'
+    ? Object.values(gamesData).length > 0 && Object.values(gamesData).every(g => g?.status === 'unavailable')
+    : (active.length === 0 || active.every(s => boards[s]!.status === 'unavailable'))
 
   const refWeight = refs.length ? Math.round(100 / refs.length) : null
   const refSet = useMemo(() => new Set(refs), [refs])
@@ -479,6 +611,8 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
     ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
     : mode === 'sgp'
     ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies scans for multi-leg milestone and stat combinations that beat the book\'s direct pricing or fair correlated joint value. Try lowering the MIN EV floor or switching archetypes.' }
+    : mode === 'game_lines'
+    ? { title: 'No game lines clear these filters', body: 'Quantitative margin, total, and moneyline models price today\'s NBA and NHL games. Try clearing the market or matchup filters, or lowering the MIN EDGE threshold.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
@@ -522,8 +656,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                 : m.key === 'arb' ? counts.arb
                 : m.key === 'middles' ? counts.middles
                 : m.key === 'longshots' ? counts.long
-                : counts.sgp
-              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0)
+                : m.key === 'sgp' ? counts.sgp
+                : counts.gameLines
+              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0) || (m.key === 'game_lines' && n > 0)
               return (
                 <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                   {m.label}
@@ -620,8 +755,9 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   : m.key === 'arb' ? counts.arb
                   : m.key === 'middles' ? counts.middles
                   : m.key === 'longshots' ? counts.long
-                  : counts.sgp
-                const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0)
+                  : m.key === 'sgp' ? counts.sgp
+                  : counts.gameLines
+                const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0) || (m.key === 'game_lines' && n > 0)
                 return (
                   <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                     {m.label}
@@ -630,21 +766,25 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                 )
               })}
             </PillGroup>
-            <Field label="SPORT">
-              <PillGroup>
-                {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                  <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
-                ))}
-              </PillGroup>
-            </Field>
-            <Field label="PROP" htmlFor="odds-stat">
-              <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-                options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
-            </Field>
-            <Field label="GAME" htmlFor="odds-game">
-              <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
-                options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
-            </Field>
+            {mode !== 'game_lines' ? (
+              <>
+                <Field label="SPORT">
+                  <PillGroup>
+                    {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
+                      <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="PROP" htmlFor="odds-stat">
+                  <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
+                    options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+                </Field>
+                <Field label="GAME" htmlFor="odds-game">
+                  <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
+                    options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+                </Field>
+              </>
+            ) : null}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
               <input
                 aria-label="Search player or team" placeholder="Search player / team" value={q} onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
@@ -870,6 +1010,62 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   <PillGroup>
                     <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
                     <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
+                  </PillGroup>
+                </Field>
+              </>
+            )}
+            {mode === 'game_lines' && (
+              <>
+                <Field label="MARKET">
+                  <PillGroup>
+                    <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
+                    <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread / Puck Line</Pill>
+                    <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
+                    <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>Moneyline</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="GAME / MATCHUP" htmlFor="game-matchup-select">
+                  <Select
+                    id="game-matchup-select"
+                    value={gameMatchup}
+                    onChange={v => { setGameMatchup(v); setLimit(PAGE) }}
+                    options={[
+                      { v: 'all', l: `All Matchups (${gameLinesData.matchupOptions.length})` },
+                      ...gameLinesData.matchupOptions.map(m => ({ v: m.key, l: m.label })),
+                    ]}
+                  />
+                </Field>
+                <Field label="SPORT">
+                  <PillGroup>
+                    <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
+                    <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
+                    <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="SIDE">
+                  <PillGroup>
+                    <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
+                    <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
+                    <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
+                  </PillGroup>
+                </Field>
+                <Field label="MIN EDGE">
+                  <PillGroup>
+                    {[
+                      { label: 'All', v: 0 },
+                      { label: '1%+', v: 0.01 },
+                      { label: '2%+', v: 0.02 },
+                      { label: '3%+', v: 0.03 },
+                      { label: '5%+', v: 0.05 },
+                    ].map(m => (
+                      <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
+                    ))}
+                  </PillGroup>
+                </Field>
+                <Field label="VIEW">
+                  <PillGroup>
+                    <Pill active={gameView === 'cards'} onClick={() => setGameView('cards')}>Game Cards</Pill>
+                    <Pill active={gameView === 'table'} onClick={() => setGameView('table')}>Data Matrix</Pill>
                   </PillGroup>
                 </Field>
               </>
@@ -1139,51 +1335,123 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             </>
           )}
 
-          <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-            <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
-            <select
-              id="mobile-odds-stat"
-              value={stat}
-              onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
-              style={{
-                width: '100%',
-                background: '#090a0f',
-                color: 'var(--chalk)',
-                border: `1px solid ${HAIR}`,
-                borderRadius: '8px',
-                minHeight: '40px',
-                padding: '0 12px',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="all">All props</option>
-              {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
-            </select>
-          </div>
+          {mode === 'game_lines' && (
+            <>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MARKET</div>
+                <PillGroup>
+                  <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
+                  <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread</Pill>
+                  <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
+                  <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>ML</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME / MATCHUP</div>
+                <select
+                  id="mobile-game-matchup-select"
+                  value={gameMatchup}
+                  onChange={e => { setGameMatchup(e.target.value); setLimit(PAGE) }}
+                  style={{
+                    width: '100%',
+                    background: '#090a0f',
+                    color: 'var(--chalk)',
+                    border: `1px solid ${HAIR}`,
+                    borderRadius: '8px',
+                    minHeight: '40px',
+                    padding: '0 12px',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All Matchups ({gameLinesData.matchupOptions.length})</option>
+                  {gameLinesData.matchupOptions.map(m => (
+                    <option key={m.key} value={m.key}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SPORT</div>
+                <PillGroup>
+                  <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
+                  <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
+                  <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SIDE</div>
+                <PillGroup>
+                  <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
+                  <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
+                  <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
+                </PillGroup>
+              </div>
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN EDGE</div>
+                <PillGroup>
+                  {[
+                    { label: 'All', v: 0 },
+                    { label: '1%+', v: 0.01 },
+                    { label: '2%+', v: 0.02 },
+                    { label: '3%+', v: 0.03 },
+                    { label: '5%+', v: 0.05 },
+                  ].map(m => (
+                    <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
+                  ))}
+                </PillGroup>
+              </div>
+            </>
+          )}
 
-          <div>
-            <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
-            <select
-              id="mobile-odds-game"
-              value={game}
-              onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
-              style={{
-                width: '100%',
-                background: '#090a0f',
-                color: 'var(--chalk)',
-                border: `1px solid ${HAIR}`,
-                borderRadius: '8px',
-                minHeight: '40px',
-                padding: '0 12px',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="all">All games</option>
-              {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
-            </select>
-          </div>
+          {mode !== 'game_lines' && (
+            <>
+              <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
+                <select
+                  id="mobile-odds-stat"
+                  value={stat}
+                  onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
+                  style={{
+                    width: '100%',
+                    background: '#090a0f',
+                    color: 'var(--chalk)',
+                    border: `1px solid ${HAIR}`,
+                    borderRadius: '8px',
+                    minHeight: '40px',
+                    padding: '0 12px',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All props</option>
+                  {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
+                <select
+                  id="mobile-odds-game"
+                  value={game}
+                  onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
+                  style={{
+                    width: '100%',
+                    background: '#090a0f',
+                    color: 'var(--chalk)',
+                    border: `1px solid ${HAIR}`,
+                    borderRadius: '8px',
+                    minHeight: '40px',
+                    padding: '0 12px',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All games</option>
+                  {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
+                </select>
+              </div>
+            </>
+          )}
 
           <MobileBookChecklist
             title="SPORTSBOOKS"
@@ -1225,7 +1493,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
 
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
-      ) : allRows.length === 0 ? (
+      ) : (allRows.length === 0 && mode !== 'game_lines') ? (
         <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
@@ -1337,6 +1605,12 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
                   r={r}
                   onInspect={() => setInspectItem({ type: 'longshots', row: r })}
                 />
+              ))}
+            </div>
+          ) : mode === 'game_lines' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+              {gameLinesData.pricedGames.slice(0, limit).map((g, idx) => (
+                <GameCard key={`${g.sport}-${g.game_key}-${idx}`} game={g} />
               ))}
             </div>
           ) : (
@@ -1467,6 +1741,15 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
             </table>
           </div>
         </div>
+      ) : mode === 'game_lines' ? (
+        <GameLinesView
+          pricedGames={gameLinesData.pricedGames}
+          rows={gameLinesData.rows}
+          view={gameView}
+          limit={limit}
+          onSwitchView={setGameView}
+          isMobile={isMobile}
+        />
       ) : (
         <div>
           {isMobile && (
@@ -1607,6 +1890,7 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
           books&apos; consensus (N BKS) or, where fewer than two price the exact line, a fair probability read off the player&apos;s own multi-line curve (CURVE). The curve is an
           unvalidated estimate: treat a CURVE edge as a place to look, not a price to trust. Snipe is the longshot over against fair; Fade is the under or NO against fair.</>}
         {mode === 'sgp' && <>SGP Proxies identifies multi-leg same-game milestone and stat combinations whose synthetic SGP pricing beats official standalone markets or fair joint probability using Gaussian copula correlation. Est. SGP Odds models the target book&apos;s internal SGP builder; True Fair estimates the correlated outcome under empirical stat \u03c1.</>}
+        {mode === 'game_lines' && <>Game Lines prices full-game spreads, totals, and moneylines using institutional quantitative distribution models (NBA Student-t joint margin-total dispersion, NHL Dixon-Coles bivariate Poisson with regulation empty-net and 3v3 OT adjustments). Model win probability integrates pace, defensive four factors, rest fatigue, and active injury drags. Fair market probability is de-vigged multi-book consensus. Edge is model probability minus fair market probability.</>}
         {' '}These are unvalidated market signals, not part of the public track record. Lines move or limit quickly: check the price at the book. Not financial advice.
         21+. If gambling is a problem, call 1-800-GAMBLER.{' '}
         <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>
@@ -1616,7 +1900,6 @@ export function OddsClient({ initial, initialLocked, headline }: { initial: Part
         item={inspectItem}
         columns={columns}
         onClose={() => setInspectItem(null)}
-        bankroll={bankroll}
       />
     </div>
   )
@@ -2128,7 +2411,6 @@ function MobileCompareSheet({
   item,
   columns,
   onClose,
-  bankroll,
 }: {
   item:
     | { type: 'ev'; row: ScreenRow }
@@ -2138,16 +2420,14 @@ function MobileCompareSheet({
     | null
   columns: { key: string; offshore: boolean }[]
   onClose: () => void
-  bankroll: number
 }) {
   if (!item) return null
 
   const row = item.type === 'middles' ? item.row.low : item.row.row
-  const sportSlug = row.game_key.split(':')[0] as HeadshotSport
   const byBook = new Map(row.books.map(b => [b.book, b]))
 
   let title = row.player
-  let subtitle = `${row.away} @ ${row.home} \u00b7 ${startLabel(row.commence)}`
+  const subtitle = `${row.away} @ ${row.home} \u00b7 ${startLabel(row.commence)}`
   if (item.type === 'ev') {
     title = `${row.player} \u00b7 ${item.row.label} ${STAT_LABEL[row.stat] ?? row.stat}`
   } else if (item.type === 'middles') {
@@ -3224,6 +3504,315 @@ function Empty({ title, body }: { title: string; body: string }) {
     <div style={{ ...SURFACE_CARD, padding: '36px 20px', textAlign: 'center' }}>
       <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>{title}</div>
       <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>{body}</div>
+    </div>
+  )
+}
+
+function GameCard({ game }: { game: GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] } }) {
+  const sport = (game.sport || '').toLowerCase()
+  const isNba = sport === 'nba'
+  const isNhl = sport === 'nhl'
+
+  const expMargin = game.mu_margin != null ? (
+    game.mu_margin > 0
+      ? `${game.home_team} -${Math.abs(game.mu_margin).toFixed(1)}`
+      : `${game.away_team} -${Math.abs(game.mu_margin).toFixed(1)}`
+  ) : null
+
+  return (
+    <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="mono" style={{
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '4px',
+            background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
+            color: isNba ? '#f97316' : '#38bdf8',
+            border: `1px solid ${isNba ? 'rgba(249,115,22,0.35)' : 'rgba(56,189,248,0.35)'}`,
+          }}>
+            {sport.toUpperCase()}
+          </span>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)' }}>
+            {game.away_team} @ {game.home_team}
+          </span>
+        </div>
+        <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
+          {game.game_date}
+        </div>
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '8px',
+        padding: '10px 12px',
+        background: '#090a0f',
+        borderRadius: '6px',
+        border: `1px solid ${HAIR}`,
+      }}>
+        {isNba && (
+          <>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL MARGIN</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+                {expMargin ?? '--'}
+              </div>
+            </div>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+                {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED PACE</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
+                {game.exp_pace != null ? `${game.exp_pace.toFixed(1)} poss` : '--'}
+              </div>
+            </div>
+          </>
+        )}
+        {isNhl && (
+          <>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED GOALS</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+                {game.lambda_a != null && game.lambda_h != null
+                  ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
+                  : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+                {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
+              </div>
+            </div>
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DISPERSION</div>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
+                {game.sigma_total != null ? `\u03c3 ${game.sigma_total.toFixed(1)}` : '--'}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--fog)', fontSize: '10px' }}>
+              <th scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>MARKET / SIDE</th>
+              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>LINE</th>
+              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MODEL %</th>
+              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MKT FAIR</th>
+              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>EDGE</th>
+              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>BEST PRICE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {game.filteredMarkets.map((m, idx) => {
+              const hasEdge = m.model_edge != null && m.model_edge >= 0.015
+              const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
+              return (
+                <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid #151822', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
+                  <td style={{ padding: '8px', color: '#f3f4f6' }}>
+                    <div style={{ fontWeight: 600 }}>{m.market_label}</div>
+                    <div className="mono" style={{ fontSize: '11px', color: 'var(--silver)' }}>{sideLabel}</div>
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6', fontWeight: 600 }}>
+                    {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6' }}>
+                    {(m.p_model * 100).toFixed(1)}%
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--fog)' }}>
+                    {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
+                  </td>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
+                    {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
+                  </td>
+                  <td style={{ textAlign: 'right', padding: '8px' }}>
+                    {m.best_odds != null ? (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                        <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
+                          {formatOdds(m.best_odds)}
+                        </span>
+                        {m.best_book && <BookTag book={m.best_book} size={15} />}
+                      </div>
+                    ) : (
+                      <span className="mono" style={{ color: 'var(--fog)' }}>--</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function GameLinesTable({ rows, limit }: { rows: GameProjectionRow[]; limit: number }) {
+  return (
+    <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+      <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
+            <th scope="col" style={{ textAlign: 'left', minWidth: '70px', padding: '10px 12px' }}>SPORT</th>
+            <th scope="col" style={{ textAlign: 'left', minWidth: '180px', padding: '10px 12px' }}>MATCHUP</th>
+            <th scope="col" style={{ textAlign: 'left', minWidth: '120px', padding: '10px 12px' }}>MARKET</th>
+            <th scope="col" style={{ textAlign: 'left', minWidth: '140px', padding: '10px 12px' }}>SELECTION / LINE</th>
+            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MODEL PROB</th>
+            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MKT FAIR</th>
+            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>EDGE</th>
+            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MARKET EV</th>
+            <th scope="col" style={{ textAlign: 'right', minWidth: '160px', padding: '10px 12px' }}>BEST ODDS &amp; BOOK</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, limit).map((r, idx) => {
+            const isNba = r.sport.toLowerCase() === 'nba'
+            const hasEdge = r.model_edge != null && r.model_edge >= 0.015
+            const bestOdds = r.best_over_odds ?? r.best_under_odds
+            const bestBook = r.best_over_book ?? r.best_under_book
+            const sideDisplay = r.team ? `${r.team} ${r.side.toUpperCase()}` : r.side.toUpperCase()
+            const lineDisplay = r.line != null ? (r.line > 0 ? `+${r.line}` : `${r.line}`) : ''
+
+            return (
+              <tr key={`${r.game_key}-${r.system}-${r.side}-${idx}`} data-row="odds">
+                <td style={{ padding: '9px 12px' }}>
+                  <span className="mono" style={{
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
+                    color: isNba ? '#f97316' : '#38bdf8',
+                    border: `1px solid ${isNba ? 'rgba(249,115,22,0.35)' : 'rgba(56,189,248,0.35)'}`,
+                  }}>
+                    {r.sport.toUpperCase()}
+                  </span>
+                </td>
+                <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--chalk)' }}>
+                  {r.player}
+                  <div className="mono" style={{ fontSize: '10.5px', color: '#7d8596', fontWeight: 400 }}>
+                    {startLabel(r.commence)}
+                  </div>
+                </td>
+                <td style={{ padding: '9px 12px', color: 'var(--silver)' }}>
+                  {r.stat_label}
+                </td>
+                <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: '#f3f4f6' }}>
+                  {sideDisplay} {lineDisplay}
+                </td>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#f3f4f6' }}>
+                  {(r.p_model_side * 100).toFixed(1)}%
+                </td>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#7d8596' }}>
+                  {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
+                </td>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
+                  {r.model_edge != null ? `${m_edge(r.model_edge)}` : '--'}
+                </td>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: r.market_ev != null && r.market_ev > 0 ? GREEN : '#7d8596' }}>
+                  {r.market_ev != null ? `${r.market_ev > 0 ? '+' : ''}${(r.market_ev * 100).toFixed(1)}%` : '--'}
+                </td>
+                <td style={{ textAlign: 'right', padding: '9px 12px' }}>
+                  {bestOdds != null ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
+                        {formatOdds(bestOdds)}
+                      </span>
+                      {bestBook && <BookTag book={bestBook} size={15} />}
+                    </div>
+                  ) : (
+                    <span className="mono" style={{ color: '#7d8596' }}>--</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function m_edge(edge: number): string {
+  return `${edge > 0 ? '+' : ''}${(edge * 100).toFixed(1)}%`
+}
+
+function GameLinesView({
+  pricedGames,
+  rows,
+  view,
+  limit,
+  onSwitchView,
+  isMobile,
+}: {
+  pricedGames: (GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] })[]
+  rows: GameProjectionRow[]
+  view: 'cards' | 'table'
+  limit: number
+  onSwitchView: (v: 'cards' | 'table') => void
+  isMobile: boolean
+}) {
+  return (
+    <div>
+      {isMobile && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+            <button
+              type="button"
+              onClick={() => onSwitchView('cards')}
+              style={{
+                fontFamily: 'var(--font-text), sans-serif',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: 0,
+                cursor: 'pointer',
+                background: view === 'cards' ? '#1b1f2b' : 'transparent',
+                color: view === 'cards' ? '#ffffff' : 'var(--fog)',
+              }}
+            >
+              Game Cards ({pricedGames.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchView('table')}
+              style={{
+                fontFamily: 'var(--font-text), sans-serif',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: '4px',
+                border: 0,
+                cursor: 'pointer',
+                background: view === 'table' ? '#1b1f2b' : 'transparent',
+                color: view === 'table' ? '#ffffff' : 'var(--fog)',
+              }}
+            >
+              Data Matrix ({rows.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view === 'cards' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(520px, 1fr))', gap: '16px' }}>
+          {pricedGames.slice(0, limit).map((g, idx) => (
+            <GameCard key={`${g.sport}-${g.game_key}-${idx}`} game={g} />
+          ))}
+        </div>
+      ) : (
+        <GameLinesTable rows={rows} limit={limit} />
+      )}
     </div>
   )
 }

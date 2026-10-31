@@ -3,6 +3,7 @@
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
 import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
+import type { GameProjectionsFeed } from '@/lib/game-lines'
 import { siteDateKey } from '@/lib/dates'
 import type { ProjectionSport, SportSlug } from '@/lib/sports'
 import type { OddsBoard } from '@/lib/odds-screen'
@@ -278,6 +279,22 @@ export async function apiGetOddsBoard(sport: SportSlug, opts: { day?: string; st
   if (opts.stat) sp.set('stat', opts.stat)
   if (opts.limit) sp.set('limit', String(opts.limit))
   return apiFetch<OddsBoard>(`/api/public/odds/board?${sp.toString()}`, 60, `/api/odds-board?${sp.toString()}`)
+}
+
+/** Quantitative game-line projections (ML, Spread/Puck Line, Total) for NBA / NHL. */
+export async function apiGetGameProjections(
+  sport: 'nba' | 'nhl' | string,
+  opts: { day?: string; market?: string; limit?: number } = {},
+): Promise<GameProjectionsFeed> {
+  const sp = new URLSearchParams({ sport })
+  if (opts.day) sp.set('day', opts.day)
+  if (opts.market) sp.set('market', opts.market)
+  if (opts.limit) sp.set('limit', String(opts.limit))
+  return apiFetch<GameProjectionsFeed>(
+    `/api/public/games/projections?${sp.toString()}`,
+    60,
+    `/api/games/projections?${sp.toString()}`,
+  )
 }
 
 /** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */

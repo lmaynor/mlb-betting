@@ -18,7 +18,7 @@ import { isOffshore } from '@/lib/offshore'
 
 export type DevigMethod = 'proportional' | 'power'
 export type SideFilter = 'both' | 'over' | 'under'
-export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
+export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp' | 'game_lines'
 export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
 export interface BoardBook { book: string; over: number | null; under: number | null }
@@ -1495,7 +1495,7 @@ export function computeSgpProxies(rows: BoardRow[], opts: SgpProxyOptions): SgpP
   }
 
   // 2. Multi-Player Teammate Combos (NHL Linemates, NFL QB+WR, NBA Ast+Pts)
-  for (const [gtKey, tRows] of gameTeamGroups.entries()) {
+  for (const [, tRows] of gameTeamGroups.entries()) {
     if (tRows.length < 2) continue
     const sample = tRows[0]
     const sp = ((sample as { sport?: string }).sport || (sample.game_key.includes(':') ? sample.game_key.split(':')[0] : '')).toLowerCase()

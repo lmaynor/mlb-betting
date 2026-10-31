@@ -905,6 +905,7 @@ from mlb.runners.public_api import (
     get_summary_stats, get_window_stats, _require_api_key,
     get_clv_data, get_today_slate,
     get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections, get_odds_board,
+    get_game_projections,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1232,6 +1233,33 @@ def public_odds_board():
     except Exception as exc:
         logger.exception("public_odds_board failed")
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/games/projections", methods=["GET", "OPTIONS"])
+def public_game_projections():
+    """Daily quantitative game-line projections (ML, Spread/Puck Line, Total) for NBA / NHL."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_game_projections(
+            request.args.get("sport", ""),
+            day=request.args.get("day") or None,
+            market=request.args.get("market") or None,
+            limit=int(request.args.get("limit", 300)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_game_projections failed")
+        return jsonify({"error": str(exc)}), 500
+
 
 
 @app.route("/api/public/analytics/deep-dive", methods=["GET", "OPTIONS"])
