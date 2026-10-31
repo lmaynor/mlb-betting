@@ -66,6 +66,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import numpy as np
+import pandas as pd
 from scipy.stats import nbinom, norm
 
 from ev import rosters as _rosters

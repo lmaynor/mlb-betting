@@ -232,6 +232,25 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
             if old is None or _prefer(new, old):
                 row["books"][q.book] = new
 
+    # Drop rogue quotes where one book's payout deviates wildly (> 1.8x median dec) from >= 3 quoting books
+    # (e.g. First TD at +10000 mis-mapped into Anytime TD when peers quote +2800).
+    for row in rows.values():
+        for side in ("over", "under"):
+            side_quotes = [(b_name, b[side]) for b_name, b in row["books"].items() if b.get(side) is not None]
+            if len(side_quotes) >= 3:
+                decs = [american_to_decimal(p) for _, p in side_quotes]
+                med_dec = float(median(decs))
+                for b_name, p in side_quotes:
+                    if american_to_decimal(p) > med_dec * 1.8:
+                        log.warning(
+                            "odds_board %s: dropping rogue %s quote for %s %s %s at %s (%s vs peer median dec %.2f)",
+                            sport, side, row.get("player_norm"), row.get("stat"), row.get("line"), b_name, p, med_dec
+                        )
+                        row["books"][b_name][side] = None
+        to_drop = [b_name for b_name, b in row["books"].items() if b.get("over") is None and b.get("under") is None]
+        for b_name in to_drop:
+            row["books"].pop(b_name, None)
+
     # ---- per (game, player, stat): the modal line, then is_alt and the curve for every line of that player
     groups: dict = {}
     for row in rows.values():

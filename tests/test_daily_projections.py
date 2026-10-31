@@ -624,3 +624,18 @@ def test_projections_route_auth_payload_and_400(client):
     assert g.call_args.args == ("nba",) and g.call_args.kwargs == {"market": "pts", "limit": 9}
     assert client.get("/api/public/projections?sport=mlb", headers={"X-API-Key": "k"}).status_code == 400
     assert client.get("/api/public/projections", headers={"X-API-Key": "k"}).status_code == 400
+
+
+def test_load_env_lines_parses_dataframe_without_pd_nameerror(monkeypatch):
+    import pandas as pd
+    fake_df = pd.DataFrame([
+        {"team": "KC", "gameday": "2026-11-01", "implied_total": 24.5, "team_spread": -3.5, "wind": 10.0, "roof": "open", "temp": 65.0},
+        {"team": "BAL", "gameday": "2026-11-01", "implied_total": 21.0, "team_spread": 3.5, "wind": None, "roof": None, "temp": None},
+    ])
+    monkeypatch.setattr(dp._ea, "game_env_table", lambda sched: fake_df)
+    with patch("nfl.data.read.load", return_value=fake_df):
+        env_lines = dp._load_env_lines()
+    assert ("KC", "2026-11-01") in env_lines
+    assert env_lines[("KC", "2026-11-01")].wind == 10.0
+    assert env_lines[("BAL", "2026-11-01")].wind is None
+

@@ -30,11 +30,13 @@ import logging
 import random
 import time
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from zoneinfo import ZoneInfo
 
 from ev import bettingpros_live as bl
 from ev.props import norm_name
 from mlb_core.odds import bettingpros_props as bpp
+from mlb_core.odds.utils import american_to_decimal
 
 log = logging.getLogger("ev.bettingpros_events")
 
@@ -178,14 +180,37 @@ def build_per_game_player_rows(sport: str, market: str, market_id: int, ds: str,
                     "event_status": ev.get("status", ""), "away": ev.get("away", ""), "home": ev.get("home", ""),
                     "player_id": p.get("id"), "player": name, "team": pl.get("team") or "",
                     "position": pl.get("position") or "", "side": "over"}
+            sel_lines = []
             for book in sel.get("books") or []:
                 bid = book.get("id")
                 for ln in book.get("lines") or []:
                     if ln.get("cost") is None or ln.get("line") is None or ln.get("is_off"):
                         continue
-                    rows.append({**base, "line": 0.5, "book_id": bid, "book": bpp.BOOK_NAMES.get(bid, f"book_{bid}"),
-                                 "book_kind": bpp.book_kind(bid), "odds": ln["cost"], "is_main": ln.get("main"),
-                                 "is_best": ln.get("best"), "is_open": False, "updated": ln.get("updated")})
+                    sel_lines.append((bid, ln))
+            if not sel_lines:
+                continue
+
+            # Drop rogue quotes where one book's decimal odds exceeds 1.8x the consensus/median reference
+            # (e.g. First TD at +10000 mis-mapped into Anytime TD when consensus is +3000).
+            peer_decs = [
+                american_to_decimal(ln["cost"])
+                for bid, ln in sel_lines
+                if bid != 0 and bpp.book_kind(bid) not in ("dfs", "consensus")
+            ]
+            cons_dec = next((american_to_decimal(ln["cost"]) for bid, ln in sel_lines if bid == 0), None)
+            ref_dec = cons_dec if cons_dec is not None else (median(peer_decs) if len(peer_decs) >= 3 else None)
+
+            for bid, ln in sel_lines:
+                dec = american_to_decimal(ln["cost"])
+                if ref_dec is not None and dec > ref_dec * 1.8:
+                    log.warning(
+                        "bettingpros %s %s: dropping rogue quote for %s at %s (%s vs ref decimal %.2f)",
+                        sport, market, name, bpp.BOOK_NAMES.get(bid, f"book_{bid}"), ln["cost"], ref_dec
+                    )
+                    continue
+                rows.append({**base, "line": 0.5, "book_id": bid, "book": bpp.BOOK_NAMES.get(bid, f"book_{bid}"),
+                             "book_kind": bpp.book_kind(bid), "odds": ln["cost"], "is_main": ln.get("main"),
+                             "is_best": ln.get("best"), "is_open": False, "updated": ln.get("updated")})
     return rows
 
 

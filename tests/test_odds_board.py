@@ -58,6 +58,24 @@ def test_one_sided_yes_quote_keeps_under_null():
     assert q["over"] == 120 and q["under"] is None
 
 
+def test_rogue_quote_deviating_from_peer_consensus_is_dropped():
+    # 4 books quote +2800 to +3000, 1 rogue book quotes +10000 (e.g. First TD mapped to Anytime TD)
+    books = [
+        {"key": "bet365", "markets": [{"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Tylan Wallace", "price": 2800, "point": 0.5}]}]},
+        {"key": "betmgm", "markets": [{"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Tylan Wallace", "price": 3000, "point": 0.5}]}]},
+        {"key": "caesars", "markets": [{"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Tylan Wallace", "price": 2700, "point": 0.5}]}]},
+        {"key": "fanatics", "markets": [{"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Tylan Wallace", "price": 3000, "point": 0.5}]}]},
+        {"key": "fanduel", "markets": [{"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Tylan Wallace", "price": 10000, "point": 0.5}]}]},
+    ]
+    b = ob.build_board("nfl", [event(books, away="Kansas City Chiefs", home="Baltimore Ravens")], NOW)
+    assert b["count"] == 1
+    row = b["rows"][0]
+    book_names = [q["book"] for q in row["books"]]
+    assert "fanduel" not in book_names
+    assert set(book_names) == {"bet365", "betmgm", "caesars", "fanatics"}
+
+
+
 def test_rows_are_nearest_game_first_and_capped(monkeypatch):
     later = event(FAIR, start=START + timedelta(days=1))
     b = ob.build_board("nba", [later, event(FAIR)], NOW)

@@ -363,6 +363,18 @@ describe('computeOutliers', () => {
     // FanDuel is not in myBooksOnly, so FanDuel cannot be the outlierBook
     expect(resBettable.find(x => x.outlierBook === 'fanduel')).toBeUndefined()
   })
+
+  it('drops absurd rogue lines (e.g. First TD at +10000 mapped to Anytime TD with +3000 consensus)', () => {
+    const rogue = row([
+      B('fanduel', 10000, null),
+      B('bet365', 2800, null),
+      B('betmgm', 3000, null),
+      B('caesars', 2700, null),
+      B('fanatics', 3000, null),
+    ])
+    const res = computeOutliers([rogue], { refs: [], method: 'proportional', bettable: null, minPeers: 3, side: 'over' })
+    expect(res).toHaveLength(0)
+  })
 })
 
 describe('computeSgpProxies', () => {

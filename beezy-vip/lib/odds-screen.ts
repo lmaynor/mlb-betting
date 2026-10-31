@@ -270,6 +270,8 @@ export interface OutlierOptions {
   minRef?: number
 }
 
+export const OUTLIER_MAX_PREMIUM_PCT = 100
+
 /**
  * Identify single-book price dislocations where one bettable book is hanging a number significantly above the
  * rest of the market on the same side. Leave-self-out math: compares the outlier book's payout to the average
@@ -339,7 +341,9 @@ export function computeOutliers(rows: BoardRow[], opts: OutlierOptions): Outlier
       const marketAvgAmerican = fairAmericanOf(meanPeerImplied)
       const payoutPremiumPct = ((bestDecimal / marketAvgDecimal) - 1) * 100
 
-      if (payoutPremiumPct < minPremiumPct) continue
+      // A quote paying > 2x peer consensus (payout premium > 100%) is almost certainly a mis-mapped market
+      // (e.g. First TD mapped to Anytime TD) or a palpable error, not a legitimate single-book market outlier.
+      if (payoutPremiumPct < minPremiumPct || payoutPremiumPct > OUTLIER_MAX_PREMIUM_PCT) continue
 
       let sumFair = 0
       let nRef = 0

@@ -126,6 +126,22 @@ def test_per_game_player_market_anytime_td_is_parsed_as_one_sided_yes_at_half_po
         ("draftkings", "anytime_td", 0.5, 1800, None), ("fanduel", "anytime_td", 0.5, 1700, None)}
 
 
+def test_per_game_player_market_drops_rogue_longshot_quotes():
+    def psel(pid, label, books):
+        return {"participant": pid, "selection": "", "label": label,
+                "books": [{"id": b, "lines": [_line(c, 1, True)]} for b, c in books.items()]}
+    # 0 is Consensus (+3000), 10 is FanDuel (+10000 - rogue), others are +2700-+3000
+    offer = {"event_id": 1, "player_id": None, "participants": [
+        {"id": "24427", "name": "Tylan Wallace", "player": {"position": "WR", "team": "CLE"}}],
+        "selections": [psel("24427", "Tylan Wallace", {0: +3000, 10: +10000, 19: +3000, 13: +2700, 14: +3000, 24: +2800})]}
+    rows = be.build_per_game_player_rows("NFL", "anytime_td", 78, "d", [offer], _ev())
+    # FanDuel (+10000) should be dropped
+    books_kept = {r["book_id"] for r in rows}
+    assert 10 not in books_kept
+    assert 19 in books_kept and 13 in books_kept and 14 in books_kept and 24 in books_kept
+
+
+
 # ------------------------------------------------------------------------------------------------ crawl
 class _FakeBP:
     """Stands in for bpp's three network calls; counts calls so pacing / request accounting can be asserted."""
