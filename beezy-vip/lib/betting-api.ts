@@ -4,6 +4,7 @@
 
 import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
+import type { GameOddsFeed } from '@/lib/game-odds'
 import { siteDateKey } from '@/lib/dates'
 import type { ProjectionSport, SportSlug } from '@/lib/sports'
 import type { OddsBoard } from '@/lib/odds-screen'
@@ -294,6 +295,22 @@ export async function apiGetGameProjections(
     `/api/public/games/projections?${sp.toString()}`,
     60,
     `/api/games/projections?${sp.toString()}`,
+  )
+}
+
+/** Every book's moneyline / spread / total price per NBA / NHL game (the /ev/games PRICES view): raw prices, no fair value. */
+export async function apiGetGameOddsBoard(
+  sport: 'nba' | 'nhl' | string,
+  opts: { day?: string; market?: string; limit?: number } = {},
+): Promise<GameOddsFeed> {
+  const sp = new URLSearchParams({ sport })
+  if (opts.day) sp.set('day', opts.day)
+  if (opts.market) sp.set('market', opts.market)
+  if (opts.limit) sp.set('limit', String(opts.limit))
+  return apiFetch<GameOddsFeed>(
+    `/api/public/games/odds?${sp.toString()}`,
+    60,
+    `/api/games/odds?${sp.toString()}`,
   )
 }
 

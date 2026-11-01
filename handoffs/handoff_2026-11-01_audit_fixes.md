@@ -23,7 +23,7 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 6. A scheduler for `nba.odds.accumulator --kind game_lines` (basketball_nba, icehockey_nhl) must exist or the game engines refuse a >6 h old pointer and the payload goes stale.
 7. `SEASON_CARRYOVER = 0.5` (Kalman profile carryover) is a guess; NBA rebounds/turnovers are NaN for 2019-24 so the replay effectively uses 2025 only.
 8. Not done: server-side stripping of the hidden outlier book name (outliers are computed client-side; the lock is not a security boundary); virtualisation / further split of `odds-client.tsx` (~3400 lines); NHL history loader NaN guard (`float(x or default)`); Python 'TD PROXY' label for 2-leg rows; real-launcher check of maskable icons; `gcloud` description-field format for the pause stamp unverified against real gcloud.
-9. Next IA step (not built): a game-line PRICE screen on `/ev/games` (every book's ML/spread/total, line shopping, game-line arbs); the odds board is props-only today.
+9. Game-line PRICE screen BUILT on `/ev/games?view=prices` (see CONTEXT s22); verified only against fixtures and unit tests: check it against a real banked `game_lines` snapshot after the backend deploys (do the NBA/NHL feeds carry alternate lines? is `stale` (270 min) sensible?). The `daily-projections` job image must be rebuilt for the board file to be written.
 10. `weather_multiplier` temperature step at 32F is still a step (wind is now continuous); coefficients unvalidated.
 
 ## Verified

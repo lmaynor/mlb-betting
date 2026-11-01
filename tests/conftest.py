@@ -49,4 +49,5 @@ def _daily_projections_never_reach_gcs(monkeypatch):
     no_game_models.__wrapped__ = dp._run_game_models
     monkeypatch.setattr(dp, "_load_env_lines", guarded_env_lines)
     monkeypatch.setattr(dp, "_run_game_models", no_game_models)
+    monkeypatch.setattr(dp, "_run_game_board", lambda sport, now: False)
     yield

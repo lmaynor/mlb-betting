@@ -8,6 +8,7 @@ import { canViewFull, FREE_PREVIEW_ROWS, type Env, type Viewer } from '@/lib/acc
 import type { CockpitRow, EvFeed } from '@/lib/types'
 import type { OddsBoard } from '@/lib/odds-screen'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
+import type { GameOddsFeed } from '@/lib/game-odds'
 import { isLeague } from '@/lib/tiers'
 
 /** Total live +EV rows a non-Pro viewer sees across every sport: the best by EV. */
@@ -88,6 +89,30 @@ export function limitGameLines(feed: GameProjectionsFeed, viewer: Viewer, env?: 
     count: keptRows.length,
     priced_games: pricedGames,
     games: (feed.games ?? []).filter(g => keptGames.has(g.game_key)),
+  }
+  return { feed: out, locked: rows.length - keptRows.length }
+}
+
+/**
+ * Game-line PRICES (the /ev/games price screen) sit on the Odds Terminal too: Pro sees the whole feed, everyone else the
+ * FREE_PREVIEW_ROWS.ev_terminal best-covered rows (most books quoting), and `games` is cut to the games those rows belong
+ * to (with `n_rows` recounted) so no withheld game rides along. `locked` is how many feed rows were withheld.
+ */
+export function limitGameOdds(feed: GameOddsFeed, viewer: Viewer, env?: Env): { feed: GameOddsFeed; locked: number } {
+  const sport = isLeague(feed.sport) ? feed.sport : 'nfl'
+  if (canViewFull(viewer, 'ev_terminal', sport, env)) return { feed, locked: 0 }
+
+  const rows = feed.rows ?? []
+  const keep = rows.slice().sort((a, b) => (b.books?.length ?? 0) - (a.books?.length ?? 0)).slice(0, FREE_PREVIEW_ROWS.ev_terminal)
+  const kept = new Set(keep)
+  const keptRows = rows.filter(r => kept.has(r))
+  const perGame = new Map<string, number>()
+  for (const r of keptRows) perGame.set(r.game_key, (perGame.get(r.game_key) ?? 0) + 1)
+  const out: GameOddsFeed = {
+    ...feed,
+    rows: keptRows,
+    count: keptRows.length,
+    games: (feed.games ?? []).filter(g => perGame.has(g.game_key)).map(g => ({ ...g, n_rows: perGame.get(g.game_key) ?? 0 })),
   }
   return { feed: out, locked: rows.length - keptRows.length }
 }

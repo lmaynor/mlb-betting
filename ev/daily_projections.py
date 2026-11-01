@@ -1151,6 +1151,21 @@ def _run_game_models(sport: str, events, now: datetime) -> bool:
         return False
 
 
+def _run_game_board(sport: str, now: datetime) -> bool:
+    """Refresh the NBA / NHL per-book GAME-LINE price board (EVSweep/{sport}_games/odds_board_latest.json) from the banked
+    game_lines snapshot (no extra credits). A failed refresh keeps the previous file; failures are logged WITH the traceback and
+    never fail the props compute. (Tests neutralise this hook in tests/conftest.py.)"""
+    try:
+        if sport not in ("nba", "nhl"):
+            return False
+        from ev import game_odds_board as _gob
+        _gob.run(sport, now)
+        return True
+    except Exception:                                                                  # noqa: BLE001
+        log.exception("%s game odds board run failed", sport)
+        return False
+
+
 def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = None, events=None, meta=None,
               games=None, write: bool = True, roster=_AUTO) -> dict:
     """Compute one sport's board. `logs` / `events` / `games` / `roster` are injectable (tests, local runs; roster=None
@@ -1225,6 +1240,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         from ev import odds_board as _ob
         _ob.write_board(_ob.build_board(sport, events, now, meta), sport)
         _run_game_models(sport, events, now)
+        _run_game_board(sport, now)
     return _finish(base, sport, write, now)
 
 

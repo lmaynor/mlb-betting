@@ -895,6 +895,7 @@ from mlb.runners.public_api import (
     get_clv_data, get_today_slate,
     get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections, get_odds_board,
     get_game_projections,
+    get_game_odds_board,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1249,6 +1250,32 @@ def public_game_projections():
         logger.exception("public_game_projections failed")
         return jsonify({"error": str(exc)}), 500
 
+
+
+@app.route("/api/public/games/odds", methods=["GET", "OPTIONS"])
+def public_game_odds_board():
+    """Per-book NBA / NHL game-line price board (moneyline, spread, total), read from the precomputed GCS file."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_game_odds_board(
+            request.args.get("sport", ""),
+            day=request.args.get("day") or None,
+            market=request.args.get("market") or None,
+            limit=int(request.args.get("limit", 1500)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # unknown sport / market / bad limit / bad day
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_game_odds_board failed")
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/public/analytics/deep-dive", methods=["GET", "OPTIONS"])

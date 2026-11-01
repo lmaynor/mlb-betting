@@ -4304,6 +4304,16 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   (`/ev?view=game_lines` redirects to `/ev/games`). Before this, `/picks/games` defaulted to MLB (empty in the offseason) and read the PROPS projection feed for
   NBA/NHL, which never carries the game engines' rows (`EVSweep/{sport}_games/predictions_latest.json`, `/api/public/games/projections`), so game lines were unreachable.
   `isMlbOffseason()` (lib/dates.ts, Nov 5 - Mar 19 Central) mirrors the backend window. Not built yet: a game-line PRICE screen (every book's ML / spread / total,
-  line shopping, game-line arbs): `odds_board` is props-only; `/ev/games` is where it belongs.
+  line shopping, game-line arbs) -- BUILT 2026-11-01, see the next bullet.
+- **Game-line price board (`/ev/games?view=prices`, the default; `?view=model` is the model-estimate view):** every book's moneyline / spread / total for NBA + NHL.
+  Backend `ev/game_odds_board.py` reads the already-banked `OddsAccum/{sport}/raw/{date}/game_lines_{HHMM}.json` (ZERO new credits; via `nba/game/odds_feed.py`, which
+  refuses a snapshot older than 360 min), writes `EVSweep/{sport}_games/odds_board_latest.json` from the `daily-projections` job (hook `_run_game_board`, after
+  `_run_game_models`; a failed or stale refresh never overwrites the previous good file) and `GET /api/public/games/odds?sport=&day=&market=&limit=` serves it. Row =
+  one (game, market, line) with >= 2 books: `a` = AWAY (ml, spread) or OVER (total), `b` = HOME or UNDER, raw American prices, spread `line` = the HOME line, team codes
+  and `game_key` identical to the model engines (join key). DFS apps dropped, price > 3x the side median dropped only with >= 5 books, started games dropped at read time,
+  `stale` = lines older than 270 min (the banker runs ~6x/day). Frontend: `lib/game-odds.ts` adapts rows to the terminal's two-way math (`buildScreenRows`,
+  `computeRowArb`, Kalshi fee), `app/ev/games/game-prices-client.tsx` (best price, leave-self-out fair >= 3 reference books, EV, 1/4 Kelly, arb with Copy hedge, per-book
+  columns, mobile cards), proxy `/api/games/odds` and `limitGameOdds` (free viewers see the best-covered preview). Prices are market data, labelled UNVALIDATED like the
+  terminal. Not built: middles between different lines; the feed may carry only main lines (alternate_* keys accepted if present, unverified against real payloads).
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 
