@@ -33,8 +33,10 @@ __pycache__/
 # Never part of the Cloud Run image (the Dockerfile COPYs mlb_core/ nba/ nfl/ nhl/ mlb/ ev/ + a few named scripts, main.py,
 # tweet_drafter.py, setup.py and beezy-vip/lib/engine-accuracy.json -- nothing under data/ or .claude/):
 # agent worktrees (each is a full repo copy), local data dumps, env files (may hold keys), node_modules.
-.claude/
-data/
+# ROOT-ANCHORED (/data/, /.claude/): an unanchored `data/` also matched the PACKAGES mlb_core/data, nfl/data, nhl/data and left them
+# out of the image (ModuleNotFoundError: mlb_core.data, found when the 2026-11-01 build failed in daily-projections).
+/.claude/
+/data/
 .env
 .env.*
 **/.env
