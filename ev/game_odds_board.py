@@ -43,6 +43,11 @@ MIN_BOOKS = 2                       # a one-book line is not a comparison
 # The game-lines banker runs ~6x a day (daytime gaps up to 4 h) and a snapshot older than odds_feed.MAX_AGE_MIN (360) is refused
 # outright, so 'stale' means older than the longest normal daytime gap (4 h) plus margin, not the props board's 90 minutes.
 STALE_MINUTES = 270
+# A book whose two-way quote has the OPPOSITE favourite to the consensus (and sits > FLIP_DEVIATION from the median no-vig side-a
+# probability) is a swapped-sides feed error, not a price: seen live 2026-11-01 (betmgm quoted Philadelphia -185 / Utah +150 while
+# eleven books had Utah -180 / Philadelphia +150), which would show as a ~28% "arbitrage". Needs FLIP_MIN_BOOKS two-sided books.
+FLIP_DEVIATION = 0.15
+FLIP_MIN_BOOKS = 4
 # ParlayAPI market key -> board market. The alternate_* keys are accepted in case the feed carries them (unverified).
 _MARKET_OF = {"h2h": "ml", "spreads": "spread", "totals": "total",
               "alternate_spreads": "spread", "alternate_totals": "total"}
@@ -127,6 +132,32 @@ def _fmt_line(line: Optional[float]) -> str:
     return "ml" if line is None else f"{line:g}"
 
 
+def _devig_a(a_p: Optional[int], b_p: Optional[int]) -> Optional[float]:
+    da, db = _safe_decimal(a_p), _safe_decimal(b_p)
+    if da is None or db is None:
+        return None
+    ia, ib = 1.0 / da, 1.0 / db
+    return ia / (ia + ib)
+
+
+def _drop_flipped_books(sport: str, row: dict) -> int:
+    """Remove (both sides of) every book whose two-way quote favours the opposite side to the consensus. Returns how many."""
+    probs = {name: _devig_a(b["a"], b["b"]) for name, b in row["books"].items()}
+    probs = {n: p for n, p in probs.items() if p is not None}
+    if len(probs) < FLIP_MIN_BOOKS:
+        return 0
+    dropped = 0
+    for name, p in probs.items():
+        others = [q for n, q in probs.items() if n != name]
+        med = float(median(others))
+        if (p - 0.5) * (med - 0.5) < 0 and abs(p - med) > FLIP_DEVIATION:
+            log.warning("game_odds_board %s: dropping %s from %s, sides look swapped (no-vig a-prob %.2f vs peer median %.2f)",
+                        sport, name, row["key"], p, med)
+            row["books"][name]["a"] = row["books"][name]["b"] = None
+            dropped += 1
+    return dropped
+
+
 def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Optional[dict] = None) -> dict:
     """Banked game-line events -> the board payload for one sport (see the module docstring for the row shape).
 
@@ -188,6 +219,9 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
                     if old["b"] is None:
                         old["b"] = b_p
 
+    n_flipped = 0
+    for row in rows.values():
+        n_flipped += _drop_flipped_books(sport, row)
     for row in rows.values():
         for side in ("a", "b"):
             quotes = [(name, b[side]) for name, b in row["books"].items() if b[side] is not None]
@@ -237,7 +271,7 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
         "offshore_books": sorted(b for b in book_keys if b in OFFSHORE_BOOKS),
         "games": sorted(per_game.values(), key=lambda g: (g["start"], g["game_key"])),
         "summary": {"events": n_events, "events_started": n_started, "events_unmapped": n_unmapped,
-                    "banked_events": meta.get("banked_events")},
+                    "banked_events": meta.get("banked_events"), "flipped_quotes_dropped": n_flipped},
     }
 
 

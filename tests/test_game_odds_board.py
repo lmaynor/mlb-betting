@@ -277,3 +277,23 @@ def test_sample_row_json():
     b = gob.build_game_board("nba", [nba_event()], NOW)
     row = rows_of(b, "total", 220.5)[0]
     assert set(row) == {"key", "sport", "game_key", "away", "home", "commence", "market", "line", "books"}
+
+
+def test_swapped_sides_book_is_dropped_but_a_merely_different_price_is_not():
+    """Real case 2026-11-01: betmgm quoted the home side where every other book had the away side (a fake ~28% arb)."""
+    A, H = "Utah Mammoth", "Philadelphia Flyers"
+    peers = [("bet365", -180, 150), ("bovada", -180, 155), ("caesars", -179, 150), ("draftkings", -185, 154), ("fanduel", -182, 150)]
+    books = [bm(k, h2h(A, H, a, b)) for k, a, b in peers]
+    books.append(bm("betmgm", h2h(A, H, 150, -185)))            # flipped
+    books.append(bm("hardrock", h2h(A, H, -150, 125)))          # a genuinely softer price, same favourite
+    b = gob.build_game_board("nhl", [event(A, H, books)], NOW)
+    got = {x["book"]: x for x in b["rows"][0]["books"]}
+    assert "betmgm" not in got and b["summary"]["flipped_quotes_dropped"] == 1            # both sides gone, the row keeps its other books
+    assert got["hardrock"]["a"] == -150 and got["fanduel"]["a"] == -182
+
+
+def test_flip_guard_needs_four_two_sided_books():
+    A, H = "Utah Mammoth", "Philadelphia Flyers"
+    b = gob.build_game_board("nhl", [event(A, H, [bm("bet365", h2h(A, H, -180, 150)), bm("fanduel", h2h(A, H, -182, 150)),
+                                                  bm("betmgm", h2h(A, H, 150, -185))])], NOW)
+    assert {x["book"]: x for x in b["rows"][0]["books"]}["betmgm"]["a"] == 150          # only 3 books: not enough to call it
