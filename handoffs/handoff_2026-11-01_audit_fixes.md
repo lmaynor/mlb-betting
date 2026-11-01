@@ -12,7 +12,7 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 - Game-lines route tier gating; SGP honesty (assumed rho, MODEL ARTIFACT flag, fabricated seed data deleted); literal `\uXXXX` in JSX; PWA/safe-area/iPadOS; `MobileBottomSheet`; `PYTEST_CURRENT_TEST` guard removed.
 - BestBook: bounded SSE client, per-game memory, deterministic main line, `BESTBOOK_ENABLED=1` gate + ToS note.
 
-- **Game lines visibility (found after the first push):** `/picks/games` defaulted to MLB and read the wrong feed for NBA/NHL; fixed (see CONTEXT s22). Pre-existing since cb95579.
+- **Game lines were unreachable (found after the first push) and moved:** NBA/NHL game lines are now the Scanner's Game Lines tab `/ev/games` (model estimate vs market, UNVALIDATED), not a mode of the Odds Terminal and not under Picks; `/picks/games` is MLB's tracked game picks only, with redirects for old links. Rationale and details in CONTEXT s22. Pre-existing since cb95579.
 
 ## Decisions / open items for the owner
 1. **Budgets (owner-set 2026-11-01):** NBA 45k / NHL 40k / NFL sweep 10k = 95k live + 4.5k test budget = 99.5k, floor 500. MLB's 19.5k is dormant until Mar 20; re-balance NBA/NHL via `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh` (104.5k does not fit). Re-run `setup_odds_banking.sh` to push the new env.
@@ -23,7 +23,8 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 6. A scheduler for `nba.odds.accumulator --kind game_lines` (basketball_nba, icehockey_nhl) must exist or the game engines refuse a >6 h old pointer and the payload goes stale.
 7. `SEASON_CARRYOVER = 0.5` (Kalman profile carryover) is a guess; NBA rebounds/turnovers are NaN for 2019-24 so the replay effectively uses 2025 only.
 8. Not done: server-side stripping of the hidden outlier book name (outliers are computed client-side; the lock is not a security boundary); virtualisation / further split of `odds-client.tsx` (~3400 lines); NHL history loader NaN guard (`float(x or default)`); Python 'TD PROXY' label for 2-leg rows; real-launcher check of maskable icons; `gcloud` description-field format for the pause stamp unverified against real gcloud.
-9. `weather_multiplier` temperature step at 32F is still a step (wind is now continuous); coefficients unvalidated.
+9. Next IA step (not built): a game-line PRICE screen on `/ev/games` (every book's ML/spread/total, line shopping, game-line arbs); the odds board is props-only today.
+10. `weather_multiplier` temperature step at 32F is still a step (wind is now continuous); coefficients unvalidated.
 
 ## Verified
 Full pytest, `tsc --noEmit`, full jest (one 9,000-row timing test in `odds-screen.test.ts` can fail under CPU load; passes alone 3/3). Nothing run against live GCS, gcloud, ParlayAPI or a browser.

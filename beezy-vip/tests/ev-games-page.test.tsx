@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { GamePicksClient } from '@/app/picks/games/game-picks-client'
+import { GameLinesClient } from '@/app/ev/games/game-lines-client'
 import { isMlbOffseason } from '@/lib/dates'
 import type { GamePricedGame, GameProjectionRow, GameProjectionsFeed } from '@/lib/game-lines'
 
@@ -18,24 +18,24 @@ const feed = (sport: 'nba' | 'nhl', key: string, away: string, home: string, sys
   priced_games: [game(key, away, home, system)], games: [{ game_key: key, away, home, start: '2026-11-02T23:30:00Z' }], markets: ['spread', 'total', 'ml'],
 })
 
-describe('/picks/games NBA + NHL game lines (reachable while MLB is in the offseason)', () => {
+describe('/ev/games NBA + NHL game lines (the Scanner Game Lines tab)', () => {
   const feeds = { nba: feed('nba', 'nba:2026-11-02:BOS@MIA', 'BOS', 'MIA', 'NBA_SPREAD'), nhl: feed('nhl', 'nhl:2026-11-02:TOR@MTL', 'TOR', 'MTL', 'NHL_SPREAD') }
 
   it('shows both sports with the UNVALIDATED label', () => {
-    render(<GamePicksClient feeds={feeds} sport="all" />)
+    render(<GameLinesClient feeds={feeds} sport="all" />)
     expect(screen.getByTestId('game-lines-label').textContent).toMatch(/UNVALIDATED/i)
     expect(screen.getAllByText(/BOS/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/TOR/).length).toBeGreaterThan(0)
   })
   it('narrows to one sport and says so when the feed is not published', () => {
-    const { rerender } = render(<GamePicksClient feeds={feeds} sport="nhl" />)
+    const { rerender } = render(<GameLinesClient feeds={feeds} sport="nhl" />)
     expect(screen.queryAllByText(/BOS/)).toHaveLength(0)
     expect(screen.getAllByText(/TOR/).length).toBeGreaterThan(0)
-    rerender(<GamePicksClient feeds={{ nba: null, nhl: null }} sport="all" />)
+    rerender(<GameLinesClient feeds={{ nba: null, nhl: null }} sport="all" />)
     expect(screen.getByRole('status').textContent).toMatch(/not published yet/i)
   })
   it('the market filter hides markets that do not match', () => {
-    render(<GamePicksClient feeds={feeds} sport="all" />)
+    render(<GameLinesClient feeds={feeds} sport="all" />)
     fireEvent.click(screen.getByRole('button', { name: 'Total' }))
     expect(screen.getByRole('status').textContent).toMatch(/No priced games/i)
   })

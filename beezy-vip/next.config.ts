@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     return [
       { source: '/sports/:sport', destination: '/picks/:sport', permanent: true },
       // the +EV Terminal was folded into the Odds Terminal; the screen now lives at /ev
+      { source: '/ev/odds', has: [{ type: 'query', key: 'view', value: 'game_lines' }], destination: '/ev/games', permanent: true },
       { source: '/ev/odds', destination: '/ev', permanent: true },
       { source: '/tools/edge-finder', destination: '/tools/kelly-calculator', permanent: true },
       { source: '/tools/nrfi-conditions', destination: '/tools/slate', permanent: true },

@@ -4296,10 +4296,14 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
 - **Frontend:** `/ev` Odds Terminal has modes Standard | Arbitrage | Alt & Longshots | Outliers | SGP | Game Lines; game lines are tier-cut server-side
   (`limitGameLines`, route validates `sport|day|limit|market`); Game Lines shows MODEL DIFF with an UNVALIDATED badge. `tests/jsx-literal-escape.test.ts`
   fails on a literal backslash-u escape in JSX text. PWA install flow + `MobileBottomSheet` (focus trap, scroll-lock counter).
-- **/picks/games (Game Lines nav item) was MLB-only:** it defaulted to `mlb` (offseason, so empty) and, for `?sport=nba|nhl`, read the PROPS projection feed,
-  which never carries the game engines' rows (they live in `EVSweep/{sport}_games/predictions_latest.json`, served by `/api/public/games/projections`).
-  Now: `?sport=` all (NBA + NHL) | nba | nhl | mlb with a sport nav; the default is NBA + NHL while `isMlbOffseason()` (Nov 5 - Mar 19, Central) and MLB in
-  season; NBA/NHL render the same `GameLinesView` as the /ev Game Lines mode (`app/picks/games/game-picks-client.tsx`), tier-cut by `limitGameLines`.
-  On mobile /ev the sport strip in Game Lines mode now drives the game-lines sport (ALL / NBA / NHL), not the props sport.
+- **Where game lines live (IA decision 2026-11-01):** the Scanner answers "what is the model saying against the market, right now" and may carry
+  UNVALIDATED output; Picks is the tracked, graded record. So NBA / NHL game lines (model estimate vs the books, no track record, no validated edge)
+  are the Scanner's **Game Lines** tab, `/ev/games` (`?sport=all|nba|nhl`; tabs: Odds Terminal | Game Lines | Prop Research), rendered by
+  `app/ev/games/game-lines-client.tsx` with the shared `app/ev/game-lines-view.tsx`, tier-cut by `limitGameLines`. `/picks/games` ("Game Picks") is MLB's tracked
+  game picks only (`?sport=nba|nhl|all` redirects to `/ev/games`; an offseason note links there). Game Lines is no longer a mode of the Odds Terminal
+  (`/ev?view=game_lines` redirects to `/ev/games`). Before this, `/picks/games` defaulted to MLB (empty in the offseason) and read the PROPS projection feed for
+  NBA/NHL, which never carries the game engines' rows (`EVSweep/{sport}_games/predictions_latest.json`, `/api/public/games/projections`), so game lines were unreachable.
+  `isMlbOffseason()` (lib/dates.ts, Nov 5 - Mar 19 Central) mirrors the backend window. Not built yet: a game-line PRICE screen (every book's ML / spread / total,
+  line shopping, game-line arbs): `odds_board` is props-only; `/ev/games` is where it belongs.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 

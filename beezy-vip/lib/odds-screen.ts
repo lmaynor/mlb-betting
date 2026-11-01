@@ -18,7 +18,7 @@ import { isOffshore } from '@/lib/offshore'
 
 export type DevigMethod = 'proportional' | 'power'
 export type SideFilter = 'both' | 'over' | 'under'
-export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp' | 'game_lines'
+export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
 export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
 export interface BoardBook { book: string; over: number | null; under: number | null }

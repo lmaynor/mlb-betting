@@ -3,12 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { apiGetGameProjections, apiGetOddsBoard } from '@/lib/betting-api'
-import {
-  buildGameLinesData, gameFeedEngines, gameLinesCount, gameLinesViewLabel,
-  type GameLinesData, type GameProjectionsFeed,
-} from '@/lib/game-lines'
-import { GameCard, GameLinesNotice, GameLinesView } from './game-lines-view'
+import { apiGetOddsBoard } from '@/lib/betting-api'
 import { bookDisplay, canonBook, SURFACE_CARD } from '@/lib/tokens'
 import { americanToDecimal, fmtMoney, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
@@ -142,26 +137,10 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'middles', label: 'Middles' },
   { key: 'longshots', label: 'Alt & Tail Ladders' },
   { key: 'sgp', label: 'SGP Proxies' },
-  { key: 'game_lines', label: 'Game Lines' },
 ]
 
-/** Next game feeds over the previous ones: null (a failed fetch) keeps the old feed, an identical stamp keeps the old object. */
-function mergeGameFeeds(prev: Record<string, GameProjectionsFeed | null>, next: Record<string, GameProjectionsFeed | null>): Record<string, GameProjectionsFeed | null> {
-  let changed = false
-  const out: Record<string, GameProjectionsFeed | null> = { ...prev }
-  for (const k of Object.keys(next)) {
-    const n = next[k]
-    const o = prev[k] ?? null
-    if (!n) continue
-    if (o && o.as_of === n.as_of && o.count === n.count && o.status === n.status && o.validated === n.validated && o.engine === n.engine && o.label === n.label && (o.locked ?? 0) === (n.locked ?? 0)) continue
-    out[k] = n
-    changed = true
-  }
-  return changed ? out : prev
-}
-
-type BadgeKey = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp' | 'game_lines'
-const BADGE_KEYS: BadgeKey[] = ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines']
+type BadgeKey = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
+const BADGE_KEYS: BadgeKey[] = ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp']
 
 /** Run `fn` when the browser is idle (a timer where requestIdleCallback is missing); returns a cancel function. */
 function scheduleIdle(fn: () => void): () => void {
@@ -187,10 +166,10 @@ const SGP_MIN_EV_OPTIONS = [
   { v: 10, label: '+10%+' },
 ]
 
-export function OddsClient({ initial, initialLocked, headline, initialGames, fullAccess = false }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; initialGames?: Record<string, GameProjectionsFeed | null>; fullAccess?: boolean }) {
+export function OddsClient({ initial, initialLocked, headline, fullAccess = false }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; fullAccess?: boolean }) {
   const sp = useSearchParams()
   const viewParam = sp?.get('view')
-  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam))
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam))
     ? (viewParam as OddsScreenMode)
     : 'ev'
 
@@ -236,13 +215,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
   const isMobile = useIsMobile(768)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'cards' | 'table'>('cards')
-  const [gamesData, setGamesData] = useState<Record<string, GameProjectionsFeed | null>>(initialGames ?? {})
-  const [gameMarket, setGameMarket] = useState<'all' | 'spread' | 'total' | 'ml'>('all')
-  const [gameMatchup, setGameMatchup] = useState<string>('all')
-  const [gameSport, setGameSport] = useState<'all' | 'nba' | 'nhl'>('all')
-  const [gameSide, setGameSide] = useState<'all' | 'home_over' | 'away_under'>('all')
-  const [gameMinEdge, setGameMinEdge] = useState<number>(0)
-  const [gameView, setGameView] = useState<'cards' | 'table'>('cards')
   const [inspectItem, setInspectItem] = useState<
     | { type: 'ev'; row: ScreenRow }
     | { type: 'arb'; row: ArbRow }
@@ -289,20 +261,14 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
       if (sgpBook !== 'all') count++
       if (sgpExtreme) count++
       if (!useCurve) count++
-    } else if (mode === 'game_lines') {
-      if (gameMarket !== 'all') count++
-      if (gameMatchup !== 'all') count++
-      if (gameSport !== 'all') count++
-      if (gameSide !== 'all') count++
-      if (gameMinEdge > 0) count++
     }
     return count
-  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, sgpExtreme, gameMarket, gameMatchup, gameSport, gameSide, gameMinEdge])
+  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, sgpExtreme])
 
   const [prevViewParam, setPrevViewParam] = useState(viewParam)
   if (viewParam !== prevViewParam) {
     setPrevViewParam(viewParam)
-    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam)) {
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
       setMode(viewParam as OddsScreenMode)
     }
   }
@@ -333,11 +299,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [nextBoards, nbaG, nhlG] = await Promise.all([
-        Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null))),
-        apiGetGameProjections('nba').catch(() => null),
-        apiGetGameProjections('nhl').catch(() => null),
-      ])
+      const nextBoards = await Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null)))
       const out: Partial<Record<SportSlug, OddsBoard>> = {}
       let lk = 0
       nextBoards.forEach((b, i) => { if (b) { out[SPORT_KEYS[i]] = b; lk += b.locked ?? 0 } })
@@ -346,21 +308,8 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
         setBoards(prev => SPORT_KEYS.every(k => prev[k]?.as_of === out[k]?.as_of) ? prev : out)
         setLocked(lk)
       }
-      // a failed fetch (null) keeps the previous feed; an unchanged feed (same stamp) keeps the same object
-      setGamesData(prev => mergeGameFeeds(prev, { nba: nbaG, nhl: nhlG }))
     } finally { setLoading(false) }
   }, [])
-
-  useEffect(() => {
-    if (mode === 'game_lines' && !gamesData.nba && !gamesData.nhl) {
-      Promise.all([
-        apiGetGameProjections('nba').catch(() => null),
-        apiGetGameProjections('nhl').catch(() => null),
-      ]).then(([nbaG, nhlG]) => {
-        setGamesData(prev => mergeGameFeeds(prev, { nba: nbaG, nhl: nhlG }))
-      })
-    }
-  }, [mode, gamesData.nba, gamesData.nhl])
 
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, POLL_MS)
@@ -474,20 +423,11 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
   const sgpExtremeCount = useMemo(() => sgpAll.filter(r => r.modelArtifact).length, [sgpAll])
   const sgpProxies = useMemo(() => sgpExtreme ? sgpAll : sgpAll.filter(r => !r.modelArtifact), [sgpAll, sgpExtreme])
 
-  // ---- Game Lines view model: built only while that mode is open (the idle badge count below builds its own)
-  const gameFilters = useMemo(() => ({ sport: gameSport, market: gameMarket, matchup: gameMatchup, side: gameSide, minEdge: gameMinEdge, q }),
-    [gameSport, gameMarket, gameMatchup, gameSide, gameMinEdge, q])
-  const emptyGames = useMemo<GameLinesData>(() => ({ pricedGames: [], rows: [], matchupOptions: [] }), [])
-  const gameLinesData = useMemo(() => mode === 'game_lines' ? buildGameLinesData(gamesData, gameFilters) : emptyGames, [mode, gamesData, gameFilters, emptyGames])
-  // the Cards view (the default, and the mobile card list) counts priced games; the Data Matrix counts feed rows
-  const gameCardsShown = gameView === 'cards' || (isMobile && mobileView === 'cards')
-  const gameCount = gameLinesCount(gameLinesData, gameCardsShown ? 'cards' : 'table')
-
   // Mode badges. The ACTIVE mode's badge is its own row count (already computed for the table). The other modes' counts
   // are computed one engine at a time when the browser is idle, from deferred inputs, so a filter change or a mode click
   // paints the table first and never runs all six engines in one task.
-  const badgeIn = useMemo(() => ({ scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve, gamesData, gameFilters }),
-    [scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve, gamesData, gameFilters])
+  const badgeIn = useMemo(() => ({ scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve }),
+    [scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve])
   const dBadgeIn = useDeferredValue(badgeIn)
   const [badgeVals, setBadgeVals] = useState<Partial<Record<BadgeKey, number>>>({})
   const badgeCache = useRef<{ src: object | null; vals: Partial<Record<BadgeKey, number>> }>({ src: null, vals: {} })
@@ -514,8 +454,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
         case 'sgp':
           // flagged model artifacts are not counted (they are hidden by default)
           return computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve, minRef: MIN_REF }).filter(r => !r.modelArtifact).length
-        default:
-          return gameLinesCount(buildGameLinesData(d.gamesData, d.gameFilters), 'cards')
       }
     }
     const todo = BADGE_KEYS.filter(k => k !== mode)
@@ -540,22 +478,10 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
     : mode === 'longshots' ? longshots.length
-    : mode === 'sgp' ? sgpProxies.length
-    : gameCount
+    : sgpProxies.length
   const badgeFor = (k: BadgeKey): number | null => k === mode ? nRows : (badgeVals[k] ?? null)
 
-  const gameLabel = useMemo(() => gameLinesViewLabel(Object.values(gamesData)), [gamesData])
   const meta = useMemo(() => {
-    if (mode === 'game_lines') {
-      const gList = Object.values(gamesData).filter((g): g is GameProjectionsFeed => Boolean(g))
-      const ages = gList.map(g => g.age_minutes).filter((n): n is number => n != null)
-      return {
-        age: ages.length ? Math.max(...ages) : null,
-        stale: gList.some(g => g.stale),
-        // the engine(s) named by the feeds themselves; nothing is hard-coded
-        sources: gameFeedEngines(gList),
-      }
-    }
     const activeWithRows = active.filter(s => (boards[s]?.count ?? 0) > 0)
     const target = activeWithRows.length > 0 ? activeWithRows : active
     const hasRows = activeWithRows.length > 0
@@ -568,12 +494,10 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
       stale: target.some(s => Boolean(boards[s]!.stale && (boards[s]!.count ?? 0) > 0)),
       sources,
     }
-  }, [mode, gamesData, active, boards])
+  }, [active, boards])
 
   // no board at all, or every board the API answered with is flagged unavailable (the banker has not written it yet)
-  const unpublished = mode === 'game_lines'
-    ? Object.values(gamesData).length > 0 && Object.values(gamesData).every(g => g?.status === 'unavailable')
-    : (active.length === 0 || active.every(s => boards[s]!.status === 'unavailable'))
+  const unpublished = active.length === 0 || active.every(s => boards[s]!.status === 'unavailable')
 
   const refWeight = refs.length ? Math.round(100 / refs.length) : null
   const refSet = useMemo(() => new Set(refs), [refs])
@@ -605,8 +529,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
     ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
     : mode === 'sgp'
     ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies models two-leg same-book tickets from single-leg prices (unvalidated: assumed correlation and hold). Rows above 45% model EV are hidden as likely artifacts unless you include them; lower the MIN EV floor or switch archetypes.' }
-    : mode === 'game_lines'
-    ? { title: 'No game lines clear these filters', body: 'Model projections of today\'s NBA and NHL games sit next to the books\' prices. Try clearing the market or matchup filters, or lowering the MIN DIFF threshold.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
@@ -623,7 +545,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Odds Terminal</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="mono" style={{ fontSize: '12px', color: meta.stale ? '#facc15' : 'var(--fog)' }}>
-            {nRows} {mode === 'game_lines' ? (gameCardsShown ? 'GAMES' : 'ROWS') : 'ROWS'} &middot; {meta.age != null ? `LINES ${ageLabel(meta.age).toUpperCase()} OLD` : 'OFFSEASON / NO GAMES'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
+            {nRows} ROWS &middot; {meta.age != null ? `LINES ${ageLabel(meta.age).toUpperCase()} OLD` : 'OFFSEASON / NO GAMES'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
           </span>
           <button onClick={refresh} disabled={loading} className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: '12px' }}>{loading ? 'Refreshing...' : 'Refresh'}</button>
         </div>
@@ -658,17 +580,15 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
 
           <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
             <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
-              {/* Game Lines covers NBA and NHL only and has its own sport filter: the props sport (which includes MLB) does not apply to it */}
-              {(mode === 'game_lines' ? ['all', 'nba', 'nhl'] as const : ['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => {
-                const selected = mode === 'game_lines' ? gameSport === s : sport === s
+              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => {
+                const selected = sport === s
                 return (
                   <button
                     key={s}
                     type="button"
                     aria-pressed={selected}
                     onClick={() => {
-                      if (mode === 'game_lines') { setGameSport(s as 'all' | 'nba' | 'nhl'); setLimit(PAGE); return }
-                      setSport(s as SportFilter); setStat('all'); setGame('all'); setLimit(PAGE)
+                      setSport(s); setStat('all'); setGame('all'); setLimit(PAGE)
                     }}
                     style={{
                       fontFamily: 'var(--font-mono), monospace',
@@ -756,25 +676,21 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
                 )
               })}
             </PillGroup>
-            {mode !== 'game_lines' ? (
-              <>
-                <Field label="SPORT">
-                  <PillGroup>
-                    {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                      <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
-                    ))}
-                  </PillGroup>
-                </Field>
-                <Field label="PROP" htmlFor="odds-stat">
-                  <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-                    options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
-                </Field>
-                <Field label="GAME" htmlFor="odds-game">
-                  <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
-                    options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
-                </Field>
-              </>
-            ) : null}
+              <Field label="SPORT">
+                <PillGroup>
+                  {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
+                    <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="PROP" htmlFor="odds-stat">
+                <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
+                  options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+              </Field>
+              <Field label="GAME" htmlFor="odds-game">
+                <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
+                  options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+              </Field>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
               <input
                 aria-label="Search player or team" placeholder="Search player / team" value={q} onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
@@ -1000,62 +916,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
                   <PillGroup>
                     <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
                     <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
-                  </PillGroup>
-                </Field>
-              </>
-            )}
-            {mode === 'game_lines' && (
-              <>
-                <Field label="MARKET">
-                  <PillGroup>
-                    <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
-                    <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread / Puck Line</Pill>
-                    <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
-                    <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>Moneyline</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="GAME / MATCHUP" htmlFor="game-matchup-select">
-                  <Select
-                    id="game-matchup-select"
-                    value={gameMatchup}
-                    onChange={v => { setGameMatchup(v); setLimit(PAGE) }}
-                    options={[
-                      { v: 'all', l: `All Matchups (${gameLinesData.matchupOptions.length})` },
-                      ...gameLinesData.matchupOptions.map(m => ({ v: m.key, l: m.label })),
-                    ]}
-                  />
-                </Field>
-                <Field label="SPORT">
-                  <PillGroup>
-                    <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
-                    <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
-                    <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="SIDE">
-                  <PillGroup>
-                    <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
-                    <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
-                    <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="MIN DIFF">
-                  <PillGroup>
-                    {[
-                      { label: 'All', v: 0 },
-                      { label: '1%+', v: 0.01 },
-                      { label: '2%+', v: 0.02 },
-                      { label: '3%+', v: 0.03 },
-                      { label: '5%+', v: 0.05 },
-                    ].map(m => (
-                      <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
-                    ))}
-                  </PillGroup>
-                </Field>
-                <Field label="VIEW">
-                  <PillGroup>
-                    <Pill active={gameView === 'cards'} onClick={() => setGameView('cards')}>Game Cards</Pill>
-                    <Pill active={gameView === 'table'} onClick={() => setGameView('table')}>Data Matrix</Pill>
                   </PillGroup>
                 </Field>
               </>
@@ -1325,123 +1185,51 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
             </>
           )}
 
-          {mode === 'game_lines' && (
-            <>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MARKET</div>
-                <PillGroup>
-                  <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
-                  <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread</Pill>
-                  <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
-                  <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>ML</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME / MATCHUP</div>
-                <select
-                  id="mobile-game-matchup-select"
-                  value={gameMatchup}
-                  onChange={e => { setGameMatchup(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All Matchups ({gameLinesData.matchupOptions.length})</option>
-                  {gameLinesData.matchupOptions.map(m => (
-                    <option key={m.key} value={m.key}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SPORT</div>
-                <PillGroup>
-                  <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
-                  <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
-                  <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SIDE</div>
-                <PillGroup>
-                  <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
-                  <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
-                  <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN DIFF</div>
-                <PillGroup>
-                  {[
-                    { label: 'All', v: 0 },
-                    { label: '1%+', v: 0.01 },
-                    { label: '2%+', v: 0.02 },
-                    { label: '3%+', v: 0.03 },
-                    { label: '5%+', v: 0.05 },
-                  ].map(m => (
-                    <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
-                  ))}
-                </PillGroup>
-              </div>
-            </>
-          )}
+            <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
+              <select
+                id="mobile-odds-stat"
+                value={stat}
+                onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
+                style={{
+                  width: '100%',
+                  background: '#090a0f',
+                  color: 'var(--chalk)',
+                  border: `1px solid ${HAIR}`,
+                  borderRadius: '8px',
+                  minHeight: '40px',
+                  padding: '0 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">All props</option>
+                {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
+              </select>
+            </div>
 
-          {mode !== 'game_lines' && (
-            <>
-              <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
-                <select
-                  id="mobile-odds-stat"
-                  value={stat}
-                  onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All props</option>
-                  {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
-                <select
-                  id="mobile-odds-game"
-                  value={game}
-                  onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All games</option>
-                  {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
-                </select>
-              </div>
-            </>
-          )}
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
+              <select
+                id="mobile-odds-game"
+                value={game}
+                onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
+                style={{
+                  width: '100%',
+                  background: '#090a0f',
+                  color: 'var(--chalk)',
+                  border: `1px solid ${HAIR}`,
+                  borderRadius: '8px',
+                  minHeight: '40px',
+                  padding: '0 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">All games</option>
+                {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
+              </select>
+            </div>
 
           <MobileBookChecklist
             title="SPORTSBOOKS"
@@ -1484,11 +1272,10 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
       {mode === 'sgp' && !unpublished && (
         <SgpNotice extremeCount={sgpExtremeCount} includeExtreme={sgpExtreme} onToggle={() => { setSgpExtreme(v => !v); setLimit(PAGE) }} />
       )}
-      {mode === 'game_lines' && !unpublished && <GameLinesNotice label={gameLabel.label} validated={gameLabel.validated} />}
 
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
-      ) : (allRows.length === 0 && mode !== 'game_lines') ? (
+      ) : allRows.length === 0 ? (
         <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
@@ -1600,12 +1387,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
                   r={r}
                   onInspect={() => setInspectItem({ type: 'longshots', row: r })}
                 />
-              ))}
-            </div>
-          ) : mode === 'game_lines' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
-              {gameLinesData.pricedGames.slice(0, limit).map((g, idx) => (
-                <GameCard key={`${g.sport}-${g.game_key}-${idx}`} game={g} />
               ))}
             </div>
           ) : (
@@ -1736,15 +1517,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
             </table>
           </div>
         </div>
-      ) : mode === 'game_lines' ? (
-        <GameLinesView
-          pricedGames={gameLinesData.pricedGames}
-          rows={gameLinesData.rows}
-          view={gameView}
-          limit={limit}
-          onSwitchView={setGameView}
-          isMobile={isMobile}
-        />
       ) : (
         <div>
           {isMobile && (
@@ -1885,7 +1657,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
           books&apos; consensus (N BKS) or, where fewer than two price the exact line, a fair probability read off the player&apos;s own multi-line curve (CURVE). The curve is an
           unvalidated estimate: treat a CURVE edge as a place to look, not a price to trust. Snipe is the longshot over against fair; Fade is the under or NO against fair.</>}
         {mode === 'sgp' && <>SGP Proxies models same-book two-leg tickets from the single-leg prices. The modelled SGP price runs the book&apos;s own two prices through an assumed copula and hold; the model fair price runs the other books&apos; de-vigged prices through an assumed correlation (&rho;). Every constant is a guess and none is validated, and the modelled price is not a price the book quoted: confirm any combination in the book&apos;s own builder. Rows above {SGP_ARTIFACT_EV_PCT}% model EV are flagged as likely artifacts and hidden unless you include them. The books pricing a ticket are left out of its fair value.</>}
-        {mode === 'game_lines' && <>Game Lines shows model projections of NBA and NHL game spreads, totals and moneylines next to the books&apos; de-vigged prices. MODEL DIFF is the model&apos;s win probability minus the market&apos;s fair probability. It is an UNVALIDATED model estimate unless the feed says otherwise, not a tested edge: no backtest supports betting it. Model inputs and the engine are named in the header.</>}
         {' '}These are unvalidated market signals, not part of the public track record. Lines move or limit quickly: check the price at the book. Not financial advice.
         21+. If gambling is a problem, call 1-800-GAMBLER.{' '}
         <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>

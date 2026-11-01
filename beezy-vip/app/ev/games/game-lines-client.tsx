@@ -13,9 +13,8 @@ const MARKETS: { key: Market; label: string }[] = [
   { key: 'ml', label: 'Moneyline' },
 ]
 
-/** NBA / NHL game lines for /picks/games: the same view the Odds Terminal's Game Lines mode uses, fed by the game feed
- *  (the props projection feed never carries these rows). */
-export function GamePicksClient({ feeds, sport }: { feeds: Record<string, GameProjectionsFeed | null>; sport: 'all' | 'nba' | 'nhl' }) {
+/** NBA / NHL game lines for /ev/games, fed by the game feed (the props projection feed never carries these rows). */
+export function GameLinesClient({ feeds, sport }: { feeds: Record<string, GameProjectionsFeed | null>; sport: 'all' | 'nba' | 'nhl' }) {
   const [market, setMarket] = useState<Market>('all')
   const [view, setView] = useState<'cards' | 'table'>('cards')
   const [limit, setLimit] = useState(40)
