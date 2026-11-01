@@ -343,3 +343,106 @@ def test_fetch_prices_and_json():
 
         data = bb.fetch_prices("match:2026-11-02-CHI-SEA")
         assert data == {"kickoff": "2026-11-02", "prices": []}
+
+
+# -- SSE reconnect policy ---------------------------------------------------------------------------------------------------
+class _Resp:
+    """A requests-like streaming response used as a context manager."""
+
+    def __init__(self, status=200, lines=(), headers=None):
+        self.status_code, self._lines, self.headers = status, list(lines), headers or {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise bb.requests.HTTPError(f"HTTP {self.status_code}")
+
+    def iter_lines(self, chunk_size=None):
+        yield from self._lines
+
+
+def _msg(i):
+    return f'data: {{"type": "snapshot", "n": {i}, "rows": []}}'.encode()
+
+
+@pytest.fixture
+def sse(monkeypatch):
+    """Patch the session, token and sleep; returns (responses list, sleeps list, cookie-clears counter)."""
+    sleeps, state = [], {"clears": 0, "boot": 0}
+    monkeypatch.setattr(bb.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(bb, "_ensure_token", lambda: state.__setitem__("boot", state["boot"] + 1))
+    monkeypatch.setattr(bb.random, "uniform", lambda a, b: 1.0)
+
+    class Cookies:
+        def clear(self):
+            state["clears"] += 1
+
+    monkeypatch.setattr(bb._session, "cookies", Cookies())
+    return sleeps, state
+
+
+def _serve(monkeypatch, responses):
+    it = iter(responses)
+    calls = []
+
+    def get(url, **kw):
+        calls.append(url)
+        r = next(it)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    monkeypatch.setattr(bb._session, "get", get)
+    return calls
+
+
+def test_sse_gives_up_after_max_attempts_with_exponential_backoff(monkeypatch, sse):
+    sleeps, _ = sse
+    calls = _serve(monkeypatch, [bb.requests.ConnectionError("down")] * 10)
+    with pytest.raises(bb.BestBookError, match="gave up after 6 consecutive"):
+        list(bb._sse_messages("/events", {}))
+    assert len(calls) == 6 and sleeps == [1.0, 2.0, 4.0, 8.0, 16.0]               # 5 waits between 6 attempts, doubling
+
+
+def test_sse_clean_end_with_no_messages_counts_as_a_failure_and_is_bounded(monkeypatch, sse):
+    calls = _serve(monkeypatch, [_Resp(200, [])] * 10)
+    with pytest.raises(bb.BestBookError):
+        list(bb._sse_messages("/events", {}, max_attempts=3))
+    assert len(calls) == 3                                                          # never an immediate infinite reopen
+
+
+def test_sse_403_and_429_rebootstrap_the_cookie_and_429_honours_retry_after(monkeypatch, sse):
+    sleeps, state = sse
+    _serve(monkeypatch, [_Resp(403), _Resp(429, headers={"Retry-After": "12"}), _Resp(200, [_msg(1)])])
+    gen = bb._sse_messages("/events", {}, max_attempts=4, deadline_s=None)
+    out = [next(gen)]
+    gen.close()
+    assert out[0]["n"] == 1 and state["clears"] == 2                                # cookie cleared on both 403 and 429
+    assert sleeps[1] >= 12.0
+
+
+def test_sse_a_healthy_stream_resets_the_failure_count_and_the_overall_deadline_stops_it(monkeypatch, sse):
+    sleeps, _ = sse
+    clock = {"t": 0.0}
+    monkeypatch.setattr(bb.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(bb.time, "sleep", lambda s: (sleeps.append(s), clock.__setitem__("t", clock["t"] + 100.0)))
+    _serve(monkeypatch, [_Resp(200, [_msg(1)]), _Resp(502), _Resp(502), _Resp(502)])
+    got = []
+    with pytest.raises(bb.BestBookError, match="overall deadline"):
+        for m in bb._sse_messages("/events", {}, max_attempts=50, deadline_s=150.0):
+            got.append(m["n"])
+    assert got == [1]
+
+
+def test_fetch_slate_returns_on_the_first_snapshot_message(monkeypatch, sse):
+    status = {"slate": {"games": [{"key": "2026-11-02-CHI-SEA", "away": "CHI", "home": "SEA",
+                                   "start": "2026-11-02T01:15:00Z", "venues": ["dk"]}]}}
+    line = ("data: " + json.dumps({"type": "snapshot", "rows": [], "status": status})).encode()
+    calls = _serve(monkeypatch, [_Resp(200, [line, _msg(2)])])
+    slate = bb.fetch_slate()
+    assert [g["key"] for g in slate] == ["2026-11-02-CHI-SEA"] and len(calls) == 1

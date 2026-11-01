@@ -1,4 +1,5 @@
-import { limitCockpit, limitEvFeed } from '../lib/access-feeds'
+import { limitCockpit, limitEvFeed, limitGameLines } from '../lib/access-feeds'
+import type { GameProjectionRow, GameProjectionsFeed } from '../lib/game-lines'
 import { canViewFull, FREE_PREVIEW_ROWS, type Viewer } from '../lib/access'
 import type { CockpitRow, EvFeed } from '../lib/types'
 
@@ -86,5 +87,67 @@ describe('limitCockpit', () => {
   it('all-access and pre-launch see everything, in order', () => {
     expect(limitCockpit(rows, pro, ON).rows).toBe(rows)
     expect(limitCockpit(rows, free, {}).rows).toBe(rows)
+  })
+})
+
+describe('limitGameLines (Game Lines follow the Odds Terminal rule)', () => {
+  const mkRow = (i: number, nBooks: number, side = 'home'): GameProjectionRow => ({
+    sport: 'nba', system: 'NBA_SPREAD', stat: 'spread', stat_label: 'Spread', player: `A${i} @ B${i}`, player_norm: `a${i}`, game_key: `nba:d:A${i}@B${i}`,
+    commence: '2026-10-31T23:00:00Z', side, line: -3.5, has_line: true, proj_mean: -4, p_model_side: 0.55, p_mkt_side: 0.5, n_books: nBooks,
+    model_edge: 0.05, market_ev: 0.04, confluence: false, beezy_score: 50, push_prob: 0.02,
+  })
+  const gameFeed = (): GameProjectionsFeed => {
+    const rows = Array.from({ length: 9 }, (_, i) => mkRow(i, i + 1))
+    return {
+      sport: 'nba', status: 'live', engine: 'e', as_of: null, age_minutes: 1, stale: false, count: 9, rows, markets: [],
+      priced_games: rows.map(r => ({
+        game_key: r.game_key, home_team: 'B', away_team: 'A', game_date: 'd',
+        markets: [{ system: 'NBA_SPREAD', market_label: 'Spread', side: 'home', line: -3.5, p_model: 0.55, push_prob: 0, p_fair: 0.5, best_odds: -110, best_book: 'x', n_books: r.n_books, model_edge: 0.05, market_ev: 0.04, confluence: false, beezy_score: 50 }],
+      })),
+      games: rows.map(r => ({ game_key: r.game_key, away: 'A', home: 'B', start: 's' })),
+    }
+  }
+
+  it('Pro sees the whole feed; so does everyone before launch / with tiers not enforced', () => {
+    const f = gameFeed()
+    expect(limitGameLines(f, pro, ON)).toEqual({ feed: f, locked: 0 })
+    expect(limitGameLines(f, free, {})).toEqual({ feed: f, locked: 0 })
+  })
+
+  it('a free viewer and a single-sport pass get the same small preview as the props board: the best-covered rows', () => {
+    for (const viewer of [free, nbaPass]) {
+      const { feed: cut, locked } = limitGameLines(gameFeed(), viewer, ON)
+      expect(cut.rows).toHaveLength(FREE_PREVIEW_ROWS.ev_terminal)
+      expect(cut.rows.map(r => r.n_books)).toEqual(expect.arrayContaining([9, 8, 7, 6, 5]))
+      expect(Math.min(...cut.rows.map(r => r.n_books ?? 0))).toBe(5)
+      expect(cut.count).toBe(FREE_PREVIEW_ROWS.ev_terminal)
+      expect(locked).toBe(9 - FREE_PREVIEW_ROWS.ev_terminal)
+    }
+  })
+
+  it('no withheld game rides along in priced_games or games', () => {
+    const { feed: cut } = limitGameLines(gameFeed(), free, ON)
+    const keptKeys = new Set(cut.rows.map(r => r.game_key))
+    expect(cut.priced_games).toHaveLength(keptKeys.size)
+    expect(cut.priced_games.every(g => keptKeys.has(g.game_key))).toBe(true)
+    expect(cut.games.every(g => keptKeys.has(g.game_key))).toBe(true)
+    expect(JSON.stringify(cut)).not.toContain('nba:d:A0@B0')
+  })
+
+  it('drops a priced market whose row was withheld even inside a kept game', () => {
+    const f = gameFeed()
+    const kept = f.rows[8]
+    f.rows.push({ ...mkRow(8, 1, 'away'), side: 'away' })
+    f.priced_games[8].markets.push({ ...f.priced_games[8].markets[0], side: 'away', model_edge: 0.99 })
+    const { feed: cut } = limitGameLines(f, free, ON)
+    const game = cut.priced_games.find(g => g.game_key === kept.game_key)!
+    expect(game.markets.map(m => m.side)).toEqual(['home'])
+  })
+
+  it('does not mutate the feed it was given', () => {
+    const f = gameFeed()
+    limitGameLines(f, free, ON)
+    expect(f.rows).toHaveLength(9)
+    expect(f.priced_games).toHaveLength(9)
   })
 })

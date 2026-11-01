@@ -39,6 +39,13 @@ BASE_SIGMA_MARGIN: float = 12.0
 BASE_SIGMA_TOTAL: float = 18.0
 
 
+def t_scale_to_sd(scale: float, nu: float) -> float:
+    """Standard deviation of a Student-t with `scale` and `nu` degrees of freedom (nu > 2): scale * sqrt(nu / (nu - 2))."""
+    if nu <= 2.0:
+        return float("inf")
+    return float(scale) * math.sqrt(float(nu) / (float(nu) - 2.0))
+
+
 @dataclass
 class PricedMarket:
     system: str  # 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL'
@@ -84,10 +91,12 @@ class PricedGame:
     away_team: str
     game_date: str
     mu_margin: float
-    sigma_margin: float
+    sigma_margin: float   # Student-t SCALE (not the standard deviation): true sd = scale * sqrt(nu / (nu - 2))
     mu_total: float
-    sigma_total: float
+    sigma_total: float    # Student-t SCALE, see above
     exp_pace: float
+    sd_margin: float = 0.0   # true outcome standard deviation of the margin (t scale converted)
+    sd_total: float = 0.0    # true outcome standard deviation of the total
     markets: List[PricedMarket] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,6 +110,8 @@ class PricedGame:
             "mu_total": round(self.mu_total, 2),
             "sigma_total": round(self.sigma_total, 2),
             "exp_pace": round(self.exp_pace, 2),
+            "sd_margin": round(self.sd_margin, 3),
+            "sd_total": round(self.sd_total, 3),
             "markets": [m.to_dict() for m in self.markets],
         }
 
@@ -336,6 +347,8 @@ class DistributionalGameEngine:
             mu_total=mu_t,
             sigma_total=sigma_t,
             exp_pace=exp_pace,
+            sd_margin=t_scale_to_sd(sigma_m, self.nu_margin),
+            sd_total=t_scale_to_sd(sigma_t, self.nu_total),
             markets=[],
         )
 

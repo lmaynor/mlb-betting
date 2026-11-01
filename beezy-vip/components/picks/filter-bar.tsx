@@ -209,7 +209,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                     >
                       <button
                         type="button"
-                        onClick={() => set('market', 'EV', 'ALL')}
+                        onClick={() => set('market', market === 'EV' ? 'ALL' : 'EV', 'ALL')}
+                        aria-pressed={market === 'EV'}
                         style={{ background: 'transparent', border: 'none', color: market === 'EV' ? 'var(--chalk)' : 'var(--silver)', fontSize: '12px', fontWeight: market === 'EV' ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
                       >
                         +EV alerts
@@ -218,7 +219,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         type="button"
                         title="Select only +EV alerts"
                         aria-label="Only +EV alerts"
-                        onClick={() => set('market', 'EV', 'ALL')}
+                        onClick={() => push(p => { p.set('market', 'EV') })}
                         style={{
                           fontSize: '10px',
                           fontFamily: 'var(--font-mono)',
@@ -256,7 +257,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                       >
                         <button
                           type="button"
-                          onClick={() => set('market', s.key, 'ALL')}
+                          onClick={() => set('market', isActive ? 'ALL' : s.key, 'ALL')}
+                          aria-pressed={isActive}
                           style={{ background: 'transparent', border: 'none', color: isActive ? 'var(--chalk)' : 'var(--silver)', fontSize: '12px', fontWeight: isActive ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
                         >
                           {SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}
@@ -265,7 +267,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           type="button"
                           title={`Select only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
                           aria-label={`Only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
-                          onClick={() => set('market', s.key, 'ALL')}
+                          onClick={() => push(p => { p.set('market', s.key) })}
                           style={{
                             fontSize: '10px',
                             fontFamily: 'var(--font-mono)',
@@ -498,7 +500,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                     cursor: 'pointer',
                   }}
                 >
-                  High to Low (\u2193)
+                  High to Low ({'\u2193'})
                 </button>
                 <button
                   type="button"
@@ -516,7 +518,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                     cursor: 'pointer',
                   }}
                 >
-                  Low to High (\u2191)
+                  Low to High ({'\u2191'})
                 </button>
               </div>
             </div>

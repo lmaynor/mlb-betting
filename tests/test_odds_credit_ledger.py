@@ -41,6 +41,9 @@ def store(monkeypatch):
     for name in ("exists", "read_bytes", "write_bytes", "write_csv"):
         monkeypatch.setattr(accumulator.storage, name, getattr(m, name))
     monkeypatch.setenv("ODDS_BANK_BUDGET_ICEHOCKEY_NHL", "3000")
+    # record() uses a GCS generation-match write whenever a bucket env var is set (other test modules set MLB_GCS_BUCKET at
+    # import); this in-memory store has no generations, so take the plain read-modify-write path.
+    monkeypatch.setattr(credit_ledger, "_blob_for", lambda key: None)
     return m
 
 

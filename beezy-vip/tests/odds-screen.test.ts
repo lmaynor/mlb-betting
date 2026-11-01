@@ -1,6 +1,6 @@
 import {
   bestPrice, buildArbRows, buildLongshotRows, buildScreenRows, computeLongshotMetrics, computeOutliers, computeRowArb, devigOver, fairOver,
-  computeMiddles, computeSgpProxies, copulaJoint2D, kalshiEffectiveDecimal, buildSgpDeeplinkTs, type BoardRow,
+  computeMiddles, computeSgpProxies, copulaJoint2D, kalshiEffectiveDecimal, buildSgpDeeplinkTs, priceSgpPair, safeHttpsUrl, SGP_ARTIFACT_EV_PCT, SGP_UNVALIDATED_LABEL, type BoardRow,
 } from '@/lib/odds-screen'
 
 const row = (books: BoardRow['books'], line = 24.5): BoardRow => ({
@@ -391,7 +391,7 @@ describe('computeSgpProxies', () => {
     expect(pPos).toBeLessThanOrEqual(Math.min(p1, p2))
   })
 
-  it('NBA player with 10+ Reb and 10+ Ast emits a TD PROXY row with accurate EV', () => {
+  it('NBA player with 10+ Reb and 10+ Ast emits a modelled R10+A10 row (no direct-market comparison, unvalidated)', () => {
     const nbaReb: BoardRow = {
       key: 'g|josh_hart|rebounds|9.5',
       game_key: 'nba:2026-10-30:LAL@GSW',
@@ -454,15 +454,18 @@ describe('computeSgpProxies', () => {
     const fdRow = res.find(r => r.book === 'fanduel')
     expect(fdRow).toBeDefined()
     expect(fdRow!.archetype).toBe('nba_reb_ast_10_10')
-    expect(fdRow!.archetypeLabel).toBe('TD PROXY')
+    expect(fdRow!.archetypeLabel).toBe('R10+A10')
     expect(fdRow!.fairJointProb).toBeGreaterThan(0.05)
     expect(fdRow!.estSgpAm).toBeGreaterThan(1200)
     expect(fdRow!.evPct).not.toBeNull()
-    expect(fdRow!.directMarketAm).toBe(1300)
-    expect(fdRow!.vsDirectPct).toBeGreaterThan(0) // Beats direct market
+    // 10+ Reb AND 10+ Ast is not a Triple-Double: the row carries no 'vs direct' fields at all
+    expect(fdRow).not.toHaveProperty('directMarketAm')
+    expect(fdRow).not.toHaveProperty('vsDirectPct')
+    expect(fdRow!.unvalidated).toBe(true)
+    expect(fdRow!.label).toBe(SGP_UNVALIDATED_LABEL)
   })
 
-  it('NHL player with 1+ Goal + 1+ Assist vs Over 1.5 Points computes vsDirectPct accurately', () => {
+  it('NHL player with 1+ Goal + 1+ Assist emits a GOAL+AST row and does not compare it with Over 1.5 Points', () => {
     const nhlGoal: BoardRow = {
       key: 'g|mcdavid|goals|0.5',
       game_key: 'nhl:2026-10-30:EDM@CGY',
@@ -476,6 +479,7 @@ describe('computeSgpProxies', () => {
       books: [
         B('fanduel', 190, -250),
         B('draftkings', 185, -240),
+        B('betmgm', 180, -235),
       ],
     }
 
@@ -492,6 +496,7 @@ describe('computeSgpProxies', () => {
       books: [
         B('fanduel', 130, -170),
         B('draftkings', 125, -165),
+        B('betmgm', 120, -160),
       ],
     }
 
@@ -522,11 +527,10 @@ describe('computeSgpProxies', () => {
     expect(res.length).toBeGreaterThan(0)
     const top = res[0]
     expect(top.archetype).toBe('nhl_goal_ast_vs_pts')
-    expect(top.archetypeLabel).toBe('G+A PROXY')
-    expect(top.directMarketAm).toBe(240)
-    expect(top.vsDirectPct).not.toBeNull()
-    // Direct decimal for +240 is 3.40; Est SGP for +190 & +130 is higher, so vsDirectPct > 0
-    expect(top.vsDirectPct!).toBeGreaterThan(0)
+    expect(top.archetypeLabel).toBe('GOAL+AST')
+    // 1+ Goal AND 1+ Assist is not the same event as Over 1.5 Points (two goals also clear it): no comparison
+    expect(top).not.toHaveProperty('directMarketAm')
+    expect(top).not.toHaveProperty('vsDirectPct')
   })
 
   it('NBA TD proxy matches 10.0 whole-number lines on milestone ladders', () => {
@@ -580,7 +584,7 @@ describe('computeSgpProxies', () => {
       player_norm: 'connor mcdavid',
       stat: 'points',
       line: 0.5,
-      books: [B('fanduel', -350, 270), B('draftkings', -340, 260)],
+      books: [B('fanduel', -350, 270), B('draftkings', -340, 260), B('betmgm', -345, 265)],
     }
     const draisaitlPts: BoardRow = {
       key: 'g|draisaitl|points|0.5',
@@ -593,7 +597,7 @@ describe('computeSgpProxies', () => {
       player_norm: 'leon draisaitl',
       stat: 'points',
       line: 0.5,
-      books: [B('fanduel', -280, 220), B('draftkings', -270, 215)],
+      books: [B('fanduel', -280, 220), B('draftkings', -270, 215), B('betmgm', -275, 218)],
     }
     const res = computeSgpProxies([mcdavidPts, draisaitlPts], {
       refs: [],
@@ -618,7 +622,106 @@ describe('computeSgpProxies', () => {
     expect(fdUrl).not.toContain('/event/nba:')
     expect(fdUrl).toBe('https://sportsbook.fanduel.com/navigation/nba')
 
+    // NOTE: the sids / marketId branches are dead today (the odds board carries no outcome ids) but stay allowlisted:
+    // they only ever emit the hard-coded sportsbook hosts, with every id percent-encoded.
     const sidsUrl = buildSgpDeeplinkTs('draftkings', 'event_123', [{ sid: '111' }, { sid: '222' }])
     expect(sidsUrl).toBe('https://sportsbook.draftkings.com/event/event_123?outcomes=111,222')
+  })
+
+  describe('buildSgpDeeplinkTs host safety', () => {
+    it('a leg link that merely contains the book domain (or is not https) is never used', () => {
+      const evil = [{ link: 'http://evil.com/?fanduel.com' }, { link: 'https://evil.com/?fanduel.com' }, { link: 'https://fanduel.com.evil.com/x' }, { link: 'https://u:p@fanduel.com/x' }]
+      for (const leg of evil) {
+        expect(buildSgpDeeplinkTs('fanduel', 'nba:2026-10-30:BOS@MIL', [leg], 'nba')).toBe('https://sportsbook.fanduel.com/navigation/nba')
+        expect(buildSgpDeeplinkTs('draftkings', 'nba:2026-10-30:BOS@MIL', [{ link: leg.link.replace('fanduel', 'draftkings') }], 'nba'))
+          .toBe('https://sportsbook.draftkings.com/leagues/basketball/nba')
+      }
+    })
+
+    it('an https leg link on the book\'s own domain or a subdomain is allowed', () => {
+      expect(buildSgpDeeplinkTs('fanduel', 'nba:x@y', [{ link: 'https://sportsbook.fanduel.com/basketball/nba/some-game' }], 'nba'))
+        .toBe('https://sportsbook.fanduel.com/basketball/nba/some-game')
+      expect(safeHttpsUrl('https://fanduel.com/x', ['fanduel.com'])).toBe('https://fanduel.com/x')
+      expect(safeHttpsUrl('http://fanduel.com/x', ['fanduel.com'])).toBeNull()
+      expect(safeHttpsUrl('https://notfanduel.com/x', ['fanduel.com'])).toBeNull()
+    })
+
+    it('an event id is encoded into one path segment and cannot add a host, path or query', () => {
+      const url = buildSgpDeeplinkTs('draftkings', '12345/../x?a=b#frag&outcomes=9', [{ sid: '1&x=y' }, { sid: '2' }], 'nba')!
+      expect(url.startsWith('https://sportsbook.draftkings.com/event/')).toBe(true)
+      const u = new URL(url)
+      expect(u.hostname).toBe('sportsbook.draftkings.com')
+      expect(u.pathname.split('/').filter(Boolean)).toHaveLength(2) // event / <one encoded segment>
+      expect(u.hash).toBe('')
+      expect([...u.searchParams.keys()]).toEqual(['outcomes'])
+      expect(buildSgpDeeplinkTs('betmgm', 'a/b', [], 'nba')).toBe('https://sports.betmgm.com/en/sports/events/a%2Fb')
+      expect(buildSgpDeeplinkTs('draftkings', '..', [], 'nba')).toBe('https://sportsbook.draftkings.com/leagues/basketball/nba')
+    })
+
+    it('a book name never becomes part of a host: unknown books get no link', () => {
+      expect(buildSgpDeeplinkTs('evil.com/x#', 'nba:2026-10-30:BOS@MIL', [], 'nba')).toBeNull()
+      expect(buildSgpDeeplinkTs('evil', 'event_1', [], 'nba')).toBeNull()
+      expect(buildSgpDeeplinkTs('kalshi', 'x', [], 'nba')).toBe('https://kalshi.com')
+    })
+  })
+})
+
+describe('SGP model honesty', () => {
+  const mk = (stat: string, line: number, books: BoardRow['books'], curve?: number): BoardRow => ({
+    key: `g|p|${stat}|${line}`, game_key: 'nba:2026-10-30:LAL@GSW', commence: '2026-10-30T23:00:00Z', away: 'LAL', home: 'GSW',
+    player: 'P One', player_norm: 'p one', stat, line, books, ...(curve != null ? { curve_fair_over: curve } : {}),
+  })
+  const o = { refs: [] as string[], method: 'proportional' as const, bettable: null, minEvPct: -100, useCurve: true }
+
+  it('priceSgpPair clamps the SGP probability between the independent product and the smaller leg', () => {
+    const arch = { rhoBook: 0.08, holdBook: 0.14, rhoTrue: 0.2 }
+    // heavy favourites: hold would push the implied probability above the smaller leg
+    const fav = priceSgpPair(arch, -300, -300, 0.7, 0.7)
+    expect(fav.pSgp).toBeLessThanOrEqual(0.75 + 1e-12)
+    // negative book correlation would price below independence
+    const neg = priceSgpPair({ ...arch, rhoBook: -0.4, holdBook: 0 }, 150, 150, 0.4, 0.4)
+    expect(neg.pSgp).toBeGreaterThanOrEqual(neg.pNaive - 1e-12)
+    // an ordinary case sits strictly inside the bounds
+    const mid = priceSgpPair(arch, 300, 250, 0.2, 0.25)
+    expect(mid.pSgp).toBeGreaterThan(mid.pNaive)
+    expect(mid.pSgp).toBeLessThan(Math.min(1 / 4, 1 / 3.5))
+  })
+
+  it('the pricing book is left out of its own fair value', () => {
+    const reb = mk('rebounds', 9.5, [B('fanduel', 900, -3000), B('draftkings', 320, -450), B('betmgm', 330, -470)])
+    const ast = mk('assists', 9.5, [B('fanduel', 900, -3000), B('draftkings', 380, -550), B('betmgm', 390, -570)])
+    const res = computeSgpProxies([reb, ast], o)
+    const fd = res.find(r => r.book === 'fanduel')!
+    const expected = (devigOver(320, -450, 'proportional')! + devigOver(330, -470, 'proportional')!) / 2
+    expect(fd.legs[0].fairProb).toBeCloseTo(expected, 10)
+  })
+
+  it('a fair value from fewer than minRef books yields to the curve; with no curve 2 books still count', () => {
+    const reb = mk('rebounds', 9.5, [B('fanduel', 320, -450), B('draftkings', 310, -430), B('betmgm', 330, -470)], 0.3)
+    const ast = mk('assists', 9.5, [B('fanduel', 380, -550), B('draftkings', 370, -530), B('betmgm', 390, -570)], 0.28)
+    const strict = computeSgpProxies([reb, ast], { ...o, minRef: 3, book: 'fanduel' })[0]
+    expect(strict.legs[0].fairProb).toBeCloseTo(0.3, 10) // 2 other books < minRef 3 -> the curve stands in
+    const loose = computeSgpProxies([reb, ast], { ...o, book: 'fanduel' })[0]
+    expect(loose.legs[0].fairProb).not.toBeCloseTo(0.3, 3) // default minRef 2 -> the books' own fair value
+    // one other book and no curve: no fair value, no row
+    const thin = computeSgpProxies([mk('rebounds', 9.5, [B('fanduel', 320, -450), B('draftkings', 310, -430)]), mk('assists', 9.5, [B('fanduel', 380, -550), B('draftkings', 370, -530)])], o)
+    expect(thin).toHaveLength(0)
+  })
+
+  it('EV above the artifact threshold is kept, flagged and sorted after credible rows', () => {
+    const wild = (player: string, norm: string, fairCurve: number, am: number) => [
+      { ...mk('rebounds', 9.5, [B('fanduel', am, -4000)], fairCurve), player, player_norm: norm, key: `a-${norm}` },
+      { ...mk('assists', 9.5, [B('fanduel', am, -4000)], fairCurve), player, player_norm: norm, key: `b-${norm}` },
+    ]
+    const rows = [...wild('Wild Guy', 'wild guy', 0.6, 900), ...wild('Mild Guy', 'mild guy', 0.1, 900)]
+    const res = computeSgpProxies(rows, o)
+    const wildRow = res.find(r => r.player === 'Wild Guy')!
+    expect(wildRow).toBeDefined()
+    expect(wildRow.evPct).toBeGreaterThan(SGP_ARTIFACT_EV_PCT)
+    expect(wildRow.modelArtifact).toBe(true)
+    expect(res.every(r => r.unvalidated)).toBe(true)
+    const firstArtifact = res.findIndex(r => r.modelArtifact)
+    expect(res.slice(firstArtifact).every(r => r.modelArtifact)).toBe(true)
+    expect(res.slice(0, firstArtifact).every(r => !r.modelArtifact)).toBe(true)
   })
 })

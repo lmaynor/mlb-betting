@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from bisect import insort
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -38,6 +39,19 @@ LEAGUE_BASELINES: Dict[str, float] = {
 }
 
 FEATURE_METRICS = list(LEAGUE_BASELINES.keys())
+
+SHRINK_GAMES = 15            # games into a season at which a profile stops shrinking toward the league baseline
+SEASON_CARRYOVER = 0.5       # weight of the prior-season profile on a team with no/few games this season
+
+
+def _season_of(date_str: Any) -> int:
+    """NBA season (start year) of a calendar date: Aug-Dec -> that year, Jan-Jul -> year - 1."""
+    d = str(date_str)[:10]
+    try:
+        y, m = int(d[:4]), int(d[5:7])
+    except ValueError:
+        return -1
+    return y if m >= 8 else y - 1
 
 
 def calc_possessions(
@@ -168,16 +182,27 @@ class FeatureStore:
         self._by_team: Dict[str, List[TeamGameStats]] = {}
         self._reindex()
 
+    @staticmethod
+    def _key(g: TeamGameStats) -> Tuple[str, str]:
+        return (g.game_date, g.game_id)
+
     def _reindex(self) -> None:
         self._by_team.clear()
         for g in self.games:
             self._by_team.setdefault(g.team, []).append(g)
         for t in self._by_team:
-            self._by_team[t].sort(key=lambda x: (x.game_date, x.game_id))
+            self._by_team[t].sort(key=self._key)
 
     def add_games(self, new_games: List[TeamGameStats]) -> None:
-        self.games.extend(new_games)
-        self._reindex()
+        """Incremental insert: the usual chronological replay appends in O(1); out-of-order games bisect in
+        (the old implementation re-sorted every team's whole history per added game: O(N^2) in a replay)."""
+        for g in new_games:
+            self.games.append(g)
+            lst = self._by_team.setdefault(g.team, [])
+            if not lst or self._key(lst[-1]) <= self._key(g):
+                lst.append(g)
+            else:
+                insort(lst, g, key=self._key)
 
     def get_prior_games(self, team: str, before_date: str) -> List[TeamGameStats]:
         """Strictly prior-to-date games for a team."""
@@ -203,6 +228,12 @@ class FeatureStore:
         n = len(prior)
         metrics: Dict[str, float] = {}
 
+        cur_season = _season_of(before_date)
+        n_season = sum(1 for g in prior if _season_of(g.game_date) == cur_season)
+        w_eff = min(1.0, n_season / float(SHRINK_GAMES))
+        if n_season < n and w_eff < 1.0:
+            w_eff = w_eff + (1.0 - w_eff) * SEASON_CARRYOVER
+
         # Last 10 games
         l10_slice = prior[-10:]
 
@@ -220,10 +251,10 @@ class FeatureStore:
             # Blended estimate
             blended = 0.50 * ewm_val + 0.30 * l10_val + 0.20 * std_val
 
-            # Bayesian shrinkage for early season
-            if n < 15:
-                w_sample = n / 15.0
-                blended = w_sample * blended + (1.0 - w_sample) * LEAGUE_BASELINES[m]
+            # Bayesian shrinkage keyed on games THIS season (career n never shrinks a season opener). Prior-season
+            # games still carry over with weight SEASON_CARRYOVER, the rest regresses to the league baseline.
+            if w_eff < 1.0:
+                blended = w_eff * blended + (1.0 - w_eff) * LEAGUE_BASELINES[m]
 
             metrics[m] = float(blended)
 
@@ -346,11 +377,15 @@ class FeatureStore:
 
         # Four Factors & Net Rating Z-Differentials
         z_net_rtg_diff = float(zh["net_rtg"] - za["net_rtg"])
-        z_off_def_matchup = float(0.5 * ((zh["off_rtg"] - za["def_rtg"]) + (zh["def_rtg"] - za["off_rtg"])))
-        z_efg_diff = float((zh["efg_pct"] - za["opp_efg_pct"]) - (za["efg_pct"] - zh["opp_efg_pct"]))
-        z_tov_diff = float((za["opp_tov_pct"] - zh["tov_pct"]) - (zh["opp_tov_pct"] - za["tov_pct"]))
+        # Sign convention: every term is (home offense vs away defense) - (away offense vs home defense), so a positive
+        # value always favours HOME. Defense metrics split in two families:
+        #   opp_efg_pct / opp_ftr / def_rtg = what the team CONCEDES (high = bad defense, helps the opponent's offense)
+        #   opp_tov_pct = turnovers the team FORCES (high = good defense, hurts the opponent's offense)
+        z_off_def_matchup = float(0.5 * ((zh["off_rtg"] + za["def_rtg"]) - (za["off_rtg"] + zh["def_rtg"])))
+        z_efg_diff = float((zh["efg_pct"] + za["opp_efg_pct"]) - (za["efg_pct"] + zh["opp_efg_pct"]))
+        z_tov_diff = float((za["tov_pct"] + zh["opp_tov_pct"]) - (zh["tov_pct"] + za["opp_tov_pct"]))
         z_oreb_diff = float((zh["oreb_pct"] - za["dreb_pct"]) - (za["oreb_pct"] - zh["dreb_pct"]))
-        z_ftr_diff = float((zh["ftr"] - za["opp_ftr"]) - (za["ftr"] - zh["opp_ftr"]))
+        z_ftr_diff = float((zh["ftr"] + za["opp_ftr"]) - (za["ftr"] + zh["opp_ftr"]))
         z_ts_diff = float(zh["ts_pct"] - za["ts_pct"])
 
         # Totals Z-Sums
@@ -443,52 +478,126 @@ class FeatureStore:
         return float(min(14.0, total_lost))
 
 
+# SportsBlaze abbreviations (and a few historical tricodes) that nba.teams.team_code cannot resolve on its own.
+# Known trap: PHO vs PHX, NOR vs NOP, UTH vs UTA. A game whose team cannot be resolved is dropped LOUDLY (counted + logged).
+SB_ABBR_FIX: Dict[str, str] = {
+    "PHO": "PHX", "NOR": "NOP", "NOH": "NOP", "NOK": "NOP", "UTH": "UTA", "UTAH": "UTA",
+    "BRK": "BKN", "BK": "BKN", "CHO": "CHA", "CHH": "CHA", "PHL": "PHI", "GS": "GSW", "GSW": "GSW",
+    "NY": "NYK", "SA": "SAS", "NO": "NOP", "WSH": "WAS", "WAS": "WAS",
+}
+
+
+def sb_team_code(abbr: Any) -> Optional[str]:
+    """SportsBlaze team abbreviation (team_abbr/opp_abbr in the masters) -> our tricode, or None."""
+    a = abbr.strip().upper() if isinstance(abbr, str) else ""
+    if not a:
+        return None
+    return team_code(SB_ABBR_FIX.get(a, a)) or team_code(a)
+
+
+def _et_game_day(date_val: Any, tip: Any = None) -> str:
+    """ET game day (YYYY-MM-DD). The masters' `date` is the UTC DATE of the tip (docs/solutions/integration-issues/
+    sportsblaze-master-date-is-utc.md); with the UTC tip timestamp we convert exactly, without it we can only keep the date."""
+    if tip is not None and not pd.isna(tip):
+        t = pd.Timestamp(tip)
+        t = t.tz_localize("UTC") if t.tzinfo is None else t
+        return t.tz_convert("America/New_York").strftime("%Y-%m-%d")
+    return str(date_val)[:10]
+
+
+def _num(row: Any, col: str) -> float:
+    """Float cell, NaN when missing/unparseable (float(NaN) bypasses .get defaults, so check explicitly)."""
+    try:
+        return float(row.get(col))
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+_REQUIRED_BOX_COLS = ("game_id", "team_abbr", "opp_abbr", "date", "points")
+# fields whose NaN would poison possessions / off_rtg / tov_pct (team box has NaN rebounds + turnovers for 2019-24)
+_REQUIRED_STAT_FIELDS = (
+    "points", "field_goals_made", "field_goals_attempted", "three_points_made", "three_points_attempted",
+    "free_throws_attempted", "rebounds_offensive", "rebounds_defensive", "turnovers",
+)
+
+
 def build_team_game_stats_from_raw(
     df_boxscores: Optional[pd.DataFrame],
+    tips: Optional[pd.Series] = None,
 ) -> List[TeamGameStats]:
     """
-    Parse team boxscores master into structured TeamGameStats list.
-    Expected grain: (game_id, team_id).
-    Pairs home and away rows to calculate opponent stats and pace.
+    Parse the team boxscores master (NBA/team_boxscores_master.csv, schema in nba/data/flatten.py) into TeamGameStats.
+    Grain: (game_id, team). Columns used: game_id, season_year, season_type, date, team_abbr, opp_abbr, is_home + stat fields.
+
+    tips: optional Series game_id -> UTC tip timestamp (nba.props.data.gather_tips). Converts the master's UTC `date`
+    to the ET game day so rest/back-to-back are right. Games without a tip keep the master date (counted + logged).
+    Dropped rows are never silent: unresolved tricodes, NaN box stats (2019-24 team box has no rebounds/turnovers),
+    preseason and malformed games are each counted and logged.
     """
     if df_boxscores is None or df_boxscores.empty:
         return []
+    missing = [c for c in _REQUIRED_BOX_COLS if c not in df_boxscores.columns]
+    if missing:
+        raise ValueError(f"team boxscores master missing columns {missing}; have {list(df_boxscores.columns)}")
 
     games: List[TeamGameStats] = []
+    drops = {"preseason": 0, "not_two_rows": 0, "unknown_team": 0, "nan_stats": 0}
+    approx_date = 0
+    unknown_abbrs: Dict[str, int] = {}
 
-    # Group by game_id to pair teams
-    for game_id, g_df in df_boxscores.groupby("game_id"):
+    df = df_boxscores
+    if "season_type" in df.columns:
+        pre = df["season_type"].astype(str).str.lower().eq("preseason")
+        drops["preseason"] = int(pre.sum())
+        df = df[~pre]
+
+    for game_id, g_df in df.groupby("game_id", sort=False):
         if len(g_df) != 2:
+            drops["not_two_rows"] += 1
             continue
         row_a = g_df.iloc[0]
         row_b = g_df.iloc[1]
+        tip = tips.get(game_id) if tips is not None and len(tips) else None
+        tip_known = tip is not None and not pd.isna(tip)
+        if not tip_known:
+            approx_date += 1
 
         for team_row, opp_row in [(row_a, row_b), (row_b, row_a)]:
-            t_code = team_code(str(team_row.get("team_abbrev", "")))
-            opp_code = team_code(str(opp_row.get("team_abbrev", "")))
-            if not t_code or not opp_code:
+            t_code = sb_team_code(team_row.get("team_abbr"))
+            opp_code = sb_team_code(opp_row.get("team_abbr"))
+            if not t_code or not opp_code or t_code == opp_code:
+                drops["unknown_team"] += 1
+                for r in (team_row, opp_row):
+                    if not sb_team_code(r.get("team_abbr")):
+                        k = str(r.get("team_abbr"))
+                        unknown_abbrs[k] = unknown_abbrs.get(k, 0) + 1
+                continue
+            if any(np.isnan(_num(r, c)) for r in (team_row, opp_row) for c in _REQUIRED_STAT_FIELDS):
+                drops["nan_stats"] += 1
                 continue
 
-            pts = float(team_row.get("points", 0.0))
-            opp_pts = float(opp_row.get("points", 0.0))
-            mins = float(team_row.get("minutes", 240.0))
+            pts = _num(team_row, "points")
+            opp_pts = _num(opp_row, "points")
+            mins = _num(team_row, "minutes")
+            if np.isnan(mins):
+                mins = 240.0
 
-            fga = float(team_row.get("field_goals_attempted", 0.0))
-            fgm = float(team_row.get("field_goals_made", 0.0))
-            tpa = float(team_row.get("three_points_attempted", 0.0))
-            tpm = float(team_row.get("three_points_made", 0.0))
-            fta = float(team_row.get("free_throws_attempted", 0.0))
-            oreb = float(team_row.get("rebounds_offensive", 0.0))
-            dreb = float(team_row.get("rebounds_defensive", 0.0))
-            tov = float(team_row.get("turnovers", 0.0))
+            fga = _num(team_row, "field_goals_attempted")
+            fgm = _num(team_row, "field_goals_made")
+            tpa = _num(team_row, "three_points_attempted")
+            tpm = _num(team_row, "three_points_made")
+            fta = _num(team_row, "free_throws_attempted")
+            oreb = _num(team_row, "rebounds_offensive")
+            dreb = _num(team_row, "rebounds_defensive")
+            tov = _num(team_row, "turnovers")
 
-            opp_fga = float(opp_row.get("field_goals_attempted", 0.0))
-            opp_fgm = float(opp_row.get("field_goals_made", 0.0))
-            opp_tpm = float(opp_row.get("three_points_made", 0.0))
-            opp_fta = float(opp_row.get("free_throws_attempted", 0.0))
-            opp_oreb = float(opp_row.get("rebounds_offensive", 0.0))
-            opp_dreb = float(opp_row.get("rebounds_defensive", 0.0))
-            opp_tov = float(opp_row.get("turnovers", 0.0))
+            opp_fga = _num(opp_row, "field_goals_attempted")
+            opp_fgm = _num(opp_row, "field_goals_made")
+            opp_tpm = _num(opp_row, "three_points_made")
+            opp_fta = _num(opp_row, "free_throws_attempted")
+            opp_oreb = _num(opp_row, "rebounds_offensive")
+            opp_dreb = _num(opp_row, "rebounds_defensive")
+            opp_tov = _num(opp_row, "turnovers")
 
             t_poss = calc_possessions(fga, oreb, tov, fta)
             opp_poss = calc_possessions(opp_fga, opp_oreb, opp_tov, opp_fta)
@@ -515,8 +624,11 @@ def build_team_game_stats_from_raw(
             threepar = tpa / max(1.0, fga)
 
             is_home = bool(team_row.get("is_home", False))
-            game_date = str(team_row.get("game_date", ""))
-            season_year = int(team_row.get("season_year", 2025))
+            game_date = _et_game_day(team_row.get("date"), tip if tip_known else None)
+            try:
+                season_year = int(team_row.get("season_year"))
+            except (TypeError, ValueError):
+                season_year = int(game_date[:4]) if game_date[5:7] >= "08" else int(game_date[:4]) - 1
 
             games.append(
                 TeamGameStats(
@@ -547,4 +659,13 @@ def build_team_game_stats_from_raw(
                 )
             )
 
+    n_drop = sum(v for k, v in drops.items() if k != "preseason")
+    if n_drop or drops["preseason"] or approx_date:
+        log.warning(
+            "NBA history loader: kept %d team-games; dropped rows %s (unknown abbrs %s); %d games used the UTC master "
+            "date because no tip time was available (rest/B2B approximate)",
+            len(games), drops, unknown_abbrs or "-", approx_date,
+        )
+    else:
+        log.info("NBA history loader: kept %d team-games", len(games))
     return games

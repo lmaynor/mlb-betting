@@ -5,8 +5,8 @@
 # run (covered markets); SGO inning markets are fetched on only 4 of them
 # (include_sgo=true) and CARRIED FORWARD on the other 4 (include_sgo=false), so
 # SGO stays ~4x/day within its ~2500 entities/mo free tier while ParlayAPI runs
-# 8x/day toward the 20k credit budget (the snapshot's implicit credit guard caps
-# it under PARLAY_CREDIT_CEILING). Late-night runs use day_offset=1 to bank the
+# 8x/day toward its MLB share of the shared 100k pool (the snapshot's implicit credit
+# guard caps it under PARLAY_CREDIT_CEILING = nba.config.MLB_SNAPSHOT_CEILING). Late-night runs use day_offset=1 to bank the
 # next day's slate (lines post ~9pm ET).
 #
 # !! ORDER MATTERS !! Only register the 8-job cadence AFTER flipping

@@ -90,6 +90,13 @@ def test_official_card_gate_requires_confluence():
     assert not is_official_card_play(row_low_score)
 
 
+def test_official_card_gate_rejects_unvalidated_game_engine_rows():
+    # NBA/NHL game-line engine rows (system NBA_ML / NHL_TOTAL ...) are never Official Card plays unless validated
+    assert is_official_card_play(_proj_row())
+    assert not is_official_card_play(_proj_row(system="NBA_ML", validated=False))
+    assert not is_official_card_play(_proj_row(system="NHL_TOTAL"))
+
+
 def test_official_card_gate_mlb():
     # Validated MLB system play in sweet spot accepted
     assert is_official_card_play(_mlb_row())

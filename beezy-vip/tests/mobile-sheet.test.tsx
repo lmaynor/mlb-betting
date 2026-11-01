@@ -26,6 +26,20 @@ describe('useIsMobile hook', () => {
     expect(window.matchMedia).toHaveBeenCalledWith('(max-width: 768px)')
   })
 
+  it('subscribes once, not on every render', () => {
+    const add = jest.fn()
+    window.matchMedia = jest.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: add,
+      removeEventListener: jest.fn(),
+    }))
+    const { rerender } = renderHook(() => useIsMobile(700))
+    rerender()
+    rerender()
+    rerender()
+    expect(add).toHaveBeenCalledTimes(1)
+  })
+
   it('updates reactively when media query changes', () => {
     let listener: (() => void) | null = null
     let matches = false
@@ -165,4 +179,52 @@ describe('<MobileBottomSheet />', () => {
     unmount()
     expect(document.body.style.overflow).toBe('')
   })
+
+  it('names the dialog (title by default, or an explicit ariaLabel)', () => {
+    const { rerender } = render(
+      <MobileBottomSheet open={true} onClose={() => {}} title="Filter Picks"><div>Body</div></MobileBottomSheet>
+    )
+    expect(screen.getByRole('dialog', { name: 'Filter Picks' })).toBeInTheDocument()
+    rerender(
+      <MobileBottomSheet open={true} onClose={() => {}} title={<span>Rich</span>} ariaLabel="Terminal filters"><div>Body</div></MobileBottomSheet>
+    )
+    expect(screen.getByRole('dialog', { name: 'Terminal filters' })).toBeInTheDocument()
+  })
+
+  it('moves focus in, traps Tab inside the sheet and restores focus to the opener on close', () => {
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    const { rerender } = render(
+      <MobileBottomSheet open={true} onClose={() => {}} title="Trap" footer={<button>Last</button>}>
+        <button>Middle</button>
+      </MobileBottomSheet>
+    )
+    const closeBtn = screen.getByRole('button', { name: 'Close' })
+    const last = screen.getByRole('button', { name: 'Last' })
+    expect(document.activeElement).toBe(closeBtn)
+
+    last.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(closeBtn)
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last)
+
+    rerender(<MobileBottomSheet open={false} onClose={() => {}} title="Trap"><button>Middle</button></MobileBottomSheet>)
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
+  })
+
+  it('stacked sheets that close out of order restore the ORIGINAL body overflow only when the last one closes', () => {
+    document.body.style.overflow = 'scroll'
+    const a = render(<MobileBottomSheet open={true} onClose={() => {}}><div>A</div></MobileBottomSheet>)
+    const b = render(<MobileBottomSheet open={true} onClose={() => {}}><div>B</div></MobileBottomSheet>)
+    expect(document.body.style.overflow).toBe('hidden')
+    a.unmount() // the first-opened sheet closes first
+    expect(document.body.style.overflow).toBe('hidden')
+    b.unmount()
+    expect(document.body.style.overflow).toBe('scroll')
+    document.body.style.overflow = ''
+  })
 })
+

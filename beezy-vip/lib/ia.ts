@@ -2,8 +2,10 @@
  * Information architecture: the ONE place that says which pages exist in the top nav and which pages are views of
  * the same section. Five questions, five nav items; everything else is a tab inside one of them.
  *
- *   Scanner  what is mispriced right now?     /ev (Odds Terminal: every book's price)   + /edge (prop research view)
- *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games + /picks/history + /cheat-sheet
+ *   Scanner  what is mispriced right now?     /ev (Odds Terminal: every book's player-prop price) + /ev/games (NBA / NHL game lines:
+ *            model estimate vs the books, UNVALIDATED) + /edge (prop research view)
+ *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games (MLB tracked game picks) +
+ *            /picks/history + /cheat-sheet. Picks is the tracked, graded record; unvalidated estimates live in the Scanner.
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
  *   Home     proof, nothing else
@@ -19,7 +21,7 @@ export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string
 export const SECTIONS: Section[] = [
   {
     id: 'scanner', prefixes: ['/ev', '/edge'],
-    tabs: [{ label: 'Odds Terminal', href: '/ev' }, { label: 'Prop Research', href: '/edge' }],
+    tabs: [{ label: 'Odds Terminal', href: '/ev' }, { label: 'Game Lines', href: '/ev/games' }, { label: 'Prop Research', href: '/edge' }],
   },
   {
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.
@@ -27,7 +29,7 @@ export const SECTIONS: Section[] = [
     tabs: [
       { label: 'Daily Card', href: '/cheat-sheet' },
       { label: 'Top Signals', href: '/picks' },
-      { label: 'Game Lines', href: '/picks/games' },
+      { label: 'Game Picks', href: '/picks/games' },
       { label: 'Graded History', href: '/picks/history' },
     ],
   },
@@ -70,6 +72,7 @@ export function tabActive(pathname: string, tabParam: string | null, tab: Sectio
   const want = query ? new URLSearchParams(query).get('tab') : null
   if (path === '/analytics') return pathname === '/analytics' && (tabParam ?? 'bankroll') === want
   if (path === '/picks') return pathname === '/picks'
+  if (path === '/ev') return pathname === '/ev'                 // /ev/games is its own tab
   return under(pathname, path)
 }
 

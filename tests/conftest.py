@@ -16,3 +16,53 @@ order. Importing these up front, once, before collection begins, avoids it.
 """
 import sklearn.metrics  # noqa: F401
 import xgboost  # noqa: F401
+
+import sys  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _daily_projections_never_reach_gcs(monkeypatch):
+    """ev.daily_projections used to detect pytest itself (PYTEST_CURRENT_TEST) to avoid two network/GCS paths; that test
+    detection is gone from production code, so the isolation lives here instead:
+
+      * _load_env_lines reads the NFL schedule mirror via nfl.data.read.load. Unless a test stubs that loader (or
+        _load_env_lines itself), it returns {} without touching storage.
+      * _run_game_models refreshes the NBA/NHL game payload (history replay + GCS writes): a no-op by default. A test that
+        wants the real function gets it via inspect.unwrap(dp._run_game_models).
+    Only active for tests that have imported ev.daily_projections."""
+    dp = sys.modules.get("ev.daily_projections")
+    if dp is None:
+        yield
+        return
+    import nfl.data.read as nr
+
+    real_env, stock_load = dp._load_env_lines, nr.load
+
+    def guarded_env_lines():
+        return {} if nr.load is stock_load else real_env()
+
+    def no_game_models(sport, events, now):
+        return False
+
+    no_game_models.__wrapped__ = dp._run_game_models
+    monkeypatch.setattr(dp, "_load_env_lines", guarded_env_lines)
+    monkeypatch.setattr(dp, "_run_game_models", no_game_models)
+    monkeypatch.setattr(dp, "_run_game_board", lambda sport, now: False)
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _nfl_sweep_ledger_never_reaches_gcs(request, monkeypatch):
+    """The NFL sweep meters every ParlayAPI pull through the shared credit ledger (OddsAccum/.../_credits/*.json). A few test
+    modules set a fake MLB_GCS_BUCKET, so an un-stubbed ledger call would go to REAL storage. Default: permissive and
+    write-nothing. A module that tests the metering itself sets REAL_SWEEP_LEDGER = True and stubs the ledger's storage."""
+    sw = sys.modules.get("ev.sweep_nfl_props")
+    if sw is None or getattr(request.module, "REAL_SWEEP_LEDGER", False):
+        yield
+        return
+    from nba.odds.credit_ledger import Allowance
+    monkeypatch.setattr(sw, "_ledger_allowance", lambda pc, want, today: Allowance(True, want, "test"))
+    monkeypatch.setattr(sw, "_ledger_record", lambda today, n: None)
+    yield

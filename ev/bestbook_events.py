@@ -31,7 +31,8 @@ _ET = ZoneInfo("America/New_York")
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "Odds/bestbook_live/{sport}/latest.json"
 
-DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7}
+DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7}    # ET calendar days INCLUDING today (today .. today + days - 1)
+MAX_CONSECUTIVE_FETCH_FAILURES = 3
 
 BESTBOOK_STAT_MAP: dict[str, dict[str, str]] = {
     "nba": {
@@ -176,15 +177,32 @@ def parse_american(val) -> int | None:
         return None
 
 
+def _two_sided_stats(row: dict) -> tuple[int, float]:
+    """(number of two-sided non-DFS book quotes on a rung row, mean |P(yes) - 0.5| over them). A row with no two-sided quote has
+    distance 1.0 (never preferred on the tie-break). Quote yes/no are BestBook implied-probability PERCENTS."""
+    n, dist = 0, 0.0
+    for q in row.get("quotes") or []:
+        if q.get("yes") is None or q.get("no") is None or bb.venue_info(q.get("venue"))[1] == "dfs":
+            continue
+        n += 1
+        py = bb.pct_to_prob(q.get("yes"))
+        dist += abs(py - 0.5) if py is not None else 0.5
+    return n, (dist / n if n else 1.0)
+
+
 def build_events_from_snapshots(
     sport: str,
     slate_games: list[dict],
-    snapshots: dict[str, dict],
+    snapshots,
     now: datetime,
     canon=None,
 ) -> tuple[list[dict], dict]:
     """Pure transform: converts slate games and snapshots into ParlayAPI-shaped event dicts.
-    Returns (events, counts)."""
+    Returns (events, counts).
+
+    `snapshots` is a {game_key: snapshot} dict OR a callable game_key -> snapshot. The crawler passes a callable so each game's
+    multi-MB snapshot is fetched only for games that pass the started / unknown-team filters, turned into its event, and
+    dropped before the next one is fetched (holding every game at once was ~100 MB for a full NFL slate)."""
     if canon is None:
         from ev.daily_projections import canon_team as canon
 
@@ -200,7 +218,9 @@ def build_events_from_snapshots(
         "books": set(),
     }
 
+    rows = player_stat_rows = None
     for g in slate_games:
+        rows = player_stat_rows = None            # release the previous game's snapshot BEFORE fetching the next
         game_key = g.get("key")
         if not game_key:
             continue
@@ -225,8 +245,9 @@ def build_events_from_snapshots(
             log.warning("bestbook %s event %s: unknown team(s) %r @ %r", sport, game_key, g.get("away"), g.get("home"))
             continue
 
-        snap = snapshots.get(game_key) or {}
+        snap = (snapshots(game_key) if callable(snapshots) else snapshots.get(game_key)) or {}
         rows = snap.get("rows") or []
+        snap = None                       # the raw snapshot is as big as `rows`: keep only the row list
         if not rows:
             counts["events_no_quotes"] += 1
             continue
@@ -242,24 +263,20 @@ def build_events_from_snapshots(
                 continue
             player_stat_rows.setdefault((player.lower(), stat), []).append(r)
 
-        # For each (player, stat), pick the main line as the line with the most two-sided books
+        # Main line per (player, stat): the line with the MOST two-sided books; ties go to the line whose consensus is closest to
+        # even odds (what a book posts as its main line), then to the lower number, so the pick never depends on row order.
         main_lines: dict[tuple[str, str], float] = {}
         for (pl_norm, st), r_list in player_stat_rows.items():
+            best_key = None
             best_line = None
-            max_two_sided = -1
             for r in r_list:
                 pt = point_from_row(r.get("line"), r.get("rung"), st)
                 if pt is None:
                     continue
-                q_list = r.get("quotes") or []
-                two_sided = sum(
-                    1
-                    for q in q_list
-                    if q.get("yes") is not None and q.get("no") is not None and bb.venue_info(q.get("venue"))[1] != "dfs"
-                )
-                if two_sided > max_two_sided:
-                    max_two_sided = two_sided
-                    best_line = pt
+                two_sided, dist = _two_sided_stats(r)
+                key = (-two_sided, dist, pt)
+                if best_key is None or key < best_key:
+                    best_key, best_line = key, pt
             if best_line is not None:
                 main_lines[(pl_norm, st)] = best_line
 
@@ -363,10 +380,10 @@ def crawl_sport(
     slate = bb.fetch_slate()
     sport_games = [g for g in slate if g.get("sport") == sp]
 
-    # Filter to games in target day window (ET calendar dates)
+    # Target window = exactly `days` ET calendar days starting today (today .. today + days - 1).
     max_days = DEFAULT_DAYS.get(sp, 7) if days is None else days
     d0 = now.astimezone(_ET).date()
-    cutoff_date = d0 + timedelta(days=max_days)
+    end_date = d0 + timedelta(days=max_days)          # exclusive
 
     target_games = []
     for g in sport_games:
@@ -374,24 +391,36 @@ def crawl_sport(
         if st_str:
             try:
                 st = datetime.fromisoformat(str(st_str).replace("Z", "+00:00"))
-                if st.astimezone(_ET).date() <= cutoff_date:
+                if st.astimezone(_ET).date() < end_date:
                     target_games.append(g)
             except ValueError:
                 target_games.append(g)
         else:
             target_games.append(g)
 
-    snapshots: dict[str, dict] = {}
-    for i, g in enumerate(target_games):
-        k = g.get("key")
-        if k:
-            snapshots[k] = bb.fetch_game_snapshot(k)
-            if i < len(target_games) - 1:
-                # Randomized intra-request delay to prevent fixed-interval bot sniffing
-                time.sleep(random.uniform(0.6, 1.8))
+    state = {"n": 0, "consecutive_fail": 0, "failed": 0}
 
-    events, counts = build_events_from_snapshots(sp, target_games, snapshots, now)
+    def fetch_one(game_key: str) -> dict:
+        if state["n"]:
+            # Randomized pause between per-game requests: spreads load instead of hitting the endpoint at a fixed rhythm
+            time.sleep(random.uniform(0.6, 1.8))
+        state["n"] += 1
+        try:
+            snap = bb.fetch_game_snapshot(game_key)
+        except bb.BestBookError as e:
+            # the client already retried with backoff; one dead game must not sink the slate, a dead endpoint must stop the crawl
+            state["failed"] += 1
+            state["consecutive_fail"] += 1
+            log.warning("bestbook %s: snapshot for %s failed (%s)", sp, game_key, e)
+            if state["consecutive_fail"] >= MAX_CONSECUTIVE_FETCH_FAILURES:
+                raise
+            return {}
+        state["consecutive_fail"] = 0
+        return snap
+
+    events, counts = build_events_from_snapshots(sp, target_games, fetch_one, now)
     counts["events_upcoming"] = len(sport_games)
+    counts["events_fetch_failed"] = state["failed"]
 
     return {
         "sport": sp,

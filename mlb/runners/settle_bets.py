@@ -623,16 +623,153 @@ def _settle_pitcher_er(pending: pd.DataFrame, game_cache: dict) -> list[dict]:
     return results
 
 
+_WINTER_DAY_OFFSETS = (0, -1, 1)
+_NFL_STAT_ALIAS = {"pass_completions": "completions"}     # sweep stat code -> nfl.props.grade stat code
+
+
+def _shift_day(day: str, n: int) -> str:
+    return (date.fromisoformat(day) + timedelta(days=n)).isoformat()
+
+
+def _nfl_season_of(day: str) -> int:
+    """nflverse season of a calendar day: Jan/Feb playoff games belong to the PRIOR year's season."""
+    d = date.fromisoformat(day)
+    return d.year if d.month > 2 else d.year - 1
+
+
+def _winter_actuals(sport: str, gdate: str, away: str, home: str, cache: dict):
+    """Final box score for away@home near `gdate`, or None (leave the bet pending).
+
+    The actuals providers search the ET schedule for ONE day. Bets logged before the ET-day fix carry a UTC date (the next day
+    for an evening game), so try the stated day, the day before, then the day after. A game that exists but is not final is
+    returned as-is (still pending); only 'game not found' moves on to the next candidate day."""
+    from ev.grade_props import nhl_actuals, nba_actuals
+    fetch = nhl_actuals if sport == "nhl" else nba_actuals
+    last = None
+    for off in _WINTER_DAY_OFFSETS:
+        try:
+            day = _shift_day(gdate, off)
+        except ValueError:
+            return None
+        ckey = (sport, day, away, home)
+        if ckey not in cache:
+            try:
+                cache[ckey] = fetch(day, away, home)
+            except Exception as e:                                                       # noqa: BLE001
+                logger.warning(f"settle winter: {sport} actuals fetch failed for {ckey}: {e}")
+                cache[ckey] = None
+        res = cache[ckey]
+        if res is None:
+            return None
+        if res.get("final"):
+            return res
+        last = res
+        if "not found" not in str(res.get("reason") or ""):
+            return res                      # the game exists on this day but is not final yet
+    return last
+
+
+def _winter_player_id(sport: str, notes: dict, player: str, away: str, home: str, resolvers: dict):
+    """League player id for an NHL/NBA bet (int), or None when it cannot be resolved safely.
+
+    Preferred: the id the sweep stored in the bet's notes. Legacy rows fall back to the same roster crosswalk resolver the sweep
+    used, restricted to the game's two teams. Ambiguous or unknown names return None (never a guess)."""
+    raw = notes.get("player_id")
+    if raw not in (None, "", "nan"):
+        try:
+            return int(float(raw))
+        except (TypeError, ValueError):
+            pass
+    if sport not in resolvers:
+        try:
+            from ev.sweep_props_alerts import SPORTS, load_resolver
+            resolvers[sport] = load_resolver(SPORTS[sport])[0]
+        except Exception as e:                                                           # noqa: BLE001
+            logger.warning(f"settle winter: {sport} roster resolver unavailable: {e}")
+            resolvers[sport] = None
+    resolver = resolvers[sport]
+    if resolver is None or not player:
+        return None
+    try:
+        pid, how = resolver.resolve(player, within=[t for t in (away, home) if t])
+        return int(pid) if pid is not None else None
+    except Exception as e:                                                               # noqa: BLE001
+        logger.warning(f"settle winter: could not resolve {player!r} ({sport}): {e}")
+        return None
+
+
+def _nfl_grading_context(seasons) -> tuple:
+    """(Actuals, PlayerResolver) from the mirrored nflverse tables for `seasons`. Raises when a season is not mirrored."""
+    from nfl.props.grade import Actuals
+    from nfl.props.resolve import PlayerResolver
+    return Actuals.from_mirror(seasons), PlayerResolver.from_mirror(seasons)
+
+
+def _grade_nfl_bet(ctx, stat: str, side: str, point: float, player: str, gdate: str, away: str, home: str, notes: dict):
+    """-> 'win' | 'loss' | 'push' | 'void' | None (leave pending) for one NFL prop, via nfl.props.grade.grade_frame.
+
+    The game is found by game_key (stored ET day, then the neighbouring days, for rows logged with a UTC date), so the right
+    week is graded -- not the player's last row of the season. A missing player_stats row is NOT a DNP: it only voids when the
+    snap counts prove the player never took a snap (grade_detail reason 'dnp_no_stat_row')."""
+    from nfl.data.keys import make_game_key
+    from nfl.props.grade import grade_frame
+    actuals, resolver = ctx
+    keys = []
+    if notes.get("game_key"):
+        keys.append(str(notes["game_key"]))
+    for off in _WINTER_DAY_OFFSETS:
+        try:
+            k = make_game_key(_shift_day(gdate, off), away, home)
+        except ValueError:
+            k = None
+        if k:
+            keys.append(k)
+    game_key = next((k for k in dict.fromkeys(keys) if actuals.find_game({"game_key": k})[0]), None)
+    if game_key is None:
+        logger.info(f"settle winter: NFL game not found in schedules for {away}@{home} {gdate} -- pending")
+        return None
+    frame = pd.DataFrame([{"player": player, "stat": _NFL_STAT_ALIAS.get(stat, stat), "point": point,
+                           "side": side, "game_key": game_key}])
+    out = grade_frame(frame, resolver=resolver, actuals=actuals).iloc[0]
+    res, reason = str(out["result"]), str(out["reason"] or "")
+    if res in ("win", "loss", "push"):
+        return res
+    if res == "void" and reason.startswith("dnp_no_stat_row"):
+        return "void"
+    logger.info(f"settle winter: NFL {player} {stat} stays pending ({res}: {reason})")
+    return None
+
+
 def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[dict]:
-    """Settle NFL, NBA, and NHL bets against official league box scores."""
+    """Settle NFL, NBA, and NHL bets against official league box scores.
+
+    Fails closed: a bet whose player cannot be resolved, whose stat is missing, or whose game is not final stays pending.
+    A bet is voided only when the player IS resolved and the box score shows he did not play."""
     outcomes: list[dict] = []
     if pending_winter.empty:
         return outcomes
 
     import json
-    from mlb_core.data.player_names import norm_name
 
     game_cache: dict = {}
+    resolvers: dict = {}
+    nfl_ctx = {"ctx": None, "failed": False}
+
+    def get_nfl_ctx():
+        if nfl_ctx["ctx"] is None and not nfl_ctx["failed"]:
+            nfl = pending_winter[pending_winter["sport"].astype(str).str.lower() == "nfl"]
+            seasons = set()
+            for gd in nfl["game_date"].astype(str):
+                try:
+                    seasons.update(_nfl_season_of(_shift_day(gd, off)) for off in _WINTER_DAY_OFFSETS)
+                except ValueError:
+                    continue
+            try:
+                nfl_ctx["ctx"] = _nfl_grading_context(sorted(seasons))
+            except Exception as e:                                                       # noqa: BLE001
+                logger.warning(f"settle winter: NFL actuals/resolver unavailable ({e}); NFL bets stay pending")
+                nfl_ctx["failed"] = True
+        return nfl_ctx["ctx"]
 
     for _, bet in pending_winter.iterrows():
         bid = int(bet["id"])
@@ -646,15 +783,15 @@ def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[
         stake = float(bet.get("stake") or 1.0)
         notes_str = str(bet.get("notes") or "")
 
-        stat, side, point = None, None, None
+        stat, side, point, notes = None, None, None, {}
         if "{" in notes_str:
             try:
-                nd = json.loads(notes_str)
-                stat = nd.get("stat")
-                side = nd.get("side")
-                point = float(nd.get("point")) if nd.get("point") is not None else None
+                notes = json.loads(notes_str)
+                stat = notes.get("stat")
+                side = notes.get("side")
+                point = float(notes.get("point")) if notes.get("point") is not None else None
             except Exception:
-                pass
+                notes = {}
         if not stat or not side or point is None:
             parts = btype.rsplit("_", 2)
             if len(parts) == 3:
@@ -670,58 +807,36 @@ def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[
 
         result = None
         if sport in ("nhl", "nba"):
-            from ev.grade_props import nhl_actuals, nba_actuals
-            ckey = (sport, gdate, away, home)
-            if ckey not in game_cache:
-                try:
-                    game_cache[ckey] = nhl_actuals(gdate, away, home) if sport == "nhl" else nba_actuals(gdate, away, home)
-                except Exception as e:
-                    logger.warning(f"settle winter: {sport} actuals fetch failed for {ckey}: {e}")
-                    game_cache[ckey] = None
-            game = game_cache.get(ckey)
+            game = _winter_actuals(sport, gdate, away, home, game_cache)
             if not game or not game.get("final"):
                 continue
 
-            matched_stat_val = None
-            player_played = False
-            p_dict = game.get("players", {})
-            target_norm = norm_name(player)
-
-            for pid, pdata in p_dict.items():
-                pname = pdata.get("name") or pdata.get("full_name") or ""
-                if (pname and norm_name(pname) == target_norm) or str(pid) == str(bet.get("game_pk")):
-                    player_played = pdata.get("_played", True)
-                    matched_stat_val = pdata.get(stat)
-                    break
-
-            if matched_stat_val is None and not player_played:
-                # Player not found in boxscore of a final game -> void
-                result = "void"
-            elif not player_played:
-                result = "void"
-            elif matched_stat_val is not None:
-                if matched_stat_val == point:
+            pid = _winter_player_id(sport, notes, player, away, home, resolvers)
+            if pid is None:
+                logger.warning(f"settle winter: {sport.upper()} bet {bid} ({player}) has no resolvable player id on a final "
+                               f"game -- leaving pending")
+                continue
+            pdata = (game.get("players") or {}).get(pid)
+            if pdata is None or not pdata.get("_played"):
+                result = "void"          # resolved player absent from / idle in the final box score: DNP, stake refunded
+            else:
+                val = pdata.get(stat)
+                if val is None:
+                    logger.warning(f"settle winter: {sport.upper()} bet {bid} stat '{stat}' missing from box score -- pending")
+                elif val == point:
                     result = "push"
                 elif str(side).lower() == "over":
-                    result = "win" if matched_stat_val > point else "loss"
+                    result = "win" if val > point else "loss"
                 else:
-                    result = "win" if matched_stat_val < point else "loss"
+                    result = "win" if val < point else "loss"
 
         elif sport == "nfl":
-            try:
-                from nfl.props.grade import grade_detail
-                from nfl.data.read import load
-                stats_df = load("player_stats", seasons=[int(gdate[:4])])
-                row_match = None
-                if stats_df is not None and not stats_df.empty:
-                    p_match = stats_df[stats_df["player_name"].map(norm_name) == norm_name(player)]
-                    if not p_match.empty:
-                        row_match = p_match.iloc[-1].to_dict()
-                if row_match:
-                    gr = grade_detail(stat, point, side, row_match, game_final=True, played=True)
-                    result = gr.result
-            except Exception as e:
-                logger.warning(f"settle winter: nfl grade failed for bet {bid}: {e}")
+            ctx = get_nfl_ctx()
+            if ctx is not None:
+                try:
+                    result = _grade_nfl_bet(ctx, str(stat), str(side), point, player, gdate, away, home, notes)
+                except Exception as e:                                                   # noqa: BLE001
+                    logger.warning(f"settle winter: nfl grade failed for bet {bid}: {e}")
 
         if result in ("win", "loss", "push", "void"):
             profit = _calc_profit(stake, odds, result)
@@ -732,6 +847,50 @@ def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[
 
 
 # ── Main run ──────────────────────────────────────────────────────────────────
+
+
+_WINTER_RECAP_SPORTS = ("nfl", "nba", "nhl")
+
+
+def _winter_season_start(settle_date: str) -> str:
+    """First day of the NFL/NBA/NHL season containing settle_date (Aug 1: before any of the three tips off), so Jan/Feb bets
+    stay in the season that began the previous autumn instead of resetting on Jan 1."""
+    y, m = int(settle_date[:4]), int(settle_date[5:7])
+    return f"{y if m >= 8 else y - 1}-08-01"
+
+
+def _winter_sport_stats(engine, settle_date: str) -> dict:
+    """Season record of the logged NFL / NBA / NHL alert bets, one entry per sport (None when nothing has settled), for
+    the #daily-recap embed. Same fields as the per-system MLB stats."""
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            rows = pd.read_sql(
+                text("SELECT * FROM bets WHERE game_date >= :s AND game_date <= :e AND sport IN ('nfl', 'nba', 'nhl')"),
+                conn, params={"s": _winter_season_start(settle_date), "e": settle_date},
+            )
+    except Exception as e:                                                                  # noqa: BLE001
+        logger.warning("settle: winter recap stats unavailable: %r", e)
+        return {s.upper(): None for s in _WINTER_RECAP_SPORTS}
+    out = {}
+    for sport in _WINTER_RECAP_SPORTS:
+        mine = rows[rows["sport"].astype(str).str.lower() == sport]
+        resolved = mine[mine["result"].notna()]
+        # voids/pushes carry no decision: count them out of the hit rate but keep them out of the headline bet count too
+        graded = resolved[resolved["result"].isin(["win", "loss"])]
+        if graded.empty:
+            out[sport.upper()] = None
+            continue
+        staked = float(graded["stake"].sum())
+        pnl = float(graded["profit"].sum())
+        wins = int((graded["result"] == "win").sum())
+        out[sport.upper()] = {
+            "bets": int(len(graded)), "wins": wins, "hit_rate": wins / len(graded), "pnl": round(pnl, 2),
+            "roi": round(pnl / staked * 100, 2) if staked > 0 else 0.0,
+            "avg_edge": float(graded["edge"].mean()) if graded["edge"].notna().any() else None,
+            "pending": int(len(mine[mine["result"].isna()])),
+        }
+    return out
 
 def run(settle_date: str = None) -> dict:
     """Settle all pending bets for settle_date (default: yesterday).
@@ -766,6 +925,11 @@ def run(settle_date: str = None) -> dict:
         logger.info(f"settle: no pending bets for {settle_date} or earlier")
         return {"status": "ok", "settle_date": settle_date, "settled": 0}
 
+    # Counters for the return value. (original_pending_count / retry_count were once defined only inside the MLB branch,
+    # which made every run() end in a NameError.)
+    original_pending_count = len(pending_all)
+    retry_count = int((pending_all["game_date"] < settle_date).sum())
+
     # Settle NFL, NBA, and NHL winter sports bets
     all_outcomes: list[dict] = []
     winter_pending = pending_all[pending_all["sport"].isin(["nfl", "nba", "nhl"])]
@@ -783,9 +947,9 @@ def run(settle_date: str = None) -> dict:
         logger.info("settle: no pending MLB bets")
     else:
         today_count = (mlb_pending["game_date"] == settle_date).sum()
-        retry_count = (mlb_pending["game_date"] < settle_date).sum()
+        mlb_retry_count = int((mlb_pending["game_date"] < settle_date).sum())
         logger.info(f"settle: {today_count} MLB bets for {settle_date}, "
-                    f"{retry_count} stale pending bets being retried")
+                    f"{mlb_retry_count} stale pending bets being retried")
         for gd, grp in mlb_pending.groupby("game_date"):
             logger.info(
                 f"settle: pending MLB breakdown -- game_date={gd} | "
@@ -933,9 +1097,13 @@ def run(settle_date: str = None) -> dict:
             "pending":  int(len(rows[rows["result"].isna()])),
         }
 
+    sport_stats = _winter_sport_stats(engine, settle_date)
+
     from mlb_core.config import is_mlb_offseason
-    if not is_mlb_offseason() or not mlb_pending.empty:
-        post_all_systems_summary(system_stats, settle_date=settle_date)
+    # In-season always posts; in the MLB offseason post whenever ANY sport settled bets (NFL/NBA/NHL results used to be
+    # swallowed when no MLB bet was pending).
+    if not is_mlb_offseason() or not mlb_pending.empty or all_outcomes:
+        post_all_systems_summary(system_stats, settle_date=settle_date, sport_stats=sport_stats)
 
     return {
         "status":      "ok",
@@ -944,4 +1112,5 @@ def run(settle_date: str = None) -> dict:
         "retried":     int(retry_count),
         "skipped":     original_pending_count - len(all_outcomes),
         "systems":     {k: (v or {}) for k, v in system_stats.items()},
+        "winter_sports": {k: (v or {}) for k, v in sport_stats.items()},
     }

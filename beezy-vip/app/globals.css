@@ -369,7 +369,7 @@ a:focus-visible {
 }
 
 /* Nav + ticker stay pinned together at the top of the viewport. */
-.site-chrome { position: sticky; top: 0; z-index: 50; width: 100%; max-width: 100vw; }
+.site-chrome { position: sticky; top: 0; z-index: 50; width: 100%; max-width: 100vw; padding-top: env(safe-area-inset-top, 0px); background: #090a0f; }
 
 /* ── Ticker ─────────────────────────────────────────────────────── */
 @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
@@ -585,7 +585,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 a { color: inherit; }
 
 /* ── /ev data table: one sticky header (clears the 96px two-tier nav), hairline rows, hover = background only ── */
-.ev-table th { position: sticky; top: 131px; z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
+.ev-table th { position: sticky; top: calc(131px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
 .ev-table td { padding: 10px 12px; vertical-align: middle; border-bottom: 1px solid #151822; }
 .ev-table tbody tr { transition: background-color 120ms ease; }
 .ev-table tbody tr[data-row]:hover { background: #171a24; }
@@ -593,7 +593,7 @@ a { color: inherit; }
 @media (max-width: 1100px) { .ev-table-wrap { overflow-x: auto; } .ev-table th { position: static; } }
 
 /* ── /ev Odds Terminal: one row per prop side, one narrow column per book ────────────────────────── */
-.odds-table th { position: sticky; top: 131px; z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
+.odds-table th { position: sticky; top: calc(131px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
 .odds-table td { padding: 7px 10px; vertical-align: middle; border-bottom: 1px solid #151822; white-space: nowrap; }
 .odds-table tbody tr { transition: background-color 120ms ease; }
 .odds-table tbody tr[data-row]:hover { background: #171a24; }
@@ -624,7 +624,7 @@ a { color: inherit; }
   .cockpit-grid { grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.2fr); }
   .cockpit-detail,
   .cockpit-detail.is-open {
-    display: block; position: sticky; inset: auto; top: 146px; z-index: auto; background: transparent;
+    display: block; position: sticky; inset: auto; top: calc(146px + env(safe-area-inset-top, 0px)); z-index: auto; background: transparent;
     padding: 0; max-height: calc(100vh - 162px); overflow-y: auto;
   }
   .cockpit-close { display: none !important; }

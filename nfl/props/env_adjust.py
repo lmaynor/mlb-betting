@@ -130,26 +130,34 @@ def adjust(mu, x1, x2, coef: Optional[dict]):
     return mu * np.exp(eta)
 
 
+WIND_PASS_PER_MPH = 0.008    # UNVALIDATED prior (see weather_multiplier)
+WIND_RUSH_PER_MPH = 0.005    # UNVALIDATED prior
+
+
 def weather_multiplier(stat: str, wind_mph: Optional[float] = None, roof: Optional[str] = None, temp_f: Optional[float] = None) -> float:
     """Multiplier on stat expected value from stadium weather.
+
+    UNVALIDATED: every coefficient below is a hand-set prior, NOT fitted to nflverse results (no walk-forward evidence behind
+    them; see docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md before relying on them).
+
     - Indoors (dome / closed roof): 1.0 (neutral environment)
-    - Outdoors with wind >= 15 mph:
-      * Passing yards, pass attempts, passing TDs, receiving yards decrease by ~0.8% per mph over 12 mph (up to -20%)
-      * Rush attempts and rush yards increase by ~0.5% per mph over 12 mph (up to +10%)
-    - Cold temperature (< 32F):
-      * Slight drag on deep passing (-3%)
+    - Outdoors, wind above 12 mph, linear in the excess and CONTINUOUS (no step at any speed; the excess saturates at 20 mph, i.e. at
+      32 mph of wind):
+      * Passing yards / attempts / TDs, receiving yards, receptions: -0.8% per mph over 12 mph, so at most -16% (excess 20 mph)
+      * Rush attempts and rush yards: +0.5% per mph over 12 mph, so at most +10% (excess 20 mph)
+    - Cold temperature (< 32F): -3% on deep-passing stats (pass_yds, rec_yds); this one is a step at 32F, not interpolated.
     """
     if roof and str(roof).lower() in ("dome", "closed"):
         return 1.0
     mult = 1.0
     wind = float(wind_mph) if wind_mph is not None and math.isfinite(wind_mph) else 0.0
     stat_k = str(stat).lower()
-    if wind >= 15.0:
-        excess = min(wind - 12.0, 20.0)
+    excess = min(max(wind - 12.0, 0.0), 20.0)
+    if excess > 0.0:
         if any(w in stat_k for w in ("pass", "rec_yds", "receptions")):
-            mult *= max(0.80, 1.0 - 0.008 * excess)
+            mult *= 1.0 - WIND_PASS_PER_MPH * excess
         elif any(w in stat_k for w in ("rush", "carries")):
-            mult *= min(1.12, 1.0 + 0.005 * excess)
+            mult *= 1.0 + WIND_RUSH_PER_MPH * excess
     if temp_f is not None and math.isfinite(temp_f) and temp_f < 32.0:
         if any(w in stat_k for w in ("pass_yds", "rec_yds")):
             mult *= 0.97

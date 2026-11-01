@@ -979,8 +979,15 @@ def get_odds_board(sport, day=None, stat=None, limit=2000):
         status = "idle"
     out = {k: payload.get(k) for k in ("sport", "status", "stats", "summary", "lines_age_minutes", "lines_source")}
     out["status"] = status
+    # Stale = the BOARD is old (or has no timestamp), whether or not rows survive the filters. The only old-board case that is
+    # not reported stale is a sport that is genuinely out of season (MLB offseason), where an idle board is the correct state;
+    # an old board with no rows left in any other sport means the feed stopped, and saying "not stale" would hide that.
+    board_old = age is None or age > _ob.STALE_MINUTES
+    if board_old and not rows and sport == "mlb":
+        from mlb_core.config import is_mlb_offseason
+        board_old = not is_mlb_offseason()
     out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
-               stale=(age is None or age > _ob.STALE_MINUTES) if rows else False, count=len(rows), rows=rows[:limit], games=games,
+               stale=board_old, count=len(rows), rows=rows[:limit], games=games,
                books=books, offshore_books=[b for b in payload.get("offshore_books") or [] if b in books], validated=False)
     out["lines_source"] = out["lines_source"] or []
     if day:
@@ -1064,9 +1071,14 @@ def get_game_projections(sport: str, day: str | None = None, market: str | None 
         "sport": sport,
         "status": payload.get("status", "live"),
         "engine": payload.get("engine"),
+        "engine_version": payload.get("engine_version"),
+        # No validated edge exists for NBA/NHL game lines: default to unvalidated even if an old payload lacks the flag.
+        "validated": bool(payload.get("validated", False)),
+        "label": payload.get("label") or "UNVALIDATED model estimate, not a tested edge",
         "as_of": ts_str,
         "age_minutes": None if age is None else round(age, 1),
-        "stale": (age is None or age > 90) if rows else False,
+        "stale": (bool(payload.get("stale")) or age is None or age > 90) if rows else False,
+        "stale_reason": payload.get("stale_reason"),
         "count": len(rows),
         "rows": rows[:limit],
         "priced_games": priced_games,
@@ -1074,6 +1086,86 @@ def get_game_projections(sport: str, day: str | None = None, market: str | None 
         "markets": ["spread", "total", "ml"],
     }
 
+
+
+_GAME_ODDS_CACHE: dict = {}
+_GAME_ODDS_CACHE_TTL = 60  # seconds; the job rewrites the file every 30 min
+
+
+def get_game_odds_board(sport, day=None, market=None, limit=1500):
+    """Per-book NBA / NHL GAME-LINE price matrix (moneyline / spread / total): the data behind the Scanner's Game Lines tab.
+    Reads the precomputed GCS file (ev/game_odds_board.py), never computed on a request. ValueError on a bad sport / day /
+    market / limit. A missing file answers `status: 'unavailable'` with no rows. Games that have started are dropped at read
+    time (a cached board outlives game starts); `day` is the America/New_York game day, the date inside `game_key`. Every
+    row is unvalidated."""
+    import time as _time
+    from zoneinfo import ZoneInfo
+    from ev import game_odds_board as _gob
+    sport = (sport or "").lower()
+    if sport not in _gob.SPORTS:
+        raise ValueError(f"unknown game odds sport {sport!r}; expected one of {_gob.SPORTS}")
+    mkt = str(market).lower().strip() if market else None
+    if mkt == "all":
+        mkt = None
+    if mkt is not None and mkt not in _gob.MARKETS:
+        raise ValueError(f"unknown market {market!r}; expected one of {_gob.MARKETS}")
+    limit = max(1, min(int(limit), 3000))
+    day = _proj_day(day, "day")
+    now = _datetime.now(_timezone.utc)
+    empty = {"sport": sport, "status": "unavailable", "as_of": None, "age_minutes": None, "stale": True, "validated": False,
+             "lines_source": _gob.LINES_SOURCE, "count": 0, "books": [], "offshore_books": [], "games": [], "rows": []}
+
+    hit = _GAME_ODDS_CACHE.get(sport)
+    if hit and _time.monotonic() - hit[0] < _GAME_ODDS_CACHE_TTL:
+        payload = hit[1]
+    else:
+        payload = None
+        try:
+            from mlb_core import storage
+            key = _gob.OUT_KEY.format(sport=sport)
+            if storage.exists(key):
+                payload = _json.loads(storage.read_bytes(key).decode("utf-8"))
+                _GAME_ODDS_CACHE[sport] = (_time.monotonic(), payload)
+        except Exception:  # noqa: BLE001 -- serve the empty shape
+            logger.exception("game odds board read failed for %s", sport)
+            payload = None
+    if not isinstance(payload, dict) or payload.get("status") == "unavailable":
+        return empty
+
+    as_of = payload.get("as_of") or payload.get("ts")
+    age = None
+    try:
+        age = max(0.0, (now - _datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))).total_seconds() / 60.0)
+    except (TypeError, ValueError):
+        pass
+    started = now.isoformat()
+    live = [r for r in payload.get("rows") or [] if str(r.get("commence")) > started]     # a cached board outlives game starts
+    rows = live
+    if day:
+        et = ZoneInfo("America/New_York")
+
+        def _et_day(v):
+            try:
+                return _datetime.fromisoformat(str(v).replace("Z", "+00:00")).astimezone(et).date().isoformat()
+            except (TypeError, ValueError):
+                return None
+        rows = [r for r in rows if _et_day(r.get("commence")) == day]
+    if mkt:
+        rows = [r for r in rows if r.get("market") == mkt]
+    stale = age is None or age > _gob.STALE_MINUTES or bool(payload.get("stale"))
+    status = "awaiting_lines" if not live else ("stale" if stale else "live")
+    books = sorted({b["book"] for r in rows for b in r.get("books") or []})
+    per_game: dict = {}
+    for r in rows:
+        g = per_game.setdefault(r.get("game_key"), {"game_key": r.get("game_key"), "away": r.get("away"),
+                                                    "home": r.get("home"), "start": r.get("commence"), "n_rows": 0})
+        g["n_rows"] += 1
+    return {"sport": sport, "status": status, "as_of": as_of, "age_minutes": None if age is None else round(age, 1),
+            "stale": stale, "validated": False, "lines_source": payload.get("lines_source") or _gob.LINES_SOURCE,
+            "count": len(rows), "books": books,
+            "offshore_books": [b for b in payload.get("offshore_books") or [] if b in books],
+            "games": sorted(per_game.values(), key=lambda g: (str(g["start"]), str(g["game_key"]))),
+            "rows": rows[:limit]}
 
 
 def _roi(profit, stake):

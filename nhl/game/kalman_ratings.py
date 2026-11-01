@@ -28,6 +28,16 @@ from nhl.config import TEAMS, team_abbrev
 
 log = logging.getLogger("nhl.game.kalman_ratings")
 
+
+def _season_of(date_str: Any) -> int:
+    """NHL season (start year) of a calendar date: Aug-Dec -> that year, Jan-Jul -> year - 1."""
+    d = str(date_str)[:10]
+    try:
+        y, m = int(d[:4]), int(d[5:7])
+    except ValueError:
+        return -1
+    return y if m >= 8 else y - 1
+
 DEFAULT_LEAGUE_GOALS: float = 2.85
 DEFAULT_LEAGUE_SOG: float = 30.5
 DEFAULT_HIA_GOALS: float = 0.18
@@ -113,6 +123,7 @@ class KalmanTeamTracker:
         self.league_sog = float(league_sog)
         self.hia_goals = float(hia_goals)
         self.teams: Dict[str, TeamState] = {}
+        self.current_season: Optional[int] = None
         self._init_teams()
 
     def _init_teams(self) -> None:
@@ -145,10 +156,10 @@ class KalmanTeamTracker:
             )
         return self.teams[code]
 
-    def _apply_time_drift(self, state: TeamState, current_date: Optional[str]) -> None:
-        """Inject process noise based on elapsed days since last game."""
+    def _drifted_cov(self, state: TeamState, current_date: Optional[str]) -> np.ndarray:
+        """Covariance after process noise for the days elapsed since the team's last game. PURE: returns a new array."""
         if not current_date or not state.last_date:
-            return
+            return state.cov
         try:
             d_curr = datetime.strptime(str(current_date)[:10], "%Y-%m-%d").date()
             d_last = datetime.strptime(str(state.last_date)[:10], "%Y-%m-%d").date()
@@ -161,7 +172,27 @@ class KalmanTeamTracker:
             DAILY_Q_DEF * delta_days,
             DAILY_Q_PACE * delta_days,
         ])
-        state.cov = state.cov + q_matrix
+        return state.cov + q_matrix
+
+    def _apply_time_drift(self, state: TeamState, current_date: Optional[str]) -> None:
+        """Inject process noise based on elapsed days since last game. MUTATES state: call exactly once per game, from
+        update_game (predict_game uses the pure _drifted_cov, so repeated predicts never compound)."""
+        state.cov = self._drifted_cov(state, current_date)
+
+    def roll_season(self, game_date: Optional[str]) -> bool:
+        """Apply the offseason regression once when `game_date` falls in a later NHL season than the last seen one.
+        Call before predicting/updating each game in any replay or evaluator. Returns True if decay was applied."""
+        if not game_date:
+            return False
+        season = _season_of(game_date)
+        if season < 0:
+            return False
+        prev = self.current_season
+        self.current_season = season if prev is None else max(prev, season)
+        if prev is not None and season > prev:
+            self.apply_offseason_decay()
+            return True
+        return False
 
     def predict_game(
         self,
@@ -182,12 +213,9 @@ class KalmanTeamTracker:
         h_state = self.get_state(h_code)
         a_state = self.get_state(a_code)
 
-        # Apply process noise for elapsed rest
-        self._apply_time_drift(h_state, game_date)
-        self._apply_time_drift(a_state, game_date)
-
-        h_theta, h_cov = h_state.theta, h_state.cov
-        a_theta, a_cov = a_state.theta, a_state.cov
+        # Process noise for elapsed rest, on copies: predicting must not change the filter state
+        h_theta, h_cov = h_state.theta, self._drifted_cov(h_state, game_date)
+        a_theta, a_cov = a_state.theta, self._drifted_cov(a_state, game_date)
 
         hia = self.hia_goals if hia_goals is None else float(hia_goals)
 
@@ -375,6 +403,7 @@ class KalmanTeamTracker:
             "league_goals": self.league_goals,
             "league_sog": self.league_sog,
             "hia_goals": self.hia_goals,
+            "current_season": self.current_season,
             "teams": {k: v.to_dict() for k, v in self.teams.items()},
         }
 
@@ -385,6 +414,7 @@ class KalmanTeamTracker:
             league_sog=data.get("league_sog", DEFAULT_LEAGUE_SOG),
             hia_goals=data.get("hia_goals", DEFAULT_HIA_GOALS),
         )
+        tracker.current_season = data.get("current_season")
         if "teams" in data:
             tracker.teams = {k: TeamState.from_dict(v) for k, v in data["teams"].items()}
         return tracker

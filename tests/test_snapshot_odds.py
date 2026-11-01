@@ -112,6 +112,17 @@ def test_credit_guard_skips_props_over_ceiling(env, monkeypatch):
     assert not any(k.startswith("batting_homeRuns") for k in events[0]["odds"])
 
 
+def test_shared_pool_floor_skips_props_even_when_the_pace_allows_them(env, monkeypatch):
+    """The MLB snapshot job spends the SAME 100k pool as the NHL/NBA bankers, so it honours the same reserve floor."""
+    class _LowPool(_FakeParlay):
+        def __init__(self, *a, **k):
+            self.credits_remaining = "300"                    # below PARLAY_RESERVE_FLOOR (500)
+    monkeypatch.setattr("nba.odds.parlayapi.ParlayApiClient", _LowPool)
+    events, meta = S._gather_parlay(DATE, "Odds/sgo/latest.json", include_sgo=True)
+    assert meta["props_pulled"] is False
+    assert not any(k.startswith("batting_homeRuns") for k in events[0]["odds"])
+
+
 def test_target_date_offset():
     # day_offset shifts the target ET date forward
     assert S._target_date("2024-05-01", 0) == "2024-05-01"

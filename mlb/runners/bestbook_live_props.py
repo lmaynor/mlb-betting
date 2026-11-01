@@ -10,6 +10,12 @@ ev.daily_projections.load_events to union with the banked ParlayAPI and BettingP
 A crawl that finds games but cannot price ANY of them does NOT overwrite the last good
 file, and exits 1 so the failure is visible in Cloud Run.
 
+STATUS: LIVE as an additional line source (owner decision 2026-11-01, docs/solutions/conventions/bestbook-needs-tos-decision.md).
+BestBook is a third party's private, cookie-authenticated stream and no ToS / licensing review was done; BESTBOOK_DISABLED=1 is the
+kill switch (the runner then exits 2 without touching the endpoint).
+
+--days N is a window of N ET calendar days INCLUDING today (today .. today + N - 1).
+
 --out PATH writes the result to that local file INSTEAD of the bucket (smoke runs / probes; never touches GCS).
 """
 
@@ -28,12 +34,23 @@ from ev import bestbook_events as bbe
 log = logging.getLogger("bestbook_live_props")
 
 
+class BestBookDisabled(RuntimeError):
+    """Raised when the BESTBOOK_DISABLED=1 kill switch is set."""
+
+
+def require_enabled() -> None:
+    """On by default; BESTBOOK_DISABLED=1 (or true/yes/on) stops the crawl."""
+    if os.environ.get("BESTBOOK_DISABLED", "").strip().lower() in ("1", "true", "yes", "on"):
+        raise BestBookDisabled("BestBook crawl is switched off (BESTBOOK_DISABLED is set); unset it to resume")
+
+
 def run(sport: str, days: int | None = None, out: str | None = None) -> dict:
+    require_enabled()
     if os.environ.get("SKIP_STARTUP_JITTER") != "1":
         jitter = float(os.environ.get("BB_STARTUP_JITTER", "0"))
         if jitter <= 0:
             jitter = round(random.uniform(5.0, 30.0), 1)
-        log.info("Anti-detection startup jitter: sleeping %.1fs before BestBook crawl", jitter)
+        log.info("Startup jitter to spread load: sleeping %.1fs before BestBook crawl", jitter)
         time.sleep(jitter)
 
     result = bbe.crawl_sport(sport, days=days)
@@ -72,6 +89,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=None, help="write the result to this local file instead of the bucket")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    try:
+        require_enabled()
+    except BestBookDisabled as e:
+        log.error("%s", e)
+        return 2
     try:
         result = run(a.sport, a.days, a.out)
     except Exception:  # noqa: BLE001

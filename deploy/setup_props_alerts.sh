@@ -29,6 +29,7 @@ SERVICE_NAME="mlb-betting"
 IMAGE="${IMAGE:-gcr.io/${PROJECT_ID}/mlb-betting-feeds}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
+INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 
 if [ "${PAUSE:-0}" = "1" ]; then
   for s in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep -E '^(props-alerts|props-grade|nba-espn-players)'); do
@@ -64,9 +65,20 @@ ROWS=(
 )
 for row in "${ROWS[@]}"; do
   IFS='|' read -r JOB ARGS CRON TMO <<<"$row"
-  FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL" --set-secrets="$SECRETS"
+  # The alert jobs log every gated alert into the bets table (mlb_core.alerts.sport_alerts.log_sport_alert_bets -> BetTracker), so
+  # -- exactly like setup_fast_alert.sh -- they need the MLB_DB_URL secret AND the Cloud SQL socket. Without them the tracker
+  # silently fell back to an ephemeral sqlite file inside the container and every winter-sport alert was lost on exit (now the
+  # code refuses and logs an ERROR instead). Only props-alerts-* log bets; the grader and crosswalk jobs get neither.
+  JOB_SECRETS="$SECRETS"
+  DB_FLAGS=()
+  if [[ "$JOB" == props-alerts-* ]]; then
+    JOB_SECRETS="${SECRETS},MLB_DB_URL=mlb-db-url:latest"
+    DB_FLAGS=(--set-cloudsql-instances="$INSTANCE")
+  fi
+  FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL" --set-secrets="$JOB_SECRETS"
          --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},BEEZY_BOT_URL=${BOT_URL}" --command="python" --args="$ARGS"
          --memory=1Gi --cpu=1 --task-timeout="$TMO" --max-retries=0 --quiet)
+  if [ ${#DB_FLAGS[@]} -gt 0 ]; then FLAGS+=("${DB_FLAGS[@]}"); fi
   if gcloud run jobs describe "$JOB" --region="$REGION" --quiet >/dev/null 2>&1; then
     gcloud run jobs update "$JOB" "${FLAGS[@]}"
   else

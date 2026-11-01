@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # setup_parlay_schedules.sh -- provision the full ParlayAPI accumulator fleet
-# (jobs + Cloud Scheduler crons), sized to the $5 / 20,000-credit-per-month tier.
+# (jobs + Cloud Scheduler crons), originally sized to the $5 starter tier; the production plan is now 100k/mo (budgets: nba/config.py).
 #
 # Wraps deploy/setup_parlay_accumulator.sh once per (sport, kind, schedule).
 #
-# CREDIT BUDGET (20,000/mo). Billing: props = 1 credit per (event x market);
+# CREDIT BUDGET (these figures are the ORIGINAL starter-tier sizing, kept for the per-call arithmetic; the live pool is 100k/mo and
+# every budget is defined in nba/config.py). Billing: props = 1 credit per (event x market);
 # game lines = 1 credit per market for the whole slate; slate discovery = 1.
 #   MLB props (6 markets x ~15 games + 1) ~= 91 cr/snapshot x 5/day ~= 13,600/mo
 #   MLB game lines (3 markets, whole slate) =   3 cr/snapshot x 8/day ~=    720/mo
 #   NBA jobs: STAGED (no scheduler) -- offseason, ~0 credits until October.
-#   Active total ~14,300/mo -- safe headroom under 20,000.
+#   Active total ~14,300/mo (MLB accumulators are retired; see below).
 #
 # Prereqs: image rebuilt with current nba/ + the 6-market config
 #   (./deploy/deploy_service.sh) and secret `parlay-api-key` present.
@@ -33,7 +34,7 @@ echo "=== ParlayAPI accumulator fleet ($PROJECT_ID) ==="
 # /snapshot-odds 4x/day) is now the single ParlayAPI consumer: it pulls props +
 # game lines, writes the SGO-shaped snapshot AND banks the OddsAccum artifacts.
 # Running these standalone accumulators too would double-spend credits
-# (4x/day snapshot + 5x/day accumulator ~= 24k/mo > 20k). Jobs stay PROVISIONED
+# (4x/day snapshot + 5x/day accumulator ~= 24k/mo of the shared pool). Jobs stay PROVISIONED
 # (schedule "") so they can be invoked manually if ever needed.
 acc baseball_mlb props      ""
 acc baseball_mlb game_lines ""

@@ -117,6 +117,7 @@ def evaluate_walk_forward(
 
     # Warmup phase
     for i, (h, a) in enumerate(game_list):
+        kalman.roll_season(h.game_date)   # offseason regression at each season boundary (once per new season)
         if i < warmup_games:
             # Update trackers without recording predictions
             kalman.update_game(

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from nhl.game.features import FeatureStore, TeamGameStats
+from nhl.game.features import FeatureStore, TeamGameStats, build_team_game_stats
 from nhl.game.goalie_model import GoalieTracker
 from nhl.game.kalman_ratings import KalmanTeamTracker
 from nhl.game.matrix_pricer import DistributionalNHLMatrixEngine
@@ -43,6 +43,7 @@ class NHLEvaluationRecord:
     pred_over: Optional[float] = None
     actual_home_covered: Optional[int] = None
     actual_over: Optional[int] = None
+    lines_are_market: bool = False   # False: closing_puck_line / closing_total are the evaluator's own fixed inputs
 
 
 @dataclass
@@ -57,12 +58,19 @@ class NHLEvaluationReport:
     puck_line_accuracy: Optional[float] = None
     totals_accuracy: Optional[float] = None
     records: List[NHLEvaluationRecord] = field(default_factory=list)
+    lines_are_market: bool = False
 
     def summary(self) -> str:
         pl_str = f"{self.puck_line_accuracy:.3f}" if self.puck_line_accuracy is not None else "N/A"
         tot_str = f"{self.totals_accuracy:.3f}" if self.totals_accuracy is not None else "N/A"
+        if self.lines_are_market:
+            basis = "Lines: caller-supplied closing lines (flagged as market prices)."
+        else:
+            basis = ("NOTE: puck line / total are the evaluator's OWN fixed inputs (default -1.5 / 6.0), NOT closing prices. "
+                     "This measures calibration and accuracy against those lines, not edge versus the market.")
         return (
             f"NHL Game Evaluation Report (N={self.n_games} games)\n"
+            f"  {basis}\n"
             f"  Moneyline: Accuracy={self.ml_accuracy:.3f}, Brier={self.ml_brier_score:.4f}, "
             f"LogLoss={self.ml_log_loss:.4f}, ECE={self.ml_ece:.4f}\n"
             f"  Puck Line (-1.5/+1.5): Accuracy={pl_str}\n"
@@ -116,10 +124,18 @@ class WalkForwardNHLEvaluator:
         actual_away_sog: float = 30.0,
         closing_puck_line: float = -1.5,
         closing_total: float = 6.0,
+        home_stats: Optional[TeamGameStats] = None,
+        away_stats: Optional[TeamGameStats] = None,
+        lines_are_market: bool = False,
     ) -> NHLEvaluationRecord:
         """
         Record prediction strictly pre-game, then execute post-game update.
+
+        home_stats / away_stats: real per-team rows from nhl.game.features.build_team_game_stats_from_raw; when omitted both
+        sides are derived through the real build_team_game_stats pipeline from goals + shots (xG is the shot-based proxy,
+        not true xG). lines_are_market: set True only if closing_puck_line / closing_total are real closing prices.
         """
+        self.kalman.roll_season(game_date)
         # 1. Pre-game prediction
         kalman_pred = self.kalman.predict_game(home, away, game_date=game_date)
 
@@ -141,7 +157,7 @@ class WalkForwardNHLEvaluator:
         pred_total = lh + la
 
         # Puck Line (-1.5)
-        p_h_cov, p_a_cov, _ = matrix.puck_line(closing_puck_line)
+        p_h_cov, p_a_cov, _ = matrix.puck_line_two_way(closing_puck_line)
 
         # Total
         p_over_raw, p_under_raw, p_push, p_over_fair = matrix.total(closing_total)
@@ -175,6 +191,7 @@ class WalkForwardNHLEvaluator:
             pred_over=p_over_fair,
             actual_home_covered=actual_cover,
             actual_over=actual_over,
+            lines_are_market=lines_are_market,
         )
         self.records.append(record)
 
@@ -189,37 +206,23 @@ class WalkForwardNHLEvaluator:
             game_date=game_date,
         )
 
-        stat_h = TeamGameStats(
-            game_id=game_id,
-            game_date=str(game_date)[:10],
-            season_year=2026,
-            team=home,
-            opp=away,
-            is_home=True,
-            goals=actual_home_goals,
-            goals_against=actual_away_goals,
-            minutes=60.0,
-            sog=actual_home_sog,
-            shots_against=actual_away_sog,
-            gf_60=actual_home_goals,
-            ga_60=actual_away_goals,
-            sog_for_60=actual_home_sog,
-            sog_against_60=actual_away_sog,
-            sog_share=actual_home_sog / (actual_home_sog + actual_away_sog),
-            xgf_60=actual_home_goals,
-            xga_60=actual_away_goals,
-            xg_share=actual_home_goals / (actual_home_goals + actual_away_goals),
-            sh_pct_luck=0.0,
-            pp_goals_per_game=0.6,
-            pp_share=0.2,
-            pk_goals_against_per_game=0.6,
-            pim_per_60=8.0,
-            blocks_per_60=14.0,
-            hits_per_60=20.0,
-            takeaway_diff_per_60=0.0,
-            fo_win_pct=0.5,
-        )
-        self.features.add_game_stat(stat_h)
+        # Both teams go into the feature store (the old code added only the home row, so away teams never accrued history)
+        d = str(game_date)[:10]
+        season_year = int(d[:4]) if d[5:7] >= "08" else int(d[:4]) - 1
+        if home_stats is None:
+            home_stats = build_team_game_stats(
+                game_id=game_id, game_date=d, season_year=season_year, team=home, opp=away, is_home=True,
+                goals=actual_home_goals, goals_against=actual_away_goals,
+                sog=actual_home_sog, shots_against=actual_away_sog,
+            )
+        if away_stats is None:
+            away_stats = build_team_game_stats(
+                game_id=game_id, game_date=d, season_year=season_year, team=away, opp=home, is_home=False,
+                goals=actual_away_goals, goals_against=actual_home_goals,
+                sog=actual_away_sog, shots_against=actual_home_sog,
+            )
+        self.features.add_game_stat(home_stats)
+        self.features.add_game_stat(away_stats)
 
         return record
 
@@ -285,4 +288,5 @@ class WalkForwardNHLEvaluator:
             puck_line_accuracy=pl_acc,
             totals_accuracy=tot_acc,
             records=list(self.records),
+            lines_are_market=all(r.lines_are_market for r in self.records),
         )

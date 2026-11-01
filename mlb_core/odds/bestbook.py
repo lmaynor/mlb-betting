@@ -88,6 +88,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
 from datetime import datetime, timezone
@@ -137,7 +138,7 @@ DFS_VENUES = {c for c, (_, k) in VENUES.items() if k == "dfs"}
 
 
 class BestBookError(RuntimeError):
-    """BestBook request/stream failure after the retry policy gave up."""
+    """BestBook request/stream failure after the retry policy gave up (max attempts or overall deadline)."""
 
 
 class TokenExpired(BestBookError):
@@ -368,15 +369,33 @@ def apply_changes(state: dict, msg: dict) -> tuple[int, int]:
 # Network: SSE streams + REST helpers
 # ---------------------------------------------------------------------------
 
-def _sse_messages(path: str, params: dict):
-    """Yield parsed JSON messages from an SSE endpoint. Handles the
-    reconnect policy the web client uses: on an HTTP error or a dropped
-    stream, renew the token, back off 1 s doubling to a 30 s cap, reopen.
-    Generator -- the caller controls lifetime (break / close to stop)."""
-    backoff = 1.0
+SSE_MAX_ATTEMPTS = 6        # consecutive failed (re)connects before giving up
+SSE_BACKOFF_START = 1.0
+SSE_BACKOFF_CAP = 30.0
+ONE_SHOT_DEADLINE_S = 180.0  # fetch_slate / fetch_game_snapshot: the whole call, retries included
+
+
+def _sse_messages(path: str, params: dict, max_attempts: int = SSE_MAX_ATTEMPTS,
+                  deadline_s: float | None = None):
+    """Yield parsed JSON messages from an SSE endpoint.
+
+    Reconnect policy: on an HTTP error, a dropped stream or a CLEAN end of stream, wait an exponentially growing, jittered
+    backoff (1 s doubling to a 30 s cap, x0.5-1.0 random) and reopen. A 403/429 means the bb token is no longer accepted (or we
+    are being throttled): the cookie is cleared and re-bootstrapped before the next attempt, and a 429 Retry-After is honoured.
+    The generator GIVES UP -- raising BestBookError -- after `max_attempts` consecutive attempts that delivered nothing, or once
+    `deadline_s` seconds (if set) have passed since the call started. A connection that delivered at least one message resets
+    the failure count. A caller that breaks/closes the generator stops the stream (stream_game() is the intentionally
+    long-lived consumer; it has no deadline but is still bounded by max_attempts)."""
+    started = time.monotonic()
+    backoff = SSE_BACKOFF_START
+    failures = 0
     while True:
-        _ensure_token()
+        if deadline_s is not None and time.monotonic() - started > deadline_s:
+            raise BestBookError(f"SSE {path}: gave up after {deadline_s:.0f}s overall deadline")
+        got_message = False
+        retry_after = 0.0
         try:
+            _ensure_token()
             # Accept-Encoding: identity is LOAD-BEARING: with requests'
             # default gzip negotiation the SSE stream stalls behind
             # Cloudflare/urllib3 buffering (verified 2026-10-30: snapshot
@@ -385,30 +404,48 @@ def _sse_messages(path: str, params: dict):
                               timeout=(10, 60),
                               headers={"Accept-Encoding": "identity"}) as r:
                 if r.status_code in (403, 429, 502):
+                    if r.status_code in (403, 429):
+                        _session.cookies.clear()          # re-bootstrap the token on the next attempt
+                    if r.status_code == 429:
+                        try:
+                            retry_after = float(r.headers.get("Retry-After", 0) or 0)
+                        except (TypeError, ValueError):
+                            retry_after = 0.0
                     raise BestBookError(f"SSE {path} -> HTTP {r.status_code}")
                 r.raise_for_status()
-                backoff = 1.0
                 for raw in r.iter_lines(chunk_size=65536):
                     if not raw:
                         continue
                     line = raw.decode("utf-8", "replace").strip()
                     if line.startswith("data: "):
                         try:
-                            yield json.loads(line[6:])
+                            msg = json.loads(line[6:])
                         except json.JSONDecodeError:
                             logger.warning("bestbook: undecodable SSE line "
                                            "(%d bytes) on %s", len(line), path)
+                            continue
+                        got_message = True
+                        yield msg
+            why = "stream ended"
         except (requests.RequestException, BestBookError) as e:
-            logger.warning("bestbook: stream %s dropped (%s); reopening in "
-                           "%.0fs", path, e, backoff)
-            time.sleep(backoff)
-            backoff = min(30.0, backoff * 2)
+            why = str(e)
+        if got_message:
+            failures, backoff = 0, SSE_BACKOFF_START      # it was healthy until it dropped
+        else:
+            failures += 1
+            if failures >= max_attempts:
+                raise BestBookError(f"SSE {path}: gave up after {failures} consecutive failed attempts (last: {why})")
+        delay = max(retry_after, backoff * random.uniform(0.5, 1.0))
+        logger.warning("bestbook: stream %s dropped (%s); reopening in %.1fs (attempt %d/%d)",
+                       path, why, delay, failures, max_attempts)
+        time.sleep(delay)
+        backoff = min(SSE_BACKOFF_CAP, backoff * 2)
 
 
 def fetch_slate(src: str = "direct") -> list[dict]:
     """Normalized slate across all leagues (parse_slate shape). One short
     rows=0 stream read -- returns as soon as the snapshot lands."""
-    for msg in _sse_messages("/events", {"game": "all", "rows": 0, "src": src}):
+    for msg in _sse_messages("/events", {"game": "all", "rows": 0, "src": src}, deadline_s=ONE_SHOT_DEADLINE_S):
         return parse_slate(msg.get("status") or {})
     return []
 
@@ -420,7 +457,7 @@ def fetch_game_snapshot(game_key: str, src: str = "direct",
     params = {"game": game_key, "src": src}
     if more:
         params["more"] = 1
-    for msg in _sse_messages("/events", params):
+    for msg in _sse_messages("/events", params, deadline_s=ONE_SHOT_DEADLINE_S):
         if msg.get("type") == "snapshot":
             return {"game_key": game_key, "rows": msg.get("rows") or [],
                     "records": normalize_rows(msg.get("rows")),

@@ -3,8 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { apiGetGameProjections, apiGetOddsBoard } from '@/lib/betting-api'
-import type { GamePricedGame, GameProjectionRow, GameProjectionsFeed, GamePricedMarket } from '@/lib/game-lines'
+import { apiGetOddsBoard } from '@/lib/betting-api'
 import { bookDisplay, canonBook, SURFACE_CARD } from '@/lib/tokens'
 import { americanToDecimal, fmtMoney, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
@@ -18,10 +17,11 @@ import { LedgerStrip } from './ledger-strip'
 import type { EvHeadline } from '@/lib/types'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { LockGlyph } from '@/components/ui/lock-glyph'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { HorizontalPillStrip, MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import {
-  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, fairAmericanOf, STAT_LABEL,
+  buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, fairAmericanOf, STAT_LABEL, SGP_ARTIFACT_EV_PCT, SGP_UNVALIDATED_LABEL,
   type ArbRow, type BoardBook, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard,
   type OddsScreenMode, type OutlierRow, type ScreenRow, type SgpProxyRow, type SideFilter,
 } from '@/lib/odds-screen'
@@ -137,13 +137,25 @@ const MODES: { key: OddsScreenMode; label: string }[] = [
   { key: 'middles', label: 'Middles' },
   { key: 'longshots', label: 'Alt & Tail Ladders' },
   { key: 'sgp', label: 'SGP Proxies' },
-  { key: 'game_lines', label: 'Game Lines' },
 ]
+
+type BadgeKey = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
+const BADGE_KEYS: BadgeKey[] = ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp']
+
+/** Run `fn` when the browser is idle (a timer where requestIdleCallback is missing); returns a cancel function. */
+function scheduleIdle(fn: () => void): () => void {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    const id = window.requestIdleCallback(fn, { timeout: 1500 })
+    return () => window.cancelIdleCallback(id)
+  }
+  const id = setTimeout(fn, 120)
+  return () => clearTimeout(id)
+}
 
 const SGP_ARCHETYPE_OPTIONS = [
   { v: 'all', label: 'All Combos' },
   { v: 'stacks', label: 'Teammate Stacks (NHL Linemates / QB+WR / PG+Scorer)' },
-  { v: 'milestones', label: 'TD & DD Milestones (10+R/10+A)' },
+  { v: 'milestones', label: 'Milestones (10+ Reb and 10+ Ast)' },
   { v: 'combos', label: 'Stat Combos (P+R / P+A / R+A / G+A)' },
 ]
 
@@ -154,10 +166,10 @@ const SGP_MIN_EV_OPTIONS = [
   { v: 10, label: '+10%+' },
 ]
 
-export function OddsClient({ initial, initialLocked, headline, initialGames }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; initialGames?: Record<string, GameProjectionsFeed | null> }) {
+export function OddsClient({ initial, initialLocked, headline, fullAccess = false }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; fullAccess?: boolean }) {
   const sp = useSearchParams()
   const viewParam = sp?.get('view')
-  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam))
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam))
     ? (viewParam as OddsScreenMode)
     : 'ev'
 
@@ -174,6 +186,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
   const [sgpArch, setSgpArch] = useState<string>('all')
   const [sgpMinEv, setSgpMinEv] = useState<number>(0)
   const [sgpBook, setSgpBook] = useState<string>('all')
+  const [sgpExtreme, setSgpExtreme] = useState(false)
   const [q, setQ] = useState('')
   const [method, setMethod] = useState<DevigMethod>('proportional')
   const [refs, setRefs] = useState<string[]>([])                 // empty = every book
@@ -202,13 +215,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
   const isMobile = useIsMobile(768)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [mobileView, setMobileView] = useState<'cards' | 'table'>('cards')
-  const [gamesData, setGamesData] = useState<Record<string, GameProjectionsFeed | null>>(initialGames ?? {})
-  const [gameMarket, setGameMarket] = useState<'all' | 'spread' | 'total' | 'ml'>('all')
-  const [gameMatchup, setGameMatchup] = useState<string>('all')
-  const [gameSport, setGameSport] = useState<'all' | 'nba' | 'nhl'>('all')
-  const [gameSide, setGameSide] = useState<'all' | 'home_over' | 'away_under'>('all')
-  const [gameMinEdge, setGameMinEdge] = useState<number>(0)
-  const [gameView, setGameView] = useState<'cards' | 'table'>('cards')
   const [inspectItem, setInspectItem] = useState<
     | { type: 'ev'; row: ScreenRow }
     | { type: 'arb'; row: ArbRow }
@@ -253,21 +259,16 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
       if (sgpArch !== 'all') count++
       if (sgpMinEv > 0) count++
       if (sgpBook !== 'all') count++
+      if (sgpExtreme) count++
       if (!useCurve) count++
-    } else if (mode === 'game_lines') {
-      if (gameMarket !== 'all') count++
-      if (gameMatchup !== 'all') count++
-      if (gameSport !== 'all') count++
-      if (gameSide !== 'all') count++
-      if (gameMinEdge > 0) count++
     }
     return count
-  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, gameMarket, gameMatchup, gameSport, gameSide, gameMinEdge])
+  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, sgpExtreme])
 
   const [prevViewParam, setPrevViewParam] = useState(viewParam)
   if (viewParam !== prevViewParam) {
     setPrevViewParam(viewParam)
-    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp', 'game_lines'].includes(viewParam)) {
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
       setMode(viewParam as OddsScreenMode)
     }
   }
@@ -284,23 +285,21 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
   }, [])
 
   const handleReveal = useCallback((key: string) => {
-    if (PRE_LAUNCH) {
+    if (fullAccess) {
       setRevealed(prev => new Set(prev).add(key))
-      setRevealMsg('Pre-launch preview: Book unmasked! All books unlocked for early visitors.')
-      setTimeout(() => setRevealMsg(null), 3500)
+      if (PRE_LAUNCH) {
+        setRevealMsg('Pre-launch preview: all books are unlocked for early visitors.')
+        setTimeout(() => setRevealMsg(null), 3500)
+      }
     } else {
       window.location.href = '/pricing'
     }
-  }, [])
+  }, [fullAccess])
 
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      const [nextBoards, nbaG, nhlG] = await Promise.all([
-        Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null))),
-        apiGetGameProjections('nba').catch(() => null),
-        apiGetGameProjections('nhl').catch(() => null),
-      ])
+      const nextBoards = await Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null)))
       const out: Partial<Record<SportSlug, OddsBoard>> = {}
       let lk = 0
       nextBoards.forEach((b, i) => { if (b) { out[SPORT_KEYS[i]] = b; lk += b.locked ?? 0 } })
@@ -309,20 +308,8 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
         setBoards(prev => SPORT_KEYS.every(k => prev[k]?.as_of === out[k]?.as_of) ? prev : out)
         setLocked(lk)
       }
-      setGamesData({ nba: nbaG, nhl: nhlG })
     } finally { setLoading(false) }
   }, [])
-
-  useEffect(() => {
-    if (mode === 'game_lines' && !gamesData.nba && !gamesData.nhl) {
-      Promise.all([
-        apiGetGameProjections('nba').catch(() => null),
-        apiGetGameProjections('nhl').catch(() => null),
-      ]).then(([nbaG, nhlG]) => {
-        setGamesData({ nba: nbaG, nhl: nhlG })
-      })
-    }
-  }, [mode, gamesData.nba, gamesData.nhl])
 
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, POLL_MS)
@@ -415,8 +402,8 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
     return rows.sort((a, b) => (b.bestEv ?? -Infinity) - (a.bestEv ?? -Infinity))
   }, [mode, filtered, refs, method, bettable, useCurve, longSub, minEv, oddsMin])
 
-  // ---- SGP Proxies: multi-leg combinations beating direct markets or fair correlated joint value
-  const sgpProxies = useMemo(() => {
+  // ---- SGP Proxies: modelled same-book SGP tickets (assumed correlation constants: unvalidated model output, not quotes)
+  const sgpAll = useMemo(() => {
     if (mode !== 'sgp') return []
     const all = computeSgpProxies(filtered, {
       refs,
@@ -425,143 +412,76 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
       minEvPct: sgpMinEv,
       book: sgpBook === 'all' ? undefined : sgpBook,
       useCurve,
+      minRef: MIN_REF,
     })
-    if (sgpArch === 'milestones') {
-      return all.filter(r => r.archetype === 'nba_reb_ast_10_10' || r.archetype === 'nba_dd_proxy')
-    }
-    if (sgpArch === 'combos') {
-      return all.filter(r => r.archetype.includes('_vs_'))
-    }
-    if (sgpArch === 'stacks') {
-      return all.filter(r => r.archetype.includes('stack'))
-    }
+    if (sgpArch === 'milestones') return all.filter(r => r.archetype === 'nba_reb_ast_10_10')
+    if (sgpArch === 'combos') return all.filter(r => r.archetype.includes('_vs_'))
+    if (sgpArch === 'stacks') return all.filter(r => r.archetype.includes('stack'))
     return all
   }, [mode, filtered, refs, method, bettable, sgpMinEv, sgpBook, useCurve, sgpArch])
+  // rows above SGP_ARTIFACT_EV_PCT are flagged model artifacts: hidden (and counted) unless 'Include extreme' is on
+  const sgpExtremeCount = useMemo(() => sgpAll.filter(r => r.modelArtifact).length, [sgpAll])
+  const sgpProxies = useMemo(() => sgpExtreme ? sgpAll : sgpAll.filter(r => !r.modelArtifact), [sgpAll, sgpExtreme])
 
-  const gameLinesData = useMemo(() => {
-    const sports = gameSport === 'all' ? ['nba', 'nhl'] : [gameSport]
-    const pricedGames: (GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] })[] = []
-    const allRows: GameProjectionRow[] = []
-    const matchups: { key: string; label: string; sport: string }[] = []
-
-    for (const s of ['nba', 'nhl']) {
-      const feed = gamesData[s]
-      if (!feed) continue
-      if (feed.games) {
-        for (const g of feed.games) {
-          matchups.push({
-            key: g.game_key,
-            label: `${g.away} @ ${g.home} (${s.toUpperCase()})`,
-            sport: s,
-          })
-        }
-      }
-    }
-
-    for (const s of sports) {
-      const feed = gamesData[s]
-      if (!feed) continue
-
-      if (feed.priced_games) {
-        for (const g of feed.priced_games) {
-          if (gameMatchup !== 'all' && g.game_key !== gameMatchup) continue
-          if (q) {
-            const ql = q.toLowerCase().trim()
-            const match = `${g.away_team} ${g.home_team}`.toLowerCase().includes(ql)
-            if (!match) continue
-          }
-
-          const filteredMarkets = (g.markets || []).filter(m => {
-            if (gameMarket !== 'all') {
-              const sys = (m.system || '').toLowerCase()
-              if (gameMarket === 'spread' && !sys.includes('spread')) return false
-              if (gameMarket === 'total' && !sys.includes('total')) return false
-              if (gameMarket === 'ml' && !sys.includes('ml')) return false
-            }
-            if (gameSide !== 'all') {
-              const sd = (m.side || '').toLowerCase()
-              if (gameSide === 'home_over' && sd !== 'home' && sd !== 'over') return false
-              if (gameSide === 'away_under' && sd !== 'away' && sd !== 'under') return false
-            }
-            if (gameMinEdge > 0 && (m.model_edge == null || m.model_edge < gameMinEdge)) return false
-            return true
-          })
-
-          if (filteredMarkets.length > 0 || (gameMarket === 'all' && gameMinEdge === 0 && !q)) {
-            pricedGames.push({ ...g, sport: s, filteredMarkets })
-          }
-        }
-      }
-
-      if (feed.rows) {
-        for (const r of feed.rows) {
-          if (gameMatchup !== 'all' && r.game_key !== gameMatchup) continue
-          if (gameMarket !== 'all') {
-            const m = (r.stat || r.system || '').toLowerCase()
-            if (gameMarket === 'spread' && !m.includes('spread') && !m.includes('puck')) continue
-            if (gameMarket === 'total' && !m.includes('total')) continue
-            if (gameMarket === 'ml' && !m.includes('ml') && !m.includes('moneyline')) continue
-          }
-          if (gameSide !== 'all') {
-            const sd = (r.side || '').toLowerCase()
-            if (gameSide === 'home_over' && sd !== 'home' && sd !== 'over') continue
-            if (gameSide === 'away_under' && sd !== 'away' && sd !== 'under') continue
-          }
-          if (gameMinEdge > 0 && (r.model_edge == null || r.model_edge < gameMinEdge)) continue
-          if (q) {
-            const ql = q.toLowerCase().trim()
-            const match = (r.player || '').toLowerCase().includes(ql) ||
-              (r.team || '').toLowerCase().includes(ql) ||
-              (r.opp || '').toLowerCase().includes(ql) ||
-              (r.stat_label || '').toLowerCase().includes(ql)
-            if (!match) continue
-          }
-          allRows.push(r)
-        }
-      }
-    }
-
-    return { pricedGames, rows: allRows, matchupOptions: matchups }
-  }, [gamesData, gameSport, gameMarket, gameMatchup, gameSide, gameMinEdge, q])
-
-  // Mode badges: counted from deferred inputs so a click paints the table first and the other two counts follow.
+  // Mode badges. The ACTIVE mode's badge is its own row count (already computed for the table). The other modes' counts
+  // are computed one engine at a time when the browser is idle, from deferred inputs, so a filter change or a mode click
+  // paints the table first and never runs all six engines in one task.
   const badgeIn = useMemo(() => ({ scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve }),
     [scoped, refs, method, bettable, minEv, lines, side, exchanges, useCurve])
   const dBadgeIn = useDeferredValue(badgeIn)
-  const counts = useMemo(() => {
+  const [badgeVals, setBadgeVals] = useState<Partial<Record<BadgeKey, number>>>({})
+  const badgeCache = useRef<{ src: object | null; vals: Partial<Record<BadgeKey, number>> }>({ src: null, vals: {} })
+  useEffect(() => {
     const d = dBadgeIn
+    const cache = badgeCache.current
+    if (cache.src !== d) { cache.src = d; cache.vals = {} }
     const floor = Math.max(d.minEv, 0)
-    const src = d.lines === 'main' ? d.scoped.filter(r => !r.is_alt) : d.scoped
-    return {
-      ev: buildScreenRows(src, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: MIN_REF, side: d.side }).filter(r => r.ev != null && r.ev >= floor).length,
-      outliers: computeOutliers(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minPeers: 3, minPremiumPct: 8, minEvPct: 0, side: d.side, useCurve: d.useCurve }).length,
-      arb: buildArbRows(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, minNetArbPct: 0 }).length,
-      middles: computeMiddles(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, maxCostPct: 5, minGap: 0, onlyPositiveEv: false, refs: d.refs, method: d.method, minRef: MIDDLE_MIN_REF, useCurve: d.useCurve }).length,
-      long: buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
-        .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length,
-      sgp: computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve }).length,
-      gameLines: gameLinesData.rows.length,
+    const compute = (k: BadgeKey): number => {
+      switch (k) {
+        case 'ev': {
+          const src = d.lines === 'main' ? d.scoped.filter(r => !r.is_alt) : d.scoped
+          return buildScreenRows(src, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: MIN_REF, side: d.side }).filter(r => r.ev != null && r.ev >= floor).length
+        }
+        case 'outliers':
+          return computeOutliers(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minPeers: 3, minPremiumPct: 8, minEvPct: 0, side: d.side, useCurve: d.useCurve }).length
+        case 'arb':
+          return buildArbRows(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, minNetArbPct: 0 }).length
+        case 'middles':
+          return computeMiddles(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, maxCostPct: 5, minGap: 0, onlyPositiveEv: false, refs: d.refs, method: d.method, minRef: MIDDLE_MIN_REF, useCurve: d.useCurve }).length
+        case 'longshots':
+          return buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
+            .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length
+        case 'sgp':
+          // flagged model artifacts are not counted (they are hidden by default)
+          return computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve, minRef: MIN_REF }).filter(r => !r.modelArtifact).length
+      }
     }
-  }, [dBadgeIn, gameLinesData.rows.length])
+    const todo = BADGE_KEYS.filter(k => k !== mode)
+    let cancel: (() => void) | null = null
+    let dead = false
+    const step = () => {
+      if (dead) return
+      const k = todo.shift()
+      if (!k) return
+      if (cache.vals[k] == null) {
+        cache.vals[k] = compute(k)
+        setBadgeVals({ ...cache.vals })
+      }
+      if (todo.length) cancel = scheduleIdle(step)
+    }
+    cancel = scheduleIdle(step)
+    return () => { dead = true; cancel?.() }
+  }, [dBadgeIn, mode])
 
   const nRows = mode === 'ev' ? screen.length
     : mode === 'outliers' ? outliers.length
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
     : mode === 'longshots' ? longshots.length
-    : mode === 'sgp' ? sgpProxies.length
-    : gameLinesData.rows.length
+    : sgpProxies.length
+  const badgeFor = (k: BadgeKey): number | null => k === mode ? nRows : (badgeVals[k] ?? null)
 
   const meta = useMemo(() => {
-    if (mode === 'game_lines') {
-      const gList = Object.values(gamesData).filter((g): g is GameProjectionsFeed => Boolean(g))
-      const ages = gList.map(g => g.age_minutes).filter((n): n is number => n != null)
-      return {
-        age: ages.length ? Math.max(...ages) : null,
-        stale: gList.some(g => g.stale),
-        sources: ['KALMAN_JOINT_T_V1', 'DISTRIBUTIONAL_MATRIX_V1'],
-      }
-    }
     const activeWithRows = active.filter(s => (boards[s]?.count ?? 0) > 0)
     const target = activeWithRows.length > 0 ? activeWithRows : active
     const hasRows = activeWithRows.length > 0
@@ -574,12 +494,10 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
       stale: target.some(s => Boolean(boards[s]!.stale && (boards[s]!.count ?? 0) > 0)),
       sources,
     }
-  }, [mode, gamesData, active, boards])
+  }, [active, boards])
 
   // no board at all, or every board the API answered with is flagged unavailable (the banker has not written it yet)
-  const unpublished = mode === 'game_lines'
-    ? Object.values(gamesData).length > 0 && Object.values(gamesData).every(g => g?.status === 'unavailable')
-    : (active.length === 0 || active.every(s => boards[s]!.status === 'unavailable'))
+  const unpublished = active.length === 0 || active.every(s => boards[s]!.status === 'unavailable')
 
   const refWeight = refs.length ? Math.round(100 / refs.length) : null
   const refSet = useMemo(() => new Set(refs), [refs])
@@ -610,9 +528,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
   const emptyBody = mode === 'outliers'
     ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
     : mode === 'sgp'
-    ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies scans for multi-leg milestone and stat combinations that beat the book\'s direct pricing or fair correlated joint value. Try lowering the MIN EV floor or switching archetypes.' }
-    : mode === 'game_lines'
-    ? { title: 'No game lines clear these filters', body: 'Quantitative margin, total, and moneyline models price today\'s NBA and NHL games. Try clearing the market or matchup filters, or lowering the MIN EDGE threshold.' }
+    ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies models two-leg same-book tickets from single-leg prices (unvalidated: assumed correlation and hold). Rows above 45% model EV are hidden as likely artifacts unless you include them; lower the MIN EV floor or switch archetypes.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
@@ -651,18 +567,12 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
         <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
           <HorizontalPillStrip padding="8px 10px" gap="6px">
             {MODES.map(m => {
-              const n = m.key === 'ev' ? counts.ev
-                : m.key === 'outliers' ? counts.outliers
-                : m.key === 'arb' ? counts.arb
-                : m.key === 'middles' ? counts.middles
-                : m.key === 'longshots' ? counts.long
-                : m.key === 'sgp' ? counts.sgp
-                : counts.gameLines
-              const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0) || (m.key === 'game_lines' && n > 0)
+              const n = badgeFor(m.key)
+              const hot = n != null && n > 0 && (m.key === 'arb' || m.key === 'outliers')
               return (
                 <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                   {m.label}
-                  <span className="mono" style={{ marginLeft: '6px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
+                  <span className="mono" style={{ marginLeft: '6px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n ?? '\u00b7'}</span>
                 </Pill>
               )
             })}
@@ -670,26 +580,32 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
 
           <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
             <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
-              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}
-                  style={{
-                    fontFamily: 'var(--font-mono), monospace',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    border: `1px solid ${sport === s ? '#3a4156' : HAIR}`,
-                    background: sport === s ? '#1b1f2b' : 'transparent',
-                    color: sport === s ? '#ffffff' : 'var(--fog)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {s.toUpperCase()}
-                </button>
-              ))}
+              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => {
+                const selected = sport === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setSport(s); setStat('all'); setGame('all'); setLimit(PAGE)
+                    }}
+                    style={{
+                      fontFamily: 'var(--font-mono), monospace',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '5px 8px',
+                      borderRadius: '4px',
+                      border: `1px solid ${selected ? '#3a4156' : HAIR}`,
+                      background: selected ? '#1b1f2b' : 'transparent',
+                      color: selected ? '#ffffff' : 'var(--fog)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {s.toUpperCase()}
+                  </button>
+                )
+              })}
             </HorizontalPillStrip>
 
             <input
@@ -750,41 +666,31 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
           <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
             <PillGroup label="Mode">
               {MODES.map(m => {
-                const n = m.key === 'ev' ? counts.ev
-                  : m.key === 'outliers' ? counts.outliers
-                  : m.key === 'arb' ? counts.arb
-                  : m.key === 'middles' ? counts.middles
-                  : m.key === 'longshots' ? counts.long
-                  : m.key === 'sgp' ? counts.sgp
-                  : counts.gameLines
-                const hot = (m.key === 'arb' && n > 0) || (m.key === 'outliers' && n > 0) || (m.key === 'sgp' && n > 0) || (m.key === 'game_lines' && n > 0)
+                const n = badgeFor(m.key)
+                const hot = n != null && n > 0 && (m.key === 'arb' || m.key === 'outliers')
                 return (
                   <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                     {m.label}
-                    <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n}</span>
+                    <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--fog)' }}>{n ?? '\u00b7'}</span>
                   </Pill>
                 )
               })}
             </PillGroup>
-            {mode !== 'game_lines' ? (
-              <>
-                <Field label="SPORT">
-                  <PillGroup>
-                    {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                      <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
-                    ))}
-                  </PillGroup>
-                </Field>
-                <Field label="PROP" htmlFor="odds-stat">
-                  <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-                    options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
-                </Field>
-                <Field label="GAME" htmlFor="odds-game">
-                  <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
-                    options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
-                </Field>
-              </>
-            ) : null}
+              <Field label="SPORT">
+                <PillGroup>
+                  {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
+                    <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
+                  ))}
+                </PillGroup>
+              </Field>
+              <Field label="PROP" htmlFor="odds-stat">
+                <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
+                  options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+              </Field>
+              <Field label="GAME" htmlFor="odds-game">
+                <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
+                  options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
+              </Field>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
               <input
                 aria-label="Search player or team" placeholder="Search player / team" value={q} onChange={e => { setQ(e.target.value); setLimit(PAGE) }}
@@ -1010,62 +916,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
                   <PillGroup>
                     <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
                     <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
-                  </PillGroup>
-                </Field>
-              </>
-            )}
-            {mode === 'game_lines' && (
-              <>
-                <Field label="MARKET">
-                  <PillGroup>
-                    <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
-                    <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread / Puck Line</Pill>
-                    <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
-                    <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>Moneyline</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="GAME / MATCHUP" htmlFor="game-matchup-select">
-                  <Select
-                    id="game-matchup-select"
-                    value={gameMatchup}
-                    onChange={v => { setGameMatchup(v); setLimit(PAGE) }}
-                    options={[
-                      { v: 'all', l: `All Matchups (${gameLinesData.matchupOptions.length})` },
-                      ...gameLinesData.matchupOptions.map(m => ({ v: m.key, l: m.label })),
-                    ]}
-                  />
-                </Field>
-                <Field label="SPORT">
-                  <PillGroup>
-                    <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
-                    <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
-                    <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="SIDE">
-                  <PillGroup>
-                    <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
-                    <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
-                    <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
-                  </PillGroup>
-                </Field>
-                <Field label="MIN EDGE">
-                  <PillGroup>
-                    {[
-                      { label: 'All', v: 0 },
-                      { label: '1%+', v: 0.01 },
-                      { label: '2%+', v: 0.02 },
-                      { label: '3%+', v: 0.03 },
-                      { label: '5%+', v: 0.05 },
-                    ].map(m => (
-                      <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
-                    ))}
-                  </PillGroup>
-                </Field>
-                <Field label="VIEW">
-                  <PillGroup>
-                    <Pill active={gameView === 'cards'} onClick={() => setGameView('cards')}>Game Cards</Pill>
-                    <Pill active={gameView === 'table'} onClick={() => setGameView('table')}>Data Matrix</Pill>
                   </PillGroup>
                 </Field>
               </>
@@ -1335,123 +1185,51 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
             </>
           )}
 
-          {mode === 'game_lines' && (
-            <>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MARKET</div>
-                <PillGroup>
-                  <Pill active={gameMarket === 'all'} onClick={() => { setGameMarket('all'); setLimit(PAGE) }}>All Lines</Pill>
-                  <Pill active={gameMarket === 'spread'} onClick={() => { setGameMarket('spread'); setLimit(PAGE) }}>Spread</Pill>
-                  <Pill active={gameMarket === 'total'} onClick={() => { setGameMarket('total'); setLimit(PAGE) }}>Total</Pill>
-                  <Pill active={gameMarket === 'ml'} onClick={() => { setGameMarket('ml'); setLimit(PAGE) }}>ML</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME / MATCHUP</div>
-                <select
-                  id="mobile-game-matchup-select"
-                  value={gameMatchup}
-                  onChange={e => { setGameMatchup(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All Matchups ({gameLinesData.matchupOptions.length})</option>
-                  {gameLinesData.matchupOptions.map(m => (
-                    <option key={m.key} value={m.key}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SPORT</div>
-                <PillGroup>
-                  <Pill active={gameSport === 'all'} onClick={() => { setGameSport('all'); setLimit(PAGE) }}>All</Pill>
-                  <Pill active={gameSport === 'nba'} onClick={() => { setGameSport('nba'); setLimit(PAGE) }}>NBA</Pill>
-                  <Pill active={gameSport === 'nhl'} onClick={() => { setGameSport('nhl'); setLimit(PAGE) }}>NHL</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>SIDE</div>
-                <PillGroup>
-                  <Pill active={gameSide === 'all'} onClick={() => { setGameSide('all'); setLimit(PAGE) }}>Both</Pill>
-                  <Pill active={gameSide === 'home_over'} onClick={() => { setGameSide('home_over'); setLimit(PAGE) }}>Home / Over</Pill>
-                  <Pill active={gameSide === 'away_under'} onClick={() => { setGameSide('away_under'); setLimit(PAGE) }}>Away / Under</Pill>
-                </PillGroup>
-              </div>
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>MIN EDGE</div>
-                <PillGroup>
-                  {[
-                    { label: 'All', v: 0 },
-                    { label: '1%+', v: 0.01 },
-                    { label: '2%+', v: 0.02 },
-                    { label: '3%+', v: 0.03 },
-                    { label: '5%+', v: 0.05 },
-                  ].map(m => (
-                    <Pill key={m.v} active={gameMinEdge === m.v} onClick={() => { setGameMinEdge(m.v); setLimit(PAGE) }}>{m.label}</Pill>
-                  ))}
-                </PillGroup>
-              </div>
-            </>
-          )}
+            <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
+              <select
+                id="mobile-odds-stat"
+                value={stat}
+                onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
+                style={{
+                  width: '100%',
+                  background: '#090a0f',
+                  color: 'var(--chalk)',
+                  border: `1px solid ${HAIR}`,
+                  borderRadius: '8px',
+                  minHeight: '40px',
+                  padding: '0 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">All props</option>
+                {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
+              </select>
+            </div>
 
-          {mode !== 'game_lines' && (
-            <>
-              <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>PROP MARKET</div>
-                <select
-                  id="mobile-odds-stat"
-                  value={stat}
-                  onChange={e => { setStat(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All props</option>
-                  {statOptions.map(s => <option key={s} value={s}>{STAT_LABEL[s] ?? s}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
-                <select
-                  id="mobile-odds-game"
-                  value={game}
-                  onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
-                  style={{
-                    width: '100%',
-                    background: '#090a0f',
-                    color: 'var(--chalk)',
-                    border: `1px solid ${HAIR}`,
-                    borderRadius: '8px',
-                    minHeight: '40px',
-                    padding: '0 12px',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All games</option>
-                  {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
-                </select>
-              </div>
-            </>
-          )}
+            <div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>GAME</div>
+              <select
+                id="mobile-odds-game"
+                value={game}
+                onChange={e => { setGame(e.target.value); setLimit(PAGE) }}
+                style={{
+                  width: '100%',
+                  background: '#090a0f',
+                  color: 'var(--chalk)',
+                  border: `1px solid ${HAIR}`,
+                  borderRadius: '8px',
+                  minHeight: '40px',
+                  padding: '0 12px',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="all">All games</option>
+                {games.map(g => <option key={g.key} value={g.key}>{`${g.label} ${startLabel(g.start)}`}</option>)}
+              </select>
+            </div>
 
           <MobileBookChecklist
             title="SPORTSBOOKS"
@@ -1491,9 +1269,13 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
         </div>
       </MobileBottomSheet>
 
+      {mode === 'sgp' && !unpublished && (
+        <SgpNotice extremeCount={sgpExtremeCount} includeExtreme={sgpExtreme} onToggle={() => { setSgpExtreme(v => !v); setLimit(PAGE) }} />
+      )}
+
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
-      ) : (allRows.length === 0 && mode !== 'game_lines') ? (
+      ) : allRows.length === 0 ? (
         <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
@@ -1554,7 +1336,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
                   <OutlierCard
                     key={item.key}
                     item={item}
-                    isLocked={!revealed.has(item.key) && idx >= 3 && !PRE_LAUNCH}
+                    isLocked={!revealed.has(item.key) && idx >= 3 && !fullAccess}
                     onReveal={() => handleReveal(item.key)}
                   />
                 ))}
@@ -1605,12 +1387,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
                   r={r}
                   onInspect={() => setInspectItem({ type: 'longshots', row: r })}
                 />
-              ))}
-            </div>
-          ) : mode === 'game_lines' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
-              {gameLinesData.pricedGames.slice(0, limit).map((g, idx) => (
-                <GameCard key={`${g.sport}-${g.game_key}-${idx}`} game={g} />
               ))}
             </div>
           ) : (
@@ -1674,7 +1450,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
               <OutlierCard
                 key={item.key}
                 item={item}
-                isLocked={!revealed.has(item.key) && idx >= 3 && !PRE_LAUNCH}
+                isLocked={!revealed.has(item.key) && idx >= 3 && !fullAccess}
                 onReveal={() => handleReveal(item.key)}
               />
             ))}
@@ -1728,9 +1504,9 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
                 <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
                   <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>PLAYER &amp; MATCHUP</th>
                   <th scope="col" style={{ textAlign: 'left', minWidth: '280px', padding: '10px 14px' }}>SGP LEGS (SAME BOOK)</th>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>TRUE CORRELATED FAIR</th>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>EST. SGP PRICE vs DIRECT</th>
-                  <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>EDGE &amp; ACTION</th>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>ASSUMED-CORRELATION FAIR</th>
+                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>MODELLED SGP PRICE (NOT QUOTED)</th>
+                  <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>MODEL EV &amp; ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -1741,15 +1517,6 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
             </table>
           </div>
         </div>
-      ) : mode === 'game_lines' ? (
-        <GameLinesView
-          pricedGames={gameLinesData.pricedGames}
-          rows={gameLinesData.rows}
-          view={gameView}
-          limit={limit}
-          onSwitchView={setGameView}
-          isMobile={isMobile}
-        />
       ) : (
         <div>
           {isMobile && (
@@ -1852,7 +1619,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
                   key={r.key}
                   r={r}
                   columns={columns}
-                  isLocked={!revealed.has(r.key) && idx >= 3 && !PRE_LAUNCH}
+                  isLocked={!revealed.has(r.key) && idx >= 3 && !fullAccess}
                   onReveal={() => handleReveal(r.key)}
                 />
               ))}
@@ -1889,8 +1656,7 @@ export function OddsClient({ initial, initialLocked, headline, initialGames }: {
         {mode === 'longshots' && <>Each cell is a book&apos;s over price above its under price. Alt lines are rungs off the player&apos;s main line. FAIR ANCHOR is the reference
           books&apos; consensus (N BKS) or, where fewer than two price the exact line, a fair probability read off the player&apos;s own multi-line curve (CURVE). The curve is an
           unvalidated estimate: treat a CURVE edge as a place to look, not a price to trust. Snipe is the longshot over against fair; Fade is the under or NO against fair.</>}
-        {mode === 'sgp' && <>SGP Proxies identifies multi-leg same-game milestone and stat combinations whose synthetic SGP pricing beats official standalone markets or fair joint probability using Gaussian copula correlation. Est. SGP Odds models the target book&apos;s internal SGP builder; True Fair estimates the correlated outcome under empirical stat \u03c1.</>}
-        {mode === 'game_lines' && <>Game Lines prices full-game spreads, totals, and moneylines using institutional quantitative distribution models (NBA Student-t joint margin-total dispersion, NHL Dixon-Coles bivariate Poisson with regulation empty-net and 3v3 OT adjustments). Model win probability integrates pace, defensive four factors, rest fatigue, and active injury drags. Fair market probability is de-vigged multi-book consensus. Edge is model probability minus fair market probability.</>}
+        {mode === 'sgp' && <>SGP Proxies models same-book two-leg tickets from the single-leg prices. The modelled SGP price runs the book&apos;s own two prices through an assumed copula and hold; the model fair price runs the other books&apos; de-vigged prices through an assumed correlation (&rho;). Every constant is a guess and none is validated, and the modelled price is not a price the book quoted: confirm any combination in the book&apos;s own builder. Rows above {SGP_ARTIFACT_EV_PCT}% model EV are flagged as likely artifacts and hidden unless you include them. The books pricing a ticket are left out of its fair value.</>}
         {' '}These are unvalidated market signals, not part of the public track record. Lines move or limit quickly: check the price at the book. Not financial advice.
         21+. If gambling is a problem, call 1-800-GAMBLER.{' '}
         <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>
@@ -2272,21 +2038,32 @@ function MobileLongshotCard({
   )
 }
 
+function SgpBadges({ r }: { r: SgpProxyRow }) {
+  const badgeBg = r.archetype === 'nba_reb_ast_10_10' ? 'rgba(168, 85, 247, 0.2)' : r.archetype.includes('vs_') ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)'
+  const badgeFg = r.archetype === 'nba_reb_ast_10_10' ? '#c084fc' : r.archetype.includes('vs_') ? '#60a5fa' : '#facc15'
+  return (
+    <>
+      <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, letterSpacing: '0.03em', flexShrink: 0 }}>
+        {r.archetypeLabel}
+      </span>
+      <span className="mono" title={r.label} style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', border: '1px solid #3a4156', color: '#facc15', letterSpacing: '0.04em', flexShrink: 0 }}>
+        UNVALIDATED
+      </span>
+      {r.modelArtifact && (
+        <span className="mono" title={`EV above ${SGP_ARTIFACT_EV_PCT}% is almost certainly an artifact of the assumed correlation and hold`} style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(255,90,79,0.5)', color: '#ff5a4f', letterSpacing: '0.04em', flexShrink: 0 }}>
+          MODEL ARTIFACT?
+        </span>
+      )}
+    </>
+  )
+}
+
+/** Model EV of an SGP row: neutral text, never the green "positive EV" styling (the number comes from assumed constants). */
+function sgpEvText(r: SgpProxyRow): string {
+  return `${r.evPct > 0 ? '+' : ''}${r.evPct.toFixed(1)}% model EV`
+}
+
 function MobileSgpCard({ r }: { r: SgpProxyRow }) {
-  const isPositive = r.evPct > 0
-  const vsDir = r.vsDirectPct
-  const badgeColor = r.archetype === 'nba_reb_ast_10_10'
-    ? 'rgba(168, 85, 247, 0.2)'
-    : r.archetype.includes('vs_')
-    ? 'rgba(59, 130, 246, 0.2)'
-    : 'rgba(234, 179, 8, 0.2)'
-
-  const badgeTextColor = r.archetype === 'nba_reb_ast_10_10'
-    ? '#c084fc'
-    : r.archetype.includes('vs_')
-    ? '#60a5fa'
-    : '#facc15'
-
   return (
     <div
       style={{
@@ -2301,26 +2078,13 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {r.player}
-            </span>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '1px 5px',
-                borderRadius: '4px',
-                background: badgeColor,
-                color: badgeTextColor,
-                letterSpacing: '0.03em',
-                flexShrink: 0,
-              }}
-            >
-              {r.archetypeLabel}
-            </span>
+          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--chalk)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {r.player}
           </div>
-          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
+            <SgpBadges r={r} />
+          </div>
+          <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '3px' }}>
             {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
           </div>
         </div>
@@ -2331,14 +2095,7 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
           <span
             key={idx}
             className="mono"
-            style={{
-              fontSize: '11px',
-              padding: '2px 7px',
-              borderRadius: '4px',
-              background: '#090a0f',
-              border: `1px solid ${HAIR}`,
-              color: 'var(--chalk)',
-            }}
+            style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: '#090a0f', border: `1px solid ${HAIR}`, color: 'var(--chalk)' }}
           >
             {leg.label} ({formatOdds(leg.bookAm)})
           </span>
@@ -2349,60 +2106,39 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <BookLogo book={r.book} size={18} />
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
-              Est. {formatOdds(r.estSgpAm)}
+            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>
+              Modelled {formatOdds(r.estSgpAm)}
             </span>
           </div>
           <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
-            Fair: {formatOdds(r.fairJointAm)} ({(r.fairJointProb * 100).toFixed(1)}%)
+            Model fair: {formatOdds(r.fairJointAm)} ({(r.fairJointProb * 100).toFixed(1)}%)
           </div>
         </div>
 
         <div style={{ textAlign: 'right' }}>
-          <span
-            className="mono"
-            style={{
-              fontSize: '12px',
-              fontWeight: 700,
-              padding: '2px 7px',
-              borderRadius: '4px',
-              background: isPositive ? 'rgba(87, 242, 135, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-              color: isPositive ? GREEN : 'var(--fog)',
-              border: isPositive ? '1px solid rgba(87, 242, 135, 0.3)' : `1px solid ${HAIR}`,
-            }}
-          >
-            {r.evPct > 0 ? `+${r.evPct.toFixed(1)}%` : `${r.evPct.toFixed(1)}%`} EV
+          <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--silver)', border: `1px solid ${HAIR}` }}>
+            {sgpEvText(r)}
           </span>
-          {vsDir != null && vsDir > 0 && (
-            <div style={{ fontSize: '10px', color: GREEN, marginTop: '2px' }}>
-              +{vsDir.toFixed(1)}% vs direct
-            </div>
-          )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <a
-          href={r.deeplink || '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn-ghost"
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: 600,
-            color: 'var(--chalk)',
-            border: `1px solid ${HAIR}`,
-            borderRadius: '4px',
-            textDecoration: 'none',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-        >
-          Build SGP on {bookDisplay(r.book).label} &rarr;
-        </a>
+      <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)' }}>
+        Assumed correlation &rho;={r.rhoTrue}, book &rho;={r.rhoBook}, hold {Math.round(r.holdBook * 100)}% (unvalidated; not a quoted price)
       </div>
+
+      {r.deeplink && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <a
+            href={r.deeplink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost"
+            style={{ padding: '5px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+          >
+            Check price on {bookDisplay(r.book).label} &rarr;
+          </a>
+        </div>
+      )}
     </div>
   )
 }
@@ -2882,12 +2618,12 @@ function OutlierCard({
         {isLocked ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-              <span style={{ fontSize: '13px', color: '#9ca3af' }}>\ud83d\udd12</span>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af' }}>Book hidden</span>
+              <LockGlyph size={13} color="#9ca3af" />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af' }}>Book hidden (Pro)</span>
               <span className="mono" style={{ fontSize: '10.5px', color: '#7d8596' }}>({item.nPeers} peer books)</span>
             </div>
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px', color: GREEN, borderColor: 'rgba(87,242,135,0.3)' }}>
-              Reveal book &rarr;
+              See Pro &rarr;
             </button>
           </>
         ) : (
@@ -2907,7 +2643,7 @@ function OutlierCard({
         {/* Outlier Book Row */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ width: '32px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-            {isLocked ? <span style={{ fontSize: '12px', color: '#7d8596' }}>\ud83d\udd12</span> : <BookLogo book={item.outlierBook} size={20} />}
+            {isLocked ? <LockGlyph size={12} color="#7d8596" /> : <BookLogo book={item.outlierBook} size={20} />}
           </div>
           <div style={{ flex: 1, height: '8px', background: '#171a24', borderRadius: '4px', overflow: 'hidden' }}>
             <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
@@ -2977,8 +2713,8 @@ function OutlierTableRow({
       <td className="odds-ev">
         {isLocked ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px' }}>\ud83d\udd12</span>
-            <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px', color: GREEN }}>Reveal book</button>
+            <LockGlyph size={12} color="#9ca3af" />
+            <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px', color: GREEN }}>See Pro</button>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3012,42 +2748,18 @@ function OutlierTableRow({
 }
 
 function SgpTableRow({ r }: { r: SgpProxyRow }) {
-  const isPositive = r.evPct > 0
-  const vsDir = r.vsDirectPct
-  const badgeColor = r.archetype === 'nba_reb_ast_10_10'
-    ? 'rgba(168, 85, 247, 0.2)'
-    : r.archetype.includes('vs_')
-    ? 'rgba(59, 130, 246, 0.2)'
-    : 'rgba(234, 179, 8, 0.2)'
-
-  const badgeTextColor = r.archetype === 'nba_reb_ast_10_10'
-    ? '#c084fc'
-    : r.archetype.includes('vs_')
-    ? '#60a5fa'
-    : '#facc15'
-
   return (
     <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
       <td style={{ padding: '10px 14px', minWidth: '220px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontWeight: 600, color: 'var(--chalk)', fontSize: '13px' }}>{r.player}</span>
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                padding: '1px 5px',
-                borderRadius: '4px',
-                background: badgeColor,
-                color: badgeTextColor,
-                letterSpacing: '0.03em',
-              }}>
-                {r.archetypeLabel}
-              </span>
+            <div style={{ fontWeight: 600, color: 'var(--chalk)', fontSize: '13px' }}>{r.player}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>
+              <SgpBadges r={r} />
             </div>
-            <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '2px' }}>
-              {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} \u00b7 {startLabel(r.commence)}
+            <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '3px' }}>
+              {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
             </div>
           </div>
         </div>
@@ -3059,14 +2771,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
               <span
                 key={idx}
                 className="mono"
-                style={{
-                  fontSize: '11px',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: 'rgba(255, 255, 255, 0.04)',
-                  border: `1px solid ${HAIR}`,
-                  color: 'var(--chalk)',
-                }}
+                style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', border: `1px solid ${HAIR}`, color: 'var(--chalk)' }}
               >
                 {leg.label} ({formatOdds(leg.bookAm)})
               </span>
@@ -3086,91 +2791,70 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
-            {(r.fairJointProb * 100).toFixed(1)}% fair
+            {(r.fairJointProb * 100).toFixed(1)}% model
           </span>
           <span
             className="mono"
-            style={{
-              fontSize: '10px',
-              padding: '1px 4px',
-              borderRadius: '3px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: 'var(--fog)',
-            }}
-            title={`Empirical true correlation rho = ${r.rhoTrue}`}
+            style={{ fontSize: '10px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--fog)' }}
+            title={`Assumed correlation rho = ${r.rhoTrue} (unvalidated: a constant per archetype, not fitted to data)`}
           >
-            \u03c1={r.rhoTrue > 0 ? `+${r.rhoTrue}` : r.rhoTrue}
+            &rho;={r.rhoTrue > 0 ? `+${r.rhoTrue}` : r.rhoTrue}
           </span>
         </div>
       </td>
       <td style={{ padding: '10px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <BookLogo book={r.book} size={22} />
-          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
-            Est. SGP: {formatOdds(r.estSgpAm)}
-          </span>
-          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 4px', borderRadius: '3px', background: 'rgba(87, 242, 135, 0.1)', color: GREEN, border: '1px solid rgba(87, 242, 135, 0.25)' }}>
-            EST. BOOK SGP
+          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>
+            Modelled: {formatOdds(r.estSgpAm)}
           </span>
         </div>
-        {r.directMarketAm != null ? (
-          <div style={{ fontSize: '11px', color: vsDir != null && vsDir > 0 ? GREEN : 'var(--fog)', marginTop: '2px' }}>
-            {vsDir != null && vsDir > 0 ? (
-              <>Beats direct {r.directMarketLabel || 'market'} ({formatOdds(r.directMarketAm)}) by +{vsDir.toFixed(1)}%</>
-            ) : (
-              <>Direct {r.directMarketLabel || 'market'}: {formatOdds(r.directMarketAm)}</>
-            )}
-          </div>
-        ) : (
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
-            Book copula (\u03c1={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
-          </div>
-        )}
+        <div className="mono" style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '2px' }}>
+          Assumed book copula (&rho;={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
+        </div>
         {r.runnerUpBooks && r.runnerUpBooks.length > 0 && (
           <div style={{ fontSize: '10.5px', color: 'var(--fog)', marginTop: '3px' }}>
-            Also at: {r.runnerUpBooks.map(b => `${bookDisplay(b.book).label} (${b.evPct > 0 ? `+${b.evPct.toFixed(1)}%` : `${b.evPct.toFixed(1)}%`} EV)`).join(', ')}
+            Also at: {r.runnerUpBooks.map(b => `${bookDisplay(b.book).label} (${b.evPct > 0 ? `+${b.evPct.toFixed(1)}%` : `${b.evPct.toFixed(1)}%`})`).join(', ')}
           </div>
         )}
       </td>
       <td style={{ padding: '10px 14px', textAlign: 'right' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px' }}>
-          <span
-            className="mono"
-            style={{
-              fontSize: '12px',
-              fontWeight: 700,
-              padding: '3px 8px',
-              borderRadius: '4px',
-              background: isPositive ? 'rgba(87, 242, 135, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-              color: isPositive ? GREEN : 'var(--fog)',
-              border: isPositive ? '1px solid rgba(87, 242, 135, 0.3)' : `1px solid ${HAIR}`,
-            }}
-          >
-            {r.evPct > 0 ? `+${r.evPct.toFixed(1)}%` : `${r.evPct.toFixed(1)}%`} EV
+          <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--silver)', border: `1px solid ${HAIR}` }}>
+            {sgpEvText(r)}
           </span>
-          <a
-            href={r.deeplink || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-ghost"
-            style={{
-              padding: '4px 8px',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: 'var(--chalk)',
-              border: `1px solid ${HAIR}`,
-              borderRadius: '4px',
-              textDecoration: 'none',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            Build SGP \u2197
-          </a>
+          {r.deeplink && (
+            <a
+              href={r.deeplink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost"
+              style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            >
+              Check price &rarr;
+            </a>
+          )}
         </div>
       </td>
     </tr>
+  )
+}
+
+/** One strip above the SGP view: every row is UNVALIDATED model output, and the flagged extreme rows are counted, not silently dropped. */
+function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
+  return (
+    <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: '3px solid #facc15' }}>
+      <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15' }}>UNVALIDATED</span>
+      <span style={{ fontSize: '12px', color: 'var(--silver)', flex: 1, minWidth: '240px' }}>
+        {SGP_UNVALIDATED_LABEL}. Correlation and book hold are assumed constants, so a gap here is a place to look, not an edge.
+      </span>
+      <span className="mono" style={{ fontSize: '11px', color: extremeCount > 0 ? '#ff5a4f' : 'var(--fog)' }}>
+        {extremeCount} EXTREME (EV OVER {SGP_ARTIFACT_EV_PCT}%){includeExtreme ? ' SHOWN' : ' HIDDEN'}
+      </span>
+      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost" style={{ padding: '3px 10px', fontSize: '11px' }}>
+        Include extreme
+      </button>
+    </div>
   )
 }
 
@@ -3504,315 +3188,6 @@ function Empty({ title, body }: { title: string; body: string }) {
     <div style={{ ...SURFACE_CARD, padding: '36px 20px', textAlign: 'center' }}>
       <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>{title}</div>
       <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>{body}</div>
-    </div>
-  )
-}
-
-function GameCard({ game }: { game: GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] } }) {
-  const sport = (game.sport || '').toLowerCase()
-  const isNba = sport === 'nba'
-  const isNhl = sport === 'nhl'
-
-  const expMargin = game.mu_margin != null ? (
-    game.mu_margin > 0
-      ? `${game.home_team} -${Math.abs(game.mu_margin).toFixed(1)}`
-      : `${game.away_team} -${Math.abs(game.mu_margin).toFixed(1)}`
-  ) : null
-
-  return (
-    <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="mono" style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '2px 7px',
-            borderRadius: '4px',
-            background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
-            color: isNba ? '#f97316' : '#38bdf8',
-            border: `1px solid ${isNba ? 'rgba(249,115,22,0.35)' : 'rgba(56,189,248,0.35)'}`,
-          }}>
-            {sport.toUpperCase()}
-          </span>
-          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)' }}>
-            {game.away_team} @ {game.home_team}
-          </span>
-        </div>
-        <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
-          {game.game_date}
-        </div>
-      </div>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '8px',
-        padding: '10px 12px',
-        background: '#090a0f',
-        borderRadius: '6px',
-        border: `1px solid ${HAIR}`,
-      }}>
-        {isNba && (
-          <>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL MARGIN</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
-                {expMargin ?? '--'}
-              </div>
-            </div>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
-                {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
-              </div>
-            </div>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED PACE</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
-                {game.exp_pace != null ? `${game.exp_pace.toFixed(1)} poss` : '--'}
-              </div>
-            </div>
-          </>
-        )}
-        {isNhl && (
-          <>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED GOALS</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
-                {game.lambda_a != null && game.lambda_h != null
-                  ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
-                  : '--'}
-              </div>
-            </div>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
-                {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
-              </div>
-            </div>
-            <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DISPERSION</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
-                {game.sigma_total != null ? `\u03c3 ${game.sigma_total.toFixed(1)}` : '--'}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--fog)', fontSize: '10px' }}>
-              <th scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>MARKET / SIDE</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>LINE</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MODEL %</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MKT FAIR</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>EDGE</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>BEST PRICE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {game.filteredMarkets.map((m, idx) => {
-              const hasEdge = m.model_edge != null && m.model_edge >= 0.015
-              const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
-              return (
-                <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid #151822', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
-                  <td style={{ padding: '8px', color: '#f3f4f6' }}>
-                    <div style={{ fontWeight: 600 }}>{m.market_label}</div>
-                    <div className="mono" style={{ fontSize: '11px', color: 'var(--silver)' }}>{sideLabel}</div>
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6', fontWeight: 600 }}>
-                    {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6' }}>
-                    {(m.p_model * 100).toFixed(1)}%
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--fog)' }}>
-                    {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
-                  </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
-                    {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
-                  </td>
-                  <td style={{ textAlign: 'right', padding: '8px' }}>
-                    {m.best_odds != null ? (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                        <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
-                          {formatOdds(m.best_odds)}
-                        </span>
-                        {m.best_book && <BookTag book={m.best_book} size={15} />}
-                      </div>
-                    ) : (
-                      <span className="mono" style={{ color: 'var(--fog)' }}>--</span>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function GameLinesTable({ rows, limit }: { rows: GameProjectionRow[]; limit: number }) {
-  return (
-    <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
-      <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '70px', padding: '10px 12px' }}>SPORT</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '180px', padding: '10px 12px' }}>MATCHUP</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '120px', padding: '10px 12px' }}>MARKET</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '140px', padding: '10px 12px' }}>SELECTION / LINE</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MODEL PROB</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MKT FAIR</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>EDGE</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MARKET EV</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '160px', padding: '10px 12px' }}>BEST ODDS &amp; BOOK</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, limit).map((r, idx) => {
-            const isNba = r.sport.toLowerCase() === 'nba'
-            const hasEdge = r.model_edge != null && r.model_edge >= 0.015
-            const bestOdds = r.best_over_odds ?? r.best_under_odds
-            const bestBook = r.best_over_book ?? r.best_under_book
-            const sideDisplay = r.team ? `${r.team} ${r.side.toUpperCase()}` : r.side.toUpperCase()
-            const lineDisplay = r.line != null ? (r.line > 0 ? `+${r.line}` : `${r.line}`) : ''
-
-            return (
-              <tr key={`${r.game_key}-${r.system}-${r.side}-${idx}`} data-row="odds">
-                <td style={{ padding: '9px 12px' }}>
-                  <span className="mono" style={{
-                    fontSize: '10.5px',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
-                    color: isNba ? '#f97316' : '#38bdf8',
-                    border: `1px solid ${isNba ? 'rgba(249,115,22,0.35)' : 'rgba(56,189,248,0.35)'}`,
-                  }}>
-                    {r.sport.toUpperCase()}
-                  </span>
-                </td>
-                <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--chalk)' }}>
-                  {r.player}
-                  <div className="mono" style={{ fontSize: '10.5px', color: '#7d8596', fontWeight: 400 }}>
-                    {startLabel(r.commence)}
-                  </div>
-                </td>
-                <td style={{ padding: '9px 12px', color: 'var(--silver)' }}>
-                  {r.stat_label}
-                </td>
-                <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: '#f3f4f6' }}>
-                  {sideDisplay} {lineDisplay}
-                </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#f3f4f6' }}>
-                  {(r.p_model_side * 100).toFixed(1)}%
-                </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#7d8596' }}>
-                  {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
-                </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
-                  {r.model_edge != null ? `${m_edge(r.model_edge)}` : '--'}
-                </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: r.market_ev != null && r.market_ev > 0 ? GREEN : '#7d8596' }}>
-                  {r.market_ev != null ? `${r.market_ev > 0 ? '+' : ''}${(r.market_ev * 100).toFixed(1)}%` : '--'}
-                </td>
-                <td style={{ textAlign: 'right', padding: '9px 12px' }}>
-                  {bestOdds != null ? (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
-                        {formatOdds(bestOdds)}
-                      </span>
-                      {bestBook && <BookTag book={bestBook} size={15} />}
-                    </div>
-                  ) : (
-                    <span className="mono" style={{ color: '#7d8596' }}>--</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function m_edge(edge: number): string {
-  return `${edge > 0 ? '+' : ''}${(edge * 100).toFixed(1)}%`
-}
-
-function GameLinesView({
-  pricedGames,
-  rows,
-  view,
-  limit,
-  onSwitchView,
-  isMobile,
-}: {
-  pricedGames: (GamePricedGame & { sport: string; filteredMarkets: GamePricedMarket[] })[]
-  rows: GameProjectionRow[]
-  view: 'cards' | 'table'
-  limit: number
-  onSwitchView: (v: 'cards' | 'table') => void
-  isMobile: boolean
-}) {
-  return (
-    <div>
-      {isMobile && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
-            <button
-              type="button"
-              onClick={() => onSwitchView('cards')}
-              style={{
-                fontFamily: 'var(--font-text), sans-serif',
-                fontSize: '11px',
-                fontWeight: 600,
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: 0,
-                cursor: 'pointer',
-                background: view === 'cards' ? '#1b1f2b' : 'transparent',
-                color: view === 'cards' ? '#ffffff' : 'var(--fog)',
-              }}
-            >
-              Game Cards ({pricedGames.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => onSwitchView('table')}
-              style={{
-                fontFamily: 'var(--font-text), sans-serif',
-                fontSize: '11px',
-                fontWeight: 600,
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: 0,
-                cursor: 'pointer',
-                background: view === 'table' ? '#1b1f2b' : 'transparent',
-                color: view === 'table' ? '#ffffff' : 'var(--fog)',
-              }}
-            >
-              Data Matrix ({rows.length})
-            </button>
-          </div>
-        </div>
-      )}
-
-      {view === 'cards' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(520px, 1fr))', gap: '16px' }}>
-          {pricedGames.slice(0, limit).map((g, idx) => (
-            <GameCard key={`${g.sport}-${g.game_key}-${idx}`} game={g} />
-          ))}
-        </div>
-      ) : (
-        <GameLinesTable rows={rows} limit={limit} />
-      )}
     </div>
   )
 }

@@ -1,16 +1,33 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { SportBoardPage } from '@/components/picks/sport-board-page'
+import { isMlbOffseason } from '@/lib/dates'
 import type { SportSlug } from '@/lib/sports'
 
 export const metadata: Metadata = {
   title: 'Game Picks',
-  description: 'MLB, NHL, and NBA game picks: moneyline, puck line / spread, and game totals, ranked by Beezy Score and settled publicly.',
+  description: 'MLB game picks: moneyline, run line and game totals, ranked by Beezy Score and settled publicly.',
 }
 
+/** Game Picks is the TRACKED, graded game record (MLB). NBA / NHL game lines are unvalidated model estimates with no record, so
+ *  they live in the Scanner (/ev/games); old links with ?sport=nba|nhl|all land there. */
 export default async function GamePicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
-  const sport: SportSlug = params.sport === 'nba' ? 'nba' : params.sport === 'nhl' ? 'nhl' : 'mlb'
-  return <SportBoardPage sport={sport} view="picks" kind="game" searchParams={searchParams} />
+  if (params.sport === 'nba' || params.sport === 'nhl') redirect(`/ev/games?sport=${params.sport}`)
+  if (params.sport === 'all') redirect('/ev/games')
+  const mlb: SportSlug = 'mlb'
+  return (
+    <>
+      {isMlbOffseason() && (
+        <div role="note" style={{ maxWidth: '1200px', margin: '0 auto', padding: '12px 24px 0', fontSize: '12.5px', color: 'var(--silver)' }}>
+          MLB is in the offseason, so there are no game picks until it resumes in March. NBA and NHL game lines are in the{' '}
+          <Link href="/ev/games" style={{ color: 'var(--link)' }}>Odds Terminal &rarr; Game Lines</Link>.
+        </div>
+      )}
+      <SportBoardPage sport={mlb} view="picks" kind="game" searchParams={searchParams} />
+    </>
+  )
 }

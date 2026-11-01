@@ -9,7 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/ev?source=pwa',
     scope: '/',
     display: 'standalone',
-    display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+    // no window-controls-overlay: the nav has no titlebar-area-* layout, so the overlay would draw under the window controls
+    display_override: ['standalone', 'minimal-ui'],
     background_color: '#090a0f',
     theme_color: '#090a0f',
     categories: ['sports', 'finance', 'utilities'],
@@ -17,6 +18,9 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      // the glyph sits inside the central 80% safe zone of a full-bleed #090a0f square (measured by eye, tight at two corners)
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
     shortcuts: [
       {
@@ -44,6 +48,7 @@ export default function manifest(): MetadataRoute.Manifest {
         description: 'Verified graded bet history and ROI',
       },
     ],
+    // one wide screenshot only: a 'narrow' entry needs a real portrait capture (the OG card is 2000x1056)
     screenshots: [
       {
         src: '/brand/og-card.jpg',
@@ -51,13 +56,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/jpeg',
         form_factor: 'wide',
         label: 'beezy.fyi Quantitative Sports Betting Terminal',
-      },
-      {
-        src: '/brand/og-card.jpg',
-        sizes: '2000x1056',
-        type: 'image/jpeg',
-        form_factor: 'narrow',
-        label: 'beezy.fyi Mobile Odds Terminal',
       },
     ],
   }

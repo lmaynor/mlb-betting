@@ -142,6 +142,37 @@ def test_per_game_player_market_drops_rogue_longshot_quotes():
 
 
 
+def _td_offer(prices):
+    """prices: {book_id: american cost}; one anytime-TD selection with those one-sided Yes prices."""
+    return {"event_id": 1, "player_id": None, "participants": [
+        {"id": "24427", "name": "Tylan Wallace", "player": {"position": "WR", "team": "CLE"}}],
+        "selections": [{"participant": "24427", "selection": "", "label": "Tylan Wallace",
+                        "books": [{"id": b, "lines": [_line(c, 1, True)]} for b, c in prices.items()]}]}
+
+
+def test_rogue_filter_never_applies_with_fewer_than_five_quoting_books():
+    # consensus +250 plus three real books; a +600 soft price (decimal 7.0 vs 3.5 = 2.0x) is NOT a rogue, and neither is +1800
+    for soft in (600, 1800):
+        offer = _td_offer({0: 250, 10: soft, 19: 250, 13: 260})
+        rows = be.build_per_game_player_rows("NFL", "anytime_td", 78, "d", [offer], _ev())
+        assert 10 in {r["book_id"] for r in rows}, soft
+
+
+def test_rogue_filter_uses_a_3x_ratio_with_five_or_more_books():
+    peers = {19: 250, 13: 260, 14: 270, 24: 250}
+    keep = be.build_per_game_player_rows("NFL", "anytime_td", 78, "d", [_td_offer({0: 255, 10: 700, **peers})], _ev())
+    assert 10 in {r["book_id"] for r in keep}                        # 8.0 vs 3.55 = 2.25x
+    drop = be.build_per_game_player_rows("NFL", "anytime_td", 78, "d", [_td_offer({0: 255, 10: 1800, **peers})], _ev())
+    assert 10 not in {r["book_id"] for r in drop}                    # 19.0 vs 3.55 = 5.4x
+
+
+def test_zero_cost_is_skipped_not_a_zero_division():
+    rows = be.build_per_game_player_rows("NFL", "anytime_td", 78, "d",
+                                         [_td_offer({0: 255, 10: 0, 19: 250, 13: 260, 14: 270, 24: 250})], _ev())
+    assert 10 not in {r["book_id"] for r in rows} and {19, 13, 14, 24} <= {r["book_id"] for r in rows}
+    assert be._safe_decimal(0) is None and be._safe_decimal("x") is None
+
+
 # ------------------------------------------------------------------------------------------------ crawl
 class _FakeBP:
     """Stands in for bpp's three network calls; counts calls so pacing / request accounting can be asserted."""

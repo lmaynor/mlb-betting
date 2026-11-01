@@ -27,3 +27,9 @@ export function formatDateKey(dateKey: string, options: Intl.DateTimeFormatOptio
 export function formatCentralDate(date = new Date(), options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: SITE_TIME_ZONE, ...options }).format(date)
 }
+
+/** MLB offseason window, Central time: Nov 5 through Mar 19 (mirrors mlb_core.config.is_mlb_offseason; baseball resumes Mar 20). */
+export function isMlbOffseason(date = new Date()): boolean {
+  const [, m, d] = siteDateKey(date).split('-').map(Number)
+  return m > 11 || (m === 11 && d >= 5) || m < 3 || (m === 3 && d < 20)
+}

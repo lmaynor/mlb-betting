@@ -39,7 +39,12 @@ STANDARD_BETTABLE_BOOKS: Set[str] = {
     "fanatics", "hardrock", "espnbet", "betrivers", "novig", "prophetx",
 }
 
+# Above this EV the row is almost certainly an artifact of the assumed copula constants (every rho / hold in
+# ev.sgp_book_pricer is a guess, so longshot pairs "beat the book" by construction). Such rows are KEPT and flagged
+# (`model_artifact=True`), never silently dropped, and sort after every non-flagged row.
 MAX_CREDIBLE_EV_PCT = 45.0
+
+UNVALIDATED_LABEL = "UNVALIDATED model estimate: assumed correlation, modelled (not quoted) SGP price"
 
 
 @dataclass
@@ -85,6 +90,10 @@ class SgpCandidate:
     vs_direct_pct: Optional[float] = None
     deeplink: Optional[str] = None
     runner_up_books: Optional[List[Dict[str, Any]]] = None
+    # Honesty fields. Every SGP row is a model output built from assumed constants, not a quoted price.
+    unvalidated: bool = True
+    label: str = UNVALIDATED_LABEL
+    model_artifact: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -153,11 +162,31 @@ def _fair_prob_of_row(
     return None
 
 
-def _n_books_backing(row: Dict[str, Any]) -> int:
+def _n_books_backing(row: Dict[str, Any], exclude: Optional[str] = None) -> int:
     books = row.get("books", [])
     if isinstance(books, dict):
         books = list(books.values())
-    return sum(1 for b in books if b.get("over") is not None)
+    ex = exclude.lower() if exclude else None
+    return sum(
+        1 for b in books
+        if b.get("over") is not None and not (ex and str(b.get("book", "")).lower() == ex)
+    )
+
+
+def _fair_excl(row: Optional[Dict[str, Any]], book: str) -> Optional[float]:
+    """
+    Fair P(over) for pricing `book`'s own ticket: the book is left out of its own fair value, and the row must still be
+    backed by >= 2 other books (or a fitted curve) with a fair value inside the credible [0.04, 0.88] band.
+    """
+    if not row:
+        return None
+    has_curve = row.get("curve_fair_over") is not None
+    if _n_books_backing(row, exclude=book) < 2 and not has_curve:
+        return None
+    f = _fair_prob_of_row(row, leave_out_book=book)
+    if f is None or not (0.04 <= f <= 0.88):
+        return None
+    return f
 
 
 def _best_price_on_row(
@@ -206,8 +235,11 @@ def build_sgp_proxy_candidates(
     Two-stage scan for SGP proxy value across banked BoardRow props.
 
     Stage 1: Validates single-leg support and fair probabilities in [0.04, 0.88].
-    Stage 2: Applies fitted book copula (rho_book, hold_book), predicts SGP price,
-             evaluates EV% (capped at 45%), and compares with direct markets.
+    Stage 2: Applies the book copula (rho_book, hold_book: archetype defaults unless a validated fit exists),
+             predicts a MODELLED SGP price and evaluates EV% against the copula fair value, with the pricing book
+             left out of its own fair value. EV above MAX_CREDIBLE_EV_PCT is flagged `model_artifact`, not dropped.
+             Every row carries `unvalidated=True`. "vs direct" is only filled where the ticket is the same event
+             as the direct market (3-leg Triple-Double).
     """
     allowed_books = bettable if bettable is not None else STANDARD_BETTABLE_BOOKS
     raw_candidates: List[SgpCandidate] = []
@@ -258,128 +290,221 @@ def build_sgp_proxy_candidates(
 
         if r_reb10 and r_ast10 and sp == "nba":
             arch = SGP_ARCHETYPES["nba_reb_ast_10_10"]
-            f_reb = _fair_prob_of_row(r_reb10)
-            f_ast = _fair_prob_of_row(r_ast10)
-            f_pts = _fair_prob_of_row(r_pts10) if r_pts10 else None
 
-            # Stage 1 Sanity: fair probs in [0.04, 0.88] and backed by >= 2 books or curve
-            if (
-                f_reb is not None and 0.04 <= f_reb <= 0.88
-                and f_ast is not None and 0.04 <= f_ast <= 0.88
-                and (_n_books_backing(r_reb10) >= 2 or r_reb10.get("curve_fair_over") is not None)
-                and (_n_books_backing(r_ast10) >= 2 or r_ast10.get("curve_fair_over") is not None)
-            ):
-                main_pts_row = next((r for r in p_rows if str(r.get("stat", "")).lower() == "points" and not r.get("is_alt")), None)
-                main_pts_line = float(main_pts_row.get("line", 20.0)) if main_pts_row else 20.0
+            # Direct Triple-Double market: only a like-for-like reference for the 3-leg (Pts + Reb + Ast, all 9.5) ticket.
+            direct_row = next(
+                (r for r in p_rows if str(r.get("stat", "")).lower() in ("triple_double", "td", "player_triple_double")),
+                None,
+            )
+            dir_book, dir_am, dir_dec = _best_price_on_row(direct_row, "OVER", allowed_books)
 
-                # Direct TD market lookup
-                direct_row = next(
-                    (r for r in p_rows if str(r.get("stat", "")).lower() in ("triple_double", "td", "player_triple_double")),
-                    None,
+            books_reb = {str(b.get("book", "")).lower(): b for b in r_reb10.get("books", []) if b.get("over") is not None}
+            books_ast = {str(b.get("book", "")).lower(): b for b in r_ast10.get("books", []) if b.get("over") is not None}
+            books_pts = {str(b.get("book", "")).lower(): b for b in r_pts10.get("books", []) if b.get("over") is not None} if r_pts10 else {}
+
+            common_books = set(books_reb.keys()).intersection(books_ast.keys()).intersection(allowed_books)
+            for b_name in sorted(common_books):
+                # the pricing book never contributes to its own fair value
+                f_reb = _fair_excl(r_reb10, b_name)
+                f_ast = _fair_excl(r_ast10, b_name)
+                if f_reb is None or f_ast is None:
+                    continue
+                f_pts = _fair_excl(r_pts10, b_name) if r_pts10 else None
+
+                b_reb = books_reb[b_name]
+                b_ast = books_ast[b_name]
+                am_reb = int(b_reb["over"])
+                am_ast = int(b_ast["over"])
+
+                # 3-leg if book quotes points 10+ and f_pts valid
+                use_3leg = bool(r_pts10 and b_name in books_pts and f_pts is not None)
+
+                if use_3leg and r_pts10:
+                    b_pts = books_pts[b_name]
+                    am_pts = int(b_pts["over"])
+                    p_true = copula_joint([f_pts, f_reb, f_ast], arch.rho_true)
+                    pred = predict_book_sgp_odds(b_name, arch.key, [am_pts, am_reb, am_ast])
+                    q_pts = american_to_implied_prob(am_pts)
+                    q_reb = american_to_implied_prob(am_reb)
+                    q_ast = american_to_implied_prob(am_ast)
+                    p_naive = q_pts * q_reb * q_ast
+                    legs = [
+                        SgpLegCandidate(
+                            stat="points",
+                            line=float(r_pts10.get("line", 9.5)),
+                            side="OVER",
+                            book_american=am_pts,
+                            fair_prob=round(f_pts, 4),
+                            label=f"o{r_pts10.get('line', 9.5)} Pts",
+                            sid=b_pts.get("over_sid") or b_pts.get("sid"),
+                            market_id=b_pts.get("market_id"),
+                            selection_id=b_pts.get("selection_id"),
+                        ),
+                        SgpLegCandidate(
+                            stat="rebounds",
+                            line=float(r_reb10.get("line", 9.5)),
+                            side="OVER",
+                            book_american=am_reb,
+                            fair_prob=round(f_reb, 4),
+                            label=f"o{r_reb10.get('line', 9.5)} Reb",
+                            sid=b_reb.get("over_sid") or b_reb.get("sid"),
+                            market_id=b_reb.get("market_id"),
+                            selection_id=b_reb.get("selection_id"),
+                        ),
+                        SgpLegCandidate(
+                            stat="assists",
+                            line=float(r_ast10.get("line", 9.5)),
+                            side="OVER",
+                            book_american=am_ast,
+                            fair_prob=round(f_ast, 4),
+                            label=f"o{r_ast10.get('line', 9.5)} Ast",
+                            sid=b_ast.get("over_sid") or b_ast.get("sid"),
+                            market_id=b_ast.get("market_id"),
+                            selection_id=b_ast.get("selection_id"),
+                        ),
+                    ]
+                else:
+                    # The ticket the book prices is Reb + Ast only, so the fair value is the 2-leg joint. (An earlier
+                    # version multiplied in a conditional-points factor, which priced a different event.)
+                    p_true = copula_joint([f_reb, f_ast], arch.rho_true)
+                    pred = predict_book_sgp_odds(b_name, arch.key, [am_reb, am_ast])
+                    q_reb = american_to_implied_prob(am_reb)
+                    q_ast = american_to_implied_prob(am_ast)
+                    p_naive = q_reb * q_ast
+                    legs = [
+                        SgpLegCandidate(
+                            stat="rebounds",
+                            line=float(r_reb10.get("line", 9.5)),
+                            side="OVER",
+                            book_american=am_reb,
+                            fair_prob=round(f_reb, 4),
+                            label=f"o{r_reb10.get('line', 9.5)} Reb",
+                            sid=b_reb.get("over_sid") or b_reb.get("sid"),
+                            market_id=b_reb.get("market_id"),
+                            selection_id=b_reb.get("selection_id"),
+                        ),
+                        SgpLegCandidate(
+                            stat="assists",
+                            line=float(r_ast10.get("line", 9.5)),
+                            side="OVER",
+                            book_american=am_ast,
+                            fair_prob=round(f_ast, 4),
+                            label=f"o{r_ast10.get('line', 9.5)} Ast",
+                            sid=b_ast.get("over_sid") or b_ast.get("sid"),
+                            market_id=b_ast.get("market_id"),
+                            selection_id=b_ast.get("selection_id"),
+                        ),
+                    ]
+
+                ev_pct = (p_true * pred.decimal - 1.0) * 100.0
+                if ev_pct < min_ev_pct:
+                    continue
+
+                # "vs direct" only when the ticket is the same event as the direct market: Pts 10+ AND Reb 10+ AND Ast 10+
+                # (all three lines at 9.5) is exactly a Triple-Double. Reb + Ast alone is not, so no comparison is made.
+                td_like_for_like = bool(
+                    use_3leg and r_pts10 and dir_dec and dir_dec > 0.0
+                    and all(float(r.get("line", 0.0)) == 9.5 for r in (r_pts10, r_reb10, r_ast10))
                 )
-                dir_book, dir_am, dir_dec = _best_price_on_row(direct_row, "OVER", allowed_books)
+                vs_dir = round(((pred.decimal / dir_dec) - 1.0) * 100.0, 1) if td_like_for_like and dir_dec else None
 
-                books_reb = {str(b.get("book", "")).lower(): b for b in r_reb10.get("books", []) if b.get("over") is not None}
-                books_ast = {str(b.get("book", "")).lower(): b for b in r_ast10.get("books", []) if b.get("over") is not None}
-                books_pts = {str(b.get("book", "")).lower(): b for b in r_pts10.get("books", []) if b.get("over") is not None} if r_pts10 else {}
+                dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nba")
+                raw_candidates.append(
+                    SgpCandidate(
+                        archetype=arch.key,
+                        archetype_label=arch.label,
+                        sport="nba",
+                        player=player,
+                        player_norm=player_norm,
+                        game_key=game_key,
+                        commence=commence,
+                        away=away,
+                        home=home,
+                        book=b_name,
+                        legs=legs,
+                        naive_product_american=int(implied_to_american(p_naive)),
+                        est_sgp_dec=pred.decimal,
+                        est_sgp_american=pred.american,
+                        fair_joint_prob=round(p_true, 4),
+                        fair_joint_american=int(implied_to_american(p_true)),
+                        rho_true=arch.rho_true,
+                        rho_book=pred.rho_used,
+                        hold_book=pred.hold_used,
+                        ev_pct=round(ev_pct, 2),
+                        team=team,
+                        player_id=p_id,
+                        direct_market_label="Triple-Double" if td_like_for_like else None,
+                        direct_best_american=dir_am if td_like_for_like else None,
+                        direct_best_book=dir_book if td_like_for_like else None,
+                        vs_direct_pct=vs_dir,
+                        deeplink=dlink,
+                    )
+                )
 
-                common_books = set(books_reb.keys()).intersection(books_ast.keys()).intersection(allowed_books)
-                for b_name in common_books:
-                    b_reb = books_reb[b_name]
-                    b_ast = books_ast[b_name]
-                    am_reb = int(b_reb["over"])
-                    am_ast = int(b_ast["over"])
+        # ----------------------------------------------------------------------
+        # Archetype 2: NBA Stat Combos (P+R, P+A, R+A)
+        #
+        # Two over legs ("Pts > x AND Reb > y") are a different event from the combined market ("Pts + Reb > x + y"),
+        # so no direct-market comparison is made for these.
+        # ----------------------------------------------------------------------
+        main_pts = next((r for r in p_rows if str(r.get("stat", "")).lower() == "points" and not r.get("is_alt")), None)
+        main_reb = next((r for r in p_rows if str(r.get("stat", "")).lower() == "rebounds" and not r.get("is_alt")), None)
+        main_ast = next((r for r in p_rows if str(r.get("stat", "")).lower() == "assists" and not r.get("is_alt")), None)
 
-                    # 3-leg if book quotes points 10+ and f_pts valid
-                    use_3leg = bool(b_name in books_pts and f_pts is not None and 0.04 <= f_pts <= 0.88)
+        combo_configs = [
+            (main_pts, main_reb, "nba_pts_reb_vs_pr", "Pts", "Reb"),
+            (main_pts, main_ast, "nba_pts_ast_vs_pa", "Pts", "Ast"),
+            (main_reb, main_ast, "nba_reb_ast_vs_ra", "Reb", "Ast"),
+        ]
 
-                    if use_3leg and r_pts10:
-                        b_pts = books_pts[b_name]
-                        am_pts = int(b_pts["over"])
-                        # Bivariate copula chained or 3D copula
-                        p_true = copula_joint([f_pts, f_reb, f_ast], arch.rho_true)
-                        pred = predict_book_sgp_odds(b_name, arch.key, [am_pts, am_reb, am_ast])
-                        q_pts = american_to_implied_prob(am_pts)
-                        q_reb = american_to_implied_prob(am_reb)
-                        q_ast = american_to_implied_prob(am_ast)
-                        p_naive = q_pts * q_reb * q_ast
-                        legs = [
-                            SgpLegCandidate(
-                                stat="points",
-                                line=float(r_pts10.get("line", 9.5)),
-                                side="OVER",
-                                book_american=am_pts,
-                                fair_prob=round(f_pts, 4),
-                                label=f"o{r_pts10.get('line', 9.5)} Pts",
-                                sid=b_pts.get("over_sid") or b_pts.get("sid"),
-                                market_id=b_pts.get("market_id"),
-                                selection_id=b_pts.get("selection_id"),
-                            ),
-                            SgpLegCandidate(
-                                stat="rebounds",
-                                line=float(r_reb10.get("line", 9.5)),
-                                side="OVER",
-                                book_american=am_reb,
-                                fair_prob=round(f_reb, 4),
-                                label=f"o{r_reb10.get('line', 9.5)} Reb",
-                                sid=b_reb.get("over_sid") or b_reb.get("sid"),
-                                market_id=b_reb.get("market_id"),
-                                selection_id=b_reb.get("selection_id"),
-                            ),
-                            SgpLegCandidate(
-                                stat="assists",
-                                line=float(r_ast10.get("line", 9.5)),
-                                side="OVER",
-                                book_american=am_ast,
-                                fair_prob=round(f_ast, 4),
-                                label=f"o{r_ast10.get('line', 9.5)} Ast",
-                                sid=b_ast.get("over_sid") or b_ast.get("sid"),
-                                market_id=b_ast.get("market_id"),
-                                selection_id=b_ast.get("selection_id"),
-                            ),
-                        ]
-                    else:
-                        p_true_2leg = copula_joint([f_reb, f_ast], arch.rho_true)
-                        # Conditional points factor: starter with 20+ pts line has ~95% conditional prob of 10+ pts
-                        p_cond_pts = min(0.98, max(0.85, 0.70 + 0.012 * main_pts_line))
-                        p_true = p_true_2leg * (p_cond_pts if direct_row else 1.0)
-                        pred = predict_book_sgp_odds(b_name, arch.key, [am_reb, am_ast])
-                        q_reb = american_to_implied_prob(am_reb)
-                        q_ast = american_to_implied_prob(am_ast)
-                        p_naive = q_reb * q_ast
-                        legs = [
-                            SgpLegCandidate(
-                                stat="rebounds",
-                                line=float(r_reb10.get("line", 9.5)),
-                                side="OVER",
-                                book_american=am_reb,
-                                fair_prob=round(f_reb, 4),
-                                label=f"o{r_reb10.get('line', 9.5)} Reb",
-                                sid=b_reb.get("over_sid") or b_reb.get("sid"),
-                                market_id=b_reb.get("market_id"),
-                                selection_id=b_reb.get("selection_id"),
-                            ),
-                            SgpLegCandidate(
-                                stat="assists",
-                                line=float(r_ast10.get("line", 9.5)),
-                                side="OVER",
-                                book_american=am_ast,
-                                fair_prob=round(f_ast, 4),
-                                label=f"o{r_ast10.get('line', 9.5)} Ast",
-                                sid=b_ast.get("over_sid") or b_ast.get("sid"),
-                                market_id=b_ast.get("market_id"),
-                                selection_id=b_ast.get("selection_id"),
-                            ),
-                        ]
+        if sp == "nba":
+            for r1, r2, arch_key, lbl1, lbl2 in combo_configs:
+                if not r1 or not r2:
+                    continue
+                line1, line2 = float(r1.get("line", 0.0)), float(r2.get("line", 0.0))
+                arch = SGP_ARCHETYPES[arch_key]
 
+                b1_map = {str(b.get("book", "")).lower(): b for b in r1.get("books", []) if b.get("over") is not None}
+                b2_map = {str(b.get("book", "")).lower(): b for b in r2.get("books", []) if b.get("over") is not None}
+                common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
+
+                for b_name in sorted(common):
+                    f1 = _fair_excl(r1, b_name)
+                    f2 = _fair_excl(r2, b_name)
+                    if f1 is None or f2 is None:
+                        continue
+                    p_true = copula_joint([f1, f2], arch.rho_true)
+                    b1 = b1_map[b_name]
+                    b2 = b2_map[b_name]
+                    am1, am2 = int(b1["over"]), int(b2["over"])
+                    q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
+                    p_naive = q1 * q2
+
+                    pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
                     ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                    if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
+                    if ev_pct < min_ev_pct:
                         continue
 
-                    vs_dir = None
-                    if dir_dec and dir_dec > 0.0:
-                        vs_dir = round(((pred.decimal / dir_dec) - 1.0) * 100.0, 1)
-
+                    legs = [
+                        SgpLegCandidate(
+                            stat=str(r1.get("stat")),
+                            line=line1,
+                            side="OVER",
+                            book_american=am1,
+                            fair_prob=round(f1, 4),
+                            label=f"o{line1} {lbl1}",
+                            sid=b1.get("over_sid") or b1.get("sid"),
+                        ),
+                        SgpLegCandidate(
+                            stat=str(r2.get("stat")),
+                            line=line2,
+                            side="OVER",
+                            book_american=am2,
+                            fair_prob=round(f2, 4),
+                            label=f"o{line2} {lbl2}",
+                            sid=b2.get("over_sid") or b2.get("sid"),
+                        ),
+                    ]
                     dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nba")
                     raw_candidates.append(
                         SgpCandidate(
@@ -405,213 +530,88 @@ def build_sgp_proxy_candidates(
                             ev_pct=round(ev_pct, 2),
                             team=team,
                             player_id=p_id,
-                            direct_market_label="Triple-Double" if dir_am else None,
-                            direct_best_american=dir_am,
-                            direct_best_book=dir_book,
-                            vs_direct_pct=vs_dir,
                             deeplink=dlink,
                         )
                     )
 
         # ----------------------------------------------------------------------
-        # Archetype 2: NBA Stat Combos (P+R, P+A, R+A)
-        # ----------------------------------------------------------------------
-        main_pts = next((r for r in p_rows if str(r.get("stat", "")).lower() == "points" and not r.get("is_alt")), None)
-        main_reb = next((r for r in p_rows if str(r.get("stat", "")).lower() == "rebounds" and not r.get("is_alt")), None)
-        main_ast = next((r for r in p_rows if str(r.get("stat", "")).lower() == "assists" and not r.get("is_alt")), None)
-
-        combo_configs = [
-            (main_pts, main_reb, "pr", ("pr", "points_rebounds"), "nba_pts_reb_vs_pr", "P+R PROXY", "Pts", "Reb"),
-            (main_pts, main_ast, "pa", ("pa", "points_assists"), "nba_pts_ast_vs_pa", "P+A PROXY", "Pts", "Ast"),
-            (main_reb, main_ast, "ra", ("ra", "rebounds_assists"), "nba_reb_ast_vs_ra", "R+A PROXY", "Reb", "Ast"),
-        ]
-
-        if sp == "nba":
-            for r1, r2, direct_code, direct_aliases, arch_key, arch_label, lbl1, lbl2 in combo_configs:
-                if not r1 or not r2:
-                    continue
-                line1, line2 = float(r1.get("line", 0.0)), float(r2.get("line", 0.0))
-                expected_sum = line1 + line2
-                direct_row = next(
-                    (r for r in p_rows if str(r.get("stat", "")).lower() in direct_aliases and abs(float(r.get("line", 0.0)) - expected_sum) <= 1.0),
-                    None,
-                )
-                f1 = _fair_prob_of_row(r1)
-                f2 = _fair_prob_of_row(r2)
-                if (
-                    f1 is not None and 0.04 <= f1 <= 0.88
-                    and f2 is not None and 0.04 <= f2 <= 0.88
-                    and (_n_books_backing(r1) >= 2 or r1.get("curve_fair_over") is not None)
-                    and (_n_books_backing(r2) >= 2 or r2.get("curve_fair_over") is not None)
-                ):
-                    arch = SGP_ARCHETYPES[arch_key]
-                    p_true = copula_joint([f1, f2], arch.rho_true)
-                    dir_book, dir_am, dir_dec = _best_price_on_row(direct_row, "OVER", allowed_books)
-
-                    b1_map = {str(b.get("book", "")).lower(): b for b in r1.get("books", []) if b.get("over") is not None}
-                    b2_map = {str(b.get("book", "")).lower(): b for b in r2.get("books", []) if b.get("over") is not None}
-                    common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
-
-                    for b_name in common:
-                        b1 = b1_map[b_name]
-                        b2 = b2_map[b_name]
-                        am1, am2 = int(b1["over"]), int(b2["over"])
-                        q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
-                        p_naive = q1 * q2
-
-                        pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
-                        ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                        if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
-                            continue
-
-                        vs_dir = None
-                        if dir_dec and dir_dec > 0.0:
-                            vs_dir = round(((pred.decimal / dir_dec) - 1.0) * 100.0, 1)
-
-                        legs = [
-                            SgpLegCandidate(
-                                stat=str(r1.get("stat")),
-                                line=line1,
-                                side="OVER",
-                                book_american=am1,
-                                fair_prob=round(f1, 4),
-                                label=f"o{line1} {lbl1}",
-                                sid=b1.get("over_sid") or b1.get("sid"),
-                            ),
-                            SgpLegCandidate(
-                                stat=str(r2.get("stat")),
-                                line=line2,
-                                side="OVER",
-                                book_american=am2,
-                                fair_prob=round(f2, 4),
-                                label=f"o{line2} {lbl2}",
-                                sid=b2.get("over_sid") or b2.get("sid"),
-                            ),
-                        ]
-                        dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nba")
-                        raw_candidates.append(
-                            SgpCandidate(
-                                archetype=arch.key,
-                                archetype_label=arch.label,
-                                sport="nba",
-                                player=player,
-                                player_norm=player_norm,
-                                game_key=game_key,
-                                commence=commence,
-                                away=away,
-                                home=home,
-                                book=b_name,
-                                legs=legs,
-                                naive_product_american=int(implied_to_american(p_naive)),
-                                est_sgp_dec=pred.decimal,
-                                est_sgp_american=pred.american,
-                                fair_joint_prob=round(p_true, 4),
-                                fair_joint_american=int(implied_to_american(p_true)),
-                                rho_true=arch.rho_true,
-                                rho_book=pred.rho_used,
-                                hold_book=pred.hold_used,
-                                ev_pct=round(ev_pct, 2),
-                                team=team,
-                                player_id=p_id,
-                                direct_market_label=f"{direct_code.upper()} o{direct_row.get('line')}" if dir_am and direct_row else None,
-                                direct_best_american=dir_am,
-                                direct_best_book=dir_book,
-                                vs_direct_pct=vs_dir,
-                                deeplink=dlink,
-                            )
-                        )
-
-        # ----------------------------------------------------------------------
-        # Archetype 3: NHL 1+ Goal + 1+ Assist vs 2+ Points
+        # Archetype 3: NHL 1+ Goal + 1+ Assist
+        #
+        # Not compared to Over 1.5 Points: two goals is 2+ points but is not "1+ goal AND 1+ assist", so the events differ.
         # ----------------------------------------------------------------------
         r_goal = stat_map.get(("goals", 0.5))
         r_ast = stat_map.get(("assists", 0.5))
-        r_pts2 = stat_map.get(("points", 1.5))
         if r_goal and r_ast and sp == "nhl":
             arch = SGP_ARCHETYPES["nhl_goal_ast_vs_pts"]
-            f_goal = _fair_prob_of_row(r_goal)
-            f_ast = _fair_prob_of_row(r_ast)
-            if (
-                f_goal is not None and 0.04 <= f_goal <= 0.88
-                and f_ast is not None and 0.04 <= f_ast <= 0.88
-                and (_n_books_backing(r_goal) >= 2 or r_goal.get("curve_fair_over") is not None)
-                and (_n_books_backing(r_ast) >= 2 or r_ast.get("curve_fair_over") is not None)
-            ):
+            books_g = {str(b.get("book", "")).lower(): b for b in r_goal.get("books", []) if b.get("over") is not None}
+            books_a = {str(b.get("book", "")).lower(): b for b in r_ast.get("books", []) if b.get("over") is not None}
+            common = set(books_g.keys()).intersection(books_a.keys()).intersection(allowed_books)
+
+            for b_name in sorted(common):
+                f_goal = _fair_excl(r_goal, b_name)
+                f_ast = _fair_excl(r_ast, b_name)
+                if f_goal is None or f_ast is None:
+                    continue
                 p_true = copula_joint([f_goal, f_ast], arch.rho_true)
-                dir_book, dir_am, dir_dec = _best_price_on_row(r_pts2, "OVER", allowed_books)
+                b_g = books_g[b_name]
+                b_a = books_a[b_name]
+                am_g, am_a = int(b_g["over"]), int(b_a["over"])
+                q_g, q_a = american_to_implied_prob(am_g), american_to_implied_prob(am_a)
+                p_naive = q_g * q_a
 
-                books_g = {str(b.get("book", "")).lower(): b for b in r_goal.get("books", []) if b.get("over") is not None}
-                books_a = {str(b.get("book", "")).lower(): b for b in r_ast.get("books", []) if b.get("over") is not None}
-                common = set(books_g.keys()).intersection(books_a.keys()).intersection(allowed_books)
+                pred = predict_book_sgp_odds(b_name, arch.key, [am_g, am_a])
+                ev_pct = (p_true * pred.decimal - 1.0) * 100.0
+                if ev_pct < min_ev_pct:
+                    continue
 
-                for b_name in common:
-                    b_g = books_g[b_name]
-                    b_a = books_a[b_name]
-                    am_g, am_a = int(b_g["over"]), int(b_a["over"])
-                    q_g, q_a = american_to_implied_prob(am_g), american_to_implied_prob(am_a)
-                    p_naive = q_g * q_a
-
-                    pred = predict_book_sgp_odds(b_name, arch.key, [am_g, am_a])
-                    ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                    if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
-                        continue
-
-                    vs_dir = None
-                    if dir_dec and dir_dec > 0.0:
-                        vs_dir = round(((pred.decimal / dir_dec) - 1.0) * 100.0, 1)
-
-                    legs = [
-                        SgpLegCandidate(
-                            stat="goals",
-                            line=0.5,
-                            side="OVER",
-                            book_american=am_g,
-                            fair_prob=round(f_goal, 4),
-                            label="1+ Goal",
-                            sid=b_g.get("over_sid") or b_g.get("sid"),
-                        ),
-                        SgpLegCandidate(
-                            stat="assists",
-                            line=0.5,
-                            side="OVER",
-                            book_american=am_a,
-                            fair_prob=round(f_ast, 4),
-                            label="1+ Assist",
-                            sid=b_a.get("over_sid") or b_a.get("sid"),
-                        ),
-                    ]
-                    dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nhl")
-                    raw_candidates.append(
-                        SgpCandidate(
-                            archetype=arch.key,
-                            archetype_label=arch.label,
-                            sport="nhl",
-                            player=player,
-                            player_norm=player_norm,
-                            game_key=game_key,
-                            commence=commence,
-                            away=away,
-                            home=home,
-                            book=b_name,
-                            legs=legs,
-                            naive_product_american=int(implied_to_american(p_naive)),
-                            est_sgp_dec=pred.decimal,
-                            est_sgp_american=pred.american,
-                            fair_joint_prob=round(p_true, 4),
-                            fair_joint_american=int(implied_to_american(p_true)),
-                            rho_true=arch.rho_true,
-                            rho_book=pred.rho_used,
-                            hold_book=pred.hold_used,
-                            ev_pct=round(ev_pct, 2),
-                            team=team,
-                            player_id=p_id,
-                            direct_market_label="Over 1.5 Points" if dir_am else None,
-                            direct_best_american=dir_am,
-                            direct_best_book=dir_book,
-                            vs_direct_pct=vs_dir,
-                            deeplink=dlink,
-                        )
+                legs = [
+                    SgpLegCandidate(
+                        stat="goals",
+                        line=0.5,
+                        side="OVER",
+                        book_american=am_g,
+                        fair_prob=round(f_goal, 4),
+                        label="1+ Goal",
+                        sid=b_g.get("over_sid") or b_g.get("sid"),
+                    ),
+                    SgpLegCandidate(
+                        stat="assists",
+                        line=0.5,
+                        side="OVER",
+                        book_american=am_a,
+                        fair_prob=round(f_ast, 4),
+                        label="1+ Assist",
+                        sid=b_a.get("over_sid") or b_a.get("sid"),
+                    ),
+                ]
+                dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nhl")
+                raw_candidates.append(
+                    SgpCandidate(
+                        archetype=arch.key,
+                        archetype_label=arch.label,
+                        sport="nhl",
+                        player=player,
+                        player_norm=player_norm,
+                        game_key=game_key,
+                        commence=commence,
+                        away=away,
+                        home=home,
+                        book=b_name,
+                        legs=legs,
+                        naive_product_american=int(implied_to_american(p_naive)),
+                        est_sgp_dec=pred.decimal,
+                        est_sgp_american=pred.american,
+                        fair_joint_prob=round(p_true, 4),
+                        fair_joint_american=int(implied_to_american(p_true)),
+                        rho_true=arch.rho_true,
+                        rho_book=pred.rho_used,
+                        hold_book=pred.hold_used,
+                        ev_pct=round(ev_pct, 2),
+                        team=team,
+                        player_id=p_id,
+                        deeplink=dlink,
                     )
+                )
 
     # --------------------------------------------------------------------------
     # Multi-Player Teammate Combos (NHL Linemates, NFL QB+WR, NBA Ast+Pts)
@@ -658,17 +658,21 @@ def build_sgp_proxy_candidates(
                     b2_map = {str(b.get("book", "")).lower(): b for b in s2["row"].get("books", []) if b.get("over") is not None}
                     common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
 
-                    for b_name in common:
+                    for b_name in sorted(common):
                         b1 = b1_map[b_name]
                         b2 = b2_map[b_name]
                         am1, am2 = int(b1["over"]), int(b2["over"])
                         q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
                         p_naive = q1 * q2
 
-                        p_true = copula_joint([s1["fair_prob"], s2["fair_prob"]], arch.rho_true)
+                        fa = _fair_excl(s1["row"], b_name)
+                        fb = _fair_excl(s2["row"], b_name)
+                        if fa is None or fb is None:
+                            continue
+                        p_true = copula_joint([fa, fb], arch.rho_true)
                         pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
                         ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                        if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
+                        if ev_pct < min_ev_pct:
                             continue
 
                         legs = [
@@ -677,7 +681,7 @@ def build_sgp_proxy_candidates(
                                 line=0.5,
                                 side="OVER",
                                 book_american=am1,
-                                fair_prob=round(s1["fair_prob"], 4),
+                                fair_prob=round(fa, 4),
                                 label=f"{s1['player']} 1+ Pt",
                                 sid=b1.get("over_sid") or b1.get("sid"),
                             ),
@@ -686,7 +690,7 @@ def build_sgp_proxy_candidates(
                                 line=0.5,
                                 side="OVER",
                                 book_american=am2,
-                                fair_prob=round(s2["fair_prob"], 4),
+                                fair_prob=round(fb, 4),
                                 label=f"{s2['player']} 1+ Pt",
                                 sid=b2.get("over_sid") or b2.get("sid"),
                             ),
@@ -760,17 +764,21 @@ def build_sgp_proxy_candidates(
                     b2_map = {str(b.get("book", "")).lower(): b for b in wr["row"].get("books", []) if b.get("over") is not None}
                     common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
 
-                    for b_name in common:
+                    for b_name in sorted(common):
                         b1 = b1_map[b_name]
                         b2 = b2_map[b_name]
                         am1, am2 = int(b1["over"]), int(b2["over"])
                         q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
                         p_naive = q1 * q2
 
-                        p_true = copula_joint([qb_row["fair_prob"], wr["fair_prob"]], arch.rho_true)
+                        fa = _fair_excl(qb_row["row"], b_name)
+                        fb = _fair_excl(wr["row"], b_name)
+                        if fa is None or fb is None:
+                            continue
+                        p_true = copula_joint([fa, fb], arch.rho_true)
                         pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
                         ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                        if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
+                        if ev_pct < min_ev_pct:
                             continue
 
                         legs = [
@@ -779,7 +787,7 @@ def build_sgp_proxy_candidates(
                                 line=qb_row["line"],
                                 side="OVER",
                                 book_american=am1,
-                                fair_prob=round(qb_row["fair_prob"], 4),
+                                fair_prob=round(fa, 4),
                                 label=f"{qb_row['player']} o{qb_row['line']} Pass Yds",
                                 sid=b1.get("over_sid") or b1.get("sid"),
                             ),
@@ -788,7 +796,7 @@ def build_sgp_proxy_candidates(
                                 line=wr["line"],
                                 side="OVER",
                                 book_american=am2,
-                                fair_prob=round(wr["fair_prob"], 4),
+                                fair_prob=round(fb, 4),
                                 label=f"{wr['player']} o{wr['line']} Rec Yds",
                                 sid=b2.get("over_sid") or b2.get("sid"),
                             ),
@@ -864,17 +872,21 @@ def build_sgp_proxy_candidates(
                     b2_map = {str(b.get("book", "")).lower(): b for b in scorer["row"].get("books", []) if b.get("over") is not None}
                     common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
 
-                    for b_name in common:
+                    for b_name in sorted(common):
                         b1 = b1_map[b_name]
                         b2 = b2_map[b_name]
                         am1, am2 = int(b1["over"]), int(b2["over"])
                         q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
                         p_naive = q1 * q2
 
-                        p_true = copula_joint([pg["fair_prob"], scorer["fair_prob"]], arch.rho_true)
+                        fa = _fair_excl(pg["row"], b_name)
+                        fb = _fair_excl(scorer["row"], b_name)
+                        if fa is None or fb is None:
+                            continue
+                        p_true = copula_joint([fa, fb], arch.rho_true)
                         pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
                         ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                        if ev_pct < min_ev_pct or ev_pct > MAX_CREDIBLE_EV_PCT:
+                        if ev_pct < min_ev_pct:
                             continue
 
                         legs = [
@@ -883,7 +895,7 @@ def build_sgp_proxy_candidates(
                                 line=pg["line"],
                                 side="OVER",
                                 book_american=am1,
-                                fair_prob=round(pg["fair_prob"], 4),
+                                fair_prob=round(fa, 4),
                                 label=f"{pg['player']} o{pg['line']} Ast",
                                 sid=b1.get("over_sid") or b1.get("sid"),
                             ),
@@ -892,7 +904,7 @@ def build_sgp_proxy_candidates(
                                 line=scorer["line"],
                                 side="OVER",
                                 book_american=am2,
-                                fair_prob=round(scorer["fair_prob"], 4),
+                                fair_prob=round(fb, 4),
                                 label=f"{scorer['player']} o{scorer['line']} Pts",
                                 sid=b2.get("over_sid") or b2.get("sid"),
                             ),
@@ -930,14 +942,17 @@ def build_sgp_proxy_candidates(
     # --------------------------------------------------------------------------
     # Deduplicate across sportsbooks for each (archetype, game_key, player_norm)
     # --------------------------------------------------------------------------
-    dedup_groups: Dict[Tuple[str, str, str], List[SgpCandidate]] = {}
+    # A 2-leg and a 3-leg ticket are different events, so the leg count is part of the key.
+    # Flagged (model-artifact) rows form their own group so a credible book's row never hides an extreme one.
+    dedup_groups: Dict[Tuple[str, str, str, int, bool], List[SgpCandidate]] = {}
     for c in raw_candidates:
-        k = (c.archetype, c.game_key, c.player_norm)
+        c.model_artifact = c.ev_pct > MAX_CREDIBLE_EV_PCT
+        k = (c.archetype, c.game_key, c.player_norm, len(c.legs), c.model_artifact)
         dedup_groups.setdefault(k, []).append(c)
 
     final_candidates: List[SgpCandidate] = []
     for grp in dedup_groups.values():
-        grp.sort(key=lambda x: x.ev_pct, reverse=True)
+        grp.sort(key=lambda x: -x.ev_pct)
         top = grp[0]
         if len(grp) > 1:
             top.runner_up_books = [
@@ -950,7 +965,8 @@ def build_sgp_proxy_candidates(
             ]
         final_candidates.append(top)
 
-    final_candidates.sort(key=lambda c: c.ev_pct, reverse=True)
+    # model-artifact rows are kept (flagged) but never lead the list
+    final_candidates.sort(key=lambda c: (c.model_artifact, -c.ev_pct))
     return final_candidates
 
 

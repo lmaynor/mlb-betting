@@ -15,6 +15,23 @@ INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:latest"
 SERVICE_URL="https://mlb-betting-628109313129.us-central1.run.app"
 
+# SKIP_TESTS=1 ships to production WITHOUT the test suite. Checked FIRST (before step 0 commits and pushes anything):
+#   * it must be acknowledged with I_KNOW_TESTS_ARE_SKIPPED=1 (a CI job that really means it sets both), and
+#   * it is refused outright on a dirty working tree on main -- that is an unreviewed, untested change going straight to prod.
+if [ "${SKIP_TESTS:-0}" = "1" ]; then
+  echo "################################################################################" >&2
+  echo "# WARNING: SKIP_TESTS=1 -- the test suite will NOT run before this production deploy." >&2
+  echo "################################################################################" >&2
+  if [ "$(git symbolic-ref --short -q HEAD 2>/dev/null)" = "main" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "REFUSING: SKIP_TESTS=1 on main with uncommitted changes. Commit/stash them (or deploy from a clean checkout) first." >&2
+    exit 1
+  fi
+  if [ "${I_KNOW_TESTS_ARE_SKIPPED:-0}" != "1" ]; then
+    echo "REFUSING: SKIP_TESTS=1 also needs I_KNOW_TESTS_ARE_SKIPPED=1 to confirm you mean it." >&2
+    exit 1
+  fi
+fi
+
 
 echo "==> 0. Stamp CONTEXT.md"
 python3 - << 'PYEOF'

@@ -90,3 +90,18 @@ def test_load_coefs_ignores_missing_file_and_null_stats(tmp_path):
     assert set(EA.load_calibration(str(p))) == {"rec_yds"}
     p.write_text("not json")
     assert EA.load_calibration(str(p)) == {}
+
+
+# -- weather multiplier: continuous in wind, caps match the documented +10% / -16% -----------------------------------------
+def test_weather_multiplier_is_continuous_in_wind_and_capped_as_documented():
+    from nfl.props.env_adjust import weather_multiplier as wm
+    assert wm("pass_yds", wind_mph=12.0) == 1.0 and wm("rush_yds", wind_mph=5.0) == 1.0
+    # no step at the old 15 mph gate: 14.99 and 15.0 differ by well under 0.1%
+    assert abs(wm("pass_yds", wind_mph=15.0) - wm("pass_yds", wind_mph=14.99)) < 1e-3
+    assert abs(wm("rush_yds", wind_mph=15.0) - wm("rush_yds", wind_mph=14.99)) < 1e-3
+    # monotone, and saturating at 20 mph of excess (32 mph wind) at exactly -16% / +10%
+    pass_curve = [wm("pass_yds", wind_mph=w) for w in range(10, 45)]
+    assert all(a >= b for a, b in zip(pass_curve, pass_curve[1:]))
+    assert wm("pass_yds", wind_mph=32.0) == wm("pass_yds", wind_mph=60.0) == pytest.approx(0.84, abs=1e-4)
+    assert wm("rush_yds", wind_mph=32.0) == wm("rush_yds", wind_mph=60.0) == pytest.approx(1.10, abs=1e-4)
+    assert wm("pass_yds", wind_mph=40.0, roof="dome") == 1.0 and wm("pass_yds", wind_mph=None) == 1.0

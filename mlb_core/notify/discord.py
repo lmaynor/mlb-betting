@@ -65,6 +65,9 @@ _SYSTEM_COLORS = {
 _EXTRA_RECAP_SYSTEMS = ["EV"]
 _EXTRA_RECAP_ICONS = {"EV": "📡"}   # matches the +EV alert embeds' own title emoji
 
+# NFL / NBA / NHL alert-bet records, rendered after the MLB systems (post_all_systems_summary sport_stats=).
+_WINTER_RECAP_ICONS = {"NFL": "🏈", "NBA": "🏀", "NHL": "🏒"}
+
 _DEFAULT_COLOR = 0x99AAB5  # grey
 
 # Abbrev -> sportsbook-canonical nickname
@@ -503,8 +506,13 @@ def post_all_systems_summary(
     systems_stats: dict,
     run_date: str = None,
     settle_date: str = None,
+    sport_stats: dict = None,
 ) -> None:
-    """Post a daily recap embed after settlement (#daily-recap)."""
+    """Post a daily recap embed after settlement (#daily-recap).
+
+    systems_stats: MLB per-system season stats. sport_stats: NFL / NBA / NHL season stats keyed by sport code ("NFL", ...);
+    those bets are paper, unvalidated alerts (all one 'EV' system), so each sport gets one field and they all count toward
+    the combined P&L."""
     webhook_url = webhook_for("recap")
     if not webhook_url:
         logger.warning("No Discord webhook configured for summary.")
@@ -512,22 +520,15 @@ def post_all_systems_summary(
 
     run_date = run_date or settle_date or date.today().isoformat()
 
+    sport_stats = sport_stats or {}
     valid_stats = {k: v for k, v in systems_stats.items() if v}
+    valid_stats.update({f"sport:{k}": v for k, v in sport_stats.items() if v})
     total_pnl   = sum(s.get("pnl", 0) for s in valid_stats.values())
     pnl_emoji   = "📈" if total_pnl >= 0 else "📉"
 
-    fields = []
-    for system in CANONICAL_ORDER + _EXTRA_RECAP_SYSTEMS:
-        stats = systems_stats.get(system)
-        icon  = _EXTRA_RECAP_ICONS.get(system) or (SYSTEMS[system].icon if system in SYSTEMS else "⚪")
+    def _field(name: str, stats) -> dict:
         if not stats:
-            fields.append({
-                "name":   f"{icon} {system}",
-                "value":  "_No settled bets yet_",
-                "inline": True,
-            })
-            continue
-
+            return {"name": name, "value": "_No settled bets yet_", "inline": True}
         wins    = stats.get("wins", 0)
         bets    = stats.get("bets", 0)
         hit     = stats.get("hit_rate", 0)
@@ -545,7 +546,14 @@ def post_all_systems_summary(
             f"{pnl_sign} **${pnl:+.2f}** | ROI {roi:+.1f}%\n"
             f"Avg edge {edge_str}{pending_str}"
         )
-        fields.append({"name": f"{icon} {system}", "value": value, "inline": True})
+        return {"name": name, "value": value, "inline": True}
+
+    fields = []
+    for system in CANONICAL_ORDER + _EXTRA_RECAP_SYSTEMS:
+        icon = _EXTRA_RECAP_ICONS.get(system) or (SYSTEMS[system].icon if system in SYSTEMS else "⚪")
+        fields.append(_field(f"{icon} {system}", systems_stats.get(system)))
+    for sport_code in ("NFL", "NBA", "NHL"):
+        fields.append(_field(f"{_WINTER_RECAP_ICONS[sport_code]} {sport_code} props (unvalidated)", sport_stats.get(sport_code)))
 
     if len(fields) % 3 == 2:
         fields.append({"name": "\u200b", "value": "\u200b", "inline": True})

@@ -52,33 +52,22 @@ def _require_db_url() -> str:
 
 
 def _off_season() -> bool:
-    """True post-World Series through March 19 (resumes March 20, 4 days before Opening Day).
+    """True from the offseason start (Nov 5 by default, MLB_OFFSEASON_START=MM-DD overrides) through March 19 (resumes March 20,
+    4 days before Opening Day). Logic lives in mlb_core.config.is_mlb_offseason; "today" is the America/Chicago date.
 
     Scheduler jobs fire year-round; the heavy handlers no-op with 202 in this
     window instead of fetching odds / building features for an empty slate.
     Override with MLB_FORCE_RUN=1 (manual backfills, testing).
     """
-    if os.environ.get("MLB_FORCE_RUN") == "1":
-        return False
-    today = datetime.now(_CT).date()
-    # Off-season:
-    # - Full months: Nov, Dec, Jan, Feb
-    # - Late Oct: Oct 29 through Oct 31 (post-World Series)
-    # - Early March: March 1 through March 19 (resumes March 20)
-    if today.month in (11, 12, 1, 2):
-        return True
-    if today.month == 10 and today.day >= 29:
-        return True
-    if today.month == 3 and today.day < 20:
-        return True
-    return False
+    from mlb_core.config import is_mlb_offseason
+    return is_mlb_offseason(datetime.now(_CT).date())
 
 
 def _off_season_response():
     return jsonify({
         "status": "skipped",
         "reason": "off_season",
-        "message": "MLB off-season (Oct 29 - Mar 19). Resumes March 20. Set MLB_FORCE_RUN=1 to override.",
+        "message": "MLB off-season (after the World Series, Nov 5 by default, through Mar 19). Resumes March 20. Set MLB_FORCE_RUN=1 to override.",
     }), 202
 
 
@@ -906,6 +895,7 @@ from mlb.runners.public_api import (
     get_clv_data, get_today_slate,
     get_ev_scanner_feed, get_analytics_deep_dive, get_multisport_cockpit, get_sport_projections, get_odds_board,
     get_game_projections,
+    get_game_odds_board,
 )
 
 SITE_API_KEY = os.environ.get("SITE_API_KEY", "")
@@ -1260,6 +1250,32 @@ def public_game_projections():
         logger.exception("public_game_projections failed")
         return jsonify({"error": str(exc)}), 500
 
+
+
+@app.route("/api/public/games/odds", methods=["GET", "OPTIONS"])
+def public_game_odds_board():
+    """Per-book NBA / NHL game-line price board (moneyline, spread, total), read from the precomputed GCS file."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = get_game_odds_board(
+            request.args.get("sport", ""),
+            day=request.args.get("day") or None,
+            market=request.args.get("market") or None,
+            limit=int(request.args.get("limit", 1500)),
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=60"
+        return resp
+    except ValueError as exc:      # unknown sport / market / bad limit / bad day
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_game_odds_board failed")
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/public/analytics/deep-dive", methods=["GET", "OPTIONS"])

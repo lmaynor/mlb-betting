@@ -8,8 +8,8 @@ Pinnacle never quotes in the BettingPros feed, so this is the only free sharp-cl
 Cost (verified 2026-10-14): 10 credits per CALL regardless of how many markets are listed, and each paged call
 (offset=) is billed again. The pool is SHARED with every other ParlayAPI consumer, so the run is metered:
   --max-credits   hard cap on credits spent by THIS run (checked before every call)
-  --floor         stop if the shared pool's x-requests-remaining would drop below this (default 2500, the same
-                  floor nba.odds.credit_ledger uses)
+  --floor         stop if the shared pool's x-requests-remaining would drop below this (default nba.config.PARLAY_RESERVE_FLOOR,
+                  the same floor nba.odds.credit_ledger and the MLB snapshot job use)
 
 Rows are PER (book, player, market, line): no teams, no event id -- join to box scores on (game_date, player).
 `commence_time` is local (-04:00). DFS books are excluded server-side (their rows carry null odds).
@@ -34,13 +34,13 @@ from datetime import date, datetime, timedelta, timezone
 import requests
 
 from mlb_core import storage
-from nba.config import PARLAY_API_BASE
+from nba.config import PARLAY_API_BASE, PARLAY_RESERVE_FLOOR
 
 logger = logging.getLogger(__name__)
 
 PAGE_LIMIT = 5000        # the archive's own per-leg row cap (x-archive-row-cap)
 CALL_COST = 10           # credits per call, observed in x-requests-last
-DEFAULT_FLOOR = 2500
+DEFAULT_FLOOR = PARLAY_RESERVE_FLOOR     # the ONE shared-pool floor (nba.config), same as the ledger
 HISTORY_DAYS = 7         # Starter tier: 168h
 
 # Real books + exchanges only. DFS (prizepicks/underdog/sleeper/pick6/betr/...) rows have null odds.

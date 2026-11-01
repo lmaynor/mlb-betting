@@ -12,7 +12,9 @@ describe('PWA manifest', () => {
     const data = manifest()
     expect(data.id).toBe('/')
     expect(data.display).toBe('standalone')
-    expect(data.display_override).toEqual(['window-controls-overlay', 'standalone', 'minimal-ui'])
+    // window-controls-overlay needs titlebar-area-* layout in the nav, which does not exist: it must not be requested
+    expect(data.display_override).toEqual(['standalone', 'minimal-ui'])
+    expect(data.display_override).not.toContain('window-controls-overlay')
     expect(data.start_url).toBe('/ev?source=pwa')
     expect(data.categories).toEqual(['sports', 'finance', 'utilities'])
     expect(data.shortcuts).toBeDefined()
@@ -24,11 +26,15 @@ describe('PWA manifest', () => {
     expect(shortcutUrls).toContain('/edge')
     expect(shortcutUrls).toContain('/results')
 
-    expect(data.screenshots).toBeDefined()
-    expect(data.screenshots?.length).toBe(2)
-    const formFactors = data.screenshots?.map(s => s.form_factor)
-    expect(formFactors).toContain('wide')
-    expect(formFactors).toContain('narrow')
+    // only the wide 2000x1056 capture exists: a 'narrow' entry would reuse the same landscape image
+    expect(data.screenshots?.map(s => s.form_factor)).toEqual(['wide'])
+    expect(data.screenshots?.every(s => s.sizes === '2000x1056')).toBe(true)
+  })
+
+  it('offers maskable variants of the 192 and 512 icons alongside the regular ones', () => {
+    const icons = manifest().icons ?? []
+    expect(icons.filter(i => i.purpose === 'maskable').map(i => i.sizes).sort()).toEqual(['192x192', '512x512'])
+    expect(icons.filter(i => !i.purpose && i.type === 'image/png')).toHaveLength(2)
   })
 })
 
@@ -73,6 +79,15 @@ describe('detectInstallPlatform helper', () => {
   it('returns ios for iOS devices without deferred prompt', () => {
     expect(detectInstallPlatform('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15', false)).toBe('ios')
     expect(detectInstallPlatform('Mozilla/5.0 (iPad; CPU OS 16_5 like Mac OS X) AppleWebKit/605.1.15', false)).toBe('ios')
+  })
+
+  it('classifies iPadOS (Macintosh UA with a touch screen) as ios, and a real Mac as macos_safari', () => {
+    const ipadOs = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15'
+    expect(detectInstallPlatform(ipadOs, false, 5)).toBe('ios')
+    expect(detectInstallPlatform(ipadOs, false, 0)).toBe('macos_safari')
+    expect(detectInstallPlatform(ipadOs, false)).toBe('macos_safari')
+    // a deferred prompt (Chromium) still wins over everything
+    expect(detectInstallPlatform(ipadOs, true, 5)).toBe('chromium')
   })
 
   it('returns macos_safari for macOS Safari without Chrome or Edge', () => {
@@ -221,5 +236,59 @@ describe('<InstallAppButton /> component', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('the dialog has an accessible name, moves focus in, traps Tab and returns focus to the button on close', () => {
+    window.matchMedia = jest.fn().mockImplementation(() => ({
+      matches: false, media: '', onchange: null, addListener: jest.fn(), removeListener: jest.fn(),
+      addEventListener: jest.fn(), removeEventListener: jest.fn(), dispatchEvent: jest.fn(),
+    }))
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+      configurable: true,
+    })
+
+    render(<InstallAppButton />)
+    const opener = screen.getByRole('button', { name: /install beezy\.fyi web app/i })
+    opener.focus()
+    fireEvent.click(opener)
+
+    const dialog = screen.getByRole('dialog', { name: /install beezy\.fyi/i })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    const closeX = screen.getByRole('button', { name: 'Close install modal' })
+    const closeBtn = screen.getByRole('button', { name: 'Close' })
+    expect(dialog).toContainElement(document.activeElement as HTMLElement) // focus moved into the dialog
+    expect(document.activeElement).toBe(closeX)
+
+    // Tab from the last control wraps to the first; Shift+Tab from the first wraps to the last
+    closeBtn.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(closeX)
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(closeBtn)
+
+    fireEvent.click(closeBtn)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(opener) // focus restored
+  })
+
+  it('an iPad reporting a Macintosh UA gets the Share-sheet (iOS) instructions', () => {
+    window.matchMedia = jest.fn().mockImplementation(() => ({
+      matches: false, media: '', onchange: null, addListener: jest.fn(), removeListener: jest.fn(),
+      addEventListener: jest.fn(), removeEventListener: jest.fn(), dispatchEvent: jest.fn(),
+    }))
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+      configurable: true,
+    })
+    Object.defineProperty(navigator, 'maxTouchPoints', { value: 5, configurable: true })
+    try {
+      render(<InstallAppButton />)
+      fireEvent.click(screen.getByRole('button', { name: /install beezy\.fyi web app/i }))
+      expect(screen.getByText(/Add to Home Screen/i)).toBeInTheDocument()
+      expect(screen.queryByText(/Add to Dock/i)).not.toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'maxTouchPoints', { value: 0, configurable: true })
+    }
   })
 })

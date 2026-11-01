@@ -9,8 +9,14 @@
 # DFS apps and Kalshi are dropped) which ev.daily_projections.load_events unions with ParlayAPI and BettingPros lines.
 # BestBook is a free cookie-authenticated feed: this spends no ParlayAPI credits.
 #
+# STATUS: LIVE (owner decision 2026-11-01: an additional line source, no gate). The client reads a third party's private,
+# cookie-authenticated stream and no ToS / licensing review was done (docs/solutions/conventions/bestbook-needs-tos-decision.md).
+# Kill switches: `PAUSE=1` below pauses every scheduler; BESTBOOK_DISABLED=1 on the job makes the runner exit without crawling.
+# Schedulers are created ENABLED (and `RESUME=1` re-enables them after a PAUSE).
+#
 # Usage:
 #   PROJECT_ID=concrete-crow-445205-m4 CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_bestbook_live.sh
+#   RESUME=1 PROJECT_ID=... bash deploy/setup_bestbook_live.sh    # re-enable every bb-live-* scheduler after a PAUSE
 #   PAUSE=1 PROJECT_ID=... bash deploy/setup_bestbook_live.sh     # pause every bb-live-* scheduler
 #   Test one run now:  gcloud run jobs execute bb-live-nba --region=us-central1 --wait
 set -euo pipefail
@@ -30,6 +36,13 @@ ROWS=(
   "bb-live-nfl|nfl|sun-rest|20 0-5,13-23 * 9-12,1-2 0"
   "bb-live-nba|nba|hourly|20 * * 10-12,1-6 *"
 )
+
+if [ "${RESUME:-0}" = "1" ]; then
+  for s in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep '^bb-live-'); do
+    gcloud scheduler jobs resume "$s" --location="$REGION" --project="$PROJECT_ID" --quiet
+  done
+  echo "All bb-live-* schedulers resumed."; exit 0
+fi
 
 if [ "${PAUSE:-0}" = "1" ]; then
   for s in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep '^bb-live-'); do
@@ -62,13 +75,19 @@ for row in "${ROWS[@]}"; do
       echo "Creating Cloud Run job $JOB..."
       gcloud run jobs create "$JOB" "${FLAGS[@]}" --project="$PROJECT_ID" --quiet
     fi
+    # scheduler-invoker must hold run.invoker ON THE JOB or every scheduler firing is PERMISSION_DENIED (code 7); see
+    # docs/solutions/runtime-errors/scheduler-invoker-needs-run-invoker-per-job.md. Idempotent.
+    gcloud run jobs add-iam-policy-binding "$JOB" --region="$REGION" --project="$PROJECT_ID" \
+      --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
     JOBS_DONE="${JOBS_DONE}${JOB} "
   fi
 
   SCHED="${JOB}-${TAG}"
-  URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${JOB}:run"
+  URI="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB}:run"
   SCHED_FLAGS=(--schedule="$CRON" --time-zone="America/Chicago" --uri="$URI" --http-method="POST"
-               --oauth-service-account-email="$SCHED_SA" --location="$REGION" --project="$PROJECT_ID"
+               --oauth-service-account-email="$SCHED_SA"
+               --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
+               --location="$REGION" --project="$PROJECT_ID"
                --description="Trigger $JOB ($TAG) -> Odds/bestbook_live/$SPORT/latest.json")
   if gcloud scheduler jobs describe "$SCHED" --location="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     echo "Updating Cloud Scheduler $SCHED ($CRON)..."
@@ -79,4 +98,4 @@ for row in "${ROWS[@]}"; do
   fi
 done
 
-echo "BestBook live jobs and schedulers provisioned."
+echo "BestBook live jobs and schedulers provisioned (enabled)."

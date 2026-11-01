@@ -65,8 +65,9 @@ Built and running (branch feat/multisport-ev-sweep):
   settled result via `... pnl`). DEMO = identical IOC order to the Kalshi demo exchange. PROBED: demo NFL-prop books
   are ~empty (receiving yds 29 of 1,000 two-sided; passing/rushing 0), so demo orders will mostly NO_FILL --
   mechanics only. One position per (game, player, stat) per day.
-- Credit use: ~76/cycle with 15 games; run capped at 9,000 credits. Account showed ~19.3k remaining (the 100k plan
-  was not yet applied when checked).
+- Credit use: ~76/cycle with 15 games; run capped at 9,000 credits. The 100k/month plan is APPLIED (confirmed
+  2026-11; an earlier ~19.3k balance reading predates the upgrade). The sweep IS ledger-metered (2026-11-01): its monthly budget
+  is `nba.config.NFL_SWEEP_MONTHLY_BUDGET` (10k, ledger key `NFL_SWEEP_LEDGER_SPORT`, cumulative cap) and `--max-credits` caps a single run.
 
 ARCHITECTURE NOTE (found live 2026-10-04): Kalshi's CDN blocks SOME Cloud Run egress IPs persistently (HTML 403,
 any User-Agent; one execution got 200s, the next 403s). So the cloud job ALWAYS publishes `consensus.json`
@@ -175,20 +176,24 @@ Differences from the MLB executor that matter:
   NFL inactives ~90 min pre-kick; NHL confirmed starting goalie (a goalie swap moves a game several
   points); NBA late scratches / injury reports. Adapters expose `news_window_min`.
 
-### Credit budget (ParlayAPI, 100k/month; ESTIMATES until s7 probe confirms alt-line costs)
-| Use | Assumption | ~credits/mo |
+### Credit budget (ParlayAPI, 100k/month, applied; the numbers live in `nba/config.py`, pinned by `tests/test_parlay_budget.py`)
+| Use | Where it is enforced | ~credits/mo |
 |---|---|---|
-| Game lines h2h+spreads+totals, 3 sports | 3 credits/poll/sport, 10-min poll, ~10 active h/day | 16k |
-| ~~Alt spreads/totals~~ | PROBED 2026-10-04: ParlayAPI has NO alternate game-line markets (s3.1) | 0 |
-| MLB (existing guard ceiling 19.5k; postseason then offseason) | | 20k |
-| Props v2 + single-event refreshes before a decision | | 30k |
-| Reserve | | ~12k |
-Hard rules (from the 2026-08-27 incident): every ParlayAPI caller goes through ONE credit ledger
-(extend OddsAccum/{sport}/_credits/{month}.json), per-sport allowances with the existing pace guard
-(`PARLAY_CREDIT_CEILING` must be raised from 19.5k to ~97k deliberately, not by accident), a weekly
-reconciliation of the ledger against the API's own `x-requests-remaining` header, and
-`gcloud scheduler jobs list` checked for stray jobs after any new schedule. Out of credits -> degrade
-to REJECT, never to stale data.
+| NBA accumulators (props + game lines share one ledger) | `nba.odds.credit_ledger` (`ODDS_BANK_DEFAULT_BUDGET`) | 45k |
+| NHL accumulators | same | 40k |
+| NFL accumulator ledger (no banker job today; test budget) | same | 1.5k |
+| NFL props sweep (Sink A/B + Kalshi join) | NOT ledgered: planning figure + per-run `--max-credits` | 10k |
+| MLB snapshot job (paused Nov-Mar 19; NOT in the winter total) | `mlb.runners.snapshot_odds` (`MLB_SNAPSHOT_CEILING`) | 19.5k when active |
+| Historical closing-line pulls | `nba.odds.parlay_historical` (planning figure) | 3k |
+| **Committed total (winter)** | asserted: live sports >= 95k, total + floor <= 100k | **99.5k** (95k live + 4.5k test) |
+| Reserve floor (`PARLAY_RESERVE_FLOOR`) | stops every metered caller | 0.5k |
+(When MLB resumes Mar 20, NBA 45k + NHL 40k + MLB 19.5k = 104.5k does not fit: re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` first.)
+(The earlier table summed the per-sport ledgers to 99.5k and left the MLB 19.5k ceiling on top, ~119k against a 100k plan.)
+Hard rules (from the 2026-08-27 incident): every ParlayAPI caller goes through the shared budgets above, the reserve floor on the
+API's own `x-requests-remaining` header stops every metered caller (ledger, MLB snapshot, historical puller), the ledger write is
+generation-match safe when two jobs of one sport overlap, a weekly reconciliation of the ledgers against that header is still
+owed, and `gcloud scheduler jobs list` is checked for stray jobs after any new schedule. Out of credits -> degrade to REJECT,
+never to stale data.
 
 ---
 
@@ -306,9 +311,8 @@ NFL/NHL: to be chosen, unverified) is added as a disagreement alarm, as in MLB d
 
 ## 7. Open questions
 1. ~~ParlayAPI coverage probe~~ -- DONE 2026-10-04 (s3.1). Findings: keys confirmed; no alt game
-   lines; NFL deep (14 books), NHL thin (6), NBA preseason very thin. **The account still reports
-   ~19.3k credits remaining, i.e. the 100k upgrade is NOT applied yet** -- apply it before the sweep
-   runs (MLB's 19.5k pace ceiling alone consumes the old pool). Rate limits at the 100k tier unknown.
+   lines; NFL deep (14 books), NHL thin (6), NBA preseason very thin. The 100k upgrade IS applied
+   (confirmed 2026-11; the ~19.3k balance seen on 2026-10-04 predates it). Rate limits at the 100k tier unknown.
 2. ~~Kalshi rulebooks per series~~ -- READ and enforced (s3.3). Remaining: each reference BOOK's own
    rules (NHL totals shootout treatment; NFL tie handling at DK/FD/etc.) -- needs the books' rulebooks.
 3. Do you want Sink A (Discord +EV alerts at sportsbook prices for the three sports) in v1? It shares

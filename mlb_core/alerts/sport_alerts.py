@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from mlb_core.alerts.beezy_score import beezy_score, tier
 from mlb_core.alerts.discord_routes import (
@@ -168,8 +171,9 @@ def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
     # Log gated official alerts into the unified bets ledger
     try:
         log_sport_alert_bets(sport, rows)
-    except Exception as e:
-        log.warning("log_sport_alert_bets(%s) error: %r", sport, e)
+    except Exception:                                                                    # noqa: BLE001
+        # a ledger failure must not stop the member post, but it must never be silent either
+        log.exception("log_sport_alert_bets(%s) failed; %d alert(s) were NOT recorded in the bets ledger", sport, len(rows))
     shown = rows[:MAX_ALERTS]
     embeds = [alert_embed(r) for r in shown]
     if bot_configured():
@@ -195,35 +199,103 @@ def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
         return False
 
 
+_ET = ZoneInfo("America/New_York")
+_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _in_cloud_run() -> bool:
+    """True inside a Cloud Run service/job (K_SERVICE / CLOUD_RUN_JOB are set by the platform)."""
+    return bool(os.environ.get("K_SERVICE") or os.environ.get("CLOUD_RUN_JOB"))
+
+
+def alert_game_day(r: dict) -> str:
+    """The game's LOCAL (America/New_York) calendar day for an alert row, 'YYYY-MM-DD'.
+
+    The sweeps build game_key as '<sport>:<ET day>:<AWAY>@<HOME>', which is exactly the day the NHL schedule, the ESPN
+    scoreboard and the nflverse schedule are keyed by, so it wins. Otherwise the UTC `commence` timestamp is converted to ET
+    (an 8pm ET puck drop is already the NEXT day in UTC, so commence[:10] is wrong for every evening game)."""
+    explicit = str(r.get("game_date") or "")
+    if _DAY_RE.match(explicit):
+        return explicit
+    parts = str(r.get("game_key") or "").split(":")
+    if len(parts) == 3 and _DAY_RE.match(parts[1]):
+        return parts[1]
+    for k in ("commence", "ts"):
+        raw = str(r.get(k) or "").strip()
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_ET).date().isoformat()
+    return datetime.now(_ET).date().isoformat()
+
+
+def _teams_of(r: dict) -> tuple:
+    """(away, home) from the row, falling back to the '<sport>:<day>:<AWAY>@<HOME>' game_key."""
+    away, home = r.get("away") or r.get("away_team"), r.get("home") or r.get("home_team")
+    if (not away or not home) and "@" in str(r.get("game_key") or ""):
+        a, h = str(r["game_key"]).rsplit(":", 1)[-1].split("@", 1)
+        away, home = away or a, home or h
+    return away, home
+
+
+def _player_id(r: dict):
+    """League player id when the sweep's roster resolver identified the player (player_norm is then 'id<ID>')."""
+    pid = r.get("player_id")
+    if pid is None or str(pid) == "" or str(pid) == "nan":
+        pn = str(r.get("player_norm") or "")
+        pid = pn[2:] if pn.startswith("id") and len(pn) > 2 else None
+    return pid
+
+
 def log_sport_alert_bets(sport: str, rows: list[dict]) -> int:
-    """Log gated sport alerts to the unified bets table so they enter the official public results record."""
+    """Log gated sport alerts to the unified bets table so they enter the official public results record.
+
+    Refuses (ERROR + return 0) inside Cloud Run when no database URL is configured: the sqlite fallback is a throwaway file on
+    the container's ephemeral disk, so those rows would silently vanish. Alerts with no real price are skipped (never a
+    default -110). The settlement job needs the player id and the ET game day, so both go into the row/notes."""
     if not rows:
         return 0
-    from datetime import date
     import json
     from mlb_core.tracking import BetTracker
     from mlb_core.odds.utils import american_to_implied_prob
-    db_path = os.environ.get("MLB_DB_URL") or os.environ.get("DB_URL") or "EV_Alerts/data/ev_bets.db"
+    db_path = os.environ.get("MLB_DB_URL") or os.environ.get("DB_URL")
+    if not db_path:
+        if _in_cloud_run():
+            log.error("log_sport_alert_bets(%s): MLB_DB_URL is not set in a Cloud Run job; refusing to write %d alert(s) to an "
+                      "ephemeral sqlite file (mount the MLB_DB_URL secret and the Cloud SQL instance on this job)",
+                      sport, len(rows))
+            return 0
+        db_path = "EV_Alerts/data/ev_bets.db"      # local development only
     tracker = BetTracker(db_path, system="EV", sport=sport)
     logged = 0
     for r in rows:
         try:
-            player = r.get("player") or r.get("player_name") or f"{r.get('away', '')} @ {r.get('home', '')}"
+            away, home = _teams_of(r)
+            player = r.get("player") or r.get("player_name") or f"{away or ''} @ {home or ''}"
             stat = r.get("stat") or "stat"
             side = str(r.get("side") or "over").lower()
             point = r.get("point")
             bet_type = f"{stat}_{side}_{point}" if point is not None else f"{stat}_{side}"
-            commence = r.get("commence") or r.get("ts") or ""
-            game_date = str(r.get("game_date") or (commence[:10] if len(commence) >= 10 else None) or date.today().isoformat())
-            odds = int(r.get("american") or r.get("odds") or -110)
+            raw_odds = r.get("american") if r.get("american") is not None else r.get("odds")
+            try:
+                odds = int(raw_odds)
+            except (TypeError, ValueError):
+                log.warning("skipping %s alert for %s: no real price on the row (not inventing one)", sport, player)
+                continue
             mkt_prob = american_to_implied_prob(odds)
-            fair_prob = float(r.get("fair") or r.get("consensus_fair") or ((1.0 / r["fair_decimal"]) if r.get("fair_decimal") else (mkt_prob + float(r.get("ev", 0.0)))))
+            fair_prob = float(r.get("fair") or r.get("consensus_fair") or r.get("p_fair")
+                              or ((1.0 / r["fair_decimal"]) if r.get("fair_decimal") else (mkt_prob + float(r.get("ev", 0.0)))))
             edge = float(r.get("ev") or (fair_prob - mkt_prob))
             bid = tracker.log_bet(
-                game_date=game_date,
+                game_date=alert_game_day(r),
                 player=player,
-                away_team=r.get("away") or r.get("away_team"),
-                home_team=r.get("home") or r.get("home_team"),
+                away_team=away,
+                home_team=home,
                 bet_type=bet_type,
                 model_prob=fair_prob,
                 market_prob=mkt_prob,
@@ -234,12 +306,13 @@ def log_sport_alert_bets(sport: str, rows: list[dict]) -> int:
                 paper=True,
                 book=r.get("book"),
                 proj_mean=float(r["proj_mean"]) if r.get("proj_mean") is not None else None,
-                notes=json.dumps({"stat": stat, "point": point, "side": side, "n_books": r.get("n_books")}),
+                notes=json.dumps({"stat": stat, "point": point, "side": side, "n_books": r.get("n_books"),
+                                  "player_id": _player_id(r), "game_key": r.get("game_key")}, default=str),
             )
             if bid > 0:
                 logged += 1
-        except Exception as e:
-            log.warning("failed to log %s bet: %r", sport, e)
+        except Exception:                                                                # noqa: BLE001
+            log.exception("failed to log %s bet", sport)
     if logged:
         log.info("logged %d %s bet(s) to public bets table", logged, sport)
     return logged

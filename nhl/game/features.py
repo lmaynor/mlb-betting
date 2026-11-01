@@ -42,6 +42,18 @@ LEAGUE_BASELINES: Dict[str, float] = {
 
 FEATURE_METRICS = list(LEAGUE_BASELINES.keys())
 
+SEASON_CARRYOVER = 0.5       # weight of the prior-season profile on a team with no/few games this season
+
+
+def _season_of(date_str: Any) -> int:
+    """NHL season (start year) of a calendar date: Aug-Dec -> that year, Jan-Jul -> year - 1."""
+    d = str(date_str)[:10]
+    try:
+        y, m = int(d[:4]), int(d[5:7])
+    except ValueError:
+        return -1
+    return y if m >= 8 else y - 1
+
 
 @dataclass
 class TeamGameStats:
@@ -287,6 +299,8 @@ class FeatureStore:
         # Sort chronologically
         games = sorted(games, key=lambda g: g.game_date)
         n = len(games)
+        cur_season = _season_of(before_date)
+        n_season = sum(1 for g in games if _season_of(g.game_date) == cur_season)
         weights = np.array([0.5 ** ((n - 1 - i) / halflife) for i in range(n)], dtype=float)
         w_sum = float(np.sum(weights))
 
@@ -295,8 +309,11 @@ class FeatureStore:
             vals = np.array([getattr(g, m) for g in games], dtype=float)
             ewm_val = float(np.sum(weights * vals) / w_sum) if w_sum > 0 else LEAGUE_BASELINES[m]
 
-            # Prior-season shrinkage during first 12 games of a season
-            shrinkage = 0.75 ** min(n, 12)
+            # Shrink on games played THIS season (career n never shrinks a season opener); prior-season games
+            # still carry over with weight SEASON_CARRYOVER at a season start.
+            shrinkage = 0.75 ** min(n_season, 12)
+            if n_season < n:
+                shrinkage *= (1.0 - SEASON_CARRYOVER)
             profile[m] = float((1.0 - shrinkage) * ewm_val + shrinkage * LEAGUE_BASELINES[m])
 
         return profile

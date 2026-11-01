@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 import os
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # -- GCS (Cloud Run) vs local (Windows) ---------------------------------------
 GCS_BUCKET = os.environ.get("MLB_GCS_BUCKET", "") or os.environ.get("GCS_BUCKET", "")
@@ -21,21 +22,36 @@ SEASON_END_MONTH   = 11
 TIMEZONE           = "America/New_York"
 
 
-def is_mlb_offseason(target_date: Optional[date] = None) -> bool:
-    """True post-World Series through March 19 (resumes March 20, 4 days before Opening Day).
+OFFSEASON_START_DEFAULT = "11-05"      # MM-DD: first offseason day, safely after the latest possible World Series game
+OFFSEASON_END_MONTH_DAY = (3, 20)      # in-season again from March 20 (4 days before Opening Day)
 
-    Override with MLB_FORCE_RUN=1 (manual backfills, testing).
+
+def _offseason_start() -> tuple[int, int]:
+    """(month, day) of the first offseason day: MLB_OFFSEASON_START=MM-DD wins, a malformed value falls back to the default."""
+    for raw in (os.environ.get("MLB_OFFSEASON_START", ""), OFFSEASON_START_DEFAULT):
+        try:
+            m, d = (int(x) for x in raw.strip().split("-"))
+            date(2024, m, d)                    # validates the month/day pair (2024 is a leap year)
+            return m, d
+        except ValueError:
+            continue
+    raise AssertionError("OFFSEASON_START_DEFAULT is not a valid MM-DD")
+
+
+def is_mlb_offseason(target_date: Optional[date] = None) -> bool:
+    """True from the offseason start (Nov 5 by default; env MLB_OFFSEASON_START=MM-DD overrides) through March 19; in-season again
+    March 20, 4 days before Opening Day. The World Series can run into the first days of November, so the old Oct 29 cutoff
+    switched the pipeline off mid-series.
+
+    "Today" is the America/Chicago date (every scheduler in this repo is Central), not the container's UTC date: an evening run on
+    the cutoff day used to see tomorrow. Override with MLB_FORCE_RUN=1 (manual backfills, testing).
     """
     if os.environ.get("MLB_FORCE_RUN") == "1":
         return False
-    d = target_date or date.today()
-    if d.month in (11, 12, 1, 2):
-        return True
-    if d.month == 10 and d.day >= 29:
-        return True
-    if d.month == 3 and d.day < 20:
-        return True
-    return False
+    d = target_date or datetime.now(ZoneInfo("America/Chicago")).date()
+    md = (d.month, d.day)
+    return md >= _offseason_start() or md < OFFSEASON_END_MONTH_DAY
+
 
 # Per-year MLB regular-season boundaries (actual Opening Day -> end of
 # regular season). Consolidated 2026-09-04 -- previously hardcoded verbatim

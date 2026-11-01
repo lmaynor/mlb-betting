@@ -155,3 +155,29 @@ class TestRecapIncludesEv:
         fields = captured["payload"]["embeds"][0]["fields"]
         ev_field = next(f for f in fields if f["name"].endswith("EV"))
         assert ev_field["value"] == "_No settled bets yet_"
+
+
+class TestRecapRendersWinterSports:
+    def _stats(self, bets=4, wins=3, pnl=12.5):
+        return {"bets": bets, "wins": wins, "hit_rate": wins / bets, "pnl": pnl, "roi": 6.0, "avg_edge": 0.05, "pending": 1}
+
+    def test_every_sport_gets_a_field_and_counts_toward_the_total(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_WEBHOOK_SUMMARY", "https://discord.test/webhook")
+        captured = _post_capture(monkeypatch)
+        post_all_systems_summary({}, run_date="2026-11-02",
+                                 sport_stats={"NFL": self._stats(), "NBA": None, "NHL": self._stats(2, 1, -3.0)})
+        embed = captured["payload"]["embeds"][0]
+        fields = {f["name"]: f["value"] for f in embed["fields"]}
+        nfl = next(v for k, v in fields.items() if "NFL" in k)
+        nba = next(v for k, v in fields.items() if "NBA" in k)
+        assert "3/4" in nfl and "pending" in nfl
+        assert nba == "_No settled bets yet_"                                  # rendered, not omitted
+        assert any("NHL" in k for k in fields) and all("unvalidated" in k for k in fields if "props" in k)
+        assert "$+9.50" in embed["description"] and "6 settled" in embed["description"]
+
+    def test_no_sport_stats_keeps_old_embed_plus_placeholders(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_WEBHOOK_SUMMARY", "https://discord.test/webhook")
+        captured = _post_capture(monkeypatch)
+        post_all_systems_summary({}, run_date="2026-11-02")
+        names = [f["name"] for f in captured["payload"]["embeds"][0]["fields"]]
+        assert sum("props (unvalidated)" in n for n in names) == 3
