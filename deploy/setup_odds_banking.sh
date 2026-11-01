@@ -7,9 +7,9 @@
 # CREDIT SAFETY (read before changing cadence): every run is metered by nba/odds/credit_ledger.py -- a per-sport
 # monthly budget with a LINEAR pace cap, a per-run cap, and a floor on the shared pool's x-requests-remaining.
 # Sized for the 100k credits/mo plan (applied, confirmed 2026-11). ALL budgets are defined once, in nba/config.py (the shared
-# pool also feeds the MLB snapshot job, the NFL sweep and historical pulls; the total is kept ~91.5k with a 500 reserve floor).
+# pool also feeds the MLB snapshot job, the NFL sweep and historical pulls; NBA 45k + NHL 40k + NFL sweep 10k = 95k, ~4.5k test budget, 500 reserve floor; MLB is paused in the offseason).
 # The defaults below are copies of those constants and tests/test_parlay_budget.py fails if they drift:
-#   NBA: 32,000 / mo (~1,065/day)     NHL: 24,000 / mo (~800/day)     Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
+#   NBA: 45,000 / mo (~1,500/day)     NHL: 40,000 / mo (~1,335/day)     Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
 #
 # Cadence (UTC) -- Captures overnight openers (~11pm ET / 03:30 & 05:00 UTC), morning adjustments, midday,
 # peak pre-lock, and closing lines before tipoff/puck drop:
@@ -41,8 +41,8 @@ SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Budgets / floor: env override, else the nba/config.py values (pinned equal by tests/test_parlay_budget.py).
-BUDGET_NBA="${ODDS_BANK_BUDGET_BASKETBALL_NBA:-32000}"
-BUDGET_NHL="${ODDS_BANK_BUDGET_ICEHOCKEY_NHL:-24000}"
+BUDGET_NBA="${ODDS_BANK_BUDGET_BASKETBALL_NBA:-45000}"
+BUDGET_NHL="${ODDS_BANK_BUDGET_ICEHOCKEY_NHL:-40000}"
 RESERVE_FLOOR="${PARLAY_RESERVE_FLOOR:-500}"
 
 # tag|sport_key|kind|cron(UTC)

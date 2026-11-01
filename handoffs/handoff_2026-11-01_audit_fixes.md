@@ -12,8 +12,10 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 - Game-lines route tier gating; SGP honesty (assumed rho, MODEL ARTIFACT flag, fabricated seed data deleted); literal `\uXXXX` in JSX; PWA/safe-area/iPadOS; `MobileBottomSheet`; `PYTEST_CURRENT_TEST` guard removed.
 - BestBook: bounded SSE client, per-game memory, deterministic main line, `BESTBOOK_ENABLED=1` gate + ToS note.
 
+- **Game lines visibility (found after the first push):** `/picks/games` defaulted to MLB and read the wrong feed for NBA/NHL; fixed (see CONTEXT s22). Pre-existing since cb95579.
+
 ## Decisions / open items for the owner
-1. **Budgets:** NBA 32k / NHL 24k were cut from 45k / 40k without measuring real burn (total committed 91.5k of 100k). Re-tune after a month.
+1. **Budgets (owner-set 2026-11-01):** NBA 45k / NHL 40k / NFL sweep 10k = 95k live + 4.5k test budget = 99.5k, floor 500. MLB's 19.5k is dormant until Mar 20; re-balance NBA/NHL via `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh` (104.5k does not fit). Re-run `setup_odds_banking.sh` to push the new env.
 2. **BestBook ToS:** schedulers are created paused and the runner refuses without `BESTBOOK_ENABLED=1`. Decide before enabling.
 3. **Re-run provisioning** to take effect: `deploy/setup_props_alerts.sh`, `deploy/setup_nfl_sweep_schedule.sh`, `deploy/setup_bestbook_live.sh` (paused), `deploy/setup_odds_banking.sh`. None were executed here.
 4. **NFL sweep** is still outside the shared ledger (`ev/sweep_nfl_props.py` default `--max-credits 9000` per run; first cycle's spend is not counted). Only `setup_nfl_sweep_schedule.sh`'s 150/firing caps it.

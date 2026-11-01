@@ -4263,10 +4263,11 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
 Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the audit fixes. Nothing here is deployed unless a handoff says so.
 
 - **ParlayAPI is the 100k/month plan (confirmed by the owner 2026-11-01).** Budgets live in ONE place, `nba/config.py`, and `snapshot_odds`,
-  `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins total <= 95k and that the script defaults
-  equal the Python constants). Committed total 91.5k: NBA 32k, NHL 24k, NFL accumulator ledger 3k (no NFL banker job exists), NFL sweep 10k
-  (planning figure, NOT ledger-metered; its real cap is `--max-credits` per firing in `setup_nfl_sweep_schedule.sh`), MLB snapshot 19.5k, historical 3k.
-  Reserve floor 500 everywhere. The NBA/NHL numbers were cut from 45k/40k without measuring burn: re-tune in `nba/config.py` after a month of data.
+  `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins: live sports >= 95k, total + floor <= 100k,
+  and that the script defaults equal the Python constants). Owner-set 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k (planning figure, NOT
+  ledger-metered; its real cap is `--max-credits` per firing in `setup_nfl_sweep_schedule.sh`) = 95k live, plus a 4.5k test budget (historical pulls 3k,
+  NFL accumulator ledger 1.5k, no banker job). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
+  45k + 40k + 19.5k = 104.5k does not fit, so re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
   `credit_ledger.record()` is generation-match safe (props + game_lines jobs share one ledger file).
 - **Winter (NHL/NBA/NFL) alert bets and settlement.** `sport_alerts.log_sport_alert_bets` needs `MLB_DB_URL` + Cloud SQL on the job (`setup_props_alerts.sh`,
   `setup_nfl_sweep_schedule.sh`; re-run both to take effect), refuses to write to an ephemeral sqlite inside Cloud Run, never invents a -110 price, logs
@@ -4295,5 +4296,10 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
 - **Frontend:** `/ev` Odds Terminal has modes Standard | Arbitrage | Alt & Longshots | Outliers | SGP | Game Lines; game lines are tier-cut server-side
   (`limitGameLines`, route validates `sport|day|limit|market`); Game Lines shows MODEL DIFF with an UNVALIDATED badge. `tests/jsx-literal-escape.test.ts`
   fails on a literal backslash-u escape in JSX text. PWA install flow + `MobileBottomSheet` (focus trap, scroll-lock counter).
+- **/picks/games (Game Lines nav item) was MLB-only:** it defaulted to `mlb` (offseason, so empty) and, for `?sport=nba|nhl`, read the PROPS projection feed,
+  which never carries the game engines' rows (they live in `EVSweep/{sport}_games/predictions_latest.json`, served by `/api/public/games/projections`).
+  Now: `?sport=` all (NBA + NHL) | nba | nhl | mlb with a sport nav; the default is NBA + NHL while `isMlbOffseason()` (Nov 5 - Mar 19, Central) and MLB in
+  season; NBA/NHL render the same `GameLinesView` as the /ev Game Lines mode (`app/picks/games/game-picks-client.tsx`), tier-cut by `limitGameLines`.
+  On mobile /ev the sport strip in Game Lines mode now drives the game-lines sport (ALL / NBA / NHL), not the props sport.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 

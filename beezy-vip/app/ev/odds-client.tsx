@@ -658,26 +658,34 @@ export function OddsClient({ initial, initialLocked, headline, initialGames, ful
 
           <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
             <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
-              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}
-                  style={{
-                    fontFamily: 'var(--font-mono), monospace',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    padding: '5px 8px',
-                    borderRadius: '4px',
-                    border: `1px solid ${sport === s ? '#3a4156' : HAIR}`,
-                    background: sport === s ? '#1b1f2b' : 'transparent',
-                    color: sport === s ? '#ffffff' : 'var(--fog)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {s.toUpperCase()}
-                </button>
-              ))}
+              {/* Game Lines covers NBA and NHL only and has its own sport filter: the props sport (which includes MLB) does not apply to it */}
+              {(mode === 'game_lines' ? ['all', 'nba', 'nhl'] as const : ['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => {
+                const selected = mode === 'game_lines' ? gameSport === s : sport === s
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      if (mode === 'game_lines') { setGameSport(s as 'all' | 'nba' | 'nhl'); setLimit(PAGE); return }
+                      setSport(s as SportFilter); setStat('all'); setGame('all'); setLimit(PAGE)
+                    }}
+                    style={{
+                      fontFamily: 'var(--font-mono), monospace',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '5px 8px',
+                      borderRadius: '4px',
+                      border: `1px solid ${selected ? '#3a4156' : HAIR}`,
+                      background: selected ? '#1b1f2b' : 'transparent',
+                      color: selected ? '#ffffff' : 'var(--fog)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {s.toUpperCase()}
+                  </button>
+                )
+              })}
             </HorizontalPillStrip>
 
             <input

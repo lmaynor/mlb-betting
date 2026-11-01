@@ -177,27 +177,33 @@ DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "f
 #   NFL props sweep (ev.sweep_nfl_props, NOT ledger-metered) ....... NFL_SWEEP_MONTHLY_BUDGET (planning figure; its own
 #                                                                     per-firing cap is --max-credits, see deploy/setup_nfl_sweep_schedule.sh)
 #   historical pulls (nba.odds.parlay_historical) .................. PARLAY_HISTORICAL_MONTHLY_BUDGET (planning figure)
-# The sum is kept at ~91.5k so the ~8.5k left over (plus the PARLAY_RESERVE_FLOOR) absorbs estimate error, discovery /
-# game-line calls and one-off probes. Change a number HERE and the shell script's copies fail the test until they match.
+# Owner decision 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k = 95k committed to the three live winter sports, plus ~4.5k kept
+# for testing (historical pulls 3k + the NFL accumulator ledger 1.5k, which has no banker job and exists for manual probes).
+# That is 99.5k, and the PARLAY_RESERVE_FLOOR (500) is the last 0.5k. The MLB snapshot ceiling is NOT in the winter total: MLB is
+# paused for the offseason (deploy/pause_mlb_offseason.sh, resumes Mar 20). When it resumes, NFL is over (its 10k is free) but
+# NBA + NHL + MLB = 104.5k does not fit: re-balance with ODDS_BANK_BUDGET_<SPORTKEY> BEFORE running resume_mlb_season.sh.
+# Change a number HERE and the shell script's copies fail the test until they match.
 # Override a sport's ledger budget with ODDS_BANK_BUDGET_<SPORTKEY>.
 PARLAY_MONTHLY_QUOTA = 100_000
 MLB_SNAPSHOT_CEILING = 19_500
 NFL_SWEEP_MONTHLY_BUDGET = 10_000
 PARLAY_HISTORICAL_MONTHLY_BUDGET = 3_000
 ODDS_BANK_DEFAULT_BUDGET = {
-    "icehockey_nhl": 24000,
-    "basketball_nba": 32000,
-    "americanfootball_nfl": 3000,       # accumulator ledger only (no NFL banker job exists); the sweep is budgeted above
+    "icehockey_nhl": 40000,
+    "basketball_nba": 45000,
+    "americanfootball_nfl": 1500,       # accumulator ledger only (no NFL banker job exists); the sweep is budgeted above
 }
 # Never spend the shared pool below this many remaining credits (read from x-requests-remaining). ONE floor for the ledger,
 # the MLB snapshot job and the historical puller (was 500 / none / 2500).
 PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "500"))
 
 
-def parlay_budget_total() -> int:
-    """Everything that may be spent in one month across all sports and tools (excludes the reserve floor)."""
-    return (sum(ODDS_BANK_DEFAULT_BUDGET.values()) + MLB_SNAPSHOT_CEILING + NFL_SWEEP_MONTHLY_BUDGET
-            + PARLAY_HISTORICAL_MONTHLY_BUDGET)
+def parlay_budget_total(mlb_active: bool = False) -> int:
+    """Everything that may be spent in one month across all sports and tools (excludes the reserve floor).
+
+    mlb_active=False is the winter profile (MLB snapshot paused); True adds the MLB ceiling."""
+    total = (sum(ODDS_BANK_DEFAULT_BUDGET.values()) + NFL_SWEEP_MONTHLY_BUDGET + PARLAY_HISTORICAL_MONTHLY_BUDGET)
+    return total + (MLB_SNAPSHOT_CEILING if mlb_active else 0)
 
 
 # accumulated-odds lake (sport-namespaced; multi-sport)

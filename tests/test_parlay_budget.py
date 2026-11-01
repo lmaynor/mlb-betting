@@ -15,12 +15,15 @@ from nba.odds import credit_ledger as L
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_every_budget_in_the_shared_pool_sums_to_well_under_the_quota():
-    total = C.parlay_budget_total()
-    assert total == (sum(C.ODDS_BANK_DEFAULT_BUDGET.values()) + C.MLB_SNAPSHOT_CEILING + C.NFL_SWEEP_MONTHLY_BUDGET
+def test_winter_budget_uses_at_least_95k_and_fits_the_quota_with_the_reserve_floor():
+    total = C.parlay_budget_total()                      # MLB paused for the offseason
+    assert total == (sum(C.ODDS_BANK_DEFAULT_BUDGET.values()) + C.NFL_SWEEP_MONTHLY_BUDGET
                      + C.PARLAY_HISTORICAL_MONTHLY_BUDGET)
-    assert total <= 95_000, f"{total} committed credits would not fit the {C.PARLAY_MONTHLY_QUOTA} plan with headroom"
-    assert total + C.PARLAY_RESERVE_FLOOR < C.PARLAY_MONTHLY_QUOTA
+    live = (C.ODDS_BANK_DEFAULT_BUDGET["basketball_nba"] + C.ODDS_BANK_DEFAULT_BUDGET["icehockey_nhl"]
+            + C.NFL_SWEEP_MONTHLY_BUDGET)
+    assert live >= 95_000, "the three live winter sports should use at least 95k of the plan"
+    assert total + C.PARLAY_RESERVE_FLOOR <= C.PARLAY_MONTHLY_QUOTA, f"{total} committed credits exceed the plan"
+    assert C.parlay_budget_total(mlb_active=True) == total + C.MLB_SNAPSHOT_CEILING
 
 
 def test_mlb_snapshot_ceiling_comes_from_the_shared_constants(monkeypatch):

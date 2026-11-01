@@ -179,14 +179,15 @@ Differences from the MLB executor that matter:
 ### Credit budget (ParlayAPI, 100k/month, applied; the numbers live in `nba/config.py`, pinned by `tests/test_parlay_budget.py`)
 | Use | Where it is enforced | ~credits/mo |
 |---|---|---|
-| NBA accumulators (props + game lines share one ledger) | `nba.odds.credit_ledger` (`ODDS_BANK_DEFAULT_BUDGET`) | 32k |
-| NHL accumulators | same | 24k |
-| NFL accumulator ledger (no banker job today) | same | 3k |
+| NBA accumulators (props + game lines share one ledger) | `nba.odds.credit_ledger` (`ODDS_BANK_DEFAULT_BUDGET`) | 45k |
+| NHL accumulators | same | 40k |
+| NFL accumulator ledger (no banker job today; test budget) | same | 1.5k |
 | NFL props sweep (Sink A/B + Kalshi join) | NOT ledgered: planning figure + per-run `--max-credits` | 10k |
-| MLB snapshot job (postseason then offseason) | `mlb.runners.snapshot_odds` (`MLB_SNAPSHOT_CEILING`) | 19.5k |
+| MLB snapshot job (paused Nov-Mar 19; NOT in the winter total) | `mlb.runners.snapshot_odds` (`MLB_SNAPSHOT_CEILING`) | 19.5k when active |
 | Historical closing-line pulls | `nba.odds.parlay_historical` (planning figure) | 3k |
-| **Committed total** | asserted <= 95k | **91.5k** |
-| Unallocated headroom + reserve floor (`PARLAY_RESERVE_FLOOR`, 500) | | ~8.5k |
+| **Committed total (winter)** | asserted: live sports >= 95k, total + floor <= 100k | **99.5k** (95k live + 4.5k test) |
+| Reserve floor (`PARLAY_RESERVE_FLOOR`) | stops every metered caller | 0.5k |
+(When MLB resumes Mar 20, NBA 45k + NHL 40k + MLB 19.5k = 104.5k does not fit: re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` first.)
 (The earlier table summed the per-sport ledgers to 99.5k and left the MLB 19.5k ceiling on top, ~119k against a 100k plan.)
 Hard rules (from the 2026-08-27 incident): every ParlayAPI caller goes through the shared budgets above, the reserve floor on the
 API's own `x-requests-remaining` header stops every metered caller (ledger, MLB snapshot, historical puller), the ledger write is
