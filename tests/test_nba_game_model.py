@@ -502,7 +502,7 @@ def test_end_to_end_game_scoring(monkeypatch):
     from nba.game import run_daily
 
     monkeypatch.setattr(run_daily, "load_historical_boxscores", lambda: None or np.nan and None)
-    monkeypatch.setattr(run_daily, "load_live_game_odds", lambda now=None: [sample_event])
+    monkeypatch.setattr(run_daily, "load_live_game_odds", lambda now=None, meta_out=None: [sample_event])
     monkeypatch.setattr(run_daily, "load_live_injuries", lambda: {})
 
     res = run_daily.run_nba_game_predictions(
@@ -533,11 +533,12 @@ def test_walk_forward_evaluation():
     from datetime import datetime, timedelta
     import random
 
+    rng = random.Random(20260101)   # seeded: the pairing (and so the metrics) must not vary run to run
     teams = ["BOS", "NYK", "MIA", "PHI"]
     games = []
     start_d = datetime(2026, 1, 1)
     for i in range(50):
-        t1, t2 = random.sample(teams, 2)
+        t1, t2 = rng.sample(teams, 2)
         h_pts = 100 + (i % 20)
         a_pts = 98 + (i % 15)
         d = (start_d + timedelta(days=i // 2)).strftime("%Y-%m-%d")

@@ -231,9 +231,6 @@ class EnvTuple(tuple):
 
 
 def _load_env_lines() -> dict:
-    import os
-    if os.environ.get("PYTEST_CURRENT_TEST") and "test_load_env_lines" not in os.environ.get("PYTEST_CURRENT_TEST", ""):
-        return {}
     try:
         from nfl.data.read import load
         cols = ["game_id", "season", "week", "gameday", "home_team", "away_team", "spread_line", "total_line"]
@@ -1134,6 +1131,26 @@ def build_games(sport: str, sched: list, events: list | None, now: datetime) -> 
     return sorted(out.values(), key=lambda g: (g["start"], g["game_key"]))
 
 
+def _run_game_models(sport: str, events, now: datetime) -> bool:
+    """Refresh the NBA / NHL quantitative GAME-LINE payload (EVSweep/{sport}_games/predictions_latest.json) after a props
+    compute. `events` are this compute's in-memory PROP events; they are handed to the game runner, which uses them only if
+    they carry h2h/spreads/totals markets (prop feeds normally do not) and otherwise loads the banked game_lines snapshot
+    itself. Failures are logged WITH the traceback and never fail the props compute. -> True if the runner completed.
+    (Tests neutralise this hook in tests/conftest.py; production code carries no test detection.)"""
+    try:
+        if sport == "nba":
+            from nba.game.run_daily import run_nba_game_predictions as run
+        elif sport == "nhl":
+            from nhl.game.run_daily import run_nhl_game_predictions as run
+        else:
+            return False
+        run(write_gcs=True, now=now, events=events)
+        return True
+    except Exception:                                                                  # noqa: BLE001
+        log.exception("%s game predictions run failed", sport)
+        return False
+
+
 def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = None, events=None, meta=None,
               games=None, write: bool = True, roster=_AUTO) -> dict:
     """Compute one sport's board. `logs` / `events` / `games` / `roster` are injectable (tests, local runs; roster=None
@@ -1207,20 +1224,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         # the /ev/odds screen's full per-book matrix rides the same compute: same unioned events, no extra credits
         from ev import odds_board as _ob
         _ob.write_board(_ob.build_board(sport, events, now, meta), sport)
-        import os
-        if not os.environ.get("PYTEST_CURRENT_TEST"):
-            if sport == "nba":
-                try:
-                    from nba.game.run_daily import run_nba_game_predictions
-                    run_nba_game_predictions(write_gcs=True)
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("nba game predictions run failed: %s", exc)
-            elif sport == "nhl":
-                try:
-                    from nhl.game.run_daily import run_nhl_game_predictions
-                    run_nhl_game_predictions(write_gcs=True)
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("nhl game predictions run failed: %s", exc)
+        _run_game_models(sport, events, now)
     return _finish(base, sport, write, now)
 
 

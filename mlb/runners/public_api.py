@@ -979,8 +979,15 @@ def get_odds_board(sport, day=None, stat=None, limit=2000):
         status = "idle"
     out = {k: payload.get(k) for k in ("sport", "status", "stats", "summary", "lines_age_minutes", "lines_source")}
     out["status"] = status
+    # Stale = the BOARD is old (or has no timestamp), whether or not rows survive the filters. The only old-board case that is
+    # not reported stale is a sport that is genuinely out of season (MLB offseason), where an idle board is the correct state;
+    # an old board with no rows left in any other sport means the feed stopped, and saying "not stale" would hide that.
+    board_old = age is None or age > _ob.STALE_MINUTES
+    if board_old and not rows and sport == "mlb":
+        from mlb_core.config import is_mlb_offseason
+        board_old = not is_mlb_offseason()
     out.update(as_of=payload.get("ts"), age_minutes=None if age is None else round(age, 1),
-               stale=(age is None or age > _ob.STALE_MINUTES) if rows else False, count=len(rows), rows=rows[:limit], games=games,
+               stale=board_old, count=len(rows), rows=rows[:limit], games=games,
                books=books, offshore_books=[b for b in payload.get("offshore_books") or [] if b in books], validated=False)
     out["lines_source"] = out["lines_source"] or []
     if day:
@@ -1064,9 +1071,14 @@ def get_game_projections(sport: str, day: str | None = None, market: str | None 
         "sport": sport,
         "status": payload.get("status", "live"),
         "engine": payload.get("engine"),
+        "engine_version": payload.get("engine_version"),
+        # No validated edge exists for NBA/NHL game lines: default to unvalidated even if an old payload lacks the flag.
+        "validated": bool(payload.get("validated", False)),
+        "label": payload.get("label") or "UNVALIDATED model estimate, not a tested edge",
         "as_of": ts_str,
         "age_minutes": None if age is None else round(age, 1),
-        "stale": (age is None or age > 90) if rows else False,
+        "stale": (bool(payload.get("stale")) or age is None or age > 90) if rows else False,
+        "stale_reason": payload.get("stale_reason"),
         "count": len(rows),
         "rows": rows[:limit],
         "priced_games": priced_games,

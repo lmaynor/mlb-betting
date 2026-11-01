@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { useFocusTrap } from '@/components/ui/use-focus-trap'
 
 export interface InstallAppButtonProps {
   compact?: boolean
@@ -20,12 +21,18 @@ export function isStandaloneMode(win?: Window): boolean {
   return false
 }
 
+/**
+ * `maxTouchPoints` is navigator.maxTouchPoints. iPadOS 13+ reports a Macintosh user agent, so a Mac UA with a touch
+ * screen (a real Mac reports 0 touch points) is an iPad and gets the iOS Share-sheet instructions.
+ */
 export function detectInstallPlatform(
   ua: string,
   hasDeferredPrompt: boolean,
+  maxTouchPoints = 0,
 ): 'chromium' | 'ios' | 'macos_safari' | 'other' {
   if (hasDeferredPrompt) return 'chromium'
   if (/iphone|ipad|ipod/i.test(ua)) return 'ios'
+  if (/macintosh/i.test(ua) && maxTouchPoints > 1) return 'ios'
   if (/macintosh/i.test(ua) && /safari/i.test(ua) && !/chrome|chromium|edg/i.test(ua)) return 'macos_safari'
   return 'other'
 }
@@ -34,6 +41,9 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  // focus moves into the dialog, Tab wraps inside it, and focus returns to the Install button on close
+  useFocusTrap(dialogRef, modalOpen)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -75,7 +85,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
 
   const handleInstallClick = async () => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-    const platform = detectInstallPlatform(ua, Boolean(deferredPrompt))
+    const platform = detectInstallPlatform(ua, Boolean(deferredPrompt), typeof navigator !== 'undefined' ? navigator.maxTouchPoints : 0)
 
     if (platform === 'chromium' && deferredPrompt) {
       try {
@@ -94,7 +104,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
   }
 
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-  const platform = detectInstallPlatform(ua, Boolean(deferredPrompt))
+  const platform = detectInstallPlatform(ua, Boolean(deferredPrompt), typeof navigator !== 'undefined' ? navigator.maxTouchPoints : 0)
 
   const btnStyle: React.CSSProperties = {
     height: '30px',
@@ -146,9 +156,12 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
 
       {modalOpen && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="install-modal-title"
+          aria-label="Install beezy.fyi"
+          tabIndex={-1}
           onClick={() => setModalOpen(false)}
           style={{
             position: 'fixed',
@@ -157,6 +170,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
             backdropFilter: 'blur(4px)',
             WebkitBackdropFilter: 'blur(4px)',
             zIndex: 9999,
+            outline: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

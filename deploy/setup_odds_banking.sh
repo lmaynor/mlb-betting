@@ -6,11 +6,10 @@
 #
 # CREDIT SAFETY (read before changing cadence): every run is metered by nba/odds/credit_ledger.py -- a per-sport
 # monthly budget with a LINEAR pace cap, a per-run cap, and a floor on the shared pool's x-requests-remaining.
-# Sized for the 100k credits/mo plan (99,500 monthly budget + 500 reserve floor):
-#   NBA: 45,000 / mo (~1,500/day)
-#   NHL: 40,000 / mo (~1,333/day)
-#   NFL: 14,500 / mo (~483/day)
-#   Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
+# Sized for the 100k credits/mo plan (applied, confirmed 2026-11). ALL budgets are defined once, in nba/config.py (the shared
+# pool also feeds the MLB snapshot job, the NFL sweep and historical pulls; the total is kept ~91.5k with a 500 reserve floor).
+# The defaults below are copies of those constants and tests/test_parlay_budget.py fails if they drift:
+#   NBA: 32,000 / mo (~1,065/day)     NHL: 24,000 / mo (~800/day)     Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
 #
 # Cadence (UTC) -- Captures overnight openers (~11pm ET / 03:30 & 05:00 UTC), morning adjustments, midday,
 # peak pre-lock, and closing lines before tipoff/puck drop:
@@ -40,6 +39,11 @@ SERVICE_NAME="mlb-betting"
 IMAGE="${IMAGE:-gcr.io/${PROJECT_ID}/mlb-betting-feeds}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Budgets / floor: env override, else the nba/config.py values (pinned equal by tests/test_parlay_budget.py).
+BUDGET_NBA="${ODDS_BANK_BUDGET_BASKETBALL_NBA:-32000}"
+BUDGET_NHL="${ODDS_BANK_BUDGET_ICEHOCKEY_NHL:-24000}"
+RESERVE_FLOOR="${PARLAY_RESERVE_FLOOR:-500}"
 
 # tag|sport_key|kind|cron(UTC)
 SCHEDULES=(
@@ -104,7 +108,7 @@ for row in "${SCHEDULES[@]}"; do
     ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND},--max-credits,600"
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest"
-           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=45000,ODDS_BANK_BUDGET_ICEHOCKEY_NHL=40000,PARLAY_RESERVE_FLOOR=500"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=${BUDGET_NBA},ODDS_BANK_BUDGET_ICEHOCKEY_NHL=${BUDGET_NHL},PARLAY_RESERVE_FLOOR=${RESERVE_FLOOR}"
            --command="python" --args="$ARGS"
            --memory=1Gi --cpu=1 --task-timeout=900 --max-retries=0 --quiet)
     # max-retries=0: a retried props run would re-spend credits; the ledger records the first attempt either way.

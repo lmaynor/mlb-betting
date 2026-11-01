@@ -94,9 +94,9 @@ def test_build_events_from_snapshots():
                     "line": 235.5,
                     "rung": "235.5",
                     "quotes": [
-                        {"venue": "dk", "yesNative": "-115", "noNative": "-115"},
-                        {"venue": "fd", "yesNative": "-110", "noNative": "-120"},
-                        {"venue": "pp", "yesNative": "-110", "noNative": "-110"},  # DFS dropped
+                        {"venue": "dk", "yes": 53.49, "no": 53.49, "yesNative": "-115", "noNative": "-115"},
+                        {"venue": "fd", "yes": 52.38, "no": 54.55, "yesNative": "-110", "noNative": "-120"},
+                        {"venue": "pp", "yes": 52.38, "no": 52.38, "yesNative": "-110", "noNative": "-110"},  # DFS dropped
                     ],
                 },
                 # Alt line: Caleb Williams 250+ Pass Yds (one-sided)
@@ -108,7 +108,7 @@ def test_build_events_from_snapshots():
                     "line": 250,
                     "rung": "250+",
                     "quotes": [
-                        {"venue": "dk", "yesNative": "+140", "noNative": None},
+                        {"venue": "dk", "yes": 41.67, "no": None, "yesNative": "+140", "noNative": None},
                     ],
                 },
             ]
@@ -243,3 +243,118 @@ def test_union_events_with_bestbook_fallback_and_merge():
     b_keys = {b["key"] for b in ev["bookmakers"]}
     assert b_keys == {"fanduel", "draftkings"}
     assert "bestbook" in meta["lines_source"]
+
+
+# -- main-line tie-break, streaming build, window, circuit breaker ---------------------------------------------------------------
+def _game(key="2026-11-02-CHI-SEA", start="2026-11-02T01:15:00Z"):
+    return {"key": key, "sport": "nfl", "away": "CHI", "home": "SEA", "start": start, "venues": ["dk", "fd"]}
+
+
+def _row(line, yes_pcts, rung=None):
+    """A real-shaped rung row: every quote carries yes/no PERCENTS (implied probability) plus the native strings."""
+    return {"player": "Caleb Williams", "team": "CHI", "section": "passing", "family": "g|passyds|caleb williams",
+            "line": line, "rung": rung or str(line),
+            "quotes": [{"venue": v, "yes": y, "no": 100 - y + 4.5, "yesNative": "-110", "noNative": "-110"}
+                       for v, y in zip(("dk", "fd", "mgm"), yes_pcts)]}
+
+
+def test_main_line_tie_breaks_toward_even_odds_and_ignores_row_order():
+    near_even = _row(235.5, (51.0, 50.5, 49.8))          # 3 two-sided books, consensus ~50%
+    lopsided = _row(250.5, (70.0, 68.0, 66.0))           # 3 two-sided books, consensus ~68%
+    for order in ([near_even, lopsided], [lopsided, near_even]):
+        events, _ = bbe.build_events_from_snapshots("nfl", [_game()], {"2026-11-02-CHI-SEA": {"rows": list(order)}}, NOW)
+        dk = next(b for b in events[0]["bookmakers"] if b["key"] == "draftkings")
+        keys = {m["key"] for m in dk["markets"]}
+        main = next(m for m in dk["markets"] if m["key"] == "player_pass_yds")
+        assert main["outcomes"][0]["point"] == 235.5 and "player_pass_yds_alternate" in keys
+
+
+def test_main_line_prefers_the_line_with_more_two_sided_books_over_closeness():
+    few_but_even = _row(235.5, (50.0,))                  # 1 book at exactly even
+    many_lopsided = _row(250.5, (70.0, 68.0, 66.0))      # 3 books
+    events, _ = bbe.build_events_from_snapshots("nfl", [_game()], {"2026-11-02-CHI-SEA": {"rows": [few_but_even, many_lopsided]}}, NOW)
+    dk = next(b for b in events[0]["bookmakers"] if b["key"] == "draftkings")
+    main = next(m for m in dk["markets"] if m["key"] == "player_pass_yds")
+    assert main["outcomes"][0]["point"] == 250.5
+
+
+def test_build_accepts_a_fetch_callable_and_never_fetches_started_games():
+    fetched = []
+    games = [_game("2026-11-02-CHI-SEA"), _game("2026-10-31-DAL-NYG", start="2026-10-31T17:00:00Z")]     # 2nd already started
+
+    def fetch(key):
+        fetched.append(key)
+        return {"rows": [_row(235.5, (51.0, 50.5, 49.8))]}
+
+    events, counts = bbe.build_events_from_snapshots("nfl", games, fetch, NOW)
+    assert fetched == ["2026-11-02-CHI-SEA"] and counts["events_started"] == 1 and len(events) == 1
+
+
+def _crawl(monkeypatch, slate, fetch):
+    monkeypatch.setattr(bbe.bb, "fetch_slate", lambda: slate)
+    monkeypatch.setattr(bbe.bb, "fetch_game_snapshot", fetch)
+    monkeypatch.setattr(bbe.time, "sleep", lambda s: None)
+    return bbe.crawl_sport
+
+
+def test_crawl_window_is_exactly_days_and_snapshots_are_not_all_held_at_once(monkeypatch):
+    now = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)                     # Sun Nov 1, 10:00 ET
+    slate = [dict(_game(f"2026-11-0{d}-CHI-SEA", start=f"2026-11-0{d}T18:00:00Z"), sport="nfl") for d in (1, 2, 3, 4)]
+    live, peak = {"n": 0}, {"n": 0}
+
+    class Snap(dict):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            live["n"] += 1
+            peak["n"] = max(peak["n"], live["n"])
+
+        def __del__(self):
+            live["n"] -= 1
+
+    crawl = _crawl(monkeypatch, slate, lambda k: Snap(rows=[_row(235.5, (51.0, 50.5, 49.8))]))
+    res = crawl("nfl", now=now, days=2)                                          # ET days Nov 1 and Nov 2 only
+    assert [e["bb_game_key"] for e in res["events"]] == ["2026-11-01-CHI-SEA", "2026-11-02-CHI-SEA"]
+    assert res["window"] == {"days": 2}
+    assert peak["n"] <= 2                                                        # never every game's snapshot at once
+
+
+def test_crawl_survives_one_dead_game_but_stops_when_the_endpoint_is_dead(monkeypatch):
+    now = datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc)
+    keys = [f"2026-11-0{d}-CHI-SEA" for d in (1, 2, 3, 4)]
+    slate = [dict(_game(k, start=f"{k[:10]}T23:00:00Z"), sport="nfl") for k in keys]
+
+    def one_bad(k):
+        if k == keys[1]:
+            raise bbe.bb.BestBookError("gave up")
+        return {"rows": [_row(235.5, (51.0, 50.5, 49.8))]}
+
+    res = _crawl(monkeypatch, slate, one_bad)("nfl", now=now, days=7)
+    assert res["counts"]["events_fetch_failed"] == 1 and res["counts"]["events_priced"] == 3
+
+    def all_bad(k):
+        raise bbe.bb.BestBookError("blocked")
+
+    with pytest.raises(bbe.bb.BestBookError):
+        _crawl(monkeypatch, slate, all_bad)("nfl", now=now, days=7)
+
+
+def test_runner_refuses_without_bestbook_enabled(monkeypatch):
+    from mlb.runners import bestbook_live_props as runner
+    monkeypatch.delenv("BESTBOOK_ENABLED", raising=False)
+    monkeypatch.setenv("SKIP_STARTUP_JITTER", "1")
+    called = []
+    monkeypatch.setattr(runner.bbe, "crawl_sport", lambda *a, **k: called.append(1))
+    assert runner.main(["--sport", "nfl"]) == 2 and not called
+    with pytest.raises(runner.BestBookDisabled):
+        runner.run("nfl")
+    monkeypatch.setenv("BESTBOOK_ENABLED", "0")
+    assert runner.main(["--sport", "nfl"]) == 2
+
+
+def test_no_evasion_wording_in_the_crawler_sources():
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    for rel in ("ev/bestbook_events.py", "mlb_core/odds/bestbook.py", "mlb/runners/bestbook_live_props.py",
+                "mlb/runners/bettingpros_live_props.py", "ev/bettingpros_events.py"):
+        text = (root / rel).read_text().lower()
+        assert "anti-detection" not in text and "anti-sniff" not in text and "sniffing" not in text, rel

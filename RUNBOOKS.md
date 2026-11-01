@@ -747,7 +747,7 @@ Gotchas:
 Context: `bets.sport` landed 2026-10-14 with `idx_bets_dedup_v4` (= the v3 key + `sport`). v3 was kept only so a rolling deploy
 could not break old code whose `ON CONFLICT` targets it; while it exists, an identical key in another sport hits v3 and `log_bet`
 returns -1. Background: handoffs/handoff_2026-10-14_nhl_nba_infrastructure.md. The odds-bank jobs are PAUSED on purpose
-(shared 20k/mo ParlayAPI pool) -- resuming them is a credit-spend decision, not routine.
+(shared 100k/mo ParlayAPI pool; budgets in `nba/config.py`) -- resuming them is a credit-spend decision, not routine.
 
 ### 7a. Verify nothing still runs pre-v4 code, then drop v3
 

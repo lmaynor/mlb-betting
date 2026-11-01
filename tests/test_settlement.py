@@ -817,46 +817,190 @@ class TestBetTrackerDedup:
         assert id_a_again == -1
 
 
-def test_settle_winter_bets():
-    from mlb.runners.settle_bets import _settle_winter_bets
+# -- winter (NHL / NBA / NFL) settlement ----------------------------------------------------------------------------------
+# The mocks below use the REAL shape of ev.grade_props.nhl_actuals / nba_actuals:
+#   {"final": bool, "players": {int league_player_id: {stat: value, "_played": bool}}, "game_id": ...}
+# with NO name key anywhere (the first version of this test invented a "name" field and so never noticed that every bet voided).
+
+def _winter_bet(**kw):
+    import json
+    base = {"id": 101, "sport": "nhl", "game_date": "2026-10-28", "away_team": "TOR", "home_team": "BOS",
+            "player": "Auston Matthews", "bet_type": "sog_over_3.5", "odds": -115, "stake": 10.0,
+            "notes": json.dumps({"stat": "sog", "point": 3.5, "side": "over", "player_id": 8479318})}
+    base.update(kw)
+    return base
+
+
+def _settle_winter(bets, nhl=None, nba=None, nhl_fn=None):
     import pandas as pd
     from unittest.mock import patch
+    from mlb.runners.settle_bets import _settle_winter_bets
+    with patch("ev.grade_props.nhl_actuals", side_effect=nhl_fn, return_value=nhl), \
+         patch("ev.grade_props.nba_actuals", return_value=nba):
+        return _settle_winter_bets(pd.DataFrame(bets), "2026-10-29")
 
-    pending = pd.DataFrame([
-        {
-            "id": 101, "sport": "nhl", "game_date": "2026-10-28", "away_team": "TOR", "home_team": "BOS",
-            "player": "Auston Matthews", "bet_type": "sog_over_3.5", "odds": -115, "stake": 10.0, "notes": '{"stat":"sog","point":3.5,"side":"over"}'
-        },
-        {
-            "id": 102, "sport": "nba", "game_date": "2026-10-28", "away_team": "BOS", "home_team": "NYK",
-            "player": "Jayson Tatum", "bet_type": "points_over_26.5", "odds": 110, "stake": 10.0, "notes": '{"stat":"points","point":26.5,"side":"over"}'
-        },
+
+def test_settle_winter_bets():
+    import json
+    nhl = {"final": True, "game_id": 2026020101, "players": {8479318: {"sog": 5, "goals": 1, "_played": True}}}
+    nba = {"final": True, "game_id": "401", "players": {4065648: {"points": 24.0, "_played": True}}}
+    outcomes = _settle_winter(
+        [_winter_bet(),
+         _winter_bet(id=102, sport="nba", away_team="BOS", home_team="NYK", player="Jayson Tatum",
+                     bet_type="points_over_26.5", odds=110,
+                     notes=json.dumps({"stat": "points", "point": 26.5, "side": "over", "player_id": "4065648"}))],
+        nhl=nhl, nba=nba)
+    assert [(o["id"], o["result"], o["profit"]) for o in outcomes] == [(101, "win", 8.70), (102, "loss", -10.0)]
+
+
+def test_winter_resolved_player_who_did_not_play_is_void_but_unresolved_stays_pending():
+    import json
+    nhl = {"final": True, "players": {8479318: {"sog": 0, "_played": False}, 8478402: {"sog": 4, "_played": True}}}
+    scratched = _winter_bet()                                                         # id resolved, _played False -> void
+    absent = _winter_bet(id=102, notes=json.dumps({"stat": "sog", "point": 3.5, "side": "over", "player_id": 1}))
+    no_id = _winter_bet(id=103, notes=json.dumps({"stat": "sog", "point": 3.5, "side": "over"}))
+    from unittest.mock import patch
+    with patch("ev.sweep_props_alerts.load_resolver", return_value=(None, None)):     # roster crosswalk unavailable
+        out = {o["id"]: o["result"] for o in _settle_winter([scratched, absent, no_id], nhl=nhl)}
+    assert out == {101: "void", 102: "void"}                       # id 103 cannot be resolved -> left pending, NOT voided
+
+
+def test_winter_legacy_row_without_player_id_resolves_through_the_roster_crosswalk():
+    import json
+    from unittest.mock import patch
+    from mlb_core.data.player_names import PlayerResolver
+    resolver = PlayerResolver([{"player_id": 8479318, "full_name": "Auston Matthews", "team": "TOR"},
+                               {"player_id": 8470638, "full_name": "Auston Matthews", "team": "NYR"}])   # namesake off the card
+    nhl = {"final": True, "players": {8479318: {"sog": 2, "_played": True}}}
+    legacy = _winter_bet(notes=json.dumps({"stat": "sog", "point": 3.5, "side": "over", "n_books": 6}))
+    with patch("ev.sweep_props_alerts.load_resolver", return_value=(resolver, {"TOR", "BOS"})):
+        out = _settle_winter([legacy], nhl=nhl)
+    assert [(o["id"], o["result"]) for o in out] == [(101, "loss")]
+
+
+def test_winter_not_final_stays_pending_and_utc_dated_rows_still_grade():
+    import json
+    nhl_final = {"final": True, "players": {8479318: {"sog": 5, "_played": True}}}
+    # a bet logged with the UTC date (10-29) for a game that the ET schedule lists on 10-28
+    bet = _winter_bet(game_date="2026-10-29")
+
+    def by_day(day, away, home):
+        return nhl_final if day == "2026-10-28" else {"final": False, "players": {}, "reason": "game not found in schedule"}
+
+    out = _settle_winter([bet], nhl_fn=by_day)
+    assert [(o["id"], o["result"]) for o in out] == [(101, "win")]
+    assert _settle_winter([_winter_bet()], nhl={"final": False, "players": {}, "reason": "not final"}) == []
+
+
+def test_winter_missing_stat_value_stays_pending():
+    nhl = {"final": True, "players": {8479318: {"goals": 1, "_played": True}}}      # no 'sog' key
+    assert _settle_winter([_winter_bet()], nhl=nhl) == []
+
+
+def _nfl_ctx():
+    import pandas as pd
+    from nfl.props import grade as G
+    from nfl.props.grade import Actuals
+    from nfl.props.resolve import PlayerResolver
+
+    def row(pid, gid, team, **kw):
+        return {"player_id": pid, "game_id": gid, "team": team, **{c: 0 for c in G.STAT_ROW_COLUMNS}, **kw}
+
+    sched = pd.DataFrame([
+        # a Jan game: nflverse season is the PRIOR year (2026), not the calendar year
+        dict(game_id="2026_19_ATL_NO", season=2026, week=19, gameday="2027-01-10", away_team="ATL", home_team="NO",
+             home_score=20.0, away_score=17.0),
+        dict(game_id="2026_05_ATL_NO", season=2026, week=5, gameday="2026-10-04", away_team="ATL", home_team="NO",
+             home_score=20.0, away_score=17.0),
+        dict(game_id="2026_06_NO_LA", season=2026, week=6, gameday="2026-10-11", away_team="NO", home_team="LA",
+             home_score=float("nan"), away_score=float("nan")),
     ])
+    ros = pd.DataFrame([
+        dict(gsis_id="00-KAM", full_name="Alvin Kamara", first_name="Alvin", last_name="Kamara", team="NO",
+             position="RB", status="ACT", season=2026, week=w, football_name="Alvin") for w in (5, 6, 19)] + [
+        dict(gsis_id="00-DNP", full_name="Dnp Guy", first_name="Dnp", last_name="Guy", team="NO",
+             position="WR", status="INA", season=2026, week=5, football_name="Dnp")])
+    stats = pd.DataFrame([row("00-KAM", "2026_05_ATL_NO", "NO", rushing_yards=39),
+                          row("00-KAM", "2026_19_ATL_NO", "NO", rushing_yards=100)])
+    snaps = pd.DataFrame([dict(game_id="2026_05_ATL_NO", gsis_id="00-KAM", offense_snaps=40, defense_snaps=0, st_snaps=0),
+                          dict(game_id="2026_05_ATL_NO", gsis_id="00-DNP", offense_snaps=0, defense_snaps=0, st_snaps=0)])
+    return Actuals(stats, sched, snaps), PlayerResolver(ros, schedules=sched)
 
-    mock_nhl = {
-        "final": True,
-        "players": {
-            8479318: {"name": "Auston Matthews", "sog": 5, "_played": True}
-        }
-    }
-    mock_nba = {
-        "final": True,
-        "players": {
-            4065648: {"name": "Jayson Tatum", "points": 24, "_played": True}
-        }
-    }
 
-    with patch("ev.grade_props.nhl_actuals", return_value=mock_nhl), \
-         patch("ev.grade_props.nba_actuals", return_value=mock_nba):
-        outcomes = _settle_winter_bets(pending, "2026-10-28")
+def _nfl_bet(**kw):
+    import json
+    base = {"id": 201, "sport": "nfl", "game_date": "2026-10-04", "away_team": "ATL", "home_team": "NO",
+            "player": "Alvin Kamara", "bet_type": "rush_yds_over_49.5", "odds": -110, "stake": 1.0,
+            "notes": json.dumps({"stat": "rush_yds", "point": 49.5, "side": "over", "game_key": "nfl:2026-10-04:ATL@NO"})}
+    base.update(kw)
+    return base
 
-    assert len(outcomes) == 2
-    # NHL bet: 5 sog > 3.5 line -> win, -115 odds -> profit ~ 10 * (100/115) = 8.70
-    assert outcomes[0]["id"] == 101
-    assert outcomes[0]["result"] == "win"
-    assert outcomes[0]["profit"] == 8.70
 
-    # NBA bet: 24 points < 26.5 line -> loss -> profit = -10.0
-    assert outcomes[1]["id"] == 102
-    assert outcomes[1]["result"] == "loss"
-    assert outcomes[1]["profit"] == -10.0
+def test_nfl_winter_settlement_grades_the_right_week_not_the_last_row_of_the_season():
+    import pandas as pd
+    from unittest.mock import patch
+    from mlb.runners.settle_bets import _settle_winter_bets, _nfl_season_of
+    assert _nfl_season_of("2027-01-10") == 2026 and _nfl_season_of("2026-10-04") == 2026
+    seen = {}
+
+    def ctx(seasons):
+        seen["seasons"] = list(seasons)
+        return _nfl_ctx()
+
+    with patch("mlb.runners.settle_bets._nfl_grading_context", side_effect=ctx):
+        out = _settle_winter_bets(pd.DataFrame([_nfl_bet()]), "2026-10-05")
+    # week 5 (39 yds) loses the over 49.5; the Jan row (100 yds) must NOT be picked up as "the last row"
+    assert [(o["id"], o["result"]) for o in out] == [(201, "loss")]
+    assert 2026 in seen["seasons"]
+
+
+def test_nfl_winter_settlement_void_only_on_confirmed_dnp_and_pending_otherwise():
+    import json
+    import pandas as pd
+    from unittest.mock import patch
+    from mlb.runners.settle_bets import _settle_winter_bets
+    notes = json.dumps({"stat": "rec_yds", "point": 19.5, "side": "over"})
+    bets = [
+        _nfl_bet(id=202, player="Dnp Guy", bet_type="rec_yds_over_19.5", notes=notes),      # snap counts prove 0 snaps -> void
+        _nfl_bet(id=203, player="Nobody Known", bet_type="rec_yds_over_19.5", notes=notes), # unresolved -> pending
+        _nfl_bet(id=204, game_date="2026-10-11", home_team="LA", away_team="NO", bet_type="rush_yds_over_49.5",
+                 notes=json.dumps({"stat": "rush_yds", "point": 49.5, "side": "over"})),   # week 6 not played -> pending
+    ]
+    with patch("mlb.runners.settle_bets._nfl_grading_context", side_effect=lambda s: _nfl_ctx()):
+        out = _settle_winter_bets(pd.DataFrame(bets), "2026-10-12")
+    assert [(o["id"], o["result"]) for o in out] == [(202, "void")]
+
+
+def test_nfl_winter_settlement_leaves_bets_pending_when_the_mirror_is_missing():
+    import pandas as pd
+    from unittest.mock import patch
+    from mlb.runners.settle_bets import _settle_winter_bets
+    with patch("mlb.runners.settle_bets._nfl_grading_context", side_effect=FileNotFoundError("season not mirrored")):
+        assert _settle_winter_bets(pd.DataFrame([_nfl_bet()]), "2026-10-05") == []
+
+
+def test_run_settles_winter_bets_and_returns_without_crashing(monkeypatch):
+    """Regression: run() ended in a NameError (original_pending_count / retry_count unbound) whenever there were no MLB
+    bets, and the Discord recap was skipped in the offseason when only NFL/NBA/NHL bets settled."""
+    import json
+    import pandas as pd
+    import sqlalchemy as sa
+    from unittest.mock import patch
+    from mlb.runners import settle_bets
+
+    eng = sa.create_engine("sqlite://")
+    bet = {**_winter_bet(), "system": "EV", "result": None, "profit": None, "settled_at": None, "edge": 0.05,
+           "game_pk": None, "notes": json.dumps({"stat": "sog", "point": 3.5, "side": "over", "player_id": 8479318})}
+    pd.DataFrame([bet]).to_sql("bets", eng, index=False)
+    posted = []
+    nhl = {"final": True, "players": {8479318: {"sog": 5, "_played": True}}}
+    with patch("mlb_core.tracking.bet_tracker._make_engine", return_value=eng), \
+         patch("mlb_core.notify.discord.post_all_systems_summary", side_effect=lambda *a, **k: posted.append(k)), \
+         patch("mlb_core.notify.discord.post_ops_alert"), \
+         patch("mlb_core.config.is_mlb_offseason", return_value=True), \
+         patch("ev.grade_props.nhl_actuals", return_value=nhl):
+        out = settle_bets.run("2026-10-29")
+    assert out["status"] == "ok" and out["settled"] == 1 and out["skipped"] == 0
+    assert len(posted) == 1                                   # offseason, no MLB bet pending, but a winter bet settled
+    with eng.connect() as c:
+        assert c.execute(sa.text("SELECT result FROM bets")).scalar() == "win"

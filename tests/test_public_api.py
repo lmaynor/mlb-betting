@@ -793,6 +793,31 @@ def test_get_game_projections_and_market_filter(monkeypatch):
         api.get_game_projections("mlb")
 
 
+def test_game_projections_carry_unvalidated_label_and_stale_passthrough(monkeypatch):
+    from datetime import datetime, timezone
+    from mlb.runners import public_api as api
+    api._GAME_PROJ_CACHE.clear()
+    now = datetime.now(timezone.utc)
+    payload = {"sport": "nhl", "status": "live", "engine": "dixon_coles_eng_matrix_v1", "ts": now.isoformat(),
+               "stale": True, "stale_reason": "odds failed to load", "engine_version": "2026-11-01.1",
+               "rows": [{"sport": "nhl", "system": "NHL_ML", "stat": "moneyline", "side": "home"}],
+               "priced_games": [], "games": []}
+    files = {"EVSweep/nhl_games/predictions_latest.json": payload}
+    monkeypatch.setattr("mlb_core.storage.exists", lambda k: k in files)
+    monkeypatch.setattr("mlb_core.storage.read_bytes", lambda k: json.dumps(files[k]).encode())
+    res = api.get_game_projections("nhl")
+    assert res["validated"] is False
+    assert "UNVALIDATED" in res["label"]
+    assert res["engine_version"] == "2026-11-01.1"
+    assert res["stale"] is True and res["stale_reason"] == "odds failed to load"
+
+    # An old payload with no validated/label fields still reads as unvalidated.
+    api._GAME_PROJ_CACHE.clear()
+    files["EVSweep/nhl_games/predictions_latest.json"] = {k: v for k, v in payload.items() if k not in ("stale", "stale_reason")}
+    res = api.get_game_projections("nhl")
+    assert res["validated"] is False and res["stale"] is False
+
+
 def test_public_game_projections_route(client):
     from unittest.mock import patch
     # Unauthorized

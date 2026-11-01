@@ -29,6 +29,7 @@ import pandas as pd
 from mlb_core import storage
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 from nba.config import GAMES_MASTER, TEAM_BOX_MASTER
+from nba.game import odds_feed
 from nba.game.features import FeatureStore, MatchupFeatures, build_team_game_stats_from_raw
 from nba.game.kalman_ratings import KalmanTeamTracker
 from nba.game.model import DistributionalGameEngine, PricedGame, PricedMarket
@@ -38,6 +39,7 @@ log = logging.getLogger("nba.game.run_daily")
 _CT = ZoneInfo("America/Chicago")
 _ET = ZoneInfo("America/New_York")
 
+ENGINE_VERSION = "2026-11-01.1"   # bump when the model changes (2026-11-01: defensive Four-Factor signs, Kalman drift, loader schema)
 OUT_KEY = "EVSweep/nba_games/predictions_latest.json"
 ARCHIVE_PREFIX = "EVSweep/nba_games/archive"
 
@@ -56,28 +58,31 @@ def load_historical_boxscores() -> pd.DataFrame:
     return pd.DataFrame()
 
 
-def load_live_game_odds(now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+def load_live_game_odds(
+    now: Optional[datetime] = None,
+    meta_out: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     """
-    Load upcoming NBA game lines (h2h, spreads, totals) from banked odds or live aggregator.
+    Upcoming NBA game lines (h2h, spreads, totals): the raw event list the banker's game_lines pointer references
+    (see nba.game.odds_feed). Returns [] on any failure; the reason lands in `meta_out` (ok/reason/age_min/raw_key).
     """
-    now = now or datetime.now(timezone.utc)
-    # Check OddsAccum/basketball_nba/latest_game_lines.json or latest.json
-    for key in [
-        "OddsAccum/basketball_nba/latest_game_lines.json",
-        "OddsAccum/basketball_nba/latest.json",
-        "Odds/bettingpros_live/nba/latest.json",
-    ]:
-        if storage.exists(key):
-            try:
-                raw = storage.read_bytes(key)
-                data = json.loads(raw.decode("utf-8"))
-                events = data.get("events") or data.get("rows") or []
-                if events:
-                    log.info("Loaded %d events from %s", len(events), key)
-                    return events
-            except Exception as exc:
-                log.warning("Failed reading odds from %s: %s", key, exc)
-    return []
+    events, meta = odds_feed.read_banked_game_lines("basketball_nba", now)
+    if meta_out is not None:
+        meta_out.update(meta)
+    return events or []
+
+
+def load_tips(df_box: Optional[pd.DataFrame]) -> Optional[pd.Series]:
+    """game_id -> UTC tip (schedule dumps first, raw boxscore cache second) so the master's UTC `date` becomes the ET
+    game day. None if unavailable; the loader then keeps the UTC date and logs how many games were approximate."""
+    if df_box is None or df_box.empty or "game_id" not in df_box.columns or "date" not in df_box.columns:
+        return None
+    try:
+        from nba.props.data import gather_tips
+        return gather_tips(df_box[["game_id", "date"]].drop_duplicates("game_id"))
+    except Exception:                                                                    # noqa: BLE001
+        log.exception("tip times unavailable; NBA rest/B2B will use the UTC master date")
+        return None
 
 
 def load_live_injuries() -> Dict[str, List[Dict[str, Any]]]:
@@ -135,12 +140,9 @@ def extract_game_market_odds(event: Dict[str, Any]) -> Dict[str, Any]:
                 p_map = {}
                 for o in outcomes:
                     p_map[team_code(str(o.get("name")))] = o.get("price")
-                if h_code in p_map and a_code in p_map and p_map[h_code] and p_map[a_code]:
-                    h2h_quotes.append({
-                        "book": b_name,
-                        "home_odds": int(p_map[h_code]),
-                        "away_odds": int(p_map[a_code]),
-                    })
+                ho, ao = odds_feed.safe_price(p_map.get(h_code)), odds_feed.safe_price(p_map.get(a_code))
+                if ho is not None and ao is not None:
+                    h2h_quotes.append({"book": b_name, "home_odds": ho, "away_odds": ao})
             elif mk_key == "spreads":
                 p_map = {}
                 line_val = None
@@ -149,13 +151,9 @@ def extract_game_market_odds(event: Dict[str, Any]) -> Dict[str, Any]:
                     p_map[c] = o.get("price")
                     if c == h_code:
                         line_val = o.get("point")
-                if h_code in p_map and a_code in p_map and line_val is not None:
-                    spread_quotes.append({
-                        "book": b_name,
-                        "line": float(line_val),
-                        "home_odds": int(p_map[h_code]),
-                        "away_odds": int(p_map[a_code]),
-                    })
+                ho, ao = odds_feed.safe_price(p_map.get(h_code)), odds_feed.safe_price(p_map.get(a_code))
+                if ho is not None and ao is not None and line_val is not None:
+                    spread_quotes.append({"book": b_name, "line": float(line_val), "home_odds": ho, "away_odds": ao})
             elif mk_key == "totals":
                 p_map = {}
                 line_val = None
@@ -163,13 +161,9 @@ def extract_game_market_odds(event: Dict[str, Any]) -> Dict[str, Any]:
                     s = str(o.get("name", "")).lower()
                     p_map[s] = o.get("price")
                     line_val = o.get("point")
-                if "over" in p_map and "under" in p_map and line_val is not None:
-                    total_quotes.append({
-                        "book": b_name,
-                        "line": float(line_val),
-                        "over_odds": int(p_map["over"]),
-                        "under_odds": int(p_map["under"]),
-                    })
+                oo, uo = odds_feed.safe_price(p_map.get("over")), odds_feed.safe_price(p_map.get("under"))
+                if oo is not None and uo is not None and line_val is not None:
+                    total_quotes.append({"book": b_name, "line": float(line_val), "over_odds": oo, "under_odds": uo})
 
     # Consensus de-vig for h2h
     if h2h_quotes:
@@ -260,17 +254,21 @@ def run_nba_game_predictions(
     target_date: Optional[str] = None,
     write_gcs: bool = False,
     now: Optional[datetime] = None,
+    events: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Execute full quantitative game-line prediction pipeline for the upcoming NBA slate.
+
+    `events` (optional): already-loaded game-line events. Used only if they carry h2h/spreads/totals markets (the prop
+    feeds do not); otherwise the banked game_lines snapshot is loaded.
     """
     now = now or datetime.now(timezone.utc)
-    ct_today = now.astimezone(_CT).strftime("%Y-%m-%d")
-    date_str = target_date or ct_today
+    et_today = now.astimezone(_ET).strftime("%Y-%m-%d")      # ET game day (repo convention), not CT
+    date_str = target_date or et_today
 
     # 1. Load historical training data
     df_box = load_historical_boxscores()
-    hist_stats = build_team_game_stats_from_raw(df_box)
+    hist_stats = build_team_game_stats_from_raw(df_box, tips=load_tips(df_box))
 
     kalman = KalmanTeamTracker()
     feature_store = FeatureStore()
@@ -280,16 +278,27 @@ def run_nba_game_predictions(
     hist_stats.sort(key=lambda g: (g.game_date, g.game_id))
     for g in hist_stats:
         if str(g.game_date)[:10] < date_str:
+            kalman.roll_season(g.game_date)
             if g.is_home:
                 # Find matching opponent row to update Kalman
                 kalman.update_game(
                     g.team, g.opp, g.points, g.opp_points, g.possessions, g.minutes, g.game_date
                 )
             feature_store.add_games([g])
+    kalman.roll_season(date_str)
 
     # 2. Load live data
     injuries = load_live_injuries()
-    events = load_live_game_odds(now)
+    odds_meta: Dict[str, Any] = {}
+    if events is not None and odds_feed.has_game_markets(events):
+        odds_meta = {"ok": True, "source": "injected"}
+    else:
+        events = load_live_game_odds(now, meta_out=odds_meta)
+    odds_ok = bool(odds_meta.get("ok", bool(events)))
+    n_loaded = len(events)
+    events, _n_undated = odds_feed.events_for_day(events, date_str)
+    odds_meta["events_loaded"] = n_loaded
+    odds_meta["events_for_day"] = len(events)
 
     games_meta = []
     board_rows = []
@@ -349,6 +358,8 @@ def run_nba_game_predictions(
                 "confluence": m.confluence,
                 "beezy_score": m.beezy_score,
                 "push_prob": round(m.push_prob, 4),
+                "validated": False,
+                "label": odds_feed.UNVALIDATED_LABEL,
             }
             board_rows.append(row)
 
@@ -356,22 +367,38 @@ def run_nba_game_predictions(
         "sport": "nba",
         "market_type": "game",
         "engine": "kalman_joint_t_v1",
+        "engine_version": ENGINE_VERSION,
+        # NBA ML/spread/totals walk-forward research found NO validated edge (2021-25): model_edge is a model-vs-market
+        # gap, not a tested edge. Consumers must show `label` next to any edge figure.
+        "validated": False,
+        "label": odds_feed.UNVALIDATED_LABEL,
+        "stale": False,
         "ts": now.isoformat(),
         "date": date_str,
         "count": len(board_rows),
         "status": "live" if board_rows else "awaiting_lines",
+        "lines_source": "oddsaccum_game_lines",
+        "odds_meta": odds_meta,
         "games": games_meta,
         "rows": board_rows,
         "priced_games": [pg.to_dict() for pg in priced_games],
     }
 
     if write_gcs:
-        raw_bytes = json.dumps(payload, indent=2).encode("utf-8")
-        storage.write_bytes(raw_bytes, OUT_KEY)
-        storage.write_bytes(raw_bytes, f"{ARCHIVE_PREFIX}/{date_str}.json")
-        log.info("Saved NBA game predictions to %s", OUT_KEY)
+        return odds_feed.persist_payload(payload, OUT_KEY, ARCHIVE_PREFIX, odds_ok)
 
     return payload
+
+
+def read_cached_game_predictions() -> Optional[Dict[str, Any]]:
+    """Latest stored payload, or None. Unlike get_nba_game_predictions this NEVER recomputes (a recompute replays the whole
+    history), so per-event callers such as the Kalshi leg builder cannot trigger it."""
+    try:
+        if storage.exists(OUT_KEY):
+            return json.loads(storage.read_bytes(OUT_KEY).decode("utf-8"))
+    except Exception:  # noqa: BLE001
+        log.exception("could not read cached game predictions at %s", OUT_KEY)
+    return None
 
 
 def get_nba_game_predictions(

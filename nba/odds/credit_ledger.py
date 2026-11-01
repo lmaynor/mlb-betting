@@ -1,6 +1,6 @@
 """Per-sport ParlayAPI credit ledger + pace guard for the odds accumulators.
 
-ParlayAPI bills ONE shared monthly pool (20k on the current plan) across every caller. The 2026-08-27 incident
+ParlayAPI bills ONE shared monthly pool (100k/mo on the current plan; every budget is defined in nba/config.py) across every caller. The 2026-08-27 incident
 (two never-retired accumulator jobs drained the pool outside the MLB snapshot ledger) is the reason this exists:
 every accumulator call goes through allowance() BEFORE spending and record() AFTER, and a hard floor on the
 pool's own `x-requests-remaining` header stops everything regardless of what any ledger says.
@@ -8,9 +8,11 @@ pool's own `x-requests-remaining` header stops everything regardless of what any
 Ledger format is identical to mlb.runners.snapshot_odds' tally so the two are interchangeable:
   OddsAccum/{sport}/_credits/{YYYY-MM}.json  ->  {"month": "2026-10", "credits": 1234}
 
-Read-modify-write without locking: one scheduler job per (sport, kind) at a time, jobs never overlap
-(task-timeout < cadence), so a lost update is not a realistic concern; an unreadable ledger FAILS CLOSED
-(spend nothing) rather than open -- the opposite of a cosmetic counter, because it is the spend guard.
+Concurrency: the props and game_lines jobs of one sport share ONE ledger file, fire 5 minutes apart (:30 / :35) and have a
+900 s task timeout, so they CAN overlap and a plain read-modify-write loses an update (verified by reading
+deploy/setup_odds_banking.sh). On GCS record() therefore uses a generation-match precondition (read the object generation,
+write with if_generation_match, retry on PreconditionFailed); local files (dev) fall back to the plain write. An unreadable
+ledger FAILS CLOSED (spend nothing) rather than open -- the opposite of a cosmetic counter, because it is the spend guard.
 """
 import calendar
 import json
@@ -45,12 +47,45 @@ def read_spent(sport: str, month: str) -> int:
     return int(d.get("credits", 0)) if d.get("month") == month else 0
 
 
+CAS_RETRIES = 8
+
+
+def _blob_for(key: str):
+    """The GCS blob for `key` when a bucket is configured, else None (local-file development mode)."""
+    return storage._gcs_blob(key) if storage._get_bucket() else None
+
+
+def _record_gcs(blob, month: str, n: int) -> None:
+    """Add n credits with optimistic concurrency: write only if the object is still at the generation we read."""
+    from google.api_core.exceptions import NotFound, PreconditionFailed
+    for _ in range(CAS_RETRIES):
+        try:
+            blob.reload()
+            gen = blob.generation
+            d = json.loads(blob.download_as_bytes(if_generation_match=gen))
+            cur = int(d.get("credits", 0)) if d.get("month") == month else 0
+        except NotFound:
+            gen, cur = 0, 0                                     # if_generation_match=0 == "create only if absent"
+        payload = json.dumps({"month": month, "credits": cur + int(n)}).encode()
+        try:
+            blob.upload_from_string(payload, if_generation_match=gen)
+            return
+        except PreconditionFailed:
+            continue                                            # another job wrote in between: re-read and retry
+    raise RuntimeError(f"credit ledger contended: {CAS_RETRIES} generation-match retries exhausted")
+
+
 def record(sport: str, month: str, n: int) -> None:
     if n <= 0:
         return
     try:
+        key = ledger_key(sport, month)
+        blob = _blob_for(key)
+        if blob is not None:
+            _record_gcs(blob, month, int(n))
+            return
         total = read_spent(sport, month) + int(n)
-        storage.write_bytes(json.dumps({"month": month, "credits": total}).encode(), ledger_key(sport, month))
+        storage.write_bytes(json.dumps({"month": month, "credits": total}).encode(), key)
     except Exception as e:                                                                  # noqa: BLE001
         logger.error("credit ledger write FAILED for %s %s (+%s credits not recorded): %r", sport, month, n, e)
 

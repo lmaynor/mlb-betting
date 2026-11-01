@@ -29,12 +29,16 @@ from typing import Any, Dict, List, Optional
 
 from ev.sgp_book_pricer import (
     DEFAULT_PARAMS_PATH,
+    MIN_QUOTES_PER_GROUP,
     SGP_ARCHETYPES,
     fit_book_sgp_params,
+    link_allowed_for_book,
     load_book_sgp_params,
 )
 
 DEFAULT_CSV_PATH = "data/sgp_quotes.csv"
+# Every row this tool writes is a manual observation of a live book price.
+HARVEST_SOURCE = "harvest"
 CSV_COLUMNS = [
     "book", "archetype", "leg1_odds", "leg2_odds", "sgp_odds",
     "leg3_odds", "timestamp", "source", "player", "event",
@@ -77,7 +81,17 @@ def run_fit_only(csv_path: str, params_path: str) -> int:
         return 1
 
     log.info("Fitting book SGP parameters on %d quotes from %s...", len(quotes), csv_path)
-    fitted = fit_book_sgp_params(quotes, out_path=params_path)
+    rejections: Dict[str, str] = {}
+    fitted = fit_book_sgp_params(quotes, out_path=params_path, rejections=rejections)
+    for key, why in sorted(rejections.items()):
+        log.warning("  rejected %s: %s", key, why)
+    if not fitted:
+        log.warning(
+            "No parameter set accepted (need >= %d real 2-leg quotes per book+archetype, a passing holdout, "
+            "no fit at a bound). Archetype defaults stay in force; nothing was written.",
+            MIN_QUOTES_PER_GROUP,
+        )
+        return 1
     log.info("Fitted %d (book, archetype) parameter sets:", len(fitted))
     for key, p in sorted(fitted.items()):
         log.info(
@@ -117,7 +131,8 @@ def harvest_browser_links(
         log.warning("No SGP candidates available to harvest.")
         return 1
 
-    cands.sort(key=lambda c: float(c.get("ev_pct", 0.0)), reverse=True)
+    # credible rows first; flagged model artifacts last
+    cands.sort(key=lambda c: (bool(c.get("model_artifact")), -float(c.get("ev_pct", 0.0))))
     top_cands = cands[:limit]
     log.info("Selected top %d candidates for quote harvesting:", len(top_cands))
 
@@ -159,6 +174,12 @@ def harvest_browser_links(
 
             if not link:
                 continue
+            if len(legs) < 2:
+                log.warning("Skipping %s: fewer than 2 legs", player)
+                continue
+            if not link_allowed_for_book(book, link):
+                log.warning("Skipping %s: deep link is not https on %s's own domain: %r", player, book, link)
+                continue
 
             if use_playwright and context:
                 page = context.new_page()
@@ -177,8 +198,9 @@ def harvest_browser_links(
 
             try:
                 sgp_val = int(prompt.replace("+", ""))
-                l1_val = legs[0].get("book_american") if len(legs) >= 1 else 0
-                l2_val = legs[1].get("book_american") if len(legs) >= 2 else 0
+                l1_val = legs[0].get("book_american")
+                l2_val = legs[1].get("book_american")
+                # 3-leg tickets keep their third leg; the fitter skips them (it only models 2 legs)
                 l3_val = legs[2].get("book_american") if len(legs) >= 3 else ""
 
                 row = {
@@ -189,7 +211,7 @@ def harvest_browser_links(
                     "sgp_odds": sgp_val,
                     "leg3_odds": l3_val,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "source": "playwright" if use_playwright else "manual_open",
+                    "source": HARVEST_SOURCE,
                     "player": player,
                     "event": cand.get("game_key", ""),
                 }

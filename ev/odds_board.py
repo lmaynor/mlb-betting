@@ -175,6 +175,21 @@ def _prefer(new: dict, old: dict) -> bool:
     return (sides(new), not new["alt"]) > (sides(old), not old["alt"])
 
 
+ROGUE_MIN_BOOKS = 5      # rogue-quote filter needs at least this many quoting books on a side (never filter on fewer)
+ROGUE_RATIO = 3.0        # ... and drops a quote whose decimal payout is above this multiple of the median
+
+
+def _safe_decimal(american):
+    """American odds -> decimal, or None for a missing / zero / non-numeric price (american_to_decimal(0) divides by zero)."""
+    try:
+        v = float(american)
+    except (TypeError, ValueError):
+        return None
+    if v == 0 or v != v:
+        return None
+    return american_to_decimal(v)
+
+
 def build_board(sport: str, events: list | None, now: datetime, meta: dict | None = None) -> dict:
     """Banked events -> the odds-board payload for one sport (rows sorted nearest game first, then player, then stat).
 
@@ -232,16 +247,20 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
             if old is None or _prefer(new, old):
                 row["books"][q.book] = new
 
-    # Drop rogue quotes where one book's payout deviates wildly (> 1.8x median dec) from >= 3 quoting books
-    # (e.g. First TD at +10000 mis-mapped into Anytime TD when peers quote +2800).
+    # Drop rogue quotes (e.g. First TD at +10000 mis-mapped into Anytime TD when peers quote +2800): a book whose decimal payout
+    # exceeds ROGUE_RATIO x the median of the side's quotes. Applies ONLY with >= ROGUE_MIN_BOOKS quoting books: with 3-4 books
+    # the median is too fragile and a genuinely soft price (the whole point of this board) looks like an outlier.
     for row in rows.values():
         for side in ("over", "under"):
             side_quotes = [(b_name, b[side]) for b_name, b in row["books"].items() if b.get(side) is not None]
-            if len(side_quotes) >= 3:
-                decs = [american_to_decimal(p) for _, p in side_quotes]
-                med_dec = float(median(decs))
+            if len(side_quotes) >= ROGUE_MIN_BOOKS:
+                decs = {b_name: _safe_decimal(p) for b_name, p in side_quotes}
+                valid = [d for d in decs.values() if d is not None]
+                if len(valid) < ROGUE_MIN_BOOKS:
+                    continue
+                med_dec = float(median(valid))
                 for b_name, p in side_quotes:
-                    if american_to_decimal(p) > med_dec * 1.8:
+                    if decs[b_name] is not None and decs[b_name] > med_dec * ROGUE_RATIO:
                         log.warning(
                             "odds_board %s: dropping rogue %s quote for %s %s %s at %s (%s vs peer median dec %.2f)",
                             sport, side, row.get("player_norm"), row.get("stat"), row.get("line"), b_name, p, med_dec

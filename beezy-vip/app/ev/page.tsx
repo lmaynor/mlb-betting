@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { apiGetAnalyticsDeepDive, apiGetOddsBoard, apiGetGameProjections } from '@/lib/betting-api'
-import { limitOddsBoard } from '@/lib/access-feeds'
+import { canViewFull } from '@/lib/access'
+import { limitGameLines, limitOddsBoard } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
 import { withHeadshots } from '@/lib/odds-headshots'
 import type { OddsBoard } from '@/lib/odds-screen'
@@ -35,9 +36,14 @@ export default async function OddsPage() {
     locked += c.locked
     cut[SPORTS[i]] = withHeadshots(c.board)
   })
-  const initialGames: Record<string, GameProjectionsFeed | null> = {
-    nba: nbaGames,
-    nhl: nhlGames,
+  // Game Lines follow the Terminal's rule (limitGameLines): Pro whole, everyone else the small preview, cut before the payload.
+  const cutGames = (feed: GameProjectionsFeed | null): GameProjectionsFeed | null => {
+    if (!feed) return null
+    const c = limitGameLines(feed, viewer)
+    return { ...c.feed, locked: c.locked }
   }
-  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} initialGames={initialGames} />
+  const initialGames: Record<string, GameProjectionsFeed | null> = { nba: cutGames(nbaGames), nhl: cutGames(nhlGames) }
+  // Whole-Terminal access (Pro, or anyone while the site is pre-launch / tiers are not enforced): drives the outlier book reveal.
+  const fullAccess = canViewFull(viewer, 'ev_terminal', 'mlb')
+  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} initialGames={initialGames} fullAccess={fullAccess} />
 }

@@ -9,8 +9,14 @@
 # DFS apps and Kalshi are dropped) which ev.daily_projections.load_events unions with ParlayAPI and BettingPros lines.
 # BestBook is a free cookie-authenticated feed: this spends no ParlayAPI credits.
 #
+# COMPLIANCE GATE: this client reads a third party's private, cookie-authenticated stream and no ToS / licensing review is on
+# record (docs/solutions/conventions/bestbook-needs-tos-decision.md). The script therefore REFUSES to provision unless
+# BESTBOOK_ENABLED=1 is set, and every scheduler it creates starts PAUSED (BESTBOOK_RESUME=1 resumes them). The runner enforces
+# the same flag, so a stray `gcloud run jobs execute` also refuses.
+#
 # Usage:
-#   PROJECT_ID=concrete-crow-445205-m4 CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_bestbook_live.sh
+#   BESTBOOK_ENABLED=1 PROJECT_ID=concrete-crow-445205-m4 CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_bestbook_live.sh
+#   BESTBOOK_RESUME=1 BESTBOOK_ENABLED=1 ... bash deploy/setup_bestbook_live.sh   # only after the ToS decision: un-pause the schedulers
 #   PAUSE=1 PROJECT_ID=... bash deploy/setup_bestbook_live.sh     # pause every bb-live-* scheduler
 #   Test one run now:  gcloud run jobs execute bb-live-nba --region=us-central1 --wait
 set -euo pipefail
@@ -38,6 +44,10 @@ if [ "${PAUSE:-0}" = "1" ]; then
   echo "All bb-live-* schedulers paused."; exit 0
 fi
 
+[ "${BESTBOOK_ENABLED:-0}" = "1" ] || {
+  echo "REFUSING: BESTBOOK_ENABLED=1 is required. A ToS / licensing decision is needed before this feed is provisioned"
+  echo "(see docs/solutions/conventions/bestbook-needs-tos-decision.md)."; exit 1; }
+
 [ "${CONFIRM_IMAGE_HAS_LIVE_LINES:-0}" = "1" ] || {
   echo "REFUSING: set CONFIRM_IMAGE_HAS_LIVE_LINES=1 once $IMAGE contains ev/bestbook_events.py."
   echo "(An older image has no mlb.runners.bestbook_live_props: every execution would fail.)"; exit 1; }
@@ -51,7 +61,7 @@ for row in "${ROWS[@]}"; do
   if [[ "$JOBS_DONE" != *" $JOB "* ]]; then
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
-           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},BESTBOOK_ENABLED=1"
            --command="python"
            --args="-m,mlb.runners.bestbook_live_props,--sport,$SPORT"
            --task-timeout="900s" --max-retries=1 --memory="1Gi" --cpu="1")
@@ -62,13 +72,19 @@ for row in "${ROWS[@]}"; do
       echo "Creating Cloud Run job $JOB..."
       gcloud run jobs create "$JOB" "${FLAGS[@]}" --project="$PROJECT_ID" --quiet
     fi
+    # scheduler-invoker must hold run.invoker ON THE JOB or every scheduler firing is PERMISSION_DENIED (code 7); see
+    # docs/solutions/runtime-errors/scheduler-invoker-needs-run-invoker-per-job.md. Idempotent.
+    gcloud run jobs add-iam-policy-binding "$JOB" --region="$REGION" --project="$PROJECT_ID" \
+      --member="serviceAccount:${SCHED_SA}" --role="roles/run.invoker" --quiet >/dev/null
     JOBS_DONE="${JOBS_DONE}${JOB} "
   fi
 
   SCHED="${JOB}-${TAG}"
-  URI="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/${JOB}:run"
+  URI="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB}:run"
   SCHED_FLAGS=(--schedule="$CRON" --time-zone="America/Chicago" --uri="$URI" --http-method="POST"
-               --oauth-service-account-email="$SCHED_SA" --location="$REGION" --project="$PROJECT_ID"
+               --oauth-service-account-email="$SCHED_SA"
+               --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
+               --location="$REGION" --project="$PROJECT_ID"
                --description="Trigger $JOB ($TAG) -> Odds/bestbook_live/$SPORT/latest.json")
   if gcloud scheduler jobs describe "$SCHED" --location="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     echo "Updating Cloud Scheduler $SCHED ($CRON)..."
@@ -79,4 +95,4 @@ for row in "${ROWS[@]}"; do
   fi
 done
 
-echo "BestBook live jobs and schedulers provisioned."
+echo "BestBook live jobs and schedulers provisioned (new schedulers are PAUSED unless BESTBOOK_RESUME=1)."

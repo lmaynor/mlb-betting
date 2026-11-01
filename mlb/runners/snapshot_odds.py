@@ -31,9 +31,10 @@ regardless; day_offset only steers which ET day the SGO inning fetch targets.
 
 Credit guard (implicit, no header): each ParlayAPI run estimates spend as
 events*markets (+ game-line + discovery) and tracks a monthly tally in GCS. When
-the month would exceed PARLAY_CREDIT_CEILING (default 19500), it skips the
-expensive per-event props for that run (still writes game lines) -- so we push
-toward 20k without ever going over, no matter the slate size.
+the month would exceed PARLAY_CREDIT_CEILING (default nba.config.MLB_SNAPSHOT_CEILING, the MLB share of the ONE shared 100k/mo
+pool), it skips the expensive per-event props for that run (still writes game lines) -- so spend tracks a line to the ceiling
+without ever going over, no matter the slate size. It also honours the pool-wide reserve floor (nba.config.PARLAY_RESERVE_FLOOR)
+read from the x-requests-remaining header, like the NHL/NBA accumulators do.
 
 Output (SGO shape, same paths -> runners untouched):
      {out_prefix}/{YYYY-MM-DD}/snapshot_{HHMM_UTC}.json   (archive)
@@ -52,7 +53,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_PREFIX = "Odds/sgo"
 SPORT = "baseball_mlb"
 _ET = ZoneInfo("America/New_York")
-CREDIT_CEILING = int(os.environ.get("PARLAY_CREDIT_CEILING", "19500"))
+from nba.config import MLB_SNAPSHOT_CEILING, PARLAY_RESERVE_FLOOR  # noqa: E402  (single source of the shared-pool budgets)
+
+CREDIT_CEILING = int(os.environ.get("PARLAY_CREDIT_CEILING", str(MLB_SNAPSHOT_CEILING)))
 
 
 def _keys(out_prefix: str, run_date: str, hhmm: str):
@@ -174,6 +177,14 @@ def _gather_parlay(target_date: str, latest_key: str, include_sgo: bool | None):
     est_props = n_events * max(1, len(markets))
     pace_cap = _pace_ceiling(call_date)
     do_props = (spent + 3 + est_props) <= pace_cap
+    try:                                         # shared-pool floor: x-requests-remaining from the game-lines call above
+        remaining = int(client.credits_remaining) if client.credits_remaining is not None else None
+    except (TypeError, ValueError):
+        remaining = None
+    if do_props and remaining is not None and remaining - est_props < PARLAY_RESERVE_FLOOR:
+        logger.warning("snapshot(parlay): shared ParlayAPI pool has %d credits left; %d more would breach the %d floor -- "
+                       "game lines only this run", remaining, est_props, PARLAY_RESERVE_FLOOR)
+        do_props = False
 
     props_by_id, raw_props, prop_rows = {}, [], []
     if do_props:

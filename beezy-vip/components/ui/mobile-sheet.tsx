@@ -1,13 +1,15 @@
 'use client'
 
-import React, { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import React, { useCallback, useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { useFocusTrap } from '@/components/ui/use-focus-trap'
 
 /**
  * SSR-safe hook to detect mobile viewports (<= breakpoint px).
  * Defaults to false on the server to prevent hydration mismatch.
  */
 export function useIsMobile(breakpoint = 768): boolean {
-  const subscribe = (onStoreChange: () => void) => {
+  // stable between renders (it only changes with the breakpoint), so useSyncExternalStore does not re-subscribe every render
+  const subscribe = useCallback((onStoreChange: () => void) => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {}
     const mql = window.matchMedia(`(max-width: ${breakpoint}px)`)
     if (typeof mql.addEventListener === 'function') {
@@ -18,17 +20,38 @@ export function useIsMobile(breakpoint = 768): boolean {
       return () => (mql as unknown as { removeListener: (cb: () => void) => void }).removeListener(onStoreChange)
     }
     return () => {}
-  }
+  }, [breakpoint])
 
-  const getSnapshot = () => {
+  const getSnapshot = useCallback(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
     const mql = window.matchMedia(`(max-width: ${breakpoint}px)`)
     return Boolean(mql && mql.matches)
-  }
-
-  const getServerSnapshot = () => false
+  }, [breakpoint])
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
+
+const getServerSnapshot = () => false
+
+/**
+ * Body scroll lock shared by every open sheet. The ORIGINAL overflow value is saved when the first lock is taken and
+ * restored only when the last one is released, so sheets that close out of order can never leave the body stuck hidden.
+ */
+let scrollLocks = 0
+let savedOverflow = ''
+function lockBodyScroll(): () => void {
+  if (scrollLocks === 0) {
+    savedOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  scrollLocks += 1
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    scrollLocks = Math.max(0, scrollLocks - 1)
+    if (scrollLocks === 0) document.body.style.overflow = savedOverflow
+  }
 }
 
 /**
@@ -77,6 +100,8 @@ export interface MobileBottomSheetProps {
   onClose: () => void
   title?: ReactNode
   subtitle?: ReactNode
+  /** accessible name of the dialog; defaults to the title when it is plain text */
+  ariaLabel?: string
   children: ReactNode
   footer?: ReactNode
   maxHeight?: string
@@ -93,20 +118,22 @@ export function MobileBottomSheet({
   onClose,
   title,
   subtitle,
+  ariaLabel,
   children,
   footer,
   maxHeight = '88vh',
   zIndex = 80,
 }: MobileBottomSheetProps) {
-  // Body scroll lock
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Body scroll lock (module-level counter)
   useEffect(() => {
     if (!open) return
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = originalOverflow
-    }
+    return lockBodyScroll()
   }, [open])
+
+  // Focus moves into the sheet, Tab wraps inside it, and focus returns to the opener on close
+  useFocusTrap(dialogRef, open)
 
   // ESC key dismissal
   useEffect(() => {
@@ -122,9 +149,13 @@ export function MobileBottomSheet({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
+      aria-label={ariaLabel ?? (typeof title === 'string' ? title : 'Dialog')}
+      tabIndex={-1}
       style={{
+        outline: 'none',
         position: 'fixed',
         inset: 0,
         zIndex,

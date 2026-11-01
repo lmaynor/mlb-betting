@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from nba.game.features import _season_of
 from nba.teams import TEAMS, team_code
 
 log = logging.getLogger("nba.game.kalman_ratings")
@@ -112,6 +113,7 @@ class KalmanTeamTracker:
         self.league_pace = float(league_pace)
         self.hca_100 = float(hca_100)
         self.teams: Dict[str, TeamState] = {}
+        self.current_season: Optional[int] = None
         self._init_teams()
 
     def _init_teams(self) -> None:
@@ -144,10 +146,10 @@ class KalmanTeamTracker:
             )
         return self.teams[code]
 
-    def _apply_time_drift(self, state: TeamState, current_date: Optional[str]) -> None:
-        """Inject process noise based on elapsed days since last game."""
+    def _drifted_cov(self, state: TeamState, current_date: Optional[str]) -> np.ndarray:
+        """Covariance after process noise for the days elapsed since the team's last game. PURE: returns a new array."""
         if not current_date or not state.last_date:
-            return
+            return state.cov
         try:
             d_curr = datetime.strptime(str(current_date)[:10], "%Y-%m-%d").date()
             d_last = datetime.strptime(str(state.last_date)[:10], "%Y-%m-%d").date()
@@ -160,7 +162,27 @@ class KalmanTeamTracker:
             DAILY_Q_DEF * delta_days,
             DAILY_Q_PACE * delta_days,
         ])
-        state.cov = state.cov + q_matrix
+        return state.cov + q_matrix
+
+    def _apply_time_drift(self, state: TeamState, current_date: Optional[str]) -> None:
+        """Inject process noise based on elapsed days since last game. MUTATES state: call exactly once per game, from
+        update_game (predict_game uses the pure _drifted_cov, so repeated predicts never compound)."""
+        state.cov = self._drifted_cov(state, current_date)
+
+    def roll_season(self, game_date: Optional[str]) -> bool:
+        """Apply the offseason regression once when `game_date` falls in a later NBA season than the last seen one.
+        Call before predicting/updating each game in any replay or evaluator. Returns True if decay was applied."""
+        if not game_date:
+            return False
+        season = _season_of(game_date)
+        if season < 0:
+            return False
+        prev = self.current_season
+        self.current_season = season if prev is None else max(prev, season)
+        if prev is not None and season > prev:
+            self.apply_offseason_decay()
+            return True
+        return False
 
     def predict_game(
         self,
@@ -181,12 +203,9 @@ class KalmanTeamTracker:
         h_state = self.get_state(h_code)
         a_state = self.get_state(a_code)
 
-        # Apply process noise for elapsed rest
-        self._apply_time_drift(h_state, game_date)
-        self._apply_time_drift(a_state, game_date)
-
-        h_theta, h_cov = h_state.theta, h_state.cov
-        a_theta, a_cov = a_state.theta, a_state.cov
+        # Process noise for elapsed rest, on copies: predicting must not change the filter state
+        h_theta, h_cov = h_state.theta, self._drifted_cov(h_state, game_date)
+        a_theta, a_cov = a_state.theta, self._drifted_cov(a_state, game_date)
 
         hca = self.hca_100 if hca_100 is None else float(hca_100)
 
@@ -376,6 +395,7 @@ class KalmanTeamTracker:
             "league_pts_100": self.league_pts_100,
             "league_pace": self.league_pace,
             "hca_100": self.hca_100,
+            "current_season": self.current_season,
             "teams": {k: v.to_dict() for k, v in self.teams.items()},
         }
 
@@ -386,6 +406,7 @@ class KalmanTeamTracker:
             league_pace=data.get("league_pace", DEFAULT_LEAGUE_PACE),
             hca_100=data.get("hca_100", DEFAULT_HCA_100),
         )
+        tracker.current_season = data.get("current_season")
         for k, v in data.get("teams", {}).items():
             tracker.teams[k] = TeamState.from_dict(v)
         return tracker

@@ -18,7 +18,9 @@ NFL ties settle $0.50 per team on Kalshi; a two-way de-vig ignores them (a ~0.5p
 
 from __future__ import annotations
 
+import logging
 import statistics
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -31,6 +33,7 @@ from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
 
 _ET = ZoneInfo("America/New_York")
 _ND = statistics.NormalDist()
+log = logging.getLogger("ev.kalshi_game_legs")
 
 # Rung interpolation for spreads / totals. Books quote one or two lines per game; Kalshi lists EVERY half-point rung ("wins by over
 # 3.5 / 4.5 / ... / 17.5"). Between and beside the quoted lines the margin / total is modelled as Normal(mu, sd) with mu fitted to the
@@ -124,35 +127,82 @@ def _spreads(book: dict, home: str, away: str) -> dict:
     return out
 
 
-def _get_nba_game_sd(game_key: str) -> dict[str, float]:
-    """Retrieve model-predicted heteroscedastic scale (margin & total) for NBA game if available."""
+# ---- model payloads: read ONCE per process (TTL), never recomputed on a miss, indexed by a canonical game key --------------------
+_PRED_TTL_S = 300.0
+_PRED_CACHE: dict = {}          # sport -> (monotonic ts, {canonical game_key: priced game dict})
+
+
+def canon_game_key(sport: str, gk: str) -> str:
+    """'nhl:2026-01-10:LAK@TBL' and 'nhl:2026-01-10:LA@TB' are the same game: map both teams through the league's Kalshi
+    code table (ev.sports.kalshi_code). The NHL model keys games by NHL-API abbreviations (LAK/NJD/SJS/TBL) while the Kalshi
+    side uses LA/NJ/SJ/TB; an unmappable key is returned unchanged."""
     try:
-        from nba.game.run_daily import get_nba_game_predictions
-        preds = get_nba_game_predictions()
-        for g in (preds or {}).get("priced_games", []):
-            if g.get("game_key") == game_key:
-                return {
-                    "margin": float(g.get("sigma_margin", 12.0)),
-                    "total": float(g.get("sigma_total", 18.0)),
-                }
-    except Exception:
+        sp, day, teams = str(gk).split(":", 2)
+        away, home = teams.split("@", 1)
+        a, h = kalshi_code(sport, away), kalshi_code(sport, home)
+        if a and h:
+            return f"{sp}:{day}:{a}@{h}"
+    except ValueError:
         pass
+    return str(gk)
+
+
+def _priced_games(sport: str) -> dict:
+    """{canonical game_key: priced_game dict} from the stored model payload, cached per process for _PRED_TTL_S."""
+    hit = _PRED_CACHE.get(sport)
+    if hit is not None and time.monotonic() - hit[0] < _PRED_TTL_S:
+        return hit[1]
+    index: dict = {}
+    try:
+        if sport == "nba":
+            from nba.game.run_daily import read_cached_game_predictions as reader
+        else:
+            from nhl.game.run_daily import read_cached_game_predictions as reader
+        for g in (reader() or {}).get("priced_games", []) or []:
+            if isinstance(g, dict) and g.get("game_key"):
+                index[canon_game_key(sport, g["game_key"])] = g
+    except Exception:                                                                   # noqa: BLE001
+        log.exception("%s game model payload unavailable; game legs use league-typical sd", sport)
+    _PRED_CACHE[sport] = (time.monotonic(), index)
+    return index
+
+
+def _reset_pred_cache() -> None:
+    _PRED_CACHE.clear()
+
+
+def _get_nba_game_sd(game_key: str) -> dict[str, float]:
+    """Model outcome sd (margin & total) for an NBA game. The model's sigma_* are Student-t SCALES: the true sd is
+    scale * sqrt(nu / (nu - 2)). Payloads carry sd_* already; an older payload is converted here."""
+    g = _priced_games("nba").get(canon_game_key("nba", game_key))
+    if g:
+        try:
+            from nba.game.model import NU_MARGIN, NU_TOTAL, t_scale_to_sd
+            sd_m = g.get("sd_margin") or t_scale_to_sd(float(g["sigma_margin"]), NU_MARGIN)
+            sd_t = g.get("sd_total") or t_scale_to_sd(float(g["sigma_total"]), NU_TOTAL)
+            return {"margin": float(sd_m), "total": float(sd_t)}
+        except (KeyError, TypeError, ValueError):
+            log.warning("nba priced game %s has no usable sigma/sd fields; using league-typical sd", game_key)
+    else:
+        log.info("no NBA model payload for %s; using league-typical sd %s", game_key, GAME_SD["nba"])
     return GAME_SD.get("nba", {})
 
 
 def _get_nhl_game_sd(game_key: str) -> dict[str, float]:
-    """Retrieve model-predicted scale (margin & total) for NHL game if available."""
-    try:
-        from nhl.game.run_daily import get_nhl_game_predictions
-        preds = get_nhl_game_predictions()
-        for g in (preds or {}).get("priced_games", []):
-            if g.get("game_key") == game_key:
-                return {
-                    "margin": float(g.get("sigma_margin", 2.3)),
-                    "total": float(g.get("sigma_total", 2.5)),
-                }
-    except Exception:
-        pass
+    """Model OUTCOME sd (margin & total) for an NHL game, from the score matrix (payload fields sd_margin / sd_total).
+    sigma_margin / sigma_total in the payload are Kalman parameter-uncertainty stds (~0.7) and must never be used as an
+    outcome dispersion; a payload without sd_* (written before 2026-11-01) falls back to the league-typical defaults."""
+    g = _priced_games("nhl").get(canon_game_key("nhl", game_key))
+    if g:
+        try:
+            sd_m, sd_t = float(g["sd_margin"]), float(g["sd_total"])
+            if sd_m > 0 and sd_t > 0:
+                return {"margin": sd_m, "total": sd_t}
+        except (KeyError, TypeError, ValueError):
+            pass
+        log.warning("nhl priced game %s lacks outcome sd_margin/sd_total (legacy payload); using league-typical sd", game_key)
+    else:
+        log.info("no NHL model payload for %s; using league-typical sd %s", game_key, GAME_SD["nhl"])
     return GAME_SD.get("nhl", {})
 
 
@@ -254,15 +304,12 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
         spr: dict[tuple, list] = {}
         model_markets: dict[tuple[str, str, float | None], float] = {}
         if sport == "nhl":
-            try:
-                from nhl.game.run_daily import get_nhl_game_predictions
-                nhl_preds = get_nhl_game_predictions()
-                for pg in (nhl_preds or {}).get("priced_games", []):
-                    if pg.get("game_key") == gk:
-                        for mk in pg.get("markets", []):
-                            model_markets[(mk.get("system"), mk.get("side"), mk.get("line"))] = float(mk.get("p_model"))
-            except Exception:
-                pass
+            pg = _priced_games("nhl").get(canon_game_key("nhl", gk))
+            for mk in (pg or {}).get("markets", []) or []:
+                try:
+                    model_markets[(mk.get("system"), mk.get("side"), mk.get("line"))] = float(mk.get("p_model"))
+                except (TypeError, ValueError):
+                    continue
         for b in books:
             raw = str(b.get("key", "")).strip().lower()
             if raw in BOOK_ALIASES and BOOK_ALIASES[raw] in present:
@@ -302,7 +349,7 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
         for (fav_name, line), vals in spr.items():
             code = home if fav_name == home_n else away
             sp_side = "home" if code == home else "away"
-            sp_line = -line if sp_side == "home" else line
+            sp_line = -line      # the favourite's own line is -L whichever side it is (an away favourite is the away -L market)
             p_mod = model_markets.get(("NHL_SPREAD", sp_side, sp_line))
             ticker = f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}"
             r_dict = {"ticker": ticker, "sport": sport, "game_key": gk, "market_class": "game_spread", "player_norm": None,

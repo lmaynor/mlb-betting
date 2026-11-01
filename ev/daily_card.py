@@ -109,6 +109,9 @@ def is_confluence_play(r: dict[str, Any]) -> bool:
     """NFL / NBA / NHL projection row meeting strict Tier 1 Official Play criteria."""
     if not bool(r.get("confluence")):
         return False
+    # NBA/NHL game-line engines (NBA_ML, NHL_TOTAL, ...) have no validated edge: never promote them to the Official Card.
+    if str(r.get("system") or "").upper().startswith(("NBA_", "NHL_")) and r.get("validated") is not True:
+        return False
     try:
         n_books = int(r.get("n_books") or 0)
     except (ValueError, TypeError):

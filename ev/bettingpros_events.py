@@ -156,6 +156,21 @@ PER_GAME_PLAYER_MARKETS = {
 _NOT_A_PLAYER_POSITIONS = {"DST", "DEF", "TEAM"}
 
 
+ROGUE_MIN_BOOKS = 5      # same contract as ev.odds_board: the rogue-quote filter never applies to fewer quoting books
+ROGUE_RATIO = 3.0
+
+
+def _safe_decimal(american):
+    """American odds -> decimal, or None for a missing / zero / non-numeric price (american_to_decimal(0) divides by zero)."""
+    try:
+        v = float(american)
+    except (TypeError, ValueError):
+        return None
+    if v == 0 or v != v:
+        return None
+    return american_to_decimal(v)
+
+
 def build_per_game_player_rows(sport: str, market: str, market_id: int, ds: str, offers: list, ev_map: dict) -> list:
     """Long rows (the bpp.build_prop_rows shape) for a per-game, per-player market. Every selection is an 'over' (the
     one-sided Yes price) at the canonical anytime point 0.5: BettingPros stamps line 1 ('1+'), and ev.daily_projections.p_over
@@ -190,19 +205,25 @@ def build_per_game_player_rows(sport: str, market: str, market_id: int, ds: str,
             if not sel_lines:
                 continue
 
-            # Drop rogue quotes where one book's decimal odds exceeds 1.8x the consensus/median reference
-            # (e.g. First TD at +10000 mis-mapped into Anytime TD when consensus is +3000).
+            # Drop rogue quotes (e.g. First TD at +10000 mis-mapped into Anytime TD when consensus is +3000): a book whose decimal
+            # odds exceed ROGUE_RATIO x the reference (the BettingPros consensus line, else the peer median). Needs at least
+            # ROGUE_MIN_BOOKS real quoting books: with 3-4 books a genuine soft price is indistinguishable from an outlier.
             peer_decs = [
-                american_to_decimal(ln["cost"])
-                for bid, ln in sel_lines
-                if bid != 0 and bpp.book_kind(bid) not in ("dfs", "consensus")
+                d for d in (_safe_decimal(ln["cost"]) for bid, ln in sel_lines
+                            if bid != 0 and bpp.book_kind(bid) not in ("dfs", "consensus")) if d is not None
             ]
-            cons_dec = next((american_to_decimal(ln["cost"]) for bid, ln in sel_lines if bid == 0), None)
-            ref_dec = cons_dec if cons_dec is not None else (median(peer_decs) if len(peer_decs) >= 3 else None)
+            cons_dec = next((_safe_decimal(ln["cost"]) for bid, ln in sel_lines if bid == 0), None)
+            ref_dec = None
+            if len(peer_decs) >= ROGUE_MIN_BOOKS:
+                ref_dec = cons_dec if cons_dec is not None else median(peer_decs)
 
             for bid, ln in sel_lines:
-                dec = american_to_decimal(ln["cost"])
-                if ref_dec is not None and dec > ref_dec * 1.8:
+                dec = _safe_decimal(ln["cost"])
+                if dec is None:
+                    log.warning("bettingpros %s %s: skipping unpriced quote for %s at %s (cost=%r)",
+                                sport, market, name, bpp.BOOK_NAMES.get(bid, f"book_{bid}"), ln["cost"])
+                    continue
+                if ref_dec is not None and dec > ref_dec * ROGUE_RATIO:
                     log.warning(
                         "bettingpros %s %s: dropping rogue quote for %s at %s (%s vs ref decimal %.2f)",
                         sport, market, name, bpp.BOOK_NAMES.get(bid, f"book_{bid}"), ln["cost"], ref_dec

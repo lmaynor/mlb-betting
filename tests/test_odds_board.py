@@ -76,6 +76,39 @@ def test_rogue_quote_deviating_from_peer_consensus_is_dropped():
 
 
 
+def _td_book(key, price):
+    return {"key": key, "markets": [{"key": "player_anytime_td", "outcomes": [
+        {"name": "Over", "description": "Tylan Wallace", "price": price, "point": 0.5}]}]}
+
+
+def test_a_genuine_soft_price_survives_when_only_three_or_four_books_quote():
+    # +450 against +250/+260 is a real soft-book price (decimal 5.5 vs ~3.55 = 1.55x) and +800 against three +250s is much softer
+    # (9.0 vs 3.5 = 2.6x). Neither may be dropped: the old filter (> 1.8x the median with >= 3 books) ate the second.
+    for prices in ((250, 260, 450), (250, 250, 250, 800)):
+        books = [_td_book(f"book{i}", p) for i, p in enumerate(prices)]
+        b = ob.build_board("nfl", [event(books, away="Kansas City Chiefs", home="Baltimore Ravens")], NOW)
+        kept = {q["book"]: q["over"] for q in b["rows"][0]["books"]}
+        assert kept == {f"book{i}": p for i, p in enumerate(prices)}, prices
+
+
+def test_rogue_filter_needs_five_books_and_a_3x_payout_ratio():
+    # five quoting books: +1800 (decimal 19) vs median 3.6 (+260) is > 3x -> dropped; +700 (8.0) is 2.2x -> kept
+    base = [250, 260, 270, 250]
+    books = [_td_book(f"book{i}", p) for i, p in enumerate(base + [700])]
+    b = ob.build_board("nfl", [event(books, away="Kansas City Chiefs", home="Baltimore Ravens")], NOW)
+    assert "book4" in {q["book"] for q in b["rows"][0]["books"]}
+    books = [_td_book(f"book{i}", p) for i, p in enumerate(base + [1800])]
+    b = ob.build_board("nfl", [event(books, away="Kansas City Chiefs", home="Baltimore Ravens")], NOW)
+    assert "book4" not in {q["book"] for q in b["rows"][0]["books"]}
+
+
+def test_zero_price_does_not_crash_the_rogue_filter():
+    books = [_td_book(f"book{i}", p) for i, p in enumerate([250, 260, 270, 250, 0])]
+    b = ob.build_board("nfl", [event(books, away="Kansas City Chiefs", home="Baltimore Ravens")], NOW)
+    assert b["count"] == 1
+    assert ob._safe_decimal(0) is None and ob._safe_decimal(None) is None and ob._safe_decimal(-110) == pytest.approx(1.9091, abs=1e-3)
+
+
 def test_rows_are_nearest_game_first_and_capped(monkeypatch):
     later = event(FAIR, start=START + timedelta(days=1))
     b = ob.build_board("nba", [later, event(FAIR)], NOW)
@@ -273,7 +306,7 @@ def test_public_odds_board_accepts_mlb(monkeypatch):
     assert out["count"] == 1 and out["sport"] == "mlb"
 
 
-def test_public_odds_board_empty_or_past_games_is_idle_not_stale(monkeypatch):
+def test_public_odds_board_old_board_with_past_games_is_idle_and_not_stale_only_in_the_mlb_offseason(monkeypatch):
     # Old board with games in the past (e.g. offseason MLB)
     past = datetime.now(timezone.utc) - timedelta(hours=25)
     board = {
@@ -288,8 +321,27 @@ def test_public_odds_board_empty_or_past_games_is_idle_not_stale(monkeypatch):
         "lines_age_minutes": 1500.0,
     }
     monkeypatch.setattr(ob, "read_board", lambda sp: board)
+    monkeypatch.setattr("mlb_core.config.is_mlb_offseason", lambda *a, **k: True)
     out = pa.get_odds_board("MLB")
     assert out["count"] == 0
     assert out["status"] == "idle"
     assert out["stale"] is False
+
+    # the same old board in season (or any other sport) means the feed stopped: report it stale
+    monkeypatch.setattr("mlb_core.config.is_mlb_offseason", lambda *a, **k: False)
+    out = pa.get_odds_board("MLB")
+    assert out["count"] == 0 and out["status"] == "idle" and out["stale"] is True
+    nba = {**board, "sport": "nba"}
+    monkeypatch.setattr(ob, "read_board", lambda sp: nba)
+    monkeypatch.setattr("mlb_core.config.is_mlb_offseason", lambda *a, **k: True)
+    assert pa.get_odds_board("NBA")["stale"] is True            # the MLB offseason says nothing about the NBA feed
+
+
+def test_public_odds_board_fresh_empty_slate_is_not_stale(monkeypatch):
+    now = datetime.now(timezone.utc)
+    board = {"sport": "nba", "ts": (now - timedelta(minutes=10)).isoformat(), "status": "idle", "count": 0, "rows": [],
+             "games": [], "stats": [], "lines_source": ["parlayapi"], "lines_age_minutes": 5.0}
+    monkeypatch.setattr(ob, "read_board", lambda sp: board)
+    out = pa.get_odds_board("NBA")
+    assert out["count"] == 0 and out["status"] == "idle" and out["stale"] is False
 

@@ -17,6 +17,13 @@ def clean_env(monkeypatch):
         monkeypatch.delenv(v, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_ledger_writes(monkeypatch, request):
+    """post_sport_alerts logs to the bets ledger; keep these delivery tests from writing a sqlite file into the repo."""
+    if "ledger" not in request.node.name:
+        monkeypatch.setattr(sa, "log_sport_alert_bets", lambda *a, **k: 0)
+
+
 def test_gate_drops_low_scores_and_sorts_best_first():
     rows = [row(ev=0.03, player="Low"), row(ev=0.14, player="High"), row(ev=0.09, player="Mid")]
     out = sa.gate(rows)
@@ -136,3 +143,85 @@ def test_props_sweep_posts_gated_highlights_and_every_row_to_the_signals_thread(
     assert member == [("nhl", ["Strong"])]                 # only the gated row is highlighted top-level
     assert len(admin) == 1 and admin[0][0] == "nhl"       # the signals thread still receives the full batch
     assert "Strong Over 2.5" in admin[0][1] and "Weak Over 2.5" in admin[0][1]    # as plain copyable slip lines
+
+
+# -- bets-ledger logging (real sweep row shape: ev.sweep_props_alerts.outlier_rows) ------------------------------------------
+class _FakeTracker:
+    instances = []
+
+    def __init__(self, db, system=None, sport=None):
+        self.db, self.system, self.sport, self.calls = db, system, sport, []
+        _FakeTracker.instances.append(self)
+
+    def log_bet(self, **kw):
+        self.calls.append(kw)
+        return len(self.calls)
+
+
+@pytest.fixture
+def tracker(monkeypatch):
+    _FakeTracker.instances = []
+    monkeypatch.setattr("mlb_core.tracking.BetTracker", _FakeTracker)
+    for v in ("MLB_DB_URL", "DB_URL", "K_SERVICE", "CLOUD_RUN_JOB"):
+        monkeypatch.delenv(v, raising=False)
+    return _FakeTracker
+
+
+def sweep_row(**kw):
+    """One row exactly as ev.sweep_props_alerts.outlier_rows builds it for an evening NHL game (UTC commence is the next day)."""
+    r = dict(sport="nhl", ts="2026-10-28T20:10:00+00:00", game_key="nhl:2026-10-28:TOR@BOS", event_id="e1",
+             commence="2026-10-29T00:00:00+00:00", mins_to_start=230.0, away="TOR", home="BOS",
+             book="draftkings", player="Auston Matthews", player_norm="id8479318", player_id=8479318, stat="sog",
+             point=3.5, alt=False, side="OVER", american=-115, decimal=1.8696, p_fair=0.58, ev=0.084, n_books=6,
+             disp=0.02, all_books=[], flag=True, reason="FLAG")
+    r.update(kw)
+    return r
+
+
+def test_ledger_row_uses_et_game_day_and_stores_the_player_id(tracker):
+    assert sa.log_sport_alert_bets("nhl", [sweep_row()]) == 1
+    kw = tracker.instances[0].calls[0]
+    assert kw["game_date"] == "2026-10-28"                       # NOT commence[:10] == 2026-10-29
+    import json
+    notes = json.loads(kw["notes"])
+    assert notes["player_id"] == 8479318 and notes["game_key"] == "nhl:2026-10-28:TOR@BOS" and notes["side"] == "over"
+    assert kw["odds"] == -115 and abs(kw["model_prob"] - 0.58) < 1e-9 and kw["away_team"] == "TOR"
+
+
+def test_ledger_game_day_falls_back_to_commence_in_eastern_time():
+    assert sa.alert_game_day({"commence": "2026-10-29T00:00:00+00:00"}) == "2026-10-28"
+    assert sa.alert_game_day({"commence": "2026-10-29T00:00:00Z"}) == "2026-10-28"
+    assert sa.alert_game_day({"commence": "2026-10-28T23:30:00+00:00"}) == "2026-10-28"
+    assert sa.alert_game_day({"game_key": "nfl:2027-01-10:ATL@NO", "commence": "2027-01-11T01:00:00+00:00"}) == "2027-01-10"
+
+
+def test_ledger_player_id_recovered_from_player_norm_and_teams_from_game_key(tracker):
+    sa.log_sport_alert_bets("nfl", [sweep_row(player_id=None, away=None, home=None, game_key="nfl:2026-10-25:KC@BUF")])
+    kw = tracker.instances[0].calls[0]
+    import json
+    assert json.loads(kw["notes"])["player_id"] == "8479318" and (kw["away_team"], kw["home_team"]) == ("KC", "BUF")
+
+
+def test_ledger_skips_alerts_with_no_price_instead_of_inventing_minus_110(tracker):
+    bad = sweep_row(american=None)
+    assert sa.log_sport_alert_bets("nhl", [bad, sweep_row()]) == 1
+    assert len(tracker.instances[0].calls) == 1 and tracker.instances[0].calls[0]["odds"] == -115
+
+
+def test_ledger_refuses_ephemeral_sqlite_in_cloud_run(tracker, monkeypatch, caplog):
+    monkeypatch.setenv("CLOUD_RUN_JOB", "ev-nfl-props-sweep")
+    with caplog.at_level("ERROR", logger="mlb_core.alerts.sport_alerts"):
+        assert sa.log_sport_alert_bets("nfl", [sweep_row()]) == 0
+    assert tracker.instances == [] and "MLB_DB_URL" in caplog.text
+    monkeypatch.setenv("MLB_DB_URL", "postgresql+pg8000://u:p@/db?unix_sock=/cloudsql/x/.s.PGSQL.5432")
+    assert sa.log_sport_alert_bets("nfl", [sweep_row()]) == 1
+
+
+def test_post_sport_alerts_logs_ledger_failures_with_a_traceback(monkeypatch, caplog):
+    monkeypatch.setattr(sa, "log_sport_alert_bets", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db down")))
+    monkeypatch.setattr(sa, "bot_configured", lambda: False)
+    monkeypatch.setattr(sa, "webhook_for", lambda *a, **k: None)
+    with caplog.at_level("ERROR", logger="mlb_core.alerts.sport_alerts"):
+        sa.post_sport_alerts("nhl", sa.gate([row()]))
+    rec = [r for r in caplog.records if "NOT recorded" in r.getMessage()]
+    assert rec and rec[0].exc_info and "db down" in caplog.text

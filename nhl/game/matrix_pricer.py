@@ -10,6 +10,13 @@ Transforms expected regulation scoring rates (lambda_H, lambda_A) into an exact
            P(Home Wins OT/SO | Tie) = sigmoid(0.08 + 0.35 * (ln lambda_H - ln lambda_A)).
            Diag cleared to 0.0; winner receives +1 goal at (k+1, k) or (k, k+1).
 
+CALIBRATION CONTRACT (2026-11-01): the (lambda_H, lambda_A) passed in are expected FINAL goals per team in the sense of the
+training data (Kalman fits official final scores, which already include the OT winner's goal, the shootout winner's +1 and
+empty-net goals). Stages 2 and 3 add empty-net goals and the OT/SO goal on top of the stage-1 grid, so the stage-1 REGULATION
+rates are backed out (fixed point on the two scale factors) such that the final matrix's mean home goals == lambda_H and mean
+away goals == lambda_A. The OT/SO goal is therefore never counted twice (the old code produced mean total = lh + la + 0.26).
+Totals settle EXCLUDING the shootout by default (a shootout "goal" does not count toward a game total at any major book).
+
 Computes 100% mathematically coherent probabilities for:
   * Moneyline (NHL_ML)
   * Puck Line / Spread (NHL_SPREAD, -1.5 / +1.5 and alternates)
@@ -40,6 +47,8 @@ RHO_DIXON_COLES: float = -0.06
 P_ENG_LEAD_1: float = 0.145
 P_6V5_TIE_LEAD_1: float = 0.080
 SHOOTOUT_SHARE_OF_TIES: float = 0.32  # 32% SO, 68% 3v3 OT
+MAX_CALIBRATION_PASSES: int = 12
+CALIBRATION_TOL: float = 1e-4  # goals per team
 
 
 @dataclass
@@ -55,6 +64,8 @@ class ScoreMatrixResult:
     p_home_reg: float
     p_away_reg: float
     p_home_ot_so_win: float
+    reg_lambda_h: float = 0.0   # calibrated stage-1 REGULATION rates (lambda_* minus the EN / OT goals added later)
+    reg_lambda_a: float = 0.0
 
     def puck_line(self, line_home: float) -> Tuple[float, float, float]:
         """
@@ -79,29 +90,62 @@ class ScoreMatrixResult:
 
         return p_home, p_away, p_push
 
-    def total(self, line: float, exclude_shootout: bool = False) -> Tuple[float, float, float, float]:
+    def puck_line_two_way(self, line_home: float) -> Tuple[float, float, float]:
         """
-        Evaluate Game Total for line (e.g. 5.5, 6.0, 6.5).
-        Returns: (p_over_raw, p_under_raw, p_push, p_over_fair)
+        Push-ADJUSTED cover probabilities, the same convention the totals and the NBA engine use (and the convention of a
+        two-way de-vigged market price): p_home = P(home covers) / (1 - P(push)).
+        Returns: (p_home_cover_adj, p_away_cover_adj, p_push). Half-point lines have p_push == 0 and equal puck_line().
+        """
+        p_home, p_away, p_push = self.puck_line(line_home)
+        two_way = p_home + p_away
+        if two_way <= 0.0:
+            return 0.5, 0.5, p_push
+        return p_home / two_way, p_away / two_way, p_push
+
+    def outcome_sd(self, exclude_shootout: bool = True) -> Tuple[float, float]:
+        """(sd of final margin, sd of game total) of the score matrix itself: OUTCOME dispersion, not parameter uncertainty."""
+        mat = self._totals_matrix(exclude_shootout)
+        x = np.arange(GRID_SIZE, dtype=float)[:, None]
+        y = np.arange(GRID_SIZE, dtype=float)[None, :]
+        pm = float(np.sum(mat))
+        if pm <= 0.0:
+            return 0.0, 0.0
+        marg, tot = x - y, x + y
+        m_mu, t_mu = float(np.sum(mat * marg) / pm), float(np.sum(mat * tot) / pm)
+        sd_m = math.sqrt(max(0.0, float(np.sum(mat * (marg - m_mu) ** 2) / pm)))
+        sd_t = math.sqrt(max(0.0, float(np.sum(mat * (tot - t_mu) ** 2) / pm)))
+        return sd_m, sd_t
+
+    def _totals_matrix(self, exclude_shootout: bool) -> np.ndarray:
+        """The matrix a TOTAL settles on. Including the shootout, every tie decider adds +1 (m_final). Excluding it
+        (default), the 32% of ties that go to a shootout stay at (k, k): the SO winner's 'goal' is not a game goal."""
+        if not exclude_shootout:
+            return self.m_final
+        target_matrix = self.m_stage2.copy()
+        p_ot = 1.0 - SHOOTOUT_SHARE_OF_TIES
+        for k in range(GRID_SIZE):
+            t_prob = float(self.m_stage2[k, k])
+            if t_prob > 0:
+                target_matrix[k, k] = t_prob * SHOOTOUT_SHARE_OF_TIES
+                if k + 1 < GRID_SIZE:
+                    target_matrix[k + 1, k] += t_prob * p_ot * self.p_home_ot_so_win
+                    target_matrix[k, k + 1] += t_prob * p_ot * (1.0 - self.p_home_ot_so_win)
+                else:
+                    target_matrix[k, k - 1] += t_prob * p_ot * self.p_home_ot_so_win
+                    target_matrix[k - 1, k] += t_prob * p_ot * (1.0 - self.p_home_ot_so_win)
+        return target_matrix
+
+    def total(self, line: float, exclude_shootout: bool = True) -> Tuple[float, float, float, float]:
+        """
+        Evaluate Game Total for line (e.g. 5.5, 6.0, 6.5), settled EXCLUDING the shootout by default.
+        Returns: (p_over_raw, p_under_raw, p_push, p_over_fair) where p_over_fair is push-adjusted.
         """
         l_val = float(line)
         p_over = 0.0
         p_under = 0.0
         p_push = 0.0
 
-        target_matrix = self.m_final
-        if exclude_shootout:
-            # Reconstruct matrix where 32% of tie-deciders do not add +1 goal to game total
-            target_matrix = self.m_stage2.copy()
-            # OT wins still add 1 goal for the 68% that finish in 3v3 OT
-            p_ot = 1.0 - SHOOTOUT_SHARE_OF_TIES
-            for k in range(GRID_SIZE):
-                t_prob = float(self.m_stage2[k, k])
-                if t_prob > 0:
-                    target_matrix[k, k] = t_prob * SHOOTOUT_SHARE_OF_TIES
-                    if k + 1 < GRID_SIZE:
-                        target_matrix[k + 1, k] += t_prob * p_ot * self.p_home_ot_so_win
-                        target_matrix[k, k + 1] += t_prob * p_ot * (1.0 - self.p_home_ot_so_win)
+        target_matrix = self._totals_matrix(exclude_shootout)
 
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
@@ -166,8 +210,10 @@ class PricedGame:
     lambda_h: float
     lambda_a: float
     exp_total: float
-    sigma_margin: float
-    sigma_total: float
+    sigma_margin: float   # Kalman PARAMETER uncertainty (std of the rating estimate, ~0.7): NOT an outcome sd
+    sigma_total: float    # same: do not use these as the dispersion of a game's margin / total
+    sd_margin: float = 0.0   # OUTCOME sd of the final margin, from the score matrix (use this for Normal rung interpolation)
+    sd_total: float = 0.0    # OUTCOME sd of the game total (ex-shootout), from the score matrix
     markets: List[PricedMarket] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -181,6 +227,8 @@ class PricedGame:
             "exp_total": round(self.exp_total, 3),
             "sigma_margin": round(self.sigma_margin, 2),
             "sigma_total": round(self.sigma_total, 2),
+            "sd_margin": round(self.sd_margin, 3),
+            "sd_total": round(self.sd_total, 3),
             "markets": [m.to_dict() for m in self.markets],
         }
 
@@ -238,21 +286,21 @@ class DistributionalNHLMatrixEngine:
         la = float(np.clip(np.nan_to_num(la, nan=2.90), 1.20, 6.00))
         return lh, la
 
-    def compute_score_matrix(
+    def _build_matrix(
         self,
-        lambda_h: float,
-        lambda_a: float,
-        enable_eng: bool = True,
+        reg_h: float,
+        reg_a: float,
+        target_h: float,
+        target_a: float,
+        enable_eng: bool,
     ) -> ScoreMatrixResult:
-        """
-        Generate exact 3-stage score matrix.
-        Stage 1: Pre-Empty-Net Dixon-Coles
-        Stage 2: Late-game Empty-Net Goal Markov operator
-        Stage 3: Overtime & Shootout resolution on diagonal
-        """
-        lh, la = float(lambda_h), float(lambda_a)
+        """One pass of the 3 stages from stage-1 REGULATION rates (reg_*); target_* only feed the OT/SO win model."""
+        lh, la = float(reg_h), float(reg_a)
 
-        # Stage 1: Base Poisson + Dixon-Coles low-score adjustment
+        # Stage 1: Base Poisson + Dixon-Coles low-score adjustment.
+        # Standard Dixon-Coles tau (x = home goals ~ Poisson(lh), y = away goals ~ Poisson(la)):
+        #   tau(0,0) = 1 - lh*la*rho   tau(0,1) = 1 + lh*rho   tau(1,0) = 1 + la*rho   tau(1,1) = 1 - rho
+        # (an earlier version had the (0,1)/(1,0) rates swapped)
         p_h = [poisson.pmf(x, lh) for x in range(GRID_SIZE)]
         p_a = [poisson.pmf(y, la) for y in range(GRID_SIZE)]
 
@@ -263,9 +311,9 @@ class DistributionalNHLMatrixEngine:
                 if x == 0 and y == 0:
                     tau = 1.0 - lh * la * self.rho_dc
                 elif x == 0 and y == 1:
-                    tau = 1.0 + la * self.rho_dc
-                elif x == 1 and y == 0:
                     tau = 1.0 + lh * self.rho_dc
+                elif x == 1 and y == 0:
+                    tau = 1.0 + la * self.rho_dc
                 elif x == 1 and y == 1:
                     tau = 1.0 - self.rho_dc
                 m_s1[x, y] = p_h[x] * p_a[y] * max(0.0, tau)
@@ -321,8 +369,8 @@ class DistributionalNHLMatrixEngine:
 
         # Stage 3: OT & Shootout Resolution on diagonal x == y
         m_final = m_s2.copy()
-        # Conditional OT/SO win probability
-        log_ratio = math.log(lh) - math.log(la)
+        # Conditional OT/SO win probability (strength ratio of the FINAL-goal targets)
+        log_ratio = math.log(target_h) - math.log(target_a)
         p_home_ot_so = 1.0 / (1.0 + math.exp(-(0.08 + 0.35 * log_ratio)))
 
         p_tie_reg = float(sum(m_s2[k, k] for k in range(GRID_SIZE)))
@@ -352,8 +400,8 @@ class DistributionalNHLMatrixEngine:
         p_away_ml = float(sum(m_final[x, y] for x in range(GRID_SIZE) for y in range(GRID_SIZE) if y > x))
 
         return ScoreMatrixResult(
-            lambda_h=lh,
-            lambda_a=la,
+            lambda_h=float(target_h),
+            lambda_a=float(target_a),
             m_stage1=m_s1,
             m_stage2=m_s2,
             m_final=m_final,
@@ -363,7 +411,47 @@ class DistributionalNHLMatrixEngine:
             p_home_reg=p_home_reg,
             p_away_reg=p_away_reg,
             p_home_ot_so_win=p_home_ot_so,
+            reg_lambda_h=lh,
+            reg_lambda_a=la,
         )
+
+    @staticmethod
+    def _mean_goals(m_final: np.ndarray) -> Tuple[float, float]:
+        x = np.arange(GRID_SIZE, dtype=float)
+        return float(np.sum(m_final.sum(axis=1) * x)), float(np.sum(m_final.sum(axis=0) * x))
+
+    def compute_score_matrix(
+        self,
+        lambda_h: float,
+        lambda_a: float,
+        enable_eng: bool = True,
+        calibrate: bool = True,
+    ) -> ScoreMatrixResult:
+        """
+        Generate exact 3-stage score matrix whose mean goals per team equal (lambda_h, lambda_a).
+
+        lambda_* are expected FINAL goals (incl. empty-net and the OT/SO goal), so with calibrate=True the stage-1
+        regulation rates are solved (fixed point on two scale factors, ~4-6 passes) until the FINAL matrix reproduces
+        them: the OT/SO goal and the empty-net goals are not added a second time. calibrate=False treats lambda_* as raw
+        stage-1 regulation rates (legacy behaviour: mean total = lh + la + ~0.26).
+        Stage 1: Pre-Empty-Net Dixon-Coles
+        Stage 2: Late-game Empty-Net Goal Markov operator
+        Stage 3: Overtime & Shootout resolution on diagonal
+        """
+        lh, la = float(lambda_h), float(lambda_a)
+        if not calibrate:
+            return self._build_matrix(lh, la, lh, la, enable_eng)
+
+        rh, ra = lh, la
+        res = self._build_matrix(rh, ra, lh, la, enable_eng)
+        for _ in range(MAX_CALIBRATION_PASSES):
+            mh, ma = self._mean_goals(res.m_final)
+            if abs(mh - lh) < CALIBRATION_TOL and abs(ma - la) < CALIBRATION_TOL:
+                break
+            rh = float(np.clip(rh * lh / max(mh, 1e-6), 0.05, 12.0))
+            ra = float(np.clip(ra * la / max(ma, 1e-6), 0.05, 12.0))
+            res = self._build_matrix(rh, ra, lh, la, enable_eng)
+        return res
 
     def blend_with_market(
         self,
@@ -389,13 +477,16 @@ class DistributionalNHLMatrixEngine:
         matchup: MatchupFeatures,
         game_key: str,
         market_odds: Optional[Dict[str, Any]] = None,
+        totals_exclude_shootout: bool = True,
     ) -> PricedGame:
         """
         Synthesize game predictions and price Moneyline, Puck Line, and Game Totals
-        against live market odds.
+        against live market odds. Totals settle excluding the shootout unless totals_exclude_shootout=False.
+        Every two-way market (puck line, total) is push-adjusted so it is comparable to a de-vigged two-way price.
         """
         lh, la = self.compute_scoring_rates(kalman_pred, matchup)
         matrix = self.compute_score_matrix(lh, la)
+        sd_m, sd_t = matrix.outcome_sd(exclude_shootout=totals_exclude_shootout)
 
         exp_total = lh + la
         # Dispersion for Kalshi RFQ / spreads
@@ -412,6 +503,8 @@ class DistributionalNHLMatrixEngine:
             exp_total=exp_total,
             sigma_margin=sigma_m,
             sigma_total=sigma_t,
+            sd_margin=sd_m,
+            sd_total=sd_t,
             markets=[],
         )
 
@@ -460,7 +553,7 @@ class DistributionalNHLMatrixEngine:
             # Standard NHL Puck Line is -1.5 for favorite, +1.5 for underdog
             spread_line = -1.5 if matrix.p_home_ml >= 0.50 else 1.5
 
-        p_h_cover, p_a_cover, p_sp_push = matrix.puck_line(float(spread_line))
+        p_h_cover, p_a_cover, p_sp_push = matrix.puck_line_two_way(float(spread_line))
         h_sp_fair = spread_info.get("p_home_fair")
         a_sp_fair = spread_info.get("p_away_fair")
         n_b_sp = spread_info.get("n_books")
@@ -503,7 +596,8 @@ class DistributionalNHLMatrixEngine:
             safe_exp = float(np.nan_to_num(exp_total, nan=6.0))
             total_line = round(safe_exp * 2.0) / 2.0
 
-        p_over_raw, p_under_raw, p_tot_push, p_over_fair_m = matrix.total(float(total_line))
+        p_over_raw, p_under_raw, p_tot_push, p_over_fair_m = matrix.total(
+            float(total_line), exclude_shootout=totals_exclude_shootout)
         over_fair = totals_info.get("p_over_fair")
         under_fair = totals_info.get("p_under_fair")
         n_b_tot = totals_info.get("n_books")

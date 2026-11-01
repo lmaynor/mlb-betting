@@ -82,7 +82,7 @@ repo: create the Stripe price metadata if the pass copy should name the league, 
 - `nba/config.py`: `PARLAY_PROP_MARKETS[<sport_key>]` (core markets), `PARLAY_PROP_MARKETS_ALT` (opt-in tier) and
   `ODDS_BANK_DEFAULT_BUDGET`; the monthly cap is enforced by `nba/odds/credit_ledger.py`.
 - **Every market costs 1 ParlayAPI credit per event per run, whether or not any book returns it, and the pool is shared**
-  (20k/month plan). Adding a sport or a market is a budget decision, not a wishlist; the ledger refuses a sport with no budget.
+  (100k/month plan, every budget defined once in `nba/config.py` and pinned by `tests/test_parlay_budget.py`). Adding a sport or a market is a budget decision, not a wishlist; the ledger refuses a sport with no budget.
 - Run `deploy/build_all_images.sh` and re-provision the jobs (RUNBOOKS.md s8; a job's command is baked into GCP).
 
 ## The guard rails (what fails CI)

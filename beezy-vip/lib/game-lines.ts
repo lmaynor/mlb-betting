@@ -79,7 +79,12 @@ export interface GameProjectionRow {
 export interface GameProjectionsFeed {
   sport: 'nba' | 'nhl' | string
   status: string
-  engine: string | null
+  /** model engine behind the feed (e.g. 'kalman_joint_t_v1'); the UI shows this instead of a hard-coded list */
+  engine?: string | null
+  /** true only once the engine has a tested edge. Absent or false: the feed is a model estimate and the UI says so. */
+  validated?: boolean
+  /** backend wording for the feed's status badge */
+  label?: string | null
   as_of: string | null
   age_minutes: number | null
   stale: boolean
@@ -89,4 +94,183 @@ export interface GameProjectionsFeed {
   games: GameMetadata[]
   markets: string[]
   locked?: number
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Honesty labels. The projection engines have no tested edge: until the backend says `validated: true` the Game Lines view
+// is market data plus a model estimate, never an "edge".
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const GAME_LINES_DEFAULT_LABEL = 'UNVALIDATED model estimate, not a tested edge'
+
+export function isGameFeedValidated(feed: Pick<GameProjectionsFeed, 'validated'> | null | undefined): boolean {
+  return feed?.validated === true
+}
+
+/** The badge text for a feed: the backend label when it is present (and, if not validated, says UNVALIDATED), else the default. */
+export function gameFeedLabel(feed: Pick<GameProjectionsFeed, 'validated' | 'label'> | null | undefined): string {
+  const label = typeof feed?.label === 'string' ? feed.label.trim() : ''
+  if (isGameFeedValidated(feed)) return label || 'Validated model'
+  return label && /unvalidated/i.test(label) ? label : GAME_LINES_DEFAULT_LABEL
+}
+
+/** One label for the whole view: the first non-validated feed's label (the view is only as validated as its weakest feed). */
+export function gameLinesViewLabel(feeds: (GameProjectionsFeed | null | undefined)[]): { label: string; validated: boolean } {
+  const live = feeds.filter((f): f is GameProjectionsFeed => Boolean(f))
+  const weak = live.find(f => !isGameFeedValidated(f))
+  if (weak || live.length === 0) return { label: gameFeedLabel(weak ?? null), validated: false }
+  return { label: gameFeedLabel(live[0]), validated: true }
+}
+
+/** Engine names from the feeds themselves (never a hard-coded list), de-duplicated, upper-cased for the meta line. */
+export function gameFeedEngines(feeds: (GameProjectionsFeed | null | undefined)[]): string[] {
+  return [...new Set(feeds.map(f => (typeof f?.engine === 'string' ? f.engine.trim() : '')).filter(Boolean))].map(e => e.toUpperCase())
+}
+
+/** Expected margin text for a card: `mu_margin` is home minus away. A zero margin is a pick'em, never 'AWAY -0.0'. */
+export function expectedMarginLabel(game: Pick<GamePricedGame, 'mu_margin' | 'home_team' | 'away_team'>): string | null {
+  const mu = game.mu_margin
+  if (mu == null || !isFinite(mu)) return null
+  const mag = Math.abs(mu)
+  if (mag.toFixed(1) === '0.0') return 'PICK'
+  return `${mu > 0 ? game.home_team : game.away_team} -${mag.toFixed(1)}`
+}
+
+/** A model-minus-market gap is highlighted green only for a validated feed. */
+export function highlightModelDiff(diff: number | null | undefined, validated: boolean, threshold = 0.015): boolean {
+  return validated && diff != null && diff >= threshold
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Query validation for the /api/games/projections proxy: nothing but known, well-formed values is forwarded upstream.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const GAME_FEED_SPORTS = ['nfl', 'nhl', 'nba'] as const
+export const GAME_FEED_MARKETS = ['spread', 'total', 'ml', 'moneyline'] as const
+export const GAME_FEED_MAX_LIMIT = 1200
+
+export interface GameQuery { sport: (typeof GAME_FEED_SPORTS)[number]; day?: string; market?: string; limit?: number }
+
+function validDay(day: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false
+  const d = new Date(`${day}T00:00:00Z`)
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === day
+}
+
+export function parseGameProjectionQuery(sp: URLSearchParams): { ok: true; query: GameQuery } | { ok: false; error: string } {
+  const sport = (sp.get('sport') ?? '').toLowerCase()
+  if (!(GAME_FEED_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nfl, nhl, nba' }
+  const query: GameQuery = { sport: sport as GameQuery['sport'] }
+
+  const day = sp.get('day')
+  if (day != null && day !== '') {
+    if (!validDay(day)) return { ok: false, error: 'day must be a real date as YYYY-MM-DD' }
+    query.day = day
+  }
+  const market = sp.get('market')
+  if (market != null && market !== '') {
+    const m = market.toLowerCase()
+    if (!(GAME_FEED_MARKETS as readonly string[]).includes(m)) return { ok: false, error: 'market must be spread, total, ml or moneyline' }
+    query.market = m
+  }
+  const limit = sp.get('limit')
+  if (limit != null && limit !== '') {
+    if (!/^\d{1,4}$/.test(limit)) return { ok: false, error: `limit must be an integer from 1 to ${GAME_FEED_MAX_LIMIT}` }
+    const n = Number(limit)
+    if (n < 1 || n > GAME_FEED_MAX_LIMIT) return { ok: false, error: `limit must be an integer from 1 to ${GAME_FEED_MAX_LIMIT}` }
+    query.limit = n
+  }
+  return { ok: true, query }
+}
+
+/** The upstream query string for a validated query (URLSearchParams encodes it; nothing from the request is passed through). */
+export function gameQueryString(q: GameQuery): string {
+  const sp = new URLSearchParams({ sport: q.sport })
+  if (q.day) sp.set('day', q.day)
+  if (q.market) sp.set('market', q.market)
+  if (q.limit) sp.set('limit', String(q.limit))
+  return sp.toString()
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The Game Lines view model (pure, so the client can gate it on the active mode and the idle badge count can reuse it).
+// ---------------------------------------------------------------------------------------------------------------------
+
+export interface GameLinesFilters {
+  sport: 'all' | 'nba' | 'nhl'
+  market: 'all' | 'spread' | 'total' | 'ml'
+  matchup: string
+  side: 'all' | 'home_over' | 'away_under'
+  minEdge: number
+  q: string
+}
+export type GamePricedGameView = GamePricedGame & { sport: string; validated: boolean; filteredMarkets: GamePricedMarket[] }
+export type GameRowView = GameProjectionRow & { validated: boolean }
+export interface GameLinesData { pricedGames: GamePricedGameView[]; rows: GameRowView[]; matchupOptions: { key: string; label: string; sport: string }[] }
+
+export function buildGameLinesData(feeds: Record<string, GameProjectionsFeed | null | undefined>, f: GameLinesFilters): GameLinesData {
+  const sports = f.sport === 'all' ? ['nba', 'nhl'] : [f.sport]
+  const pricedGames: GamePricedGameView[] = []
+  const rows: GameRowView[] = []
+  const matchupOptions: GameLinesData['matchupOptions'] = []
+  const ql = f.q.toLowerCase().trim()
+
+  for (const s of ['nba', 'nhl']) {
+    for (const g of feeds[s]?.games ?? []) matchupOptions.push({ key: g.game_key, label: `${g.away} @ ${g.home} (${s.toUpperCase()})`, sport: s })
+  }
+
+  for (const s of sports) {
+    const feed = feeds[s]
+    if (!feed) continue
+    const validated = isGameFeedValidated(feed)
+
+    for (const g of feed.priced_games ?? []) {
+      if (f.matchup !== 'all' && g.game_key !== f.matchup) continue
+      if (ql && !`${g.away_team} ${g.home_team}`.toLowerCase().includes(ql)) continue
+      const filteredMarkets = (g.markets || []).filter(m => {
+        if (f.market !== 'all') {
+          const sys = (m.system || '').toLowerCase()
+          if (f.market === 'spread' && !sys.includes('spread')) return false
+          if (f.market === 'total' && !sys.includes('total')) return false
+          if (f.market === 'ml' && !sys.includes('ml')) return false
+        }
+        if (f.side !== 'all') {
+          const sd = (m.side || '').toLowerCase()
+          if (f.side === 'home_over' && sd !== 'home' && sd !== 'over') return false
+          if (f.side === 'away_under' && sd !== 'away' && sd !== 'under') return false
+        }
+        if (f.minEdge > 0 && (m.model_edge == null || m.model_edge < f.minEdge)) return false
+        return true
+      })
+      if (filteredMarkets.length > 0 || (f.market === 'all' && f.minEdge === 0 && !ql)) pricedGames.push({ ...g, sport: s, validated, filteredMarkets })
+    }
+
+    for (const r of feed.rows ?? []) {
+      if (f.matchup !== 'all' && r.game_key !== f.matchup) continue
+      if (f.market !== 'all') {
+        const m = (r.stat || r.system || '').toLowerCase()
+        if (f.market === 'spread' && !m.includes('spread') && !m.includes('puck')) continue
+        if (f.market === 'total' && !m.includes('total')) continue
+        if (f.market === 'ml' && !m.includes('ml') && !m.includes('moneyline')) continue
+      }
+      if (f.side !== 'all') {
+        const sd = (r.side || '').toLowerCase()
+        if (f.side === 'home_over' && sd !== 'home' && sd !== 'over') continue
+        if (f.side === 'away_under' && sd !== 'away' && sd !== 'under') continue
+      }
+      if (f.minEdge > 0 && (r.model_edge == null || r.model_edge < f.minEdge)) continue
+      if (ql) {
+        const hit = (r.player || '').toLowerCase().includes(ql) || (r.team || '').toLowerCase().includes(ql)
+          || (r.opp || '').toLowerCase().includes(ql) || (r.stat_label || '').toLowerCase().includes(ql)
+        if (!hit) continue
+      }
+      rows.push({ ...r, validated })
+    }
+  }
+  return { pricedGames, rows, matchupOptions }
+}
+
+/** The 'N ROWS' count must match what the visible view shows: priced games on the Cards view, feed rows on the Data Matrix. */
+export function gameLinesCount(data: Pick<GameLinesData, 'pricedGames' | 'rows'>, view: 'cards' | 'table'): number {
+  return view === 'cards' ? data.pricedGames.length : data.rows.length
 }

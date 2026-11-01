@@ -236,7 +236,7 @@ def test_whole_number_total_push_handling():
     engine = DistributionalNHLMatrixEngine()
     matrix = engine.compute_score_matrix(3.0, 3.0)
 
-    p_over, p_under, p_push, p_fair = matrix.total(6.0)
+    p_over, p_under, p_push, p_fair = matrix.total(6.0, exclude_shootout=False)
 
     assert abs((p_over + p_under + p_push) - 1.0) < 1e-6
     assert p_push > 0.10  # Typically 12-16% on 6.0
@@ -244,6 +244,7 @@ def test_whole_number_total_push_handling():
 
     # Exclude shootout mode
     p_o_so, p_u_so, p_push_so, p_fair_so = matrix.total(6.0, exclude_shootout=True)
+    assert matrix.total(6.0) == matrix.total(6.0, exclude_shootout=True)   # ex-shootout is the default
     assert abs((p_o_so + p_u_so + p_push_so) - 1.0) < 1e-6
     # Excluding shootout reduces total scoring slightly
     assert p_fair_so < p_fair
@@ -476,7 +477,7 @@ def test_end_to_end_nhl_game_scoring(monkeypatch):
         }
     ]
 
-    monkeypatch.setattr("nhl.game.run_daily.load_live_game_odds", lambda now=None: mock_events)
+    monkeypatch.setattr("nhl.game.run_daily.load_live_game_odds", lambda now=None, meta_out=None: mock_events)
     monkeypatch.setattr("nhl.game.run_daily.load_historical_boxscores", lambda: None)
     monkeypatch.setattr("nhl.game.run_daily.load_historical_goalies", lambda: None)
 

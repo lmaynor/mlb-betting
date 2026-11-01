@@ -9,7 +9,7 @@
 #                 exists inside Cloud Run (CONTEXT.md s5), so the DROP is a manual `gcloud sql connect` step (RUNBOOKS.md s7a).
 #   3. SIGNALS    deploy/setup_props_alerts.sh, then give ev-nfl-props-sweep the bot URL + secret (daily thread under #nfl-card).
 #   4. NHL        RESUME_NHL=1: resume odds-bank-nhl-* FIRST, then props-alerts-nhl-*, and print their STATE table.
-#                 Resuming banking SPENDS shared ParlayAPI credits (pool is 20k/mo; the ledger caps NHL at its own budget).
+#                 Resuming banking SPENDS shared ParlayAPI credits (one shared 100k/mo pool; the ledger caps NHL at its own budget, nba/config.py).
 #   5. BP BACKFILL START_BP_BACKFILL=1: provision bp-backfill-{nfl,nhl,nba} (deploy/setup_backfill_bettingpros_props.sh) and
 #                 execute each --async. A job that already has a RUNNING execution is SKIPPED (never double-crawl).
 #
@@ -141,7 +141,7 @@ fi
 # ---- 4. resume NHL --------------------------------------------------------------------------------------------------------
 if [ "${RESUME_NHL:-0}" = "1" ]; then
   say "4/5 NHL: resume banking FIRST (the alerts sweep refuses a banked snapshot older than 45 min), then alerts"
-  warn "resuming odds-bank-nhl-* spends SHARED ParlayAPI credits (20k/mo pool; the per-sport ledger caps NHL)."
+  warn "resuming odds-bank-nhl-* spends SHARED ParlayAPI credits (shared 100k/mo pool; the per-sport ledger caps NHL)."
   for PAT in '^odds-bank-nhl-' '^props-alerts-nhl-'; do
     for S in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep -E "$PAT" || true); do
       run gcloud scheduler jobs resume "$S" --location="$REGION" --project="$PROJECT_ID"

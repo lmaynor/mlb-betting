@@ -99,4 +99,27 @@ describe('Mobile navigation and filters', () => {
 
     expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('market=NBA_PTS'), { scroll: false })
   })
+
+  it('a market row toggles (tapping the active market clears it) while ONLY always selects just that market', () => {
+    mockSearchParams = new URLSearchParams('market=NBA_PTS')
+    render(<FilterBar sport="nba" />)
+    fireEvent.click(screen.getByRole('button', { name: /filters/i }))
+
+    // row button on the ACTIVE market: toggles off
+    const row = screen.getByRole('button', { name: 'PTS', pressed: true })
+    fireEvent.click(row)
+    expect(pushMock).toHaveBeenLastCalledWith('/picks', { scroll: false })
+
+    // ONLY on the same, already-active market: stays selected (never a toggle)
+    fireEvent.click(screen.getByRole('button', { name: /only pts/i }))
+    expect(pushMock).toHaveBeenLastCalledWith('/picks?market=NBA_PTS', { scroll: false })
+  })
+
+  it('a market row on an inactive market selects it', () => {
+    render(<FilterBar sport="nba" />)
+    fireEvent.click(screen.getByRole('button', { name: /filters/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'PTS', pressed: false }))
+    expect(pushMock).toHaveBeenLastCalledWith(expect.stringContaining('market=NBA_PTS'), { scroll: false })
+  })
 })
+

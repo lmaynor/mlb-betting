@@ -28,6 +28,7 @@ REGION="us-central1"
 JOB="ev-nfl-props-sweep"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 MAX_CREDITS="${MAX_CREDITS:-150}"
+INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 
 SCHEDULES=(
   "weekly|0 */2 * * 1-6"
@@ -45,9 +46,14 @@ fi
 gcloud run jobs describe "$JOB" --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null \
   || { echo "ERROR: job $JOB not found (create it per deploy/build_all_images.sh / docs/designs/multisport_ev_sweep.md)."; exit 1; }
 
-# One cycle per execution; keeps the job's image, secrets and service account as they are.
+# One cycle per execution; keeps the job's image, other secrets and service account as they are.
+# The sweep logs gated alerts into the bets table (mlb_core.alerts.sport_alerts.log_sport_alert_bets), so the job needs the
+# MLB_DB_URL secret and the Cloud SQL socket, wired exactly like deploy/setup_fast_alert.sh. --update-secrets ADDS/overwrites
+# that one secret (a full secrets reset would wipe the bot/bucket secrets this job already has); this job uses only that one instance,
+# so --set-cloudsql-instances is idempotent here.
 gcloud run jobs update "$JOB" --region="$REGION" --project="$PROJECT_ID" \
-  --args="-m,ev.sweep_nfl_props,--max-credits,${MAX_CREDITS}" --max-retries=0 --task-timeout=900 --quiet
+  --args="-m,ev.sweep_nfl_props,--max-credits,${MAX_CREDITS}" --max-retries=0 --task-timeout=900 \
+  --update-secrets="MLB_DB_URL=mlb-db-url:latest" --set-cloudsql-instances="$INSTANCE" --quiet
 
 # scheduler-invoker needs run.invoker ON THE JOB or every firing is PERMISSION_DENIED (code 7); see
 # docs/solutions/runtime-errors/scheduler-invoker-needs-run-invoker-per-job.md. Idempotent.

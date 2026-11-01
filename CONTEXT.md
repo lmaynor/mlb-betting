@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-10-29 12:33 CST_
+_Last updated: 2026-11-01 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -1471,7 +1471,7 @@ flip back to `sgo` without also cutting the cadence back to ~4x/day.
   to bank tomorrow's slate (next-day lines post ~9pm ET); ParlayAPI events are
   dated per-event from commence_time so multi-day slates resolve correctly.
   **Credit budget:** an implicit guard in `snapshot_odds` paces ParlayAPI spend
-  EVENLY toward `PARLAY_CREDIT_CEILING` (19,500) -- allowance grows linearly
+  EVENLY toward `PARLAY_CREDIT_CEILING` (19,500; one slice of the 100k/month pool, see s22) -- allowance grows linearly
   (`CEILING * day/days_in_month`), tracked in `OddsAccum/baseball_mlb/_credits/
   {month}.json`; over-pace runs skip per-event props (game lines only). Pushes
   to ~20k without ever exceeding. Schedulers: `deploy/add_snapshot_schedulers.sh`
@@ -3566,7 +3566,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-10-29 12:33 CST_
+_Last updated: 2026-11-01 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
@@ -4255,3 +4255,45 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   `docs/analysis/nhl_xg_saves_goals_validation_2026-10-16.md`. Not deployed; no job, scheduler, bets-table write or Discord post.
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).
+
+---
+
+## 22. 2026-10-30/31 additions and the 2026-11-01 audit fixes
+
+Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the audit fixes. Nothing here is deployed unless a handoff says so.
+
+- **ParlayAPI is the 100k/month plan (confirmed by the owner 2026-11-01).** Budgets live in ONE place, `nba/config.py`, and `snapshot_odds`,
+  `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins total <= 95k and that the script defaults
+  equal the Python constants). Committed total 91.5k: NBA 32k, NHL 24k, NFL accumulator ledger 3k (no NFL banker job exists), NFL sweep 10k
+  (planning figure, NOT ledger-metered; its real cap is `--max-credits` per firing in `setup_nfl_sweep_schedule.sh`), MLB snapshot 19.5k, historical 3k.
+  Reserve floor 500 everywhere. The NBA/NHL numbers were cut from 45k/40k without measuring burn: re-tune in `nba/config.py` after a month of data.
+  `credit_ledger.record()` is generation-match safe (props + game_lines jobs share one ledger file).
+- **Winter (NHL/NBA/NFL) alert bets and settlement.** `sport_alerts.log_sport_alert_bets` needs `MLB_DB_URL` + Cloud SQL on the job (`setup_props_alerts.sh`,
+  `setup_nfl_sweep_schedule.sh`; re-run both to take effect), refuses to write to an ephemeral sqlite inside Cloud Run, never invents a -110 price, logs
+  the ET game day, and stores `player_id` in the bet notes. `settle_bets._settle_winter_bets` matches on league player id (legacy rows via the sweep
+  roster crosswalk), leaves unresolved players PENDING (only a resolved non-player voids), and tries day-1/day+1 for UTC-dated legacy rows. NFL uses the
+  `nfl.props.grade` pipeline (correct season in Jan/Feb, game found by `game_key`, void only on snap-count-proven DNP). `settle_bets.run()` NameError
+  (`original_pending_count`) fixed. The #daily-recap embed still renders MLB systems only (`post_all_systems_summary` / `sport='mlb'` stats): open.
+- **NBA/NHL game engines** (`nba/game/`, `nhl/game/`, shadow, UNVALIDATED -- prior research found no NBA game-line edge). Loaders read the real
+  masters (`team_abbr`, `opp_abbr`, `date`; UTC date converted to ET with tips), odds come from the raw snapshot the `latest_game_lines.json` POINTER
+  references (`nba/game/odds_feed.py`), a failed odds load keeps the previous good payload marked `stale`. Payload fields: `validated:false`, `label`,
+  `engine`, `engine_version`, `stale`, `stale_reason`, `odds_meta`, per-game `sd_margin`/`sd_total` (outcome sd; `sigma_*` are NOT outcome dispersion).
+  Fixed: Four-Factor defensive signs, NHL matrix mean/OT/shootout/tau, Kalman drift (pure predict, once in update, `roll_season` offseason decay),
+  Kalshi code mapping (LAK/NJD/SJS/TBL), away-favorite spread line. `SEASON_CARRYOVER = 0.5` is a guess. NBA rebounds/turnovers are NaN for 2019-24, so the
+  replay effectively uses populated seasons only. The game-line engines can never enter the Official Card (`ev/daily_card.is_confluence_play`).
+  `GET /api/public/games/projections` passes `validated`/`label`/`engine_version`/`stale_reason` through. The `nba.odds.accumulator --kind game_lines` job must
+  be scheduled for basketball_nba and icehockey_nhl or the loader refuses a pointer older than 6 h.
+- **SGP proxies** (`ev/sgp_proxy_builder.py`, `ev/sgp_book_pricer.py`, odds-screen SGP mode): EV is a MODEL output from ASSUMED correlations, not a quoted
+  price; UI says so, rows are UNVALIDATED, extreme rows (> 45%) are flagged `MODEL ARTIFACT?` and hidden behind "Include extreme". The fabricated
+  `data/sgp_quotes.csv` / `sgp_book_params.json` were deleted (git history keeps them); a fit needs >= 8 real quotes per (book, archetype) and a holdout
+  check. Deep links parse the URL and allowlist hosts.
+- **BestBook** (`mlb_core/odds/bestbook.py`, `ev/bestbook_events.py`, jobs `bb-live-*`): needs a ToS/licensing decision
+  (`docs/solutions/conventions/bestbook-needs-tos-decision.md`); the runner exits without `BESTBOOK_ENABLED=1` and schedulers are created PAUSED.
+- **MLB offseason pause** (`deploy/pause_mlb_offseason.sh` / `resume_mlb_season.sh`): keeps `mlb-settle`, tweets, `mlb-free-plays`, `mlb-monitor-ops`,
+  `mlb-kalshi-rfq-recorder-daily`; stamps `[offseason-paused:DATE]` in the scheduler description and resume only touches stamped jobs. Offseason cutoff is
+  Nov 5 in America/Chicago (`MLB_OFFSEASON_START=MM-DD` overrides).
+- **Frontend:** `/ev` Odds Terminal has modes Standard | Arbitrage | Alt & Longshots | Outliers | SGP | Game Lines; game lines are tier-cut server-side
+  (`limitGameLines`, route validates `sport|day|limit|market`); Game Lines shows MODEL DIFF with an UNVALIDATED badge. `tests/jsx-literal-escape.test.ts`
+  fails on a literal backslash-u escape in JSX text. PWA install flow + `MobileBottomSheet` (focus trap, scroll-lock counter).
+- **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
+

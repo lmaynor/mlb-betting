@@ -115,7 +115,7 @@ def odds_csv_key(date: str, kind: str, hhmm: str) -> str:
 
 
 # -- ParlayAPI (chosen live odds provider; sport-agnostic accumulator) ----------
-# parlay-api.com -- 1000 credits/mo free (60 req/sec); $5 = 20k. Same response
+# parlay-api.com -- 1000 credits/mo free (60 req/sec); the production plan is 100k/mo (see the budgets below). Same response
 # shape as The Odds API EXCEPT prop outcome name is "Over <player>" with
 # description="<player>". Billing: props 1 credit per (event x market); whole-slate
 # game lines 1 credit per market. Request oddsFormat=american. Pinnacle included.
@@ -169,20 +169,36 @@ PARLAY_PROP_MARKETS_ALT = {
 # raw payload (training data) but excluded from best-book CSVs and from any fair-probability or alert logic.
 DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "fliff"})
 
-# -- Per-sport monthly ParlayAPI credit budgets (the shared pool is ONE plan; see nba/odds/credit_ledger.py) --
-# Sized to the 100k/mo tier (99,500 budget + 500 reserve floor):
-#   NBA: 45,000 / mo (~1,500/day)
-#   NHL: 40,000 / mo (~1,333/day)
-#   NFL: 14,500 / mo (~483/day)
-# Override per sport with ODDS_BANK_BUDGET_<SPORTKEY>.
+# -- ParlayAPI credit budgets: ONE shared pool, ONE place -------------------------------------------------------------------
+# The plan is 100,000 credits / month (confirmed applied 2026-11). EVERY spender draws from that single pool, so every
+# budget lives here and tests/test_parlay_budget.py pins the total:
+#   per-sport accumulator ledgers (nba.odds.credit_ledger) ........ ODDS_BANK_DEFAULT_BUDGET
+#   MLB snapshot job (mlb.runners.snapshot_odds) ................... MLB_SNAPSHOT_CEILING
+#   NFL props sweep (ev.sweep_nfl_props, NOT ledger-metered) ....... NFL_SWEEP_MONTHLY_BUDGET (planning figure; its own
+#                                                                     per-firing cap is --max-credits, see deploy/setup_nfl_sweep_schedule.sh)
+#   historical pulls (nba.odds.parlay_historical) .................. PARLAY_HISTORICAL_MONTHLY_BUDGET (planning figure)
+# The sum is kept at ~91.5k so the ~8.5k left over (plus the PARLAY_RESERVE_FLOOR) absorbs estimate error, discovery /
+# game-line calls and one-off probes. Change a number HERE and the shell script's copies fail the test until they match.
+# Override a sport's ledger budget with ODDS_BANK_BUDGET_<SPORTKEY>.
+PARLAY_MONTHLY_QUOTA = 100_000
+MLB_SNAPSHOT_CEILING = 19_500
+NFL_SWEEP_MONTHLY_BUDGET = 10_000
+PARLAY_HISTORICAL_MONTHLY_BUDGET = 3_000
 ODDS_BANK_DEFAULT_BUDGET = {
-    "icehockey_nhl": 40000,
-    "basketball_nba": 45000,
-    "americanfootball_nfl": 14500,
+    "icehockey_nhl": 24000,
+    "basketball_nba": 32000,
+    "americanfootball_nfl": 3000,       # accumulator ledger only (no NFL banker job exists); the sweep is budgeted above
 }
-# Never spend the shared pool below this many remaining credits (read from x-requests-remaining).
-# Set to 500 reserve floor to push right up to the 100k quota limit.
+# Never spend the shared pool below this many remaining credits (read from x-requests-remaining). ONE floor for the ledger,
+# the MLB snapshot job and the historical puller (was 500 / none / 2500).
 PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "500"))
+
+
+def parlay_budget_total() -> int:
+    """Everything that may be spent in one month across all sports and tools (excludes the reserve floor)."""
+    return (sum(ODDS_BANK_DEFAULT_BUDGET.values()) + MLB_SNAPSHOT_CEILING + NFL_SWEEP_MONTHLY_BUDGET
+            + PARLAY_HISTORICAL_MONTHLY_BUDGET)
+
 
 # accumulated-odds lake (sport-namespaced; multi-sport)
 ODDSACCUM_PREFIX = "OddsAccum"
