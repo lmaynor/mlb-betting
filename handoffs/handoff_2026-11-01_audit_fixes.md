@@ -1,6 +1,6 @@
 # Handoff -- 2026-11-01 -- audit of the last 20 commits + fixes
 
-Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 6835c26..2408d6a (see CONTEXT.md s22 for the contract-level summary).
+Branch `claude/recent-commits-audit-4a4e44`. **Backend DEPLOYED 2026-11-01 (see the Deployed section at the end); Vercel frontend NOT deployed.** Audit covered 6835c26..2408d6a (see CONTEXT.md s22 for the contract-level summary).
 
 ## Fixed (all verified by tests against REAL data shapes unless noted)
 - NHL/NBA settlement voided every bet (actuals have no `name` key) -> matches league player id; unresolved players stay pending. NFL settlement uses `nfl.props.grade`.
@@ -30,3 +30,16 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 
 ## Verified
 Full pytest, `tsc --noEmit`, full jest (one 9,000-row timing test in `odds-screen.test.ts` can fail under CPU load; passes alone 3/3). Nothing run against live GCS, gcloud, ParlayAPI or a browser.
+
+## Deployed 2026-11-01 (backend, from commit 1f61be1, unmerged branch)
+- One image (digest `sha256:def3f762...`) tagged onto `mlb-betting:latest`, `mlb-betting-feeds:latest`, `mlb-betting-ev:shadow`, `mlb-betting-bp-crawl:latest`; service revision `mlb-betting-00349-xev` at 100% (previous good: `-00332-tq7`).
+- Re-run: `setup_bestbook_live.sh` (ungated, schedulers enabled; first `bb-live-*` runs were previously blocked by the missing run.invoker), `setup_nfl_sweep_schedule.sh`, `setup_props_alerts.sh`, `setup_odds_banking.sh`.
+- INCIDENT (self-inflicted, ~1.5 min): the first build of this session dropped `mlb_core/data` (unanchored `data/` in `.gcloudignore`); the service took 100% on it for a few minutes and ~6 `/api/public/projections` requests returned 500 until rolled back; two `daily-projections` executions failed. Fixed + regression test + `docs/solutions/runtime-errors/gcloudignore-unanchored-data-dropped-packages.md`.
+- Verified live: `daily-projections` writes `EVSweep/{nba,nhl}_games/odds_board_latest.json`; BestBook (16 books incl. novig/polymarket/thescore) is a third source for NBA; the NFL sweep records its credits in `OddsAccum/americanfootball_nfl_sweep/_credits/2026-11.json`.
+- NOT verified: the authenticated `/api/public/games/odds` response from the service (the canary answered 401 without the site key; the board file itself was read from GCS), the Vercel UI, the recap embed (next `mlb-settle` run).
+
+## Price-board findings from real banked data (items 1-2)
+1. **The feed carries MAIN lines only**: one spread and one total per book, no alternate ladders. Rows split only where books' main lines differ by a half point (e.g. totals 229.5/230/230.5). Alternates would need `alternate_spreads`/`alternate_totals` markets (unverified that ParlayAPI serves them for game odds; ~1 credit per market per slate call).
+2. **Stale cutoff**: the game_lines schedulers fire 12:35, 17:35, 21:35, 22:35, 01:00, 03:35 CT. The 12:35 -> 17:35 gap is 300 min, longer than `STALE_MINUTES = 270`, so the badge flips for ~30 min on afternoons; the 03:35 -> 12:35 overnight gap is expected. Cheap fix is cadence, not the cutoff: a game_lines snapshot is only 3 credits.
+3. **Real bad-feed case found and fixed**: betmgm quoted Philadelphia -185 / Utah +150 where eleven books had Utah -180 / Philadelphia +150 (a fake ~28% arb). `_drop_flipped_books` drops a book whose favourite is the opposite of the consensus (>= 4 books, > 0.15 off the median); count in `summary.flipped_quotes_dropped`.
+4. 4 of 8 NBA and 1 of 6 NHL banked events are one-book stubs with no `commence_time`; they are skipped (warning in the log).
