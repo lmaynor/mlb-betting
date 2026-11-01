@@ -66,8 +66,8 @@ Built and running (branch feat/multisport-ev-sweep):
   are ~empty (receiving yds 29 of 1,000 two-sided; passing/rushing 0), so demo orders will mostly NO_FILL --
   mechanics only. One position per (game, player, stat) per day.
 - Credit use: ~76/cycle with 15 games; run capped at 9,000 credits. The 100k/month plan is APPLIED (confirmed
-  2026-11; an earlier ~19.3k balance reading predates the upgrade). The sweep is NOT ledger-metered: its monthly planning budget
-  is `nba.config.NFL_SWEEP_MONTHLY_BUDGET` (10k) and `--max-credits` caps a single run.
+  2026-11; an earlier ~19.3k balance reading predates the upgrade). The sweep IS ledger-metered (2026-11-01): its monthly budget
+  is `nba.config.NFL_SWEEP_MONTHLY_BUDGET` (10k, ledger key `NFL_SWEEP_LEDGER_SPORT`, cumulative cap) and `--max-credits` caps a single run.
 
 ARCHITECTURE NOTE (found live 2026-10-04): Kalshi's CDN blocks SOME Cloud Run egress IPs persistently (HTML 403,
 any User-Agent; one execution got 200s, the next 403s). So the cloud job ALWAYS publishes `consensus.json`

@@ -174,8 +174,9 @@ DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "f
 # budget lives here and tests/test_parlay_budget.py pins the total:
 #   per-sport accumulator ledgers (nba.odds.credit_ledger) ........ ODDS_BANK_DEFAULT_BUDGET
 #   MLB snapshot job (mlb.runners.snapshot_odds) ................... MLB_SNAPSHOT_CEILING
-#   NFL props sweep (ev.sweep_nfl_props, NOT ledger-metered) ....... NFL_SWEEP_MONTHLY_BUDGET (planning figure; its own
-#                                                                     per-firing cap is --max-credits, see deploy/setup_nfl_sweep_schedule.sh)
+#   NFL props sweep (ev.sweep_nfl_props) ........................... NFL_SWEEP_MONTHLY_BUDGET, metered by the same ledger under
+#                                                                     NFL_SWEEP_LEDGER_SPORT (cumulative cap, no linear pace: NFL spend is
+#                                                                     Thu/Sun/Mon-shaped); --max-credits still caps ONE firing
 #   historical pulls (nba.odds.parlay_historical) .................. PARLAY_HISTORICAL_MONTHLY_BUDGET (planning figure)
 # Owner decision 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k = 95k committed to the three live winter sports, plus ~4.5k kept
 # for testing (historical pulls 3k + the NFL accumulator ledger 1.5k, which has no banker job and exists for manual probes).
@@ -187,6 +188,7 @@ DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "f
 PARLAY_MONTHLY_QUOTA = 100_000
 MLB_SNAPSHOT_CEILING = 19_500
 NFL_SWEEP_MONTHLY_BUDGET = 10_000
+NFL_SWEEP_LEDGER_SPORT = "americanfootball_nfl_sweep"     # OddsAccum/{this}/_credits/{month}.json
 PARLAY_HISTORICAL_MONTHLY_BUDGET = 3_000
 ODDS_BANK_DEFAULT_BUDGET = {
     "icehockey_nhl": 40000,

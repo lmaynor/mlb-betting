@@ -9,14 +9,14 @@
 # DFS apps and Kalshi are dropped) which ev.daily_projections.load_events unions with ParlayAPI and BettingPros lines.
 # BestBook is a free cookie-authenticated feed: this spends no ParlayAPI credits.
 #
-# COMPLIANCE GATE: this client reads a third party's private, cookie-authenticated stream and no ToS / licensing review is on
-# record (docs/solutions/conventions/bestbook-needs-tos-decision.md). The script therefore REFUSES to provision unless
-# BESTBOOK_ENABLED=1 is set, and every scheduler it creates starts PAUSED (BESTBOOK_RESUME=1 resumes them). The runner enforces
-# the same flag, so a stray `gcloud run jobs execute` also refuses.
+# STATUS: LIVE (owner decision 2026-11-01: an additional line source, no gate). The client reads a third party's private,
+# cookie-authenticated stream and no ToS / licensing review was done (docs/solutions/conventions/bestbook-needs-tos-decision.md).
+# Kill switches: `PAUSE=1` below pauses every scheduler; BESTBOOK_DISABLED=1 on the job makes the runner exit without crawling.
+# Schedulers are created ENABLED (and `RESUME=1` re-enables them after a PAUSE).
 #
 # Usage:
-#   BESTBOOK_ENABLED=1 PROJECT_ID=concrete-crow-445205-m4 CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_bestbook_live.sh
-#   BESTBOOK_RESUME=1 BESTBOOK_ENABLED=1 ... bash deploy/setup_bestbook_live.sh   # only after the ToS decision: un-pause the schedulers
+#   PROJECT_ID=concrete-crow-445205-m4 CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_bestbook_live.sh
+#   RESUME=1 PROJECT_ID=... bash deploy/setup_bestbook_live.sh    # re-enable every bb-live-* scheduler after a PAUSE
 #   PAUSE=1 PROJECT_ID=... bash deploy/setup_bestbook_live.sh     # pause every bb-live-* scheduler
 #   Test one run now:  gcloud run jobs execute bb-live-nba --region=us-central1 --wait
 set -euo pipefail
@@ -37,16 +37,19 @@ ROWS=(
   "bb-live-nba|nba|hourly|20 * * 10-12,1-6 *"
 )
 
+if [ "${RESUME:-0}" = "1" ]; then
+  for s in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep '^bb-live-'); do
+    gcloud scheduler jobs resume "$s" --location="$REGION" --project="$PROJECT_ID" --quiet
+  done
+  echo "All bb-live-* schedulers resumed."; exit 0
+fi
+
 if [ "${PAUSE:-0}" = "1" ]; then
   for s in $(gcloud scheduler jobs list --location="$REGION" --project="$PROJECT_ID" --format='value(ID.basename())' | grep '^bb-live-'); do
     gcloud scheduler jobs pause "$s" --location="$REGION" --project="$PROJECT_ID" --quiet
   done
   echo "All bb-live-* schedulers paused."; exit 0
 fi
-
-[ "${BESTBOOK_ENABLED:-0}" = "1" ] || {
-  echo "REFUSING: BESTBOOK_ENABLED=1 is required. A ToS / licensing decision is needed before this feed is provisioned"
-  echo "(see docs/solutions/conventions/bestbook-needs-tos-decision.md)."; exit 1; }
 
 [ "${CONFIRM_IMAGE_HAS_LIVE_LINES:-0}" = "1" ] || {
   echo "REFUSING: set CONFIRM_IMAGE_HAS_LIVE_LINES=1 once $IMAGE contains ev/bestbook_events.py."
@@ -61,7 +64,7 @@ for row in "${ROWS[@]}"; do
   if [[ "$JOBS_DONE" != *" $JOB "* ]]; then
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
-           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},BESTBOOK_ENABLED=1"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
            --command="python"
            --args="-m,mlb.runners.bestbook_live_props,--sport,$SPORT"
            --task-timeout="900s" --max-retries=1 --memory="1Gi" --cpu="1")
@@ -95,4 +98,4 @@ for row in "${ROWS[@]}"; do
   fi
 done
 
-echo "BestBook live jobs and schedulers provisioned (new schedulers are PAUSED unless BESTBOOK_RESUME=1)."
+echo "BestBook live jobs and schedulers provisioned (enabled)."

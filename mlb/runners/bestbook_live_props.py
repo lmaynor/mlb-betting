@@ -10,8 +10,9 @@ ev.daily_projections.load_events to union with the banked ParlayAPI and BettingP
 A crawl that finds games but cannot price ANY of them does NOT overwrite the last good
 file, and exits 1 so the failure is visible in Cloud Run.
 
-COMPLIANCE GATE: BestBook is a third party's private, cookie-authenticated stream and no ToS / licensing review is on record
-(docs/solutions/conventions/bestbook-needs-tos-decision.md). This runner REFUSES to run unless BESTBOOK_ENABLED=1.
+STATUS: LIVE as an additional line source (owner decision 2026-11-01, docs/solutions/conventions/bestbook-needs-tos-decision.md).
+BestBook is a third party's private, cookie-authenticated stream and no ToS / licensing review was done; BESTBOOK_DISABLED=1 is the
+kill switch (the runner then exits 2 without touching the endpoint).
 
 --days N is a window of N ET calendar days INCLUDING today (today .. today + N - 1).
 
@@ -34,13 +35,13 @@ log = logging.getLogger("bestbook_live_props")
 
 
 class BestBookDisabled(RuntimeError):
-    """Raised when BESTBOOK_ENABLED=1 is not set (no ToS / licensing decision recorded)."""
+    """Raised when the BESTBOOK_DISABLED=1 kill switch is set."""
 
 
 def require_enabled() -> None:
-    if os.environ.get("BESTBOOK_ENABLED") != "1":
-        raise BestBookDisabled("BestBook crawl is disabled: set BESTBOOK_ENABLED=1 only after the ToS / licensing decision "
-                               "(docs/solutions/conventions/bestbook-needs-tos-decision.md)")
+    """On by default; BESTBOOK_DISABLED=1 (or true/yes/on) stops the crawl."""
+    if os.environ.get("BESTBOOK_DISABLED", "").strip().lower() in ("1", "true", "yes", "on"):
+        raise BestBookDisabled("BestBook crawl is switched off (BESTBOOK_DISABLED is set); unset it to resume")
 
 
 def run(sport: str, days: int | None = None, out: str | None = None) -> dict:

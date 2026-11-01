@@ -44,6 +44,8 @@ from ev.props import (POOL_MAX_GAP, book_points, build_consensus, parse_event_pr
                       scan_book_outliers)
 from ev.props_config import props_config
 from ev.sports import NFL
+from nba.config import NFL_SWEEP_LEDGER_SPORT
+from nba.odds import credit_ledger
 from mlb.execution.kalshi.client import PUBLIC_DATA_ENV, KalshiClient
 from mlb.execution.kalshi.fees import taker_fee
 from mlb.execution.kalshi.mapping import MapFail
@@ -145,12 +147,42 @@ def consensus_snapshot(parlay_events: list):
     return snap, stats
 
 
+# -- ParlayAPI credit metering: the sweep draws from the SAME 100k pool as the NBA/NHL bankers, so every pull goes through the
+# shared ledger (nba.odds.credit_ledger) under NFL_SWEEP_LEDGER_SPORT: allowance() BEFORE spending, record() AFTER.
+def _credits_of(pc, default: int) -> int:
+    """Credits the LAST call actually cost (x-requests-last), else the caller's estimate."""
+    try:
+        v = int(getattr(pc, "credits_last", None))
+        return v if v >= 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _ledger_month(today) -> str:
+    return f"{today.year:04d}-{today.month:02d}"
+
+
+def _ledger_allowance(pc, want: int, today):
+    """Allowance for `want` credits against the sweep's monthly budget and the shared pool floor (no linear pace)."""
+    return credit_ledger.allowance(NFL_SWEEP_LEDGER_SPORT, want, today, getattr(pc, "credits_remaining", None), pace=False)
+
+
+def _ledger_record(today, n: int) -> None:
+    credit_ledger.record(NFL_SWEEP_LEDGER_SPORT, _ledger_month(today), n)
+
+
 def refresh_single_event_consensus(pc, sport: str, event_id: str, comm_iso: str, gk: str, now: datetime | None = None):
     """On-demand consensus for ONE game: a single ParlayAPI event pull (len(PARLAY_MARKETS) = 5 credits) instead of
     waiting for the next full-slate cycle. -> a snapshot entry (same shape as consensus_snapshot's, plus 'ts' = the
     fetch time, which is the consensus's true age anchor) or None when the pull returned nothing (API error / out of
     credits / game gone) -- the caller must then NOT treat any older consensus as fresh."""
+    today = (now or datetime.now(timezone.utc)).astimezone(_ET).date()
+    a = _ledger_allowance(pc, len(PARLAY_MARKETS), today)
+    if not a.ok or a.credits < len(PARLAY_MARKETS):
+        log.warning("on-demand consensus refresh skipped for %s: %s", event_id, a.reason)
+        return None                                                      # same contract as an API failure: never treat older data as fresh
     props = pc.get_event_props(sport, event_id, PARLAY_MARKETS)
+    _ledger_record(today, _credits_of(pc, len(PARLAY_MARKETS)))
     if not props:
         return None
     start = datetime.fromisoformat(comm_iso.replace("Z", "+00:00"))
@@ -509,7 +541,13 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
     now = datetime.now(timezone.utc)
     day = now.astimezone(_ET).date().isoformat()
     hhmmss = now.strftime("%H%M%S")
+    today = now.astimezone(_ET).date()
+    a0 = _ledger_allowance(pc, 1, today)
+    if not a0.ok:
+        log.error("NFL sweep cycle %s skipped: %s", cycle, a0.reason)
+        return {"cycle": cycle, "ts": now.isoformat(), "skipped": a0.reason, "credits_remaining": pc.credits_remaining}
     slate = pc.get_slate(SPORT, markets=["h2h"]) or []
+    _ledger_record(today, _credits_of(pc, 1))
     start_cutoff = now + timedelta(minutes=cfg.close_buffer_min)
     upcoming = []
     for ev in slate:
@@ -523,14 +561,27 @@ def run_cycle(pc, kc, cfg, cycle: int, horizon_h: float, state: dict) -> dict:
         if mins <= 360 or cycle % 4 == 0:                     # near games every cycle, far games every 4th
             upcoming.append(ev)
     parlay_events = []
-    for ev in upcoming:
-        props = pc.get_event_props(SPORT, ev["id"], PARLAY_MARKETS)
-        if props:
-            parlay_events.append({"event": ev, "props": props})
-            try:
-                _write(json.dumps(props).encode(), f"{PREFIX}/raw/{day}/{ev['id']}_{hhmmss}.json")
-            except Exception as e:                                                      # noqa: BLE001
-                log.warning("raw write failed: %r", e)
+    # soonest kickoff first, so a budget that only covers part of the slate spends on the games that matter most
+    upcoming.sort(key=lambda e: (event_game(e) or (None, now))[1])
+    if upcoming:
+        a = _ledger_allowance(pc, len(upcoming) * len(PARLAY_MARKETS), today)
+        granted = (a.credits // len(PARLAY_MARKETS)) if a.ok else 0
+        if granted < len(upcoming):
+            log.warning("NFL sweep: budget covers %d of %d games this cycle (%s)", granted, len(upcoming), a.reason)
+        upcoming = upcoming[:granted]
+    event_spend = 0
+    try:
+        for ev in upcoming:
+            props = pc.get_event_props(SPORT, ev["id"], PARLAY_MARKETS)
+            event_spend += _credits_of(pc, len(PARLAY_MARKETS))
+            if props:
+                parlay_events.append({"event": ev, "props": props})
+                try:
+                    _write(json.dumps(props).encode(), f"{PREFIX}/raw/{day}/{ev['id']}_{hhmmss}.json")
+                except Exception as e:                                                  # noqa: BLE001
+                    log.warning("raw write failed: %r", e)
+    finally:
+        _ledger_record(today, event_spend)     # real spend, even if a call raised part-way
     snap, sstats = consensus_snapshot(parlay_events)
     # Book consensus is ALWAYS published: the join to Kalshi can then happen anywhere Kalshi is reachable.
     _write(json.dumps({"ts": now.isoformat(), "cycle": cycle, "events": snap}).encode(), f"{PREFIX}/consensus.json")

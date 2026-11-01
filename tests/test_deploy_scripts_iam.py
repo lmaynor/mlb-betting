@@ -69,11 +69,11 @@ def test_binding_is_granted_before_the_scheduler_is_created(script):
     assert _violations(script.read_text()) == [], script.name
 
 
-def test_bestbook_live_setup_is_gated_and_born_paused():
+def test_bestbook_live_setup_is_ungated_and_has_pause_and_resume_switches():
     s = (DEPLOY / "setup_bestbook_live.sh").read_text()
     assert "setup_bestbook_live.sh" in {p.name for p in TRIGGERS_A_JOB}
-    assert 'BESTBOOK_ENABLED:-0}" = "1"' in s and s.index("BESTBOOK_ENABLED:-0") < s.index("gcloud run jobs create")
-    assert "gcloud scheduler jobs pause" in s and "BESTBOOK_RESUME" in s
+    assert "BESTBOOK_ENABLED" not in s                                         # owner decision 2026-11-01: no opt-in gate
+    assert "gcloud scheduler jobs pause" in s and "gcloud scheduler jobs resume" in s and "RESUME" in s
 
 
 def test_alert_sweep_jobs_that_log_bets_are_wired_for_the_database():

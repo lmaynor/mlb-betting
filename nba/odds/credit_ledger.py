@@ -21,7 +21,8 @@ import os
 from dataclasses import dataclass
 
 from mlb_core import storage
-from nba.config import ODDS_BANK_DEFAULT_BUDGET, ODDSACCUM_PREFIX, PARLAY_RESERVE_FLOOR
+from nba.config import (NFL_SWEEP_LEDGER_SPORT, NFL_SWEEP_MONTHLY_BUDGET, ODDS_BANK_DEFAULT_BUDGET, ODDSACCUM_PREFIX,
+                        PARLAY_RESERVE_FLOOR)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ def monthly_budget(sport: str) -> int:
     env = os.environ.get(f"ODDS_BANK_BUDGET_{sport.upper()}")
     if env:
         return int(env)
+    if sport == NFL_SWEEP_LEDGER_SPORT:
+        return int(NFL_SWEEP_MONTHLY_BUDGET)
     return int(ODDS_BANK_DEFAULT_BUDGET.get(sport, 0))
 
 
@@ -103,10 +106,11 @@ class Allowance:
     reason: str
 
 
-def allowance(sport: str, want: int, today, remaining_hint=None, run_cap: int = 0) -> Allowance:
+def allowance(sport: str, want: int, today, remaining_hint=None, run_cap: int = 0, pace: bool = True) -> Allowance:
     """How many of `want` credits may be spent now. Partial grants are allowed (the caller spends them on the
     soonest-starting events first). Denied when: budget unset, ledger unreadable, pool below the reserve floor,
-    or the month is already ahead of the linear pace."""
+    or the month is already ahead of the linear pace. pace=False replaces the linear pace with the plain monthly budget (for a
+    spender whose demand is lumpy by design, e.g. the NFL sweep: a Sunday burst on day 4 is not "ahead of pace")."""
     month = f"{today.year:04d}-{today.month:02d}"
     budget = monthly_budget(sport)
     if budget <= 0:
@@ -123,10 +127,10 @@ def allowance(sport: str, want: int, today, remaining_hint=None, run_cap: int = 
             headroom = None
     if headroom is not None and headroom <= 0:
         return Allowance(False, 0, f"shared pool {remaining_hint} is at/below floor {PARLAY_RESERVE_FLOOR}")
-    cap = pace_cap(budget, today.day, today.year, today.month)
+    cap = pace_cap(budget, today.day, today.year, today.month) if pace else float(budget)
     room = int(cap - spent)
     if room <= 0:
-        return Allowance(False, 0, f"over pace: spent {spent} >= {cap:.0f} allowed so far (budget {budget})")
+        return Allowance(False, 0, f"over {'pace' if pace else 'budget'}: spent {spent} >= {cap:.0f} allowed so far (budget {budget})")
     grant = min(want, room, run_cap) if run_cap and run_cap > 0 else min(want, room)
     if headroom is not None:
         grant = min(grant, headroom)

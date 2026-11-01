@@ -338,17 +338,20 @@ def test_crawl_survives_one_dead_game_but_stops_when_the_endpoint_is_dead(monkey
         _crawl(monkeypatch, slate, all_bad)("nfl", now=now, days=7)
 
 
-def test_runner_refuses_without_bestbook_enabled(monkeypatch):
+def test_runner_is_on_by_default_and_the_kill_switch_stops_it(monkeypatch):
     from mlb.runners import bestbook_live_props as runner
-    monkeypatch.delenv("BESTBOOK_ENABLED", raising=False)
     monkeypatch.setenv("SKIP_STARTUP_JITTER", "1")
+    monkeypatch.delenv("BESTBOOK_DISABLED", raising=False)
+    monkeypatch.delenv("BESTBOOK_ENABLED", raising=False)                    # the old opt-in flag no longer matters
+    runner.require_enabled()                                                  # does not raise
     called = []
     monkeypatch.setattr(runner.bbe, "crawl_sport", lambda *a, **k: called.append(1))
+    monkeypatch.setenv("BESTBOOK_DISABLED", "1")
     assert runner.main(["--sport", "nfl"]) == 2 and not called
     with pytest.raises(runner.BestBookDisabled):
         runner.run("nfl")
-    monkeypatch.setenv("BESTBOOK_ENABLED", "0")
-    assert runner.main(["--sport", "nfl"]) == 2
+    monkeypatch.setenv("BESTBOOK_DISABLED", "0")                              # explicit 0 = on
+    runner.require_enabled()
 
 
 def test_no_evasion_wording_in_the_crawler_sources():

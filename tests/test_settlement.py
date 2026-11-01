@@ -1002,5 +1002,13 @@ def test_run_settles_winter_bets_and_returns_without_crashing(monkeypatch):
         out = settle_bets.run("2026-10-29")
     assert out["status"] == "ok" and out["settled"] == 1 and out["skipped"] == 0
     assert len(posted) == 1                                   # offseason, no MLB bet pending, but a winter bet settled
+    nhl_stats = posted[0]["sport_stats"]["NHL"]                # ...and the recap carries that NHL bet's record
+    assert nhl_stats["bets"] == 1 and nhl_stats["wins"] == 1 and posted[0]["sport_stats"]["NFL"] is None
     with eng.connect() as c:
         assert c.execute(sa.text("SELECT result FROM bets")).scalar() == "win"
+
+
+def test_winter_season_start_spans_the_new_year():
+    from mlb.runners.settle_bets import _winter_season_start
+    assert _winter_season_start("2026-11-02") == "2026-08-01"
+    assert _winter_season_start("2027-01-20") == "2026-08-01"       # NFL playoffs / NBA / NHL stay in the autumn's season

@@ -51,3 +51,18 @@ def _daily_projections_never_reach_gcs(monkeypatch):
     monkeypatch.setattr(dp, "_run_game_models", no_game_models)
     monkeypatch.setattr(dp, "_run_game_board", lambda sport, now: False)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _nfl_sweep_ledger_never_reaches_gcs(request, monkeypatch):
+    """The NFL sweep meters every ParlayAPI pull through the shared credit ledger (OddsAccum/.../_credits/*.json). A few test
+    modules set a fake MLB_GCS_BUCKET, so an un-stubbed ledger call would go to REAL storage. Default: permissive and
+    write-nothing. A module that tests the metering itself sets REAL_SWEEP_LEDGER = True and stubs the ledger's storage."""
+    sw = sys.modules.get("ev.sweep_nfl_props")
+    if sw is None or getattr(request.module, "REAL_SWEEP_LEDGER", False):
+        yield
+        return
+    from nba.odds.credit_ledger import Allowance
+    monkeypatch.setattr(sw, "_ledger_allowance", lambda pc, want, today: Allowance(True, want, "test"))
+    monkeypatch.setattr(sw, "_ledger_record", lambda today, n: None)
+    yield

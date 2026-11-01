@@ -4264,8 +4264,10 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
 
 - **ParlayAPI is the 100k/month plan (confirmed by the owner 2026-11-01).** Budgets live in ONE place, `nba/config.py`, and `snapshot_odds`,
   `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins: live sports >= 95k, total + floor <= 100k,
-  and that the script defaults equal the Python constants). Owner-set 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k (planning figure, NOT
-  ledger-metered; its real cap is `--max-credits` per firing in `setup_nfl_sweep_schedule.sh`) = 95k live, plus a 4.5k test budget (historical pulls 3k,
+  and that the script defaults equal the Python constants). Owner-set 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k (METERED by the
+  same ledger since 2026-11-01 under `NFL_SWEEP_LEDGER_SPORT`: allowance before every pull, spend recorded after, soonest games first when the budget
+  only covers part of the slate, cumulative monthly cap with NO linear pace because NFL demand is Thu/Sun/Mon-shaped; `--max-credits` still caps one
+  firing) = 95k live, plus a 4.5k test budget (historical pulls 3k,
   NFL accumulator ledger 1.5k, no banker job). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
   45k + 40k + 19.5k = 104.5k does not fit, so re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
   `credit_ledger.record()` is generation-match safe (props + game_lines jobs share one ledger file).
@@ -4274,7 +4276,8 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   the ET game day, and stores `player_id` in the bet notes. `settle_bets._settle_winter_bets` matches on league player id (legacy rows via the sweep
   roster crosswalk), leaves unresolved players PENDING (only a resolved non-player voids), and tries day-1/day+1 for UTC-dated legacy rows. NFL uses the
   `nfl.props.grade` pipeline (correct season in Jan/Feb, game found by `game_key`, void only on snap-count-proven DNP). `settle_bets.run()` NameError
-  (`original_pending_count`) fixed. The #daily-recap embed still renders MLB systems only (`post_all_systems_summary` / `sport='mlb'` stats): open.
+  (`original_pending_count`) fixed. The #daily-recap embed now also renders an NFL / NBA / NHL field each (season record of the logged alert bets, labelled
+  "props (unvalidated)", counted in the combined P&L; `settle_bets._winter_sport_stats`, season = since Aug 1) next to the MLB systems.
 - **NBA/NHL game engines** (`nba/game/`, `nhl/game/`, shadow, UNVALIDATED -- prior research found no NBA game-line edge). Loaders read the real
   masters (`team_abbr`, `opp_abbr`, `date`; UTC date converted to ET with tips), odds come from the raw snapshot the `latest_game_lines.json` POINTER
   references (`nba/game/odds_feed.py`), a failed odds load keeps the previous good payload marked `stale`. Payload fields: `validated:false`, `label`,
@@ -4288,8 +4291,10 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   price; UI says so, rows are UNVALIDATED, extreme rows (> 45%) are flagged `MODEL ARTIFACT?` and hidden behind "Include extreme". The fabricated
   `data/sgp_quotes.csv` / `sgp_book_params.json` were deleted (git history keeps them); a fit needs >= 8 real quotes per (book, archetype) and a holdout
   check. Deep links parse the URL and allowlist hosts.
-- **BestBook** (`mlb_core/odds/bestbook.py`, `ev/bestbook_events.py`, jobs `bb-live-*`): needs a ToS/licensing decision
-  (`docs/solutions/conventions/bestbook-needs-tos-decision.md`); the runner exits without `BESTBOOK_ENABLED=1` and schedulers are created PAUSED.
+- **BestBook** (`mlb_core/odds/bestbook.py`, `ev/bestbook_events.py`, jobs `bb-live-*`): LIVE as an additional prop-line source (owner decision
+  2026-11-01), unioned with ParlayAPI and BettingPros in `ev.daily_projections.load_events`. No ToS / licensing review was done
+  (`docs/solutions/conventions/bestbook-needs-tos-decision.md`); kill switches: `BESTBOOK_DISABLED=1` on the job, `PAUSE=1 deploy/setup_bestbook_live.sh`.
+  The earlier "born paused" claim was never implemented in the script (schedulers were created enabled); the gate is gone, not hidden.
 - **MLB offseason pause** (`deploy/pause_mlb_offseason.sh` / `resume_mlb_season.sh`): keeps `mlb-settle`, tweets, `mlb-free-plays`, `mlb-monitor-ops`,
   `mlb-kalshi-rfq-recorder-daily`; stamps `[offseason-paused:DATE]` in the scheduler description and resume only touches stamped jobs. Offseason cutoff is
   Nov 5 in America/Chicago (`MLB_OFFSEASON_START=MM-DD` overrides).

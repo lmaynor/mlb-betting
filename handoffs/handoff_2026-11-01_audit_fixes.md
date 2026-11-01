@@ -16,11 +16,13 @@ Branch `claude/recent-commits-audit-4a4e44`. Nothing deployed. Audit covered 683
 
 ## Decisions / open items for the owner
 1. **Budgets (owner-set 2026-11-01):** NBA 45k / NHL 40k / NFL sweep 10k = 95k live + 4.5k test budget = 99.5k, floor 500. MLB's 19.5k is dormant until Mar 20; re-balance NBA/NHL via `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh` (104.5k does not fit). Re-run `setup_odds_banking.sh` to push the new env.
-2. **BestBook ToS:** schedulers are created paused and the runner refuses without `BESTBOOK_ENABLED=1`. Decide before enabling.
+2. **BestBook (owner decision 2026-11-01): LIVE, ungated, an additional prop-line source** (third feed in `ev.daily_projections.load_events`). No ToS review was
+   done; kill switches `BESTBOOK_DISABLED=1` / `PAUSE=1 deploy/setup_bestbook_live.sh`. Found while checking prod: the `bb-live-*` jobs and schedulers already
+   existed and were ENABLED (the "born paused" behaviour was never implemented in the script), so the feed was running all along.
 3. **Re-run provisioning** to take effect: `deploy/setup_props_alerts.sh`, `deploy/setup_nfl_sweep_schedule.sh`, `deploy/setup_bestbook_live.sh` (paused), `deploy/setup_odds_banking.sh`. None were executed here.
-4. **NFL sweep** is still outside the shared ledger (`ev/sweep_nfl_props.py` default `--max-credits 9000` per run; first cycle's spend is not counted). Only `setup_nfl_sweep_schedule.sh`'s 150/firing caps it.
-5. **#daily-recap** still renders MLB systems only; winter results settle but do not appear in the embed (`mlb_core/notify/discord.py`, `sport='mlb'` stats).
-6. A scheduler for `nba.odds.accumulator --kind game_lines` (basketball_nba, icehockey_nhl) must exist or the game engines refuse a >6 h old pointer and the payload goes stale.
+4. **NFL sweep is now on the shared ledger** (owner decision 2026-11-01): `ev/sweep_nfl_props.py` calls `credit_ledger.allowance` (key `NFL_SWEEP_LEDGER_SPORT`, 10k cumulative cap, no linear pace) before the slate call and the event pulls and records real spend; the on-demand `refresh_single_event_consensus` is metered too. `--max-credits` still caps one firing. Takes effect when the `ev:shadow` image is rebuilt.
+5. **#daily-recap now renders NFL / NBA / NHL** (a field each, "props (unvalidated)", counted in the combined P&L) next to the MLB systems: `settle_bets._winter_sport_stats`.
+6. The `game_lines` accumulator schedulers exist in prod (`odds-bank-{nba,nhl}-game-lines-*`, 6/day each), verified 2026-11-01.
 7. `SEASON_CARRYOVER = 0.5` (Kalman profile carryover) is a guess; NBA rebounds/turnovers are NaN for 2019-24 so the replay effectively uses 2025 only.
 8. Not done: server-side stripping of the hidden outlier book name (outliers are computed client-side; the lock is not a security boundary); virtualisation / further split of `odds-client.tsx` (~3400 lines); NHL history loader NaN guard (`float(x or default)`); Python 'TD PROXY' label for 2-leg rows; real-launcher check of maskable icons; `gcloud` description-field format for the pause stamp unverified against real gcloud.
 9. Game-line PRICE screen BUILT on `/ev/games?view=prices` (see CONTEXT s22); verified only against fixtures and unit tests: check it against a real banked `game_lines` snapshot after the backend deploys (do the NBA/NHL feeds carry alternate lines? is `stale` (270 min) sensible?). The `daily-projections` job image must be rebuilt for the board file to be written.
