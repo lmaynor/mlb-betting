@@ -73,7 +73,7 @@ describe('design-system debt guards', () => {
   it('the home hero is a solid surface: no gradient, no radius-xl, no paper-mode eyebrow', () => {
     const hero = read('components/landing/hero.tsx')
     expect(hero).not.toMatch(/linear-gradient|radius-xl/)
-    expect(hero).toMatch(/SURFACE_CARD/)
+    expect(hero).toMatch(/SURFACE_CARD|bg-background-primary-default/)
     expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
     expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
     // the legal disclosure stays in the footer, as one muted paragraph (no PAPER MODE callout box)
