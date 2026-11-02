@@ -1,6 +1,8 @@
 # Kalshi RFQ market maker / combo lay engine (2026-10-25)
 
-Status: CODE + OFFLINE TESTS ONLY. Nothing has been run against any Kalshi exchange. No edge is claimed.
+Status (updated 2026-11-01): code merged (PRs #115, #120-123), 101 offline tests pass. Only the DEMO recorder has run (4 executions,
+2026-10-26/27, 546 tape chunks, 2,730 RFQs). The PRODUCTION read-only recorder is NOT provisioned (no job, scheduler or `kalshi-prod-*`
+secrets in GCP). No edge is claimed, and the demo tape cannot support one (see "Demo tape findings" and "Production recorder runbook").
 
 ## Thesis (unproven)
 Public-book passive making on Kalshi props loses to queue priority (market_making_2026-10-12.md). RFQs bypass the
@@ -176,6 +178,43 @@ KALSHI_RFQ_ENV=production-readonly python scripts/kalshi_rfq_daemon.py --mode re
 python scripts/kalshi_rfq_daemon.py --reset-kill                        # kill switch is manual-reset-only
 ```
 Kill switch key: `kill_reason:kalshi_rfq` (own key; never halts the other venues in the same ledger).
+
+## Demo tape findings (read 2026-11-01; `Kalshi/rfq_tape/demo/`, 2026-10-26 to 10-27)
+* 2,730 RFQs: 2,720 combos, 10 single-market. Combo size: 2,055 two-leg, 234 fourteen-leg, the rest 3-18.
+* Decisions: 16 QUOTE (0.6%, all 2-3 legs, est. ROI 4-6%), 2,636 `REJ_COMBO_LEG_UNVALIDATED` (97%), 58 `REJ_COMBO_NOT_LONGSHOT`.
+  Coverage of legs, not risk, is the binding limit.
+* The 490 follow-up trade rows are NOT usable as evidence: the demo prints a flat 0.45 yes / 0.55 no for 100 contracts on most
+  of them (demo bot), and `fetch_trades_after` matches by market ticker, which differs from the RFQ's combo ticker
+  (`KXMVECROSSCATEGORY0-...` vs `KXMVECROSSCATEGORY-...`). Do not compare our `no_bid` to those prices.
+* Per-leg `legs` diagnostics are present on only 32 records, so the `why` histogram cannot be built from this tape.
+* Not exercised: `quote_accepted`, confirm latency, `accepted_side`, tick grid. The recorder never quotes.
+
+## Production recorder runbook (NOT yet done)
+Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,
+2 secrets, 1 Cloud Run Job, 1 scheduler; ParlayAPI game pulls capped at 120 credits/day (`KALSHI_RFQ_GAME_BUDGET`).
+1. **Owner decision:** create a production Kalshi API key, READ-ONLY if the UI offers it. The daemon never sends a non-GET on this env,
+   but a scoped key is the fourth layer.
+2. **Secrets** (this script never sees values):
+   ```
+   printf '%s' "<key id>" | gcloud secrets create kalshi-prod-api-key-id --data-file=- --project=$PROJECT_ID
+   gcloud secrets create kalshi-prod-private-key --data-file=/path/to/key.pem --project=$PROJECT_ID
+   ```
+3. **Image:** confirm `gcr.io/$PROJECT_ID/mlb-betting:latest` contains `scripts/kalshi_rfq_daemon.py` and `websockets` (the demo job already
+   ran on it, so a rebuild is only needed if the code changed since 2026-10-26).
+4. **Provision:** `PROJECT_ID=concrete-crow-445205-m4 ./deploy/setup_kalshi_rfq_recorder.sh` (creates `mlb-kalshi-rfq-recorder` + `mlb-kalshi-rfq-recorder-daily`, 10:00 UTC).
+5. **First execution by hand, not the scheduler:** `gcloud run jobs execute mlb-kalshi-rfq-recorder --region=us-central1 --project=$PROJECT_ID`.
+   Within ~3 min read the logs. Pass: a `heartbeat:` line with connects >= 1 and RFQs seen > 0. Fail: `RFQ stream never connected in 120 s`
+   (blocked Cloud Run egress or a rejected key).
+6. **If egress is blocked:** the demo job connected from Cloud Run, so only the production hosts (`external-api.kalshi.com` + WS) are in
+   doubt. Fallbacks, in order: static egress IP (VPC connector + Cloud NAT), a small GCE VM, or run the daemon from the laptop.
+7. **Check the tape** after a day: `gsutil ls gs://<bucket>/Kalshi/rfq_tape/production/<day>/`; RFQ rate, combo/single mix, share of legs
+   priced.
+8. **Before trusting any P&L-style comparison**, fix the follow-up join (see Demo tape findings): key trades to the RFQ's market via the
+   combo ticker mapping, or record the RFQ's own `quote_executed` / settlement instead of the public trade tape.
+9. **Pause / stop:** `PAUSE=1 PROJECT_ID=... ./deploy/setup_kalshi_rfq_recorder.sh`; cancel a running execution with
+   `gcloud run jobs executions cancel`.
+Note: `deploy/pause_mlb_offseason.sh` already excludes `mlb-kalshi-rfq-recorder-daily` from the offseason pause; until step 4 runs, that
+entry matches nothing.
 
 ## Promotion criteria (suggested, not met)
 Record: >= 2 weeks of tape, our would-be no_bid vs the price combos actually traded at afterwards. Shadow: PLAN rate,
