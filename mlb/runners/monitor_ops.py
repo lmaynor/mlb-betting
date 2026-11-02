@@ -248,6 +248,32 @@ def _check_board_feeds(month: int | None = None) -> list[str]:
     return failures
 
 
+MODEL_PICKS_KEY = "ModelPicks/last_run.json"          # written by ev.model_picks after every pass
+MODEL_PICKS_STALE_HOURS = 3.0                         # the props-model-picks job runs hourly
+MODEL_PICKS_MONTHS = BP_LIVE_MONTHS                   # same in-season windows as the live line crawls
+
+
+def _check_model_picks(month: int | None = None) -> list[str]:
+    """The tracked model-pick job (ev.model_picks, props-model-picks): a missing heartbeat is silent (not provisioned yet), a
+    STALE one or a sport whose last pass could not log (stale board) is reported. Only in-season sports are judged."""
+    import json
+    from mlb_core.storage import exists, read_bytes
+    month = month or datetime.now(timezone.utc).month
+    age = _gcs_age_hours(MODEL_PICKS_KEY)
+    if age is None:
+        return []
+    if age > MODEL_PICKS_STALE_HOURS:
+        return [f"model-pick job stale: `{MODEL_PICKS_KEY}` {age:.1f}h old (props-model-picks job)"]
+    try:
+        hb = json.loads(read_bytes(MODEL_PICKS_KEY).decode()) if exists(MODEL_PICKS_KEY) else {}
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"monitor_ops: model-pick heartbeat unreadable: {e}")
+        return []
+    return [f"{sp.upper()} model picks: last pass status={v.get('status')} (board stale or missing)"
+            for sp, v in (hb.get("sports") or {}).items()
+            if month in MODEL_PICKS_MONTHS.get(sp, set()) and v.get("status") not in (None, "ok")]
+
+
 def _check_snapshot_freshness() -> list[str]:
     age = _gcs_age_hours(SGO_SNAPSHOT_KEY)
     if age is None:
@@ -375,6 +401,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_snapshot_freshness()
     failures += _check_build_sentinels()
     failures += _check_nfl_sentinel()
+    failures += _check_model_picks()
     failures += _check_nfl_contracts()
     failures += _check_board_feeds()
     failures += _check_stuck_bets()

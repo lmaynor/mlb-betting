@@ -85,11 +85,15 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
             <span className="dell-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
+            {!tracked && (
+              <span className="dell-heading" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+                style={{ fontSize: '10px', color: 'var(--warn)', border: '1px solid rgba(245,158,11,0.45)', borderRadius: '6px', padding: '2px 8px' }}>UNVALIDATED</span>
+            )}
           </div>
           <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>

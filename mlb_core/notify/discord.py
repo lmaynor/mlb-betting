@@ -507,12 +507,14 @@ def post_all_systems_summary(
     run_date: str = None,
     settle_date: str = None,
     sport_stats: dict = None,
+    model_stats: dict = None,
 ) -> None:
     """Post a daily recap embed after settlement (#daily-recap).
 
     systems_stats: MLB per-system season stats. sport_stats: NFL / NBA / NHL season stats keyed by sport code ("NFL", ...);
     those bets are paper, unvalidated alerts (all one 'EV' system), so each sport gets one field and they all count toward
-    the combined P&L."""
+    the combined P&L. model_stats: the same, for the MODEL's own tracked picks (system 'PROPS', ev.model_picks), shown as
+    separate fields only for sports that have settled picks."""
     webhook_url = webhook_for("recap")
     if not webhook_url:
         logger.warning("No Discord webhook configured for summary.")
@@ -521,8 +523,10 @@ def post_all_systems_summary(
     run_date = run_date or settle_date or date.today().isoformat()
 
     sport_stats = sport_stats or {}
+    model_stats = model_stats or {}
     valid_stats = {k: v for k, v in systems_stats.items() if v}
     valid_stats.update({f"sport:{k}": v for k, v in sport_stats.items() if v})
+    valid_stats.update({f"model:{k}": v for k, v in model_stats.items() if v})
     total_pnl   = sum(s.get("pnl", 0) for s in valid_stats.values())
     pnl_emoji   = "📈" if total_pnl >= 0 else "📉"
 
@@ -554,6 +558,9 @@ def post_all_systems_summary(
         fields.append(_field(f"{icon} {system}", systems_stats.get(system)))
     for sport_code in ("NFL", "NBA", "NHL"):
         fields.append(_field(f"{_WINTER_RECAP_ICONS[sport_code]} {sport_code} props (unvalidated)", sport_stats.get(sport_code)))
+    for sport_code in ("NFL", "NBA", "NHL"):
+        if model_stats.get(sport_code):
+            fields.append(_field(f"{_WINTER_RECAP_ICONS[sport_code]} {sport_code} model picks (unvalidated)", model_stats[sport_code]))
 
     if len(fields) % 3 == 2:
         fields.append({"name": "\u200b", "value": "\u200b", "inline": True})

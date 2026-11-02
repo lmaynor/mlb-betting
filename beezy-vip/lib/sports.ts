@@ -121,7 +121,7 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
     slug: 'nhl',
     name: 'National Hockey League',
     shortName: 'NHL',
-    seasonBadge: '7 PROP SYSTEMS (6 ACTIVE) + +EV SCANNER',
+    seasonBadge: '7 PROP SYSTEMS + +EV SCANNER',
     status: 'live',
     board: 'projection',
     accent: '#38bdf8',
@@ -134,8 +134,8 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
       { key: 'goals', label: 'Player Goals O/U', kind: 'prop', status: 'Active', system: 'NHL_GOALS' },
       { key: 'assists', label: 'Player Assists O/U', kind: 'prop', status: 'Active', system: 'NHL_ASSISTS' },
       { key: 'points', label: 'Player Points O/U', kind: 'prop', status: 'Active', system: 'NHL_POINTS' },
-      // no projection: the skater master has no power-play assists (see lib/pick-systems.ts NHL_PP_POINTS)
-      { key: 'pp_points', label: 'Power Play Points O/U', kind: 'prop', status: 'Data gap', system: 'NHL_PP_POINTS' },
+      // projected since 2026-11-01: power-play points come from the play-by-play (nhl/data/powerplay.py), see lib/pick-systems.ts
+      { key: 'pp_points', label: 'Power Play Points O/U', kind: 'prop', status: 'Active', system: 'NHL_PP_POINTS' },
       { key: 'saves', label: 'Goalie Saves O/U', kind: 'prop', status: 'Active', system: 'NHL_SAVES' },
       { key: 'blocked_shots', label: 'Blocked Shots O/U', kind: 'prop', status: 'Active', system: 'NHL_BLOCKS' },
     ],

@@ -66,7 +66,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>
       )}
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{pillar.shortName} {system.name}</h1>

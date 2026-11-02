@@ -195,7 +195,7 @@ describe('systems statistics', () => {
       expect(a!.mae).toBeLessThan(a!.baselineMae)
       expect(a!.dMae).toBeLessThan(0)
     }
-    expect(liveAccuracy('nhl', 'pp_points')).toBeNull()                 // a data gap: no number is invented
+    expect(liveAccuracy('nhl', 'pp_points')).toBeNull()                 // projected, but no accuracy study yet: no number is invented
     expect(liveAccuracy('mlb', 'K')).toBeNull()
     expect(liveAccuracy('nfl', undefined)).toBeNull()
   })

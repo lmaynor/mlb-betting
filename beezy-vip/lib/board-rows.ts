@@ -57,6 +57,30 @@ export interface BoardRow {
   isPick: boolean
   /** MLB only: how a settled pick ended */
   result: 'win' | 'loss' | 'push' | 'void' | null
+  /** readable name of the engine that priced the row ('Hierarchical', 'Empirical EWM'), never the raw id; null when the feed names none */
+  engine?: string | null
+}
+
+const ENGINE_NAME: Record<string, string> = {
+  empirical_ewm_v1: 'Empirical EWM', empirical_ewm_v2: 'Empirical EWM', hierarchical_v1: 'Hierarchical', hier_v1: 'Hierarchical',
+}
+
+/**
+ * A readable engine name for a feed's engine id. The ids are internal ('empirical_ewm_v2', 'hierarchical_v1') and the payload id can be a
+ * '+'-joined mix ('empirical_ewm_v2+hierarchical_v1', NFL when some stats are served by the hierarchical engine): users see
+ * 'Empirical EWM', 'Hierarchical' or 'Empirical EWM + Hierarchical', and an id this site does not know is spelled out
+ * ('foo_bar_v3' -> 'Foo bar') rather than printed raw. Null for an empty id.
+ */
+export function engineLabel(raw: string | null | undefined): string | null {
+  const parts = (raw ?? '').split('+').map(p => p.trim().toLowerCase()).filter(Boolean)
+  if (parts.length === 0) return null
+  const names = parts.map(p => ENGINE_NAME[p] ?? (p.replace(/_?v\d+$/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) || 'Model'))
+  return [...new Set(names)].join(' + ')
+}
+
+/** The engine label of one projection row: the NBA / NHL hierarchical models are tagged on the row (`nba_model`, `nhl_model`), not in `engine`. */
+export function rowEngineLabel(r: Pick<SportProjectionRow, 'engine' | 'nba_model' | 'nhl_model'>): string | null {
+  return engineLabel(r.nba_model || r.nhl_model || r.engine)
 }
 
 /** Hit rates are stored for the OVER; for an under pick the share that stayed under is the complement. */
@@ -106,6 +130,7 @@ export function fromSportProjections(rows: SportProjectionRow[]): BoardRow[] {
       score: r.has_line ? r.beezy_score : 0,
       isPick: false,
       result: null,
+      engine: rowEngineLabel(r),
     }
   })
 }

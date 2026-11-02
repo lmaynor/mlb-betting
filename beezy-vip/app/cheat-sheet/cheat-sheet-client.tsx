@@ -7,6 +7,7 @@ import { LockedNotice } from '@/components/picks/locked-notice'
 import { LINK_REPLY, POST_LIMIT, postLength, SHEET_SIZE, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { readableNotes } from '@/lib/bet-notes'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { SYSTEM_COLOR, bookText } from '@/lib/tokens'
 import { isOfficialCardPlay, isEvOutlier, type TopPick } from '@/lib/top-picks'
@@ -43,7 +44,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const color = pick.bet?.system ? (SYSTEM_COLOR[pick.bet.system] ?? pillar.accent) : pillar.accent
   const tierColor = TIER_COLOR[scoreTier(pick.score)]
   const edge = fmtEdge(pick.edge)
-  const bullets = splitNotes(pick.bet?.notes)
+  const bullets = splitNotes(readableNotes(pick.bet?.notes))
   const isGame = !pick.what // game picks carry the matchup, not a player
   const market = isGame ? pick.game : pick.what
   const price = [fmtOdds(pick.odds), bookText(pick.book)].filter(Boolean).join(DOT)

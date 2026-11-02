@@ -77,7 +77,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           defaultValue={qParam}
           onKeyDown={e => { if (e.key === 'Enter') set('q', e.currentTarget.value.trim(), '') }}
           onBlur={e => { if (e.currentTarget.value.trim() !== qParam) set('q', e.currentTarget.value.trim(), '') }}
-          style={{ ...CONTROL, flex: 1, minWidth: '100px', height: '34px' }}
+          style={{ ...CONTROL, flex: 1, minWidth: '100px', height: '44px' }}
         />
 
         <button
@@ -89,7 +89,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             alignItems: 'center',
             gap: '5px',
             cursor: 'pointer',
-            height: '34px',
+            height: '44px',
             color: active > 0 ? 'var(--signal)' : 'var(--chalk)',
             borderColor: active > 0 ? 'var(--signal)' : undefined,
             flexShrink: 0,
@@ -116,7 +116,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           <button
             type="button"
             onClick={clear}
-            style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)', height: '34px', flexShrink: 0 }}
+            style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)', height: '44px', flexShrink: 0 }}
           >
             Clear
           </button>

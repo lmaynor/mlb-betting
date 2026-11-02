@@ -268,7 +268,12 @@ export interface SportProjectionRow {
   beezy_score: number
   score_basis: 'confluence' | 'market' | 'model' | 'capped' | 'none'
   validated: false
+  /** the engine that priced THIS row: 'empirical_ewm_v2' or 'hierarchical_v1'. The PAYLOAD's `engine` can be a '+'-joined mix of both. */
   engine: string
+  /** NBA rows the hierarchical model priced ('hier_v1'); the row's `engine` stays 'empirical_ewm_v2' for them */
+  nba_model?: string | null
+  /** NHL rows the hierarchical model priced ('hierarchical_v1') */
+  nhl_model?: string | null
   /** resolved server-side by name (NHL / NBA: a league player id; NFL: nfl.com image token); null when unknown */
   headshot_id?: number | string | null
 }

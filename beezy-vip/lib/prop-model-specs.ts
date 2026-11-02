@@ -110,7 +110,7 @@ export const SPORT_MODEL_SPECS: Record<Exclude<SportSlug, 'mlb'>, SportModelSpec
       { key: 'points', label: 'Points', trained: false, distribution: 'Empirical projection, NegBin spread', validation: null, verdict: 'No trained model; unvalidated' },
       { key: 'assists', label: 'Assists', trained: false, distribution: 'Empirical projection, NegBin spread', validation: null, verdict: 'No trained model; unvalidated' },
       { key: 'saves', label: 'Goalie Saves', trained: false, distribution: 'Empirical projection, normal spread', validation: null, verdict: 'No trained model; unvalidated' },
-      { key: 'pp_points', label: 'Power Play Points', trained: false, distribution: 'Not projected', validation: null, verdict: 'Data gap: the box-score master has no power-play assists' },
+      { key: 'pp_points', label: 'Power Play Points', trained: false, distribution: 'Empirical rate shrunk to a position prior, NegBin spread', validation: null, verdict: 'No trained model; unvalidated' },
       { key: 'blocked_shots', label: 'Blocked Shots', trained: false, distribution: 'Empirical projection, NegBin spread', validation: null, verdict: 'No trained model; unvalidated' },
     ]),
     features: [

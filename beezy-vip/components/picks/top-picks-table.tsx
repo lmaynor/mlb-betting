@@ -72,6 +72,9 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className="mono" style={{ ...TD, color: 'var(--silver)', whiteSpace: 'nowrap' }}>{p.game || '--'}</td>
                 <td style={{ ...TD, whiteSpace: 'nowrap', color: 'var(--silver)' }}>
                   {BASIS_LABEL[p.basis]}
+                  {p.tracked && p.unvalidated && (
+                    <span className="dell-heading" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED &middot; PAPER</span>
+                  )}
                   {!p.tracked && (
                     <span className="dell-heading" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
                   )}

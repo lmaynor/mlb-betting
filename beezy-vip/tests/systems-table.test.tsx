@@ -88,11 +88,13 @@ describe('systems table (projection sports)', () => {
     expect(steals.getAllByText('--').length).toBeGreaterThanOrEqual(3)
   })
 
-  it('the NHL power-play-points row is marked as a data gap, not given numbers', () => {
+  it('the NHL power-play-points row is a live system (the backend serves pp_points); no accuracy number is invented for it', () => {
     render(<SystemsTable sport="nhl" />)
     const pp = within(screen.getByText('Power Play Points').closest('tr')!)
-    expect(pp.getByText('Data gap')).toBeInTheDocument()
-    expect(pp.getByText('Not projected (data gap)')).toBeInTheDocument()
+    expect(pp.getByText('Active')).toBeInTheDocument()
+    expect(pp.queryByText('Data gap')).toBeNull()
+    expect(pp.queryByText('Not projected (data gap)')).toBeNull()
+    expect(pp.getByText('Empirical EWM + position prior + NegBin')).toBeInTheDocument()
   })
 
   it('every sport renders the same table structure', () => {

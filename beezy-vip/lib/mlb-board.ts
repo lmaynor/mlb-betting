@@ -7,7 +7,8 @@ import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
 import type { BoardRow } from '@/lib/board-rows'
 import { parseSideLine } from '@/lib/mlb-projections'
-import { pickLabel, resolveEvUnderlying, teamAbbrev } from '@/lib/tokens'
+import { isWinterSport } from '@/lib/bet-notes'
+import { pickLabel, parseWinterBetType, resolveEvUnderlying, teamAbbrev } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
 const asFraction = (p: number | null | undefined) => (p == null ? null : p <= 1.5 ? p : p / 100)
@@ -23,14 +24,16 @@ export function fromBets(bets: Bet[], opts: { collapse?: boolean } = {}): BoardR
   const rows = opts.collapse === false ? bets.map(b => ({ ...b, bookCount: 1 })) : collapseBooks(bets)
   return rows.map(b => {
     const bt = b.system === 'EV' ? resolveEvUnderlying(b).bet_type : (b.bet_type ?? '')
-    const sl = parseSideLine(bt)
+    // winter bet types are lower case '<stat>_<side>_<line>': the MLB parser (upper case) would miss them
+    const wl = isWinterSport(b.sport) ? parseWinterBetType(bt) : null
+    const sl = wl && wl.line != null ? { side: wl.side.toUpperCase() as 'OVER' | 'UNDER', line: wl.line } : parseSideLine(bt)
     const away = teamAbbrev(b.away_team) || null
     const home = teamAbbrev(b.home_team) || null
     const matchup = away && home ? `${away} @ ${home}` : ''
     const edge = edgeFraction(b.edge)
     return {
       key: String(b.id),
-      sport: 'mlb' as const,
+      sport: (isWinterSport(b.sport) ? b.sport.toLowerCase() : 'mlb') as BoardRow['sport'],
       system: b.system,
       marketLabel: withoutPlayer(pickLabel(b), b.player, sl != null),
       player: b.player ?? matchup,

@@ -46,7 +46,7 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
   }
   return (
     <nav aria-label="Games" style={{ overflowX: 'auto', scrollSnapType: 'x proximity', borderBottom: B, background: 'var(--carbon)' }}>
-      <div style={{ display: 'flex', gap: '8px', width: 'max-content', padding: '8px 24px', marginLeft: 'max(0px, calc((100% - 1200px) / 2))' }}>
+      <div className="gutter-m" style={{ display: 'flex', gap: '8px', width: 'max-content', padding: '8px 24px', marginLeft: 'max(0px, calc((100% - 1200px) / 2))' }}>
         <Link href={hrefFor(null)} scroll={false} aria-current={!selected ? 'true' : undefined}
           aria-label={`All games: ${games.length} games, ${total} rows`} title={`${games.length} games, ${total} rows`}
           style={{ ...CARD, minWidth: '56px', ...(!selected ? ON : {}) }}>

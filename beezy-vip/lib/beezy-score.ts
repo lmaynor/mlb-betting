@@ -1,4 +1,5 @@
 import type { Bet } from './types'
+import { notesBookCount } from './bet-notes'
 import { type ScoreTier, TIER_COLOR, TIER_LABEL } from './tokens'
 
 export type { ScoreTier }
@@ -38,6 +39,8 @@ const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x
 /** Reference-book count behind a flagged price. EV rows carry it in notes as "(N books)"; model bets do not. */
 export function booksBehind(bet: Pick<Bet, 'notes'> & { n_books?: number | null }): number | null {
   if (bet.n_books != null) return bet.n_books
+  const j = notesBookCount(bet.notes)          // winter bets: the JSON notes carry n_books
+  if (j != null) return j
   const m = /\((\d+) books\)/.exec(bet.notes ?? '')
   return m ? Number(m[1]) : null
 }

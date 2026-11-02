@@ -450,7 +450,8 @@ a:focus-visible {
 /* iOS: prevent zoom on input focus; ensure ≥40px touch targets in content */
 @media (hover: none) and (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
-  main button, main [role="button"] { min-height: 40px; }
+  main button, main [role="button"] { min-height: 44px; }
+  main input:not([type="checkbox"]):not([type="radio"]), main select { min-height: 44px; }
 }
 
 @media (max-width: 768px) {
@@ -640,3 +641,39 @@ a { color: inherit; }
 .article-body ol { padding-left: 22px; margin: 12px 0; }
 .article-body ol li, .article-body ul li { margin: 4px 0; }
 .article-body hr { border: 0; border-top: 1px solid #1e2230; margin: 24px 0; }
+
+/* -- Projection board (components/picks/sport-projections-board.tsx): a phone keeps SCORE, PLAYER, PICK, MODEL, BEST PRICE and EDGE
+      in one real table with no sideways scroll; every other column moves into the tap-open detail row. The player column absorbs
+      the leftover width and truncates (width:100% + max-width:0), so a long name never pushes the numbers off screen. -- */
+.pb-table { min-width: 980px; }
+@media (max-width: 768px) {
+  .pb-table { min-width: 0; }
+  .pb-hide-m { display: none !important; }
+  .pb-table th, .pb-table td { padding-left: 6px !important; padding-right: 6px !important; }
+  .pb-table th { white-space: normal !important; }
+  .pb-table td { height: 48px; }
+  .pb-player { width: 100%; max-width: 0; overflow: hidden; }
+  .pb-name { display: block; overflow: hidden; }
+  /* the name wraps to two lines and is clamped with an ellipsis after that (a 48-character name still cannot push the numbers off screen) */
+  span.pb-name, .pb-name-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+  .pb-pick .pb-line, .pb-pick .pb-mkt, .pb-pick .pb-noline { display: block; }
+  .pb-pick .pb-mkt, .pb-pick .pb-noline { font-size: 11px; color: var(--fog); }
+  .pb-pick .pb-noline { font-size: 10px; }
+  /* the book badge shows its 3-letter code (data-short) on a phone; the full name stays in the DOM, title and accessible name */
+  .pb-book { position: relative; display: inline-block; overflow: hidden; white-space: nowrap; text-indent: -200em; width: 34px; height: 18px; padding: 0 !important; }
+  .pb-book::before { content: attr(data-short); position: absolute; inset: 0; text-indent: 0; text-align: center; line-height: 18px; font-size: 10px; }
+  .pb-price > span { flex-direction: column-reverse; align-items: flex-start !important; gap: 3px !important; }
+  .pb-table th, .pb-table td { padding-left: 5px !important; padding-right: 5px !important; }
+}
+
+/* -- Phone gutters and tap targets shared by the picks shell (day strip, tabs, filters): 24px gutters cost 13% of a 375px screen,
+      and every control a thumb must hit is at least 44px tall. -- */
+@media (max-width: 768px) {
+  .gutter-m { padding-left: 12px !important; padding-right: 12px !important; }
+  .tap-m { min-height: 44px !important; align-items: center !important; }
+}
+@media (max-width: 768px) {
+  .sport-ribbon { height: 44px !important; }
+  .sport-ribbon-link { min-height: 44px; padding-left: 12px !important; padding-right: 12px !important; }
+  .nav-mobile-actions > a, .nav-mobile-actions > button { min-height: 44px; }
+}

@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-11-01 CST_
+_Last updated: 2026-11-02 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -3567,7 +3567,7 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
 
 ## 16. Backlogs
 
-_Last updated: 2026-11-01 CST_
+_Last updated: 2026-11-02 CST_
 
 Three independent backlogs share this section: model remediation (T-series),
 engineering (E-series), and frontend UX (F-series from the Mongoose audit).
@@ -4385,3 +4385,28 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   zero >= 20%, no flipped sides. Row semantics: `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 
+## 23. Tracked model picks for NFL / NBA / NHL props (2026-11-02)
+
+Before this, the winter engines' output was only DISPLAYED (the /picks boards, `GET /api/public/projections`); the only tracked winter-sport
+bets (`system='EV'`) are the BOOK-OUTLIER alerts of `ev.sweep_props_alerts` / `ev.sweep_nfl_props`, which do not use the model. `ev/model_picks.py`
+closes that gap with the same machinery the MLB systems have. Everything is paper and UNVALIDATED.
+
+- **Selection (pre-registered, not tuned):** a board row is a tracked pick when it has a real line + a real price at a non-offshore, non-DFS book
+  for the model's side, `confluence` is true (model and market agree, both edges > 0, not edge-capped, >= 3 reference books) and the game is
+  >= 30 min away. Tier `official` = also passes `ev.daily_card.is_official_card_play` (the repo's own Official Card gate); everything else is `tracked`.
+  A board older than 45 min logs nothing.
+- **Ledger:** `bets`, `system='PROPS'`, `sport` = nfl|nba|nhl, flat 1u, `paper`, `bet_type` = `<stat>_<side>_<line>`, `notes` JSON carries stat / point /
+  side / tier / row_key / engine / commence / player_id. **First sighting wins** (a later pass never re-logs or re-prices the same game-day + player +
+  stat). Settlement is the existing `settle_bets._settle_winter_bets` (it keys on sport, not system). `_winter_sport_stats(system=...)` now splits the
+  recap: `EV` alerts vs `PROPS` model picks (separate "model picks (unvalidated)" fields, only when something settled).
+- **CLV:** `capture_closing` fills `closing_odds` / `closing_prob` / `clv_pct` (same price-ratio CLV as MLB) from the board archive's LAST pre-game state of
+  the same prop, same line only, only after the game started.
+- **Discord:** official-tier picks only, via `sport_alerts.post_sport_alerts(..., log_bets=False)` (so no duplicate `EV` ledger rows) to the sport's alerts
+  channel, labelled paper / unvalidated; never #ops-alerts or a +EV channel.
+- **Job:** `python -m ev.model_picks --sport all` as Cloud Run job `props-model-picks` (`deploy/setup_model_picks.sh`, feeds image, hourly :40 UTC, zero
+  ParlayAPI credits, needs MLB_DB_URL + Cloud SQL). `--dry-run` prints the selection with no writes.
+- **Audit tool:** `scripts/props_forward_audit.py` replays the selection over the board ARCHIVE (last pre-game state, 30-min gate waived) and settles it with
+  the production settler into a throwaway sqlite ledger; day-clustered bootstrap CIs, both-sides control. Results + review hand-off: `docs/analysis/props_integration_review_2026-11-02.md` (raw: `props_forward_audit_2026-11-02.json`). Also 2026-11-02: the NBA live loader never derived the opponent column (fixed in `cockpit_form._load_nba`), and NHL `pp_points` has no sportsbook feed (DFS apps only) so it is projection-only.
+- **Gotchas:** the board archive keeps the LAST pre-game state, so an audit from it uses near-closing prices (not what an early bettor saw) and cannot compute CLV;
+  `BetTracker.log_bet` only dedups when `game_pk` is set (winter bets have none), so `ev.model_picks` dedups itself with a SELECT; the bets column is `closing_prob`,
+  not `closing_implied_prob`.

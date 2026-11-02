@@ -105,8 +105,9 @@ describe('registry matches the projection engine', () => {
     for (const stat of engine(sport)) expect(getSystemByStat(sport, stat)).toBeDefined()
   })
 
-  it('the only registered system without an engine stat is the documented NHL power-play-points gap', () => {
+  it('no registered system is a data gap any more: NHL pp_points is projected by the engine (pins the flip from the 2026-10 gap)', () => {
     const gaps = PICK_SYSTEMS.filter(s => s.gap).map(s => s.key)
-    expect(gaps).toEqual(['NHL_PP_POINTS'])
+    expect(gaps).toEqual([])
+    expect(getSystemByStat('nhl', 'pp_points')?.key).toBe('NHL_PP_POINTS')
   })
 })
