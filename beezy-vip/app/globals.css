@@ -34,6 +34,7 @@
   --color-bg:     #090a0f;  /* --carbon */
 }
 
+@layer components {
 /* ===================================================================
    beezy.fyi — Terminal design system
    Dark near-black canvas, hairline borders, Signal Green brand accent,
@@ -697,4 +698,5 @@ a { color: inherit; }
   .sport-ribbon { height: 44px !important; }
   .sport-ribbon-link { min-height: 44px; padding-left: 12px !important; padding-right: 12px !important; }
   .nav-mobile-actions > a, .nav-mobile-actions > button { min-height: 44px; }
+}
 }
