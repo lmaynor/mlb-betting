@@ -350,13 +350,16 @@ def test_goalie_saves_rise_with_opponent_shot_volume():
     assert hi["p_over_model"] > lo["p_over_model"]
 
 
-def test_defenseman_blocked_shots_rise_with_opponent_shot_volume():
+def test_blocked_shots_use_the_generic_opponent_factor_not_shot_pace():
+    """The spec's opponent shot-pace factor lowered the replay log score on blocks (-0.0008, z -2.6), so blocks keep the
+    opponent-allowed factor. Without opponent history in the logs the factor is 1.0 for any opponent."""
     logs = make_logs()
     hi = row_for(logs, "blocked_shots", "Dan Defense", opp="MTL")
     lo = row_for(logs, "blocked_shots", "Dan Defense", opp="OTT")
-    assert hi["proj_mean"] > lo["proj_mean"]
-    assert dp.OPP_CLIP[0] <= H.pace_factor(34.5, 29.5) <= dp.OPP_CLIP[1] and H.PACE_CLIP == (0.85, 1.15)
+    assert hi["proj_mean"] == lo["proj_mean"] and hi["opp_factor"] == 1.0
+    assert H.PACE_CLIP == (0.85, 1.15)
     assert H.pace_factor(100.0, 29.5) == 1.15 and H.pace_factor(5.0, 29.5) == 0.85 and H.pace_factor(None, 29.5) == 1.0
+    assert H.pace_factor(34.5, 29.5) > 1.0 > H.pace_factor(25.0, 29.5)
 
 
 def test_team_pace_uses_only_games_before_as_of_and_has_league_means():

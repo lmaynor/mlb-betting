@@ -887,14 +887,7 @@ def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, a
         n_eff = float(np.sum(0.5 ** ((n - 1 - np.arange(n)) / hl)))
         mu = _nh.pp_prior_rate(_nh.ewm(vals, hl), n_eff, pos) * ctx_of(stat).opp_factor.get(opp, 1.0)
         proj = {"mu": mu, "n_games": n, "usage_proj": None, "opp_factor": ctx_of(stat).opp_factor.get(opp, 1.0)}
-    elif stat == "blocked_shots":
-        pj = generic(stat, sdef)
-        if pj is None:
-            return None, None, info
-        o = pace.get(opp) or {}
-        f = _nh.pace_factor(o.get("sog_for"), league_sog, o.get("n", _nh.PACE_WINDOW))
-        proj = dict(pj, mu=pj["mu"] * f, opp_factor=f)
-    else:                                                                              # sog (+ any future skater stat)
+    else:                       # sog, blocked_shots: trailing rate x the opponent-allowed factor (see the replay doc on blocks)
         pj = generic(stat, sdef)
         if pj is None:
             return None, None, info

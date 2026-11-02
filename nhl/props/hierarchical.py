@@ -11,7 +11,7 @@ no I/O, no clock) and every function takes rows that the caller has already cut 
   points      mu_points = mu_goals + mu_assists EXACTLY (one point per goal at most, so the markets cannot disagree);
               the tails come from a NegBin whose spread is the league's own points dispersion
   pp_points   power-play goals + assists (nhl.data.powerplay), shrunk to a position prior: the counts are sparse
-  blocked     trailing blocks per TOI x the opponent's shot-generation pace
+  blocked     (unchanged) trailing blocks per TOI x the opponent-allowed factor: the spec's shot-pace factor was tested and lost
   saves       EB save % x expected shots against (team shots against blended with the opponent's shot pace) x the
               share of the game a starter is in net, priced with a two-regime mixture (full game / early hook) whose
               TOTAL spread is the league's measured goalie-saves cv (floored at 0.24), so the hook only reshapes the

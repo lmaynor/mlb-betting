@@ -25,15 +25,16 @@ used for selection.
 | points | 37,327 | -0.9264 / -0.9325 | **+0.0061 (7.3)** | 0.5727 / 0.5732 |
 | pp_points | 37,327 | -0.3442 / -0.3590 | **+0.0147 (6.2)** | 0.2030 / 0.1984 |
 | saves | 2,848 | -3.3925 / -3.4148 | **+0.0223 (5.1)** | 5.48 / 5.66 |
-| blocked_shots | 37,327 | -1.2309 / -1.2301 | **-0.0008 (-2.6)** | 0.7969 / 0.7966 |
+| blocked_shots (spec pace factor, REVERTED) | 37,327 | -1.2309 / -1.2301 | **-0.0008 (-2.6)** | 0.7969 / 0.7966 |
 
 - Log score is the proper score here. MAE of a mean against a sparse count is not (goals / pp_points MAE gets slightly worse
   while the whole distribution gets better: the shrunk means stop over-projecting streaky players).
 - `legacy pp_points` = the same estimator with no shrinkage, i.e. there was no legacy market; the comparison isolates the shrinkage.
 - SOG is unchanged by construction: same estimator, no absence data in the replay.
 - **Blocked shots got very slightly WORSE** with the spec's opponent shot-pace factor than with the generic opponent factor
-  (-0.0008 log score per row, 2.6 SE, MAE flat). It is kept because the spec asks for it and the cost is ~0.07% of the
-  score, but it is not supported by evidence; reverting is one line in `project_nhl` (use `ctx_of(stat).opp_factor`).
+  (-0.0008 log score per row, 2.6 SE, MAE flat), so the factor was REVERTED: blocks use the opponent-allowed factor, i.e. the
+  legacy path, and the shipped engine ties legacy on this stat by construction. The row above is the measured spec variant
+  (kept in the results JSON). `hierarchical.pace_factor` still feeds the saves row's displayed `opp_factor`.
 - Saves: bias +0.23 (legacy) -> -0.06; the gain comes from the measured start share and the rolling league save %.
 
 ## Absent-teammate redistribution (hindsight upper bound)

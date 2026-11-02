@@ -4261,7 +4261,7 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   powerPlayPoints, see `docs/solutions/integration-issues/nhl-boxscore-has-no-power-play-points.md`); saves = EB save % x (team SA + opp shot pace)
   x start share, priced by a two-regime hook mixture; every NHL input and league context is cut to games before the game date (`GameLogs(as_of)`).
   `BLEND_C_BY_SPORT_STAT` (sog 0.30 ...) is display-only. Replay (accuracy only): `docs/analysis/nhl_hierarchical_engine_2026-11-01.md`
-  (log score up on goals/assists/points/pp_points/saves, blocked_shots -0.0008, SOG unchanged). Deploy order: backfill
+  (log score up on goals/assists/points/pp_points/saves; SOG and blocks unchanged: the spec's blocks pace factor lost and was reverted). Deploy order: backfill
   `python -m nhl.data.powerplay --seasons ... --write` (optional, the loader fills at read time), then the image; beezy-vip still lists pp_points as
   `Data gap` (`lib/sports.ts`, `lib/prop-model-specs.ts`, 3 pinned tests): flip AFTER the backend serves pp_points rows.
 
