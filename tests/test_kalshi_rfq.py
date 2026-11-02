@@ -433,9 +433,14 @@ def test_kill_switch_uses_its_own_key_and_is_manual_reset():
     assert not gate.killed
 
 
+# The shipped defaults are scaffolding-loose (2026-11-01); the gate MECHANICS are tested against the original tight caps.
+TIGHT = RFQConfig(max_liability_per_quote_dollars=50.0, max_exposure_per_game_dollars=150.0,
+                  max_exposure_per_player_dollars=75.0, max_open_quotes=25)
+
+
 def test_player_exposure_capped_across_open_combo_quotes():
     legs = three_cross_game() + [mk_leg("T4", "nfl:2026-10-25:A4@B4", "p4"), mk_leg("T5", "nfl:2026-10-25:A5@B5", "p5")]
-    m, _, ledger, gate = make_maker(legs)
+    m, _, ledger, gate = make_maker(legs, cfg=TIGHT)
     d1 = m.on_rfq_created(combo_rfq(["T1", "T2", "T3"], "r1", 50.0))
     assert d1.quoted and d1.collateral <= 50.0
     d2 = m.on_rfq_created(combo_rfq(["T1", "T4", "T5"], "r2", 50.0))      # p1 again: ~41 + ~41 > $75
@@ -447,7 +452,7 @@ def test_player_exposure_capped_across_open_combo_quotes():
 
 
 def test_per_quote_liability_game_and_open_quote_caps():
-    m, *_ = make_maker(three_cross_game())
+    m, *_ = make_maker(three_cross_game(), cfg=TIGHT)
     big = m.on_rfq_created(combo_rfq(["T1", "T2", "T3"], "r1", 200.0))        # ~$164 collateral > $50
     assert big.reason == "REJ_RISK_SIZE"
     m2, *_ = make_maker(three_cross_game(), cfg=RFQConfig(max_open_quotes=1))
@@ -1230,10 +1235,8 @@ def test_risk_caps_are_overridable_and_default_unchanged():
     assert cfg.max_exposure_per_game_dollars == RFQConfig().max_exposure_per_game_dollars
 
 
-def test_a_14_leg_64_contract_rfq_needs_more_than_the_default_per_quote_cap():
-    """The demo tape's 14-leggers are 64.18 contracts: at no_bid ~0.86-0.93 that is $55-60 > the $50 default, so even a
-    priced 14-leg lay is REJ_RISK_SIZE in shadow/live until --max-liability-per-quote is raised."""
-    gate = RFQRiskGate(RFQConfig(), RFQLedger(":memory:"), "shadow")
-    assert gate.check_quote(64.18 * 0.9, [{"game_key": "g", "player_norm": "p"}]) == (False, "REJ_RISK_SIZE")
-    gate2 = RFQRiskGate(RFQConfig(max_liability_per_quote_dollars=100.0), RFQLedger(":memory:"), "shadow")
-    assert gate2.check_quote(64.18 * 0.9, [{"game_key": "g", "player_norm": "p"}]) == (True, "")
+def test_a_14_leg_64_contract_rfq_fits_the_scaffolding_defaults_but_not_the_old_caps():
+    """The demo tape's 14-leggers are 64.18 contracts: at no_bid ~0.86-0.93 that is $55-60, over the old $50 per-quote cap."""
+    legs = [{"game_key": "g", "player_norm": "p"}]
+    assert RFQRiskGate(TIGHT, RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (False, "REJ_RISK_SIZE")
+    assert RFQRiskGate(RFQConfig(), RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (True, "")

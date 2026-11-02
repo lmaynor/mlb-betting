@@ -334,11 +334,11 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-same-game", action="store_true", help="quote same-game combos (SGP); off until shadow markouts")
     ap.add_argument("--quote-single-leg", action="store_true", help="also quote single-market RFQs (off by default)")
     ap.add_argument("--max-liability-per-quote", type=float, default=None,
-                    help="$ of collateral one quote may lock (default RFQConfig 50; a 14-leg RFQ of 64 contracts at no_bid 0.9 needs $58)")
-    ap.add_argument("--max-exposure-per-game", type=float, default=None, help="$ across open quotes per game (default RFQConfig 150)")
+                    help="$ of collateral one quote may lock (default RFQConfig 1000, scaffolding-loose; was 50)")
+    ap.add_argument("--max-exposure-per-game", type=float, default=None, help="$ across open quotes per game (default RFQConfig 5000, scaffolding-loose; was 150)")
     ap.add_argument("--max-exposure-per-player", type=float, default=None,
-                    help="$ across open quotes per player; a combo's whole collateral counts against EACH of its players (default 75)")
-    ap.add_argument("--max-open-quotes", type=int, default=None, help="open quote cap (default RFQConfig 25; Kalshi's own is 100)")
+                    help="$ across open quotes per player; a combo's whole collateral counts against EACH of its players (default 2500, scaffolding-loose; was 75)")
+    ap.add_argument("--max-open-quotes", type=int, default=None, help="open quote cap (default RFQConfig 100 = Kalshi's own cap; was 25)")
     ap.add_argument("--reset-kill", action="store_true", help="clear kill_reason:kalshi_rfq and exit (manual reset only)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")

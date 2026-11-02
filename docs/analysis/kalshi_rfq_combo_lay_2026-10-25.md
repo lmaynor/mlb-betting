@@ -200,7 +200,11 @@ p=0.5 per leg now quotes at no_bid ~0.86 instead of rejecting); daemon `--allow-
 new `--max-liability-per-quote / --max-exposure-per-game / --max-exposure-per-player / --max-open-quotes` (defaults unchanged); recorder
 script defaults `MAX_UNPRICED_LEGS=16` and `ALLOW_SAME_GAME=1` (record-only, so it only widens the would-be-quote tape).
 To quote long combos on the DEMO exchange: `KALSHI_RFQ_LIVE=1 python scripts/kalshi_rfq_daemon.py --mode live --allow-same-game
---max-unpriced-legs 16 --max-liability-per-quote 100 --max-exposure-per-player 150`.
+--max-unpriced-legs 16` (the risk-cap flags are no longer needed at the loosened defaults).
+**Risk caps loosened for scaffolding (owner decision 2026-11-01):** `RFQConfig` defaults are now $1000 per quote / $5000 per game / $2500 per player /
+100 open quotes (were 50 / 150 / 75 / 25), so the demo exchange exercises the whole pipeline. The gates are to be set later, before any production
+quoting exists. Unchanged: the production-quoting refusal in code, `KALSHI_RFQ_LIVE=1`, the kill switch, the last-look shield, abort limits and
+the per-game cooldown. The `--max-*` flags above still override. Tests of the gate mechanics pin the old values via `TIGHT`.
 Caveats: dropping unpriced legs is a sound upper bound only if the PRICED legs and their correlations are right (copula rho 0.15 is ~3x the
 measured pairwise lift, plus the capped buffer). Whether other makers undercut our no_bid (0.86-0.93 against a fair ~0.995+) is unknowable
 offline; fill rate is the open question. "14-legs are -EV for retail" rests on 3 distinct combos so far. A leg count above 8 or so with
