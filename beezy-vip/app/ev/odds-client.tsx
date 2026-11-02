@@ -720,7 +720,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 align="right"
                 header={
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>DEVIG</span>
+                    <span className="dell-heading text-[10px] text-text-secondary">DEVIG</span>
                     <PillGroup>
                       <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
                       <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
@@ -981,26 +981,26 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'ev' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>LINES</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">LINES</div>
                 <PillGroup>
                   <Pill active={lines === 'main'} onClick={() => setLines('main')}>Main Lines</Pill>
                   <Pill active={lines === 'all'} onClick={() => setLines('all')}>Main + Alt Ladders</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>O/U</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">O/U</div>
                 <PillGroup>
                   {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.toUpperCase()}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN EV</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>SORT</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">SORT</div>
                 <Select id="mobile-ev-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
               </div>
             </>
@@ -1009,7 +1009,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'outliers' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN GAP</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN GAP</div>
                 <PillGroup>
                   {OUTLIER_GAP_OPTIONS.map(g => (
                     <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>
@@ -1017,14 +1017,14 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>REQUIRE +EV</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">REQUIRE +EV</div>
                 <PillGroup>
                   <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
                   <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }}>Verified +EV Only</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>ODDS BAND</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">ODDS BAND</div>
                 <PillGroup>
                   {OUTLIER_ODDS_OPTIONS.map(b => (
                     <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -1032,7 +1032,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN BOOKS</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN BOOKS</div>
                 <PillGroup>
                   {OUTLIER_MIN_BOOKS.map(b => (
                     <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -1040,7 +1040,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>VIEW</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">VIEW</div>
                 <PillGroup>
                   <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
                   <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
@@ -1052,20 +1052,20 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'arb' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>SHOW</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">SHOW</div>
                 <PillGroup>
                   <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                   <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>EXCHANGES</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>OUTLAY ($)</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
                 <input
                   inputMode="decimal"
                   value={outlayText}
@@ -1079,31 +1079,31 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'middles' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MAX COST</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MAX COST</div>
                 <PillGroup>
                   {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }}>{`${c}%`}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>VALUE</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">VALUE</div>
                 <PillGroup>
                   <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV ONLY</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>WINDOW</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">WINDOW</div>
                 <PillGroup>
                   {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>EXCHANGES</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>OUTLAY ($)</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
                 <input
                   inputMode="decimal"
                   value={outlayText}
@@ -1117,7 +1117,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'longshots' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>STRATEGY</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">STRATEGY</div>
                 <PillGroup>
                   <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }}>All</Pill>
                   <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }}>Buy Over</Pill>
@@ -1125,19 +1125,19 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN PAYOUT</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN PAYOUT</div>
                 <PillGroup>
                   {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN EV</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>FAIR SOURCE</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
                 <PillGroup>
                   <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                   <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -1149,7 +1149,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'sgp' && (
             <>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>ARCHETYPE</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">ARCHETYPE</div>
                 <PillGroup>
                   {SGP_ARCHETYPE_OPTIONS.map(a => (
                     <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>{a.label}</Pill>
@@ -1157,7 +1157,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>MIN EV</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {SGP_MIN_EV_OPTIONS.map(e => (
                     <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>{e.label}</Pill>
@@ -1165,7 +1165,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>BOOK</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">BOOK</div>
                 <Select
                   id="mobile-sgp-book"
                   value={sgpBook}
@@ -1177,7 +1177,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 />
               </div>
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>FAIR SOURCE</div>
+                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
                 <PillGroup>
                   <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                   <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -1187,7 +1187,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           )}
 
             <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>PROP MARKET</div>
+              <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">PROP MARKET</div>
               <select
                 id="mobile-odds-stat"
                 value={stat}
@@ -1210,7 +1210,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             </div>
 
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>GAME</div>
+              <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">GAME</div>
               <select
                 id="mobile-odds-game"
                 value={game}
@@ -1259,7 +1259,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             ]}
             extraHeader={
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
-                <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>DEVIG METHOD</span>
+                <span className="dell-heading text-[10px] text-text-secondary">DEVIG METHOD</span>
                 <PillGroup>
                   <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')}>PROPORTIONAL</Pill>
                   <Pill active={method === 'power'} onClick={() => setMethod('power')}>POWER</Pill>
@@ -1282,7 +1282,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         <Empty title={emptyBody.title} body={emptyBody.body} />
       ) : isMobile && mobileView === 'cards' ? (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <div className="mb-2.5 flex items-center justify-between">
             <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
               <button
                 type="button"
@@ -1319,7 +1319,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 Spreadsheet
               </button>
             </div>
-            <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+            <span className="mono text-[11px] text-text-secondary">
               {meta.age != null ? ageLabel(meta.age) : ''}
             </span>
           </div>
@@ -1401,7 +1401,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       ) : mode === 'outliers' && outlierView === 'cards' ? (
         <div>
           {isMobile && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div className="mb-2.5 flex items-center justify-between">
               <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
                 <button
                   type="button"
@@ -1460,7 +1460,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       ) : mode === 'sgp' ? (
         <div>
           {isMobile && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div className="mb-2.5 flex items-center justify-between">
               <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
                 <button
                   type="button"
@@ -1521,7 +1521,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       ) : (
         <div>
           {isMobile && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div className="mb-2.5 flex items-center justify-between">
               <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
                 <button
                   type="button"
@@ -1570,14 +1570,14 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   <>
                     <th scope="col" className="odds-ev" title="Fair price of this side from the reference books">FAIR ODDS</th>
                     <th scope="col" className="odds-ev" title="EV of the best bettable price against the fair value">BEST EDGE</th>
-                    <th scope="col" style={{ textAlign: 'right' }} title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes">KELLY / LINE</th>
+                    <th scope="col" title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes" className="text-right">KELLY / LINE</th>
                   </>
                 )}
                 {mode === 'outliers' && (
                   <>
                     <th scope="col" className="odds-ev" title="Average price across all peer books quoting this side">MARKET AVG</th>
                     <th scope="col" className="odds-ev" title="The single book hanging a number off the market">OUTLIER BOOK</th>
-                    <th scope="col" style={{ textAlign: 'right' }} title="Payout premium above peer average, and de-vigged EV">DISLOCATION</th>
+                    <th scope="col" title="Payout premium above peer average, and de-vigged EV" className="text-right">DISLOCATION</th>
                   </>
                 )}
                 {mode === 'middles' && (
@@ -1598,7 +1598,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   <>
                     <th scope="col" className="odds-ev" title="Fair over / under price: the reference books' consensus, or the player's curve when they are too few">FAIR ANCHOR</th>
                     <th scope="col" className="odds-ev" title="The side with the higher EV">BEST ACTION</th>
-                    <th scope="col" style={{ textAlign: 'right' }} title="Implied probability of the best price against the fair probability, for the best action's side">IMPLIED / TRUE</th>
+                    <th scope="col" title="Implied probability of the best price against the fair probability, for the best action's side" className="text-right">IMPLIED / TRUE</th>
                   </>
                 )}
                 {columns.map(c => {
@@ -1687,25 +1687,16 @@ function MobileEvRowCard({
   const sportSlug = r.row.game_key.split(':')[0] as HeadshotSport
 
   return (
-    <div
-      style={{
-        ...SURFACE_CARD,
-        padding: '12px',
-        marginBottom: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex size-[34px] shrink-0">
           <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="min-w-0 flex-1">
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.row.player}
           </div>
-          <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[11px] text-text-secondary">
             {r.row.away} @ {r.row.home} &middot; {startLabel(r.row.commence)}
           </div>
         </div>
@@ -1717,11 +1708,11 @@ function MobileEvRowCard({
           <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             {r.label} {STAT_LABEL[r.row.stat] ?? r.row.stat}
           </span>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Fair: {r.fairAmerican != null ? (r.fairAmerican > 0 ? `+${r.fairAmerican}` : `${r.fairAmerican}`) : '--'} ({r.nRef} bks)
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>
             {r.ev == null ? '--' : `${signed(r.ev * 100)}% EV`}
           </span>
@@ -1778,25 +1769,16 @@ function MobileArbCard({
   const sportSlug = r.row.game_key.split(':')[0] as HeadshotSport
 
   return (
-    <div
-      style={{
-        ...SURFACE_CARD,
-        padding: '12px',
-        marginBottom: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex size-[34px] shrink-0">
           <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="min-w-0 flex-1">
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.row.player}
           </div>
-          <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[11px] text-text-secondary">
             {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
           </div>
         </div>
@@ -1816,29 +1798,29 @@ function MobileArbCard({
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+      <div className="grid grid-cols-2 gap-2">
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <BookLogo book={a.bestOverBook} size={18} />
-            <span style={{ fontSize: '11px', color: 'var(--color-neutral-300)', fontWeight: 600 }}>{bookDisplay(a.bestOverBook).label}</span>
+            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(a.bestOverBook).label}</span>
           </div>
-          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+          <div className="mono mt-1 text-xs font-bold text-text-primary">
             OVER {formatOdds(a.bestOverAm)}
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Stake: {usd(a.stakeOverPer100 * k)}
           </div>
         </div>
 
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <BookLogo book={a.bestUnderBook} size={18} />
-            <span style={{ fontSize: '11px', color: 'var(--color-neutral-300)', fontWeight: 600 }}>{bookDisplay(a.bestUnderBook).label}</span>
+            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(a.bestUnderBook).label}</span>
           </div>
-          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+          <div className="mono mt-1 text-xs font-bold text-text-primary">
             UNDER {formatOdds(a.bestUnderAm)}
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Stake: {usd(a.stakeUnderPer100 * k)}
           </div>
         </div>
@@ -1879,25 +1861,16 @@ function MobileMiddleCard({
   const sportSlug = r.low.game_key.split(':')[0] as HeadshotSport
 
   return (
-    <div
-      style={{
-        ...SURFACE_CARD,
-        padding: '12px',
-        marginBottom: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex size-[34px] shrink-0">
           <PlayerHeadshot sport={sportSlug} id={r.low.headshot_id} name={r.low.player} size={34} />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="min-w-0 flex-1">
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.low.player}
           </div>
-          <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[11px] text-text-secondary">
             {STAT_LABEL[r.low.stat] ?? r.low.stat} &middot; {r.low.away} @ {r.low.home}
           </div>
         </div>
@@ -1917,36 +1890,36 @@ function MobileMiddleCard({
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+      <div className="grid grid-cols-2 gap-2">
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <BookLogo book={r.overBook} size={18} />
-            <span style={{ fontSize: '11px', color: 'var(--color-neutral-300)', fontWeight: 600 }}>{bookDisplay(r.overBook).label}</span>
+            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(r.overBook).label}</span>
           </div>
-          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+          <div className="mono mt-1 text-xs font-bold text-text-primary">
             OVER {r.low.line} ({formatOdds(r.overAm)})
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Stake: {usd(r.stakeOverPer100 * k)}
           </div>
         </div>
 
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <BookLogo book={r.underBook} size={18} />
-            <span style={{ fontSize: '11px', color: 'var(--color-neutral-300)', fontWeight: 600 }}>{bookDisplay(r.underBook).label}</span>
+            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(r.underBook).label}</span>
           </div>
-          <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '4px' }}>
+          <div className="mono mt-1 text-xs font-bold text-text-primary">
             UNDER {r.high.line} ({formatOdds(r.underAm)})
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Stake: {usd(r.stakeUnderPer100 * k)}
           </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderTop: `1px solid var(--color-border-table)`, paddingTop: '8px' }}>
-        <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)' }}>
+        <div className="mono text-[10.5px] text-text-secondary">
           Miss: {signed(r.missPct)}% &middot; Hit: {signed(r.hitPct)}%
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
@@ -1979,25 +1952,16 @@ function MobileLongshotCard({
   const sideLabel = over ? 'OVER' : 'UNDER'
 
   return (
-    <div
-      style={{
-        ...SURFACE_CARD,
-        padding: '12px',
-        marginBottom: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ width: 34, height: 34, flexShrink: 0, display: 'inline-flex' }}>
+    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex size-[34px] shrink-0">
           <PlayerHeadshot sport={sportSlug} id={r.row.headshot_id} name={r.row.player} size={34} />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="min-w-0 flex-1">
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.row.player}
           </div>
-          <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[11px] text-text-secondary">
             {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
           </div>
         </div>
@@ -2009,11 +1973,11 @@ function MobileLongshotCard({
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             Best Play: {sideLabel} {actionAm != null ? formatOdds(actionAm) : '--'}
           </span>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Fair: {fairText(fairProb)} {m.fairSource === 'curve' ? '(EST. CURVE)' : `(${m.nRef} BKS)`}
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           <span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: actionEv != null && actionEv > 0 ? GREEN : 'var(--color-text-secondary)' }}>
             {actionEv != null ? `${signed(actionEv)}% EV` : '--'}
           </span>
@@ -2066,19 +2030,10 @@ function sgpEvText(r: SgpProxyRow): string {
 
 function MobileSgpCard({ r }: { r: SgpProxyRow }) {
   return (
-    <div
-      style={{
-        ...SURFACE_CARD,
-        padding: '12px',
-        marginBottom: '10px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
+      <div className="flex items-center gap-2.5">
         <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="min-w-0 flex-1">
           <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {r.player}
           </div>
@@ -2105,25 +2060,25 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <BookLogo book={r.book} size={18} />
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+            <span className="mono text-[13px] font-bold text-text-primary">
               Modelled {formatOdds(r.estSgpAm)}
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+          <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
             Model fair: {formatOdds(r.fairJointAm)} ({(r.fairJointProb * 100).toFixed(1)}%)
           </div>
         </div>
 
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
             {sgpEvText(r)}
           </span>
         </div>
       </div>
 
-      <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)' }}>
+      <div className="mono text-[10.5px] text-text-secondary">
         Assumed correlation &rho;={r.rhoTrue}, book &rho;={r.rhoBook}, hold {Math.round(r.holdBook * 100)}% (unvalidated; not a quoted price)
       </div>
 
@@ -2183,13 +2138,13 @@ function MobileCompareSheet({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {item.type === 'ev' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <div className="grid grid-cols-2 gap-2">
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
               <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Consensus Fair</div>
               <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--color-text-primary)', marginTop: '2px' }}>
                 {item.row.fairAmerican != null ? (item.row.fairAmerican > 0 ? `+${item.row.fairAmerican}` : `${item.row.fairAmerican}`) : '--'}
               </div>
-              <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+              <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
                 {item.row.nRef} reference books
               </div>
             </div>
@@ -2228,7 +2183,7 @@ function MobileCompareSheet({
                     border: `1px solid ${isBest ? 'rgba(87, 242, 135, 0.35)' : HAIR}`,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="flex items-center gap-2">
                     <BookLogo book={c.key} size={22} />
                     <div>
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
@@ -2239,7 +2194,7 @@ function MobileCompareSheet({
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ textAlign: 'right' }}>
+                    <div className="text-right">
                       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'OVER' ? GREEN : 'var(--color-text-primary)' }}>
                         O {q.over != null ? formatOdds(q.over) : '--'}
                       </span>
@@ -2309,7 +2264,7 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
   return (
     <>
       <td className="odds-prop">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="flex items-center gap-2">
           <span style={{ flexShrink: 0, width: 30, height: 30, display: 'inline-flex' }}>
             <PlayerHeadshot sport={row.game_key.split(':')[0] as HeadshotSport} id={row.headshot_id} name={row.player} size={30} />
           </span>
@@ -2325,7 +2280,7 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
         </div>
       </td>
       <td>
-        <div className="mono" style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)' }}>{row.away} @ {row.home}</div>
+        <div className="mono text-[11.5px] text-[var(--color-neutral-300)]">{row.away} @ {row.home}</div>
         <div className="mono odds-sub">{startLabel(row.commence)}</div>
       </td>
     </>
@@ -2350,13 +2305,13 @@ function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string;
           </>
         ) : (
           <>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
+            <div className="mono text-[13px] font-bold text-text-primary">{r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
             <div className="mono odds-sub" title={`${r.nRef} reference books; the other side's fair price is ${fairText(1 - r.pFair)}`}>{r.nRef} BKS &middot; {fairText(1 - r.pFair)}</div>
           </>
         )}
       </td>
       <td className="odds-ev">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="flex items-center gap-2">
           <BookLogo book={r.bestBook} size={28} />
           <div>
             <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>{r.ev == null ? '--' : `${signed(r.ev * 100)}%`}</div>
@@ -2364,7 +2319,7 @@ function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string;
           </div>
         </div>
       </td>
-      <td style={{ textAlign: 'right' }}>
+      <td className="text-right">
         <div className="mono" style={{ fontSize: '12px', color: size && size.dollars > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{size && size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</div>
         <div style={{ marginTop: '2px' }}><TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} /></div>
       </td>
@@ -2384,7 +2339,7 @@ function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
       <BookLogo book={book} size={size} />
-      <span style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)' }}>{bookDisplay(book).label}</span>
+      <span className="text-[11.5px] text-[var(--color-neutral-300)]">{bookDisplay(book).label}</span>
     </span>
   )
 }
@@ -2408,7 +2363,7 @@ function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
         <div className="mono odds-sub">{a.feeLeg ? 'NET OF KALSHI FEE' : '\u00a0'}</div>
       </td>
       <td className="odds-ev">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="flex items-center gap-2">
           <span className="mono" style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--color-text-primary)', minWidth: '84px' }}>OVER {formatOdds(a.bestOverAm)}</span>
           <BookTag book={a.bestOverBook} />
         </div>
@@ -2455,7 +2410,7 @@ function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
         </div>
       </td>
       <td className="odds-ev">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="flex items-center gap-2">
           <span className="mono" style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--color-text-primary)', minWidth: '104px' }}>OVER {r.low.line} {formatOdds(r.overAm)}</span>
           <BookTag book={r.overBook} />
         </div>
@@ -2512,7 +2467,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
           </>
         ) : (
           <>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
+            <div className="mono text-[13px] font-bold text-text-primary">{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
             <div className="mono odds-sub" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               {m.fairSource === 'curve' ? (
                 <span title={`Implied from player's main line (${r.row.modal_point ?? 'main'}) across reference books`}
@@ -2538,7 +2493,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
           </>
         )}
       </td>
-      <td style={{ textAlign: 'right' }}>
+      <td className="text-right">
         <div className="mono" style={{ fontSize: '12px', color: 'var(--color-neutral-300)' }}>
           {implied == null ? '--' : `${(implied * 100).toFixed(1)}%`} / <span style={{ color: truth != null && implied != null && truth > implied ? GREEN : 'var(--color-neutral-300)' }}>{truth == null ? '--' : `${(truth * 100).toFixed(1)}%`}</span>
         </div>
@@ -2577,11 +2532,11 @@ function OutlierCard({
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Row 1: Matchup & Dislocation Pill */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="flex items-center gap-1.5">
           <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: '#9ca3af', border: `1px solid ${HAIR}` }}>
             {sport.toUpperCase()}
           </span>
-          <span className="mono" style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)' }}>
+          <span className="mono text-[11.5px] text-[var(--color-neutral-300)]">
             {item.row.away} @ {item.row.home} &middot; {startLabel(item.row.commence)}
           </span>
         </div>
@@ -2592,7 +2547,7 @@ function OutlierCard({
 
       {/* Row 2: Player, Prop Line & Giant Outlier Price */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-2.5">
           <span style={{ flexShrink: 0, width: 36, height: 36, display: 'inline-flex' }}>
             <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
           </span>
@@ -2606,7 +2561,7 @@ function OutlierCard({
             </div>
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div className="text-right">
           <div className="mono" style={{ fontSize: '24px', fontWeight: 800, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
             {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
           </div>
@@ -2629,7 +2584,7 @@ function OutlierCard({
           </>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="flex items-center gap-2">
               <BookLogo book={item.outlierBook} size={22} />
               <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--color-text-primary)' }}>{bookDisplay(item.outlierBook).label}</span>
               <span className="mono" style={{ fontSize: '11px', color: '#7d8596', marginLeft: '4px' }}>Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
@@ -2642,7 +2597,7 @@ function OutlierCard({
       {/* Row 4: Horizontal Price Comparison Bar Chart */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '6px', borderTop: '1px solid var(--color-border-table)' }}>
         {/* Outlier Book Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-2.5">
           <div style={{ width: '32px', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
             {isLocked ? <LockGlyph size={12} color="#7d8596" /> : <BookLogo book={item.outlierBook} size={20} />}
           </div>
@@ -2704,7 +2659,7 @@ function OutlierTableRow({
     <tr data-row="odds">
       <PropCells row={r.row} label={r.label} />
       <td className="odds-ev">
-        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+        <div className="mono text-[13px] font-bold text-text-primary">
           {r.marketAvgAmerican > 0 ? `+${r.marketAvgAmerican}` : `${r.marketAvgAmerican}`}
         </div>
         <div className="mono odds-sub">
@@ -2713,12 +2668,12 @@ function OutlierTableRow({
       </td>
       <td className="odds-ev">
         {isLocked ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="flex items-center gap-1.5">
             <LockGlyph size={12} color="#9ca3af" />
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px', color: GREEN }}>See Pro</button>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="flex items-center gap-2">
             <BookLogo book={r.outlierBook} size={28} />
             <div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
@@ -2729,7 +2684,7 @@ function OutlierTableRow({
           </div>
         )}
       </td>
-      <td style={{ textAlign: 'right' }}>
+      <td className="text-right">
         <div className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: gapColor }}>
           +{r.payoutPremiumPct.toFixed(1)}% MKT
         </div>
@@ -2752,7 +2707,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
   return (
     <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
       <td style={{ padding: '10px 14px', minWidth: '220px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="flex items-center gap-2.5">
           <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', fontSize: '13px' }}>{r.player}</div>
@@ -2777,11 +2732,11 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
                 {leg.label} ({formatOdds(leg.bookAm)})
               </span>
             ))}
-            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+            <span className="text-[11px] text-text-secondary">
               @ <span style={{ textTransform: 'capitalize', color: 'var(--color-text-primary)', fontWeight: 500 }}>{bookDisplay(r.book).label}</span>
             </span>
           </div>
-          <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)' }}>
+          <div className="mono text-[10.5px] text-text-secondary">
             Uncorrelated parlay: {formatOdds(r.naiveSingleProductAm)}
           </div>
         </div>
@@ -2791,7 +2746,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           {formatOdds(r.fairJointAm)}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+          <span className="mono text-[11px] text-text-secondary">
             {(r.fairJointProb * 100).toFixed(1)}% model
           </span>
           <span
@@ -2806,11 +2761,11 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
       <td style={{ padding: '10px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <BookLogo book={r.book} size={22} />
-          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <span className="mono text-[13px] font-bold text-text-primary">
             Modelled: {formatOdds(r.estSgpAm)}
           </span>
         </div>
-        <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>
+        <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
           Assumed book copula (&rho;={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
         </div>
         {r.runnerUpBooks && r.runnerUpBooks.length > 0 && (
@@ -3038,7 +2993,7 @@ function MobileBookChecklist({
           <span className="dell-heading" style={{ fontSize: '11px', color: 'var(--color-text-primary)', letterSpacing: '0.06em' }}>
             {title} ({countLabel})
           </span>
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>
+          <span className="mono text-[10px] text-text-secondary">
             {collapsed ? '[\u25bc Show]' : '[\u25b2 Hide]'}
           </span>
         </button>
