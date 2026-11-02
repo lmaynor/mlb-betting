@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { cx } from '@/utils/cx'
 
 export interface LearnCard {
   slug: string
@@ -20,22 +21,15 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
   return (
     <>
       {/* Category filter */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
+      <div className="mb-6 flex flex-wrap gap-2">
         {categories.map(c => {
           const on = c === active
           return (
             <button
               key={c}
               onClick={() => setActive(c)}
-              className="dell-heading"
-              style={{
-                fontSize: '11px', letterSpacing: '0.06em', padding: '7px 14px',
-                borderRadius: 'var(--radius-pill)', cursor: 'pointer',
-                border: on ? '1px solid var(--win-border)' : '1px solid var(--basalt)',
-                background: on ? 'var(--win-wash)' : 'var(--graphite)',
-                color: on ? 'var(--signal)' : 'var(--silver)',
-                transition: 'all var(--dur) var(--ease-out)',
-              }}
+              className={cx('ui-heading button-press-motion cursor-pointer rounded-full border px-3.5 py-[7px] text-[11px] tracking-[0.06em]',
+                on ? 'border-[var(--win-border)] bg-[var(--win-wash)] text-[var(--signal)]' : 'border-separator-border bg-background-primary-default text-text-secondary hover:bg-background-primary-hover')}
             >
               {c}
             </button>
@@ -43,14 +37,14 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
         })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
         {shown.map(article => (
-          <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover" style={{ display: 'block', padding: '22px', textDecoration: 'none', background: 'var(--graphite)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)' }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '10px' }}>
+          <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover block rounded-xl border border-separator-border bg-background-primary-default p-5.5 no-underline shadow-card">
+            <div className="ui-heading mb-2.5 tracking-[0.1em] text-text-secondary">
               {article.category} · {article.keyword} · {article.readTime} min read
             </div>
-            <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', marginBottom: '8px', letterSpacing: '-0.01em' }}>{article.title}</div>
-            <div className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55 }}>{article.description}</div>
+            <div className="ui-display mb-2 text-[17px] tracking-[-0.01em]">{article.title}</div>
+            <div className="times text-body-2-regular text-text-secondary">{article.description}</div>
           </Link>
         ))}
       </div>

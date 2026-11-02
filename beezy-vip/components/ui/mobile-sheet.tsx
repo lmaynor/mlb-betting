@@ -110,7 +110,7 @@ export interface MobileBottomSheetProps {
 
 /**
  * Native-feeling dark-mode Bottom Sheet modal for mobile viewports.
- * Enforces NO_SLOP_CHECKLIST: solid #11131a graphite surface, 1px #1e2230 border,
+ * Enforces NO_SLOP_CHECKLIST: solid var(--color-background-primary-default) graphite surface, 1px var(--color-separator-border) border,
  * no gradients, no glows, font sizes >= 10px, body scroll lock, ESC and backdrop dismiss.
  */
 export function MobileBottomSheet({
@@ -183,10 +183,10 @@ export function MobileBottomSheet({
         data-testid="bottom-sheet-surface"
         style={{
           position: 'relative',
-          background: '#11131a',
-          borderTop: '1px solid #1e2230',
-          borderLeft: '1px solid #1e2230',
-          borderRight: '1px solid #1e2230',
+          background: 'var(--color-background-primary-default)',
+          borderTop: '1px solid var(--color-separator-border)',
+          borderLeft: '1px solid var(--color-separator-border)',
+          borderRight: '1px solid var(--color-separator-border)',
           borderRadius: '16px 16px 0 0',
           maxHeight,
           display: 'flex',
@@ -203,7 +203,7 @@ export function MobileBottomSheet({
           style={{
             width: '36px',
             height: '4px',
-            background: '#3a4156',
+            background: 'var(--color-border-button-hover)',
             borderRadius: '2px',
             margin: '8px auto 4px auto',
             flexShrink: 0,
@@ -213,41 +213,20 @@ export function MobileBottomSheet({
         {/* Header bar */}
         {(title || subtitle) && (
           <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 16px 10px 16px',
-              borderBottom: '1px solid #1e2230',
-              flexShrink: 0,
-              gap: '12px',
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
+           
+           className="flex items-center justify-between pt-2 pr-4 pb-2.5 pl-4 border-b border-b-[color:var(--color-separator-border)] shrink-0 gap-3">
+            <div className="flex-1 min-w-0">
               {title && (
                 <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: 'var(--chalk)',
-                    lineHeight: 1.3,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                 
+                 className="text-[14px] font-bold text-text-primary leading-[1.3] overflow-hidden text-ellipsis whitespace-nowrap">
                   {title}
                 </div>
               )}
               {subtitle && (
                 <div
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--fog)',
-                    lineHeight: 1.3,
-                    marginTop: '2px',
-                  }}
-                >
+                 
+                 className="text-[11px] text-text-secondary leading-[1.3] mt-0.5">
                   {subtitle}
                 </div>
               )}
@@ -257,22 +236,8 @@ export function MobileBottomSheet({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              style={{
-                background: 'transparent',
-                border: '1px solid #1e2230',
-                borderRadius: '6px',
-                color: 'var(--fog)',
-                width: '28px',
-                height: '28px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '14px',
-                padding: 0,
-                flexShrink: 0,
-              }}
-            >
+             
+             className="bg-transparent border border-[color:var(--color-separator-border)] rounded-[6px] text-text-secondary w-[28px] h-[28px] cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
               {'\u2715'}
             </button>
           </div>
@@ -294,14 +259,8 @@ export function MobileBottomSheet({
         {/* Optional Sticky Footer */}
         {footer && (
           <div
-            style={{
-              padding: '10px 16px',
-              borderTop: '1px solid #1e2230',
-              background: '#090a0f',
-              flexShrink: 0,
-              boxSizing: 'border-box',
-            }}
-          >
+           
+           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
             {footer}
           </div>
         )}

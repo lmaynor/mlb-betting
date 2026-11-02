@@ -18,17 +18,17 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (
-    <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid #1e2230', background: '#090a0f' }}>
-      <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px 16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', padding: '10px 0' }}>
+    <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
+      <div className="gutter-m max-w-[1200px] mx-auto py-0 px-6 flex items-center justify-between gap-y-1 gap-x-4 flex-wrap">
+        <div className="flex items-baseline gap-2.5 py-2.5 px-0">
           <span style={{ fontSize: '13px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
-          <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fog)' }}>&middot; {n} Systems</span>
+          <span className="mono text-[11.5px] text-text-secondary">&middot; {n} Systems</span>
         </div>
-        <div style={{ display: 'flex', gap: '2px' }}>
+        <div className="flex gap-0.5">
           {tabs.map(t => (
             <Link key={t.id} href={t.href} aria-current={active === t.id ? 'page' : undefined} className="tap-m"
               style={{ display: 'inline-flex', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '10px 12px', textDecoration: 'none',
-                color: active === t.id ? 'var(--chalk)' : 'var(--fog)',
+                color: active === t.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                 borderBottom: `2px solid ${active === t.id ? pillar.accent : 'transparent'}`, marginBottom: '-1px' }}>
               {t.label}
             </Link>

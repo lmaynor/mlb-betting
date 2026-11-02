@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   alternates: { canonical: '/compare/oddsjam-alternative' },
 }
 
-const th = { textAlign: 'left' as const, padding: '8px 10px', fontSize: '12px', color: '#7d8596', borderBottom: '1px solid #1e2230', position: 'sticky' as const, top: 0, background: '#11131a' }
-const td = { padding: '8px 10px', fontSize: '13px', color: '#d1d5db', borderBottom: '1px solid #1e2230', verticalAlign: 'top' as const }
+const th = { textAlign: 'left' as const, padding: '8px 10px', fontSize: '12px', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-separator-border)', position: 'sticky' as const, top: 0, background: 'var(--color-background-primary-default)' }
+const td = { padding: '8px 10px', fontSize: '13px', color: '#d1d5db', borderBottom: '1px solid var(--color-separator-border)', verticalAlign: 'top' as const }
 
 const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
   { tool: 'beezy.fyi', price: `$${PLANS.single.price}/mo one league, $${PLANS.monthly.price}/mo all four, $${PLANS.annual.price}/yr (pre-launch)`, what: 'Market-consensus +EV scanner plus projection models; public paper-tracked ledger', href: '/pricing' },
@@ -23,8 +23,8 @@ const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
 
 export default function CompareOddsJamAlternativePage() {
   return (
-    <div style={{ maxWidth: '860px', margin: '0 auto', padding: '32px 20px 48px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f3f4f6', margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
+    <div className="max-w-[860px] mx-auto pt-8 px-5 pb-12">
+      <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
       <div className="article-body">
         <p>
           Sports betting tools fall into three groups: odds scanners, prop research tools and bet trackers. beezy.fyi is
@@ -33,8 +33,8 @@ export default function CompareOddsJamAlternativePage() {
           and annual billing, and prices change, so confirm current pricing with the vendor.
         </p>
       </div>
-      <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)' }}>
+        <table className="w-full border-collapse">
           <thead><tr><th style={th}>Tool</th><th style={th}>Price</th><th style={th}>What it is</th></tr></thead>
           <tbody>
             {ROWS.map(r => (

@@ -6,9 +6,9 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import type { BoardDay } from '@/lib/board-days'
 import { addDaysToDateKey } from '@/lib/dates'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 const SEG: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'baseline', gap: '8px', padding: '6px 14px', border: B, background: 'var(--graphite)', color: 'var(--silver)',
+  display: 'inline-flex', alignItems: 'baseline', gap: '8px', padding: '6px 14px', border: B, background: 'var(--color-background-primary-default)', color: 'var(--color-neutral-300)',
   fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', textDecoration: 'none', whiteSpace: 'nowrap',
 }
 const ON: React.CSSProperties = { borderColor: 'var(--win-border)', background: 'var(--win-wash)', color: 'var(--signal)', fontWeight: 600 }
@@ -65,7 +65,7 @@ export function DayToggle({ today, yesterday, days, selected, pinDates = true }:
           <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined} className="tap-m"
             title={c.count == null ? undefined : `${c.count} ${c.count === 1 ? 'row' : 'rows'}`}
             style={{ ...SEG, borderRadius: `${i === 0 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === 0 ? 'var(--radius)' : 0}`, ...(i > 0 ? { borderLeft: 'none' } : {}), ...(on ? ON : {}) }}>
-            {dated ? <>{word} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{rest.join(' ')}</span></> : name(c)}
+            {dated ? <>{word} <span className="text-text-secondary font-normal">{rest.join(' ')}</span></> : name(c)}
           </Link>
         )
       })}

@@ -6,7 +6,7 @@ import type { CSSProperties, ReactNode } from 'react'
  */
 export function AlignedBar({ children, style, role, label }: { children: ReactNode; style?: CSSProperties; role?: string; label?: string }) {
   return (
-    <div role={role} aria-label={label} style={{ borderBottom: '1px solid var(--basalt)', background: 'var(--carbon)' }}>
+    <div role={role} aria-label={label} className="border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-full)]">
       <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '10px 24px', ...style }}>{children}</div>
     </div>
   )

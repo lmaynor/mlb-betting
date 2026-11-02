@@ -27,8 +27,8 @@ const HEAD_TIPS: Record<string, string> = {
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
 const signed = (x: number | null | undefined) => (x == null ? '--' : `${x > 0 ? '+' : ''}${(x * 100).toFixed(1)}%`)
 const num = (x: number | null) => (x == null ? '--' : Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 3 ? x.toFixed(1) : x.toFixed(2))
-const hitColor = (x: number | null) => (x == null ? 'var(--fog)' : x >= 0.6 ? 'var(--signal)' : x < 0.4 ? 'var(--loss)' : 'var(--silver)')
-const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--silver)', void: 'var(--fog)' } as const
+const hitColor = (x: number | null) => (x == null ? 'var(--color-text-secondary)' : x >= 0.6 ? 'var(--signal)' : x < 0.4 ? 'var(--loss)' : 'var(--color-neutral-300)')
+const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--color-neutral-300)', void: 'var(--color-text-secondary)' } as const
 
 /**
  * The one table every sport's picks, projections and system pages render: the model's expected value beside the line, the
@@ -48,8 +48,8 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   if (rows.length === 0) {
     return (
       <div style={{ ...SURFACE, padding: '28px 20px', textAlign: 'center' }}>
-        <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>Nothing to show</div>
-        <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
+        <div className="text-text-primary font-semibold mb-1.5">Nothing to show</div>
+        <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">
           {emptyBody ?? `No ${pillar.shortName} rows match. The board fills in once a slate and prices are available.`}
         </div>
       </div>
@@ -66,10 +66,10 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
 
   return (
     <div>
-      {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--fog)', marginBottom: '8px' }}>{status}</div>}
+      {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)', marginBottom: '8px' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
-        <table className="pb-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-          <thead><tr>{heads.map(h => <th key={h} className={`dell-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
+        <table className="pb-table w-full border-collapse text-[13px]">
+          <thead><tr>{heads.map(h => <th key={h} className={`ui-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
               const b = r.book ? bookDisplay(r.book) : null
@@ -83,92 +83,92 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                 <tr className="sys-row" onClick={isMobile ? () => setOpen(isOpen ? null : r.key) : undefined} style={isMobile ? { cursor: 'pointer' } : undefined}>
                   <td className="pb-score" style={TD}>
                     {r.score > 0 ? (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <div className="inline-flex items-center gap-1.5">
                         {isOfficial ? (
-                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                          <span className="ui-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
                         ) : isOutlier ? (
-                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                          <span className="ui-heading pb-hide-m" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
                         ) : null}
-                        <span className="mono" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--silver)', fontWeight: 700 }}>{r.score}</span>
+                        <span className="mono" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{r.score}</span>
                       </div>
-                    ) : <span style={{ color: 'var(--fog)' }}>--</span>}
+                    ) : <span className="text-text-secondary">--</span>}
                   </td>
                   <td className="pb-player" style={TD}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '100%' }}>
-                      {r.headshotId != null && hasHeadshots(r.sport) && <span className="pb-hide-m" style={{ display: 'inline-flex' }}><PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} /></span>}
-                      <span style={{ minWidth: 0 }}>
+                      {r.headshotId != null && hasHeadshots(r.sport) && <span className="pb-hide-m inline-flex"><PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} /></span>}
+                      <span className="min-w-0">
                         {isMobile ? (
                           <button type="button" className="pb-name" aria-expanded={isOpen} title={r.player}
-                            style={{ color: 'var(--chalk)', fontWeight: 600, background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer', minHeight: `${TAP_PX}px`, display: 'block', maxWidth: '100%' }}>
+                            style={{ color: 'var(--color-text-primary)', fontWeight: 600, background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer', minHeight: `${TAP_PX}px`, display: 'block', maxWidth: '100%' }}>
                             <span className="pb-name-text">{r.player}</span>
                           </button>
                         ) : (
-                          <span className="pb-name" title={r.player} style={{ color: 'var(--chalk)', fontWeight: 600 }}>{r.player}</span>
+                          <span className="pb-name text-text-primary font-semibold" title={r.player}>{r.player}</span>
                         )}
                       </span>
                     </span>
                   </td>
                   <td className="pb-hide-m" style={TD}>
                     {r.team ? (
-                      <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--silver)', fontSize: '12px' }}>
+                      <span className="mono inline-flex items-center gap-1.5 text-[var(--color-neutral-300)] text-[12px]">
                         <SportLogo sport={r.sport} team={r.team} size={20} />{r.team}
                       </span>
                     ) : r.away && r.home ? (
-                      <span className="mono" title="The feed does not name this player's team" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: 'var(--silver)', fontSize: '12px' }}>
-                        <SportLogo sport={r.sport} team={r.away} size={16} />{r.away}<span style={{ color: 'var(--fog)' }}>@</span><SportLogo sport={r.sport} team={r.home} size={16} />{r.home}
+                      <span className="mono inline-flex items-center gap-[5px] text-[var(--color-neutral-300)] text-[12px]" title="The feed does not name this player's team">
+                        <SportLogo sport={r.sport} team={r.away} size={16} />{r.away}<span className="text-text-secondary">@</span><SportLogo sport={r.sport} team={r.home} size={16} />{r.home}
                       </span>
-                    ) : <span style={{ color: 'var(--fog)' }}>--</span>}
+                    ) : <span className="text-text-secondary">--</span>}
                   </td>
-                  <td className="pb-pick" style={{ ...TD, color: 'var(--silver)' }}>
+                  <td className="pb-pick" style={{ ...TD, color: 'var(--color-neutral-300)' }}>
                     {r.hasLine && r.line != null
-                      ? <span><span className="mono pb-line" style={{ color: 'var(--chalk)' }}>{r.side === 'under' ? 'Under' : 'Over'} {r.line}</span>{' '}<span className="pb-mkt">{r.marketLabel}</span></span>
+                      ? <span><span className="mono pb-line text-text-primary">{r.side === 'under' ? 'Under' : 'Over'} {r.line}</span>{' '}<span className="pb-mkt">{r.marketLabel}</span></span>
                       : r.hasLine ? <span className="pb-mkt">{r.marketLabel}</span>
-                        : <span><span className="pb-mkt">{r.marketLabel}</span>{' '}<span className="pb-noline" style={{ color: 'var(--fog)' }}>(no line yet)</span></span>}
+                        : <span><span className="pb-mkt">{r.marketLabel}</span>{' '}<span className="pb-noline text-text-secondary">(no line yet)</span></span>}
                   </td>
                   {showModel && (
                     <td className="pb-model" style={TD}>
-                      <span className="mono" style={{ color: 'var(--chalk)', fontWeight: 700 }}>{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono pb-hide-m" title="The model's probability for the listed side" style={{ marginLeft: '8px', fontSize: '11.5px', color: 'var(--silver)' }}>{pct(r.pModel)}</span>}
+                      <span className="mono text-text-primary font-bold">{num(r.proj)}</span>
+                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-[var(--color-neutral-300)]" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showFair && (
-                    <td className="mono pb-hide-m" style={{ ...TD, color: 'var(--silver)' }}>
-                      {r.pFair == null ? '--' : <span>{pct(r.pFair)}{fair != null ? ` ${formatOdds(fair)}` : ''}{r.nBooks != null ? <span style={{ color: r.nBooks >= 3 ? 'var(--fog)' : 'var(--warn)' }}> {r.nBooks} bk</span> : null}</span>}
+                    <td className="mono pb-hide-m" style={{ ...TD, color: 'var(--color-neutral-300)' }}>
+                      {r.pFair == null ? '--' : <span>{pct(r.pFair)}{fair != null ? ` ${formatOdds(fair)}` : ''}{r.nBooks != null ? <span style={{ color: r.nBooks >= 3 ? 'var(--color-text-secondary)' : 'var(--warn)' }}> {r.nBooks} bk</span> : null}</span>}
                     </td>
                   )}
                   {showForm && (
                     <td className="mono pb-hide-m" style={{ ...TD, fontSize: '12px' }}>
                       {r.l5 != null || r.l10 != null ? (
                         <span title="Share of the last 5 and last 10 games that landed on the listed side of the line">
-                          <span style={{ color: hitColor(r.l5) }}>L5 {pct(r.l5)}</span> <span style={{ color: 'var(--fog)' }}>&middot;</span> <span style={{ color: hitColor(r.l10) }}>L10 {pct(r.l10)}</span>
+                          <span style={{ color: hitColor(r.l5) }}>L5 {pct(r.l5)}</span> <span className="text-text-secondary">&middot;</span> <span style={{ color: hitColor(r.l10) }}>L10 {pct(r.l10)}</span>
                         </span>
                       ) : r.avg10 != null || r.avgSzn != null ? (
-                        <span title="The player's average in this stat over his last 10 games and this season" style={{ color: 'var(--silver)' }}>
-                          L10 avg {num(r.avg10)} <span style={{ color: 'var(--fog)' }}>&middot;</span> szn {num(r.avgSzn)}
+                        <span title="The player's average in this stat over his last 10 games and this season" className="text-[var(--color-neutral-300)]">
+                          L10 avg {num(r.avg10)} <span className="text-text-secondary">&middot;</span> szn {num(r.avgSzn)}
                         </span>
-                      ) : <span style={{ color: 'var(--fog)' }}>--</span>}
+                      ) : <span className="text-text-secondary">--</span>}
                     </td>
                   )}
                   <td className="pb-price" style={TD}>
-                    {r.odds == null || !b ? <span style={{ color: 'var(--fog)' }}>--</span> : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                    {r.odds == null || !b ? <span className="text-text-secondary">--</span> : (
+                      <span className="inline-flex items-center gap-[7px]">
                         <span className="pb-book" data-short={b.short} title={b.label} style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
-                        <span className="mono" style={{ color: 'var(--chalk)' }}>{formatOdds(r.odds)}</span>
+                        <span className="mono text-text-primary">{formatOdds(r.odds)}</span>
                       </span>
                     )}
                   </td>
                   <td className="pb-edge" style={TD}>
-                    <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.modelEdge)}</span>
-                    {r.confluence && <span className="dell-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="dell-heading pb-hide-m" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
+                    <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
+                    {r.confluence && <span className="ui-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-[var(--signal)]">PICK</span>}
                   </td>
                   {showEv && (
                     <td className="pb-hide-m" style={TD}>
-                      <span className="mono" title="Best price against the market's fair probability, not the model's" style={{ color: (r.marketEv ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.marketEv)}</span>
+                      <span className="mono" title="Best price against the market's fair probability, not the model's" style={{ color: (r.marketEv ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.marketEv)}</span>
                     </td>
                   )}
                   {showResult && (
-                    <td className="dell-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--fog)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
+                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
                   )}
                 </tr>
                 {isOpen && <DetailRow r={r} span={heads.length} showResult={showResult} />}
@@ -181,7 +181,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m" style={{ marginTop: '10px' }}>Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p style={{ fontSize: '11.5px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.55 }}>
+      <p className="text-[11.5px] text-text-secondary mt-2.5 leading-[1.55]">
         Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
         price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
         model likes the play. Rows with no line are projections only: prices have not posted.
@@ -195,9 +195,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
 function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showResult: boolean }) {
   const fair = fairAmerican(r.pFair)
   const item = (label: string, value: React.ReactNode) => (
-    <div style={{ display: 'flex', gap: '6px', minWidth: 0 }}>
-      <dt className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', flex: '0 0 auto' }}>{label}</dt>
-      <dd className="mono" style={{ margin: 0, color: 'var(--silver)', fontSize: '12px', minWidth: 0 }}>{value}</dd>
+    <div className="flex gap-1.5 min-w-0">
+      <dt className="ui-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', flex: '0 0 auto' }}>{label}</dt>
+      <dd className="mono" style={{ margin: 0, color: 'var(--color-neutral-300)', fontSize: '12px', minWidth: 0 }}>{value}</dd>
     </div>
   )
   return (
@@ -215,7 +215,7 @@ function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showRes
           {showResult && r.result && item('RESULT', r.result.toUpperCase())}
           {r.engine && item('ENGINE', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--warn)' }}>Unvalidated model output. Paper only, not in the public results.</div>}
+        {r.sport !== 'mlb' && <div className="mt-2 text-[11px] text-[var(--warn)]">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )

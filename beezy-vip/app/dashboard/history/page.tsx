@@ -3,8 +3,8 @@
 
 export default function DashboardHistoryPage() {
   return (
-    <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-      <p style={{ color: 'var(--fog)', fontFamily: 'monospace', fontSize: '12px' }}>
+    <div className="px-5 py-10 text-center">
+      <p className="font-mono text-caption-1-regular text-text-secondary">
         Full history available after launch.
       </p>
     </div>

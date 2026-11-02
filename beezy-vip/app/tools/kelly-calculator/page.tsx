@@ -5,10 +5,10 @@ import { ToolHeader } from '@/components/ui/tool-header'
 import { useBankroll } from '@/lib/use-bankroll'
 import { kellyStake, formatOdds, americanToImpliedProb, formatProb } from '@/lib/odds'
 
-const B = '1px solid var(--basalt)'
-const B_INNER = '1px solid var(--basalt)'
-const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '8px' }
+const B = '1px solid var(--color-separator-border)'
+const B_INNER = '1px solid var(--color-separator-border)'
+const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
 
 export default function KellyCalculatorPage() {
   // Shared with the +EV terminal: editing it here updates the stake sizing there (stored per browser).
@@ -25,19 +25,19 @@ export default function KellyCalculatorPage() {
   const impliedP = !isNaN(o) ? americanToImpliedProb(o) : null
 
   return (
-    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px' }}>
+    <div className="max-w-[680px] mx-auto p-6">
       <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
 
-      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
-        <div style={{ marginBottom: '16px' }}>
+      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-6 mb-4">
+        <div className="mb-4">
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label style={labelStyle}>Line (American)</label>
             <input type="number" value={odds} onChange={e => setOdds(e.target.value)} placeholder="-110" style={inputStyle} />
-            {impliedP && <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>Implied: {formatProb(impliedP)}</p>}
+            {impliedP && <p className="mono text-[11px] text-text-secondary mt-1">Implied: {formatProb(impliedP)}</p>}
           </div>
           <div>
             <label style={labelStyle}>Your Win Prob (%)</label>
@@ -52,21 +52,21 @@ export default function KellyCalculatorPage() {
       </div>
 
       {result && (
-        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
+        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Full Kelly</div>
-              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--signal)' }}>{result.fullKelly}%</div>
-              <div className="mono" style={{ fontSize: '13px', color: 'var(--signal)', marginTop: '4px' }}>${result.stakeFullDollars.toFixed(2)}</div>
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Full Kelly</div>
+              <div className="mono text-[28px] font-bold text-[var(--signal)]">{result.fullKelly}%</div>
+              <div className="mono text-[13px] text-[var(--signal)] mt-1">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
-            <div style={{ padding: '20px' }}>
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Half Kelly</div>
-              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--ash)' }}>{result.halfKelly}%</div>
-              <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>${result.stakeHalfDollars.toFixed(2)}</div>
+            <div className="p-5">
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Half Kelly</div>
+              <div className="mono text-[28px] font-bold text-text-primary">{result.halfKelly}%</div>
+              <div className="mono text-[13px] text-text-secondary mt-1">${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>
-          <div style={{ padding: '14px 20px' }}>
-            <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6 }}>Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
+          <div className="py-3.5 px-5">
+            <p className="times text-[12px] text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
           </div>
         </div>
       )}

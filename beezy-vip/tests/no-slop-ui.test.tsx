@@ -26,8 +26,8 @@ describe('no-slop-ui', () => {
     'components/picks/systems-table.tsx', 'components/picks/filter-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx',
   ])('%s: no eyebrow+mood header, no gradient header, no card-per-row stack', (f) => {
     const src = read(f)
-    expect(src).not.toMatch(/dell-display[^}]*clamp\(/)   // the mood-headline h1 style
-    expect(src).not.toMatch(/dell-heading[^>]*>\s*(ANALYTICS|\+EV TERMINAL)</)
+    expect(src).not.toMatch(/ui-display[^}]*clamp\(/)   // the mood-headline h1 style
+    expect(src).not.toMatch(/ui-heading[^>]*>\s*(ANALYTICS|\+EV TERMINAL)</)
     expect(src).not.toMatch(/linear-gradient/)
     expect(src).not.toMatch(/kpi-grid|<Kpi\b/)
     expect(src).not.toMatch(/<article/)
@@ -73,7 +73,7 @@ describe('design-system debt guards', () => {
   it('the home hero is a solid surface: no gradient, no radius-xl, no paper-mode eyebrow', () => {
     const hero = read('components/landing/hero.tsx')
     expect(hero).not.toMatch(/linear-gradient|radius-xl/)
-    expect(hero).toMatch(/SURFACE_CARD/)
+    expect(hero).toMatch(/SURFACE_CARD|bg-background-primary-default/)
     expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
     expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
     // the legal disclosure stays in the footer, as one muted paragraph (no PAPER MODE callout box)
@@ -91,31 +91,32 @@ describe('design-system debt guards', () => {
     expect(hover![1]).not.toMatch(/box-shadow/)
   })
 
-  it('there is one surface spec: CARD_STYLE is SURFACE_CARD at 8px with a 1px shadow, and .ribbon-card-wrap matches', async () => {
+  it('there is one surface spec: CARD_STYLE is SURFACE_CARD (BoardUI tokens, 12px), and .ribbon-card-wrap matches', async () => {
     const tokens = await import('../lib/tokens')
     expect(tokens.CARD_STYLE).toBe(tokens.SURFACE_CARD)
-    expect(tokens.SURFACE_CARD).toEqual({ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' })
+    expect(tokens.SURFACE_CARD).toEqual({ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '12px', boxShadow: 'var(--shadow-card)' })
     expect(tokens.SURFACE_ELEVATED).toEqual({ background: '#171a24', border: '1px solid #2e3446', borderRadius: '8px' })
     expect(tokens.TABLE_TH.fontSize).toBe('10px')
     expect(tokens.TABLE_TD.borderBottom).toBe('1px solid #151822')
     const wrap = /\.ribbon-card-wrap \{([^}]*)\}/.exec(read('app/globals.css'))![1]
-    expect(wrap).toMatch(/border-radius: 8px/)
-    expect(wrap).toMatch(/box-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.45\)/)
+    expect(wrap).toMatch(/border-radius: 12px/)
+    expect(wrap).toMatch(/box-shadow: var\(--shadow-card\)/)
   })
 
   it('tables share the tokens.ts primitives instead of re-declaring them', () => {
     for (const f of ['components/picks/top-picks-table.tsx', 'components/picks/systems-table.tsx', 'components/picks/sport-projections-board.tsx', 'app/picks/history/history-table.tsx']) {
       const src = read(f)
-      expect(src).toMatch(/TABLE_TH/)
+      expect(src).toMatch(/TABLE_TH|bg-background-secondary-default/)
       expect(src).not.toMatch(/const TH = \{ textAlign/)
     }
   })
 
-  it('canonical .ui-* classes exist and the .dell-* names are aliases of the same rules', () => {
+  it('canonical .ui-* classes exist and the retired .dell-* aliases are gone', () => {
     const css = read('app/globals.css')
-    expect(css).toMatch(/\.ui-display,\s*\.dell-display \{/)
-    expect(css).toMatch(/\.ui-heading,\s*\.dell-heading \{/)
-    expect(css).toMatch(/\.btn-primary,\s*\.dell-btn-primary,\s*\.dell-btn-red \{/)
+    expect(css).toMatch(/\.ui-display \{/)
+    expect(css).toMatch(/\.ui-heading \{/)
+    expect(css).toMatch(/\.btn-primary \{/)
+    expect(css).not.toMatch(/\.dell-/)
   })
 
   it('loads the three-face stack with the variable names the CSS and inline styles read', () => {

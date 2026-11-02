@@ -4,16 +4,16 @@ import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/l
 import { SYSTEM_PILL, systemLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
-const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, #090a0f)', color: '#c9c6cf', border: '1px solid var(--iron)' }
+const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, var(--color-background-secondary-default))', color: '#c9c6cf', border: '1px solid var(--color-border-button-default)' }
 
 export function LiveDot({ label }: { label?: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+    <span className="inline-flex items-center gap-2">
       <span className="live-dot" />
       {label && (
         <span
-          className="dell-heading"
-          style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)' }}
+          className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary"
+         
         >
           {label}
         </span>
@@ -27,7 +27,7 @@ export function SystemBadge({ system }: { system: string }) {
   const label = systemLabel(system, true)
   return (
     <span
-      className="dell-heading"
+      className="ui-heading"
       style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
     >
       {label}
@@ -37,27 +37,27 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '20px', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
+    <div className="flex flex-col gap-1.5 p-5 border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
       <span
-        className="dell-heading"
-        style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '2px' }}
+        className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-0.5"
+       
       >
         {label}
       </span>
       <span
         className="mono"
-        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? 'var(--signal)' : 'var(--chalk)' }}
+        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}
       >
         {value}
       </span>
-      {sub && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</span>}
+      {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
     </div>
   )
 }
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', color: 'var(--fog)' }}>PENDING</span>
+    return <span className="ui-heading text-[10px] tracking-[0.06em] text-text-secondary">PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -65,11 +65,11 @@ export function ResultPill({ result }: { result: string | null }) {
   const style = isWin
     ? { background: 'var(--win-wash)', color: 'var(--signal)', border: '1px solid var(--win-border)' }
     : isPush || isVoid
-    ? { background: 'var(--slate)', color: 'var(--fog)', border: '1px solid var(--iron)' }
+    ? { background: 'var(--slate)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border-button-default)' }
     : { background: 'var(--loss-wash)', color: 'var(--loss)', border: '1px solid var(--loss-border)' }
   return (
     <span
-      className="dell-heading"
+      className="ui-heading"
       style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
     >
       {result.toUpperCase()}
@@ -80,7 +80,7 @@ export function ResultPill({ result }: { result: string | null }) {
 /** Per-bet P&L in units of that bet's own stake (1u = the amount risked). Falls back to a $10 unit when the stake is unknown. */
 export function PnL({ value, stake, result }: { value: number | null; stake?: number | null; result?: string | null }) {
   // A void or push refunds the stake: no profit to show, and a green +0.00u reads as a win.
-  if (value === null || result === 'void' || result === 'push') return <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>&mdash;</span>
+  if (value === null || result === 'void' || result === 'push') return <span className="mono text-[12px] text-text-secondary">&mdash;</span>
   const pos = value >= 0
   const unit = stake != null && stake > 0 ? stake : 10
   return (
@@ -92,9 +92,9 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
 
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div style={{ marginBottom: '24px' }}>
-      <h2 className="dell-display" style={{ fontSize: '24px', color: 'var(--chalk)' }}>{label}</h2>
-      {sub && <p className="times" style={{ fontSize: '14px', color: 'var(--fog)', marginTop: '7px', lineHeight: 1.5 }}>{sub}</p>}
+    <div className="mb-6">
+      <h2 className="ui-display text-[24px] text-text-primary">{label}</h2>
+      {sub && <p className="times text-[14px] text-text-secondary mt-[7px] leading-[1.5]">{sub}</p>}
     </div>
   )
 }
@@ -106,7 +106,7 @@ export function Button({ children, variant = 'primary', href, onClick }: { child
 }
 
 export function Divider() {
-  return <div style={{ width: '100%', height: '1px', background: 'var(--basalt)' }} />
+  return <div  className="w-full h-[1px] bg-[var(--color-separator-border)]"/>
 }
 
 export function ScoreBadge({ bet }: { bet: Bet }) {
@@ -114,13 +114,13 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const tier  = scoreTier(score)
   const color = TIER_COLOR[tier]
   return (
-    <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+    <div title={explainScore(bet)} className="flex flex-col items-center gap-1">
       <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>
       <span
-        className="dell-heading"
-        style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--carbon))`, color }}
+        className="ui-heading"
+        style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--color-background-full))`, color }}
       >
         {TIER_LABEL[tier]}
       </span>

@@ -8,7 +8,7 @@ import { PLANS, ANNUAL_PER_MONTH, ANNUAL_SAVINGS_PCT } from '@/lib/plans'
 import { DISCORD_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
-import { SURFACE_CARD } from '@/lib/tokens'
+import { cx } from '@/utils/cx'
 import { LEAGUES, type League } from '@/lib/tiers'
 
 const CheckoutButton = dynamic(
@@ -16,7 +16,7 @@ const CheckoutButton = dynamic(
   { ssr: false }
 )
 
-const SURFACE = SURFACE_CARD
+const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 
 export { PLANS, ANNUAL_PER_MONTH, ANNUAL_SAVINGS_PCT }
 
@@ -41,9 +41,9 @@ function Check() {
 
 function Features({ items }: { items: string[] }) {
   return (
-    <ul style={{ listStyle: 'none', margin: '0 0 20px', padding: 0, flex: 1 }}>
+    <ul className="m-0 mb-5 flex-1 list-none p-0">
       {items.map(f => (
-        <li key={f} style={{ display: 'flex', gap: '9px', marginBottom: '10px', fontSize: '13.5px', color: 'var(--silver)', lineHeight: 1.45 }}>
+        <li key={f} className="mb-2.5 flex gap-[9px] text-body-regular text-text-secondary">
           <Check /><span>{f}</span>
         </li>
       ))}
@@ -55,13 +55,13 @@ function Plan({ name, price, period, note, featured, children }: {
   name: string; price: string; period: string; note?: string; featured?: boolean; children: React.ReactNode
 }) {
   return (
-    <div style={{ ...SURFACE, display: 'flex', flexDirection: 'column', padding: '18px 18px 20px', borderColor: featured ? 'rgba(87,242,135,0.55)' : '#1e2230' }}>
-      <div className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.06em', color: featured ? 'var(--signal)' : 'var(--silver)', marginBottom: '10px' }}>{name.toUpperCase()}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', marginBottom: '4px' }}>
-        <span className="mono" style={{ fontSize: '34px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1 }}>{price}</span>
-        <span style={{ fontSize: '13px', color: 'var(--fog)' }}>{period}</span>
+    <div className={cx(CARD, 'flex flex-col px-4.5 pb-5 pt-4.5', featured && 'border-[rgba(87,242,135,0.55)]')}>
+      <div className={cx('ui-heading mb-2.5 text-[11px] tracking-[0.06em]', featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{name.toUpperCase()}</div>
+      <div className="mb-1 flex items-baseline gap-[5px]">
+        <span className="mono text-[34px] font-bold leading-none text-text-primary">{price}</span>
+        <span className="text-body-2-regular text-text-secondary">{period}</span>
       </div>
-      <div style={{ minHeight: '18px', fontSize: '12px', color: 'var(--fog)', marginBottom: '14px' }}>{note ?? ''}</div>
+      <div className="mb-3.5 min-h-[18px] text-caption-1-regular text-text-secondary">{note ?? ''}</div>
       {children}
     </div>
   )
@@ -69,7 +69,7 @@ function Plan({ name, price, period, note, featured, children }: {
 
 function Cta({ tier, sport, label, featured }: { tier: 'single_sport' | 'pro_monthly' | 'pro_annual'; sport?: League; label: string; featured?: boolean }) {
   if (PRE_LAUNCH) {
-    return <a href={DISCORD_URL} className={featured ? 'btn btn-primary' : 'btn btn-ghost'} style={{ width: '100%' }}>Join waitlist</a>
+    return <a href={DISCORD_URL} className={cx('w-full', featured ? 'btn btn-primary' : 'btn btn-ghost')}>Join waitlist</a>
   }
   return <CheckoutButton tier={tier} sport={sport} label={label} featured={featured} />
 }
@@ -78,37 +78,38 @@ export function PricingSection() {
   const [league, setLeague] = useState<League>('nfl')
   const lc = league
   return (
-    <section style={{ maxWidth: '1080px', margin: '0 auto', padding: '24px 24px 56px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Pricing</h1>
-        <span style={{ fontSize: '12.5px', color: 'var(--fog)' }}>
+    <section className="mx-auto max-w-[1080px] px-6 pb-14 pt-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 className="text-title-2-bold text-text-primary">Pricing</h1>
+        <span className="text-body-2-regular text-text-secondary">
           {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime in 1 click.'}
         </span>
       </div>
 
-      <div style={{ ...SURFACE, padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', borderLeft: '3px solid var(--signal)' }}>
+      <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-4.5 py-3.5')}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--signal)' }}>EXPLORER TIER</span>
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>$0 / Free Forever</span>
+          <div className="flex items-center gap-2">
+            <span className="ui-heading text-[11px] tracking-[0.08em] text-[var(--signal)]">EXPLORER TIER</span>
+            <span className="mono text-body-2-bold text-text-primary">$0 / Free Forever</span>
           </div>
-          <div style={{ fontSize: '12.5px', color: 'var(--silver)', marginTop: '3px' }}>
+          <div className="mt-[3px] text-body-2-regular text-text-secondary">
             Daily Top 10 cross-sport picks, full public results ledger, odds & vig calculator, and Kelly sizing. No account or credit card required.
           </div>
         </div>
-        <Link href="/picks" style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '7px 14px', borderRadius: '6px', background: 'var(--surface-elevated)', border: '1px solid #1e2230', color: 'var(--chalk)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+        <Link href="/picks" className="button-press-motion whitespace-nowrap rounded-2lg border border-border-button-default bg-background-secondary-default px-3.5 py-[7px] text-caption-1-semibold text-text-primary no-underline hover:bg-background-primary-hover">
           Browse free picks &rarr;
         </Link>
       </div>
 
       <div className="pricing-grid">
         <Plan name="Single-Sport Pass" price={`$${PLANS.single.price}`} period={PLANS.single.period} note="One league of your choice">
-          <div role="radiogroup" aria-label="League" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <div role="radiogroup" aria-label="League" className="mb-4 flex flex-wrap gap-1.5">
             {PICKER.map(l => (
               <button key={l} role="radio" aria-checked={league === l} onClick={() => setLeague(l)}
-                style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px', cursor: 'pointer',
-                  color: league === l ? '#090a0f' : 'var(--silver)', background: league === l ? 'var(--signal)' : 'var(--surface-elevated)',
-                  border: `1px solid ${league === l ? 'var(--signal)' : '#1e2230'}`, transition: 'background 120ms ease, border-color 120ms ease' }}>
+                className={cx('button-press-motion cursor-pointer rounded-lg border px-3 py-[5px] text-caption-1-semibold',
+                  league === l
+                    ? 'border-[var(--signal)] bg-[var(--signal)] text-[var(--color-background-secondary-default)]'
+                    : 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}>
                 {LEAGUE_LABEL[l]}
               </button>
             ))}
@@ -142,26 +143,26 @@ export function PricingSection() {
         </Plan>
       </div>
 
-      <div style={{ ...SURFACE, marginTop: '20px' }}>
-        <div className="dell-heading" style={{ fontSize: '11px', color: 'var(--silver)', padding: '12px 16px', borderBottom: '1px solid #1e2230' }}>HOW THE DUAL-ENGINE TERMINAL WORKS</div>
+      <div className={cx(CARD, 'mt-5')}>
+        <div className="ui-heading border-b border-separator-border px-4 py-3 text-[11px] text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
         <div className="pricing-grid" style={{ gap: 0 }}>
           {ENGINES.map((e, i) => (
-            <div key={e.n} style={{ padding: '14px 16px', borderLeft: i === 0 ? 'none' : '1px solid #1e2230' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)', marginBottom: '5px' }}>{e.n}. {e.title}</div>
-              <div style={{ fontSize: '12.5px', color: 'var(--fog)', lineHeight: 1.5 }}>{e.body}</div>
+            <div key={e.n} className={cx('px-4 py-3.5', i > 0 && 'border-l border-separator-border')}>
+              <div className="mb-[5px] text-body-2-semibold text-text-primary">{e.n}. {e.title}</div>
+              <div className="text-body-2-regular text-text-secondary">{e.body}</div>
             </div>
           ))}
         </div>
       </div>
 
       {PRE_LAUNCH && (
-        <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
+        <p className="mt-3.5 text-caption-1-regular text-text-secondary">
           Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.
         </p>
       )}
-      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '8px 0 0', lineHeight: 1.55 }}>
+      <p className="mt-2 text-caption-1-regular text-text-secondary">
         Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
-        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} style={{ color: 'var(--link)' }}>{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} style={{ color: 'var(--link)' }}>Discord</a>.
+        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-[var(--link)]">{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} className="text-[var(--link)]">Discord</a>.
       </p>
     </section>
   )

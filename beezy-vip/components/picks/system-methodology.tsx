@@ -3,15 +3,15 @@ import { liveAccuracy, LIVE_ENGINE, SPORT_MODEL_SPECS, type ModelValidation, typ
 import type { PickSystem } from '@/lib/pick-systems'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
 
-const CARD = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '14px 16px', display: 'grid', gap: '12px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.55 } as const
+const CARD = { background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '14px 16px', display: 'grid', gap: '12px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.55 } as const
 const fmt = (x: number | null | undefined, d: number) => (x == null ? '--' : x.toFixed(d))
 const pair = (a: number | null, b: number | null, d: number) => (a == null ? '--' : `${a.toFixed(d)} vs ${fmt(b, d)}`)
 
 function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <div title={title}>
-      <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '13px', color: 'var(--chalk)', marginTop: '2px' }}>{value}</div>
+      <div className="ui-heading text-text-secondary">{label}</div>
+      <div className="mono text-[13px] text-text-primary mt-0.5">{value}</div>
     </div>
   )
 }
@@ -27,12 +27,12 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
     return (
       <div style={CARD}>
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: SPORT_PILLARS.mlb.accent, marginBottom: '6px' }}>HOW IT WORKS</div>
-          <div><strong style={{ color: 'var(--chalk)' }}>Model.</strong> {system.family}.</div>
+          <div className="ui-heading" style={{ fontSize: '10px', color: SPORT_PILLARS.mlb.accent, marginBottom: '6px' }}>HOW IT WORKS</div>
+          <div><strong className="text-text-primary">Model.</strong> {system.family}.</div>
         </div>
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px' }}>KEY FEATURES</div>
-          <ul style={{ margin: 0, paddingLeft: '18px' }}>{system.features.map(f => <li key={f}>{f}</li>)}</ul>
+          <div className="ui-heading text-text-secondary mb-1.5">KEY FEATURES</div>
+          <ul className="m-0 pl-4.5">{system.features.map(f => <li key={f}>{f}</li>)}</ul>
         </div>
         {system.learnSlug && <div><Link href={`/learn/${system.learnSlug}`} style={{ color: 'var(--link)' }}>Read the guide to this market &rarr;</Link></div>}
       </div>
@@ -46,34 +46,34 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
   return (
     <div style={CARD}>
       {system.gap && (
-        <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)', borderRadius: '8px', padding: '10px 12px' }}>
-          <strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}
+        <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-[8px] py-2.5 px-3">
+          <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
         </div>
       )}
       <div>
-        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>DISTRIBUTION</div>
-        <div><strong style={{ color: 'var(--chalk)' }}>Live board.</strong> {system.family}.{system.gap ? '' : ` ${LIVE_ENGINE.summary}`}</div>
-        {model && <div style={{ marginTop: '6px' }}><strong style={{ color: 'var(--chalk)' }}>Research model.</strong> {model.trained ? model.distribution : 'None trained for this stat.'}</div>}
+        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>DISTRIBUTION</div>
+        <div><strong className="text-text-primary">Live board.</strong> {system.family}.{system.gap ? '' : ` ${LIVE_ENGINE.summary}`}</div>
+        {model && <div className="mt-1.5"><strong className="text-text-primary">Research model.</strong> {model.trained ? model.distribution : 'None trained for this stat.'}</div>}
       </div>
       <div>
-        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>WHAT THE LIVE BOARD LOOKS AT</div>
-        <ul style={{ margin: 0, paddingLeft: '18px' }}>{system.features.map(f => <li key={f}>{f}</li>)}</ul>
+        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>WHAT THE LIVE BOARD LOOKS AT</div>
+        <ul className="m-0 pl-4.5">{system.features.map(f => <li key={f}>{f}</li>)}</ul>
       </div>
       {live && (
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>LIVE BOARD ACCURACY</div>
-          <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
+          <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>LIVE BOARD ACCURACY</div>
+          <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
             <Stat label="SAMPLE" value={live.sample} />
             <Stat label="PLAYER-GAMES" value={live.n.toLocaleString('en-US')} />
             <Stat label="MAE (ENGINE VS L5)" value={pair(live.mae, live.baselineMae, live.mae >= 10 ? 1 : 3)} title="Mean absolute error of the projection on past games, using only earlier games; L5 is the player's average over the last five. Lower is better." />
             <Stat label="MAE CHANGE" value={`${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}% (se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%)`} title="Paired over the same games, as a share of the L5 error; negative means the engine is more accurate." />
           </div>
-          <div style={{ marginTop: '8px', color: 'var(--fog)', fontSize: '11.5px' }}>{live.method}. Accuracy of the projection only; it says nothing about beating a price.</div>
+          <div className="mt-2 text-text-secondary text-[11.5px]">{live.method}. Accuracy of the projection only; it says nothing about beating a price.</div>
         </div>
       )}
       <div>
-        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>RESEARCH MODEL VALIDATION</div>
-        <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
+        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>RESEARCH MODEL VALIDATION</div>
+        <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
           <Stat label="SAMPLE" value={v?.sample ?? '--'} />
           <Stat label="MAE (MODEL VS BASELINE)" value={v ? pair(v.mae, v.baselineMae, 3) : '--'} title="Lower is better; the baseline is the best trailing-average forecaster in the study" />
           <Stat label="CRPS (MODEL VS BASELINE)" value={v ? pair(v.crps, v.baselineCrps, 3) : '--'} />
@@ -81,11 +81,11 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
           <Stat label="ECE" value={fmt(v?.ece, 4)} />
           <Stat label="BLEND c (t)" value={model?.blend ? `${model.blend.c >= 0 ? '+' : ''}${model.blend.c.toFixed(2)} (${model.blend.t >= 0 ? '+' : ''}${model.blend.t.toFixed(1)})` : '--'} title="c > 0 with a large t: the trained research model adds information beyond the market. It does not say the information is tradable." />
         </div>
-        <div style={{ marginTop: '8px' }}><strong style={{ color: 'var(--chalk)' }}>Result.</strong> {model?.verdict ?? 'No study covers this stat.'}</div>
+        <div className="mt-2"><strong className="text-text-primary">Result.</strong> {model?.verdict ?? 'No study covers this stat.'}</div>
       </div>
-      <div><strong style={{ color: 'var(--chalk)' }}>Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
-      <div><strong style={{ color: 'var(--chalk)' }}>Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show.</div>
-      <div style={{ color: 'var(--fog)', fontSize: '11.5px' }}>Source: {spec.sources} MAE and CRPS: lower is better. The live board does not run the research model.</div>
+      <div><strong className="text-text-primary">Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
+      <div><strong className="text-text-primary">Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show.</div>
+      <div className="text-text-secondary text-[11.5px]">Source: {spec.sources} MAE and CRPS: lower is better. The live board does not run the research model.</div>
     </div>
   )
 }
@@ -97,12 +97,12 @@ export function SportEvidenceNote({ sport }: { sport: ProjectionSport }) {
   return (
     <div style={{ ...CARD, marginTop: '16px' }}>
       <div>
-        <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>KEY FEATURES (RESEARCH MODEL)</div>
-        <ul style={{ margin: 0, paddingLeft: '18px' }}>{spec.features.map(f => <li key={f}>{f}</li>)}</ul>
+        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>KEY FEATURES (RESEARCH MODEL)</div>
+        <ul className="m-0 pl-4.5">{spec.features.map(f => <li key={f}>{f}</li>)}</ul>
       </div>
-      <div><strong style={{ color: 'var(--chalk)' }}>Against prices.</strong> {spec.marketVerdict}</div>
-      <div><strong style={{ color: 'var(--chalk)' }}>What the daily board runs.</strong> {LIVE_ENGINE.summary}</div>
-      <div style={{ color: 'var(--fog)', fontSize: '11.5px' }}>Source: {spec.sources} Baselines are the best trailing-average forecaster in each study.</div>
+      <div><strong className="text-text-primary">Against prices.</strong> {spec.marketVerdict}</div>
+      <div><strong className="text-text-primary">What the daily board runs.</strong> {LIVE_ENGINE.summary}</div>
+      <div className="text-text-secondary text-[11.5px]">Source: {spec.sources} Baselines are the best trailing-average forecaster in each study.</div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { apiGetStats, apiGetSparklineBySystem } from '@/lib/betting-api'
 import Link from 'next/link'
-import { SYSTEM_COLOR, SURFACE_CARD } from '@/lib/tokens'
+import { SYSTEM_COLOR } from '@/lib/tokens'
 import { SPORT_LIST } from '@/lib/sports'
 import { ModelsGridClient, type SystemCard } from './models-grid-client'
 import { SectionHeader } from './section-header'
@@ -38,30 +38,30 @@ export async function ModelsGrid() {
       })
       .map(s => {
         const i = stats.indexOf(s), r = sl[i]
-        return { system: s.system, ...META[s.system], tint: SYSTEM_COLOR[s.system] ?? 'var(--silver)', win_rate: s.win_rate, roi: s.roi, total_bets: s.total_bets, sparkline: r.status === 'fulfilled' ? r.value : null }
+        return { system: s.system, ...META[s.system], tint: SYSTEM_COLOR[s.system] ?? 'var(--color-neutral-300)', win_rate: s.win_rate, roi: s.roi, total_bets: s.total_bets, sparkline: r.status === 'fulfilled' ? r.value : null }
       })
   } catch { /* API unavailable: league cards still render */ }
 
   return (
-    <section style={{ paddingTop: '32px' }}>
+    <section className="pt-8">
       <SectionHeader title="Coverage by league & system" href="/picks" link="Explore all models &rarr;" />
-      <div className="models-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+      <div className="models-grid grid-cols-2 gap-2.5">
         {SPORT_LIST.map(p => (
-          <Link key={p.slug} href={`/picks/${p.slug}`} style={{ ...SURFACE_CARD, padding: '14px', textDecoration: 'none', borderLeft: `3px solid ${p.accent}`, display: 'block' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: p.accent }}>{p.shortName}</span>
-              <span className="mono" style={{ fontSize: '10px', color: '#7d8596' }}>{p.seasonBadge}</span>
+          <Link key={p.slug} href={`/picks/${p.slug}`} className="block rounded-xl border border-separator-border bg-background-primary-default p-3.5 no-underline shadow-card" style={{ borderLeft: `3px solid ${p.accent}` }}>
+            <div className="mb-1.5 flex justify-between gap-2">
+              <span className="text-body-2-bold" style={{ color: p.accent }}>{p.shortName}</span>
+              <span className="mono text-[10px] text-text-secondary">{p.seasonBadge}</span>
             </div>
-            <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#9ca3af' }}>
+            <div className="text-caption-1-regular text-text-secondary">
               {p.markets.filter(m => m.kind === 'prop' || m.kind === 'game').slice(0, 6).map(m => m.label.replace(/ O\/U| \(Yes\/No\)/, '')).join(' \u00b7 ')}
             </div>
           </Link>
         ))}
       </div>
       {systems.length > 0 && (
-        <details style={{ ...SURFACE_CARD, marginTop: '10px', padding: '10px 14px' }}>
-          <summary style={{ cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--silver)' }}>MLB system records ({systems.length})</summary>
-          <div style={{ marginTop: '12px' }}><ModelsGridClient systems={systems} /></div>
+        <details className="mt-2.5 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-2.5 shadow-card">
+          <summary className="cursor-pointer text-caption-1-semibold text-text-secondary">MLB system records ({systems.length})</summary>
+          <div className="mt-3"><ModelsGridClient systems={systems} /></div>
         </details>
       )}
     </section>

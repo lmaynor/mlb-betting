@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 
 export function BankrollInput({ defaultValue }: { defaultValue: number }) {
   const [value,  setValue]  = useState(String(defaultValue))
@@ -33,7 +33,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="flex gap-2">
         <input
           type="number"
           value={value}
@@ -43,7 +43,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           style={{
             flex: 1, background: 'var(--slate)', border: B,
             borderRadius: 'var(--radius)',
-            color: 'var(--ash)', fontSize: '13px',
+            color: 'var(--color-text-primary)', fontSize: '13px',
             padding: '9px 12px', outline: 'none',
           }}
         />
@@ -52,7 +52,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           disabled={saving}
           className="mono"
           style={{
-            padding: '9px 18px', background: 'var(--signal)', color: 'var(--carbon)',
+            padding: '9px 18px', background: 'var(--signal)', color: 'var(--color-background-full)',
             fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em',
             borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer',
             opacity: saving ? 0.5 : 1, border: '1px solid var(--signal-led)',
@@ -62,7 +62,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
         </button>
       </div>
       {error && (
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--loss)', marginTop: '6px' }}>
+        <p className="mono text-[11px] text-[var(--loss)] mt-1.5">
           {error}
         </p>
       )}

@@ -42,18 +42,18 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
 
   return (
     <main>
-      <header style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 24px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Prop Research</h1>
-          <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} {rows.length === 1 ? 'projection' : 'projections'}{filtered ? ' after filters' : ''}</span>
+      <header className="max-w-[1200px] mx-auto pt-5 px-6 pb-3.5">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h1 className="text-[20px] font-bold text-text-primary m-0 tracking-[-0.01em]">Prop Research</h1>
+          <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'projection' : 'projections'}{filtered ? ' after filters' : ''}</span>
         </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '14px' }}>
+        <div className="flex gap-3 flex-wrap items-center mt-3.5">
           <ResearchTabs active="projections" />
-          <nav aria-label="League" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
+          <nav aria-label="League" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
             {LIVE_SPORTS.map(p => (
               <Link key={p.slug} href={`/edge/projections?league=${p.slug}`} aria-current={p.slug === league ? 'page' : undefined}
                 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
-                  color: p.slug === league ? '#ffffff' : 'var(--silver)', background: p.slug === league ? '#1b1f2b' : 'transparent', border: `1px solid ${p.slug === league ? '#3a4156' : 'transparent'}` }}>
+                  color: p.slug === league ? '#ffffff' : 'var(--color-neutral-300)', background: p.slug === league ? 'var(--color-background-tertiary-default)' : 'transparent', border: `1px solid ${p.slug === league ? 'var(--color-border-button-hover)' : 'transparent'}` }}>
                 {p.shortName}
               </Link>
             ))}
@@ -65,12 +65,12 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={siteDateKey()} total={board.rows.length} />
       <FilterBar sport={league} kind={league === 'mlb' ? 'player' : undefined} />
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <div className="max-w-[1200px] mx-auto p-6">
         <SportProjectionsBoard sport={league} rows={rows} status={board.status} statusWarn={board.statusWarn}
           emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'} />
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         <EdgeEvLegend />
-        <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+        <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
           MODEL is the projected value for the stat and the probability it goes over the line. Rows with no line yet are projections only;
           nothing here is a recommendation, and {league === 'mlb' ? 'only the highest-edge MLB plays are tracked in the public results' : `${pillar.shortName} projections are unvalidated and not tracked in the public results`}.
         </p>

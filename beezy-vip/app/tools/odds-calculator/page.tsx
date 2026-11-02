@@ -4,9 +4,9 @@ import { useState } from 'react'
 import { ToolHeader } from '@/components/ui/tool-header'
 import { americanToImpliedProb, removeVig, probToAmerican, formatProb, formatOdds } from '@/lib/odds'
 
-const B = '1px solid var(--basalt)'
-const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '6px' }
+const B = '1px solid var(--color-separator-border)'
+const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }
 
 export default function OddsCalculatorPage() {
   const [odds1, setOdds1] = useState('-110')
@@ -21,21 +21,21 @@ export default function OddsCalculatorPage() {
   }
 
   return (
-    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px 20px' }}>
+    <div className="max-w-[680px] mx-auto py-6 px-5">
       <ToolHeader title="Odds & Vig Calculator" hint="Example values shown; edit them" current="/tools/odds-calculator" />
 
-      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-6 mb-4">
+        <div className="grid grid-cols-2 gap-4">
           <div><label htmlFor="odds1" style={labelStyle}>Side 1 (American)</label><input id="odds1" type="number" value={odds1} onChange={e => setOdds1(e.target.value)} placeholder="-110" style={inputStyle} /></div>
           <div><label htmlFor="odds2" style={labelStyle}>Side 2 (American)</label><input id="odds2" type="number" value={odds2} onChange={e => setOdds2(e.target.value)} placeholder="-110" style={inputStyle} /></div>
         </div>
       </div>
 
       {result && (
-        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden', marginBottom: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'var(--obsidian)', borderBottom: B }}>
-            <div /><div className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 1</div>
-            <div className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Side 2</div>
+        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden mb-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'var(--color-background-secondary-default)', borderBottom: B }}>
+            <div /><div className="mono py-[9px] px-3 text-[10px] tracking-[0.1em] uppercase text-text-secondary">Side 1</div>
+            <div className="mono py-[9px] px-3 text-[10px] tracking-[0.1em] uppercase text-text-secondary">Side 2</div>
           </div>
           {[
             { label: 'Input Odds',   v1: formatOdds(o1),                          v2: formatOdds(o2) },
@@ -44,22 +44,22 @@ export default function OddsCalculatorPage() {
             { label: 'Fair Odds',    v1: formatOdds(probToAmerican(result.fair1)),v2: formatOdds(probToAmerican(result.fair2)) },
           ].map((row, i) => (
             <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', borderBottom: i < 3 ? B : undefined }}>
-              <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--fog)' }}>{row.label}</div>
-              <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: 'var(--ash)' }}>{row.v1}</div>
-              <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: 'var(--ash)' }}>{row.v2}</div>
+              <div className="mono py-2.5 px-3 text-[11px] text-text-secondary">{row.label}</div>
+              <div className="mono py-2.5 px-3 text-[12px] font-semibold text-text-primary">{row.v1}</div>
+              <div className="mono py-2.5 px-3 text-[12px] font-semibold text-text-primary">{row.v2}</div>
             </div>
           ))}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'var(--graphite)' }}>
-            <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--fog)' }}>Vig</div>
+          <div className="grid grid-cols-3 bg-[var(--color-background-primary-default)]">
+            <div className="mono py-2.5 px-3 text-[11px] text-text-secondary">Vig</div>
             <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: 'var(--loss)', gridColumn: 'span 2' }}>{result.vig.toFixed(2)}%</div>
           </div>
         </div>
       )}
 
-      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '20px' }}>
-        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '10px' }}>How it works</div>
-        <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6, marginBottom: '8px' }}>Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
-        <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6 }}>If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" style={{ color: 'var(--link)', textDecoration: 'underline' }}>Kelly Calculator</a> to size your stake.</p>
+      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-5">
+        <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-2.5">How it works</div>
+        <p className="times text-[12px] text-text-secondary leading-[1.6] mb-2">Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
+        <p className="times text-[12px] text-text-secondary leading-[1.6]">If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" className="text-[var(--link)] underline">Kelly Calculator</a> to size your stake.</p>
       </div>
     </div>
   )

@@ -8,15 +8,15 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
   const marketPct = (marketProb * 100).toFixed(1)
   const edgePct   = ((modelProb - marketProb) * 100).toFixed(1)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '120px' }}>
-      <div style={{ position: 'relative', height: '6px', background: 'var(--basalt)', borderRadius: '3px', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: 'color-mix(in oklab, var(--signal) 28%, transparent)' }} />
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${modelProb * 100}%`, background: 'var(--signal)' }} />
+    <div className="flex min-w-[120px] flex-col gap-1">
+      <div className="relative h-1.5 overflow-hidden rounded-[3px] bg-chart-track">
+        <div className="absolute inset-y-0 left-0" style={{ width: `${modelProb * 100}%`, background: 'color-mix(in oklab, var(--signal) 28%, transparent)' }} />
+        <div className="absolute inset-y-0 left-0 bg-[var(--signal)]" style={{ width: `${modelProb * 100}%` }} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'monospace', fontSize: '10px' }}>
-        <span style={{ color: 'var(--signal)' }}>{modelPct}% model</span>
-        <span style={{ color: 'var(--fog)' }}>{marketPct}% implied</span>
-        <span style={{ color: 'var(--signal)', fontWeight: 700 }}>+{edgePct}%</span>
+      <div className="flex justify-between font-mono text-[10px]">
+        <span className="text-[var(--signal)]">{modelPct}% model</span>
+        <span className="text-text-secondary">{marketPct}% implied</span>
+        <span className="font-bold text-[var(--signal)]">+{edgePct}%</span>
       </div>
     </div>
   )
@@ -48,7 +48,7 @@ export default async function DashboardPicksPage() {
   return (
     <div>
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border border-[var(--border)] mb-8">
+      <div className="mb-8 grid grid-cols-2 overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card md:grid-cols-4">
         <StatCard label="Today's Picks" value={String(pending.length)} sub="Pending" />
         <StatCard label="Season ROI"    value={`${parseFloat(String(stats.roi)) > 0 ? '+' : ''}${parseFloat(String(stats.roi)).toFixed(1)}%`} accent />
         <StatCard label="Win Rate"      value={`${parseFloat(String(stats.win_rate)).toFixed(1)}%`} />
@@ -62,18 +62,18 @@ export default async function DashboardPicksPage() {
       </div>
 
       {pending.length === 0 ? (
-        <div className="border border-[var(--border)] p-12 text-center mb-8">
-          <p className="mono text-xs text-muted">No qualifying picks for today yet.</p>
-          <p className="mono text-xs text-muted mt-1">Model runs in Central Time after lineups post.</p>
+        <div className="mb-8 rounded-xl border border-separator-border bg-background-primary-default p-12 text-center shadow-card">
+          <p className="mono text-xs text-text-secondary">No qualifying picks for today yet.</p>
+          <p className="mono text-xs text-text-secondary mt-1">Model runs in Central Time after lineups post.</p>
         </div>
       ) : (
-        <div className="border border-[var(--border)] mb-8 overflow-x-auto">
+        <div className="mb-8 overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
           <div
-            className="grid min-w-[900px] border-b border-[var(--border)] bg-[var(--surface)]"
+            className="grid min-w-[900px] border-b border-border-table bg-background-secondary-default"
             style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.7fr 1.8fr 0.8fr 1fr' }}
           >
             {['Score', 'System', 'Game', 'Pick', 'Line', 'Win Probability', 'Half Kelly', 'Stake ($1k)'].map(h => (
-              <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-muted">{h}</div>
+              <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-text-secondary">{h}</div>
             ))}
           </div>
 
@@ -83,20 +83,20 @@ export default async function DashboardPicksPage() {
             return (
               <div
                 key={i}
-                className="grid min-w-[900px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
+                className="grid min-w-[900px] border-b border-border-table hover:bg-background-primary-hover transition-colors"
                 style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.7fr 1.8fr 0.8fr 1fr' }}
               >
                 <div className="px-3 py-4 flex items-center justify-center"><ScoreBadge bet={pick} /></div>
                 <div className="px-3 py-4"><SystemBadge system={pick.system} /></div>
-                <div className="px-3 py-4 mono text-xs text-muted">
+                <div className="px-3 py-4 mono text-xs text-text-secondary">
                   {pick.away_team && pick.home_team ? `${pick.away_team} @ ${pick.home_team}` : `Game ${pick.game_pk}`}
                 </div>
-                <div className="px-3 py-4 mono text-xs font-semibold text-text">{pick.bet_type}</div>
-                <div className="px-3 py-4 mono text-xs text-text">{formatOdds(pick.odds)}</div>
+                <div className="px-3 py-4 mono text-xs font-semibold text-text-primary">{pick.bet_type}</div>
+                <div className="px-3 py-4 mono text-xs text-text-primary">{formatOdds(pick.odds)}</div>
                 <div className="px-3 py-4">
                   <ProbBar modelProb={pick.model_prob} marketProb={pick.market_prob} />
                 </div>
-                <div className="px-3 py-4 mono text-sm font-bold text-text">
+                <div className="px-3 py-4 mono text-sm font-bold text-text-primary">
                   {kelly.halfKelly}%
                 </div>
                 <div className="px-3 py-4 flex items-center gap-2">
@@ -117,29 +117,29 @@ export default async function DashboardPicksPage() {
       {settled.length > 0 && (
         <>
           <h2 className="text-sm font-extrabold uppercase tracking-wide mb-4">Settled Today</h2>
-          <div className="border border-[var(--border)] overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
             <div
-              className="grid min-w-[700px] border-b border-[var(--border)] bg-[var(--surface)]"
+              className="grid min-w-[700px] border-b border-border-table bg-background-secondary-default"
               style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr' }}
             >
               {['System', 'Game', 'Pick', 'Line', 'Result', 'P&L'].map(h => (
-                <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-muted">{h}</div>
+                <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-text-secondary">{h}</div>
               ))}
             </div>
             {settled.map((pick, i) => (
               <div
                 key={i}
-                className="grid min-w-[700px] border-b border-[var(--border)] hover:bg-[var(--surface)] transition-colors"
+                className="grid min-w-[700px] border-b border-border-table hover:bg-background-primary-hover transition-colors"
                 style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr' }}
               >
                 <div className="px-3 py-3"><SystemBadge system={pick.system} /></div>
-                <div className="px-3 py-3 mono text-xs text-muted">
+                <div className="px-3 py-3 mono text-xs text-text-secondary">
                   {pick.away_team && pick.home_team ? `${pick.away_team} @ ${pick.home_team}` : `Game ${pick.game_pk}`}
                 </div>
-                <div className="px-3 py-3 mono text-xs text-text">{pick.bet_type}</div>
-                <div className="px-3 py-3 mono text-xs text-text">{formatOdds(pick.odds)}</div>
+                <div className="px-3 py-3 mono text-xs text-text-primary">{pick.bet_type}</div>
+                <div className="px-3 py-3 mono text-xs text-text-primary">{formatOdds(pick.odds)}</div>
                 <div className="px-3 py-3">
-                  <span className={`mono text-xs font-semibold ${pick.result === 'win' ? 'text-win' : pick.result === 'loss' ? 'text-loss' : 'text-muted'}`}>
+                  <span className={`mono text-xs font-semibold ${pick.result === 'win' ? 'text-win' : pick.result === 'loss' ? 'text-loss' : 'text-text-secondary'}`}>
                     {pick.result}
                   </span>
                 </div>

@@ -32,27 +32,27 @@ export async function SlateStrip() {
             : null
           const score = topPick ? beezyscore(topPick) : 0
           const tier  = topPick ? scoreTier(score) : 'watch'
-          const color = topPick ? TIER_COLOR[tier] : 'var(--iron)'
-          const sysColor = topPick ? (SYSTEM_COLOR[topPick.system] ?? 'var(--silver)') : 'var(--silver)'
+          const color = topPick ? TIER_COLOR[tier] : 'var(--color-border-button-default)'
+          const sysColor = topPick ? (SYSTEM_COLOR[topPick.system] ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)'
 
           return (
             <div key={key} style={{
               minWidth: '116px', padding: '10px 12px',
-              background: 'var(--graphite)',
-              border: `1px solid ${hasPick ? `color-mix(in oklab, ${color} 40%, var(--carbon))` : 'var(--basalt)'}`,
+              background: 'var(--color-background-primary-default)',
+              border: `1px solid ${hasPick ? `color-mix(in oklab, ${color} 40%, var(--color-background-full))` : 'var(--color-separator-border)'}`,
               borderRadius: 'var(--radius-lg)',
               display: 'flex', flexDirection: 'column', gap: '6px',
               flexShrink: 0,
             }}>
-              <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ash)', whiteSpace: 'nowrap' }}>
+              <div className="mono text-[11px] font-semibold text-text-primary whitespace-nowrap">
                 {away} @ {home}
               </div>
               {hasPick && topPick ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="dell-heading" style={{
+                <div className="flex items-center gap-1.5">
+                  <span className="ui-heading" style={{
                     fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
-                    padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--carbon))`, color: sysColor,
-                    border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--carbon))`, borderRadius: 'var(--radius-pill)',
+                    padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`, color: sysColor,
+                    border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--color-background-full))`, borderRadius: 'var(--radius-pill)',
                   }}>
                     {topPick.system}
                   </span>
@@ -61,12 +61,12 @@ export async function SlateStrip() {
                   </span>
                 </div>
               ) : (
-                <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>
+                <div className="mono text-[10px] text-text-secondary">
                   no pick
                 </div>
               )}
               {gamePicks.length > 1 && (
-                <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>
+                <div className="mono text-[10px] text-text-secondary">
                   +{gamePicks.length - 1} more
                 </div>
               )}

@@ -3,15 +3,15 @@
 import { LineChart, Line, ReferenceLine, ResponsiveContainer, Tooltip } from 'recharts'
 import type { SparklinePoint } from '@/lib/betting-api'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload as SparklinePoint
   const pos = d.cum_pnl >= 0
   return (
-    <div style={{ background: 'var(--graphite)', border: B, padding: '6px 10px' }}>
-      <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '2px' }}>{d.date}</div>
+    <div style={{ background: 'var(--color-background-primary-default)', border: B, padding: '6px 10px' }}>
+      <div className="mono text-[10px] text-text-secondary mb-0.5">{d.date}</div>
       <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
         {pos ? '+' : ''}{(d.cum_pnl / 10).toFixed(2)}u
       </div>
@@ -28,8 +28,8 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
 
   return (
     <div style={{ borderTop: B, padding: '12px 18px 14px', gridColumn: '1 / -1' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)' }}>
+      <div className="flex justify-between items-center mb-2">
+        <span className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary">
           30D cumulative &middot; paper &middot; {settled} settled
         </span>
         <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: lineColor }}>

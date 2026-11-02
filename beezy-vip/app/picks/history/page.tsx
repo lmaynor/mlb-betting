@@ -35,40 +35,40 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Picks history</h1>
-        <div role="group" aria-label="Range" style={{ display: 'flex', gap: '6px' }}>
+    <div className="max-w-[1200px] mx-auto p-6">
+      <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
+        <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
+        <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
               className="mono"
               style={{ fontSize: '11.5px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none',
-                color: r === days ? '#090a0f' : 'var(--silver)', background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
-                border: `1px solid ${r === days ? 'var(--signal)' : '#1e2230'}` }}>
+                color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)', background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
+                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}` }}>
               {r}D
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="mono" style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '9px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--silver)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-3.5 mb-3.5 text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
-        <span style={{ color: 'var(--chalk)' }}>{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
+        <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
         <span style={{ color: total.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{total.units >= 0 ? '+' : ''}{total.units.toFixed(1)}u flat</span>
-        <span style={{ color: roi == null ? 'var(--fog)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '--' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
-        {total.pending > 0 && <span style={{ color: 'var(--fog)' }}>{total.pending} pending</span>}
+        <span style={{ color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '--' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
+        {total.pending > 0 && <span className="text-text-secondary">{total.pending} pending</span>}
       </div>
 
       {history.length === 0 ? (
-        <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-9 px-5 text-center text-text-secondary text-[13px]">
           No settled cards in this range yet.
         </div>
       ) : (
         <HistoryTable days={history} />
       )}
 
-      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+      <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
         Each day shows that day&rsquo;s ten highest-scoring player picks from the tracked MLB card and +EV alerts, one row per prop at the best book, ranked the same way as
         today&rsquo;s <Link href="/picks" style={{ color: 'var(--link)' }}>Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
         are excluded. This is not the staked ledger: see <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link> for that.

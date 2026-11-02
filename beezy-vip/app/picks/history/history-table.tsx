@@ -17,15 +17,15 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
   const toggle = (d: string) => setOpen(prev => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n })
 
   return (
-    <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '13px' }}>
+    <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] overflow-x-auto">
+      <table className="w-full border-collapse min-w-[560px] text-[13px]">
         <thead>
           <tr>
-            <th className="dell-heading" style={TH}>Day</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>Picks</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>W-L</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>Units</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>ROI</th>
+            <th className="ui-heading" style={TH}>Day</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>Picks</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>W-L</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>Units</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>ROI</th>
           </tr>
         </thead>
         <tbody>
@@ -36,25 +36,25 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
             return (
               <Fragment key={d.date}>
                 <tr className="sys-row" onClick={() => toggle(d.date)} style={{ cursor: 'pointer' }}>
-                  <td style={{ ...TD, color: 'var(--chalk)', fontWeight: 600 }}>
+                  <td style={{ ...TD, color: 'var(--color-text-primary)', fontWeight: 600 }}>
                     <button aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} ${d.date}`} onClick={e => { e.stopPropagation(); toggle(d.date) }}
-                      style={{ all: 'unset', cursor: 'pointer', color: 'var(--fog)', width: '18px', display: 'inline-block' }}>{isOpen ? '-' : '+'}</button>
+                      style={{ all: 'unset', cursor: 'pointer', color: 'var(--color-text-secondary)', width: '18px', display: 'inline-block' }}>{isOpen ? '-' : '+'}</button>
                     {formatDateKey(d.date, { weekday: 'short', month: 'short', day: 'numeric' })}
                   </td>
-                  <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--silver)' }}>{d.picks.length}</td>
-                  <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--chalk)' }}>
-                    {r.graded === 0 ? <span style={{ color: 'var(--fog)' }}>{r.pending > 0 ? 'pending' : '--'}</span> : `${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ''}`}
+                  <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--color-neutral-300)' }}>{d.picks.length}</td>
+                  <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--color-text-primary)' }}>
+                    {r.graded === 0 ? <span className="text-text-secondary">{r.pending > 0 ? 'pending' : '--'}</span> : `${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ''}`}
                   </td>
-                  <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 700, color: r.graded === 0 ? 'var(--fog)' : r.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+                  <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 700, color: r.graded === 0 ? 'var(--color-text-secondary)' : r.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
                     {r.graded === 0 ? '--' : `${r.units >= 0 ? '+' : ''}${r.units.toFixed(2)}u`}
                   </td>
-                  <td className="mono" style={{ ...TD, textAlign: 'right', color: roi == null ? 'var(--fog)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+                  <td className="mono" style={{ ...TD, textAlign: 'right', color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
                     {roi == null ? '--' : `${roi >= 0 ? '+' : ''}${roi.toFixed(0)}%`}
                   </td>
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={5} style={{ padding: '10px 12px 14px', borderBottom: '1px solid #1e2230', background: '#090a0f' }}>
+                    <td colSpan={5} className="pt-2.5 px-3 pb-3.5 border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)]">
                       <TopPicksTable picks={d.picks} showResult />
                     </td>
                   </tr>

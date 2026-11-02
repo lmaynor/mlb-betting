@@ -1,9 +1,9 @@
 'use client'
 export default function ResultsError({ reset }: { error: Error; reset: () => void }) {
   return (
-    <div style={{ padding: '40px', textAlign: 'center', border: '1px solid var(--basalt)' }}>
-      <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '12px' }}>Failed to load results.</p>
-      <button onClick={reset} className="mono" style={{ fontSize: '11px', color: 'var(--link)', background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>Try again &rarr;</button>
+    <div className="p-10 text-center border border-[color:var(--color-separator-border)]">
+      <p className="mono text-[12px] text-text-secondary mb-3">Failed to load results.</p>
+      <button onClick={reset} className="mono text-[11px] text-[var(--link)] bg-transparent bg-none border-0 cursor-pointer tracking-[0.04em]">Try again &rarr;</button>
     </div>
   )
 }

@@ -5,9 +5,10 @@ import { useSearchParams } from 'next/navigation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { AnalyticsDeepDive, SystemStats } from '@/lib/types'
 import { apiGetAnalyticsDeepDive } from '@/lib/betting-api'
-import { bookDisplay, CARD_STYLE, SYSTEM_COLOR, systemLabel } from '@/lib/tokens'
+import { bookDisplay, SYSTEM_COLOR, systemLabel } from '@/lib/tokens'
 import { fmtMoney } from '@/lib/ev-math'
 import { SPORT_PILLARS } from '@/lib/sports'
+import { cx } from '@/utils/cx'
 
 type Tab = 'bankroll' | 'calibration' | 'books' | 'health'
 const TABS: { id: Tab; label: string }[] = [
@@ -22,7 +23,8 @@ const GRID = '#1e2230'
 const AXIS = '#7d8596'
 const SYSTEM_CHIPS = ['EV', 'ALL', 'NRFI', 'HR', 'K', 'OUTS', 'F5', 'GAME', 'BATTER_TB', 'BATTER_HITS', 'SB']
 
-const tipStyle = { background: '#171a24', border: `1px solid ${GRID}`, borderRadius: 8, fontSize: 12, color: '#f3f4f6' }
+const tipStyle = { background: 'var(--color-background-tertiary-default)', border: `1px solid ${GRID}`, borderRadius: 10, fontSize: 12, color: 'var(--color-text-primary)' }
+const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
   const [mounted, setMounted] = useState(false)
@@ -50,14 +52,14 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
   }, [bankroll, fraction, system])
 
   return (
-    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '28px 24px 64px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '16px' }}>
-      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>{TABS.find(t => t.id === tab)!.label}</h1>
-      {loading && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>updating...</span>}
+    <div className="mx-auto max-w-[1280px] px-6 pb-16 pt-7">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <h1 className="text-title-2-bold text-text-primary">{TABS.find(t => t.id === tab)!.label}</h1>
+        {loading && <span className="mono text-caption-2-medium text-text-secondary">updating...</span>}
       </div>
 
       {!data ? (
-        <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center', color: 'var(--fog)' }}>Analytics are unavailable right now.</div>
+        <div className={cx(CARD, 'px-5 py-9 text-center text-body-regular text-text-secondary')}>Analytics are unavailable right now.</div>
       ) : tab === 'bankroll' ? (
         <Bankroll data={data} bankroll={bankroll} setBankroll={setBankroll} fraction={fraction} setFraction={setFraction} mounted={mounted} />
       ) : tab === 'calibration' ? (
@@ -67,7 +69,7 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
       ) : (
         <Health stats={stats} />
       )}
-      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '8px 2px 0' }}>
+      <p className="mx-0.5 mt-2 text-caption-1-regular text-text-secondary">
         Computed from graded bets in the public ledger. All results are paper: flagged price at flag time, voids excluded from ROI, no slippage or limits.
       </p>
     </div>
@@ -76,9 +78,9 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
 
 function Panel({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section style={{ ...CARD_STYLE, padding: '18px 20px', marginBottom: '16px' }}>
-      <h2 className="dell-heading" style={{ fontSize: '11px', color: 'var(--silver)' }}>{title}</h2>
-      {sub && <p className="times" style={{ fontSize: '12.5px', color: 'var(--fog)', margin: '6px 0 14px', lineHeight: 1.55, maxWidth: '90ch' }}>{sub}</p>}
+    <section className={cx(CARD, 'mb-4 px-5 py-4.5')}>
+      <h2 className="ui-heading text-text-secondary">{title}</h2>
+      {sub && <p className="times mb-3.5 mt-1.5 max-w-[90ch] text-body-2-regular text-text-secondary">{sub}</p>}
       {children}
     </section>
   )
@@ -86,14 +88,19 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
 
 function SystemChips({ system, setSystem }: { system: string; setSystem: (s: string) => void }) {
   return (
-    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }} aria-label="System filter">
-      {SYSTEM_CHIPS.map(k => (
-        <button key={k} onClick={() => setSystem(k)} aria-pressed={system === k}
-          style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '11px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', cursor: 'pointer',
-            color: system === k ? '#090a0f' : (SYSTEM_COLOR[k] ?? 'var(--silver)'), background: system === k ? (SYSTEM_COLOR[k] ?? 'var(--signal)') : 'var(--surface-elevated)', border: `1px solid ${system === k ? (SYSTEM_COLOR[k] ?? 'var(--signal)') : GRID}` }}>
-          {k === 'ALL' ? 'ALL SYSTEMS' : systemLabel(k).toUpperCase()}
-        </button>
-      ))}
+    <div className="mb-3.5 flex flex-wrap gap-1.5" aria-label="System filter">
+      {SYSTEM_CHIPS.map(k => {
+        const on = system === k
+        const c = SYSTEM_COLOR[k]
+        return (
+          <button key={k} onClick={() => setSystem(k)} aria-pressed={on}
+            className={cx('button-press-motion cursor-pointer rounded-lg border px-2.5 py-1.5 text-caption-1-semibold',
+              !on && 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}
+            style={on ? { color: 'var(--color-background-secondary-default)', background: c ?? 'var(--signal)', borderColor: c ?? 'var(--signal)' } : c ? { color: c } : undefined}>
+            {k === 'ALL' ? 'ALL SYSTEMS' : systemLabel(k).toUpperCase()}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -116,17 +123,17 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted 
         title="BANKROLL GROWTH: +EV ALERTS, FLAT VS KELLY"
         sub={`Non-compounding rescale of real graded outcomes: each bet stakes clip(kelly x multiplier, 0, ${(h.kelly_cap * 100).toFixed(0)}%) of the starting bankroll and earns the bet's real profit/stake ratio. Flat and model lines start at $1,000.`}
       >
-        <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <div className="mb-4 flex flex-wrap gap-7">
           <Slider label="STARTING BANKROLL" value={bankroll} min={500} max={25000} step={500} onChange={setBankroll} fmt={v => fmtMoney(v)} />
           <Slider label="KELLY FRACTION" value={fraction} min={0.1} max={0.5} step={0.05} onChange={setFraction} fmt={v => `${v.toFixed(2)}x`} />
         </div>
-        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '8px' }}>
+        <div className="mb-2 flex flex-wrap gap-6">
           <Big label="KELLY ENDING BANKROLL" value={fmtMoney(h.kelly_ending_bankroll)} />
           <Big label="KELLY ROI (ON STAKED)" value={h.kelly_roi_pct == null ? '--' : `${h.kelly_roi_pct > 0 ? '+' : ''}${h.kelly_roi_pct.toFixed(2)}%`} />
           <Big label="FLAT $100 P&L" value={fmtMoney(h.flat_pnl_dollars, true)} />
           <Big label="FLAT ROI" value={h.flat_roi_pct == null ? '--' : `${h.flat_roi_pct > 0 ? '+' : ''}${h.flat_roi_pct.toFixed(2)}%`} />
         </div>
-        <div style={{ height: 320 }}>
+        <div className="h-80">
           {mounted && (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
               <AreaChart data={rows} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
@@ -145,7 +152,7 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted 
             </ResponsiveContainer>
           )}
         </div>
-        <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.6 }}>
+        <p className="times mt-2.5 text-caption-1-regular text-text-secondary">
           {h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts: the same prop flagged at several books
           counts several times, which inflates the sample. The model line uses each system&rsquo;s own paper stakes, so its scale differs from the $100 flat line.
         </p>
@@ -156,9 +163,9 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted 
 
 function Slider({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (n: number) => void; fmt: (n: number) => string }) {
   return (
-    <label style={{ display: 'grid', gap: '6px', minWidth: '240px' }}>
-      <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', display: 'flex', justifyContent: 'space-between' }}>
-        {label}<span className="mono" style={{ color: 'var(--chalk)' }}>{fmt(value)}</span>
+    <label className="grid min-w-60 gap-1.5">
+      <span className="ui-heading flex justify-between text-text-secondary">
+        {label}<span className="mono text-text-primary">{fmt(value)}</span>
       </span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ accentColor: '#57f287', padding: 0, background: 'transparent', border: 'none' }} />
     </label>
@@ -168,8 +175,8 @@ function Slider({ label, value, min, max, step, onChange, fmt }: { label: string
 function Big({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: 'var(--chalk)' }}>{value}</div>
+      <div className="ui-heading mb-1 text-text-secondary">{label}</div>
+      <div className="mono text-title-1-bold text-text-primary">{value}</div>
     </div>
   )
 }
@@ -183,7 +190,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
     <>
       <Panel title="ADVERSE SELECTION: REALIZED RESULTS BY CLAIMED EDGE" sub="Graded bets grouped by the edge the system claimed at bet time. If real edge exists, realized ROI should hold or rise with claimed edge. If it falls, the biggest apparent edges are model error (the winner's curse).">
         <SystemChips system={system} setSystem={setSystem} />
-        <div style={{ height: 260, marginBottom: '14px' }}>
+        <div className="mb-3.5 h-[260px]">
           {mounted && (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
               <BarChart data={chart} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
@@ -199,13 +206,13 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
             </ResponsiveContainer>
           )}
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '640px', fontSize: '13px' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-body-2-regular">
             <thead><tr>{['Edge bucket', 'Bets', 'Hit rate', 'Model prob', 'Market prob', 'ROI', 'Mean CLV'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
             <tbody>
               {rows.map(b => (
-                <tr key={b.bucket} style={{ borderBottom: '1px solid #151822' }}>
-                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span style={{ color: 'var(--warn)', marginLeft: '6px', fontSize: '10px' }}>low n</span>}</Td>
+                <tr key={b.bucket} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
+                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span className="text-[var(--warn)] ml-1.5 text-[10px]">low n</span>}</Td>
                   <Td mono>{b.hit_rate != null ? `${b.hit_rate.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_model_prob != null ? `${b.avg_model_prob.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_market_prob != null ? `${b.avg_market_prob.toFixed(1)}%` : '--'}</Td>
@@ -216,12 +223,12 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
             </tbody>
           </table>
         </div>
-        <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '10px' }}>
+        <p className="times mt-2.5 text-caption-1-regular text-text-secondary">
           Mean CLV is the average of each bet's price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
         </p>
       </Panel>
       <Panel title="HOW MODEL PROBABILITIES ARE CONTROLLED">
-        <p className="times" style={{ fontSize: '13.5px', color: 'var(--silver)', lineHeight: 1.65, maxWidth: '90ch' }}>
+        <p className="times max-w-[90ch] text-body-regular text-text-secondary">
           Model systems pass every probability through an isotonic calibrator fit on realized outcomes,
           then skip any bet whose post-calibration edge still exceeds an edge cap. Both exist because early diagnostics showed the largest claimed edges were mostly
           overconfidence, not value. Calibration is fit on past bets, so treat the chart above as the ongoing test of whether it works.
@@ -232,10 +239,10 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
 }
 
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="dell-heading" style={{ textAlign: 'left', padding: '9px 12px', fontSize: '10px', color: 'var(--fog)', borderBottom: `1px solid ${GRID}` }}>{children}</th>
+  return <th className="ui-heading border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left text-text-secondary">{children}</th>
 }
 function Td({ children, mono, strong, color }: { children: React.ReactNode; mono?: boolean; strong?: boolean; color?: string }) {
-  return <td className={mono ? 'mono' : undefined} style={{ padding: '9px 12px', color: color ?? (strong ? 'var(--chalk)' : 'var(--silver)'), fontWeight: strong ? 600 : 400 }}>{children}</td>
+  return <td className={cx('px-3 py-2.5', mono && 'mono', strong ? 'font-semibold text-text-primary' : 'text-text-secondary')} style={color ? { color } : undefined}>{children}</td>
 }
 
 // -- 3. Book leaderboard --------------------------------------------------------
@@ -245,16 +252,16 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
   return (
     <Panel title="SPORTSBOOK AND EXCHANGE LEADERBOARD" sub="Where flagged prices came from and how they graded. Bets = how often the book was caught off consensus. Small samples (n under 100) are noise.">
       <SystemChips system={system} setSystem={setSystem} />
-      {rows.length === 0 ? <div style={{ color: 'var(--fog)', padding: '20px 0' }}>No graded bets for this selection.</div> : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '680px', fontSize: '13px' }}>
+      {rows.length === 0 ? <div className="py-5 text-text-secondary">No graded bets for this selection.</div> : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] border-collapse text-body-2-regular">
             <thead><tr>{['Book', 'Bets', 'Hit rate', 'ROI', 'Units', 'Mean CLV', 'Avg edge'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
             <tbody>
               {rows.map(r => {
                 const b = bookDisplay(r.book)
                 return (
-                  <tr key={r.book} style={{ borderBottom: '1px solid #151822', opacity: r.n < 100 ? 0.6 : 1 }} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--fog)' }}>exchange</span>}</Td>
+                  <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
+                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-[10px] text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>
@@ -280,23 +287,23 @@ function Health({ stats }: { stats: SystemStats[] }) {
   const labelOf = (k: string) => (k === '1IOU' ? '1st Inn O/U' : systemLabel(k))
   return (
     <Panel title="SYSTEM HEALTH" sub="Bets are every graded prediction a system logged, including unstaked log-only ones. Reaching 200 means the sample is big enough to judge, not that the system is profitable.">
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '13px' }}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-body-2-regular">
           <thead><tr>{['System', 'Status', 'Bets', 'ROI'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
           <tbody>
             {rows.map(s => {
               const n = Number(s.total_bets)
               const roi = s.roi == null ? null : Number(s.roi)
               const isEv = s.system === 'EV'
-              const color = SYSTEM_COLOR[s.system] ?? 'var(--silver)'
+              const color = SYSTEM_COLOR[s.system] ?? 'var(--color-neutral-300)'
               const status = isEv ? 'Tracked, not gated'
                 : logOnly.has(s.system) ? 'Log-only'
                 : n < GATE ? `Paper, ${n}/${GATE} bets`
                 : roi != null && roi < 0 ? '200+ bets, negative ROI'
                 : '200+ bets, paper'
-              const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--fog)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--silver)'
+              const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--color-text-secondary)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--color-neutral-300)'
               return (
-                <tr key={s.system} style={{ borderBottom: '1px solid #151822' }}>
+                <tr key={s.system} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
                   <Td><span style={{ color, fontWeight: 700 }}>{labelOf(s.system)}</span></Td>
                   <Td><span style={{ color: statusColor }}>{status}</span></Td>
                   <Td mono>{n.toLocaleString()}</Td>
@@ -306,7 +313,7 @@ function Health({ stats }: { stats: SystemStats[] }) {
             })}
           </tbody>
         </table>
-        {rows.length === 0 && <div style={{ color: 'var(--fog)', padding: '12px 0' }}>System stats unavailable.</div>}
+        {rows.length === 0 && <div className="py-3 text-text-secondary">System stats unavailable.</div>}
       </div>
     </Panel>
   )
