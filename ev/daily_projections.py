@@ -73,6 +73,7 @@ from ev import rosters as _rosters
 from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
+from nba.props import hierarchical as _hier
 from nfl.props import env_adjust as _ea
 
 log = logging.getLogger("ev.daily_projections")
@@ -133,6 +134,21 @@ MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of
 
 CONFLUENCE_MIN_BOOKS = 3
 BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
+# Per-sport, per-stat override of BLEND_C (stat missing here -> the sport's "default" entry, else BLEND_C). DISPLAY-ONLY like
+# the blend itself. PROVENANCE, stated precisely: the 2026-10-15 BettingPros study (docs/analysis/
+# bettingpros_model_vs_market_2026-10-15.md; mlb_core/risk/calibration.py BLEND_C) MEASURED c for the TRAINED research
+# models on five NBA markets and NHL SOG: points +0.07, rebounds +0.19, assists +0.18, threes +0.28, pra +0.05, sog +0.30.
+# Nothing was measured for THIS empirical engine, and nothing at all for pr / pa / ra / steals / blocks or any NFL stat
+# (the repo's calibration table gives those c = 0). The numbers below are the specification's priors: close to the measured
+# ones where one exists (pra 0.12 and points 0.10 are ABOVE the measured 0.05 / 0.07; sog 0.25 is below 0.30) and
+# unmeasured everywhere else. They shape a displayed probability only: not the edge, confluence flag or Beezy Score.
+BLEND_C_BY_SPORT_STAT = {
+    "nba": {"threes": 0.25, "rebounds": 0.18, "assists": 0.18, "ra": 0.18, "pr": 0.14, "pa": 0.14, "pra": 0.12,
+            "points": 0.10, "steals": 0.12, "blocks": 0.12},
+    "nhl": {"sog": 0.25, "default": 0.10},
+    "nfl": {"rec_yds": 0.15, "anytime_td": 0.12, "default": 0.10},
+}
+NBA_MODEL = "hier_v1"                                # NBA rows: role redistribution + minutes + attempt-first threes + coherent combos
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
 MAX_AGE_MIN = 240.0                                  # banked lines older than this are not live: they are flagged stale
 # The odds bankers run twice a day (17:30 / 22:30 UTC), so between the evening snapshot and the next afternoon one every
@@ -297,6 +313,10 @@ class GameLogs:
         self.opp_shrink_k = opp_shrink_k          # None = the per-stat validated value (stat_params)
         self._ctx: dict = {}
         self._env: dict | None = None
+        self._nba_teams: dict | None = None       # team -> {player_norm: rows}, built lazily (nba_team_rows)
+        self._nba_roles: dict = {}                # (team, as_of) -> {player_norm: {stat: multiplier}}
+        self._spreads: dict = {}                  # NBA game_key -> |consensus spread| (set_nba_spreads)
+        self.replay = False                       # True: replaying a PAST board -> NBA history is cut before the tip's UTC day
         self._lock = threading.Lock()
 
     @classmethod
@@ -359,6 +379,57 @@ class GameLogs:
                 except Exception as e:
                     log.info("nba injuries fetch failed: %s", e)
             return self._nba_abs
+
+    def set_nba_spreads(self, spreads: dict | None) -> None:
+        """{game_key: |consensus point spread|} for the minutes model's blowout term. Unset = no spread = no blowout trim."""
+        with self._lock:
+            self._spreads = dict(spreads or {})
+
+    def nba_spread(self, game_key: str | None) -> float | None:
+        v = self._spreads.get(game_key)
+        return None if v is None else float(v)
+
+    def nba_team_rows(self, team: str) -> dict:
+        """{player_norm: chronological rows} of the players whose LATEST game was for `team` and within 45 days of the
+        newest game in the master (a long-term absentee is not vacating anything tonight)."""
+        if self.sport != "nba":
+            return {}
+        with self._lock:
+            if self._nba_teams is None:
+                table = self.idx.get("all") or {}
+                newest = max((rows[-1].get("_sort") or "" for rows in table.values() if rows), default="")
+                try:
+                    cutoff = (datetime.fromisoformat(str(newest)[:10]) - timedelta(days=45)).date().isoformat()
+                except ValueError:
+                    cutoff = ""
+                teams: dict = {}
+                for name, rows in table.items():
+                    if str(name).startswith("id:") or not rows:
+                        continue
+                    if str(rows[-1].get("_sort") or "")[:10] < cutoff:
+                        continue
+                    t = canon_team("nba", rows[-1].get("team_abbr"))
+                    if t:
+                        teams.setdefault(t, {})[name] = rows
+                self._nba_teams = teams
+            return self._nba_teams.get(team, {})
+
+    def nba_role_boosts(self, team: str | None, as_of: str | None) -> dict:
+        """{player_norm: {stat: multiplier}} for the active rotation of `team` given tonight's injury-report absences
+        (nba.props.hierarchical.compute_vacated_shares). {} when nobody on the team is listed or the team is unknown."""
+        if self.sport != "nba" or not team:
+            return {}
+        absences = self.nba_absences().get(team, {})
+        if not absences:
+            return {}
+        key = (team, as_of, tuple(sorted(absences.items())))
+        with self._lock:
+            hit = self._nba_roles.get(key)
+        if hit is None:
+            hit = _hier.compute_vacated_shares(self.nba_team_rows(team), absences, as_of)["boost"]
+            with self._lock:
+                self._nba_roles[key] = hit
+        return hit
 
     def latest_date(self) -> str | None:
         """Newest game date in the master (YYYY-MM-DD; NFL: 'season Wweek')."""
@@ -456,9 +527,11 @@ def project_mu(hist: list, halflife: float, opp_factor: float = 1.0, ewm_weight:
     return {"mu": max(mu * opp_factor, 0.0), "n_games": n, "usage_proj": usage_proj, "opp_factor": opp_factor}
 
 
-def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None) -> float | None:
+def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None,
+           sd: float | None = None, alpha: float | None = None) -> float | None:
     """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything). `sd_mu` is the mean
-    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread."""
+    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread.
+    `sd` / `alpha` (NBA hierarchical path) replace the league-wide Normal sd / NegBin dispersion outright."""
     if mu is None or not math.isfinite(mu) or line is None:
         return None
     if family == "anytime":
@@ -466,23 +539,36 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
     if mu <= 0:
         return 0.0 if line >= 0 else 1.0
     if family == "negbin":
-        n = 1.0 / ctx.alpha
+        n = 1.0 / (ctx.alpha if alpha is None else alpha)
         return float(1.0 - nbinom.cdf(math.floor(line), n, n / (n + mu)))
+    if sd is not None:
+        return float(1.0 - norm.cdf((line - mu) / max(sd, 1e-6)))
     ref = mu if sd_mu is None else sd_mu
     sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(1.0 - norm.cdf((line - mu) / sd))
 
 
-def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float = BLEND_C) -> float | None:
+def blend_c(sport: str | None, stat: str | None) -> float:
+    """The blend weight for a sport/stat: BLEND_C_BY_SPORT_STAT, else that sport's "default", else BLEND_C."""
+    table = BLEND_C_BY_SPORT_STAT.get(sport or "", {})
+    return float(table.get(stat, table.get("default", BLEND_C)))
+
+
+def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float | None = None,
+                 sport: str | None = None, stat: str | None = None) -> float | None:
     """Market-anchored posterior: logit(p) = logit(market) + c * (logit(model) - logit(market)).
 
     This is the form the repo's own model-vs-market studies test (blend coefficient `c`; docs/analysis/
     bettingpros_model_vs_market_2026-10-15.md): c = 0 trusts the market entirely, c = 1 trusts the model entirely. Those
     studies measured c = +0.02 .. +0.30 for the TRAINED research models; nothing has been measured for this empirical
     engine, so BLEND_C is a deliberately small, UNVALIDATED shrinkage prior. It is display-only: it feeds neither the
-    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability."""
+    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability.
+
+    `c` explicit wins; else the per-stat weight for (sport, stat) (blend_c); else BLEND_C."""
     if p_model_over is None or p_mkt_over is None:
         return None
+    if c is None:
+        c = blend_c(sport, stat)
     lo, hi = 0.01, 0.99
     pm = min(max(float(p_model_over), lo), hi)
     pk = min(max(float(p_mkt_over), lo), hi)
@@ -491,7 +577,7 @@ def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float 
 
 
 def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
-               sd_mu: float | None = None):
+               sd_mu: float | None = None, sd: float | None = None, alpha: float | None = None):
     """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
     one-sided anytime market. Yards are floored at 0 (the board shows a rate-style range, not a loss). These describe
     the MODEL'S spread (league-wide within-player variance), not an interval with validated coverage."""
@@ -500,11 +586,12 @@ def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: f
     if mu <= 0:
         return 0.0, 0.0
     if family == "negbin":
-        n = 1.0 / ctx.alpha
+        n = 1.0 / (ctx.alpha if alpha is None else alpha)
         pr = n / (n + mu)
         return float(nbinom.ppf(lo, n, pr)), float(nbinom.ppf(hi, n, pr))
-    ref = mu if sd_mu is None else sd_mu
-    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
+    if sd is None:
+        ref = mu if sd_mu is None else sd_mu
+        sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
 
 
@@ -675,25 +762,102 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, ros
     return out, st
 
 
+def _nba_days(logs: GameLogs, start) -> tuple:
+    """-> (day, as_of) in the master's date system (the UTC date of the tip; the master labels games that way). `day` dates
+    tonight for the rest calculation; `as_of` is the history cutoff and is None for live serving (the master holds only
+    finished games, and an ET cutoff would drop last night's late game, whose UTC date is tonight's ET date)."""
+    if start is None:
+        return None, None
+    day = start.astimezone(timezone.utc).date().isoformat()
+    return day, (day if logs.replay else None)
+
+
+def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
+    """One NBA stat's calibrated marginal -> {"mu", "family", "sd", "alpha", "proj"} or None (thin history).
+
+    mu = engine EWM (threes: EWM(3PA) x shrunk 3P%) x opponent factor x the stat's role-redistribution multiplier x the
+    minutes factor (blowout / back-to-back trim). The spread is the league-wide one (Normal: cv, floored; NegBin: alpha),
+    widened by the shot-diet scale (points) and by the minutes distribution's EXTRA relative variance. Uses only rows
+    dated before the replay cutoff (none when serving live)."""
+    day, as_of = _nba_days(logs, start)
+    sdef = cf.NBA_STATS[stat]
+    ctx = logs.context(stat)
+    family = PROJECT_STATS["nba"][stat]
+    prior = _hier.prior_rows(rows, as_of)
+    hl, ewm_w, _ = stat_params("nba", stat)
+    opp_f = ctx.opp_factor.get(opp, 1.0) if opp else 1.0
+    proj = project_mu(_hist(prior, sdef), hl, opp_f, ewm_w)
+    if proj is None:
+        return None
+    mu = proj["mu"]
+    if stat == "threes":
+        t = _hier.project_nba_threes(prior)                           # None when the master carries no attempts
+        if t is not None:
+            mu = max(t["mu_3pm"] * opp_f, 0.0)
+    mu *= logs.nba_role_boosts(team, as_of).get(pn, {}).get(stat, 1.0)
+    extra = 0.0
+    mu_min = _hier.ewm_minutes(prior)
+    if mu_min:
+        md = _hier.project_minutes_distribution(mu_min, spread=logs.nba_spread(gk), rest=_hier.rest_days(prior, day),
+                                                pf36=_hier.pf_per36(prior))
+        mu *= md["factor"]
+        extra = md["extra_rel_var"]
+    alpha = sd = None
+    if family == "negbin":
+        alpha = ctx.alpha + extra                                     # var = mu + alpha mu^2: extra relative variance adds to alpha
+        sd = math.sqrt(max(mu + alpha * mu * mu, 0.0))
+    else:
+        sd = max(ctx.cv * mu, MIN_SD_FRAC * mu, 1e-6)
+        if stat == "points":
+            sd *= _hier.shot_diet_sd_scale(prior)
+        sd = math.sqrt(sd * sd + extra * mu * mu)
+    return {"mu": mu, "family": family, "sd": sd, "alpha": alpha, "proj": proj}
+
+
+def _nba_projection(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
+    """-> {"mu", "family", "sd", "alpha", "proj"} for any NBA stat. pra / pr / pa / ra are NEVER projected on their own:
+    they are built from the points / rebounds / assists marginals (each rounded to the 3 decimals the board shows, so the
+    published means add up exactly) and the player's shrunken within-player correlation matrix:
+    mu_C = sum mu_k; var_C = sum sd_k^2 + 2 sum_{j<k} R_jk sd_j sd_k, distributed Normal."""
+    members = _hier.COMBOS.get(stat)
+    if members is None:
+        return _nba_component(stat, pn, rows, logs, team, opp, gk, start)
+    comps = {}
+    for k in members:
+        c = _nba_component(k, pn, rows, logs, team, opp, gk, start)
+        if c is None:
+            return None
+        c["mu"] = round(c["mu"], 3)
+        comps[k] = c
+    corr = _hier.within_player_corr(rows, _nba_days(logs, start)[1])
+    mu, sd = _hier.combo_moments({k: (c["mu"], c["sd"]) for k, c in comps.items()}, corr, members)
+    wsum = sum(c["mu"] for c in comps.values()) or 1.0
+    first = comps[members[0]]["proj"]
+    proj = {"mu": mu, "n_games": min(c["proj"]["n_games"] for c in comps.values()), "usage_proj": first["usage_proj"],
+            "opp_factor": sum(c["mu"] * c["proj"]["opp_factor"] for c in comps.values()) / wsum}
+    return {"mu": mu, "family": "normal", "sd": sd, "alpha": None, "proj": proj}
+
+
 def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team, opp, gk, start, mins,
              has_line: bool = True) -> dict | None:
     family = PROJECT_STATS[sport][stat]
     ctx = logs.context(stat)
-    hl, ewm_w, _ = stat_params(sport, stat)
-    proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
-    if proj is None:
-        return None
-    mu_raw = proj["mu"]
-
-    # 1. NBA injury scratch & teammate usage redistribution
-    if sport == "nba" and team is not None:
-        team_abs = logs.nba_absences().get(team, {})
-        if team_abs.get(pn, 0.0) >= 0.8:
+    nb = None
+    if sport == "nba":
+        # 1. NBA: injury scratch, then the hierarchical projection (role-weighted teammate redistribution, minutes
+        #    distribution, attempt-first threes, covariance-coherent combos -- nba.props.hierarchical)
+        if team is not None and logs.nba_absences().get(team, {}).get(pn, 0.0) >= 0.8:
             return None
-        teammate_abs_wt = sum(w for p, w in team_abs.items() if p != pn)
-        if teammate_abs_wt > 0:
-            nba_boost = min(1.20, 1.0 + 0.04 * min(teammate_abs_wt, 4.0))
-            mu_raw = mu_raw * nba_boost
+        nb = _nba_projection(stat, pn, rows, logs, team, opp, gk, start)
+        if nb is None:
+            return None
+        proj, mu_raw = nb["proj"], nb["mu"]
+    else:
+        hl, ewm_w, _ = stat_params(sport, stat)
+        proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
+        if proj is None:
+            return None
+        mu_raw = proj["mu"]
 
     # 2. NHL xG shot quality & finishing regression
     if sport == "nhl" and stat in ("goals", "points"):
@@ -727,8 +891,12 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         mult = _ea.multiplier(coef)
 
     mu = mu_raw * mult
-    p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
-    p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
+    if nb is not None:
+        p_model_over = p_over(nb["family"], mu, line, ctx, sd=nb["sd"], alpha=nb["alpha"]) if line is not None else None
+        p_floor, p_ceil = proj_range(nb["family"], mu, ctx, sd=nb["sd"], alpha=nb["alpha"])
+    else:
+        p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
+        p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -747,7 +915,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
-        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over)),
+        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over, sport=sport, stat=stat)),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
@@ -760,6 +928,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "model_edge": _f(ef["model_edge"]), "market_ev": _f(ef["market_ev"]), "confluence": ef["confluence"],
         "edge_capped": ef["edge_capped"], "beezy_score": score, "score_basis": basis,
         "validated": False, "engine": ENGINE,
+        **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
 
 
@@ -1166,6 +1335,28 @@ def _run_game_board(sport: str, now: datetime) -> bool:
         return False
 
 
+def _load_nba_spreads(now: datetime) -> dict:
+    """{game_key: |consensus home spread|} from the banked NBA game-line snapshot (no extra credits); {} on any failure or a
+    stale snapshot -- the minutes model then simply has no blowout term. (Tests neutralise this hook in tests/conftest.py.)"""
+    out: dict = {}
+    try:
+        from nba.game import odds_feed
+        from nba.game.run_daily import extract_game_market_odds
+        events, _ = odds_feed.read_banked_game_lines("basketball_nba", now)
+        for ev in events or []:
+            try:
+                start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            away, home = canon_team("nba", ev.get("away_team")), canon_team("nba", ev.get("home_team"))
+            line = (extract_game_market_odds(ev).get("spreads") or {}).get("line")
+            if away and home and line is not None and math.isfinite(float(line)):
+                out[game_key_of("nba", start, away, home)] = abs(float(line))
+    except Exception as exc:                                                           # noqa: BLE001
+        log.info("nba spreads unavailable: %s", exc)
+    return out
+
+
 def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = None, events=None, meta=None,
               games=None, write: bool = True, roster=_AUTO) -> dict:
     """Compute one sport's board. `logs` / `events` / `games` / `roster` are injectable (tests, local runs; roster=None
@@ -1182,6 +1373,8 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     if logs is None:
         base["summary"] = {"reason": f"{sport} game-log master unavailable"}
         return _finish(base, sport, write, now)
+    if sport == "nba" and write:
+        logs.set_nba_spreads(_load_nba_spreads(now))
     base["gamelog_latest"] = logs.latest_date()
     gl = base["gamelog_latest"]
     if sport != "nfl" and gl:
