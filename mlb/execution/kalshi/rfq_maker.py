@@ -41,10 +41,13 @@ RFQ_KILL_KEY = KILL_KEY + ":kalshi_rfq"          # 'kill_reason:kalshi_rfq'
 
 @dataclass(frozen=True)
 class RFQConfig:
-    max_liability_per_quote_dollars: float = 50.0     # contracts * bid, the collateral a fill locks
-    max_exposure_per_game_dollars: float = 150.0
-    max_exposure_per_player_dollars: float = 75.0     # across every open quote AND filled combo the player is in
-    max_open_quotes: int = 25                         # Kalshi's own cap is 100
+    # SCAFFOLDING values (2026-11-01, owner decision): loosened so the demo exchange exercises the whole pipeline. Quoting is
+    # demo-only (production is refused in code), so these cap play money. The real gates are to be set later, before any
+    # production quoting exists; the old values were 50 / 150 / 75 / 25.
+    max_liability_per_quote_dollars: float = 1000.0   # contracts * bid, the collateral a fill locks
+    max_exposure_per_game_dollars: float = 5000.0
+    max_exposure_per_player_dollars: float = 2500.0   # across every open quote AND filled combo the player is in
+    max_open_quotes: int = 100                        # Kalshi's own cap is 100
     last_look_max_adverse_move: float = 0.015
     game_cooldown_sec: float = 120.0
     confirm_budget_sec: float = 2.0                   # leave >= 1 s of the 3 s HVM window for the PUT itself
