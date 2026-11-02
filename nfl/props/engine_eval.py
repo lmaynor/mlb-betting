@@ -583,8 +583,46 @@ def _as_of_env(env_tbl: pd.DataFrame) -> dict:
     return out
 
 
+MARKET_STAT = {"pass_att": "pass_attempts", "pass_cmp": "pass_completions", "pass_int": "interceptions", "pass_yds": "pass_yds",
+               "pass_tds": "pass_tds", "rec_yds": "rec_yds", "receptions": "receptions", "rush_att": "rush_attempts",
+               "rush_yds": "rush_yds"}                       # BettingPros loader label -> this module's stat
+
+
+def _over_under(dist, line: float) -> tuple:
+    """(P(over), P(under)) at `line` for a baseline / hierarchical distribution; an integer line can push."""
+    over = float(dist.sf(line))
+    if float(line) == math.floor(line):
+        under = float(np.asarray(dist.cdf(line - 1.0)).reshape(-1)[0])
+    else:
+        under = 1.0 - over
+    return over, under
+
+
+def build_market_table(consensus: pd.DataFrame, resolver, min_books: int = 3) -> tuple:
+    """Real-line market rows -> ({(gsis_id, game_date, stat): {line, p_market, n_books}}, coverage counts).
+
+    Same identity and screening rules as nfl.props.history_join (fail-closed resolver, >= min_books two-sided reference books,
+    no postgame quotes, duplicates dropped and counted)."""
+    from mlb_core.odds import model_vs_market as MVM
+    from nfl.props import history_join as HJ
+    cons, n_in, dropped = MVM.screen_consensus(consensus, MARKET_STAT, min_books)
+    dropped = dict(dropped, unresolved=0, ambiguous=0, duplicate=0)
+    out: dict = {}
+    if len(cons):
+        ids, bad = HJ._resolve_rows(cons, resolver)
+        dropped["unresolved"], dropped["ambiguous"] = bad["unresolved"], bad["ambiguous"]
+        cons = cons.assign(gsis_id=ids)
+        cons = cons[cons["gsis_id"].notna()]
+        dup = cons.duplicated(["gsis_id", "game_date", "model_stat"], keep=False)
+        dropped["duplicate"] = int(dup.sum())
+        for r in cons[~dup].to_dict("records"):
+            out[(r["gsis_id"], str(r["game_date"])[:10], r["model_stat"])] = {
+                "line": float(r["line"]), "p_market": float(r["p_over_cons"]), "n_books": int(r["n_books"])}
+    return out, {"consensus_rows": n_in, "matched_identity": len(out), **dropped}
+
+
 def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: pd.DataFrame,
-                        stats: Iterable[str] = HIER_STATS, live=None) -> pd.DataFrame:
+                        stats: Iterable[str] = HIER_STATS, live=None, market: Optional[dict] = None) -> pd.DataFrame:
     """One row per (target player-game, stat): the SHIPPED engine's and the HIERARCHICAL engine's as-of price of the same
     outcome, scored on identical rows. History for week w is games strictly before w (the production two-season window);
     the schedule's closing spread / total are the game environment both engines may use (they are pre-game numbers).
@@ -596,6 +634,7 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
     from nfl.models import hierarchical_live as HL
     env_map = _as_of_env(env_tbl)
     stats = list(stats)
+    gd_map = dict(zip(env_tbl["game_id"], env_tbl["gameday"].astype(str).str[:10])) if market is not None else {}
     out = []
     for season in sorted(set(test_seasons)):
         weeks = sorted(df[(df["season"] == season) & (df["season_type"] == "REG")]["week"].unique())
@@ -617,7 +656,12 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
                 opp = DP.canon_team("nfl", r["_opp"]) if r["_opp"] is not None else None
                 env = env_map.get((int(season), int(week), team))
                 for stat in stats:
-                    if not _eligible(stat, rows):
+                    mk = None
+                    if market is not None:           # REAL-LINE mode: score at the book consensus line, only where one exists
+                        mk = market.get((r.get("player_id"), gd_map.get(r.get("game_id")), stat))
+                        if mk is None:
+                            continue
+                    elif not _eligible(stat, rows):
                         continue
                     y = cf._sum_cols(r, cf.NFL_STATS[stat][0])
                     h = DP._hist(rows, cf.NFL_STATS[stat])
@@ -644,7 +688,7 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
                         continue
                     vals = np.array([g[0] for g in h], dtype=float)
                     l5 = float(vals[-5:].mean())
-                    line = float(proxy_line(np.array([l5]), stat)[0])
+                    line = float(proxy_line(np.array([l5]), stat)[0]) if mk is None else mk["line"]
                     # Both engines are scored on the SAME footing: the baseline's log score floors mu at MU_FLOOR (see _logscore), so
                     # the hierarchical side gets the equivalent floor (a player with ~0 projected TDs who scores must not cost
                     # -20 nats on one side only), and count / yard masses share one floor.
@@ -660,6 +704,13 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
                            "ls_base": ls_base, "ls_hier": ls_hier,
                            "p_base": base.sf(line), "p_hier": hr.p_over(line),
                            "crps_base": _crps(base, float(y), stat, family), "crps_hier": _crps(hr.dist, float(y), stat, family)}
+                    if mk is not None:
+                        ob, ub = _over_under(base, line)
+                        oh, uh = _over_under(hr.dist, line)
+                        if float(y) == line:         # push: no outcome on either side (removed from every real-line score)
+                            continue
+                        rec.update({"p_market": mk["p_market"], "n_books": mk["n_books"], "game_id": r.get("game_id"),
+                                    "over": float(y > line), "p_base": ob / max(ob + ub, 1e-9), "p_hier": oh / max(oh + uh, 1e-9)})
                     if family != "anytime":
                         for name, p in ALT_P.items():
                             lq = base.ppf(1.0 - p)                     # a rung the baseline prices at ~p
@@ -672,7 +723,10 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
     return pd.DataFrame(out)
 
 
-def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict:
+MARKET_MIN_ROWS = 300      # real-line rows a stat needs before its Brier z may replace the proxy-line Brier z
+
+
+def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int], market_z: Optional[dict] = None) -> dict:
     """Paired hierarchical-minus-baseline differences per stat on the held-out seasons (+ per-season consistency).
 
     d_logscore > 0, d_brier < 0, d_crps < 0 favour the hierarchical engine. `tails[k]` = mean predicted P(over) vs the realised
@@ -698,6 +752,10 @@ def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict
         z = float(dls.mean() / se(dls)) if se(dls) > 0 else float("nan")
         zb = float(-dbr.mean() / se(dbr)) if se(dbr) > 0 else float("nan")
         zb = -float("inf") if zb != zb else zb
+        brier_source = "proxy_line"
+        mk = (market_z or {}).get(stat)
+        if mk is not None and mk.get("n", 0) >= MARKET_MIN_ROWS and mk.get("z_brier") == mk.get("z_brier"):
+            zb, brier_source = float(mk["z_brier"]), "real_line"       # the Brier at the BOOK's line is the honest secondary guard
         n_better = sum(1 for v in per_season.values() if v > 0)
         need = 4 if len(per_season) >= 5 else len(per_season)
         verdict = "ADOPT" if (z >= ADOPT_Z_HIER and zb >= ADOPT_Z_BRIER and n_better >= need) else (
@@ -714,7 +772,8 @@ def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict
                      "d_brier": float(dbr.mean()), "d_brier_se": se(dbr), "d_crps": float(dcr.mean()),
                      "d_crps_se": se(dcr), "mae_base": float(np.abs(d["y"] - d["mu_base"]).mean()),
                      "mae_hier": float(np.abs(d["y"] - d["mu_hier"]).mean()), "per_season_d_logscore": per_season,
-                     "seasons_better": n_better, "tails": tails, "verdict": verdict}
+                     "seasons_better": n_better, "tails": tails, "verdict": verdict,
+                     "z_brier": zb, "brier_source": brier_source}
     return out
 
 
@@ -741,6 +800,66 @@ def render_hierarchical(cmp: dict, test_seasons: list) -> str:
     return "\n".join(lines) + "\n"
 
 
+
+def _cluster_mean_se(x: np.ndarray, groups) -> tuple:
+    """Mean and cluster-robust (by game) standard error of per-row values (props of one game are correlated)."""
+    x = np.asarray(x, dtype=float)
+    n = len(x)
+    if n == 0:
+        return float("nan"), float("nan")
+    g = pd.Series(x).groupby(np.asarray(groups)).sum()
+    return float(x.mean()), float(math.sqrt(float(np.sum(g.to_numpy() ** 2)) * n / max(n - 1, 1)) / n)
+
+
+def score_vs_market(res: pd.DataFrame) -> dict:
+    """Per stat, on rows scored at the REAL book consensus line (no pushes): Brier and log loss of the market, the shipped
+    engine and the hierarchical engine; the paired hierarchical-minus-baseline differences with game-clustered standard errors
+    (negative d_brier / d_logloss = hierarchical better); and each engine's blend coefficient c on top of the market
+    (c > 0 and significant = the engine adds information the market does not already price). Calibration vs a market, NOT CLV."""
+    from mlb_core.odds import model_vs_market as MVM
+    out: dict = {}
+    for stat, d in res.dropna(subset=["p_market"]).groupby("stat"):
+        y = d["over"].to_numpy(dtype=float)
+        pm, pb, ph = (d[c].clip(1e-4, 1 - 1e-4).to_numpy(dtype=float) for c in ("p_market", "p_base", "p_hier"))
+        gid = d["game_id"].to_numpy()
+
+        def ll(p):
+            return -(y * np.log(p) + (1 - y) * np.log(1 - p))
+        d_br, se_br = _cluster_mean_se((ph - y) ** 2 - (pb - y) ** 2, gid)
+        d_ll, se_ll = _cluster_mean_se(ll(ph) - ll(pb), gid)
+        sb = MVM.score_model_vs_market(y, pb, pm, gid)
+        sh = MVM.score_model_vs_market(y, ph, pm, gid)
+        per_season = {int(s): float(((g["p_hier"] - g["over"]) ** 2 - (g["p_base"] - g["over"]) ** 2).mean())
+                      for s, g in d.groupby("season")}
+        out[stat] = {"n": int(len(d)), "n_games": int(len(set(gid))), "over_rate": float(y.mean()),
+                     "brier_market": float(np.mean((pm - y) ** 2)), "brier_base": float(np.mean((pb - y) ** 2)),
+                     "brier_hier": float(np.mean((ph - y) ** 2)), "logloss_market": float(ll(pm).mean()),
+                     "logloss_base": float(ll(pb).mean()), "logloss_hier": float(ll(ph).mean()),
+                     "d_brier": d_br, "d_brier_se": se_br, "z_brier": float(-d_br / se_br) if se_br > 0 else float("nan"),
+                     "d_logloss": d_ll, "d_logloss_se": se_ll, "z_logloss": float(-d_ll / se_ll) if se_ll > 0 else float("nan"),
+                     "per_season_d_brier": per_season,
+                     "blend_c_base": (sb.get("blend") or {}).get("c"), "blend_t_base": (sb.get("blend") or {}).get("t_c"),
+                     "blend_c_hier": (sh.get("blend") or {}).get("c"), "blend_t_hier": (sh.get("blend") or {}).get("t_c")}
+    return out
+
+
+def render_vs_market(sc: dict, coverage: Optional[dict] = None) -> str:
+    L = ["", "== at REAL book lines (BettingPros consensus: median of de-vigged two-sided reference books, last pregame quote) ==",
+         "stat              n  games  over%  Brier mkt/base/hier           d_brier (z)      d_logloss (z)     blend c base -> hier (t)"]
+    for stat, c in sorted(sc.items()):
+        bc = lambda k: "n/a" if c.get(k) is None else f"{c[k]:+.2f}"                                      # noqa: E731
+        bt = lambda k: "" if c.get(k) is None else f" ({c[k]:+.1f})"                                      # noqa: E731
+        L.append(f"{stat:<16}{c['n']:>5}{c['n_games']:>6}  {c['over_rate']:.2f}  "
+                 f"{c['brier_market']:.4f}/{c['brier_base']:.4f}/{c['brier_hier']:.4f}   "
+                 f"{c['d_brier']:+.4f} ({c['z_brier']:+.1f})   {c['d_logloss']:+.4f} ({c['z_logloss']:+.1f})   "
+                 f"{bc('blend_c_base')}{bt('blend_t_base')} -> {bc('blend_c_hier')}{bt('blend_t_hier')}")
+    if coverage:
+        L.append("coverage: " + ", ".join(f"{k}={v}" for k, v in coverage.items()))
+    L.append("d < 0 / z > 0 = hierarchical better than the shipped engine at the book's own line. Blend c > 0 with t > 2 = the engine "
+             "adds information beyond the market. Calibration, not edge: BettingPros keeps one last-quote snapshot per day (no CLV).")
+    return "\n".join(L) + "\n"
+
+
 def parse_seasons(spec: str) -> list:
     out = []
     for part in spec.split(","):
@@ -763,11 +882,36 @@ def _run_hierarchical(args, seasons: list) -> str:
         res = replay_hierarchical(df, seasons, env_tbl, live=live)
         if args.hier_cache:
             res.to_parquet(args.hier_cache)
-    cmp = compare_hierarchical(res, seasons)
-    report = render_hierarchical(cmp, seasons)
+    market_z = None
+    mreport = ""
+    if args.hier_market:
+        mreport, market_scores = _run_market(args, seasons, env_tbl)
+        market_z = {st: {"n": c["n"], "z_brier": c["z_brier"]} for st, c in market_scores.items()}
+    cmp = compare_hierarchical(res, seasons, market_z)
+    report = render_hierarchical(cmp, seasons) + mreport
     if args.write_allowlist:
-        report += _write_allowlist(cmp, seasons, args)
+        report += _write_allowlist(cmp, seasons, args, market_z)
     return report
+
+
+def _run_market(args, seasons: list, env_tbl: pd.DataFrame) -> str:
+    import os
+    from mlb_core.odds import bettingpros_loader as BL
+    from nfl.data.read import load
+    from nfl.props.resolve import PlayerResolver
+    if args.hier_market_cache and os.path.exists(args.hier_market_cache):
+        res, cov = pd.read_parquet(args.hier_market_cache), None
+    else:
+        cons = BL.build_market_consensus("nfl", start=f"{min(seasons)}-08-01", end=f"{max(seasons) + 1}-03-31", min_books=3)
+        resolver = PlayerResolver.from_mirror(range(min(seasons) - 1, max(seasons) + 1))
+        market, cov = build_market_table(cons, resolver)
+        df = load_player_logs(range(min(seasons) - KEEP_SEASONS + 1, max(seasons) + 1))
+        res = replay_hierarchical(df, seasons, env_tbl, stats=sorted(set(MARKET_STAT.values())), market=market)
+        cov["scored_rows"] = int(len(res))
+        if args.hier_market_cache:
+            res.to_parquet(args.hier_market_cache)
+    scores = score_vs_market(res)
+    return render_vs_market(scores, cov), scores
 
 
 def build_allowlist(cmp: dict, extra: list, confirm: Optional[dict]) -> dict:
@@ -778,7 +922,8 @@ def build_allowlist(cmp: dict, extra: list, confirm: Optional[dict]) -> dict:
         if c.get("verdict") != "ADOPT" or any(e.get(stat, {}).get("verdict") != "ADOPT" for e in extra):
             continue
         ev = {"d_logscore": round(c["d_logscore"], 4), "d_logscore_se": round(c["d_logscore_se"], 4),
-              "d_brier": round(c["d_brier"], 4), "d_brier_se": round(c["d_brier_se"], 4), "n": c["n"]}
+              "d_brier": round(c["d_brier"], 4), "d_brier_se": round(c["d_brier_se"], 4), "n": c["n"],
+              "brier_z": round(c.get("z_brier", float("nan")), 2), "brier_source": c.get("brier_source", "proxy_line")}
         if confirm is not None:
             k = confirm.get(stat, {})
             if "d_logscore" not in k or k["d_logscore"] <= 0 or k["z_logscore"] <= -1.645:
@@ -788,17 +933,17 @@ def build_allowlist(cmp: dict, extra: list, confirm: Optional[dict]) -> dict:
     return out
 
 
-def _write_allowlist(cmp: dict, seasons: list, args) -> str:
+def _write_allowlist(cmp: dict, seasons: list, args, market_z: Optional[dict] = None) -> str:
     import json
     from datetime import date
-    extra = [compare_hierarchical(pd.read_parquet(p), seasons) for p in (args.hier_cache_extra or [])]
+    extra = [compare_hierarchical(pd.read_parquet(p), seasons, market_z) for p in (args.hier_cache_extra or [])]
     confirm = None
     if args.hier_confirm:
         cres = pd.read_parquet(args.hier_confirm)
         confirm = compare_hierarchical(cres, sorted(cres["season"].unique()))
     keep = build_allowlist(cmp, extra, confirm)
     doc = {"generated": date.today().isoformat(), "seasons": f"{seasons[0]}-{seasons[-1]}",
-           "rule": f"log-score z >= {ADOPT_Z_HIER:.2f}, Brier z >= {ADOPT_Z_BRIER:.2f}, better in the required seasons, on every "
+           "rule": f"log-score z >= {ADOPT_Z_HIER:.2f}, Brier z >= {ADOPT_Z_BRIER:.2f} (at the BOOK's lines when >= {MARKET_MIN_ROWS} real-line rows, else the proxy line), better in the required seasons, on every "
                    "supplied run; and not contradicted on the confirm seasons",
            "stats": sorted(keep), "evidence": keep}
     with open(args.write_allowlist, "w") as fh:
@@ -825,6 +970,10 @@ def main(argv=None) -> int:
     ap.add_argument("--hier-context", action="store_true",
                     help="with --hierarchical: also load injuries / pbp / participation / snap_counts (slow, big)")
     ap.add_argument("--hier-cache", help="parquet path for the hierarchical replay rows (load if present, else save)")
+    ap.add_argument("--hier-market", action="store_true",
+                    help="with --hierarchical: ALSO replay at the REAL BettingPros consensus lines of those seasons and report Brier / "
+                         "log loss of market, shipped and hierarchical engine (needs Odds/bettingpros_nfl + rosters_weekly)")
+    ap.add_argument("--hier-market-cache", help="parquet path for the real-line replay rows (load if present, else save)")
     ap.add_argument("--write-allowlist", metavar="PATH",
                     help="write the per-stat allowlist (stats ADOPTed on this run, on every --hier-cache-extra run, and not "
                          "contradicted by --hier-confirm) as JSON; the serving engine reads nfl/props/hierarchical_allowlist.json")

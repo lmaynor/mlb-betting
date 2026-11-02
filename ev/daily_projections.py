@@ -386,16 +386,21 @@ class GameLogs:
             return self._nfl_team
 
     def nfl_live(self):
-        """The optional pbp / participation / injury layers (hierarchical engine), loaded once and never raising."""
+        """The optional injury / pbp / participation layers (hierarchical engine), loaded once and never raising.
+        $NFL_HIER_LAYERS = 'none' (default: nothing is loaded -- the layers failed their ablation) | 'all' | 'absence,shell,...'."""
         with self._lock:
             if getattr(self, "_nfl_live", None) is None:
                 import os
                 self._nfl_live = False
-                if self.sport == "nfl":
+                raw = os.environ.get("NFL_HIER_LAYERS", "none").strip().lower()
+                layers = () if raw in ("", "none") else (_hl.LAYERS if raw == "all" else
+                                                         tuple(x.strip() for x in raw.split(",") if x.strip() in _hl.LAYERS))
+                if self.sport == "nfl" and layers:
                     try:
                         newest = max((r[-1].get("season") or 0) for r in self.idx["all"].values() if r)
-                        self._nfl_live = _hl.LiveContext.load(int(newest),
-                                                              with_pbp=os.environ.get("NFL_HIER_CONTEXT", "1") != "0")
+                        self._nfl_live = _hl.LiveContext.load(
+                            int(newest), with_pbp=os.environ.get("NFL_HIER_CONTEXT", "1") != "0" and layers != ("absence",),
+                            layers=layers)
                     except Exception as exc:                                            # noqa: BLE001
                         log.warning("nfl live context failed (%s): neutral context", exc)
             return self._nfl_live or None
@@ -1037,11 +1042,16 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
 
 
 def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):
-    """The hierarchical price for one NFL row, or None (the caller keeps the legacy price). Never raises."""
+    """The hierarchical price for one NFL row, or None (the caller keeps the legacy price). Never raises.
+
+    The served configuration is the TESTED one: no context layers (NFL_HIER_LAYERS, default none -- the ablation found no layer that
+    helps and two that hurt) and no weather (NFL_HIER_WEATHER=1 opts in: the schedule's wind is realised game-day data and the
+    replay evidence was produced without it)."""
+    import os
     try:
+        use_weather = os.environ.get("NFL_HIER_WEATHER", "0") == "1"
         weather = None
-        if env_t is not None and getattr(env_t, "home", None):
-            import os
+        if use_weather and env_t is not None and getattr(env_t, "home", None):
             from nfl.data import weather as _wx
             weather = _wx.kickoff_weather(env_t.home, start, schedule_wind=env_t.wind, schedule_temp=env_t.temp,
                                           schedule_roof=env_t.roof, fetch=os.environ.get("NFL_WEATHER_FETCH", "1") != "0")
@@ -1049,7 +1059,7 @@ def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):
                 weather = None
         return _hl.price_row(stat, rows, team, logs.nfl_team_ctx(), env_t, _hl.AlphaLookup(logs.context), coef,
                              live=logs.nfl_live(), mu_engine=mu_raw if stat == "anytime_td" else None, weather=weather,
-                             pid=rows[-1].get("player_id"), opp=opp)
+                             pid=rows[-1].get("player_id"), opp=opp, use_weather=use_weather)
     except Exception as exc:                                                            # noqa: BLE001
         log.warning("hierarchical price failed for %s (%s): legacy price kept", stat, exc)
         return None
