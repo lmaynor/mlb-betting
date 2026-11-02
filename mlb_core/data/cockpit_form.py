@@ -198,7 +198,10 @@ def _load_nfl() -> dict | None:
     cols = ["player_id", "player_display_name", "player_name", "team", "recent_team", "season", "week", "season_type",
             "opponent_team", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
             "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "position",
-            "completions", "passing_interceptions"]
+            "completions", "passing_interceptions",
+            # optional (hierarchical NFL engine): present in recent stats_player_week files, silently absent otherwise
+            "passing_air_yards", "passing_yards_after_catch", "passing_cpoe", "receiving_air_yards",
+            "receiving_yards_after_catch"]
     frames = []
     y = _season_year_now()
     for season in (y + 1, y, y - 1):       # newest first; stop after KEEP_SEASONS found
@@ -214,7 +217,8 @@ def _load_nfl() -> dict | None:
     name_col = "player_display_name" if "player_display_name" in df.columns else "player_name"
     for c in ("season", "week", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
               "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "completions",
-              "passing_interceptions"):
+              "passing_interceptions", "passing_air_yards", "passing_yards_after_catch", "passing_cpoe",
+              "receiving_air_yards", "receiving_yards_after_catch"):
         if c in df.columns:
             df[c] = _num(df[c])
     df = df.dropna(subset=["season", "week"]).sort_values(["season", "week"], kind="stable")

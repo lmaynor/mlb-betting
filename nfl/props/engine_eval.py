@@ -45,11 +45,15 @@ logger = logging.getLogger(__name__)
 NFL_COLS = ["player_id", "player_display_name", "player_name", "team", "season", "week", "season_type", "game_id",
             "opponent_team", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
             "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds", "position"]
+OPTIONAL_COLS = ["completions", "passing_interceptions", "passing_air_yards", "passing_yards_after_catch", "passing_cpoe",
+                 "receiving_air_yards", "receiving_yards_after_catch"]
 STATS = ("pass_yds", "rush_yds", "rec_yds", "receptions", "pass_tds", "anytime_td")
 # usage the player must average (last 10) to count as "book-quoted"; pass_tds follows pass_yds, anytime_td follows
 # either rush or receiving usage (the board's rotation thresholds)
 ELIG_USAGE = {"pass_yds": ("attempts", 15.0), "pass_tds": ("attempts", 15.0), "rush_yds": ("carries", 8.0),
-              "rec_yds": ("targets", 4.0), "receptions": ("targets", 4.0)}
+              "rec_yds": ("targets", 4.0), "receptions": ("targets", 4.0),
+              "pass_attempts": ("attempts", 15.0), "pass_completions": ("attempts", 15.0),
+              "interceptions": ("attempts", 15.0), "rush_attempts": ("carries", 8.0)}
 MIN_ROWS = 200
 KEEP_SEASONS = cf.KEEP_SEASONS
 # A held-out result is "adopt-worthy" only past a Bonferroni-style bar: 6 stats are scored, so a one-sided 5% test per
@@ -87,8 +91,14 @@ GRID = [SHIPPED, SHIPPED_NO_OPP, LEGACY] + [
 def load_player_logs(seasons: Optional[Iterable[int]] = None) -> pd.DataFrame:
     """player_stats shaped exactly like the production loader's frame (cockpit_form._load_nfl) for ALL given seasons."""
     from nfl.data.read import load
-    df = load("player_stats", seasons=list(seasons) if seasons else None,
-              columns=[c for c in NFL_COLS])
+    seas = list(seasons) if seasons else None
+    try:                                  # optional columns (hierarchical engine); older mirrors lack some of them
+        df = load("player_stats", seasons=seas, columns=NFL_COLS + OPTIONAL_COLS)
+    except Exception:                                                                    # noqa: BLE001
+        df = load("player_stats", seasons=seas, columns=[c for c in NFL_COLS])
+    for c in OPTIONAL_COLS:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     name_col = "player_display_name" if "player_display_name" in df.columns else "player_name"
     for c in ("season", "week", "passing_yards", "passing_tds", "attempts", "rushing_yards", "carries",
               "receiving_yards", "receptions", "targets", "rushing_tds", "receiving_tds"):
@@ -495,12 +505,251 @@ def _write_calibration(res: pd.DataFrame, env_tbl: pd.DataFrame, cal: dict, seas
     logger.info("wrote %s (calibrated stats: %s)", path, {k: ("env" if v and "b0" in v else "scale") for k, v in coefs.items() if v})
 
 
+
+# --------------------------------------------------------------------------------------------------------------
+# hierarchical engine vs the shipped Normal / NegBin baseline (nfl.models.hierarchical_props), held-out seasons
+# --------------------------------------------------------------------------------------------------------------
+HIER_STATS = ("pass_attempts", "pass_completions", "pass_yds", "pass_tds", "interceptions", "rush_attempts", "rush_yds",
+              "receptions", "rec_yds", "anytime_td")
+ALT_P = {"plus200": 1.0 / 3.0, "plus400": 1.0 / 5.0}          # fair P(over) at +200 / +400 American odds
+ADOPT_Z_HIER = float(norm.ppf(1 - 0.05 / (2 * len(HIER_STATS))))
+_CRPS_GRID = {"yards": np.arange(0, 601, 2.0), "count": np.arange(0, 61, 1.0)}
+
+
+class _BaseDist:
+    """The shipped engine's distribution at (mu, sd_mu) with the as-of dispersion, exposing cdf / mass / ppf / sf."""
+
+    def __init__(self, family: str, mu: float, sd_mu: float, alpha: float, cv: float):
+        self.family, self.mu = family, max(mu, 0.05)
+        self.sd_mu = max(sd_mu, 0.05)
+        self.alpha, self.cv = alpha, cv
+
+    def _sd(self) -> float:
+        return max(self.cv * self.sd_mu, DP.MIN_SD_FRAC * self.sd_mu, 1e-6)
+
+    def cdf(self, x) -> np.ndarray:
+        x = np.floor(np.asarray(x, dtype=float))
+        if self.family == "negbin":
+            n = 1.0 / self.alpha
+            return nbinom.cdf(x, n, n / (n + self.mu))
+        if self.family == "anytime":
+            return np.where(x < 0, 0.0, np.where(x < 1, math.exp(-self.mu), 1.0))
+        return norm.cdf((x + 0.5 - self.mu) / self._sd())
+
+    def mass(self, y) -> np.ndarray:
+        y = np.round(np.asarray(y, dtype=float))
+        if self.family == "anytime":                              # 0/1 indicator, like the engine's own log score
+            p = 1.0 - math.exp(-self.mu)
+            return np.clip(np.where(y >= 1, p, 1.0 - p), 1e-9, 1.0)
+        return np.clip(self.cdf(y) - self.cdf(y - 1.0), 1e-12, 1.0)
+
+    def sf(self, line: float) -> float:
+        return float(1.0 - self.cdf(math.floor(line)))
+
+    def ppf(self, q: float) -> float:
+        if self.family == "negbin":
+            n = 1.0 / self.alpha
+            return float(nbinom.ppf(q, n, n / (n + self.mu)))
+        if self.family == "anytime":
+            return 0.0 if q <= math.exp(-self.mu) else 1.0
+        return float(max(norm.ppf(q, self.mu, self._sd()), 0.0))
+
+
+def _crps(dist, y: float, stat: str, family: str) -> float:
+    """Discrete CRPS on a fixed integer grid (yards: step 2). The binary anytime market's CRPS equals its Brier score."""
+    if family == "anytime":
+        p = float(1.0 - dist.cdf(0.0)) if isinstance(dist, _BaseDist) else float(1.0 - dist.cdf(0.0))
+        return (p - float(y >= 1)) ** 2
+    grid = _CRPS_GRID["yards" if stat in ("pass_yds", "rush_yds", "rec_yds") else "count"]
+    step = float(grid[1] - grid[0])
+    f = np.asarray(dist.cdf(grid), dtype=float)
+    return float(np.sum((f - (grid >= y).astype(float)) ** 2) * step)
+
+
+def _as_of_env(env_tbl: pd.DataFrame) -> dict:
+    """{(season, week, team): namespace(implied_total, team_spread, roof, wind, temp, season, week, home)} from the schedule."""
+    import types
+    out = {}
+    cols = set(env_tbl.columns)
+    for r in env_tbl.to_dict("records"):
+        out[(int(r["season"]), int(r["week"]), r["team"])] = types.SimpleNamespace(
+            implied_total=r["implied_total"], team_spread=r["team_spread"],
+            roof=r.get("roof") if "roof" in cols else None, wind=r.get("wind") if "wind" in cols else None,
+            temp=r.get("temp") if "temp" in cols else None, season=int(r["season"]), week=int(r["week"]),
+            home=r.get("home_team"))
+    return out
+
+
+def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: pd.DataFrame,
+                        stats: Iterable[str] = HIER_STATS, live=None) -> pd.DataFrame:
+    """One row per (target player-game, stat): the SHIPPED engine's and the HIERARCHICAL engine's as-of price of the same
+    outcome, scored on identical rows. History for week w is games strictly before w (the production two-season window);
+    the schedule's closing spread / total are the game environment both engines may use (they are pre-game numbers).
+
+    Columns: season, week, player, stat, y, line (proxy = L5 mean rounded to x.5), mu_base / mu_hier, ls_base / ls_hier
+    (log of the 1-unit probability mass of the outcome: identical binning for both), p_base / p_hier (P(over proxy line)),
+    crps_base / crps_hier, and for each alt rung (fair +200 / +400, set from the BASELINE's own quantile) p_base_<k> /
+    p_hier_<k> / hit_<k>."""
+    from nfl.models import hierarchical_live as HL
+    env_map = _as_of_env(env_tbl)
+    stats = list(stats)
+    out = []
+    for season in sorted(set(test_seasons)):
+        weeks = sorted(df[(df["season"] == season) & (df["season_type"] == "REG")]["week"].unique())
+        for week in weeks:
+            t = season * 100 + int(week)
+            hist_df = df[(df["_sort"] < t) & df["season"].isin([season - k for k in range(KEEP_SEASONS)])]
+            if hist_df.empty:
+                continue
+            idx = cf._index(hist_df, "_name", None)
+            logs = DP.GameLogs("nfl", {"all": idx})
+            team_ctx = HL.build_team_ctx(idx)
+            alpha = HL.AlphaLookup(logs.context)
+            targets = df[(df["_sort"] == t) & (df["season_type"] == "REG")]
+            for r in targets.to_dict("records"):
+                rows = idx.get(r["_name"])
+                if not rows:
+                    continue
+                team = DP.canon_team("nfl", r.get("team"))
+                opp = DP.canon_team("nfl", r["_opp"]) if r["_opp"] is not None else None
+                env = env_map.get((int(season), int(week), team))
+                for stat in stats:
+                    if not _eligible(stat, rows):
+                        continue
+                    y = cf._sum_cols(r, cf.NFL_STATS[stat][0])
+                    h = DP._hist(rows, cf.NFL_STATS[stat])
+                    if y is None or len(h) < DP.MIN_GAMES:
+                        continue
+                    family = DP.PROJECT_STATS["nfl"][stat]
+                    ctx = logs.context(stat)
+                    hl, w, k = DP.stat_params("nfl", stat)
+                    raw, cnt = ctx.opp_raw.get(opp), ctx.opp_cnt.get(opp, 0)
+                    pj = DP.project_mu(h, hl, _factor(raw, cnt, k), w)
+                    if pj is None:
+                        continue
+                    coef = DP.calibration("nfl", stat)
+                    it = getattr(env, "implied_total", None) if env is not None else None
+                    sp = getattr(env, "team_spread", None) if env is not None else None
+                    it = None if it is None or not math.isfinite(it) else it
+                    sp = None if sp is None or not math.isfinite(sp) else sp
+                    mult = EA.multiplier(coef, implied_total=it, team_spread=sp, stat="") if (coef or it is not None) else 1.0
+                    mu_base = pj["mu"] * mult
+                    base = _BaseDist(family, mu_base, pj["mu"], ctx.alpha, ctx.cv)
+                    hr = HL.price_row(stat, rows, team, team_ctx, env if it is not None else None, alpha, coef, live=live,
+                                      mu_engine=pj["mu"] if stat == "anytime_td" else None, pid=r.get("player_id"), opp=opp)
+                    if hr is None:
+                        continue
+                    vals = np.array([g[0] for g in h], dtype=float)
+                    l5 = float(vals[-5:].mean())
+                    line = float(proxy_line(np.array([l5]), stat)[0])
+                    rec = {"season": season, "week": int(week), "player": r["_name"], "stat": stat, "y": float(y),
+                           "line": line, "mu_base": mu_base, "mu_hier": hr.mean,
+                           "ls_base": float(np.log(base.mass(y))), "ls_hier": float(np.log(hr.dist.mass(y))),
+                           "p_base": base.sf(line), "p_hier": hr.p_over(line),
+                           "crps_base": _crps(base, float(y), stat, family), "crps_hier": _crps(hr.dist, float(y), stat, family)}
+                    if family != "anytime":
+                        for name, p in ALT_P.items():
+                            lq = base.ppf(1.0 - p)                     # a rung the baseline prices at ~p
+                            rec[f"line_{name}"] = lq
+                            rec[f"p_base_{name}"] = base.sf(lq)
+                            rec[f"p_hier_{name}"] = hr.p_over(lq)
+                            rec[f"hit_{name}"] = float(y > lq)
+                    out.append(rec)
+        logger.info("hierarchical replay season %s: %d rows so far", season, len(out))
+    return pd.DataFrame(out)
+
+
+def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict:
+    """Paired hierarchical-minus-baseline differences per stat on the held-out seasons (+ per-season consistency).
+
+    d_logscore > 0, d_brier < 0, d_crps < 0 favour the hierarchical engine. `tails[k]` = mean predicted P(over) vs the realised
+    hit rate at the fair +200 / +400 rung (calibration error = predicted - realised; closer to 0 is better).
+    verdict ADOPT needs log score and Brier to agree, pooled z >= ADOPT_Z_HIER (Bonferroni over the 10 stats), and the log score
+    better in at least 4/5 test seasons (all of them when fewer than 5 are scored)."""
+    seasons = sorted(set(test_seasons))
+    r = res[res["season"].isin(seasons)]
+    out: dict = {}
+
+    def se(x):
+        return float(np.std(x, ddof=1) / math.sqrt(len(x))) if len(x) > 1 else float("nan")
+    for stat in HIER_STATS:
+        d = r[r["stat"] == stat]
+        if len(d) < MIN_ROWS:
+            out[stat] = {"n": int(len(d)), "verdict": "INSUFFICIENT"}
+            continue
+        over = (d["y"] > d["line"]).astype(float).to_numpy()
+        dls = (d["ls_hier"] - d["ls_base"]).to_numpy()
+        dbr = ((d["p_hier"] - over) ** 2 - (d["p_base"] - over) ** 2).to_numpy()
+        dcr = (d["crps_hier"] - d["crps_base"]).to_numpy()
+        per_season = {int(s): float((g["ls_hier"] - g["ls_base"]).mean()) for s, g in d.groupby("season")}
+        z = float(dls.mean() / se(dls)) if se(dls) > 0 else float("nan")
+        zb = float(-dbr.mean() / se(dbr)) if se(dbr) > 0 else float("nan")
+        n_better = sum(1 for v in per_season.values() if v > 0)
+        need = 4 if len(per_season) >= 5 else len(per_season)
+        verdict = "ADOPT" if (z >= ADOPT_Z_HIER and zb > 0 and n_better >= need) else (
+            "WORSE" if z <= -ADOPT_Z_HIER else "NO CLEAR GAIN")
+        tails = {}
+        for name in ALT_P:
+            if f"hit_{name}" in d.columns:
+                t = d.dropna(subset=[f"hit_{name}"])
+                if len(t):
+                    tails[name] = {"n": int(len(t)), "realised": float(t[f"hit_{name}"].mean()),
+                                   "pred_base": float(t[f"p_base_{name}"].mean()),
+                                   "pred_hier": float(t[f"p_hier_{name}"].mean())}
+        out[stat] = {"n": int(len(d)), "d_logscore": float(dls.mean()), "d_logscore_se": se(dls), "z_logscore": z,
+                     "d_brier": float(dbr.mean()), "d_brier_se": se(dbr), "d_crps": float(dcr.mean()),
+                     "d_crps_se": se(dcr), "mae_base": float(np.abs(d["y"] - d["mu_base"]).mean()),
+                     "mae_hier": float(np.abs(d["y"] - d["mu_hier"]).mean()), "per_season_d_logscore": per_season,
+                     "seasons_better": n_better, "tails": tails, "verdict": verdict}
+    return out
+
+
+def render_hierarchical(cmp: dict, test_seasons: list) -> str:
+    lines = ["", "== hierarchical engine vs shipped Normal/NegBin baseline "
+             f"(held-out seasons {test_seasons[0]}-{test_seasons[-1]}; ACCURACY only, not edge) ==",
+             "stat              n   d_logscore (se)      d_brier (se)         d_crps       MAE base->hier  seasons+  verdict"]
+    for stat in HIER_STATS:
+        c = cmp.get(stat, {})
+        if "d_logscore" not in c:
+            lines.append(f"{stat:<16}{c.get('n', 0):>5}   {c.get('verdict', 'n/a')}")
+            continue
+        lines.append(f"{stat:<16}{c['n']:>5}   {c['d_logscore']:+.4f} ({c['d_logscore_se']:.4f})   "
+                     f"{c['d_brier']:+.4f} ({c['d_brier_se']:.4f})   {c['d_crps']:+.4f}   "
+                     f"{c['mae_base']:.3f}->{c['mae_hier']:.3f}   {c['seasons_better']}/{len(c['per_season_d_logscore'])}"
+                     f"       {c['verdict']}")
+    lines.append("tail calibration at the fair +200 / +400 rung (predicted P(over) vs realised hit rate):")
+    for stat in HIER_STATS:
+        for name, t in cmp.get(stat, {}).get("tails", {}).items():
+            lines.append(f"  {stat:<16}{name:<8} n={t['n']:<6} realised {t['realised']:.3f}  baseline {t['pred_base']:.3f}  "
+                         f"hierarchical {t['pred_hier']:.3f}")
+    lines.append(f"adoption bar: pooled z >= {ADOPT_Z_HIER:.2f} on log score, Brier agrees, better in >= 4/5 seasons. "
+                 "Until a stat clears it, NFL_ENGINE stays 'ewm'.")
+    return "\n".join(lines) + "\n"
+
+
 def parse_seasons(spec: str) -> list:
     out = []
     for part in spec.split(","):
         lo, _, hi = part.strip().partition("-")
         out.extend(range(int(lo), int(hi or lo) + 1))
     return sorted(set(out))
+
+
+def _run_hierarchical(args, seasons: list) -> str:
+    import os
+    from nfl.data.read import load
+    from nfl.models import hierarchical_live as HL
+    env_tbl = EA.game_env_table(load("schedules"))
+    if args.hier_cache and os.path.exists(args.hier_cache):
+        res = pd.read_parquet(args.hier_cache)
+    else:
+        df = load_player_logs(range(min(seasons) - KEEP_SEASONS + 1, max(seasons) + 1))
+        live = HL.LiveContext.load(max(seasons), with_pbp=args.hier_context,
+                                   seasons=list(range(min(seasons) - 1, max(seasons) + 1))) if args.hier_context else None
+        res = replay_hierarchical(df, seasons, env_tbl, live=live)
+        if args.hier_cache:
+            res.to_parquet(args.hier_cache)
+    return render_hierarchical(compare_hierarchical(res, seasons), seasons)
 
 
 def main(argv=None) -> int:
@@ -515,6 +764,12 @@ def main(argv=None) -> int:
     ap.add_argument("--write-calibration", metavar="PATH",
                     help="fit the ADOPTED calibrations on ALL replayed rows and write them as JSON (implies --calibrate)")
     ap.add_argument("--cache", help="parquet path: load replayed rows if it exists, else replay + save")
+    ap.add_argument("--hierarchical", action="store_true",
+                    help="ALSO replay nfl.models.hierarchical_props against the shipped baseline on --seasons "
+                         "(use 2024-2025 for the held-out comparison) and print the paired report")
+    ap.add_argument("--hier-context", action="store_true",
+                    help="with --hierarchical: also load injuries / pbp / participation / snap_counts (slow, big)")
+    ap.add_argument("--hier-cache", help="parquet path for the hierarchical replay rows (load if present, else save)")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -529,6 +784,13 @@ def main(argv=None) -> int:
         res = replay(df, replay_seasons, variants)
         if args.cache:
             res.to_parquet(args.cache)
+    if args.hierarchical:
+        report = _run_hierarchical(args, seasons)
+        print(report)
+        if args.out:
+            with open(args.out, "w") as fh:
+                fh.write(report)
+        return 0
     ev = evaluate(res[res["season"].isin(seasons)], variants, args.tune_through, seasons)
     report = render(ev, seasons, int(res["season"].isin(seasons).sum()))
     if args.calibrate or args.write_calibration:
