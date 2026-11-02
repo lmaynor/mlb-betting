@@ -246,10 +246,14 @@ def kalshi_player_codes(player_norm: str, display: str | None = None) -> set[str
         core = [t for t in toks if t not in _GENERATIONAL]
         if len(core) < 2:
             continue
-        base = core[0][0] + "".join(core[1:])
-        out.add(base)
-        if suffix:
-            out.add(base + "".join(suffix))
+        # Kalshi: first initial + SURNAME. A hyphenated first name ("Amon-Ra St. Brown" -> ASTBROWN) or a multi-word surname makes the split
+        # ambiguous once hyphens are tokens, so try the first name spanning 1 (or 2) tokens; a code only counts when it is the UNIQUE match in a game.
+        for k in (1, 2):
+            if k < len(core):
+                base = core[0][0] + "".join(core[k:])
+                out.add(base)
+                if suffix:
+                    out.add(base + "".join(suffix))
     return {c for c in out if len(c) >= 2}
 
 

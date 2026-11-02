@@ -118,7 +118,6 @@ def build_rung_index(df, ts: float, sport: str = "nfl"):
     still be interpolated from the player's other rungs. Only EXACT-consensus rows with >= CURVE_MIN_BOOKS books anchor a curve."""
     from ev.kalshi_props import kalshi_player_codes
     from ev.kalshi_rfq_props import PropFairIndex, _PlayerStat
-    from ev.odds_board import CURVE_MIN_BOOKS, fit_curve
     idx = PropFairIndex(sport, ts)
     seen = set()
     for r in df.to_dict("records"):
@@ -137,13 +136,7 @@ def build_rung_index(df, ts: float, sport: str = "nfl"):
         ps.rungs[float(r["strike"])] = (float(p), n, float(r.get("disp") or 0.0))
     for game in idx.games.values():
         for (pn, stat), ps in game["data"].items():
-            anchors = [(pt, v[0], v[1]) for pt, v in ps.rungs.items() if v[1] >= CURVE_MIN_BOOKS]
-            if not anchors:
-                continue                      # single-book rungs never anchor a curve in replay
-            ps.curve = fit_curve(anchors, stat)
-            if ps.curve is not None:
-                ps.anchor_n = min(a[2] for a in anchors)
-                ps.anchor_disp = max(ps.rungs[a[0]][2] for a in anchors)
+            ps.finalize(stat, sport)
     return idx
 
 
@@ -151,14 +144,16 @@ class SnapshotStore:
     """Time-ordered fair-value snapshots. `book_at(t)` never returns a snapshot stamped after t, and never prices a leg whose game
     had already kicked off by t (a pre-game consensus is not a fair value for a live parlay; the live index drops started games too)."""
 
-    def __init__(self, snaps):
+    def __init__(self, snaps, sport: str = "nfl"):
         # snaps: (ts, legs) | (ts, legs, rung_index) | (ts, legs, rung_index, {game_key: commence_epoch})
+        self.sport = sport
         norm = [(float(x[0]), list(x[1]), x[2] if len(x) > 2 else None, dict(x[3]) if len(x) > 3 and x[3] else {}) for x in snaps]
-        self._snaps = sorted((s for s in norm if s[1]), key=lambda s: s[0])
+        self._snaps = sorted((s for s in norm if s[1] or s[2] is not None), key=lambda s: s[0])
         self._ts = [s[0] for s in self._snaps]
         self._books: dict = {}
         self.tickers = {leg.ticker for _, legs, _, _ in self._snaps for leg in legs}      # any snapshot: a cheap prefilter
-        self.game_keys = {leg.game_key for _, legs, _, _ in self._snaps for leg in legs}
+        self.game_keys = ({leg.game_key for _, legs, _, _ in self._snaps for leg in legs}
+                          | {g for _, _, idx, _ in self._snaps if idx is not None for g in idx.games})
 
     def __len__(self) -> int:
         return len(self._snaps)
@@ -198,6 +193,27 @@ class SnapshotStore:
     def started_games(self, t: float, i: int) -> frozenset:
         return frozenset(g for g, c in self._snaps[i][3].items() if c <= t)
 
+    def has_snapshot(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> bool:
+        return self.snapshot_index(t, max_age) is not None
+
+    def live_games(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> frozenset:
+        i = self.snapshot_index(t, max_age)
+        return frozenset() if i is None else self.started_games(t, i)
+
+    def parts(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
+        """-> (ts, direct legs, rung index, live games) of the snapshot to price from, or None. Used by CompositeStore."""
+        i = self.snapshot_index(t, max_age)
+        if i is None:
+            return None
+        ts, legs, idx, _ = self._snaps[i]
+        live = self.started_games(t, i)
+        if live and idx is not None:
+            from ev.kalshi_rfq_props import PropFairIndex
+            view = PropFairIndex(idx.sport, idx.updated_ts)
+            view.games = {g: v for g, v in idx.games.items() if g not in live}
+            idx = view
+        return ts, [l for l in legs if l.game_key not in live], idx, live
+
     def book_at(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
         i = self.snapshot_index(t, max_age)
         if i is None:
@@ -214,9 +230,143 @@ class SnapshotStore:
                     view = PropFairIndex(idx.sport, idx.updated_ts)
                     view.games = {g: v for g, v in idx.games.items() if g not in live}
                     idx = view
-                book.attach_prop_indices({"nfl": idx})      # direct rows still win; the curve fills the gaps
+                book.attach_prop_indices({self.sport: idx})      # direct rows still win; the curve/ladder fills the gaps
             self._books[key] = book
         return self._books[key]
+
+
+class CompositeStore:
+    """Several single-sport snapshot stores behind the SnapshotStore interface. Direct ticker rows from every store are merged; for each
+    sport the FRESHEST snapshot's prop index wins (raw all-book payloads are a superset of the Kalshi-matched cycle rows)."""
+
+    def __init__(self, stores):
+        self.stores = list(stores)
+        self._books: dict = {}
+
+    def __len__(self) -> int:
+        return sum(len(s) for s in self.stores)
+
+    @property
+    def tickers(self):
+        return set().union(*(s.tickers for s in self.stores)) if self.stores else set()
+
+    @property
+    def game_keys(self):
+        return set().union(*(s.game_keys for s in self.stores)) if self.stores else set()
+
+    def may_price(self, legs) -> bool:
+        return any(s.may_price(legs) for s in self.stores)
+
+    def has_snapshot(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> bool:
+        return any(s.has_snapshot(t, max_age) for s in self.stores)
+
+    def live_games(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> frozenset:
+        return frozenset().union(*(s.live_games(t, max_age) for s in self.stores)) if self.stores else frozenset()
+
+    def book_at(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
+        parts = [(s, s.parts(t, max_age)) for s in self.stores]
+        parts = [(s, p) for s, p in parts if p is not None]
+        if not parts:
+            return None
+        key = tuple((id(s), p[0], p[3]) for s, p in parts)
+        if key not in self._books:
+            book = InMemoryFairBook(clock=lambda: t)
+            legs, freshest = [], {}
+            for s, (ts, lg, idx, _live) in parts:
+                legs += lg
+                if idx is not None and (s.sport not in freshest or ts > freshest[s.sport][0]):
+                    freshest[s.sport] = (ts, idx)
+            book.replace_all(legs)
+            book.attach_prop_indices({sp: v[1] for sp, v in freshest.items()})
+            self._books[key] = book
+        return self._books[key]
+
+
+PARLAY_KEYS = {"nba": "basketball_nba", "nhl": "icehockey_nhl"}
+
+
+def _list_with_ts(prefix: str, storage=None) -> list[tuple[str, float]]:
+    """[(key, last-modified epoch)] under a prefix. GCS gives the object's updated time; a local tree falls back to mtime."""
+    from mlb_core import storage as _st
+    st = storage or _st
+    if hasattr(st, "_get_bucket") and st._get_bucket():
+        return [(b.name, b.updated.timestamp()) for b in st._gcs_client().list_blobs(st._get_bucket(), prefix=prefix)]
+    import os
+    return [(k, os.path.getmtime(st._local_path(k))) for k in st.list_keys(prefix)]
+
+
+def _read_cached(key: str, cache_dir: str | None, storage=None) -> bytes:
+    import os
+    from mlb_core import storage as _st
+    st = storage or _st
+    if cache_dir:
+        path = os.path.join(cache_dir, key.replace("/", "__"))
+        if os.path.exists(path):
+            with open(path, "rb") as fh:
+                return fh.read()
+    data = st.read_bytes(key)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(path, "wb") as fh:
+            fh.write(data)
+    return data
+
+
+def commence_map(sport: str, events) -> dict:
+    """{game_key: commence epoch} for a banked event list (same game key the prop index uses)."""
+    from ev.daily_projections import canon_team, game_key_of
+    from ev.sports import kalshi_code
+    out = {}
+    for ev in events:
+        try:
+            start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        away = kalshi_code(sport, canon_team(sport, ev.get("away_team")))
+        home = kalshi_code(sport, canon_team(sport, ev.get("home_team")))
+        if away and home and away != home:
+            out[game_key_of(sport, start, away, home)] = start.timestamp()
+    return out
+
+
+def raw_prop_snapshots(sport: str, days, *, cache_dir: str | None = None, storage=None, workers: int = 12, cluster_sec: float = 300.0):
+    """Banked RAW ParlayAPI prop payloads (every book, every quoted line incl. alternates) -> [(ts, events)], time-ordered.
+    nba / nhl: OddsAccum/{sport_key}/raw/{day}/props_{HHMM}.json (a list of events per snapshot).
+    nfl: EVSweep/nfl_props/raw/{day}/{event}_{HHMMSS}.json, one file per event per sweep cycle; files within `cluster_sec` form one cycle."""
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    keyed = []
+    for d in days:
+        if sport == "nfl":
+            keyed += [(k, ts) for k, ts in _list_with_ts(f"EVSweep/nfl_props/raw/{d}/", storage) if k.endswith(".json")]
+        else:
+            keyed += [(k, ts) for k, ts in _list_with_ts(f"OddsAccum/{PARLAY_KEYS[sport]}/raw/{d}/props_", storage) if k.endswith(".json")]
+    keyed.sort(key=lambda x: x[1])
+    with ThreadPoolExecutor(workers) as ex:
+        blobs = list(ex.map(lambda kt: json.loads(_read_cached(kt[0], cache_dir, storage)), keyed))
+    snaps, cur, cur_ts = [], [], None
+    for (k, ts), obj in zip(keyed, blobs):
+        events = obj if isinstance(obj, list) else [obj]
+        if sport != "nfl":
+            snaps.append((ts, events))
+            continue
+        if cur and ts - cur_ts > cluster_sec:
+            snaps.append((cur_ts, cur)); cur = []
+        cur_ts = ts
+        cur += events
+    if cur:
+        snaps.append((cur_ts, cur))
+    return snaps
+
+
+def store_from_raw(sport: str, snaps) -> SnapshotStore:
+    """[(ts, events)] -> SnapshotStore whose snapshots are full PropFairIndexes (alt lines included) with per-game commence times."""
+    from ev.kalshi_rfq_props import build_sport_prop_index
+    out = []
+    for ts, events in snaps:
+        idx, _ = build_sport_prop_index(sport, events, ts, ts)
+        out.append((ts, [], idx, commence_map(sport, events)))
+    return SnapshotStore(out, sport=sport)
 
 
 def fetch_cycle_frames(days, storage=None, workers: int = 12):
@@ -318,9 +468,8 @@ def audit_legs(combos, store: SnapshotStore, max_age: float = MAX_SNAPSHOT_AGE_S
     out = defaultdict(Counter)
     for c in combos:
         t = epoch(c["created_time"])
-        i = store.snapshot_index(t, max_age)
-        book = None if i is None else store.book_at(t, max_age)
-        live = frozenset() if i is None else store.started_games(t, i)
+        book = store.book_at(t, max_age)
+        live = store.live_games(t, max_age) if book is not None else frozenset()
         for tk, _ in c["legs"]:
             fam = tk.split("-")[0]
             if book is None:
@@ -329,6 +478,9 @@ def audit_legs(combos, store: SnapshotStore, max_age: float = MAX_SNAPSHOT_AGE_S
             p = parse_prop_ticker(tk)
             if isinstance(p, ParsedPropTicker) and p.game_key in live:
                 out[fam]["STARTED"] += 1
+                continue
+            if isinstance(p, ParsedPropTicker) and p.sport not in book._prop_indices and tk not in store.tickers:
+                out[fam]["NO_SNAPSHOT"] += 1           # another sport's snapshot exists, but none for this sport within max_age
                 continue
             leg = book.get(tk, t)
             if leg is not None:

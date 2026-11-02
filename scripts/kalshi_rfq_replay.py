@@ -15,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ev.kalshi_rfq_replay import (  # noqa: E402
-    SnapshotStore, audit_legs, fetch_cycle_frames, load_combos, pull_combos, replay_one, summarize,
+    CompositeStore, SnapshotStore, audit_legs, fetch_cycle_frames, load_combos, pull_combos, raw_prop_snapshots, replay_one,
+    store_from_raw, summarize,
 )
 
 
@@ -35,10 +36,14 @@ def main(argv=None) -> int:
     r = sub.add_parser("replay")
     r.add_argument("--combos", required=True)
     r.add_argument("--csv", default=None)
+    r.add_argument("--no-raw", action="store_true", help="skip the raw all-book prop payloads (NFL/NBA/NHL); cycle rows only")
+    r.add_argument("--cache-dir", default=None, help="local cache for raw payloads (they are re-read on every run otherwise)")
     r.add_argument("--max-age-min", type=float, default=120.0, help="oldest pre-game snapshot a combo may be priced from (default 120)")
     r.add_argument("--days", default=None, help="comma list of EVSweep/nfl_props day folders (default: every day the combos span, +1 before)")
     au = sub.add_parser("audit", help="per-series leg coverage: why legs do or do not join")
     au.add_argument("--combos", required=True)
+    au.add_argument("--no-raw", action="store_true", help="skip the raw all-book prop payloads (NFL/NBA/NHL); cycle rows only")
+    au.add_argument("--cache-dir", default=None, help="local cache for raw payloads (they are re-read on every run otherwise)")
     au.add_argument("--max-age-min", type=float, default=120.0)
     au.add_argument("--top", type=int, default=30)
     au.add_argument("--days", default=None)
@@ -55,8 +60,14 @@ def main(argv=None) -> int:
     days = a.days.split(",") if a.days else sorted({
         (datetime.fromisoformat(c["created_time"].replace("Z", "+00:00")).date() + timedelta(days=k)).isoformat()
         for c in combos for k in (-1, 0)})
-    store = SnapshotStore.from_cycle_frames(fetch_cycle_frames(days))
-    if not len(store):
+    stores = [SnapshotStore.from_cycle_frames(fetch_cycle_frames(days))]
+    if not a.no_raw:
+        for sport in ("nfl", "nba", "nhl"):
+            snaps = raw_prop_snapshots(sport, days, cache_dir=a.cache_dir)
+            print(f"raw {sport}: {len(snaps)} snapshots", file=sys.stderr)
+            stores.append(store_from_raw(sport, snaps))
+    store = CompositeStore(stores)
+    if not len(stores[0]):
         raise SystemExit("no sweep cycle snapshots found for " + ",".join(days[:3]) + "...: set GCS_BUCKET (or MLB_GCS_BUCKET) "
                          "to the data bucket, or point MLB_BASE_DATA at a local copy")
     print(f"combos with volume+result: {len(combos)} | windows {len(windows)} (truncated {sum(w['truncated'] for w in windows)}) | "

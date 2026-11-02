@@ -179,3 +179,119 @@ def test_audit_labels_every_outcome():
     assert a["KXNFLRECYDS"]["HIT_exact"] == 1 and a["KXNFLRECYDS"]["HIT_curve"] == 1
     assert a["KXNFLRECYDS"]["NO_SNAPSHOT"] == 2                                  # one too old (age gate), one before the first snapshot
     assert a["KXNFLSPREAD"] == {"MISS_no_game_line": 1}                          # a covered league, but no game lines are banked
+
+
+# ------------------------------------------------------------------------------------------ raw all-book snapshots, composite, ladder
+def nba_event(start_ts, away="Toronto Raptors", home="Minnesota Timberwolves", points=(24.5, 29.5), books=("fanduel", "draftkings", "caesars")):
+    def mk(book, pt, over, under):
+        return {"key": book, "title": book, "markets": [{"key": "player_points", "outcomes": [
+            {"name": "Over", "description": "Anthony Edwards", "price": over, "point": pt},
+            {"name": "Under", "description": "Anthony Edwards", "price": under, "point": pt}]}]}
+    bms = []
+    for b in books:
+        for pt, (o, u) in zip(points, ((-130, 110), (+150, -180))):
+            bms.append(mk(b, pt, o, u))
+    merged = {}
+    for bm in bms:
+        d = merged.setdefault(bm["key"], {"key": bm["key"], "title": bm["title"], "markets": [{"key": "player_points", "outcomes": []}]})
+        d["markets"][0]["outcomes"] += bm["markets"][0]["outcomes"]
+    return {"id": "e1", "sport_key": "basketball_nba", "commence_time": datetime.fromtimestamp(start_ts, timezone.utc).isoformat(),
+            "home_team": home, "away_team": away, "bookmakers": list(merged.values())}
+
+
+def test_raw_snapshot_store_prices_alt_rungs_and_extrapolates_with_the_ladder():
+    ev = nba_event(T0 + 7200)
+    store = rp.store_from_raw("nba", [(T0, [ev])])
+    book = store.book_at(T0 + 300)
+    tk = lambda n: f"KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-{n}"
+    assert book.get(tk(25)).p_cons_yes > book.get(tk(30)).p_cons_yes > 0.0                     # both quoted lines resolve (exact)
+    mid = book.get(tk(27))
+    assert mid is not None and mid.pooled                                                       # interpolated between the two alternates
+    far = book.get(tk(34))
+    assert far is not None and far.pooled and far.p_cons_yes < book.get(tk(30)).p_cons_yes     # extrapolated past the last alternate by the ladder
+    assert far.disp > mid.disp                                                                  # and it is flagged less certain
+    assert book.get(tk(80)) is None                                                             # but not absurdly far
+
+
+def test_raw_snapshot_store_drops_a_game_that_has_started_by_the_combo_time():
+    store = rp.store_from_raw("nba", [(T0, [nba_event(T0 + 600)])])
+    tk = "KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-25"
+    assert store.book_at(T0 + 300).get(tk) is not None
+    assert store.book_at(T0 + 900).get(tk) is None                                              # tip-off passed: never a pre-game fair value
+
+
+def test_composite_store_merges_sports_and_prefers_the_freshest_index_per_sport():
+    cyc_store = rp.SnapshotStore.from_cycle_frames([cyc([prop_row("KXNFLRECYDS", 49.5, 0.60), prop_row("KXNFLRECYDS", 69.5, 0.30)])])
+    nba = rp.store_from_raw("nba", [(T0, [nba_event(T0 + 7200)])])
+    comp = rp.CompositeStore([cyc_store, nba])
+    b = comp.book_at(T0 + 120)
+    assert b.get("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50") is not None and b.get("KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-25") is not None
+    assert comp.has_snapshot(T0 + 120) and not comp.has_snapshot(T0 + 120 + 99999)
+    assert comp.may_price([["KXNBAPTSPROT-26OCT25TORMIN-MINAEDWARDS5-27", "yes"]])
+
+
+def test_resolve_why_reports_ladder_for_a_rung_past_the_curve():
+    store = rp.store_from_raw("nba", [(T0, [nba_event(T0 + 7200)])])
+    book = store.book_at(T0 + 10)
+    why = book._resolve_prop_why("KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-34")[1]
+    assert why == "ladder"
+
+
+def test_hyphenated_first_names_and_multiword_surnames_resolve():
+    from ev.kalshi_props import kalshi_player_codes
+    assert "astbrown" in kalshi_player_codes("amon ra st brown", "Amon-Ra St. Brown")              # Kalshi: initial + 'St Brown'
+    assert "jsmithnjigba" in kalshi_player_codes("jaxon smith njigba", "Jaxon Smith-Njigba")
+    assert "kwalker" in kalshi_player_codes("kenneth walker", "Kenneth Walker III")                 # unchanged
+    assert "mharrisonjr" in kalshi_player_codes("marvin harrison", "Marvin Harrison Jr.")
+
+
+# ------------------------------------------------------------------------------------------ one-sided quotes (anytime TD, alternate ladders)
+def nfl_td_event(start_ts, books_td, books_pairs=None):
+    """books_td: {book: yes price} (one-sided Over 0.5); books_pairs: {book: (over, under)} two-sided rec_yds at 49.5 used to learn the hold."""
+    bms = {}
+    for b, price in books_td.items():
+        bms.setdefault(b, {"key": b, "title": b, "markets": []})["markets"].append(
+            {"key": "player_anytime_td", "outcomes": [{"name": "Over", "description": "Jim Smith (BUF)", "price": price, "point": 0.5}]})
+    for b, (o, u) in (books_pairs or {}).items():
+        bms.setdefault(b, {"key": b, "title": b, "markets": []})["markets"].append(
+            {"key": "player_reception_yds", "outcomes": [{"name": "Over", "description": "Jim Smith (BUF)", "price": o, "point": 49.5},
+                                                         {"name": "Under", "description": "Jim Smith (BUF)", "price": u, "point": 49.5}]})
+    return {"id": "n1", "sport_key": "americanfootball_nfl", "commence_time": datetime.fromtimestamp(start_ts, timezone.utc).isoformat(),
+            "home_team": "Kansas City Chiefs", "away_team": "Buffalo Bills", "bookmakers": list(bms.values())}
+
+
+def test_one_sided_anytime_td_is_priced_with_a_prior_hold_and_flagged_less_certain():
+    ev = nfl_td_event(T0 + 7200, {b: +150 for b in ("fanduel", "draftkings", "caesars", "betmgm")})          # implied 0.40 each
+    idx = rp.store_from_raw("nfl", [(T0, [ev])]).book_at(T0 + 60)
+    leg = idx.get("KXNFLTD-26OCT25BUFKC-BUFJSMITH12-1")
+    assert leg is not None and leg.n_books == 4
+    assert leg.p_cons_yes == pytest.approx(0.40 * 0.85, abs=0.005)                                          # scorer prior factor 0.85
+    assert leg.disp >= 0.02 - 1e-9                                                                          # one-sided padding on dispersion
+
+
+def test_one_sided_factor_is_learned_from_the_same_books_two_sided_pairs():
+    pairs = {b: (-110, -110) for b in ("fanduel", "draftkings", "caesars", "betmgm")}                        # fair 0.5 vs implied 0.5238
+    # 4 pairs on rec_yds: factor for rec_yds ~ 0.5/0.5238; TD (a different stat) still uses the TD prior
+    from ev.kalshi_rfq_props import _factor_for, _one_sided_factors
+    from ev.props import parse_event_props
+    q, _ = parse_event_props(nfl_td_event(T0 + 7200, {"fanduel": +150}, pairs), "nfl")
+    f = _one_sided_factors(q)
+    assert f["stat"]["rec_yds"] == pytest.approx(0.5 / (110 / 210), abs=0.002)
+    assert _factor_for(f, "fanduel", "rec_yds") == pytest.approx(0.955, abs=0.003)
+    assert _factor_for(f, "fanduel", "anytime_td") == 0.85                                                  # no TD pairs: the prior
+    assert _factor_for(f, "fanduel", "pass_yds") == 0.93                                                    # unknown stat: the default
+
+
+def test_an_under_only_quote_is_ignored():
+    ev = nfl_td_event(T0 + 7200, {})
+    ev["bookmakers"] = [{"key": "fanduel", "title": "fanduel", "markets": [{"key": "player_reception_yds", "outcomes": [
+        {"name": "Under", "description": "Jim Smith (BUF)", "price": -120, "point": 49.5}]}]}]
+    idx = rp.store_from_raw("nfl", [(T0, [ev])]).book_at(T0 + 60)
+    assert idx.get("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50") is None
+
+
+def test_audit_calls_a_missing_sport_snapshot_no_snapshot_not_unknown_series():
+    nba = rp.store_from_raw("nba", [(T0, [nba_event(T0 + 7200)])])
+    a = rp.audit_legs([{"created_time": iso(T0 + 60), "legs": [["KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50", "yes"],
+                                                                  ["KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-25", "yes"]]}], rp.CompositeStore([nba]))
+    assert a["KXNFLRECYDS"] == {"NO_SNAPSHOT": 1} and a["KXNBAPTS"] == {"HIT_exact": 1}
