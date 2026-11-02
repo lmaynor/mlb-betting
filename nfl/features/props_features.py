@@ -69,6 +69,8 @@ from typing import Iterable, Optional
 import numpy as np
 import pandas as pd
 
+from nfl.features.context_gaps import absence_weight
+
 logger = logging.getLogger(__name__)
 
 TEAM_ALIAS = {"OAK": "LV", "SD": "LAC", "STL": "LA"}
@@ -132,10 +134,15 @@ ELIG_COLS = [f"elig_{s}" for s in STATS]
 
 # ---- teammate-absence usage redistribution (EXPERIMENTAL: excluded from the default model feature list)
 # Sum of the trailing-5-appearance usage share of same-team players the game-week injury report lists as absent.
-TEAM_MISSING_COLS = ["team_missing_target_share_l5", "team_missing_rush_share_l5", "team_missing_pass_att_share_l5"]
+TEAM_MISSING_COLS = ["team_missing_target_share_l5", "team_missing_rush_share_l5", "team_missing_pass_att_share_l5",
+                     "team_missing_rz_touch_share_l5", "team_missing_air_yards_share_l5"]
 EXPERIMENTAL_FEATURES = tuple(TEAM_MISSING_COLS)
-# report_status values (lower-cased, stripped) that count as ABSENT. Real nflverse `injuries.report_status` values
-# are Out / Doubtful / Questionable (or blank); Questionable is NOT absent. The IR-style aliases are defensive: the
+# Each absent teammate is WEIGHTED by status and practice progression (nfl.features.context_gaps.absence_weight):
+# Out / IR / PUP / Suspended 1.0, Doubtful 0.80, Questionable + Friday DNP 0.55, + LP 0.25, + FP 0.0. (Before 2026-11 a
+# listed Doubtful counted 1.0 and every Questionable 0; the columns are experimental and were never default model inputs.)
+# `rz_touch` = inside-10 carries + inside-20 targets (the pbp_rz table; carries inside the 20 are not aggregated) and is
+# NaN-unknown without pbp; `air_yards` = receiving air yards share.
+# MISSING_STATUS is kept for callers: the statuses that count at FULL weight or more (Out/Doubtful/IR aliases). The IR-style aliases are defensive: the
 # weekly injury report does not normally carry injured-reserve players (they sit on rosters_weekly status RES, which
 # this builder does not read), so IR players are NOT captured unless an injuries frame happens to list them.
 MISSING_STATUS = frozenset({"out", "doubtful", "ir", "injured reserve", "reserve/injured"})
@@ -710,9 +717,10 @@ def _post_window_mean(df: pd.DataFrame, key: str, col: str, window: int) -> np.n
 
 
 def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -> pd.DataFrame:
-    """team_missing_{target,rush,pass_att}_share_l5 = sum over TEAMMATES listed absent (MISSING_STATUS) on the
-    game-week injury report of that teammate's usage share over his last MISSING_WINDOW appearances STRICTLY BEFORE
-    the target week. Share = player stat / team total of that stat in that game (skill-position rows of the frame).
+    """team_missing_{target,rush,pass_att,rz_touch,air_yards}_share_l5 = sum over TEAMMATES on the game-week injury report
+    of weight x (that teammate's usage share over his last MISSING_WINDOW appearances STRICTLY BEFORE the target week).
+    weight = context_gaps.absence_weight(report_status, practice_status) (0 = not absent). Share = player stat / team total
+    of that stat in that game (skill-position rows of the frame).
 
     Leakage reasoning
       * WHO is absent comes only from the injury report row keyed (season, week, team, gsis_id) for the target week:
@@ -731,15 +739,19 @@ def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -
     i = inj[inj["gsis_id"].notna()].copy()
     i["team"] = _alias(i["team"])
     i = i.drop_duplicates(["season", "week", "gsis_id"], keep="last")
-    status = i["report_status"].astype("object").map(lambda v: str(v).strip().lower() if pd.notna(v) else "")
-    flagged = i[status.isin(MISSING_STATUS)][["gsis_id", "team", "season", "week"]].rename(
-        columns={"gsis_id": "player_id"}).copy()
+    prac = i["practice_status"] if "practice_status" in i.columns else pd.Series([None] * len(i), index=i.index)
+    i["_w"] = [absence_weight(st, pr) for st, pr in zip(i["report_status"], prac)]
+    flagged = i[i["_w"] > 0][["gsis_id", "team", "season", "week", "_w"]].rename(
+        columns={"gsis_id": "player_id", "_w": "weight"}).copy()
     flagged["widx"] = ((flagged["season"] - 2000) * 30 + flagged["week"]).astype(float)
 
     # per player-game usage shares (played rows only; upcoming placeholder rows carry NaN outcomes)
-    hist = pg[~pg["is_upcoming"]][["player_id", "team", "game_id", "widx", "tgt", "carries", "pass_att"]].copy()
+    hist = pg[~pg["is_upcoming"]][["player_id", "team", "game_id", "widx", "tgt", "carries", "pass_att", "rec_air",
+                                   "rz_car", "rz_tgt"]].copy()
     hist["widx"] = hist["widx"].astype(float)
-    spec = {"tgt": "target_share", "carries": "rush_share", "pass_att": "pass_att_share"}
+    hist["rz_touch"] = hist["rz_car"] + hist["rz_tgt"]                 # NaN where the pbp red-zone table has no coverage
+    spec = {"tgt": "target_share", "carries": "rush_share", "pass_att": "pass_att_share", "rz_touch": "rz_touch_share",
+            "rec_air": "air_yards_share"}
     for raw, name in spec.items():
         tot = hist.groupby(["game_id", "team"])[raw].transform("sum")
         hist[name] = np.where(tot > 0, hist[raw] / tot.where(tot > 0), np.nan)
@@ -754,7 +766,7 @@ def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -
     m = m[m["team_last"].notna() & (m["team_last"] == m["team"])]        # usage must have been earned on THIS team
     out_cols = dict(zip((f"{n}_l5" for n in spec.values()), TEAM_MISSING_COLS))
     for src in out_cols:
-        m[src] = m[src].fillna(0.0)
+        m[src] = m[src].fillna(0.0) * m["weight"]
     agg = m.groupby(["team", "season", "week"], as_index=False)[list(out_cols)].sum()
     own = m[["player_id", "season", "week"] + list(out_cols)].rename(columns={k: f"own_{k}" for k in out_cols})
     pg = pg.drop(columns=TEAM_MISSING_COLS)
@@ -765,6 +777,8 @@ def _attach_team_missing_shares(pg: pd.DataFrame, inj: Optional[pd.DataFrame]) -
         tot = pg[src].fillna(0.0) - pg[f"own_{src}"].fillna(0.0)          # teammates only
         tot = np.where(np.abs(tot) < 1e-12, 0.0, tot)
         pg[dst] = np.where(avail, tot, np.nan)
+    if not hist["rz_touch"].notna().any():                   # no pbp red-zone table at all: unknown, not "no vacated touches"
+        pg["team_missing_rz_touch_share_l5"] = np.nan
     return pg.drop(columns=list(out_cols) + [f"own_{k}" for k in out_cols])
 
 
