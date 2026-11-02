@@ -132,15 +132,15 @@ def test_spend_is_recorded_even_when_a_pull_raises(store):
 
 
 def test_lumpy_sunday_burst_early_in_the_month_is_not_treated_as_over_pace(store):
-    # linear pace on day 4 of a 30-day month would allow 10000*4/30 = 1333; the sweep's cap is the plain monthly budget
-    a = credit_ledger.allowance(KEY, 2000, date(2026, 11, 4), remaining_hint=50000, pace=False)
-    assert a.ok and a.credits == 2000
-    assert credit_ledger.allowance(KEY, 2000, date(2026, 11, 4), remaining_hint=50000).credits < 2000   # paced would clip it
+    # linear pace on day 4 of a 30-day month would allow budget*4/30 (~3900 at 29k); the sweep's cap is the plain monthly budget
+    a = credit_ledger.allowance(KEY, 5000, date(2026, 11, 4), remaining_hint=50000, pace=False)
+    assert a.ok and a.credits == 5000
+    assert credit_ledger.allowance(KEY, 5000, date(2026, 11, 4), remaining_hint=50000).credits < 5000   # paced would clip it
 
 
 def test_sweep_budget_is_the_config_constant_and_env_overridable(monkeypatch):
     monkeypatch.delenv("ODDS_BANK_BUDGET_" + KEY.upper(), raising=False)
-    assert credit_ledger.monthly_budget(KEY) == C.NFL_SWEEP_MONTHLY_BUDGET == 10_000
+    assert credit_ledger.monthly_budget(KEY) == C.NFL_SWEEP_MONTHLY_BUDGET == 29_000
     monkeypatch.setenv("ODDS_BANK_BUDGET_" + KEY.upper(), "4000")
     assert credit_ledger.monthly_budget(KEY) == 4000
 

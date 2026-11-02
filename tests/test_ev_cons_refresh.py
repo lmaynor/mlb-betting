@@ -50,7 +50,7 @@ def test_helper_pulls_one_event_for_the_five_markets_and_stamps_fetch_time():
     pc = FakePC(props)
     entry = sw.refresh_single_event_consensus(pc, sw.SPORT, "evt9", COMM, leg.game_key, NOW)
     assert pc.prop_calls == [(sw.SPORT, "evt9", tuple(sw.PARLAY_MARKETS))]
-    assert len(sw.PARLAY_MARKETS) == 5                                          # the "5 credits" the executor budgets
+    assert len(sw.PARLAY_MARKETS) == 10                                         # the "10 credits" the executor budgets
     assert entry["game_key"] == leg.game_key and entry["event_id"] == "evt9" and entry["ts"] == NOW.isoformat()
     pt = next(p for p in entry["points"] if p["stat"] == leg.stat and p["point"] == leg.strike)
     assert pt["n_books"] == 3 and pt["p_over"] == pytest.approx(0.5, abs=1e-6)
@@ -83,16 +83,16 @@ def test_refresher_caches_per_game_until_the_entry_is_stale_again():
     e1 = r.fresh(GK, NOW)
     assert e1 is not None and r.fresh(GK, NOW + timedelta(minutes=4)) is e1 and len(pc.prop_calls) == 1
     assert r.fresh(GK, NOW + timedelta(minutes=6)) is not e1 and len(pc.prop_calls) == 2
-    assert r.spent == 10 and r.refreshes == 2
+    assert r.spent == 20 and r.refreshes == 2
 
 
 def test_refresher_budget_exhaustion_returns_none_without_pulling():
     leg, props = _payload()
     pc = FakePC(props)
-    r = _refresher(pc, max_credits=7)
-    assert r.fresh(GK, NOW) is not None                                          # 5 of 7
+    r = _refresher(pc, max_credits=15)
+    assert r.fresh(GK, NOW) is not None                                          # 10 of 15
     assert r.fresh(GK, NOW + timedelta(minutes=10)) is None                       # needs 5, 2 left
-    assert len(pc.prop_calls) == 1 and r.spent == 5
+    assert len(pc.prop_calls) == 1 and r.spent == 10
 
 
 def test_refresher_falls_back_to_one_slate_call_when_snapshot_has_no_event_id():
@@ -102,7 +102,7 @@ def test_refresher_falls_back_to_one_slate_call_when_snapshot_has_no_event_id():
     pc = FakePC(props, slate=slate)
     r = px.ConsRefresher(pc, after_min=5.0, max_credits=300)                     # no update_events: old snapshot
     assert r.fresh(leg.game_key, NOW) is not None
-    assert pc.slate_calls == 1 and pc.prop_calls[0][1] == "evt-from-slate" and r.spent == 1 + 5
+    assert pc.slate_calls == 1 and pc.prop_calls[0][1] == "evt-from-slate" and r.spent == 1 + 10
     assert r.fresh("nfl:2026-10-04:XXX@YYY", NOW) is None and pc.slate_calls == 1  # cached slate, unknown game -> None
 
 

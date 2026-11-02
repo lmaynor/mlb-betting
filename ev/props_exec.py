@@ -15,7 +15,7 @@ risk caps and kill switch as the MLB executor (mlb.execution.kalshi.*), and:
   are synthetic). Requires --novig; production Novig is refused in code.
   python -m ev.props_exec pnl            # grade shadow fills on Kalshi's own settled result
   python -m ev.props_exec status
-  --refresh-consensus  re-pull a candidate's book consensus for just that game (one ParlayAPI event pull, 5 credits)
+  --refresh-consensus  re-pull a candidate's book consensus for just that game (one ParlayAPI event pull, len(PARLAY_MARKETS) = 10 credits)
   when it is older than --refresh-after-min, right before the order book is fetched and sized. Opt-in: spends the
   shared ParlayAPI credit pool, capped per process by --refresh-max-credits; needs PARLAY_API_KEY and an egress IP
   ParlayAPI accepts. When the refresh cannot happen (budget, API error, unknown game) the stale consensus is left to

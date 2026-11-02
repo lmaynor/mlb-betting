@@ -7,7 +7,7 @@
 # Each firing = ONE cycle: slate (1 credit) + 5 credits per game that kicks off within 40 h (--horizon-hours default).
 # That horizon is what makes the weekday cadence cheap: Tue-Wed nothing is inside it (1 credit per firing), the Thursday
 # game enters Wed night, and the Sunday slate enters from Fri night (first kickoff Sun ~08:30 CT). Cost per firing is
-# 1 + 5 x games, ~76 credits with a full 15-game Sunday slate; roughly 2.2-2.5k credits a week, ~10k a month, from the
+# 1 + 10 x games (10 markets, 2026-11-01), ~151 credits with a full 15-game Sunday slate; roughly 4.5-5k credits a week, ~20k a month, from the
 # SHARED ParlayAPI pool (MLB snapshots and the NHL/NBA bankers draw from it too). --max-credits caps ONE firing.
 #
 # Schedules (America/Chicago, so kickoff-relative cadence survives DST):
@@ -15,7 +15,7 @@
 #   Sun      every 30 min 06:00-11:30 (pre-kickoff) */30 6-11 * * 0
 #   Sun      00,02,04 then hourly 12:00-20:00, 22:00 0 0,2,4,12-20,22 * * 0
 #
-# Credits: every pull is metered through the shared ledger (nba.odds.credit_ledger, key NFL_SWEEP_LEDGER_SPORT, 10k/month from
+# Credits: every pull is metered through the shared ledger (nba.odds.credit_ledger, key NFL_SWEEP_LEDGER_SPORT, 29k/month from
 # nba/config.py); a firing that finds the budget or the shared pool floor exhausted exits without calling ParlayAPI.
 #
 # max-retries=0: a retried cycle would re-spend credits for the same snapshot.
@@ -30,7 +30,7 @@ PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID env var}"
 REGION="us-central1"
 JOB="ev-nfl-props-sweep"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
-MAX_CREDITS="${MAX_CREDITS:-150}"
+MAX_CREDITS="${MAX_CREDITS:-260}"
 INSTANCE="${PROJECT_ID}:${REGION}:mlb-betting-db"
 
 SCHEDULES=(
