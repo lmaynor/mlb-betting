@@ -23,7 +23,7 @@ const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
 
 export default function CompareOddsJamAlternativePage() {
   return (
-    <div style={{ maxWidth: '860px', margin: '0 auto', padding: '32px 20px 48px' }}>
+    <div className="max-w-[860px] mx-auto pt-[32px] px-[20px] pb-[48px]">
       <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
       <div className="article-body">
         <p>
@@ -34,7 +34,7 @@ export default function CompareOddsJamAlternativePage() {
         </p>
       </div>
       <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="w-full border-collapse">
           <thead><tr><th style={th}>Tool</th><th style={th}>Price</th><th style={th}>What it is</th></tr></thead>
           <tbody>
             {ROWS.map(r => (

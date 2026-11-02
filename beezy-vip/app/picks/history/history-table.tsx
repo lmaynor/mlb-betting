@@ -17,8 +17,8 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
   const toggle = (d: string) => setOpen(prev => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n })
 
   return (
-    <div style={{ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '13px' }}>
+    <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] overflow-x-auto">
+      <table className="w-full border-collapse min-w-[560px] text-[13px]">
         <thead>
           <tr>
             <th className="dell-heading" style={TH}>Day</th>
@@ -54,7 +54,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={5} style={{ padding: '10px 12px 14px', borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
+                    <td colSpan={5} className="pt-[10px] px-[12px] pb-[14px] border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)]">
                       <TopPicksTable picks={d.picks} showResult />
                     </td>
                   </tr>

@@ -1332,7 +1332,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   <button onClick={() => setRevealMsg(null)} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px' }}>Dismiss</button>
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+              <div className="grid grid-cols-1 gap-[12px]">
                 {outliers.slice(0, limit).map((item, idx) => (
                   <OutlierCard
                     key={item.key}
@@ -1500,14 +1500,14 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             </div>
           )}
           <div className="odds-table-wrap rounded-xl border border-separator-border bg-background-primary-default shadow-card">
-            <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="odds-table w-full border-collapse">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>PLAYER &amp; MATCHUP</th>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '280px', padding: '10px 14px' }}>SGP LEGS (SAME BOOK)</th>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '150px', padding: '10px 14px' }}>ASSUMED-CORRELATION FAIR</th>
-                  <th scope="col" style={{ textAlign: 'left', minWidth: '220px', padding: '10px 14px' }}>MODELLED SGP PRICE (NOT QUOTED)</th>
-                  <th scope="col" style={{ textAlign: 'right', minWidth: '170px', padding: '10px 14px' }}>MODEL EV &amp; ACTION</th>
+                  <th scope="col" className="text-left min-w-[220px] py-[10px] px-[14px]">PLAYER &amp; MATCHUP</th>
+                  <th scope="col" className="text-left min-w-[280px] py-[10px] px-[14px]">SGP LEGS (SAME BOOK)</th>
+                  <th scope="col" className="text-left min-w-[150px] py-[10px] px-[14px]">ASSUMED-CORRELATION FAIR</th>
+                  <th scope="col" className="text-left min-w-[220px] py-[10px] px-[14px]">MODELLED SGP PRICE (NOT QUOTED)</th>
+                  <th scope="col" className="text-right min-w-[170px] py-[10px] px-[14px]">MODEL EV &amp; ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -1561,11 +1561,11 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             </div>
           )}
           <div className="odds-table-wrap rounded-xl border border-separator-border bg-background-primary-default shadow-card">
-            <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="odds-table w-full border-collapse">
             <thead>
               <tr>
-                <th scope="col" className="odds-prop" style={{ textAlign: 'left', minWidth: '210px' }}>PROP</th>
-                <th scope="col" style={{ textAlign: 'left' }}>GAME</th>
+                <th scope="col" className="odds-prop text-left min-w-[210px]">PROP</th>
+                <th scope="col" className="text-left">GAME</th>
                 {mode === 'ev' && (
                   <>
                     <th scope="col" className="odds-ev" title="Fair price of this side from the reference books">FAIR ODDS</th>
@@ -1739,8 +1739,8 @@ function MobileEvRowCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost"
-          style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 600 }}
+          className="btn btn-ghost py-[5px] px-[10px] text-[11px] font-semibold"
+         
         >
           Compare All Books ({r.row.books.length}) &rarr;
         </button>
@@ -1834,7 +1834,7 @@ function MobileArbCard({
           <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
             {copied ? 'Copied!' : 'Copy'}
           </button>
-          <button type="button" onClick={onInspect} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+          <button type="button" onClick={onInspect} className="btn btn-ghost py-[4px] px-[8px] text-[10.5px]">
             Books &rarr;
           </button>
         </div>
@@ -1926,7 +1926,7 @@ function MobileMiddleCard({
           <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
             {copied ? 'Copied!' : 'Copy'}
           </button>
-          <button type="button" onClick={onInspect} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
+          <button type="button" onClick={onInspect} className="btn btn-ghost py-[4px] px-[8px] text-[10.5px]">
             Books &rarr;
           </button>
         </div>
@@ -1993,8 +1993,8 @@ function MobileLongshotCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost"
-          style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 600 }}
+          className="btn btn-ghost py-[5px] px-[10px] text-[11px] font-semibold"
+         
         >
           Compare All Books ({r.row.books.length}) &rarr;
         </button>
@@ -2011,7 +2011,7 @@ function SgpBadges({ r }: { r: SgpProxyRow }) {
       <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, letterSpacing: '0.03em', flexShrink: 0 }}>
         {r.archetypeLabel}
       </span>
-      <span className="mono" title={r.label} style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', border: '1px solid var(--color-border-button-hover)', color: '#facc15', letterSpacing: '0.04em', flexShrink: 0 }}>
+      <span className="mono text-[10px] font-bold py-[1px] px-[5px] rounded-[4px] border border-[color:var(--color-border-button-hover)] text-[#facc15] tracking-[0.04em] shrink-0" title={r.label}>
         UNVALIDATED
       </span>
       {r.modelArtifact && (
@@ -2162,7 +2162,7 @@ function MobileCompareSheet({
         )}
 
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '8px', letterSpacing: '0.06em' }}>
+          <div className="dell-heading text-[10px] text-text-secondary mb-[8px] tracking-[0.06em]">
             ALL REPORTING BOOKS ({row.books.length})
           </div>
           <div className="flex flex-col gap-[6px]">
@@ -2270,7 +2270,7 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
           </span>
           <div>
             <div className="text-[13px] font-semibold text-text-primary leading-[1.3]">{row.player}</div>
-            <div className="mono odds-sub" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div className="mono odds-sub text-[11px] flex items-center gap-[5px]">
               <span>{label} {STAT_LABEL[row.stat] ?? row.stat}</span>
               {row.is_alt === true && (
                 <span title={mainLineTip} style={{ fontSize: '10px', color: 'var(--color-neutral-400)', fontFamily: 'var(--font-mono), monospace' }}>[ALT]</span>
@@ -2468,7 +2468,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
         ) : (
           <>
             <div className="mono text-[13px] font-bold text-text-primary">{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
-            <div className="mono odds-sub" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <div className="mono odds-sub flex gap-[6px] items-center">
               {m.fairSource === 'curve' ? (
                 <span title={`Implied from player's main line (${r.row.modal_point ?? 'main'}) across reference books`}
                   style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>EST. FAIR</span>
@@ -2488,7 +2488,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
             </div>
             <div className="flex items-center gap-[6px] mt-[2px]">
               <BookLogo book={book} size={16} />
-              <span className="mono odds-sub" style={{ display: 'inline' }}>{bookDisplay(book).label}{evOf == null ? '' : ` \u00b7 ${signed(evOf)}% EV`}</span>
+              <span className="mono odds-sub inline">{bookDisplay(book).label}{evOf == null ? '' : ` \u00b7 ${signed(evOf)}% EV`}</span>
             </div>
           </>
         )}
@@ -2553,10 +2553,10 @@ function OutlierCard({
           </span>
           <div>
             <div className="text-[15px] font-bold text-text-primary leading-[1.25]">{item.row.player}</div>
-            <div className="mono" style={{ fontSize: '12px', color: 'var(--color-neutral-400)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+            <div className="mono text-[12px] text-[var(--color-neutral-400)] flex items-center gap-[6px] mt-[3px]">
               <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
               {item.row.is_alt === true && (
-                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 4px', borderRadius: '3px', border: '1px solid var(--color-border-button-hover)', color: 'var(--color-neutral-400)' }}>[ALT]</span>
+                <span className="text-[10px] font-bold tracking-[0.04em] py-[0px] px-[4px] rounded-[3px] border border-[color:var(--color-border-button-hover)] text-[var(--color-neutral-400)]">[ALT]</span>
               )}
             </div>
           </div>
@@ -2575,7 +2575,7 @@ function OutlierCard({
           <>
             <div className="flex items-center gap-[7px]">
               <LockGlyph size={13} color="var(--color-neutral-400)" />
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-neutral-400)' }}>Book hidden (Pro)</span>
+              <span className="text-[12px] font-semibold text-[var(--color-neutral-400)]">Book hidden (Pro)</span>
               <span className="mono text-[10.5px] text-text-secondary">({item.nPeers} peer books)</span>
             </div>
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px', color: GREEN, borderColor: 'rgba(87,242,135,0.3)' }}>
@@ -2595,7 +2595,7 @@ function OutlierCard({
       </div>
 
       {/* Row 4: Horizontal Price Comparison Bar Chart */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '6px', borderTop: '1px solid var(--color-border-table)' }}>
+      <div className="flex flex-col gap-[8px] pt-[6px] border-t border-t-[color:var(--color-border-table)]">
         {/* Outlier Book Row */}
         <div className="flex items-center gap-2.5">
           <div className="w-[32px] flex justify-center shrink-0">
@@ -2618,7 +2618,7 @@ function OutlierCard({
             <div className="flex-1 h-[8px] bg-[var(--color-background-tertiary-default)] rounded-[4px] overflow-hidden">
               <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
             </div>
-            <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '11.5px', color: 'var(--color-neutral-400)', flexShrink: 0 }}>
+            <div className="mono w-[56px] text-right text-[11.5px] text-[var(--color-neutral-400)] shrink-0">
               {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
             </div>
           </div>
@@ -2706,7 +2706,7 @@ function OutlierTableRow({
 function SgpTableRow({ r }: { r: SgpProxyRow }) {
   return (
     <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
-      <td style={{ padding: '10px 14px', minWidth: '220px' }}>
+      <td className="py-[10px] px-[14px] min-w-[220px]">
         <div className="flex items-center gap-2.5">
           <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
           <div>
@@ -2720,7 +2720,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         </div>
       </td>
-      <td style={{ padding: '10px 14px' }}>
+      <td className="py-[10px] px-[14px]">
         <div className="flex flex-col gap-[4px]">
           <div className="flex items-center gap-[6px] flex-wrap">
             {r.legs.map((leg, idx) => (
@@ -2733,7 +2733,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
               </span>
             ))}
             <span className="text-[11px] text-text-secondary">
-              @ <span style={{ textTransform: 'capitalize', color: 'var(--color-text-primary)', fontWeight: 500 }}>{bookDisplay(r.book).label}</span>
+              @ <span className="capitalize text-text-primary font-medium">{bookDisplay(r.book).label}</span>
             </span>
           </div>
           <div className="mono text-[10.5px] text-text-secondary">
@@ -2741,7 +2741,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         </div>
       </td>
-      <td style={{ padding: '10px 14px' }}>
+      <td className="py-[10px] px-[14px]">
         <div className="mono text-[13px] font-semibold text-text-primary">
           {formatOdds(r.fairJointAm)}
         </div>
@@ -2758,7 +2758,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </span>
         </div>
       </td>
-      <td style={{ padding: '10px 14px' }}>
+      <td className="py-[10px] px-[14px]">
         <div className="flex items-center gap-[6px] flex-wrap">
           <BookLogo book={r.book} size={22} />
           <span className="mono text-[13px] font-bold text-text-primary">
@@ -2774,7 +2774,7 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         )}
       </td>
-      <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+      <td className="py-[10px] px-[14px] text-right">
         <div className="flex items-center justify-end gap-[10px]">
           <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
             {sgpEvText(r)}
@@ -2887,7 +2887,7 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
             {!emptyMeansAll && !hasAllPreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange(books.map(b => b.key))}>All</button>}
             {!hasNonePreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange([])}>None</button>}
           </div>
-          <div style={{ display: 'grid', gap: '2px', maxHeight: '280px', overflowY: 'auto' }}>
+          <div className="grid gap-[2px] max-h-[280px] overflow-y-auto">
             {books.map(b => {
               const meta = bookDisplay(b.key)
               const isOnly = on.has(b.key) && on.size === 1
@@ -2990,7 +2990,7 @@ function MobileBookChecklist({
             textAlign: 'left',
           }}
         >
-          <span className="dell-heading" style={{ fontSize: '11px', color: 'var(--color-text-primary)', letterSpacing: '0.06em' }}>
+          <span className="dell-heading text-[11px] text-text-primary tracking-[0.06em]">
             {title} ({countLabel})
           </span>
           <span className="mono text-[10px] text-text-secondary">

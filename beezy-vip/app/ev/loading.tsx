@@ -9,8 +9,8 @@ export default function Loading() {
         {ROWS.map(i => (
           <div key={i} style={{ height: 44, borderBottom: i === ROWS.length - 1 ? 'none' : '1px solid var(--color-background-tertiary-default)', display: 'flex', alignItems: 'center', gap: 16, padding: '0 12px' }}>
             <div  className="h-[10px] w-[48px] bg-[var(--color-background-tertiary-default)]"/>
-            <div style={{ height: 10, width: '22%', background: 'var(--color-background-tertiary-default)' }} />
-            <div style={{ height: 10, width: '40%', background: 'var(--color-background-tertiary-default)' }} />
+            <div  className="h-[10px] w-[22%] bg-[var(--color-background-tertiary-default)]"/>
+            <div  className="h-[10px] w-[40%] bg-[var(--color-background-tertiary-default)]"/>
           </div>
         ))}
       </div>

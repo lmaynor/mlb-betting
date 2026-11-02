@@ -17,7 +17,7 @@ export function ToolHeader({ title, hint, current }: { title: string; hint?: str
       <span className="flex items-center gap-[10px] flex-wrap">
         {hint && <span className="mono text-[12px] text-text-secondary">{hint}</span>}
         {current && (
-          <nav aria-label="Calculators" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px' }}>
+          <nav aria-label="Calculators" className="inline-flex gap-[2px] p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
             {CALCULATORS.map(c => (
               <Link key={c.href} href={c.href} aria-current={c.href === current ? 'page' : undefined}
                 style={{ fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',

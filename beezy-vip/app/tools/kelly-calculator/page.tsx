@@ -28,7 +28,7 @@ export default function KellyCalculatorPage() {
     <div className="max-w-[680px] mx-auto p-[24px]">
       <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
 
-      <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '24px', marginBottom: '16px' }}>
+      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-[24px] mb-[16px]">
         <div className="mb-[16px]">
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
@@ -52,21 +52,21 @@ export default function KellyCalculatorPage() {
       </div>
 
       {result && (
-        <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', overflow: 'hidden' }}>
+        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>Full Kelly</div>
+              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Full Kelly</div>
               <div className="mono text-[28px] font-bold text-[var(--signal)]">{result.fullKelly}%</div>
               <div className="mono text-[13px] text-[var(--signal)] mt-[4px]">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
             <div className="p-[20px]">
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>Half Kelly</div>
+              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Half Kelly</div>
               <div className="mono text-[28px] font-bold text-text-primary">{result.halfKelly}%</div>
               <div className="mono text-[13px] text-text-secondary mt-[4px]">${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>
           <div className="py-[14px] px-[20px]">
-            <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
+            <p className="times text-[12px] text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
           </div>
         </div>
       )}

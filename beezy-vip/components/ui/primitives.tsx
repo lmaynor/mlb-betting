@@ -12,8 +12,8 @@ export function LiveDot({ label }: { label?: string }) {
       <span className="live-dot" />
       {label && (
         <span
-          className="dell-heading"
-          style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-secondary)' }}
+          className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary"
+         
         >
           {label}
         </span>
@@ -37,10 +37,10 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '20px', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)' }}>
+    <div className="flex flex-col gap-[6px] p-[20px] border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
       <span
-        className="dell-heading"
-        style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '2px' }}
+        className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[2px]"
+       
       >
         {label}
       </span>
@@ -57,7 +57,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', color: 'var(--color-text-secondary)' }}>PENDING</span>
+    return <span className="dell-heading text-[10px] tracking-[0.06em] text-text-secondary">PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -93,8 +93,8 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="mb-[24px]">
-      <h2 className="dell-display" style={{ fontSize: '24px', color: 'var(--color-text-primary)' }}>{label}</h2>
-      {sub && <p className="times" style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginTop: '7px', lineHeight: 1.5 }}>{sub}</p>}
+      <h2 className="dell-display text-[24px] text-text-primary">{label}</h2>
+      {sub && <p className="times text-[14px] text-text-secondary mt-[7px] leading-[1.5]">{sub}</p>}
     </div>
   )
 }

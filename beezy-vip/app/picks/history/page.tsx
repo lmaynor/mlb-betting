@@ -51,7 +51,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         </div>
       </div>
 
-      <div className="mono" style={{ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '9px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-[14px] mb-[14px] text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-[6px] gap-x-[16px] flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -61,7 +61,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
       </div>
 
       {history.length === 0 ? (
-        <div style={{ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '36px 20px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[36px] px-[20px] text-center text-text-secondary text-[13px]">
           No settled cards in this range yet.
         </div>
       ) : (

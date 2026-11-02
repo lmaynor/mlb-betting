@@ -43,13 +43,13 @@ export async function LiveTicker() {
   const duration = Math.max(24, ticks.length * 4.5)
 
   return (
-    <div className="live-ticker-shell" style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', overflow: 'hidden', padding: '8px 0', display: 'flex', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-      <div style={{ zIndex: 10, background: 'var(--color-background-primary-default)', padding: '0 14px 0 20px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px', borderRight: '1px solid var(--color-separator-border)' }}>
+    <div className="live-ticker-shell border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] overflow-hidden py-[8px] px-[0px] flex items-center relative z-[1]">
+      <div className="z-[10] bg-[var(--color-background-primary-default)] pt-[0px] pr-[14px] pb-[0px] pl-[20px] shrink-0 flex items-center gap-[8px] border-r border-r-[color:var(--color-separator-border)]">
         <span className="live-dot" />
-        <span className="mono ticker-label" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-300)', whiteSpace: 'nowrap' }}>Latest results</span>
+        <span className="mono ticker-label text-[10px] tracking-[0.1em] uppercase text-[var(--color-neutral-300)] whitespace-nowrap">Latest results</span>
       </div>
       {/* Clipping viewport: the animated track lives inside it so translateX never reaches the label. */}
-      <div className="ticker-viewport" style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
+      <div className="ticker-viewport flex-1 min-w-0 overflow-hidden relative">
         <div className="ticker-track" style={{ animationDuration: `${duration}s` }}>
           {doubled.map((t, i) => {
             const tone = t.win ? 'var(--signal)' : 'var(--loss)'
@@ -61,7 +61,7 @@ export async function LiveTicker() {
                 <span>{t.label}</span>
                 {t.unvalidated && <span className="text-[#f59e0b] text-[10px]">UNVALIDATED</span>}
                 <span style={{ color: tone, fontWeight: 600 }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
-                <span style={{ color: 'var(--color-separator-border)', padding: '0 12px' }}>|</span>
+                <span className="text-[var(--color-separator-border)] py-[0px] px-[12px]">|</span>
               </span>
             )
           })}

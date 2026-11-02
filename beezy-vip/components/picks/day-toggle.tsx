@@ -65,7 +65,7 @@ export function DayToggle({ today, yesterday, days, selected, pinDates = true }:
           <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined} className="tap-m"
             title={c.count == null ? undefined : `${c.count} ${c.count === 1 ? 'row' : 'rows'}`}
             style={{ ...SEG, borderRadius: `${i === 0 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === 0 ? 'var(--radius)' : 0}`, ...(i > 0 ? { borderLeft: 'none' } : {}), ...(on ? ON : {}) }}>
-            {dated ? <>{word} <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>{rest.join(' ')}</span></> : name(c)}
+            {dated ? <>{word} <span className="text-text-secondary font-normal">{rest.join(' ')}</span></> : name(c)}
           </Link>
         )
       })}

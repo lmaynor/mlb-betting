@@ -192,7 +192,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
 
       <section className="mb-6">
         <div className={cx(LBL, 'mb-2.5')}>Pipeline models</div>
-        <div className="pipeline-grid grid gap-px overflow-hidden rounded-xl border border-separator-border bg-separator-border" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="pipeline-grid grid gap-px overflow-hidden rounded-xl border border-separator-border bg-separator-border grid-cols-4">
           {PIPELINE_MODELS.map(model => {
             const pill = PILL[model.system]
             const slug = getModelSpec(model.system.toLowerCase().replace(/_/g, '-'))?.slug

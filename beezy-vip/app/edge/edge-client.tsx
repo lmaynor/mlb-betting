@@ -716,7 +716,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
         <div className="edge-meta">
           <div className="edge-meta-cell">
             <span className="edge-meta-k">Kelly stake</span>
-            <span className="edge-meta-v" style={{ color: 'var(--signal)' }}>
+            <span className="edge-meta-v text-[var(--signal)]">
               {kelly != null ? `$${kelly.toFixed(0)}` : '\u2014'}
               <span className="edge-meta-dim"> &frac14;K, capped 2.5%</span>
             </span>
@@ -1021,7 +1021,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <span className="edge-hud-k">games</span>
           </div>
           <div className="edge-hud-cell">
-            <span className="edge-hud-v" style={{ color: 'var(--signal)' }}>{hud.strong}</span>
+            <span className="edge-hud-v text-[var(--signal)]">{hud.strong}</span>
             <span className="edge-hud-k">edge &ge; 5%</span>
           </div>
           {hud.firstStr && (
@@ -1032,7 +1032,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           )}
           {hud.liveAlerts > 0 && (
             <div className="edge-hud-cell">
-              <span className="edge-hud-v" style={{ color: 'var(--warn)' }}>{hud.liveAlerts}</span>
+              <span className="edge-hud-v text-[var(--warn)]">{hud.liveAlerts}</span>
               <span className="edge-hud-k">line alerts</span>
             </div>
           )}
@@ -1267,7 +1267,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
 // -- scoped styles (media queries + motion + hover; inline can't express these)
 function Styles() {
   return (
-    <style>{`
+    <style>{`@layer components {
 .edge { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; color: var(--color-text-primary);
   font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
 .edge-header { border-bottom: 1px solid var(--color-separator-border); padding-bottom: 18px; margin-bottom: 18px; }
@@ -1549,6 +1549,7 @@ function Styles() {
   .edge-live-dot { animation: none; }
   .edge-panel { animation: none; }
   .edge-row, .edge-sport, .edge-filter, .edge-slipbtn, .edge-hud-best { transition: none; }
+}
 }
 `}</style>
   )

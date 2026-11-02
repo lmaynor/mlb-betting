@@ -5,7 +5,7 @@ import { PRE_LAUNCH } from '@/lib/launch'
 export function LockedNotice({ locked, shown = 0, what, plan }: { locked: number; shown?: number; what: string; plan: string }) {
   if (locked <= 0) return null
   return (
-    <div role="note" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginTop: '10px', padding: '10px 14px', background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', fontSize: '13px' }}>
+    <div role="note" className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mt-[10px] py-[10px] px-[14px] bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] text-[13px]">
       <span className="text-[var(--color-neutral-300)]">
         <span className="mono text-text-primary font-bold">{locked}</span>{shown > 0 ? ' more' : ''} {what} today. {plan}
       </span>

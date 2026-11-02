@@ -121,7 +121,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
         <span className="mono" style={{ color: 'var(--color-neutral-300)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
         {stale && <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15', border: '1px solid #facc1555', borderRadius: '4px', padding: '0 5px' }}>STALE</span>}
         <span className="text-[var(--color-neutral-300)]">
-          <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15' }}>{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
+          <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15]">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>
       </div>
 
@@ -166,7 +166,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             </div>
           ) : (
             <div className="odds-table-wrap" style={{ background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' }}>
-              <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="odds-table w-full border-collapse">
                 <thead>
                   <tr>
                     <th scope="col" className="odds-prop">GAME</th>

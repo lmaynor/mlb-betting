@@ -68,7 +68,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             <BrandWordmark size="md" showDomain />
           </Link>
 
-          <div className="nav-desktop flex flex-1 items-center justify-center" style={{ gap: '2px' }}>
+          <div className="nav-desktop flex flex-1 items-center justify-center gap-[2px]">
             {NAV.map((l) => {
               const active = navActive(pathname, l)
               return (
@@ -84,7 +84,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             })}
           </div>
 
-          <div className="nav-desktop ml-auto shrink-0 items-center" style={{ gap: '10px' }}>
+          <div className="nav-desktop ml-auto shrink-0 items-center gap-[10px]">
             <InstallAppButton />
             <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" className={ICON_BOX}>
               <DiscordMark size={15} color="currentColor" />

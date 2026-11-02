@@ -68,7 +68,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
     <div>
       {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)', marginBottom: '8px' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
-        <table className="pb-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table className="pb-table w-full border-collapse text-[13px]">
           <thead><tr>{heads.map(h => <th key={h} className={`dell-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {

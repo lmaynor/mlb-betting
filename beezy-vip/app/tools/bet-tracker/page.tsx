@@ -9,7 +9,7 @@ export default function BetTrackerPage() {
   return (
     <div className="max-w-[680px] mx-auto p-[24px]">
       <ToolHeader title="Personal Bet Tracker" hint="Coming soon" />
-      <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '32px 24px' }}>
+      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] py-[32px] px-[24px]">
         <p style={{ fontSize: '14px', color: 'var(--color-neutral-300)', margin: '0 0 6px' }}>Under construction.</p>
         <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: '0 0 18px', lineHeight: 1.55 }}>
           Log your own bets and compare your ROI to the model. It will be a Pro feature at launch.

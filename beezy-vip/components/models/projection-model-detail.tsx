@@ -17,7 +17,7 @@ function StatBlock({ label, value, sub, accent, last }: { label: string; value: 
     <div style={{ padding: '18px', borderRight: last ? undefined : B }}>
       <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
-      {sub && <div className="times" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{sub}</div>}
+      {sub && <div className="times text-[11px] text-text-secondary">{sub}</div>}
     </div>
   )
 }
@@ -72,7 +72,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div className="mb-[28px]">
         <div className="flex items-center gap-[12px] mb-[10px] flex-wrap">
-          <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--color-text-primary)' }}>{pillar.shortName} {system.name}</h1>
+          <h1 className="dell-display text-[30px] text-text-primary">{pillar.shortName} {system.name}</h1>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>empirical_ewm_v2</span>
           <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'DATA GAP' : 'UNVALIDATED'}</span>
         </div>
@@ -100,7 +100,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
-          <div className="dell-display" style={{ fontSize: '16px', color: 'var(--color-text-primary)', marginBottom: '16px' }}>Model configuration</div>
+          <div className="dell-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
           {[
             { label: 'Live engine', value: gap ? 'Not projected' : LIVE_ENGINE.name },
             { label: 'Live distribution', value: system.family },

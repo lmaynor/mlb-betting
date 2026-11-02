@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 20px 48px' }}>
+    <div className="max-w-[760px] mx-auto pt-[32px] px-[20px] pb-[48px]">
       <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>What is beezy.fyi?</h1>
       <div className="article-body">
         <p>

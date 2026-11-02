@@ -352,10 +352,10 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         </button>
         {infoOpen && (
           <div style={{ padding: '0 16px 16px', borderTop: B }}>
-            <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.65, marginTop: '12px', marginBottom: '8px' }}>
+            <p className="times text-[12px] text-text-secondary leading-[1.65] mt-[12px] mb-[8px]">
               Closing line value (CLV) measures how much better Beezy&apos;s opening line was vs. the closing price at kickoff. When the model predicts NRFI at -115 and the line closes at -128, the edge was real -- sharp money agreed, moving the line in the same direction.
             </p>
-            <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.65 }}>
+            <p className="times text-[12px] text-text-secondary leading-[1.65]">
               Positive mean CLV over a large sample is the strongest indicator that a betting model is genuinely finding inefficiencies rather than riding variance. It&apos;s measured independent of outcomes -- a bet can have positive CLV and lose, or negative CLV and win.
             </p>
           </div>

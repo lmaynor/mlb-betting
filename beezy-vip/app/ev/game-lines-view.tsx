@@ -117,15 +117,15 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <table className="w-full border-collapse text-[12px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--color-text-secondary)', fontSize: '10px' }}>
-              <th scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>MARKET / SIDE</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>LINE</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MODEL %</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MKT FAIR</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MODEL DIFF</th>
-              <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>BEST PRICE</th>
+              <th scope="col" className="text-left py-[6px] px-[8px] font-semibold">MARKET / SIDE</th>
+              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">LINE</th>
+              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MODEL %</th>
+              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MKT FAIR</th>
+              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MODEL DIFF</th>
+              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">BEST PRICE</th>
             </tr>
           </thead>
           <tbody>
@@ -135,23 +135,23 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
               return (
                 <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid var(--color-border-table)', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
-                  <td style={{ padding: '8px', color: 'var(--color-text-primary)' }}>
+                  <td className="p-[8px] text-text-primary">
                     <div className="font-semibold">{m.market_label}</div>
                     <div className="mono text-[11px] text-[var(--color-neutral-300)]">{sideLabel}</div>
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                  <td className="mono text-right p-[8px] text-text-primary font-semibold">
                     {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-primary)' }}>
+                  <td className="mono text-right p-[8px] text-text-primary">
                     {(m.p_model * 100).toFixed(1)}%
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-secondary)' }}>
+                  <td className="mono text-right p-[8px] text-text-secondary">
                     {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                     {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
                   </td>
-                  <td style={{ textAlign: 'right', padding: '8px' }}>
+                  <td className="text-right p-[8px]">
                     {m.best_odds != null ? (
                       <div className="inline-flex items-center gap-[6px] justify-end">
                         <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
@@ -176,18 +176,18 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
 export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: number }) {
   return (
     <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
-      <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table className="odds-table w-full border-collapse">
         <thead>
           <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '70px', padding: '10px 12px' }}>SPORT</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '180px', padding: '10px 12px' }}>MATCHUP</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '120px', padding: '10px 12px' }}>MARKET</th>
-            <th scope="col" style={{ textAlign: 'left', minWidth: '140px', padding: '10px 12px' }}>SELECTION / LINE</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MODEL PROB</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MKT FAIR</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MODEL DIFF</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '100px', padding: '10px 12px' }}>MKT EV</th>
-            <th scope="col" style={{ textAlign: 'right', minWidth: '160px', padding: '10px 12px' }}>BEST ODDS &amp; BOOK</th>
+            <th scope="col" className="text-left min-w-[70px] py-[10px] px-[12px]">SPORT</th>
+            <th scope="col" className="text-left min-w-[180px] py-[10px] px-[12px]">MATCHUP</th>
+            <th scope="col" className="text-left min-w-[120px] py-[10px] px-[12px]">MARKET</th>
+            <th scope="col" className="text-left min-w-[140px] py-[10px] px-[12px]">SELECTION / LINE</th>
+            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MODEL PROB</th>
+            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MKT FAIR</th>
+            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MODEL DIFF</th>
+            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MKT EV</th>
+            <th scope="col" className="text-right min-w-[160px] py-[10px] px-[12px]">BEST ODDS &amp; BOOK</th>
           </tr>
         </thead>
         <tbody>
@@ -201,7 +201,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
 
             return (
               <tr key={`${r.game_key}-${r.system}-${r.side}-${idx}`} data-row="odds">
-                <td style={{ padding: '9px 12px' }}>
+                <td className="py-[9px] px-[12px]">
                   <span className="mono" style={{
                     fontSize: '10.5px',
                     fontWeight: 700,
@@ -214,22 +214,22 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                     {r.sport.toUpperCase()}
                   </span>
                 </td>
-                <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                <td className="py-[9px] px-[12px] font-semibold text-text-primary">
                   {r.player}
-                  <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', fontWeight: 400 }}>
+                  <div className="mono text-[10.5px] text-text-secondary font-normal">
                     {startLabel(r.commence)}
                   </div>
                 </td>
-                <td style={{ padding: '9px 12px', color: 'var(--color-neutral-300)' }}>
+                <td className="py-[9px] px-[12px] text-[var(--color-neutral-300)]">
                   {r.stat_label}
                 </td>
-                <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                <td className="mono py-[9px] px-[12px] font-semibold text-text-primary">
                   {sideDisplay} {lineDisplay}
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: 'var(--color-text-primary)' }}>
+                <td className="mono text-right py-[9px] px-[12px] text-text-primary">
                   {(r.p_model_side * 100).toFixed(1)}%
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: 'var(--color-text-secondary)' }}>
+                <td className="mono text-right py-[9px] px-[12px] text-text-secondary">
                   {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
                 </td>
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
@@ -238,7 +238,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : 'var(--color-text-secondary)' }}>
                   {r.market_ev != null ? `${r.market_ev > 0 ? '+' : ''}${(r.market_ev * 100).toFixed(1)}%` : '--'}
                 </td>
-                <td style={{ textAlign: 'right', padding: '9px 12px' }}>
+                <td className="text-right py-[9px] px-[12px]">
                   {bestOdds != null ? (
                     <div className="inline-flex items-center gap-[6px] justify-end">
                       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>

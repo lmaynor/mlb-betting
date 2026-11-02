@@ -136,7 +136,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
           onError={() => setBad(true)} style={{ objectFit: 'contain', objectPosition: 'center bottom', width: '100%', height: '100%' }} />
       ) : (
-        <span style={{ alignSelf: 'center' }}>{initials(r.player)}</span>
+        <span className="self-center">{initials(r.player)}</span>
       )}
     </span>
   )

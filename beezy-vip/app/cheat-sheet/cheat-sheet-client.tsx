@@ -69,7 +69,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
           />
         ) : isGame && (pick.awayLogoUrl || pick.homeLogoUrl) ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}>
+          <div className="flex flex-col items-center gap-[4px] z-[1]">
             {pick.awayLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={pick.awayLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
@@ -124,7 +124,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
 function YesterdayRow({ pick }: { pick: CardPick }) {
   const win = pick.result === 'win'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--color-separator-border)' }}>
+    <div className="flex items-center gap-[8px] py-[6px] px-[0px] border-b border-b-[color:var(--color-separator-border)]">
       <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
@@ -158,14 +158,14 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
 
   return (
     <div style={{ border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)', width: '100%', boxSizing: 'border-box' }}>
-      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-secondary)', marginBottom: '12px' }}>POST TO X</div>
+      <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[12px]">POST TO X</div>
       {sheets.map(sh => {
         const n = postLength(sh.text)
         return (
           <div key={sh.id} className="mb-[14px]">
             <div className="flex items-center gap-[10px] mb-[6px]">
-              <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--color-text-primary)' }}>{sh.label}</span>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--color-border-button-active)' }}>{n}/{POST_LIMIT}</span>
+              <span className="dell-heading text-[11px] tracking-[0.08em] text-text-primary">{sh.label}</span>
+              <span className="mono text-[10px] text-[var(--color-border-button-active)]">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
             </div>
@@ -174,9 +174,9 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
           </div>
         )
       })}
-      <div style={{ borderTop: '1px solid var(--color-separator-border)', paddingTop: '12px' }}>
+      <div className="border-t border-t-[color:var(--color-separator-border)] pt-[12px]">
         <div className="flex items-center gap-[10px] mb-[6px]">
-          <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--color-text-primary)' }}>REPLY</span>
+          <span className="dell-heading text-[11px] tracking-[0.08em] text-text-primary">REPLY</span>
           <div  className="flex-1"/>
           <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
         </div>
@@ -238,11 +238,11 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   }
 
   return (
-    <div style={{ background: 'var(--color-background-full)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '18px 12px 40px' }}>
+    <div className="bg-[var(--color-background-full)] flex flex-col items-center pt-[18px] px-[12px] pb-[40px]">
       <div className="cheat-sheet-layout">
-        <div style={{ width: '100%', maxWidth: '390px', border: '1px solid var(--color-separator-border)', background: 'var(--color-background-full)', borderRadius: 'var(--radius)', overflow: 'hidden', flexShrink: 0 }}>
+        <div className="w-full max-w-[390px] border border-[color:var(--color-separator-border)] bg-[var(--color-background-full)] rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
-          <div style={{ background: 'var(--color-background-primary-default)', padding: '16px 16px 12px', borderBottom: '1px solid var(--color-separator-border)' }}>
+          <div className="bg-[var(--color-background-primary-default)] pt-[16px] px-[16px] pb-[12px] border-b border-b-[color:var(--color-separator-border)]">
             <div className="flex items-start justify-between mb-[10px] gap-[12px]">
               <div>
                 <BrandWordmark size="lg" />
@@ -277,11 +277,11 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           </div>
 
           {list.length > 0 && (
-            <div style={{ padding: '7px 16px', borderBottom: '1px solid var(--color-separator-border)', display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            <div className="py-[7px] px-[16px] border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-[10px] items-center">
               <span className="mono text-[10px] text-text-secondary tracking-[0.08em]">{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
-              {strong > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{strong} STRONG</span>}
-              {lean > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>{lean} LEAN</span>}
-              {best > 0 && <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--signal)', letterSpacing: '0.06em' }}>BEST EDGE +{best.toFixed(1)}%</span>}
+              {strong > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{strong} STRONG</span>}
+              {lean > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{lean} LEAN</span>}
+              {best > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
@@ -310,15 +310,15 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <>
               {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
               {list.length > DEFAULT_LIMIT && (
-                <div className="mono" style={{ padding: '8px 16px', fontSize: '10px', letterSpacing: '0.08em', color: 'var(--color-text-secondary)', borderTop: '1px solid var(--color-separator-border)', textAlign: 'center' }}>
+                <div className="mono py-[8px] px-[16px] text-[10px] tracking-[0.08em] text-text-secondary border-t border-t-[color:var(--color-separator-border)] text-center">
                   +{list.length - DEFAULT_LIMIT} MORE ON <Link href={mode === 'games' ? '/picks/games' : '/picks'} style={{ color: 'var(--link)' }}>THE PICKS PAGE</Link>
                 </div>
               )}
-              {mode === 'games' && <div style={{ padding: '0 12px 12px' }}><LockedNotice locked={gamesLocked} shown={games.length} what="MLB game picks" plan="The full set is on the MLB Pass or All-Access Pro." /></div>}
+              {mode === 'games' && <div className="pt-[0px] px-[12px] pb-[12px]"><LockedNotice locked={gamesLocked} shown={games.length} what="MLB game picks" plan="The full set is on the MLB Pass or All-Access Pro." /></div>}
             </>
           )}
 
-          <div style={{ borderTop: '1px solid var(--color-separator-border)', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--color-background-full)' }}>
+          <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-[16px] flex items-center gap-[10px] bg-[var(--color-background-full)]">
             <button onClick={handleShare} className="dell-heading"
               style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
@@ -335,8 +335,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         <aside className="cheat-sheet-sidebar">
           {canPost && <PostToX sheets={sheets} />}
 
-          <div style={{ border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)' }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>WHAT IS THIS</div>
+          <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-[16px] mb-[16px] rounded-[var(--radius)]">
+            <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">WHAT IS THIS</div>
             <p style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 10px' }}>
               The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
@@ -348,8 +348,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             </div>
           </div>
 
-          <div style={{ border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', padding: '16px', borderRadius: 'var(--radius)' }}>
-            <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>SCORE LEGEND</div>
+          <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-[16px] rounded-[var(--radius)]">
+            <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">SCORE LEGEND</div>
             {[
               { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
               { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },

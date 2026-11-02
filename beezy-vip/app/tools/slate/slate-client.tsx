@@ -106,7 +106,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
       {notes.length > 0 && (
         <div className="flex flex-wrap gap-[6px]">
           {notes.map((n, i) => (
-            <span key={i} className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', background: 'var(--color-background-primary-default)', padding: '3px 8px', border: '1px solid var(--color-separator-border)' }}>
+            <span key={i} className="mono text-[10px] text-text-secondary bg-[var(--color-background-primary-default)] py-[3px] px-[8px] border border-[color:var(--color-separator-border)]">
               {n}
             </span>
           ))}
@@ -168,7 +168,7 @@ function GameRow({ game }: { game: SlateGame }) {
         {/* Right: expand toggle */}
         {hasPicks && (
           <div className="flex items-center">
-            <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', userSelect: 'none' }}>
+            <span className="mono text-[12px] text-text-secondary select-none">
               {open ? '-' : '+'}
             </span>
           </div>
@@ -255,7 +255,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
               borderRadius: '50%', transition: 'left 0.15s',
             }} />
           </span>
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.05em', textTransform: 'uppercase', userSelect: 'none' }}>Picks only</span>
+          <span className="mono text-[10px] text-text-secondary tracking-[0.05em] uppercase select-none">Picks only</span>
         </label>
 
         <div  className="w-[0.5px] bg-[var(--color-separator-border)] h-[20px] shrink-0"/>
@@ -307,7 +307,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Footer note */}
       <div className="mt-[16px]">
         <p className="mono text-[11px] text-text-secondary leading-[1.6]">
-          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</a>.
+          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" className="text-[var(--link)]">Odds Terminal</a>.
           Refreshes every 5 minutes.
         </p>
       </div>

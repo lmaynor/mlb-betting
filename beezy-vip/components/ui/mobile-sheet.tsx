@@ -213,16 +213,8 @@ export function MobileBottomSheet({
         {/* Header bar */}
         {(title || subtitle) && (
           <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 16px 10px 16px',
-              borderBottom: '1px solid var(--color-separator-border)',
-              flexShrink: 0,
-              gap: '12px',
-            }}
-          >
+           
+           className="flex items-center justify-between pt-[8px] pr-[16px] pb-[10px] pl-[16px] border-b border-b-[color:var(--color-separator-border)] shrink-0 gap-[12px]">
             <div className="flex-1 min-w-0">
               {title && (
                 <div
@@ -244,22 +236,8 @@ export function MobileBottomSheet({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--color-separator-border)',
-                borderRadius: '6px',
-                color: 'var(--color-text-secondary)',
-                width: '28px',
-                height: '28px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '14px',
-                padding: 0,
-                flexShrink: 0,
-              }}
-            >
+             
+             className="bg-transparent border border-[color:var(--color-separator-border)] rounded-[6px] text-text-secondary w-[28px] h-[28px] cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
               {'\u2715'}
             </button>
           </div>

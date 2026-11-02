@@ -113,7 +113,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
             <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange(emptyMeansAll ? [] : books.map(b => b.key))}>All</button>
             {!emptyMeansAll && <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange([])}>None</button>}
           </div>
-          <div style={{ display: 'grid', gap: '2px', maxHeight: '260px', overflowY: 'auto' }}>
+          <div className="grid gap-[2px] max-h-[260px] overflow-y-auto">
             {books.map(b => (
               <label key={b.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 6px', fontSize: '12px', color: on.has(b.key) ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
@@ -177,7 +177,7 @@ function PriceCell({ r, a, b, offshore, book }: { r: GamePriceRow; a: number | n
 function SideLine({ s, children }: { s: GameSidePrice; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-[6px] whitespace-nowrap">
-      <span className="mono odds-sub" style={{ display: 'inline-block', minWidth: '58px' }}>{s.label}</span>
+      <span className="mono odds-sub inline-block min-w-[58px]">{s.label}</span>
       {children}
     </div>
   )

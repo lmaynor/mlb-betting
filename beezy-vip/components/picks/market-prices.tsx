@@ -66,7 +66,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
       <table className="w-full border-collapse min-w-[760px] text-[13px]">
         <thead>
           <tr>{['Player / prop', 'Game', 'Side', 'Book', 'Price', 'Fair', 'Books', 'EV', 'Status'].map(h => (
-            <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-separator-border)' }}>{h}</th>))}</tr>
+            <th key={h} className="dell-heading text-left py-[10px] px-[12px] text-[10px] text-text-secondary border-b border-b-[color:var(--color-separator-border)]">{h}</th>))}</tr>
         </thead>
         <tbody>
           {rows.filter(r => !isOffshore(r.book)).slice(0, 60).map(r => {
@@ -77,7 +77,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                 <td className="py-[10px] px-[12px] text-text-primary font-semibold">
                   <span className="inline-flex items-center gap-[8px]">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
-                    <span>{r.player} <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>{point} {propStatLabel(r.stat ?? r.market)}</span></span>
+                    <span>{r.player} <span className="text-text-secondary font-normal">{point} {propStatLabel(r.stat ?? r.market)}</span></span>
                     {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="dell-heading" title="The projection also favors this side" style={{ fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' }}>MODEL + MARKET</span>}
                   </span>
                 </td>

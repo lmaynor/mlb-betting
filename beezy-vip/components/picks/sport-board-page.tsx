@@ -77,7 +77,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
         <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
         {tracked && view === 'picks' && (
-          <nav aria-label="Pick type" style={{ display: 'flex', gap: '14px', fontSize: '12.5px' }}>
+          <nav aria-label="Pick type" className="flex gap-[14px] text-[12.5px]">
             <Link href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400, textDecoration: 'none' }}>Player picks</Link>
             <Link href="/picks/games" aria-current={kind === 'game' ? 'page' : undefined} style={{ color: kind === 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind === 'game' ? 600 : 400, textDecoration: 'none' }}>Game picks</Link>
           </nav>

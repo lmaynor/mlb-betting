@@ -34,7 +34,7 @@ export function gamesHref(view: GamesView, sport: GameSport): string {
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
     <div className="flex items-center gap-y-[8px] gap-x-[16px] flex-wrap">
-      <nav aria-label="Game lines view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px' }}>
+      <nav aria-label="Game lines view" className="inline-flex gap-[2px] p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
         {VIEW_TABS.map(t => (
           <Link
             key={t.key}
@@ -50,7 +50,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
           >{t.label}</Link>
         ))}
       </nav>
-      <nav aria-label="Game lines sport" style={{ display: 'flex', gap: '14px', fontSize: '12.5px' }}>
+      <nav aria-label="Game lines sport" className="flex gap-[14px] text-[12.5px]">
         {SPORT_TABS.map(t => (
           <Link
             key={t.key}

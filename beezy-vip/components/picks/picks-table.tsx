@@ -251,14 +251,7 @@ function BetCard({ bet }: { bet: Bet }) {
   const description = pickDescription(bet, detail)
 
   return (
-    <div className="card-hover" style={{
-      background: 'var(--color-background-primary-default)',
-      border: '1px solid var(--color-separator-border)',
-      borderRadius: 'var(--radius-lg)',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <div className="card-hover bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] overflow-hidden flex flex-col">
       <div style={{ height: '3px', background: tierColor, opacity: 0.85 }} />
       <div className="flex flex-col gap-[10px] p-[14px]">
       <div className="flex items-start justify-between gap-[12px]">
