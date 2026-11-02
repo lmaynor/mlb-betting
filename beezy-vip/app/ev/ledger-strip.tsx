@@ -8,7 +8,7 @@ const HAIR = 'var(--color-separator-border)'
 function Metric({ label, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
   return (
     <div style={{ padding: '10px 18px', borderRight: `1px solid ${HAIR}`, display: 'grid', gap: '3px', alignContent: 'center', minWidth: 0 }}>
-      <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{label}</span>
+      <span className="dell-heading text-text-secondary">{label}</span>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 700, color: tone ?? 'var(--color-text-primary)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{value}</span>
       {sub != null && <span className="mono text-[11px] text-text-secondary whitespace-nowrap">{sub}</span>}
     </div>

@@ -10,7 +10,7 @@ const pair = (a: number | null, b: number | null, d: number) => (a == null ? '--
 function Stat({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <div title={title}>
-      <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{label}</div>
+      <div className="dell-heading text-text-secondary">{label}</div>
       <div className="mono text-[13px] text-text-primary mt-[2px]">{value}</div>
     </div>
   )
@@ -31,7 +31,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
           <div><strong className="text-text-primary">Model.</strong> {system.family}.</div>
         </div>
         <div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px' }}>KEY FEATURES</div>
+          <div className="dell-heading text-text-secondary mb-[6px]">KEY FEATURES</div>
           <ul className="m-0 pl-[18px]">{system.features.map(f => <li key={f}>{f}</li>)}</ul>
         </div>
         {system.learnSlug && <div><Link href={`/learn/${system.learnSlug}`} style={{ color: 'var(--link)' }}>Read the guide to this market &rarr;</Link></div>}

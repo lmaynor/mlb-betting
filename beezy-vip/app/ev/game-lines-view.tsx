@@ -71,19 +71,19 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         {isNba && (
           <>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL MARGIN</div>
+              <div className="dell-heading text-text-secondary">MODEL MARGIN</div>
               <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {expMargin ?? '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
+              <div className="dell-heading text-text-secondary">MODEL TOTAL</div>
               <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>EXPECTED PACE</div>
+              <div className="dell-heading text-text-secondary">EXPECTED PACE</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
                 {game.exp_pace != null ? `${game.exp_pace.toFixed(1)} poss` : '--'}
               </div>
@@ -93,7 +93,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         {isNhl && (
           <>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>EXPECTED GOALS</div>
+              <div className="dell-heading text-text-secondary">EXPECTED GOALS</div>
               <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.lambda_a != null && game.lambda_h != null
                   ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
@@ -101,13 +101,13 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
+              <div className="dell-heading text-text-secondary">MODEL TOTAL</div>
               <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>DISPERSION</div>
+              <div className="dell-heading text-text-secondary">DISPERSION</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
                 {game.sigma_total != null ? `\u03c3 ${game.sigma_total.toFixed(1)}` : '--'}
               </div>

@@ -160,7 +160,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
                     {r.confluence && <span className="dell-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="dell-heading pb-hide-m" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
+                    {r.isPick && <span className="dell-heading pb-hide-m ml-[8px] text-[var(--signal)]">PICK</span>}
                   </td>
                   {showEv && (
                     <td className="pb-hide-m" style={TD}>

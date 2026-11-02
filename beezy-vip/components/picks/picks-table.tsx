@@ -130,7 +130,7 @@ function pickDetail(label: string, player: string | null) {
 
 /** A tracked NFL / NBA / NHL bet: graded like any pick, but the model has no tested edge, so it says so on every row. */
 function UnvalidatedTag() {
-  return <span className="dell-heading" title="Paper-tracked model output with no tested edge against prices" style={{ fontSize: '10px', color: '#f59e0b' }}>UNVALIDATED &middot; PAPER</span>
+  return <span className="dell-heading text-[#f59e0b]" title="Paper-tracked model output with no tested edge against prices">UNVALIDATED &middot; PAPER</span>
 }
 
 function systemDisplay(system: string) {

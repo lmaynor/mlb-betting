@@ -46,7 +46,7 @@ export async function copyText(text: string): Promise<boolean> {
 export function Select({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
   return (
     <div className="flex gap-[8px] items-center">
-      <label htmlFor={id} className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{label}</label>
+      <label htmlFor={id} className="dell-heading text-text-secondary">{label}</label>
       <select id={id} value={value} onChange={e => onChange(e.target.value)}
         style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 8px', fontSize: '12px', maxWidth: '190px' }}>
         {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
