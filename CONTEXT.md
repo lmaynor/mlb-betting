@@ -4311,7 +4311,7 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   were tested and left OFF (`H.GOALIE_BETA`, `H.XG_PRIOR`).
   Trained models servable (2026-11-01, `docs/analysis/nhl_trained_serving_2026-11-01.md`): `nhl/props/{live_features,trained,serve_trained}.py` -- pre-game features
   for unplayed games via placeholder rows (exact parity with the training features), bundle `Models/nhl_props/` with a canary (xgboost version skew was real), job output
-  `EVSweep/nhl_props/trained_latest.json`, board flag `NHL_TRAINED_PROPS` (default OFF, NOT flipped). DEPLOYED 2026-11-02 as jobs only: dedicated image `mlb-betting-nhl-trained:<commit tag>`,
+  `EVSweep/nhl_props/trained_latest.json`, board flag `NHL_TRAINED_PROPS` (default OFF, NOT flipped). DEPLOYED 2026-11-02 as SHADOW jobs only (image built from clean `origin/main`: dedicated `mlb-betting-nhl-trained:nhl-12798aa`, no shared tag touched),
   bundle published from inside it, jobs `nhl-trained-{train,score}` + `nhl-paper-{snapshot,settle}` with schedulers (`deploy/setup_nhl_trained_jobs.sh`); measured ~2.2 GB / 3-4 min. Forward paper-tracking
   `python -m nhl.props.paper_track report`. Flip criteria in the analysis doc. Only saves has positive ROI (regime-dependent, UNDETERMINED); skater markets carry information but not money.
 
