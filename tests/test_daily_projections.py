@@ -396,7 +396,7 @@ def test_canon_team_nba_nhl():
 # ----------------------------------------------------------------------------------------------- full market depth
 # 2026-10-16: NFL 10 / NHL 6 / NBA 10 projectable stats. NHL pp_points is a documented data gap (the skater master has
 # power_play_goals but no power-play assists), so it is asserted ABSENT rather than faked.
-DEPTH = {"nfl": 10, "nhl": 6, "nba": 10}
+DEPTH = {"nfl": 10, "nhl": 7, "nba": 10}
 SPORT_TEAMS = {  # (log team code, event away name, event home name)
     "nfl": ("KC", "Las Vegas Raiders", "Kansas City Chiefs"),
     "nhl": ("TOR", "Boston Bruins", "Toronto Maple Leafs"),
@@ -473,15 +473,15 @@ def test_every_projectable_stat_produces_a_valid_row(sport):
         assert lo - 1e-3 <= r["p_over_blend"] <= hi + 1e-3                # the blend sits between its two inputs
 
 
-def test_nhl_pp_points_is_a_documented_gap_not_a_projection():
-    assert "pp_points" not in dp.PROJECT_STATS["nhl"]
-    assert "pp_points" not in cf.supported_stats("nhl")
+def test_nhl_pp_points_is_a_live_projection():
+    assert dp.PROJECT_STATS["nhl"]["pp_points"] == "negbin"
+    assert "pp_points" in cf.supported_stats("nhl") and dp.STAT_LABEL["pp_points"] == "PP Points"
 
 
 def test_nhl_finishing_regression_on_dict_rows():
     logs = _depth_logs("nhl", lambda st: 0.5)
     sdef = _stat_defs("nhl")["goals"]
-    rows = [{"goals": 1.0, "shots": 4.0, "season": 2026, "_opp": "CGY"} for _ in range(20)]
+    rows = [{"goals": 1.0, "sog": 4.0, "season": 2026, "_opp": "CGY"} for _ in range(20)]
     row = dp.make_row(
         sport="nhl", stat="goals", player="Test Skater", pn="test skater",
         rows=rows, sdef=sdef, logs=logs, line=0.5, cons=None, at_pt=None,
