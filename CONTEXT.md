@@ -4267,6 +4267,10 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   Market check (2026-11-01, `docs/analysis/nhl_engine_vs_market_2026-11-01.md`, `scripts/nhl_engine_vs_market.py`): beats the old engine on every market but
   adds no information beyond the market on goals/assists/points (c <= 0.06); saves c +0.48 but regime-dependent. Opposing-goalie factor and shooter-xG prior
   were tested and left OFF (`H.GOALIE_BETA`, `H.XG_PRIOR`).
+  Trained models servable (2026-11-01, `docs/analysis/nhl_trained_serving_2026-11-01.md`): `nhl/props/{live_features,trained,serve_trained}.py` -- pre-game features
+  for unplayed games via placeholder rows (exact parity with the training features), bundle `Models/nhl_props/` with a canary (xgboost version skew was real), job output
+  `EVSweep/nhl_props/trained_latest.json`, board flag `NHL_TRAINED_PROPS` (default OFF). NOT deployed/published; train inside the image. Only saves has positive ROI
+  (regime-dependent, UNDETERMINED); skater markets carry information but not money.
 
 ---
 

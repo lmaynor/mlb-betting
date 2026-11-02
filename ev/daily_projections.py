@@ -142,6 +142,36 @@ BLEND_C = 0.10                                       # model weight (in logit sp
 # 30,613-prop study measured for the TRAINED SOG research model (c = +0.31, t = +4.9;
 # docs/analysis/bettingpros_model_vs_market_2026-10-15.md), NOT for this empirical engine -- applied here as a prior, and
 # display-only like BLEND_C (it feeds neither the edge, the confluence flag nor the Beezy Score).
+TRAINED_KEY = "EVSweep/nhl_props/trained_latest.json"      # written by nhl.props.serve_trained (the scoring job)
+TRAINED_MAX_AGE_H = 36.0
+
+
+def trained_enabled() -> bool:
+    """NHL_TRAINED_PROPS=1 serves the trained models' means / distributions where the scoring job has a prediction for the
+    player's game; anything else (the default) leaves the board on the empirical engine."""
+    import os
+    return os.environ.get("NHL_TRAINED_PROPS", "").strip() in ("1", "true", "yes", "on")
+
+
+def load_trained(now: datetime | None = None) -> dict:
+    """{(player_id, game ET date, stat): (mu, alpha, version)} from TRAINED_KEY; {} when absent, unreadable or older than
+    TRAINED_MAX_AGE_H (a stale file must never feed a board)."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        from mlb_core import storage
+        payload = json.loads(storage.read_bytes(TRAINED_KEY))
+        age = (now - datetime.fromisoformat(str(payload["ts"]).replace("Z", "+00:00"))).total_seconds() / 3600.0
+        if age > TRAINED_MAX_AGE_H:
+            log.warning("trained NHL props are %.1f h old (> %.0f): ignored", age, TRAINED_MAX_AGE_H)
+            return {}
+        v = payload.get("version")
+        return {(int(r["player_id"]), str(r["date"])[:10], r["stat"]): (float(r["mu"]), float(r["alpha"]), v)
+                for r in payload.get("rows", [])}
+    except Exception as exc:                                                            # noqa: BLE001
+        log.info("trained NHL props unavailable: %s", exc)
+        return {}
+
+
 BLEND_C_BY_SPORT_STAT = {"nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10,
                                  "assists": 0.12, "pp_points": 0.10}}
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
@@ -314,6 +344,7 @@ class GameLogs:
         self._vac: dict = {}
         self._sv: dict = {}
         self._tracker = None
+        self._trained: dict = {}
         self._opp_g: dict = {}
         self._lock = threading.Lock()
 
@@ -451,6 +482,18 @@ class GameLogs:
                             sv, sa = sv + s_, sa + a_
                 self._sv[eff] = sv / sa if sa >= 5000 else None
             return self._sv[eff]
+
+    def set_trained(self, preds: dict) -> None:
+        """Install {(player_id, ET game date, stat): (mu, alpha, version)} (see load_trained)."""
+        self._trained = preds or {}
+
+    def trained_pred(self, player_id, as_of: str | None, stat: str):
+        if self.sport != "nhl" or not self._trained or player_id is None or not as_of:
+            return None
+        try:
+            return self._trained.get((int(player_id), as_of, stat))
+        except (TypeError, ValueError):
+            return None
 
     def goalie_tracker(self):
         """nhl.game.goalie_model.GoalieTracker over every goalie appearance in the master, recorded in GLOBAL date order (the
@@ -860,6 +903,12 @@ def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, a
     generic project_mu estimate for that term, so a thin master never drops a row the old engine would have produced."""
     rows = _nh.before(rows, as_of)
     info = {"nhl_model": "hierarchical_v1"}
+    served = logs.trained_pred(rows[-1].get("player_id") if rows else None, as_of, stat)
+    if served is not None and len(_hist(rows, sdef)) >= MIN_GAMES:
+        mu_t, alpha_t, ver = served
+        info.update(nhl_model="trained_v1", trained_version=ver)
+        proj = {"mu": mu_t, "n_games": len(_hist(rows, sdef)), "usage_proj": None, "opp_factor": 1.0}
+        return proj, _nh.NegBinDist(mu_t, alpha_t), info
 
     def ctx_of(st):
         return logs.context(st, as_of)
@@ -1456,6 +1505,8 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     if logs is None:
         base["summary"] = {"reason": f"{sport} game-log master unavailable"}
         return _finish(base, sport, write, now)
+    if sport == "nhl" and trained_enabled():
+        logs.set_trained(load_trained(now))
     base["gamelog_latest"] = logs.latest_date()
     gl = base["gamelog_latest"]
     if sport != "nfl" and gl:

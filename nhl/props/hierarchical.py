@@ -304,6 +304,27 @@ def expected_shots_against(team_sa: float | None, opp_sog_for: float | None, own
     return own_sa
 
 
+class NegBinDist:
+    """NegBin(mu, alpha) (var = mu + alpha mu^2; alpha <= 0 is Poisson) with the same p_over / ppf surface as SavesMixture, for the
+    trained models' count distributions. P(over L) = P(X > floor(L))."""
+
+    def __init__(self, mu: float, alpha: float):
+        self.mu, self.alpha = max(float(mu), 1e-9), max(float(alpha), 0.0)
+
+    def _frozen(self):
+        from scipy.stats import nbinom, poisson
+        if self.alpha <= 0:
+            return poisson(self.mu)
+        n = 1.0 / self.alpha
+        return nbinom(n, n / (n + self.mu))
+
+    def p_over(self, line: float) -> float:
+        return float(1.0 - self._frozen().cdf(math.floor(line)))
+
+    def ppf(self, q: float) -> float:
+        return float(self._frozen().ppf(q))
+
+
 class SavesMixture:
     """Two-regime distribution of a starter's saves: a full game, Normal(mu_full, sd_full), with probability 1 - p, and an
     early hook, Normal(hook_mean, hook_sd), with probability p. `fit` solves mu_full / sd_full so that the mixture's mean is
