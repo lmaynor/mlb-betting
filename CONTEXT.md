@@ -4119,11 +4119,12 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   serving board's NBA rows (`ev/daily_projections.py`) now run `nba/props/hierarchical.py` (role-weighted teammate-absence redistribution,
   blowout / back-to-back minutes, attempt-first threes with empirical-Bayes 3P%, coherent pra/pr/pa/ra built from the points / rebounds /
   assists marginals, per-stat display blend `BLEND_C_BY_SPORT_STAT`). No walk-forward evidence behind the constants; the master's `_date` is
-  the UTC tip date so live serving applies NO as-of cut (`GameLogs.replay` for replays). See
+  the UTC tip date so live serving applies NO as-of cut (`GameLogs.nba_replay` for replays). See
   `docs/solutions/conventions/nba-hierarchical-props-engine-unvalidated.md`. Follow-up (`nba/props/engine_eval.py`, accuracy-only
   walk-forward on the box-score master, ORACLE absences, no spreads): absence boost shipped at 0.4x the spec's strength with steals /
   blocks excluded, team-makes assist factor on; DvP / pool rebounds / ZINB steals-blocks rejected and OFF (`NBA_FEATURES`).
-  Evidence: `docs/analysis/nba_engine_walkforward_2026-11-01.md`.
+  Evidence: `docs/analysis/nba_engine_walkforward_2026-11-01.md`. Prior-season tracking (`nba/data/tracking.py`, community mirror
+  gabriel1200/site_Data, season aggregates, unlicensed, NOT in the bucket) was tested for assists / rebounds and rejected (OFF).
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.

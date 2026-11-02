@@ -41,8 +41,9 @@ this empirical engine or for pr / pa / ra / steals / blocks, so those NBA entrie
 edge, the confluence flag nor the Beezy Score. Do not read the combo coherence as edge: it makes the board internally
 consistent; the replay (accuracy, not edge) shows it beats the old projection on the held-out seasons.
 Built in the follow-up but left OFF because the replay rejected them: positional DvP, missed-shot-pool rebounds, zero-inflated
-steals / blocks. Overtime is a variance-only regime (untestable without spreads). Not built: tracking-data joins (NBA person ids
-vs the board's name keys need a crosswalk). `nba/props/score.py` has an opt-in `--coherent-combos` PRA (default off, unvalidated).
+steals / blocks, and the prior-season tracking factors (`nba/data/tracking.py`: potential-assist / rebound-chance luck removal from the
+unlicensed community mirror gabriel1200/site_Data; season aggregates only, so prior season only; rebound-chance files stop at 2022-23).
+Overtime is a variance-only regime (untestable without spreads). `nba/props/score.py` has an opt-in `--coherent-combos` PRA (default off, unvalidated).
 
 ## Gotcha: the master's `_date` is the UTC date of the tip
 
@@ -50,7 +51,7 @@ vs the board's name keys need a crosswalk). `nba/props/score.py` has an opt-in `
 sportsblaze-master-date-is-utc.md), so for an evening game tonight's ET day equals the UTC date of LAST night's late game.
 A strict `_date < ET game day` history cut would silently drop yesterday's game from every live projection. Therefore:
 
-- live serving passes `as_of=None` (the master holds only finished games); `GameLogs.replay = True` switches on a cutoff at the
+- live serving passes `as_of=None` (the master holds only finished games); `GameLogs.nba_replay = True` switches on a cutoff at the
   tip's UTC day (replays of past boards; an afternoon tip also loses the previous evening's game -- stale, never leaking);
 - `rest_days` is computed between the newest prior row and the tip's UTC day, floored at 0 (it can miss a back-to-back across
   the UTC/ET labelling, never invent one);

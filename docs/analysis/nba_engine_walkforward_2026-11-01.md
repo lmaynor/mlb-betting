@@ -41,6 +41,27 @@ Overall (final shipped configuration vs the old engine, 2024-26): log-score gain
 run scored `eta_0.4 + pool_0.5 + shot_0.5`, rebounds / `pr` / `ra` / `pra` for the shipped config sit between the `eta_0.4`-only
 and the three-factor rows (both in the appendices); assists and `pa` are identical to the confirmed rows.
 
+## Tracking-data joins (added 2026-11-01, `nba/data/tracking.py`): tested, REJECTED, OFF
+Source: the community mirror github.com/gabriel1200/site_Data (stats.nba.com tracking saved per season; NO license, no README;
+the owner approved using it). Every table is a SEASON AGGREGATE per player, so only the PRIOR completed season is leak-free.
+Coverage: passing / touches 2014-2026; rebound-chance files (dreb / oreb) only through 2022-23 (2024 stops at <= 23 games per
+player, 2025+ missing). Name crosswalk: >= 99.7% of rotation players matched, no duplicate names (misses are diacritics), NBA
+`PLAYER_ID` kept from passing / touches.
+
+Factors tested (prior-season "luck removal": potential assists x shrunk AST / PotentialAST conversion over actual assists; rebound
+chances x shrunk conversion over actual rebounds), paired against the shipped config `eta_0.4 + shot_0.5`:
+
+| Factor | Tune sample | Result | Decision |
+|---|---|---|---|
+| Assists, gamma 0.5 / 1.0 | 2023-24, n = 16,483 | assists d log score -0.0005 (z -2.85) / -0.0018 (z -4.28); combos ~0 | **REJECTED**, not run held-out |
+| Rebounds, gamma 0.5 / 1.0 | 2021-22 + 2022-23, n = 33,899 | rebounds -0.0002 (z -2.49) / -0.0009 (z -4.46); combos ~0 | **REJECTED**, not run held-out |
+
+Reading: assist conversion (and rebound conversion) behaves like a persistent skill, so regressing last season's conversion to the
+league mean removes signal the current-season games already carry. The code stays (`NBA_FEATURES["trk_ast" / "trk_reb"] = 0`),
+the mirror is dry-run only and was never written to the bucket. Untested ideas that need per-GAME tracking (not season
+aggregates): in-season potential-assist and rebound-chance form. Appendices: `tune_2023_tracking_assists.md`,
+`tune_2021_22_tracking_rebounds.md`.
+
 ## Not changed by this evidence (still unvalidated spec priors)
 Blowout curve and starter trim, back-to-back trim, foul-trouble weight, overtime regime (variance only), shot-diet points
 variance scale, correlation priors for the combos, `BLEND_C_BY_SPORT_STAT` (display-only), the opt-in `--coherent-combos`
