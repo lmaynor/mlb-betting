@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { SystemSparkline } from './system-sparkline'
 import { SYSTEM_PILL } from '@/lib/tokens'
 import type { SparklinePoint } from '@/lib/betting-api'
+import { cx } from '@/utils/cx'
 
 export interface SystemCard {
   system: string
@@ -44,12 +45,9 @@ function SystemTile({ s }: { s: SystemCard }) {
   const pill = SYSTEM_PILL[s.system] ?? { bg: 'var(--slate)', color: s.tint, border: '1px solid var(--color-border-button-default)' }
 
   return (
-    <div
-      className="card-hover"
-      style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}
-    >
+    <div className="card-hover flex flex-col overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card">
       {/* Top accent line in the system hue */}
-      <div style={{ height: '3px', background: s.tint, opacity: 0.85 }} />
+      <div className="h-[3px] opacity-85" style={{ background: s.tint }} />
 
       {/* Header -- click to expand */}
       <button
@@ -57,28 +55,15 @@ function SystemTile({ s }: { s: SystemCard }) {
         onClick={() => setOpen(o => !o)}
         aria-expanded={open}
         aria-controls={panelId}
-        style={{
-          background: 'transparent',
-          padding: '14px 16px 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px',
-          cursor: 'pointer',
-          width: '100%',
-          font: 'inherit',
-          textAlign: 'left',
-          color: 'inherit',
-          border: 'none',
-        }}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 border-none bg-transparent px-4 pb-0 pt-3.5 text-left [font:inherit] [color:inherit]"
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="dell-heading rounded-full px-2 py-[3px] tracking-[0.05em]" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
             {s.system}
           </span>
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roiPos ? 'var(--signal)' : 'var(--loss)', flexShrink: 0 }}>
+        <span className="flex items-center gap-2">
+          <span className="mono shrink-0 text-caption-1-semibold" style={{ color: roiPos ? 'var(--signal)' : 'var(--loss)' }}>
             {s.roi == null ? '--' : `${roiPos ? '+' : ''}${s.roi.toFixed(1)}%`}
           </span>
           <Chevron open={open} color="var(--color-text-secondary)" />
@@ -86,8 +71,8 @@ function SystemTile({ s }: { s: SystemCard }) {
       </button>
 
       {/* Compact body: name + at-a-glance ROI sparkline */}
-      <div style={{ padding: '10px 16px 6px' }}>
-        <div className="dell-display" style={{ fontSize: '17px', color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>
+      <div className="px-4 pb-1.5 pt-2.5">
+        <div className="dell-display text-[17px] tracking-[-0.01em]">
           {s.name}
         </div>
         {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} positive={roiPos} />}
@@ -96,35 +81,25 @@ function SystemTile({ s }: { s: SystemCard }) {
       {/* Expandable detail */}
       <div id={panelId} className="sys-expand" data-open={open}>
         <div className="sys-expand-inner">
-          <div style={{ padding: '4px 16px 16px' }}>
-            <div className="times" style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55, marginBottom: '14px' }}>
+          <div className="px-4 pb-4 pt-1">
+            <div className="times mb-3.5 text-body-2-regular text-text-secondary">
               {s.desc}
             </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3,1fr)',
-                gap: '10px',
-                paddingTop: '12px',
-                borderTop: '1px solid var(--color-separator-border)',
-                marginBottom: '14px',
-              }}
-            >
+            <div className="mb-3.5 grid grid-cols-3 gap-2.5 border-t border-separator-border pt-3">
               {[
                 ['Win rate', s.win_rate.toFixed(1) + '%', 'var(--color-text-primary)'] as const,
                 ['Bets', String(s.total_bets), 'var(--color-text-primary)'] as const,
                 ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--color-text-primary)' : 'var(--color-text-secondary)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
-                  <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{label}</div>
-                  <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color }}>{val}</div>
+                  <div className="dell-heading mb-1 tracking-[0.1em] text-text-secondary">{label}</div>
+                  <div className="mono text-caption-1-semibold" style={{ color }}>{val}</div>
                 </div>
               ))}
             </div>
             <Link
               href={s.href}
-              className="times"
-              style={{ fontSize: '13px', fontWeight: 600, color: 'var(--link)', textDecoration: 'none' }}
+              className="times text-body-2-semibold text-[var(--link)] no-underline hover:underline"
             >
               View picks &rarr;
             </Link>
