@@ -16,7 +16,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { CockpitFeed, CockpitForm, CockpitGame, CockpitRow, EvBookQuote } from '@/lib/types'
 import { apiGetEdgeCockpit } from '@/lib/betting-api'
-import { bookDisplay, CARD_STYLE } from '@/lib/tokens'
+import { bookDisplay } from '@/lib/tokens'
+import { cx } from '@/utils/cx'
 import { americanToDecimal, fairAmerican } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
@@ -26,6 +27,7 @@ import { isOffshore, onshoreQuotes } from '@/lib/offshore'
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
 export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
 
+const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 const HAIR = '#1e2230'
 const GOOD = '#57F287'
 const BAD = '#ef4444'
@@ -156,10 +158,10 @@ function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' })
 
 function Panel({ title, sub, children }: { title: string; sub?: string; children: ReactNode }) {
   return (
-    <section style={{ ...CARD_STYLE, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
-        <h3 className="dell-heading" style={{ fontSize: '10.5px', color: 'var(--fog)', letterSpacing: '0.08em' }}>{title}</h3>
-        {sub && <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>{sub}</span>}
+    <section className={cx(CARD, 'px-4 py-3.5')}>
+      <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="dell-heading tracking-[0.08em] text-text-secondary">{title}</h3>
+        {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
       </div>
       {children}
     </section>
@@ -168,11 +170,11 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
 
 function StatPills({ items }: { items: { label: string; value: string; color?: string }[] }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(76px, 1fr))', gap: '8px', marginTop: '12px' }}>
+    <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(76px,1fr))]">
       {items.map(it => (
-        <div key={it.label} style={{ background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '7px 9px', minWidth: 0 }}>
-          <div className="mono" style={{ fontSize: '15px', fontWeight: 700, color: it.color ?? 'var(--chalk)', lineHeight: 1.1 }}>{it.value}</div>
-          <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px' }}>{it.label}</div>
+        <div key={it.label} className="min-w-0 rounded-lg border border-separator-border bg-background-secondary-default px-[9px] py-[7px]">
+          <div className="mono text-[15px] font-bold leading-[1.1] text-text-primary" style={it.color ? { color: it.color } : undefined}>{it.value}</div>
+          <div className="dell-heading mt-1 text-text-secondary">{it.label}</div>
         </div>
       ))}
     </div>
@@ -180,7 +182,7 @@ function StatPills({ items }: { items: { label: string; value: string; color?: s
 }
 
 function NoData({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: '12.5px', color: 'var(--fog)', lineHeight: 1.55, padding: '6px 0' }}>{children}</div>
+  return <div className="py-1.5 text-body-2-regular text-text-secondary">{children}</div>
 }
 
 // -- Panel 1: L10 game log vs the prop line ------------------------------------------------------------------------
@@ -331,29 +333,30 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
   )
   return (
     <div>
-      <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} style={{ overflowX: 'auto' }}>
-        <div role="row" style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', padding: '0 4px 6px', borderBottom: `1px solid ${HAIR}`, minWidth: '320px' }}>
+      <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} className="overflow-x-auto">
+        <div role="row" className="grid min-w-[320px] gap-2 border-b border-separator-border px-1 pb-1.5" style={{ gridTemplateColumns: cols }}>
           {['BOOK', 'OVER', 'UNDER', 'FAIR O%'].map(h => (
-            <span key={h} role="columnheader" className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>{h}</span>
+            <span key={h} role="columnheader" className="dell-heading text-text-secondary">{h}</span>
           ))}
         </div>
         {ranked.map(({ quote, best }) => {
           const flagged = (quote.book ?? '').toLowerCase() === (r.book ?? '').toLowerCase()
           return (
             <div key={quote.book} role="row" data-best={best ? 'true' : undefined}
-              style={{ display: 'grid', gridTemplateColumns: cols, gap: '8px', alignItems: 'center', padding: '8px 4px', borderBottom: '1px solid #151822', minWidth: '320px', background: best ? 'rgba(87, 242, 135, 0.06)' : 'transparent' }}>
+              className={cx('grid min-w-[320px] items-center gap-2 border-b border-border-table px-1 py-2', best ? 'bg-[rgba(87,242,135,0.06)]' : 'transition-colors hover:bg-background-primary-hover')}
+              style={{ gridTemplateColumns: cols }}>
               <span role="cell" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <BookBadge book={quote.book} />
                 {flagged && <span className="dell-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
-              <span role="cell" className="mono" style={{ fontSize: '12.5px', color: 'var(--ash)' }}>{quote.fair == null ? <>&ndash;</> : `${(quote.fair * 100).toFixed(1)}%`}</span>
+              <span role="cell" className="mono text-body-2-regular text-text-primary">{quote.fair == null ? <>&ndash;</> : `${(quote.fair * 100).toFixed(1)}%`}</span>
             </div>
           )
         })}
       </div>
-      <div style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '8px', lineHeight: 1.5 }}>
+      <div className="mt-2 text-caption-2-regular text-text-secondary">
         Highlighted row = best {under ? 'under' : 'over'} price. {r.all_books && r.all_books.length > 1 ? '' : 'Only the flagged quote was captured for this line: check other books before you bet.'}
       </div>
     </div>
@@ -369,29 +372,29 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
   const form = r.recentForm
   const mlbExtras = r.sport === 'mlb' && renderMlbExtras ? renderMlbExtras(r) : null
   return (
-    <div style={{ display: 'grid', gap: '12px' }}>
-      <header style={{ ...CARD_STYLE, padding: '16px', display: 'grid', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+    <div className="grid gap-3">
+      <header className={cx(CARD, 'grid gap-3 p-4')}>
+        <div className="flex items-center gap-3.5">
           <Avatar r={r} size={56} />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
+          <div className="min-w-0 flex-1">
+            <div className="mb-[3px] flex flex-wrap items-center gap-2">
               <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
-              <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fog)' }}>{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
+              <span className="mono text-caption-1-regular text-text-secondary">{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
             </div>
-            <h2 className="dell-display" style={{ fontSize: 'clamp(19px, 3vw, 24px)', color: 'var(--chalk)', lineHeight: 1.15, overflowWrap: 'anywhere' }}>{r.player ?? 'Unknown player'}</h2>
-            <div style={{ fontSize: '14px', color: 'var(--ash)', marginTop: '3px', fontWeight: 600 }}>{propText(r)}</div>
+            <h2 className="dell-display text-[clamp(19px,3vw,24px)] leading-[1.15] [overflow-wrap:anywhere]">{r.player ?? 'Unknown player'}</h2>
+            <div className="mt-[3px] text-body-semibold text-text-primary">{propText(r)}</div>
           </div>
-          <button onClick={onClose} className="btn btn-ghost cockpit-close" aria-label="Close inspector" style={{ padding: '6px 12px', fontSize: '12px', alignSelf: 'flex-start' }}>Close</button>
+          <button onClick={onClose} className="btn btn-ghost cockpit-close self-start px-3 py-1.5 text-xs" aria-label="Close inspector">Close</button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '10px 12px' }}>
+        <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-separator-border bg-background-secondary-default px-3 py-2.5">
           <EvBadge ev={r.ev} size="lg" />
-          <div style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.5, minWidth: 0, flex: '1 1 200px' }}>
-            Best Price: <b className="mono" style={{ color: 'var(--chalk)' }}>{r.american != null ? formatOdds(r.american) : '--'}</b> on{' '}
+          <div className="min-w-0 flex-[1_1_200px] text-body-2-regular text-text-secondary">
+            Best Price: <b className="mono text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</b> on{' '}
             <b style={{ color: book.color }}>{book.label}</b>
-            {fair && <> vs <b className="mono" style={{ color: 'var(--chalk)' }}>{fair}</b> Consensus Fair</>}
+            {fair && <> vs <b className="mono text-text-primary">{fair}</b> Consensus Fair</>}
           </div>
         </div>
-        <div style={{ fontSize: '11.5px', color: 'var(--fog)', lineHeight: 1.5 }}>
+        <div className="text-caption-1-regular text-text-secondary">
           {r.n_books != null ? `De-vigged consensus of ${r.n_books} reference book${r.n_books === 1 ? '' : 's'}.` : 'De-vigged market consensus.'}
           {r.shadow ? ' Preview signal: not yet tracked in the public results.' : r.source === 'model' ? ' Model probability vs the market line.' : ' Tracked and settled publicly at the flagged price.'}
         </div>
@@ -422,24 +425,26 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
   const meta = [r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')
   return (
     <button onClick={onSelect} aria-current={active || undefined} data-row-id={r.id}
-      style={{ width: '100%', textAlign: 'left', cursor: 'pointer', color: 'var(--ash)', display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr) auto', gap: '12px', alignItems: 'center', padding: '12px', borderRadius: '10px', background: active ? '#171a24' : '#11131a', border: `1px solid ${active ? '#3a4156' : HAIR}`, boxShadow: active ? 'inset 3px 0 0 #57F287' : 'none', opacity: r.flag ? 1 : 0.82 }}>
+      className={cx('button-press-motion grid w-full cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border p-3 text-left text-text-primary',
+        active ? 'border-border-button-hover bg-background-tertiary-default shadow-[inset_3px_0_0_#57F287]' : 'border-separator-border bg-background-primary-default hover:bg-background-primary-hover',
+        !r.flag && 'opacity-80')}>
       <Avatar r={r} size={44} />
-      <span style={{ minWidth: 0, display: 'grid', gap: '3px' }}>
-        <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--chalk)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.player ?? 'Unknown player'}</span>
-        <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{propText(r)}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
-          <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 5px', flex: '0 0 auto' }}>{r.sport.toUpperCase()}</span>
-          {r.sport !== 'mlb' && <span className="dell-heading" title="NFL, NHL and NBA output has no tested edge against prices" style={{ fontSize: '10px', color: '#f59e0b', flex: '0 0 auto' }}>UNVALIDATED</span>}
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta}</span>
+      <span className="grid min-w-0 gap-[3px]">
+        <span className="truncate text-[14.5px] font-bold text-text-primary">{r.player ?? 'Unknown player'}</span>
+        <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
+        <span className="flex min-w-0 items-center gap-[7px]">
+          <span className="dell-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
+          {r.sport !== 'mlb' && <span className="dell-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
+          <span className="mono truncate text-[11px] text-text-secondary">{meta}</span>
         </span>
       </span>
-      <span style={{ display: 'grid', gap: '6px', justifyItems: 'end' }}>
+      <span className="grid justify-items-end gap-1.5">
         <EvBadge ev={r.ev} />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+        <span className="inline-flex items-center gap-1.5">
           <BookBadge book={r.book} />
-          <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{r.american != null ? formatOdds(r.american) : '--'}</span>
+          <span className="mono text-body-2-bold text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</span>
         </span>
-        <span className="mono" style={{ fontSize: '11px', fontWeight: 700, color: rateColor(l10), border: `1px solid ${HAIR}`, background: '#090a0f', borderRadius: '999px', padding: '2px 8px' }}>
+        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-[11px] font-bold" style={{ color: rateColor(l10) }}>
           L10: {pct0(l10)}
         </span>
       </span>
@@ -451,12 +456,13 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
 /** Recessed segmented group: active = elevated slate surface, never the brand fill (that stays reserved for +EV). */
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="group" aria-label={label} style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
+    <div role="group" aria-label={label} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
       {options.map(o => {
         const active = value === o.id
         return (
           <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={active}
-            style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em', padding: '6px 11px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', color: active ? '#ffffff' : 'var(--silver)', background: active ? '#1b1f2b' : 'transparent', border: `1px solid ${active ? '#3a4156' : 'transparent'}`, boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none' }}>
+            className={cx('button-press-motion cursor-pointer whitespace-nowrap rounded-md border px-[11px] py-1.5 text-caption-1-semibold tracking-[0.03em]',
+              active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
             {o.label}
           </button>
         )
@@ -553,9 +559,9 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 
   if (feed == null) {
     return (
-      <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
-        <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>Prop research is temporarily unavailable</div>
-        <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>
+      <div className={cx(CARD, 'px-5 py-9 text-center')}>
+        <div className="mb-1.5 text-body-semibold text-text-primary">Prop research is temporarily unavailable</div>
+        <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">
           Prop data is temporarily unavailable. This page retries every minute.
         </div>
       </div>
@@ -564,41 +570,41 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 
   return (
     <div>
-      <section aria-label="Cockpit filters" style={{ display: 'grid', gap: '10px', margin: '0 0 14px' }}>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <section aria-label="Cockpit filters" className="mb-3.5 grid gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Segmented<string> label="Market" value={activeMarket} onChange={setMarket}
             options={[{ id: 'all', label: `ALL MARKETS ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k).toUpperCase()} ${n}` }))]} />
         </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
               options={[{ id: 'ev', label: 'BEST +EV' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
             <Segmented<string> label="Confidence" value={credibleOnly ? 'credible' : 'all'} onChange={v => setCredibleOnly(v === 'credible')}
               options={[{ id: 'all', label: 'ALL SIGNALS' }, { id: 'credible', label: 'CREDIBLE ONLY' }]} />
           </div>
           <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search player or team" aria-label="Search player or team"
-            style={{ background: '#090a0f', border: '1px solid #2e3446', borderRadius: '6px', color: 'var(--chalk)', fontSize: '13px', height: '34px', padding: '0 10px', minWidth: 0, flex: '1 1 180px', maxWidth: '300px' }} />
+            className="h-[34px] min-w-0 max-w-[300px] flex-[1_1_180px] rounded-lg border border-border-button-default bg-background-secondary-default px-2.5 text-body-2-regular text-text-primary outline-none placeholder:text-text-placeholder focus:border-accent-500" />
         </div>
       </section>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px', margin: '0 2px 10px', flexWrap: 'wrap' }}>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} PROPS &middot; UPDATED {ageLabel.toUpperCase()}</span>
-        <button onClick={onRefresh} disabled={loading} className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: '12px' }}>{loading ? 'Refreshing...' : 'Refresh'}</button>
+      <div className="mx-0.5 mb-2.5 flex flex-wrap items-baseline justify-between gap-2.5">
+        <span className="mono text-caption-1-regular text-text-secondary">{rows.length} PROPS &middot; UPDATED {ageLabel.toUpperCase()}</span>
+        <button onClick={onRefresh} disabled={loading} className="btn btn-ghost px-3 py-[5px] text-xs">{loading ? 'Refreshing...' : 'Refresh'}</button>
       </div>
       {statusLine && (
-        <div role="note" style={{ border: `1px solid ${HAIR}`, background: '#11131a', borderRadius: '8px', padding: '10px 12px', margin: '0 0 12px', fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.5 }}>{statusLine}</div>
+        <div role="note" className={cx(CARD, 'mb-3 px-3 py-2.5 text-body-2-regular text-text-secondary')}>{statusLine}</div>
       )}
 
       {rows.length === 0 ? (
-        <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
-          <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>No props match right now</div>
-          <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>
+        <div className={cx(CARD, 'px-5 py-9 text-center')}>
+          <div className="mb-1.5 text-body-semibold text-text-primary">No props match right now</div>
+          <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">
             The scanner re-checks lines every 15 minutes through the betting day. Try another sport, clear the market filter, or switch off Credible only.
           </div>
         </div>
       ) : (
         <div className="cockpit-grid">
-          <div role="list" aria-label="Prop candidates" onKeyDown={onListKeyDown} style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
+          <div role="list" aria-label="Prop candidates" onKeyDown={onListKeyDown} className="grid min-w-0 gap-2">
             {rows.map(r => (
               <div role="listitem" key={r.id}>
                 <PropCard r={r} active={selected?.id === r.id} onSelect={() => select(r)} />
