@@ -243,8 +243,11 @@ def _fill_nhl_power_play(sk: pd.DataFrame) -> pd.DataFrame:
             rel = sk[_num(sk["season_year"]).isin(keep)]
             if "game_type" in rel.columns:
                 rel = rel[_num(rel["game_type"]).isin([2, 3])]
-            if len(rel) and rel["power_play_points"].notna().mean() >= 0.99:      # backfilled: no need to read the shots
-                return sk
+            if len(rel) and rel["power_play_points"].notna().mean() >= 0.99:      # backfilled: no need to read the shots ...
+                cut = (pd.to_datetime(rel["date"], errors="coerce").max() - pd.Timedelta(days=14))
+                recent = rel[pd.to_datetime(rel["date"], errors="coerce") >= cut]
+                if len(recent) and recent["power_play_points"].notna().all():     # ... unless the newest games lack it
+                    return sk
         years = sorted(_num(sk["season_year"]).dropna().unique())[-KEEP_SEASONS:]
         for y in years:
             try:

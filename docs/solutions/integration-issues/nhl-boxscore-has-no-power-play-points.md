@@ -38,7 +38,7 @@ power-play goal), so do not simplify it. The power-play share of all NHL points 
   shots data reproduces the box's own `power_play_goals` for that game (100 preseason rows and 2 regular-season rows did not, so
   they stay NaN); every filled row satisfies `power_play_points == power_play_goals + power_play_assists <= points`. Pre-write copy:
   `NHL/backups/skater_boxscores_master_pre_pp_2026-11-01.csv`. `cockpit_form._fill_nhl_power_play` remains as the fallback and skips
-  the shots reads once >= 99% of the kept seasons' regular-season rows are filled. The nightly upsert writes the columns for new games.
+  the shots reads once >= 99% of the kept seasons' regular-season rows are filled. The nightly upsert writes the columns for new games ONLY once the new image is deployed; until then the 2-day re-fetch window and new games arrive without them and the loader fallback (which reads the shots when the newest 14 days are unfilled) covers them.
 - grading: `ev.grade_props.nhl_actuals` fetches the play-by-play and sets `pp_points` per player; if the fetch fails the stat
   is left off the record and the quote grades `ungradable`.
 

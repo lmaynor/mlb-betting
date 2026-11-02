@@ -244,6 +244,23 @@ def test_cockpit_form_pp_points_stat_and_loader_fill(monkeypatch):
     assert math.isnan(cf._fill_nhl_power_play(sk).loc[0, "power_play_points"])      # unreadable shots: left unknown
 
 
+def test_loader_still_fills_new_games_the_old_ingest_wrote_without_pp_columns(monkeypatch):
+    day = lambda g: (pd.Timestamp("2025-10-01") + pd.Timedelta(days=g // 4)).date().isoformat()   # noqa: E731
+    rows = [{"game_id": g, "player_id": g, "season_year": 2025, "game_type": 2, "date": day(g),
+             "power_play_points": (1.0 if g < 399 else float("nan"))} for g in range(1, 401)]
+    sk = pd.DataFrame(rows)                                        # 99.5% filled overall, the newest two rows missing
+    reads = []
+    monkeypatch.setattr(cf, "_read", lambda keys, kind, usecols=None: (reads.append(kind), pd.DataFrame(
+        [{"game_id": 400, "event": "goal", "is_home": True, "period_type": "REG", "situation_code": 1451,
+          "shooter_id": 400, "assist1_id": None, "assist2_id": None}]))[1])
+    cf._fill_nhl_power_play(sk)
+    assert reads == ["nhl shots"]                                  # the newest games are missing: the fallback still reads
+    full = sk.assign(power_play_points=1.0)
+    reads.clear()
+    cf._fill_nhl_power_play(full)
+    assert reads == []                                             # fully backfilled: no shots read
+
+
 # ------------------------------------------------------------------------------- the seven markets are live
 def test_pp_points_is_a_live_market_with_labels_and_blend_weights():
     assert dp.PROJECT_STATS["nhl"]["pp_points"] == "negbin"
