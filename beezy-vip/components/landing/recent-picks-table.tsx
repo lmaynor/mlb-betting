@@ -12,7 +12,7 @@ import { playerIdByName } from '@/lib/sport-assets.server'
 import { SectionHeader } from './section-header'
 import type { Bet } from '@/lib/types'
 
-const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary'
+const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold uppercase tracking-caps text-text-secondary'
 const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
 function units(profit: number | null, stake: number | null) {
@@ -70,7 +70,7 @@ export async function RecentPicksTable() {
                         </span>
                         <div className="min-w-0">
                           <div className="text-body-2-bold text-text-primary">{b.player ?? pickText(b)}</div>
-                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="ui-heading ml-2 text-[#f59e0b]" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
+                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="ui-heading ml-2 text-gold" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>
@@ -81,7 +81,7 @@ export async function RecentPicksTable() {
                       </span>
                     </td>
                     <td className={cx(TD, 'whitespace-nowrap text-right')}>
-                      <span className="mono mr-2 text-[10px] font-bold" style={{ color: res.color }}>{res.label}</span>
+                      <span className="mono mr-2 text-micro font-bold" style={{ color: res.color }}>{res.label}</span>
                       <span className="mono text-body-2-bold" style={{ color: (b.profit ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{units(b.profit, b.stake)}</span>
                     </td>
                   </tr>
@@ -91,7 +91,7 @@ export async function RecentPicksTable() {
           </table>
         )}
       </div>
-      <div className="mt-2"><Link href="/results" className="text-caption-1-regular text-[var(--link)]">All results by sport &rarr;</Link></div>
+      <div className="mt-2"><Link href="/results" className="text-caption-1-regular text-link">All results by sport &rarr;</Link></div>
     </section>
   )
 }

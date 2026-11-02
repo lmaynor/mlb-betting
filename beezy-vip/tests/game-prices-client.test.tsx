@@ -42,8 +42,8 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
     const table = screen.getByRole('table')
     const heads = within(table).getAllByRole('columnheader').map(h => h.textContent)
     expect(heads).toEqual(expect.arrayContaining(['GAME', 'BEST AWAY / OVER', 'BEST HOME / UNDER', 'FAIR %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
-    expect(within(table).getAllByText('BOS @ MIA').length).toBe(3)
-    expect(within(table).getByText('TOR @ MTL')).toBeInTheDocument()
+    expect(table.querySelectorAll('[data-matchup="BOS @ MIA"]').length).toBe(3)
+    expect(table.querySelector('[data-matchup="TOR @ MTL"]')).not.toBeNull()
     expect(table.textContent).toMatch(/MIA -3\.5/)
     expect(table.textContent).toMatch(/O\/U 224\.5/)
   })
@@ -86,7 +86,7 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
     render(<GamePricesClient feeds={{ nba, nhl }} sport="all" />)
     fireEvent.change(screen.getByLabelText('Search teams'), { target: { value: 'mtl' } })
     expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 ROWS/)
-    expect(within(screen.getByRole('table')).queryByText('BOS @ MIA')).toBeNull()
+    expect(screen.getByRole('table').querySelector('[data-matchup="BOS @ MIA"]')).toBeNull()
   })
 
   it('flags a stale feed', () => {

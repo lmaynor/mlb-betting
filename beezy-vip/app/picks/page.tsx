@@ -40,7 +40,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <FilterBar sport="all" />
-      <div className="mx-auto max-w-[1200px] p-6">
+      <div className="mx-auto max-w-page p-6">
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
           <div>
             <h1 className="text-title-2-bold text-text-primary">Top Signals</h1>

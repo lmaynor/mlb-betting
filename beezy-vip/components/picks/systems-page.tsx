@@ -22,7 +22,7 @@ export async function SystemsPage({ sport }: { sport: SportSlug }) {
     <div>
       <SportTabs sport={sport} active="systems" />
       <SystemStrip sport={sport} active={null} />
-      <div className="max-w-[1200px] mx-auto p-6">
+      <div className="max-w-page mx-auto p-6">
         <SystemsTable sport={sport} stats={stats} today={today} level="h1" />
         {!tracked && <SportEvidenceNote sport={sport as ProjectionSport} />}
       </div>

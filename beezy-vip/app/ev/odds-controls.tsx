@@ -96,7 +96,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
                 >
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: on.has(b.key) ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', cursor: 'pointer', flex: 1, minWidth: 0 }}>
                     <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
-                    <span className="min-w-[24px] inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
+                    <span className="min-w-6 inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
                     <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
                     <span className="mono text-[10.5px] text-text-secondary mr-0.5">{b.n}</span>
                   </label>
@@ -129,7 +129,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
               )
             })}
           </div>
-          <span className="text-[11px] text-text-secondary leading-[1.45]">{note}</span>
+          <span className="text-mini text-text-secondary leading-[1.45]">{note}</span>
         </div>
       )}
     </div>
@@ -180,10 +180,10 @@ export function MobileBookChecklist({
             textAlign: 'left',
           }}
         >
-          <span className="ui-heading text-[11px] text-text-primary tracking-[0.06em]">
+          <span className="ui-heading text-mini text-text-primary tracking-head">
             {title} ({countLabel})
           </span>
-          <span className="mono text-[10px] text-text-secondary">
+          <span className="mono text-micro text-text-secondary">
             {collapsed ? '[\u25bc Show]' : '[\u25b2 Hide]'}
           </span>
         </button>
@@ -275,13 +275,13 @@ export function MobileBookChecklist({
                       onChange={() => toggle(b.key)}
                       style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--signal)' }}
                     />
-                    <span className="min-w-[24px] inline-flex justify-center">
+                    <span className="min-w-6 inline-flex justify-center">
                       <BookLogo book={b.key} size={24} />
                     </span>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: checked ? 600 : 400 }}>
                       {meta.label}{b.offshore ? ' (offshore)' : ''}
                     </span>
-                    <span className="mono text-[11px] text-text-secondary mr-1.5">
+                    <span className="mono text-mini text-text-secondary mr-1.5">
                       {b.n}
                     </span>
                   </label>
@@ -319,7 +319,7 @@ export function MobileBookChecklist({
           </div>
 
           {subtitle && (
-            <span className="text-[11px] text-text-secondary leading-[1.45]">{subtitle}</span>
+            <span className="text-mini text-text-secondary leading-[1.45]">{subtitle}</span>
           )}
         </>
       )}

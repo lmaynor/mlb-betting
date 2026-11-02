@@ -64,26 +64,26 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'ev' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">LINES</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">LINES</div>
               <PillGroup>
                 <Pill active={lines === 'main'} onClick={() => setLines('main')}>Main Lines</Pill>
                 <Pill active={lines === 'all'} onClick={() => setLines('all')}>Main + Alt Ladders</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">O/U</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">O/U</div>
               <PillGroup>
                 {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.toUpperCase()}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN EV</div>
               <PillGroup>
                 {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">SORT</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">SORT</div>
               <Select id="mobile-ev-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
             </div>
           </>
@@ -92,7 +92,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'outliers' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN GAP</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN GAP</div>
               <PillGroup>
                 {OUTLIER_GAP_OPTIONS.map(g => (
                   <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>
@@ -100,14 +100,14 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">REQUIRE +EV</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">REQUIRE +EV</div>
               <PillGroup>
                 <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
                 <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }}>Verified +EV Only</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">ODDS BAND</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">ODDS BAND</div>
               <PillGroup>
                 {OUTLIER_ODDS_OPTIONS.map(b => (
                   <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -115,7 +115,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN BOOKS</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN BOOKS</div>
               <PillGroup>
                 {OUTLIER_MIN_BOOKS.map(b => (
                   <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -123,7 +123,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">VIEW</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">VIEW</div>
               <PillGroup>
                 <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
                 <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
@@ -135,20 +135,20 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'arb' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">SHOW</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">SHOW</div>
               <PillGroup>
                 <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                 <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">EXCHANGES</div>
               <PillGroup>
                 <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">OUTLAY ($)</div>
               <input
                 inputMode="decimal"
                 value={outlayText}
@@ -162,31 +162,31 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'middles' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MAX COST</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MAX COST</div>
               <PillGroup>
                 {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }}>{`${c}%`}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">VALUE</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">VALUE</div>
               <PillGroup>
                 <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV ONLY</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">WINDOW</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">WINDOW</div>
               <PillGroup>
                 {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">EXCHANGES</div>
               <PillGroup>
                 <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">OUTLAY ($)</div>
               <input
                 inputMode="decimal"
                 value={outlayText}
@@ -200,7 +200,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'longshots' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">STRATEGY</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">STRATEGY</div>
               <PillGroup>
                 <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }}>All</Pill>
                 <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }}>Buy Over</Pill>
@@ -208,19 +208,19 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN PAYOUT</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN PAYOUT</div>
               <PillGroup>
                 {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN EV</div>
               <PillGroup>
                 {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">FAIR SOURCE</div>
               <PillGroup>
                 <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                 <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -232,7 +232,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'sgp' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">ARCHETYPE</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">ARCHETYPE</div>
               <PillGroup>
                 {SGP_ARCHETYPE_OPTIONS.map(a => (
                   <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>{a.label}</Pill>
@@ -240,7 +240,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">MIN EV</div>
               <PillGroup>
                 {SGP_MIN_EV_OPTIONS.map(e => (
                   <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>{e.label}</Pill>
@@ -248,7 +248,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">BOOK</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">BOOK</div>
               <Select
                 id="mobile-sgp-book"
                 value={sgpBook}
@@ -260,7 +260,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               />
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">FAIR SOURCE</div>
               <PillGroup>
                 <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                 <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -270,7 +270,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         )}
 
           <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-            <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">PROP MARKET</div>
+            <div className="ui-heading mb-1.5 text-micro text-text-secondary">PROP MARKET</div>
             <select
               id="mobile-odds-stat"
               value={stat}
@@ -293,7 +293,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
           </div>
 
           <div>
-            <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">GAME</div>
+            <div className="ui-heading mb-1.5 text-micro text-text-secondary">GAME</div>
             <select
               id="mobile-odds-game"
               value={game}
@@ -342,7 +342,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
           ]}
           extraHeader={
             <div className="flex gap-2 items-center mb-1">
-              <span className="ui-heading text-[10px] text-text-secondary">DEVIG METHOD</span>
+              <span className="ui-heading text-micro text-text-secondary">DEVIG METHOD</span>
               <PillGroup>
                 <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')}>PROPORTIONAL</Pill>
                 <Pill active={method === 'power'} onClick={() => setMethod('power')}>POWER</Pill>

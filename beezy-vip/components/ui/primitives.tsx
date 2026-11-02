@@ -12,7 +12,7 @@ export function LiveDot({ label }: { label?: string }) {
       <span className="live-dot" />
       {label && (
         <span
-          className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary"
+          className="ui-heading text-micro tracking-[0.12em] text-text-secondary"
          
         >
           {label}
@@ -27,8 +27,8 @@ export function SystemBadge({ system }: { system: string }) {
   const label = systemLabel(system, true)
   return (
     <span
-      className="ui-heading"
-      style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
+      className="ui-heading text-micro tracking-[0.05em] py-[3px] px-2 inline-block"
+      style={{ borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border }}
     >
       {label}
     </span>
@@ -37,27 +37,27 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="flex flex-col gap-1.5 p-5 border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
+    <div className="flex flex-col gap-1.5 p-5 border border-separator-border rounded-[var(--radius-lg)] bg-background-primary-default">
       <span
-        className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-0.5"
+        className="ui-heading text-micro tracking-label text-text-secondary mb-0.5"
        
       >
         {label}
       </span>
       <span
-        className="mono"
-        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}
+        className="mono text-[28px] font-semibold leading-[1]"
+        style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}
       >
         {value}
       </span>
-      {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
+      {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
     </div>
   )
 }
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="ui-heading text-[10px] tracking-[0.06em] text-text-secondary">PENDING</span>
+    return <span className="ui-heading text-micro tracking-head text-text-secondary">PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -80,11 +80,11 @@ export function ResultPill({ result }: { result: string | null }) {
 /** Per-bet P&L in units of that bet's own stake (1u = the amount risked). Falls back to a $10 unit when the stake is unknown. */
 export function PnL({ value, stake, result }: { value: number | null; stake?: number | null; result?: string | null }) {
   // A void or push refunds the stake: no profit to show, and a green +0.00u reads as a win.
-  if (value === null || result === 'void' || result === 'push') return <span className="mono text-[12px] text-text-secondary">&mdash;</span>
+  if (value === null || result === 'void' || result === 'push') return <span className="mono text-compact text-text-secondary">&mdash;</span>
   const pos = value >= 0
   const unit = stake != null && stake > 0 ? stake : 10
   return (
-    <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
+    <span className="mono text-compact font-semibold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{(value / unit).toFixed(2)}u
     </span>
   )
@@ -106,7 +106,7 @@ export function Button({ children, variant = 'primary', href, onClick }: { child
 }
 
 export function Divider() {
-  return <div  className="w-full h-[1px] bg-[var(--color-separator-border)]"/>
+  return <div  className="w-full h-[1px] bg-separator-border"/>
 }
 
 export function ScoreBadge({ bet }: { bet: Bet }) {

@@ -10,9 +10,9 @@ function CustomTooltip({ active, payload }: any) {
   const d = payload[0].payload as SparklinePoint
   const pos = d.cum_pnl >= 0
   return (
-    <div style={{ background: 'var(--color-background-primary-default)', border: B, padding: '6px 10px' }}>
-      <div className="mono text-[10px] text-text-secondary mb-0.5">{d.date}</div>
-      <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
+    <div className="bg-background-primary-default py-[6px] px-[10px]" style={{ border: B }}>
+      <div className="mono text-micro text-text-secondary mb-0.5">{d.date}</div>
+      <div className="mono text-mini font-semibold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
         {pos ? '+' : ''}{(d.cum_pnl / 10).toFixed(2)}u
       </div>
     </div>
@@ -27,12 +27,12 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
   const settled  = data.reduce((s, d) => s + (d.daily_pnl !== 0 ? 1 : 0), 0)
 
   return (
-    <div style={{ borderTop: B, padding: '12px 18px 14px', gridColumn: '1 / -1' }}>
+    <div className="pt-3 px-[18px] pb-[14px]" style={{ borderTop: B, gridColumn: '1 / -1' }}>
       <div className="flex justify-between items-center mb-2">
-        <span className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary">
+        <span className="ui-heading text-micro tracking-label text-text-secondary">
           30D cumulative &middot; paper &middot; {settled} settled
         </span>
-        <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: lineColor }}>
+        <span className="mono text-micro font-semibold" style={{ color: lineColor }}>
           {final >= 0 ? '+' : ''}{(final / 10).toFixed(2)}u
         </span>
       </div>

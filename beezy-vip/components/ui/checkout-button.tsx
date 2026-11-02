@@ -42,12 +42,11 @@ export function CheckoutButton({
       <button
         onClick={handleClick}
         disabled={loading}
-        className="mono"
+        className="mono block w-full text-center text-cozy tracking-[0.01em] py-[11px] px-4 font-semibold"
         style={{
-          display: 'block', width: '100%', textAlign: 'center',
-          fontSize: '13px', letterSpacing: '0.01em',
-          padding: '11px 16px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-          opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          opacity: loading ? 0.5 : 1,
+          transition: 'opacity 0.15s',
           borderRadius: 'var(--radius)',
           background: featured ? 'var(--signal)' : 'var(--slate)',
           color:      featured ? 'var(--color-background-full)' : 'var(--color-text-primary)',
@@ -58,7 +57,7 @@ export function CheckoutButton({
         {loading ? 'Redirecting...' : label}
       </button>
       {error && (
-        <p className="mono text-[11px] text-[var(--loss)] mt-2 text-center">
+        <p className="mono text-mini text-loss mt-2 text-center">
           {error}
         </p>
       )}

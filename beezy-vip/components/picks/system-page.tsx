@@ -66,7 +66,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>
       )}
-      <div className="gutter-m max-w-[1200px] mx-auto p-6">
+      <div className="gutter-m max-w-page mx-auto p-6">
         <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
           <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
@@ -74,7 +74,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
             </span>
           </div>
-          <Link href={`/picks/${sport}/systems`} style={{ fontSize: '12.5px', color: 'var(--link)' }}>&larr; All {pillar.shortName} systems</Link>
+          <Link className="text-[12.5px] text-link" href={`/picks/${sport}/systems`}>&larr; All {pillar.shortName} systems</Link>
         </div>
 
         {!system.gap && (
@@ -85,7 +85,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
                 <span>{winRate != null ? `${winRate.toFixed(1)}% win` : '-- win'}</span>
                 <span style={{ color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '-- ROI' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
                 <span style={{ color: n >= 200 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{n >= 200 ? '200+ bets, paper' : `${n}/200 bets, paper`}</span>
-                <Link href={`/results?system=${system.key}`} style={{ color: 'var(--link)' }}>Full history &rarr;</Link>
+                <Link className="text-link" href={`/results?system=${system.key}`}>Full history &rarr;</Link>
               </>
             ) : (
               <>
@@ -109,17 +109,17 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
             <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${system.shortName} rows`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
             {!tracked && f.day === 'today' && (
               <>
-                <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Market prices</h2>
+                <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
                 <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={0} block={board.block} confluenceKeys={board.confluenceKeys} />
               </>
             )}
           </>
         )}
-        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}</div>}
+        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-gold">DATA GAP.</strong> {system.gap}</div>}
 
-        <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Methodology</h2>
+        <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Methodology</h2>
         <SystemMethodology system={system} />
-        <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>{system.description}</p>
+        <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>{system.description}</p>
       </div>
     </div>
   )

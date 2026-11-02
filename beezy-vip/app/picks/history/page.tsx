@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { apiGetPicks } from '@/lib/betting-api'
 import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 import { recordOf, topFromBets, TOP_N } from '@/lib/top-picks'
+import { withHeadshotIds } from '@/lib/sport-assets.server'
 import type { Bet } from '@/lib/types'
 import { HistoryTable, type HistoryDay } from './history-table'
 
@@ -26,7 +27,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const cards = await Promise.all(dates.map(d => apiGetPicks({ date: d, limit: 200 }).catch(() => [] as Bet[])))
   const history: HistoryDay[] = dates
     .map((date, i) => {
-      const picks = topFromBets(cards[i], TOP_N)
+      const picks = withHeadshotIds(topFromBets(cards[i], TOP_N))
       return { date, picks, record: recordOf(picks) }
     })
     .filter(d => d.picks.length > 0)
@@ -35,23 +36,26 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
 
   return (
-    <div className="max-w-[1200px] mx-auto p-6">
+    <div className="max-w-page mx-auto p-6">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
         <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
         <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
-              className="mono"
-              style={{ fontSize: '11.5px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none',
-                color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)', background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
-                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}` }}>
+              className="mono text-[11.5px] font-semibold py-[5px] px-[10px] no-underline"
+              style={{
+                borderRadius: '6px',
+                color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)',
+                background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
+                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}`,
+              }}>
               {r}D
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-3.5 mb-3.5 text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-1.5 gap-x-4 flex-wrap">
+      <div className="mono bg-background-primary-default border border-separator-border rounded-control py-[9px] px-3.5 mb-3.5 text-[12.5px] text-neutral-300 flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -61,17 +65,17 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
       </div>
 
       {history.length === 0 ? (
-        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-9 px-5 text-center text-text-secondary text-[13px]">
+        <div className="bg-background-primary-default border border-separator-border rounded-control py-9 px-5 text-center text-text-secondary text-cozy">
           No settled cards in this range yet.
         </div>
       ) : (
         <HistoryTable days={history} />
       )}
 
-      <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+      <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
         Each day shows that day&rsquo;s ten highest-scoring player picks from the tracked MLB card and +EV alerts, one row per prop at the best book, ranked the same way as
-        today&rsquo;s <Link href="/picks" style={{ color: 'var(--link)' }}>Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
-        are excluded. This is not the staked ledger: see <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link> for that.
+        today&rsquo;s <Link className="text-link" href="/picks">Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
+        are excluded. This is not the staked ledger: see <Link className="text-link" href="/results">Results</Link> for that.
         NFL, NHL and NBA picks are not tracked yet, so they have no history.
       </p>
     </div>

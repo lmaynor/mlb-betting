@@ -9,6 +9,7 @@ import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookTe
 import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import { cx } from '@/utils/cx'
+import { HeadshotImg } from '@/components/ui/sport-assets'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -632,10 +633,8 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
     <div className="edge-detail">
       <div className="edge-detail-head">
         <div className="edge-portrait" style={{ background: `${color}14`, borderColor: `${color}40` }}>
-          {!isGame && p.headshotUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.headshotUrl} alt={p.player ?? ''} className="edge-portrait-img"
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+          {!isGame ? (
+            <HeadshotImg src={p.headshotUrl} alt={p.player ?? ''} className="edge-portrait-img" />
           ) : (
             <div className="edge-logos">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -716,7 +715,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
         <div className="edge-meta">
           <div className="edge-meta-cell">
             <span className="edge-meta-k">Kelly stake</span>
-            <span className="edge-meta-v text-[var(--signal)]">
+            <span className="edge-meta-v text-signal">
               {kelly != null ? `$${kelly.toFixed(0)}` : '\u2014'}
               <span className="edge-meta-dim"> &frac14;K, capped 2.5%</span>
             </span>
@@ -977,7 +976,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                   className={cx('button-press-motion inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-md border px-[13px] py-[7px] text-caption-1-bold tracking-[0.05em]',
                     active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
                   {SPORT_TAB_LABEL[k]}
-                  {n != null && <span className={cx('mono text-[10px]', active ? 'text-text-secondary' : 'text-text-tertiary')}>{n}</span>}
+                  {n != null && <span className={cx('mono text-micro', active ? 'text-text-secondary' : 'text-text-tertiary')}>{n}</span>}
                 </button>
               )
             })}
@@ -1021,7 +1020,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <span className="edge-hud-k">games</span>
           </div>
           <div className="edge-hud-cell">
-            <span className="edge-hud-v text-[var(--signal)]">{hud.strong}</span>
+            <span className="edge-hud-v text-signal">{hud.strong}</span>
             <span className="edge-hud-k">edge &ge; 5%</span>
           </div>
           {hud.firstStr && (
@@ -1032,7 +1031,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           )}
           {hud.liveAlerts > 0 && (
             <div className="edge-hud-cell">
-              <span className="edge-hud-v text-[var(--warn)]">{hud.liveAlerts}</span>
+              <span className="edge-hud-v text-warn">{hud.liveAlerts}</span>
               <span className="edge-hud-k">line alerts</span>
             </div>
           )}
@@ -1146,10 +1145,8 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                     aria-current={active || undefined}>
                     <span className="edge-row-rank">{inSlip ? <span className="edge-row-slipmark">&#10003;</span> : i + 1}</span>
                     <span className="edge-row-thumb" style={{ background: `${color}14`, borderColor: `${color}38` }}>
-                      {!isGame && p.headshotUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.headshotUrl} alt="" className="edge-row-img"
-                          onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
+                      {!isGame ? (
+                        <HeadshotImg src={p.headshotUrl} className="edge-row-img" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         p.homeLogoUrl ? <img src={p.homeLogoUrl} alt="" className="edge-row-logo" /> : null
@@ -1227,7 +1224,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <button className="edge-slip-expand" onClick={() => setSlipOpen(v => !v)}
               aria-expanded={slipOpen}>
               <span className="edge-slip-n">{slipIds.length} bet{slipIds.length === 1 ? '' : 's'} tracked</span>
-              <span aria-hidden className="text-[10px]">{slipOpen ? '\u25be' : '\u25b4'}</span>
+              <span aria-hidden className="text-micro">{slipOpen ? '\u25be' : '\u25b4'}</span>
             </button>
             <span className="edge-slip-t">
               ${slipTotal.toFixed(0)}

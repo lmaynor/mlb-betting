@@ -780,7 +780,9 @@ def _settle_winter_bets(pending_winter: pd.DataFrame, settle_date: str) -> list[
         player = str(bet.get("player") or "")
         btype = str(bet.get("bet_type") or "")
         odds = int(bet.get("odds") or -110)
-        stake = float(bet.get("stake") or 1.0)
+        # a zero-stake monitoring row (kelly_triggered=False, ev.model_picks 'tracked' tier) is graded on a 1-unit reference so its
+        # shadow record is comparable to the staked picks; a staked row grades at its own stake
+        stake = float(bet.get("stake") or 0.0) or 1.0
         notes_str = str(bet.get("notes") or "")
 
         stat, side, point, notes = None, None, None, {}
@@ -862,7 +864,9 @@ def _winter_season_start(settle_date: str) -> str:
 def _winter_sport_stats(engine, settle_date: str, system: str = "EV") -> dict:
     """Season record of the logged NFL / NBA / NHL bets of one system ('EV' = book-outlier alerts, 'PROPS' = the model's own
     picks, ev.model_picks), one entry per sport (None when nothing has settled), for the #daily-recap embed. Same fields as
-    the per-system MLB stats. The two systems are kept apart: the model-pick record is the one that says whether the engines work."""
+    the per-system MLB stats. The two systems are kept apart: the model-pick record is the one that says whether the engines work.
+    Only STAKED rows (kelly_triggered, stake > 0) are the headline record, the same filter the public API applies: the zero-stake
+    monitoring rows of ev.model_picks ('tracked' tier) are settled for the CLV study but never counted here."""
     from sqlalchemy import text
     try:
         with engine.connect() as conn:
@@ -877,6 +881,8 @@ def _winter_sport_stats(engine, settle_date: str, system: str = "EV") -> dict:
     out = {}
     for sport in _WINTER_RECAP_SPORTS:
         mine = rows[rows["sport"].astype(str).str.lower() == sport]
+        triggered = mine["kelly_triggered"].fillna(True).astype(bool) if "kelly_triggered" in mine else True
+        mine = mine[triggered & (mine["stake"].fillna(0).astype(float) > 0)]
         resolved = mine[mine["result"].notna()]
         # voids/pushes carry no decision: count them out of the hit rate but keep them out of the headline bet count too
         graded = resolved[resolved["result"].isin(["win", "loss"])]

@@ -13,10 +13,16 @@ const TEXT_STYLE_SUFFIXES = TEXT_FAMILIES.flatMap(family =>
   TEXT_WEIGHTS.map(weight => `${family}-${weight}`)
 )
 
+/** Dense-UI tokens from the @theme blocks in app/globals.css; unregistered, tailwind-merge would read text-micro as a colour. */
+const DENSE_TEXT = ['micro', 'mini', 'compact', 'cozy'] as const
+
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      'font-size': [{ text: TEXT_STYLE_SUFFIXES }],
+      'font-size': [{ text: [...TEXT_STYLE_SUFFIXES, ...DENSE_TEXT] }],
+      tracking: [{ tracking: ['label', 'caps', 'head', 'fine'] }],
+      rounded: [{ rounded: ['chip', 'control'] }],
+      'max-w': [{ 'max-w': ['page'] }],
     },
   },
 })

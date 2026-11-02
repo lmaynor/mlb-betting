@@ -37,13 +37,13 @@ export default async function SignupPage() {
             className="btn btn-primary mb-2.5 w-full">
             Join Discord (free picks now)
           </a>
-          <p className="mono mb-10 text-[10px] text-text-secondary">
+          <p className="mono mb-10 text-micro text-text-secondary">
             Paid access launches when systems clear the 200-bet gate.
           </p>
 
           {/* Live gate progress */}
           <div className="rounded-2xl border border-separator-border bg-background-primary-default p-5.5 text-left shadow-md">
-            <p className="ui-heading mb-4.5 tracking-[0.1em] text-text-secondary">
+            <p className="ui-heading mb-4.5 tracking-label text-text-secondary">
               200-Bet Gate Progress
             </p>
             {SYSTEMS.map(s => {
@@ -53,8 +53,8 @@ export default async function SignupPage() {
               return (
                 <div key={s.system} className="mb-3.5">
                   <div className="mb-1.5 flex justify-between">
-                    <span className="mono text-[11px] font-semibold" style={{ color: s.color }}>{s.system}</span>
-                    <span className="mono text-[10px] text-text-secondary">{count >= 200 ? `200+ (${count.toLocaleString()})` : `${count}/200`}</span>
+                    <span className="mono text-mini font-semibold" style={{ color: s.color }}>{s.system}</span>
+                    <span className="mono text-micro text-text-secondary">{count >= 200 ? `200+ (${count.toLocaleString()})` : `${count}/200`}</span>
                   </div>
                   <div className="h-[7px] overflow-hidden rounded-full bg-chart-track">
                     <div className="h-[7px] rounded-full transition-[width] duration-[400ms]" style={{ background: s.color, width: `${pct}%` }} />

@@ -2162,7 +2162,7 @@ Satori OG routes -- use literal hex there.
   ra, steals, blocks). The new stats are in `ev/daily_projections.py` `PROJECT_STATS` and `cockpit_form` only: odds BANKING for them is
   unchanged (the NFL sweep's `PARLAY_MARKETS` and the NHL/NBA core markets were NOT widened -- every market is 1 shared-pool credit per
   event per run); NBA pr/pa/ra were added to the opt-in `PARLAY_PROP_MARKETS_ALT` tier. Until lines are banked, those stats show as
-  rotation (no-line) rows. `p_over_blend` = a market-anchored logit blend (`BLEND_C = 0.10`, an unvalidated prior; display only).
+  rotation (no-line) rows. `p_over_blend` = a market-anchored logit blend with a per-sport/stat weight (`BLEND_C_BY_SPORT_STAT`; NBA threes .19 / rebounds .13 / assists .09 / pra .02 / points .02 are MEASURED on this engine, the rest are priors; NFL = `BLEND_C` 0.10); rows also carry `p_blend_side` and `blend_ev` (best quote priced at the blended posterior). Neither feeds the edge, confluence or Beezy Score; `blend_ev` gates the Official tier of `ev.model_picks` (s23).
 - **`/analytics`**: bankroll simulator (refetches the API on slider change), edge calibration,
   per-book leaderboard, system health / 200-bet gate. `/edge` is NOT redirected into it.
 
@@ -4398,12 +4398,16 @@ closes that gap with the same machinery the MLB systems have. Everything is pape
 
 - **Selection (pre-registered, not tuned):** a board row is a tracked pick when it has a real line + a real price at a non-offshore, non-DFS book
   for the model's side, `confluence` is true (model and market agree, both edges > 0, not edge-capped, >= 3 reference books) and the game is
-  >= 30 min away. Tier `official` = also passes `ev.daily_card.is_official_card_play` (the repo's own Official Card gate); everything else is `tracked`.
+  >= 30 min away. Tier `official` = also passes `ev.daily_card.is_official_card_play` (the repo's own Official Card gate) AND has `blend_ev` >= 0.025 (the best quote priced at the market-anchored blended posterior with the stat's measured c: a raw model-vs-market gap on a c ~ 0.02 stat such as NBA points / pra is mostly winner's curse and cannot reach it; a board with no `blend_ev` fails closed to `tracked`); everything else is `tracked`.
   A board older than 45 min logs nothing.
-- **Ledger:** `bets`, `system='PROPS'`, `sport` = nfl|nba|nhl, flat 1u, `paper`, `bet_type` = `<stat>_<side>_<line>`, `notes` JSON carries stat / point /
-  side / tier / row_key / engine / commence / player_id. **First sighting wins** (a later pass never re-logs or re-prices the same game-day + player +
-  stat). Settlement is the existing `settle_bets._settle_winter_bets` (it keys on sport, not system). `_winter_sport_stats(system=...)` now splits the
-  recap: `EV` alerts vs `PROPS` model picks (separate "model picks (unvalidated)" fields, only when something settled).
+- **Ledger:** `bets`, `system='PROPS'`, `sport` = nfl|nba|nhl, `paper`, `bet_type` = `<stat>_<side>_<line>`, `notes` JSON carries stat / point /
+  side / tier / row_key / engine / commence / player_id / p_blend / blend_ev. **Official = flat 1u, `kelly_triggered=True`** (the public record: /picks, /results and the recap headline count only
+  `kelly_triggered`, `stake > 0` rows). **Tracked = `kelly_triggered=False`, `stake=0`** (monitoring rows, the s5 prediction-logging contract; until 2026-11-02 they were logged staked --
+  158 of the first pass's 159 rows -- and polluted the recap with the -8.6% NBA population). They are still SETTLED (`_settle_winter_bets` grades a zero-stake row on a 1u reference, so
+  `profit` is per unit) and still get CLV from `capture_closing` (which does not filter on `kelly_triggered`). Anything summing `profit` over winter bets must keep the `kelly_triggered AND stake > 0`
+  filter the public API / `_winter_sport_stats` use. **First sighting wins** (a later pass never re-logs, re-prices or PROMOTES the same game-day + player + stat). One-off repair of the pre-split rows:
+  `python -m ev.model_picks --fix-tracked-stakes [--dry-run]` (run it through the `props-model-picks` job: the DB is only reachable there). Settlement is the existing `settle_bets._settle_winter_bets`
+  (it keys on sport, not system). `_winter_sport_stats(system=...)` splits the recap: `EV` alerts vs `PROPS` model picks (separate "model picks (unvalidated)" fields, only when something settled; staked rows only).
 - **CLV:** `capture_closing` fills `closing_odds` / `closing_prob` / `clv_pct` (same price-ratio CLV as MLB) from the board archive's LAST pre-game state of
   the same prop, same line only, only after the game started.
 - **Discord:** official-tier picks only, via `sport_alerts.post_sport_alerts(..., log_bets=False)` (so no duplicate `EV` ledger rows) to the sport's alerts

@@ -16,7 +16,7 @@ export function SgpBadges({ r }: { r: SgpProxyRow }) {
       <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, letterSpacing: '0.03em', flexShrink: 0 }}>
         {r.archetypeLabel}
       </span>
-      <span className="mono text-[10px] font-bold py-[1px] px-[5px] rounded-[4px] border border-[color:var(--color-border-button-hover)] text-[#facc15] tracking-[0.04em] shrink-0" title={r.label}>
+      <span className="mono text-micro font-bold py-[1px] px-[5px] rounded-chip border border-border-button-hover text-warn tracking-fine shrink-0" title={r.label}>
         UNVALIDATED
       </span>
       {r.modelArtifact && (
@@ -43,8 +43,8 @@ export function PriceCell({ top, bottom, topState, bottomState, tint, best }: {
     'mono inline-block rounded-[3px] px-1 outline-offset-1',
     main ? 'text-[12.5px]' : 'text-[10.5px]',
     'leading-[1.3]',
-    state ? 'font-extrabold text-[#57F287]' : main ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary',
-    state === 'arb' ? 'outline outline-1 outline-[#57F287]' : 'outline-none',
+    state ? 'font-extrabold text-signal' : main ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary',
+    state === 'arb' ? 'outline outline-1 outline-signal' : 'outline-none',
   )
   return (
     <td className={cx('odds-cell', top != null || bottom != null ? 'whitespace-pre-line' : undefined)} data-best={best ? 'true' : undefined} data-edge={tint ? 'true' : undefined} style={{ borderLeft: `1px solid ${HAIR}` }}>
@@ -81,8 +81,8 @@ export function PropCells({ row, label }: { row: BoardRow; label: string }) {
             <PlayerHeadshot sport={row.game_key.split(':')[0] as HeadshotSport} id={row.headshot_id} name={row.player} size={30} />
           </span>
           <div>
-            <div className="text-[13px] font-semibold text-text-primary leading-[1.3]">{row.player}</div>
-            <div className="mono odds-sub text-[11px] flex items-center gap-[5px]">
+            <div className="text-cozy font-semibold text-text-primary leading-[1.3]">{row.player}</div>
+            <div className="mono odds-sub text-mini flex items-center gap-[5px]">
               <span>{label} {STAT_LABEL[row.stat] ?? row.stat}</span>
               {row.is_alt === true && (
                 <span title={mainLineTip} style={{ fontSize: '10px', color: 'var(--color-neutral-400)', fontFamily: 'var(--font-mono), monospace' }}>[ALT]</span>
@@ -92,7 +92,7 @@ export function PropCells({ row, label }: { row: BoardRow; label: string }) {
         </div>
       </td>
       <td>
-        <div className="mono text-[11.5px] text-[var(--color-neutral-300)]">{row.away} @ {row.home}</div>
+        <div className="mono text-[11.5px] text-neutral-300">{row.away} @ {row.home}</div>
         <div className="mono odds-sub">{startLabel(row.commence)}</div>
       </td>
     </>
@@ -103,7 +103,7 @@ export function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <BookLogo book={book} size={size} />
-      <span className="text-[11.5px] text-[var(--color-neutral-300)]">{bookDisplay(book).label}</span>
+      <span className="text-[11.5px] text-neutral-300">{bookDisplay(book).label}</span>
     </span>
   )
 }

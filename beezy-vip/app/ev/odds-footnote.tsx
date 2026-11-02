@@ -3,7 +3,7 @@ import { SGP_ARTIFACT_EV_PCT, type OddsScreenMode } from '@/lib/odds-screen'
 
 export function OddsFootnote({ mode }: { mode: OddsScreenMode }) {
   return (
-    <p className="times text-text-secondary text-[12px] mt-6 max-w-[90ch] leading-[1.6]">
+    <p className="times text-text-secondary text-compact mt-6 max-w-[90ch] leading-[1.6]">
       {mode === 'ev' && <>Each cell is a book&apos;s price on the row&apos;s side above its price on the other side; green marks the best bettable price and a tint marks a book
         beating the fair price by 1.5% or more. FV is the fair price from the reference books you pick, averaged with equal weight after each book&apos;s vig is removed;
         a book is never measured against its own line. EV is fair probability times payout minus one at the best price.</>}

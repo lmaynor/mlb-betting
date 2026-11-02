@@ -170,7 +170,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             align="right"
             header={
               <div className="flex gap-2 items-center">
-                <span className="ui-heading text-[10px] text-text-secondary">DEVIG</span>
+                <span className="ui-heading text-micro text-text-secondary">DEVIG</span>
                 <PillGroup>
                   <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
                   <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
@@ -263,7 +263,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             </Field>
             <Field label="OUTLAY" htmlFor="odds-outlay">
               <span className="inline-flex items-center gap-1">
-                <span className="mono text-text-secondary text-[12px]">$</span>
+                <span className="mono text-text-secondary text-compact">$</span>
                 <input
                   id="odds-outlay" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
                   style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
@@ -296,7 +296,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             </Field>
             <Field label="OUTLAY" htmlFor="odds-outlay-mid">
               <span className="inline-flex items-center gap-1">
-                <span className="mono text-text-secondary text-[12px]">$</span>
+                <span className="mono text-text-secondary text-compact">$</span>
                 <input
                   id="odds-outlay-mid" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
                   style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default'
-const LBL = 'ui-heading tracking-[0.1em] text-text-secondary'
+const LBL = 'ui-heading tracking-label text-text-secondary'
 
 const PILL = SYSTEM_PILL
 
@@ -50,7 +50,7 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
   return (
     <details id={sport} open={open} className="mb-3.5 scroll-mt-[140px] rounded-xl border border-separator-border bg-background-full">
       <summary className="sport-summary flex cursor-pointer list-none flex-wrap items-baseline gap-x-3.5 gap-y-2.5 px-4.5 py-3.5">
-        <span className="sport-chev inline-block text-[11px] text-text-secondary transition-transform duration-[120ms]" aria-hidden="true">&#9656;</span>
+        <span className="sport-chev inline-block text-mini text-text-secondary transition-transform duration-[120ms]" aria-hidden="true">&#9656;</span>
         <span className="text-headline-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
         <span className="mono text-caption-1-regular text-text-secondary">{n} systems</span>
         <span className="ui-heading rounded-md border px-2 py-0.5" style={{ color: pillar.accent, borderColor: `${pillar.accent}66` }}>{STATUS_LABEL[pillar.status]}</span>
@@ -62,7 +62,7 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
   )
 }
 
-const TH = 'mono whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-3 py-[9px] text-left text-[10px] uppercase tracking-[0.1em] text-text-secondary'
+const TH = 'mono whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-3 py-[9px] text-left text-micro uppercase tracking-label text-text-secondary'
 const TD = 'border-b border-border-table p-3 align-top'
 
 /** NFL / NHL / NBA: every system with its engine and live accuracy against the last-5 average, linking to its model page. */
@@ -83,17 +83,17 @@ function ProjectionSportTable({ sport }: { sport: ProjectionSport }) {
               return (
                 <tr key={sys.key} className="transition-colors hover:bg-background-primary-hover">
                   <td className={TD}>
-                    <span className="mono inline-block whitespace-nowrap rounded-full px-2 py-[3px] text-[10px] font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{sys.shortName}</span>
+                    <span className="mono inline-block whitespace-nowrap rounded-full px-2 py-[3px] text-micro font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{sys.shortName}</span>
                   </td>
                   <td className={cx(TD, 'text-caption-1-regular text-text-secondary')}>
                     <div className="mb-0.5 font-semibold text-text-primary">{sys.name}</div>
-                    {sys.gap ? <span className="text-[#f59e0b]">Data gap: not projected yet.</span> : sys.description}
+                    {sys.gap ? <span className="text-gold">Data gap: not projected yet.</span> : sys.description}
                   </td>
-                  <td className={cx('mono text-[11px] text-text-secondary', TD)}>{sys.family}</td>
-                  <td className={cx('mono whitespace-nowrap text-[11px]', TD)} style={{ color: live && live.dMae < 0 ? 'var(--signal)' : undefined }}>
+                  <td className={cx('mono text-mini text-text-secondary', TD)}>{sys.family}</td>
+                  <td className={cx('mono whitespace-nowrap text-mini', TD)} style={{ color: live && live.dMae < 0 ? 'var(--signal)' : undefined }}>
                     {live ? `${live.mae.toFixed(live.mae >= 10 ? 1 : 3)} vs ${live.baselineMae.toFixed(live.baselineMae >= 10 ? 1 : 3)}` : '--'}
                   </td>
-                  <td className={TD}><Link href={`/models/${sport}/${sys.slug}`} className="times whitespace-nowrap text-body-2-semibold text-[var(--link)] no-underline hover:underline">Detail &rarr;</Link></td>
+                  <td className={TD}><Link href={`/models/${sport}/${sys.slug}`} className="times whitespace-nowrap text-body-2-semibold text-link no-underline hover:underline">Detail &rarr;</Link></td>
                 </tr>
               )
             })}
@@ -109,10 +109,10 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
   const stats = await apiGetStats().then(s => s.bySystem).catch(() => [])
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-10">
+    <div className="mx-auto max-w-page px-6 py-10">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Models</h1>
-        <Link href="/results" className="text-body-2-semibold text-[var(--link)] no-underline hover:underline">View results &rarr;</Link>
+        <Link href="/results" className="text-body-2-semibold text-link no-underline hover:underline">View results &rarr;</Link>
       </div>
 
       <div className={cx(CARD, 'mono mb-5.5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-caption-1-regular text-text-secondary shadow-card')}>
@@ -124,7 +124,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
       </div>
 
       <section className={cx(CARD, 'mb-6 p-5')}>
-        <div className="ui-heading mb-3 tracking-[0.1em] text-text-secondary">Training Methodology</div>
+        <div className="ui-heading mb-3 tracking-label text-text-secondary">Training Methodology</div>
         {[
           'Trained models use walk-forward validation: trained on prior seasons and validated on the next season so the model never sees future data.',
           'An MLB pick has to clear model probability, implied probability, edge threshold, and Kelly-positive checks before it reaches the card. NFL, NHL and NBA run projection systems that are shown beside the market but not tracked in the public results.',
@@ -140,7 +140,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         <div className={cx(CARD, 'models-table-desktop overflow-hidden')}>
           <div className="grid border-b border-separator-border bg-background-secondary-default" style={{ gridTemplateColumns: '110px 1fr 88px 88px 72px' }}>
             {['System', 'What it prices', 'Metric', 'Training', 'Detail'].map(h => (
-              <div key={h} className="mono px-3 py-[9px] text-[10px] uppercase tracking-[0.1em] text-text-secondary">{h}</div>
+              <div key={h} className="mono px-3 py-[9px] text-micro uppercase tracking-label text-text-secondary">{h}</div>
             ))}
           </div>
           {ACTIVE_MODELS.map((model, i) => {
@@ -150,18 +150,18 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <div key={model.system} className={cx('grid items-center transition-colors hover:bg-background-primary-hover', i < ACTIVE_MODELS.length - 1 && 'border-b border-border-table')} style={{ gridTemplateColumns: '110px 1fr 88px 88px 72px' }}>
                 <div className="p-3">
-                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-[10px] font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
-                  <div className="mono text-[10px] text-text-secondary">{model.version}</div>
+                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-micro font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <div className="mono text-micro text-text-secondary">{model.version}</div>
                 </div>
                 <div className="p-3 text-caption-1-regular text-text-secondary">{model.desc}</div>
                 <div className="p-3">
                   <div className="mono text-headline-bold text-text-primary">{model.metric}</div>
-                  <div className="mono text-[10px] uppercase tracking-[0.06em] text-text-secondary">{model.metricLabel}</div>
-                  {roi !== null && <div className="mono mt-0.5 text-[10px] font-bold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
+                  <div className="mono text-micro uppercase tracking-head text-text-secondary">{model.metricLabel}</div>
+                  {roi !== null && <div className="mono mt-0.5 text-micro font-bold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
                 </div>
-                <div className="mono p-3 text-[11px] text-text-secondary">{model.range}</div>
+                <div className="mono p-3 text-mini text-text-secondary">{model.range}</div>
                 <div className="p-3">
-                  <Link href={model.href} className="times text-body-2-semibold text-[var(--link)] no-underline hover:underline">Detail &rarr;</Link>
+                  <Link href={model.href} className="times text-body-2-semibold text-link no-underline hover:underline">Detail &rarr;</Link>
                 </div>
               </div>
             )
@@ -176,11 +176,11 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <Link key={model.system} href={model.href} className="mb-2.5 block rounded-2lg border border-separator-border bg-background-primary-default p-[13px] no-underline">
                 <div className="mb-[9px] flex justify-between gap-3">
-                  <span className="mono rounded-full px-2 py-[3px] text-[10px] font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
-                  <span className="mono text-[10px] text-text-secondary">{model.metricLabel}: <strong className="text-text-primary">{model.metric}</strong></span>
+                  <span className="mono rounded-full px-2 py-[3px] text-micro font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono text-micro text-text-secondary">{model.metricLabel}: <strong className="text-text-primary">{model.metric}</strong></span>
                 </div>
                 <p className="mb-2.5 text-caption-1-regular text-text-secondary">{model.desc}</p>
-                <div className="mono flex justify-between gap-2.5 text-[10px] text-text-secondary">
+                <div className="mono flex justify-between gap-2.5 text-micro text-text-secondary">
                   <span>{model.version} / {model.range}</span>
                   {roi !== null && <span className="font-extrabold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI</span>}
                 </div>
@@ -198,10 +198,10 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             const slug = getModelSpec(model.system.toLowerCase().replace(/_/g, '-'))?.slug
             const body = (
               <>
-                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-[10px] font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-micro font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
                 <div className="mb-[5px] text-body-2-bold text-text-primary">{model.label}</div>
                 <p className="text-caption-2-regular text-text-secondary">{model.note}</p>
-                {slug && <div className="times mt-2 text-caption-1-semibold text-[var(--link)]">Detail &rarr;</div>}
+                {slug && <div className="times mt-2 text-caption-1-semibold text-link">Detail &rarr;</div>}
               </>
             )
             return slug
@@ -231,7 +231,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
           { name: 'ParlayAPI + BettingPros', desc: 'Sportsbook and exchange prices behind every line, consensus and +EV flag.' },
         ].map((src, i) => (
           <div key={src.name} className={cx('p-3.5', i % 4 !== 3 && 'border-r border-separator-border', i < 4 && 'border-b border-separator-border')}>
-            <div className="mono mb-1 text-[11px] font-bold text-text-primary">{src.name}</div>
+            <div className="mono mb-1 text-mini font-bold text-text-primary">{src.name}</div>
             <div className="text-caption-2-regular text-text-secondary">{src.desc}</div>
           </div>
         ))}

@@ -13,6 +13,7 @@ export function BookLogo({ book, size, style }: { book: string; size: number; st
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      ref={el => { if (el && el.complete && el.naturalWidth === 0) setMissing(true) }}
       src={`/logos/books/${canonBook(book)}.png`} alt={meta.label} title={meta.label}
       width={size} height={size} loading="lazy" onError={() => setMissing(true)}
       style={{ width: size, height: size, objectFit: 'contain', borderRadius: '4px', verticalAlign: 'middle', ...style }}

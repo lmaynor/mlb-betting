@@ -12,14 +12,14 @@ import { OddsScreen } from './use-odds-screen'
 function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
   return (
     <div role="note" className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-separator-border border-l-[3px] border-l-[#facc15] bg-background-primary-default px-3 py-2 shadow-card">
-      <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15]">UNVALIDATED</span>
+      <span className="mono text-[10.5px] font-bold tracking-fine text-warn">UNVALIDATED</span>
       <span className="min-w-[240px] flex-1 text-caption-1-regular text-text-secondary">
         {SGP_UNVALIDATED_LABEL}. Correlation and book hold are assumed constants, so a gap here is a place to look, not an edge.
       </span>
-      <span className={cx('mono text-[11px]', extremeCount > 0 ? 'text-[#ff5a4f]' : 'text-text-secondary')}>
+      <span className={cx('mono text-mini', extremeCount > 0 ? 'text-[#ff5a4f]' : 'text-text-secondary')}>
         {extremeCount} EXTREME (EV OVER {SGP_ARTIFACT_EV_PCT}%){includeExtreme ? ' SHOWN' : ' HIDDEN'}
       </span>
-      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost px-2.5 py-[3px] text-[11px]">
+      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost px-2.5 py-[3px] text-mini">
         Include extreme
       </button>
     </div>

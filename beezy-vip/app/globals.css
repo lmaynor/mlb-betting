@@ -34,6 +34,34 @@
   --color-bg:     #090a0f;  /* --carbon */
 }
 
+/* Status + data palette. These are the single source: the :root --signal/--warn/--link/--ev-gold vars below alias them,
+   and lib/tokens.ts PALETTE mirrors them for the places a class cannot reach (recharts, SVG attrs, OG routes);
+   tests/tokens.test.ts fails if the two drift. */
+@theme {
+  --color-signal: #57f287;  /* brand / CTA / WIN */
+  --color-warn:   #facc15;  /* caution / lean tier */
+  --color-link:   #38bdf8;  /* inline links, info */
+  --color-gold:   #f59e0b;  /* +EV gold */
+}
+
+/* Dense-UI scale. No line-height on purpose: the arbitrary text-[Npx] these replace did not set one either. */
+@theme {
+  --text-micro:   10px;
+  --text-mini:    11px;
+  --text-compact: 12px;
+  --text-cozy:    13px;
+
+  --tracking-label: 0.1em;   /* small-caps column and section labels */
+  --tracking-caps:  0.08em;
+  --tracking-head:  0.06em;
+  --tracking-fine:  0.04em;
+
+  --radius-chip:    4px;     /* pills, tags, inline badges */
+  --radius-control: 8px;     /* inputs, buttons, nested panels */
+
+  --container-page: 1200px;  /* max-w-page */
+}
+
 @layer components {
 /* ===================================================================
    beezy.fyi — Terminal design system
@@ -76,14 +104,14 @@ img, video { max-width: 100%; height: auto; }
   --chalk:         #ffffff;   /* headings / display */
 
   /* ── Brand + semantic ──────────────────────────────────── */
-  --signal:        #57f287;   /* brand / primary CTA / WIN */
+  --signal:        var(--color-signal);   /* brand / primary CTA / WIN */
   --signal-led:    #2c9a58;   /* green border accent */
   --moss:          #1f6b3d;   /* green-tinted border */
   --forest:        #10321f;   /* green tinted surface */
-  --link:          #38bdf8;   /* inline links */
+  --link:          var(--color-link);   /* inline links */
   --lilac:         #baa7ff;   /* decorative violet accent */
   --loss:          #ef4444;   /* LOSS / negative */
-  --warn:          #facc15;   /* caution / lean tier / partial */
+  --warn:          var(--color-warn);   /* caution / lean tier / partial */
   --push:          #94a3b8;   /* push / void neutral */
 
   /* Tinted semantic surfaces (derived) */
@@ -114,7 +142,7 @@ img, video { max-width: 100%; height: auto; }
   --brand: var(--signal);
   --brand-dim: rgba(87, 242, 135, 0.12);
   --brand-border: rgba(87, 242, 135, 0.35);
-  --ev-gold: #f59e0b;
+  --ev-gold: var(--color-gold);
   --surface-elevated: var(--obsidian);
   --surface-glass: rgba(17, 19, 26, 0.85);
   --text-secondary: var(--silver);

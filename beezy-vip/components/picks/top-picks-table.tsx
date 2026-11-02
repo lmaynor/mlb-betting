@@ -5,6 +5,8 @@ import { bookDisplay } from '@/lib/tokens'
 import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'
 import { sportHref } from '@/lib/ia'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { hasHeadshots } from '@/lib/sport-assets'
 import { isOfficialCardPlay, isEvOutlier, type PickBasis, type TopPick } from '@/lib/top-picks'
 
 const TH = 'ui-heading sticky top-0 whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-2.5 py-2.5 text-left text-text-secondary'
@@ -47,8 +49,13 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                   <Link href={sportHref(p.sport)} className="ui-heading no-underline" style={{ color: pillar.accent }}>{pillar.shortName}</Link>
                 </td>
                 <td className={cx(TD, 'min-w-[170px]')}>
-                  <div className="font-semibold text-text-primary">{p.who}</div>
-                  {p.what && <div className="mt-0.5 text-caption-1-regular text-text-secondary">{p.what}</div>}
+                  <div className="flex items-center gap-2.5">
+                    {p.isPlayer && hasHeadshots(p.sport) && <PlayerHeadshot sport={p.sport} id={p.headshotId} name={p.who} size={36} />}
+                    <div className="min-w-0">
+                      <div className="font-semibold text-text-primary">{p.who}</div>
+                      {p.what && <div className="mt-0.5 text-caption-1-regular text-text-secondary">{p.what}</div>}
+                    </div>
+                  </div>
                 </td>
                 <td className={cx(TD, 'whitespace-nowrap')}>
                   {p.odds == null ? <span className="text-text-secondary">--</span> : (
@@ -61,11 +68,11 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={TD}>
                   <div className="inline-flex items-center gap-1.5">
                     {isOfficial ? (
-                      <span className="ui-heading text-[10px] text-[#57F287] border border-[color:#57F287] rounded-[4px] py-[1px] px-[5px] bg-[rgba(87,242,135,0.12)]">OFFICIAL PLAY</span>
+                      <span className="ui-heading text-micro text-signal border border-[color:#57F287] rounded-chip py-[1px] px-[5px] bg-[rgba(87,242,135,0.12)]">OFFICIAL PLAY</span>
                     ) : isOutlier ? (
-                      <span className="ui-heading text-[10px] text-[#38bdf8] border border-[color:#38bdf8] rounded-[4px] py-[1px] px-[5px] bg-[rgba(56,189,248,0.12)]">+EV OUTLIER</span>
+                      <span className="ui-heading text-micro text-link border border-[color:#38bdf8] rounded-chip py-[1px] px-[5px] bg-[rgba(56,189,248,0.12)]">+EV OUTLIER</span>
                     ) : null}
-                    <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{p.score}</span>
+                    <span className="mono font-bold" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{p.score}</span>
                   </div>
                 </td>
                 <td className={cx('mono', TD)} style={{ color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{fmtEdge(p.edge)}</td>
@@ -73,10 +80,10 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}
                   {p.tracked && p.unvalidated && (
-                    <span className="ui-heading ml-2 text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game.">UNVALIDATED &middot; PAPER</span>
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game.">UNVALIDATED &middot; PAPER</span>
                   )}
                   {!p.tracked && (
-                    <span className="ui-heading ml-2 text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet.">SHADOW &middot; CALIBRATING</span>
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet.">SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>
                 {showResult && (

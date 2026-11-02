@@ -334,3 +334,20 @@ def test_scorer_coherent_switch_is_off_by_default_and_rewrites_only_pra():
     b = on[on["stat"] != "pra"].sort_values(cols[:4]).reset_index(drop=True)[cols]
     pd.testing.assert_frame_equal(a, b)
     assert st0["rows"] == st1["rows"]
+
+
+def test_load_master_folds_the_five_old_team_codes_so_the_opponent_factor_keys_match(tmp_path):
+    """The box-score master spells GS / NO / NY / SA / PHO; the engine keys on GSW / NOP / NYK / SAS / PHX. An unfolded code left
+    the opponent factor at 1.0 for those teams in every offline replay (the live loader already folded them)."""
+    import pandas as pd
+    rows = []
+    for gid, (a, b) in enumerate([("GS", "NO"), ("NY", "SA"), ("PHO", "LAL")]):
+        for team, name in ((a, f"{a} Guard"), (b, f"{b} Guard")):
+            rows.append({"game_id": gid, "season_type": "regular", "date": f"2025-11-0{gid + 1}", "played": True, "minutes": "30:00",
+                         "name": name, "team_abbr": team, "season_year": 2025, "points": 10, "rebounds": 3, "assists": 2})
+    path = tmp_path / "master.csv"
+    pd.DataFrame(rows).to_csv(path, index=False)
+    index, dnp = EE.load_master(str(path))
+    by_name = {nm: rs[-1] for nm, rs in index.items()}
+    got = {r["team_abbr"]: r["_opp"] for r in by_name.values()}
+    assert got == {"GSW": "NOP", "NOP": "GSW", "NYK": "SAS", "SAS": "NYK", "PHX": "LAL", "LAL": "PHX"}

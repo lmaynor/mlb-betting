@@ -47,7 +47,7 @@ export function MobileCompareSheet({
         {item.type === 'ev' && (
           <div className="grid grid-cols-2 gap-2">
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-              <div className="mono text-[10px] text-text-secondary uppercase">Consensus Fair</div>
+              <div className="mono text-micro text-text-secondary uppercase">Consensus Fair</div>
               <div className="mono text-[14px] font-bold text-text-primary mt-0.5">
                 {item.row.fairAmerican != null ? (item.row.fairAmerican > 0 ? `+${item.row.fairAmerican}` : `${item.row.fairAmerican}`) : '--'}
               </div>
@@ -57,7 +57,7 @@ export function MobileCompareSheet({
             </div>
 
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-              <div className="mono text-[10px] text-text-secondary uppercase">Best Odds &middot; {bookDisplay(item.row.bestBook).label}</div>
+              <div className="mono text-micro text-text-secondary uppercase">Best Odds &middot; {bookDisplay(item.row.bestBook).label}</div>
               <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: GREEN, marginTop: '2px' }}>
                 {item.row.side} {formatOdds(item.row.bestAmerican)}
               </div>
@@ -69,7 +69,7 @@ export function MobileCompareSheet({
         )}
 
         <div>
-          <div className="ui-heading text-[10px] text-text-secondary mb-2 tracking-[0.06em]">
+          <div className="ui-heading text-micro text-text-secondary mb-2 tracking-head">
             ALL REPORTING BOOKS ({row.books.length})
           </div>
           <div className="flex flex-col gap-1.5">
@@ -93,9 +93,9 @@ export function MobileCompareSheet({
                   <div className="flex items-center gap-2">
                     <BookLogo book={c.key} size={22} />
                     <div>
-                      <div className="text-[12px] font-semibold text-text-primary">
+                      <div className="text-compact font-semibold text-text-primary">
                         {bookDisplay(c.key).label}
-                        {c.offshore && <span className="text-[10px] text-text-secondary ml-1">(offshore)</span>}
+                        {c.offshore && <span className="text-micro text-text-secondary ml-1">(offshore)</span>}
                       </div>
                     </div>
                   </div>

@@ -39,30 +39,29 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
           value={value}
           onChange={e => { setValue(e.target.value); setSaved(false) }}
           placeholder="1000"
-          className="mono"
+          className="mono flex-1 text-text-primary text-cozy py-[9px] px-3"
           style={{
-            flex: 1, background: 'var(--slate)', border: B,
+            background: 'var(--slate)',
+            border: B,
             borderRadius: 'var(--radius)',
-            color: 'var(--color-text-primary)', fontSize: '13px',
-            padding: '9px 12px', outline: 'none',
+            outline: 'none',
           }}
         />
         <button
           onClick={handleSave}
           disabled={saving}
-          className="mono"
+          className="mono py-[9px] px-[18px] text-background-full text-cozy font-semibold tracking-[0.01em] rounded-[var(--radius)] border border-[color:var(--signal-led)]"
           style={{
-            padding: '9px 18px', background: 'var(--signal)', color: 'var(--color-background-full)',
-            fontSize: '13px', fontWeight: 600, letterSpacing: '0.01em',
-            borderRadius: 'var(--radius)', cursor: saving ? 'not-allowed' : 'pointer',
-            opacity: saving ? 0.5 : 1, border: '1px solid var(--signal-led)',
+            background: 'var(--signal)',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            opacity: saving ? 0.5 : 1,
           }}
         >
           {saving ? '...' : saved ? 'Saved' : 'Save'}
         </button>
       </div>
       {error && (
-        <p className="mono text-[11px] text-[var(--loss)] mt-1.5">
+        <p className="mono text-mini text-loss mt-1.5">
           {error}
         </p>
       )}

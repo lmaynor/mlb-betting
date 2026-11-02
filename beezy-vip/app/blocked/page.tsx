@@ -15,21 +15,21 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
   const region = clean(sp.state) ?? clean(sp.country)
 
   return (
-    <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
+    <div className="flex items-center justify-center py-12 px-4" style={{ minHeight: '60vh' }}>
       <div className="w-full max-w-[460px]">
         <div className="mb-5"><BrandWordmark size="md" /></div>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
-        <p style={{ fontSize: '14px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 12px' }}>
+        <h1 className="text-[20px] font-bold text-text-primary" style={{ margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
+        <p className="text-[14px] text-neutral-300 leading-[1.6]" style={{ margin: '0 0 12px' }}>
           Picks and +EV alerts are not offered where local rules restrict them. The free calculators, guides and the public results record remain available.
         </p>
-        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+        <p className="text-cozy text-text-secondary leading-[1.6]" style={{ margin: '0 0 16px' }}>
           Think this is a mistake, or on a VPN? Turn it off and reload, or ask in the Discord.
         </p>
-        <div className="flex gap-4 flex-wrap text-[13px]">
-          <Link href="/tools" style={{ color: 'var(--link)' }}>Calculators</Link>
-          <Link href="/learn" style={{ color: 'var(--link)' }}>Guides</Link>
-          <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link>
-          <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>Responsible gambling</Link>
+        <div className="flex gap-4 flex-wrap text-cozy">
+          <Link className="text-link" href="/tools">Calculators</Link>
+          <Link className="text-link" href="/learn">Guides</Link>
+          <Link className="text-link" href="/results">Results</Link>
+          <Link className="text-link" href="/legal/responsible-gambling">Responsible gambling</Link>
         </div>
       </div>
     </div>

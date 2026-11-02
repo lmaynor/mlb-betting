@@ -34,7 +34,7 @@ export function MobileEvRowCard({
           <div className="text-[13.5px] font-bold text-text-primary leading-[1.25] overflow-hidden text-ellipsis whitespace-nowrap">
             {r.row.player}
           </div>
-          <div className="mono mt-0.5 text-[11px] text-text-secondary">
+          <div className="mono mt-0.5 text-mini text-text-secondary">
             {r.row.away} @ {r.row.home} &middot; {startLabel(r.row.commence)}
           </div>
         </div>
@@ -55,7 +55,7 @@ export function MobileEvRowCard({
             {r.ev == null ? '--' : `${signed(r.ev * 100)}% EV`}
           </span>
           {size && size.dollars > 0 && (
-            <div className="mono text-[10.5px] text-[var(--color-neutral-300)] mt-0.5">
+            <div className="mono text-[10.5px] text-neutral-300 mt-0.5">
               Kelly {fmtMoney(size.dollars)}
             </div>
           )}
@@ -66,7 +66,7 @@ export function MobileEvRowCard({
         <div className="flex items-center gap-[7px]">
           <BookLogo book={r.bestBook} size={22} />
           <div>
-            <div className="text-[12px] font-semibold text-text-primary">
+            <div className="text-compact font-semibold text-text-primary">
               {bookDisplay(r.bestBook).label}
             </div>
             <div className="mono" style={{ fontSize: '11px', color: GREEN, fontWeight: 700 }}>
@@ -77,7 +77,7 @@ export function MobileEvRowCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost py-[5px] px-2.5 text-[11px] font-semibold"
+          className="btn btn-ghost py-[5px] px-2.5 text-mini font-semibold"
          
         >
           Compare All Books ({r.row.books.length}) &rarr;
@@ -116,7 +116,7 @@ export function MobileArbCard({
           <div className="text-[13.5px] font-bold text-text-primary leading-[1.25] overflow-hidden text-ellipsis whitespace-nowrap">
             {r.row.player}
           </div>
-          <div className="mono mt-0.5 text-[11px] text-text-secondary">
+          <div className="mono mt-0.5 text-mini text-text-secondary">
             {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
           </div>
         </div>
@@ -140,7 +140,7 @@ export function MobileArbCard({
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
           <div className="flex items-center gap-1.5">
             <BookLogo book={a.bestOverBook} size={18} />
-            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(a.bestOverBook).label}</span>
+            <span className="text-mini font-semibold text-neutral-300">{bookDisplay(a.bestOverBook).label}</span>
           </div>
           <div className="mono mt-1 text-xs font-bold text-text-primary">
             OVER {formatOdds(a.bestOverAm)}
@@ -153,7 +153,7 @@ export function MobileArbCard({
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
           <div className="flex items-center gap-1.5">
             <BookLogo book={a.bestUnderBook} size={18} />
-            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(a.bestUnderBook).label}</span>
+            <span className="text-mini font-semibold text-neutral-300">{bookDisplay(a.bestUnderBook).label}</span>
           </div>
           <div className="mono mt-1 text-xs font-bold text-text-primary">
             UNDER {formatOdds(a.bestUnderAm)}
@@ -208,7 +208,7 @@ export function MobileMiddleCard({
           <div className="text-[13.5px] font-bold text-text-primary leading-[1.25] overflow-hidden text-ellipsis whitespace-nowrap">
             {r.low.player}
           </div>
-          <div className="mono mt-0.5 text-[11px] text-text-secondary">
+          <div className="mono mt-0.5 text-mini text-text-secondary">
             {STAT_LABEL[r.low.stat] ?? r.low.stat} &middot; {r.low.away} @ {r.low.home}
           </div>
         </div>
@@ -232,7 +232,7 @@ export function MobileMiddleCard({
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
           <div className="flex items-center gap-1.5">
             <BookLogo book={r.overBook} size={18} />
-            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(r.overBook).label}</span>
+            <span className="text-mini font-semibold text-neutral-300">{bookDisplay(r.overBook).label}</span>
           </div>
           <div className="mono mt-1 text-xs font-bold text-text-primary">
             OVER {r.low.line} ({formatOdds(r.overAm)})
@@ -245,7 +245,7 @@ export function MobileMiddleCard({
         <div style={{ padding: '8px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
           <div className="flex items-center gap-1.5">
             <BookLogo book={r.underBook} size={18} />
-            <span className="text-[11px] font-semibold text-[var(--color-neutral-300)]">{bookDisplay(r.underBook).label}</span>
+            <span className="text-mini font-semibold text-neutral-300">{bookDisplay(r.underBook).label}</span>
           </div>
           <div className="mono mt-1 text-xs font-bold text-text-primary">
             UNDER {r.high.line} ({formatOdds(r.underAm)})
@@ -299,7 +299,7 @@ export function MobileLongshotCard({
           <div className="text-[13.5px] font-bold text-text-primary leading-[1.25] overflow-hidden text-ellipsis whitespace-nowrap">
             {r.row.player}
           </div>
-          <div className="mono mt-0.5 text-[11px] text-text-secondary">
+          <div className="mono mt-0.5 text-mini text-text-secondary">
             {r.row.line} {STAT_LABEL[r.row.stat] ?? r.row.stat} &middot; {r.row.away} @ {r.row.home}
           </div>
         </div>
@@ -308,7 +308,7 @@ export function MobileLongshotCard({
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
         <div>
-          <span className="text-[12px] font-bold text-text-primary">
+          <span className="text-compact font-bold text-text-primary">
             Best Play: {sideLabel} {actionAm != null ? formatOdds(actionAm) : '--'}
           </span>
           <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
@@ -320,7 +320,7 @@ export function MobileLongshotCard({
             {actionEv != null ? `${signed(actionEv)}% EV` : '--'}
           </span>
           {actionBook && (
-            <div className="text-[10.5px] text-[var(--color-neutral-300)] mt-0.5">
+            <div className="text-[10.5px] text-neutral-300 mt-0.5">
               @ {bookDisplay(actionBook).label}
             </div>
           )}
@@ -331,7 +331,7 @@ export function MobileLongshotCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost py-[5px] px-2.5 text-[11px] font-semibold"
+          className="btn btn-ghost py-[5px] px-2.5 text-mini font-semibold"
          
         >
           Compare All Books ({r.row.books.length}) &rarr;
@@ -353,7 +353,7 @@ export function MobileSgpCard({ r }: { r: SgpProxyRow }) {
           <div className="flex items-center gap-1.5 flex-wrap mt-[3px]">
             <SgpBadges r={r} />
           </div>
-          <div className="mono text-[11px] text-text-secondary mt-[3px]">
+          <div className="mono text-mini text-text-secondary mt-[3px]">
             {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
           </div>
         </div>
@@ -375,7 +375,7 @@ export function MobileSgpCard({ r }: { r: SgpProxyRow }) {
         <div>
           <div className="flex items-center gap-1.5">
             <BookLogo book={r.book} size={18} />
-            <span className="mono text-[13px] font-bold text-text-primary">
+            <span className="mono text-cozy font-bold text-text-primary">
               Modelled {formatOdds(r.estSgpAm)}
             </span>
           </div>
@@ -434,7 +434,7 @@ export function OutlierCard({
           <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: 'var(--color-neutral-400)', border: `1px solid ${HAIR}` }}>
             {sport.toUpperCase()}
           </span>
-          <span className="mono text-[11.5px] text-[var(--color-neutral-300)]">
+          <span className="mono text-[11.5px] text-neutral-300">
             {item.row.away} @ {item.row.home} &middot; {startLabel(item.row.commence)}
           </span>
         </div>
@@ -446,15 +446,15 @@ export function OutlierCard({
       {/* Row 2: Player, Prop Line & Giant Outlier Price */}
       <div className="flex justify-between items-center gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="shrink-0 w-[36px] h-[36px] inline-flex">
+          <span className="shrink-0 w-9 h-9 inline-flex">
             <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
           </span>
           <div>
             <div className="text-[15px] font-bold text-text-primary leading-[1.25]">{item.row.player}</div>
-            <div className="mono text-[12px] text-[var(--color-neutral-400)] flex items-center gap-1.5 mt-[3px]">
+            <div className="mono text-compact text-neutral-400 flex items-center gap-1.5 mt-[3px]">
               <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
               {item.row.is_alt === true && (
-                <span className="text-[10px] font-bold tracking-[0.04em] py-0 px-1 rounded-[3px] border border-[color:var(--color-border-button-hover)] text-[var(--color-neutral-400)]">[ALT]</span>
+                <span className="text-micro font-bold tracking-fine py-0 px-1 rounded-[3px] border border-border-button-hover text-neutral-400">[ALT]</span>
               )}
             </div>
           </div>
@@ -463,7 +463,7 @@ export function OutlierCard({
           <div className="mono" style={{ fontSize: '24px', fontWeight: 800, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
             {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
           </div>
-          <div className="mono text-[10px] text-text-secondary mt-[3px] tracking-[0.04em]">OUTLIER PRICE</div>
+          <div className="mono text-micro text-text-secondary mt-[3px] tracking-fine">OUTLIER PRICE</div>
         </div>
       </div>
 
@@ -473,7 +473,7 @@ export function OutlierCard({
           <>
             <div className="flex items-center gap-[7px]">
               <LockGlyph size={13} color="var(--color-neutral-400)" />
-              <span className="text-[12px] font-semibold text-[var(--color-neutral-400)]">Book hidden (Pro)</span>
+              <span className="text-compact font-semibold text-neutral-400">Book hidden (Pro)</span>
               <span className="mono text-[10.5px] text-text-secondary">({item.nPeers} peer books)</span>
             </div>
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px', color: GREEN, borderColor: 'rgba(87,242,135,0.3)' }}>
@@ -485,7 +485,7 @@ export function OutlierCard({
             <div className="flex items-center gap-2">
               <BookLogo book={item.outlierBook} size={22} />
               <span className="text-[12.5px] font-semibold text-text-primary">{bookDisplay(item.outlierBook).label}</span>
-              <span className="mono text-[11px] text-text-secondary ml-1">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
+              <span className="mono text-mini text-text-secondary ml-1">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
             </div>
             <span className="mono" style={{ fontSize: '10.5px', color: GREEN, fontWeight: 700, letterSpacing: '0.04em' }}>BEST PRICE</span>
           </>
@@ -496,10 +496,10 @@ export function OutlierCard({
       <div className="flex flex-col gap-2 pt-1.5 border-t border-t-[color:var(--color-border-table)]">
         {/* Outlier Book Row */}
         <div className="flex items-center gap-2.5">
-          <div className="w-[32px] flex justify-center shrink-0">
+          <div className="w-8 flex justify-center shrink-0">
             {isLocked ? <LockGlyph size={12} color="var(--color-text-secondary)" /> : <BookLogo book={item.outlierBook} size={20} />}
           </div>
-          <div className="flex-1 h-[8px] bg-[var(--color-background-tertiary-default)] rounded-[4px] overflow-hidden">
+          <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
             <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
           </div>
           <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: GREEN, flexShrink: 0 }}>
@@ -510,20 +510,20 @@ export function OutlierCard({
         {/* Peer Books Rows (Up to 5) */}
         {item.peers.slice(0, 5).map((peer, idx) => (
           <div key={`${peer.book}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="w-[32px] flex justify-center shrink-0">
+            <div className="w-8 flex justify-center shrink-0">
               <BookLogo book={peer.book} size={20} />
             </div>
-            <div className="flex-1 h-[8px] bg-[var(--color-background-tertiary-default)] rounded-[4px] overflow-hidden">
+            <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
               <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
             </div>
-            <div className="mono w-[56px] text-right text-[11.5px] text-[var(--color-neutral-400)] shrink-0">
+            <div className="mono w-14 text-right text-[11.5px] text-neutral-400 shrink-0">
               {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
             </div>
           </div>
         ))}
 
         {/* Footer Summary Line */}
-        <div className="flex justify-between items-center mt-1 text-[11px] text-text-secondary">
+        <div className="flex justify-between items-center mt-1 text-mini text-text-secondary">
           <div>
             <span>Market avg &middot; {item.nPeers} books</span>
             {item.fairAmerican != null && (

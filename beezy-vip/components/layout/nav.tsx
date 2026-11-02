@@ -76,7 +76,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
                   key={l.href}
                   href={l.href}
                   className={cx('inline-flex items-center gap-[7px] rounded-md px-[11px] py-[7px] text-body-2-medium no-underline transition-colors',
-                    active ? 'bg-[var(--brand-dim)] text-[var(--signal)]' : 'bg-transparent text-text-secondary hover:text-text-primary')}
+                    active ? 'bg-[var(--brand-dim)] text-signal' : 'bg-transparent text-text-secondary hover:text-text-primary')}
                 >
                   {l.label}
                 </Link>
@@ -96,7 +96,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
               <>
                 <Link
                   href="/dashboard"
-                  className={cx('rounded-md border border-separator-border px-3 py-[7px] text-body-2-semibold no-underline', pathname.startsWith('/dashboard') ? 'text-[var(--signal)]' : 'text-text-primary')}
+                  className={cx('rounded-md border border-separator-border px-3 py-[7px] text-body-2-semibold no-underline', pathname.startsWith('/dashboard') ? 'text-signal' : 'text-text-primary')}
                 >
                   Dashboard
                 </Link>
@@ -105,7 +105,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             ) : (
               <>
                 {signIn}
-                <Link href="/pricing" className="whitespace-nowrap rounded-md bg-[#57F287] px-3 py-2 text-caption-1-bold tracking-[0.02em] text-[var(--color-background-secondary-default)] no-underline hover:bg-[#7bf5a4]">
+                <Link href="/pricing" className="whitespace-nowrap rounded-md bg-signal px-3 py-2 text-caption-1-bold tracking-[0.02em] text-background-secondary-default no-underline hover:bg-[#7bf5a4]">
                   {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
                 </Link>
               </>

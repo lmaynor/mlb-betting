@@ -11,12 +11,12 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
     <div className="flex min-w-[120px] flex-col gap-1">
       <div className="relative h-1.5 overflow-hidden rounded-[3px] bg-chart-track">
         <div className="absolute inset-y-0 left-0" style={{ width: `${modelProb * 100}%`, background: 'color-mix(in oklab, var(--signal) 28%, transparent)' }} />
-        <div className="absolute inset-y-0 left-0 bg-[var(--signal)]" style={{ width: `${modelProb * 100}%` }} />
+        <div className="absolute inset-y-0 left-0 bg-signal" style={{ width: `${modelProb * 100}%` }} />
       </div>
-      <div className="flex justify-between font-mono text-[10px]">
-        <span className="text-[var(--signal)]">{modelPct}% model</span>
+      <div className="flex justify-between font-mono text-micro">
+        <span className="text-signal">{modelPct}% model</span>
         <span className="text-text-secondary">{marketPct}% implied</span>
-        <span className="font-bold text-[var(--signal)]">+{edgePct}%</span>
+        <span className="font-bold text-signal">+{edgePct}%</span>
       </div>
     </div>
   )

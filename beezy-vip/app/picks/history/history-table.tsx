@@ -17,8 +17,8 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
   const toggle = (d: string) => setOpen(prev => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n })
 
   return (
-    <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] overflow-x-auto">
-      <table className="w-full border-collapse min-w-[560px] text-[13px]">
+    <div className="bg-background-primary-default border border-separator-border rounded-control overflow-x-auto">
+      <table className="w-full border-collapse min-w-[560px] text-cozy">
         <thead>
           <tr>
             <th className="ui-heading" style={TH}>Day</th>
@@ -35,7 +35,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
             const isOpen = open.has(d.date)
             return (
               <Fragment key={d.date}>
-                <tr className="sys-row" onClick={() => toggle(d.date)} style={{ cursor: 'pointer' }}>
+                <tr className="sys-row cursor-pointer" onClick={() => toggle(d.date)}>
                   <td style={{ ...TD, color: 'var(--color-text-primary)', fontWeight: 600 }}>
                     <button aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} ${d.date}`} onClick={e => { e.stopPropagation(); toggle(d.date) }}
                       style={{ all: 'unset', cursor: 'pointer', color: 'var(--color-text-secondary)', width: '18px', display: 'inline-block' }}>{isOpen ? '-' : '+'}</button>
@@ -54,7 +54,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={5} className="pt-2.5 px-3 pb-3.5 border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)]">
+                    <td colSpan={5} className="pt-2.5 px-3 pb-3.5 border-b border-b-[color:var(--color-separator-border)] bg-background-secondary-default">
                       <TopPicksTable picks={d.picks} showResult />
                     </td>
                   </tr>
