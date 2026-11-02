@@ -25,7 +25,7 @@ export default function OddsCalculatorPage() {
       <ToolHeader title="Odds & Vig Calculator" hint="Example values shown; edit them" current="/tools/odds-calculator" />
 
       <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-[24px] mb-[16px]">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div className="grid grid-cols-2 gap-[16px]">
           <div><label htmlFor="odds1" style={labelStyle}>Side 1 (American)</label><input id="odds1" type="number" value={odds1} onChange={e => setOdds1(e.target.value)} placeholder="-110" style={inputStyle} /></div>
           <div><label htmlFor="odds2" style={labelStyle}>Side 2 (American)</label><input id="odds2" type="number" value={odds2} onChange={e => setOdds2(e.target.value)} placeholder="-110" style={inputStyle} /></div>
         </div>

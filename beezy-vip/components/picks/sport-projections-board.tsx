@@ -49,7 +49,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
     return (
       <div style={{ ...SURFACE, padding: '28px 20px', textAlign: 'center' }}>
         <div className="text-text-primary font-semibold mb-[6px]">Nothing to show</div>
-        <div style={{ color: 'var(--color-text-secondary)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
+        <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">
           {emptyBody ?? `No ${pillar.shortName} rows match. The board fills in once a slate and prices are available.`}
         </div>
       </div>

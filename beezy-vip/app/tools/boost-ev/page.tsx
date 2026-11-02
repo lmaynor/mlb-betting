@@ -47,7 +47,7 @@ export default function BoostEvPage() {
           <input id="boosted" type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
           {validBoost && <p className="mono text-[11px] text-text-secondary mt-[4px]">Implied: {formatProb(americanToImpliedProb(bo))}</p>}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div className="grid grid-cols-2 gap-[16px]">
           <div>
             <label htmlFor="sideOdds" style={labelStyle}>Normal price, your side</label>
             <input id="sideOdds" type="number" value={sideOdds} onChange={e => setSideOdds(e.target.value)} placeholder="+110" style={inputStyle} />

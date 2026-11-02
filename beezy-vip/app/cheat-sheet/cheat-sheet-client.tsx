@@ -112,9 +112,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
         <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
         {isOfficialCardPlay(pick) ? (
-          <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #57F287', background: 'rgba(87,242,135,0.12)', color: '#57F287', whiteSpace: 'nowrap' }}>OFFICIAL PLAY</span>
+          <span className="ui-heading text-[10px] tracking-[0.04em] py-[2px] px-[5px] rounded-[4px] border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-[#57F287] whitespace-nowrap">OFFICIAL PLAY</span>
         ) : isEvOutlier(pick) ? (
-          <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #38bdf8', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', whiteSpace: 'nowrap' }}>+EV OUTLIER</span>
+          <span className="ui-heading text-[10px] tracking-[0.04em] py-[2px] px-[5px] rounded-[4px] border border-[color:#38bdf8] bg-[rgba(56,189,248,0.12)] text-[#38bdf8] whitespace-nowrap">+EV OUTLIER</span>
         ) : null}
       </div>
     </div>
@@ -157,7 +157,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
   }
 
   return (
-    <div style={{ border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)', width: '100%', boxSizing: 'border-box' }}>
+    <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-[16px] mb-[16px] rounded-[var(--radius)] w-full box-border">
       <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[12px]">POST TO X</div>
       {sheets.map(sh => {
         const n = postLength(sh.text)
@@ -251,7 +251,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <div className="text-[11.5px] text-[var(--color-neutral-300)] leading-[1.45] mt-[8px]">
                   Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
                 </div>
-                <div style={{ fontSize: '11px', color: '#57F287', background: 'rgba(87,242,135,0.08)', border: '1px solid rgba(87,242,135,0.22)', borderRadius: '4px', padding: '6px 10px', marginTop: '8px', lineHeight: 1.4 }}>
+                <div className="text-[11px] text-[#57F287] bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-[4px] py-[6px] px-[10px] mt-[8px] leading-[1.4]">
                   <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
                 </div>
               </div>

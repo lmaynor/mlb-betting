@@ -3,7 +3,7 @@ export function EdgeEvLegend() {
   return (
     <details style={{ marginTop: '14px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '10px 14px' }}>
       <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-neutral-300)' }}>Reading Model edge, Price EV and Score</summary>
-      <div style={{ fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.65, marginTop: '10px', display: 'grid', gap: '8px', maxWidth: '88ch' }}>
+      <div className="text-[12.5px] text-[var(--color-neutral-300)] leading-[1.65] mt-[10px] grid gap-[8px] max-w-[88ch]">
         <p className="m-0">
           <strong>Model edge</strong> compares two opinions: the model&rsquo;s probability for the listed side minus the market&rsquo;s fair
           probability (the books&rsquo; consensus with the vig removed). A high edge means the model disagrees with the market. It does not

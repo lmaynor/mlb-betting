@@ -83,7 +83,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       </div>
 
       {gap && (
-        <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', marginBottom: '28px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6 }}>
+        <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-[var(--radius-lg)] py-[14px] px-[18px] mb-[28px] text-[13px] text-[var(--color-neutral-300)] leading-[1.6]">
           <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
         </div>
       )}
@@ -98,7 +98,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
+      <div className="grid grid-cols-2 gap-[16px] mb-[28px]">
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
           <div className="ui-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
           {[

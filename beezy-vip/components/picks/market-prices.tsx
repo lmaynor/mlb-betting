@@ -15,7 +15,7 @@ function Empty({ title, body, cta }: { title: string; body: string; cta?: { href
   return (
     <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
       <div className="text-text-primary font-semibold mb-[6px]">{title}</div>
-      <div style={{ color: 'var(--color-text-secondary)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>{body}</div>
+      <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">{body}</div>
       {cta && <Link href={cta.href} className="btn btn-ghost" style={{ marginTop: '16px' }}>{cta.label}</Link>}
     </div>
   )
@@ -48,8 +48,8 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
   const confluence = useMemo(() => new Set(confluenceKeys), [confluenceKeys])
   return (
     <div className="grid gap-[16px]">
-      <div role="note" style={{ border: '1px solid rgba(56,189,248,0.30)', background: 'rgba(56,189,248,0.06)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}>
-        <strong style={{ color: '#38bdf8' }}>PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
+      <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-[12px] px-[14px] text-[12.5px] text-[var(--color-neutral-300)] leading-[1.55]">
+        <strong className="text-[#38bdf8]">PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
         {' '}Kalshi asks are on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link>.
       </div>
       {rows.length === 0
@@ -78,7 +78,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                   <span className="inline-flex items-center gap-[8px]">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
                     <span>{r.player} <span className="text-text-secondary font-normal">{point} {propStatLabel(r.stat ?? r.market)}</span></span>
-                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading" title="The projection also favors this side" style={{ fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' }}>MODEL + MARKET</span>}
+                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-[10px] text-[#57F287] border border-[color:rgba(87,242,135,0.35)] rounded-[4px] py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">MODEL + MARKET</span>}
                   </span>
                 </td>
                 <td className="mono py-[10px] px-[12px] text-[var(--color-neutral-300)]">{(r.game_key ?? '').split(':')[2]}</td>

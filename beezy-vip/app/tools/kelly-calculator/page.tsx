@@ -33,7 +33,7 @@ export default function KellyCalculatorPage() {
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div className="grid grid-cols-2 gap-[16px]">
           <div>
             <label style={labelStyle}>Line (American)</label>
             <input type="number" value={odds} onChange={e => setOdds(e.target.value)} placeholder="-110" style={inputStyle} />

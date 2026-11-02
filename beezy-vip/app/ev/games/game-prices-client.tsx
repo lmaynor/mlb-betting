@@ -119,7 +119,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
         <span className="mono font-bold text-text-primary">{sportLabel}</span>
         <span className="mono text-[var(--color-neutral-300)]">{visible.length} ROWS</span>
         <span className="mono" style={{ color: 'var(--color-neutral-300)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
-        {stale && <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15', border: '1px solid #facc1555', borderRadius: '4px', padding: '0 5px' }}>STALE</span>}
+        {stale && <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15] border border-[color:#facc1555] rounded-[4px] py-[0px] px-[5px]">STALE</span>}
         <span className="text-[var(--color-neutral-300)]">
           <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15]">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>

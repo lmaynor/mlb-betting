@@ -46,7 +46,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
   return (
     <div style={CARD}>
       {system.gap && (
-        <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)', borderRadius: '8px', padding: '10px 12px' }}>
+        <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-[8px] py-[10px] px-[12px]">
           <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
         </div>
       )}

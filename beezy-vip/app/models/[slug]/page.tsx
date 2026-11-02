@@ -126,7 +126,7 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Config + Calibration */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
+      <div className="grid grid-cols-2 gap-[16px] mb-[28px]">
 
         {/* Config */}
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>

@@ -1639,7 +1639,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       )}
       <LockedNotice locked={locked} shown={allRows.length} what="prop lines" plan="The odds screen is part of All-Access Pro." />
 
-      <p className="times" style={{ color: 'var(--color-text-secondary)', fontSize: '12px', marginTop: '24px', maxWidth: '90ch', lineHeight: 1.6 }}>
+      <p className="times text-text-secondary text-[12px] mt-[24px] max-w-[90ch] leading-[1.6]">
         {mode === 'ev' && <>Each cell is a book&apos;s price on the row&apos;s side above its price on the other side; green marks the best bettable price and a tint marks a book
           beating the fair price by 1.5% or more. FV is the fair price from the reference books you pick, averaged with equal weight after each book&apos;s vig is removed;
           a book is never measured against its own line. EV is fair probability times payout minus one at the best price.</>}
@@ -2632,7 +2632,7 @@ function OutlierCard({
               <span className="ml-[6px]">&middot; Fair: {item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`}</span>
             )}
           </div>
-          <div className="mono" style={{ color: '#d1d5db', fontWeight: 600 }}>
+          <div className="mono text-[#d1d5db] font-semibold">
             {item.marketAvgAmerican > 0 ? `+${item.marketAvgAmerican}` : `${item.marketAvgAmerican}`}
           </div>
         </div>

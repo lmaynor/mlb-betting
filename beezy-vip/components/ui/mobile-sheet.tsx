@@ -259,14 +259,8 @@ export function MobileBottomSheet({
         {/* Optional Sticky Footer */}
         {footer && (
           <div
-            style={{
-              padding: '10px 16px',
-              borderTop: '1px solid var(--color-separator-border)',
-              background: 'var(--color-background-secondary-default)',
-              flexShrink: 0,
-              boxSizing: 'border-box',
-            }}
-          >
+           
+           className="py-[10px] px-[16px] border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
             {footer}
           </div>
         )}

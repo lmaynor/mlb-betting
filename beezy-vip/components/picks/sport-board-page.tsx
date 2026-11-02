@@ -91,8 +91,8 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
             <h1 className="text-[20px] font-bold text-text-primary m-0">{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
             <span className="ui-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
-              <span className="ui-heading" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
-                style={{ fontSize: '10px', color: 'var(--warn)', border: '1px solid rgba(245,158,11,0.45)', borderRadius: '6px', padding: '2px 8px' }}>UNVALIDATED</span>
+              <span className="ui-heading text-[10px] text-[var(--warn)] border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-[2px] px-[8px]" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+               >UNVALIDATED</span>
             )}
           </div>
           <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>

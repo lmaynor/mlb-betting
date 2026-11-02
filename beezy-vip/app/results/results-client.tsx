@@ -349,7 +349,7 @@ export function ResultsClient({
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-2.5">
             <span className={LBL}>Cumulative P&L, full season ($)</span>
             <span className="flex gap-3.5">
-              <span className="mono" style={{ fontSize: '10px', color: '#57f287' }}>-- +EV alerts, flat $100</span>
+              <span className="mono text-[10px] text-[#57f287]">-- +EV alerts, flat $100</span>
               <span className="mono text-[10px] text-text-primary">-- models, paper stakes</span>
             </span>
           </div>
