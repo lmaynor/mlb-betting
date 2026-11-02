@@ -9,7 +9,7 @@ import path from 'path'
 describe('source files with typographic characters stay ASCII', () => {
   const root = path.resolve(__dirname, '..')
   const files = [
-    'lib/sport-assets.ts', 'lib/sports.ts', 'lib/types.ts', 'components/ui/sport-assets.tsx', 'app/ev/odds-client.tsx', 'app/ev/ledger-strip.tsx', 'lib/odds-headshots.ts',
+    'lib/sport-assets.ts', 'lib/sports.ts', 'lib/types.ts', 'components/ui/sport-assets.tsx', 'app/ev/odds-client.tsx', 'app/ev/odds-constants.ts', 'app/ev/odds-format.ts', 'app/ev/odds-controls.tsx', 'app/ev/odds-cells.tsx', 'app/ev/odds-rows.tsx', 'app/ev/odds-cards.tsx', 'app/ev/odds-compare-sheet.tsx', 'app/ev/odds-filters.tsx', 'app/ev/odds-filter-sheet.tsx', 'app/ev/odds-results.tsx', 'app/ev/odds-footnote.tsx', 'app/ev/use-odds-screen.ts', 'app/ev/ledger-strip.tsx', 'lib/odds-headshots.ts',
     'components/picks/market-prices.tsx', 'components/picks/sport-projections-board.tsx', 'components/picks/sport-tabs.tsx',
     'components/picks/sport-board-page.tsx', 'components/picks/system-page.tsx', 'components/picks/system-methodology.tsx',
     'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'components/picks/filter-bar.tsx', 'lib/team-directory.ts', 'lib/board-rows.ts', 'lib/board-games.ts',
