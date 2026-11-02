@@ -4115,6 +4115,13 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   hoopR files fall back to the master alone. The nightly `nba-hoopr-refresh` job (13:45 UTC) is what keeps the 2027 file current; its 2027
   box files did not exist at the 2026-10-19 run. Tests: `tests/test_nba_inseason_gamelogs.py`.
 
+- **Hierarchical NBA prop engine (2026-11-01, branch `claude/nba-props-quantitative-upgrade-816ba8`, UNVALIDATED, undeployed):** the
+  serving board's NBA rows (`ev/daily_projections.py`) now run `nba/props/hierarchical.py` (role-weighted teammate-absence redistribution,
+  blowout / back-to-back minutes, attempt-first threes with empirical-Bayes 3P%, coherent pra/pr/pa/ra built from the points / rebounds /
+  assists marginals, per-stat display blend `BLEND_C_BY_SPORT_STAT`). No walk-forward evidence behind the constants; the master's `_date` is
+  the UTC tip date so live serving applies NO as-of cut (`GameLogs.replay` for replays). See
+  `docs/solutions/conventions/nba-hierarchical-props-engine-unvalidated.md`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
