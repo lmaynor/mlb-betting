@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { OgBrandBadge } from "@/lib/og-brand";
+import { OgBrandBadge, type OgPick } from "@/lib/og-brand";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
 
@@ -50,7 +50,7 @@ const SYS: Record<string, { accent: string; bg: string }> = {
 };
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
-function fmtEdge(e: any) { return `+${(parseFloat(e) * 100).toFixed(1)}%`; }
+function fmtEdge(e: number | string) { return `+${(Number(e) * 100).toFixed(1)}%`; }
 function fmtPick(bt: string, sys: string) {
   if (bt === "NRFI") return "No Run 1st Inning";
   if (bt === "YRFI") return "Run in 1st Inning";
@@ -61,8 +61,8 @@ function fmtPick(bt: string, sys: string) {
   if (bt === "1I_DRAW") return "1st Inn Draw";
   return bt;
 }
-function teamInfo(abbrev: string) {
-  return TEAMS[abbrev?.toUpperCase()] ?? { p: "30,30,40", s: "10,10,15", slug: "nyy" };
+function teamInfo(abbrev: string | null | undefined) {
+  return TEAMS[(abbrev ?? "").toUpperCase()] ?? { p: "30,30,40", s: "10,10,15", slug: "nyy" };
 }
 
 export async function GET() {
@@ -72,12 +72,12 @@ export async function GET() {
   ]);
   const pd = await pr.json();
   const sd = await sr.json();
-  const all: any[] = Array.isArray(pd) ? pd : pd.picks ?? [];
+  const all: OgPick[] = Array.isArray(pd) ? pd : pd.picks ?? [];
 
   // Game picks: F5 and NRFI only, kelly triggered, top 4 by edge
   const picks = all
     .filter(p => p.kelly_triggered && ["F5","NRFI","F1H","GAME"].includes(p.system))
-    .sort((a,b) => parseFloat(b.edge) - parseFloat(a.edge))
+    .sort((a,b) => Number(b.edge) - Number(a.edge))
     .slice(0, 4);
 
   const ov = sd?.overall ?? {};
@@ -168,7 +168,7 @@ export async function GET() {
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.5)", border:`1px solid ${sys.accent}55`, borderRadius:"12px", padding:"12px 18px", gap:"4px" }}>
                   <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.5)", letterSpacing:"2px" }}>EDGE</span>
                   <span style={{ fontSize:"28px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
-                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.4)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
+                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.4)" }}>{pick.stake ? `${Number(pick.stake).toFixed(2)}u` : ""}</span>
                 </div>
               </div>
             </div>

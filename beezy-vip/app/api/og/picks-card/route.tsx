@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { OgBrandBadge } from "@/lib/og-brand";
+import { OgBrandBadge, type OgPick } from "@/lib/og-brand";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
 
@@ -31,8 +31,8 @@ const s = (sys: string) => SYS[sys] ?? { bg: "#171a24", accent: "#9ca3af" };
 const GAME_SYSTEMS = new Set(["NRFI", "1I", "1IOU", "F3", "F5", "F1H", "F7", "GAME"]);
 
 const fmtOdds = (o: number) => o > 0 ? `+${o}` : `${o}`;
-const fmtEdge = (e: any) => `+${parseFloat(e).toFixed(1)}%`;
-const fmtGame = (p: any) => {
+const fmtEdge = (e: number | string) => `+${Number(e).toFixed(1)}%`;
+const fmtGame = (p: OgPick) => {
   const a = p.away_team ?? "", h = p.home_team ?? "";
   return a && h ? `${a} @ ${h}` : p.game ?? "TBD";
 };
@@ -68,13 +68,13 @@ export async function GET() {
   ]);
   const pd = await pr.json();
   const sd = await sr.json();
-  const all: any[] = Array.isArray(pd) ? pd : pd.picks ?? [];
+  const all: OgPick[] = Array.isArray(pd) ? pd : pd.picks ?? [];
   // Card showcases model picks -- exclude pooled +EV alerts (system="EV", a
   // cross-market soft-line/Kalshi scanner, not a model prediction; see
   // lib/tokens.ts resolveEvUnderlying for the equivalent exclusion on the
   // Daily Card).
   // Player picks only: game picks are a separate, paid set (lib/access.ts), so this public image must not carry them.
-  const top = all.filter(p => p.kelly_triggered && p.system !== "EV" && !GAME_SYSTEMS.has(p.system)).sort((a, b) => parseFloat(b.edge) - parseFloat(a.edge)).slice(0, 5);
+  const top = all.filter(p => p.kelly_triggered && p.system !== "EV" && !GAME_SYSTEMS.has(p.system)).sort((a, b) => Number(b.edge) - Number(a.edge)).slice(0, 5);
   const ov = sd?.overall ?? {};
   const roi = ov.roi ?? null;
   const roiNum = roi !== null ? parseFloat(roi) : null;
@@ -150,7 +150,7 @@ export async function GET() {
 
               {/* stake */}
               <span style={{ fontSize: "12px", color: "#7d8596", minWidth: "48px", textAlign: "right" }}>
-                {pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}
+                {pick.stake ? `${Number(pick.stake).toFixed(2)}u` : ""}
               </span>
             </div>
           );

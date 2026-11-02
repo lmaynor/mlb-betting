@@ -235,8 +235,8 @@ body {
      --font-inter    Plus Jakarta Sans   dense UI and body copy (the variable name is historical: ~1,600 inline styles read it)
      --font-mono     IBM Plex Mono       every odd, probability, EV%, stake, timestamp, and every uppercase micro-label
    Classes: .ui-display (headings, wordmark) and .ui-heading (mono micro-labels). */
-h1, h2,
-.display-xl, .display-lg {
+h1,
+h2 {
   font-family: var(--font-display), var(--font-inter), sans-serif;
 }
 .ui-display {
@@ -274,8 +274,6 @@ th {
 }
 
 /* Display tracking loosens slightly at very large sizes via clamp helpers */
-.display-xl { font-size: clamp(2.5rem, 6vw, 3.75rem); letter-spacing: -0.035em; line-height: 1; }
-.display-lg { font-size: clamp(2rem, 4.5vw, 3rem);    letter-spacing: -0.03em;  line-height: 1.03; }
 
 /* ── Page container ─────────────────────────────────────────────────
    The black "page-frame" border is gone. The shell is now full-bleed
@@ -300,24 +298,6 @@ th {
 
 /* ── Card components ────────────────────────────────────────────── */
 /* Same surface spec as SURFACE_CARD in lib/tokens.ts. */
-.ribbon-card-wrap {
-  border: 1px solid var(--color-separator-border);
-  border-radius: 12px;
-  background: var(--color-background-primary-default);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.ribbon-title {
-  background: var(--obsidian);
-  border-bottom: 1px solid var(--basalt);
-  padding: 9px 14px;
-  font-family: var(--font-text), system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--silver);
-}
 
 /* ── Buttons ────────────────────────────────────────────────────── */
 .btn {
@@ -372,12 +352,6 @@ a:focus-visible {
 }
 
 /* ── Background grid (subtler) ──────────────────────────────────── */
-.grid-bg {
-  background-image:
-    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-  background-size: 44px 44px;
-}
 
 /* ── Live status dot ────────────────────────────────────────────── */
 @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -419,8 +393,6 @@ a:focus-visible {
 /* ── Entrance motion (CSS-only, runs on load; content visible by default) */
 @keyframes reveal-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .reveal { animation: reveal-up var(--dur-slow) var(--ease-out) both; }
-.reveal-2 { animation: reveal-up var(--dur-slow) var(--ease-out) both; animation-delay: 60ms; }
-.reveal-3 { animation: reveal-up var(--dur-slow) var(--ease-out) both; animation-delay: 120ms; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -439,34 +411,21 @@ a:focus-visible {
 .mobile-only    { display: none !important; }
 
 .hero-grid      { display: grid; grid-template-columns: minmax(0,7fr) minmax(0,5fr); }
-.hero-stats     { display: grid; grid-template-columns: 1fr 1fr; }
 
 .steps-grid     { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.tools-grid     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
 .footer-grid    { display: grid; grid-template-columns: 1.6fr repeat(5, 1fr); gap: 28px; }
 .models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.results-grid   { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 
 /* Seamless internal-border "strip" panels (no gap; cells share hairlines) */
-.stats-strip     { display: grid; }
-.stats-4up       { display: grid; grid-template-columns: repeat(4, 1fr); }
+
 .sources-grid    { display: grid; grid-template-columns: repeat(4, 1fr); }
-.models-strip    { display: grid; grid-template-columns: repeat(3, 1fr); }
-.model-stats-5up   { display: grid; grid-template-columns: repeat(5, 1fr); }
-.model-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 @media (max-width: 640px) {
   .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
-  .hero-stats  { border-top: 1px solid var(--basalt); }
-}
 
-.banner-short { display: none; }
-.banner-full  { display: inline; }
-@media (max-width: 600px) {
-  .banner-short { display: inline; }
-  .banner-full  { display: none; }
 }
 
 /* iOS: prevent zoom on input focus; ensure ≥40px touch targets in content */
@@ -485,7 +444,7 @@ a:focus-visible {
 
   .hero-grid  { display: block !important; }
   .hero-left  { border-right: none !important; padding: 28px 20px !important; }
-  .hero-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; border-top: 1px solid var(--basalt); }
+
   .hero-h1    { font-size: 30px !important; }
 
   .steps-grid { grid-template-columns: 1fr !important; }
@@ -493,20 +452,10 @@ a:focus-visible {
   .systems-grid  { grid-template-columns: 1fr !important; }
   .models-grid   { grid-template-columns: 1fr !important; }
   .pricing-grid  { grid-template-columns: 1fr !important; gap: 16px !important; }
-  .tools-grid    { grid-template-columns: 1fr !important; }
-  .results-grid  { grid-template-columns: 1fr !important; }
 
   .footer-grid { grid-template-columns: 1fr 1fr !important; gap: 22px !important; }
 
-  .banner-full  { display: none; }
-  .banner-short { display: inline; }
-
-  .stats-strip     { grid-template-columns: 1fr 1fr !important; }
-  .stats-4up       { grid-template-columns: 1fr 1fr !important; }
   .sources-grid    { grid-template-columns: 1fr 1fr !important; }
-  .models-strip    { grid-template-columns: 1fr !important; }
-  .model-stats-5up { grid-template-columns: 1fr 1fr !important; }
-  .model-config-grid { grid-template-columns: 1fr !important; }
 
   .live-ticker-shell { padding: 6px 0 !important; max-height: 32px; }
   .live-ticker-shell .ticker-track { animation-duration: 36s !important; }
@@ -548,8 +497,6 @@ a:focus-visible {
 .results-model-mobile  { display: none; }
 .models-table-desktop { display: block; }
 .models-cards-mobile { display: none; }
-.home-recent-desktop { display: block; }
-.home-recent-mobile { display: none; }
 
 @media (max-width: 900px) {
   .picks-desktop { display: none !important; }
@@ -560,8 +507,7 @@ a:focus-visible {
   .results-model-mobile  { display: block !important; }
   .models-table-desktop { display: none !important; }
   .models-cards-mobile { display: block !important; }
-  .home-recent-desktop { display: none !important; }
-  .home-recent-mobile { display: block !important; }
+
   .pipeline-grid { grid-template-columns: 1fr !important; }
 }
 
@@ -608,12 +554,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 a { color: inherit; }
 
 /* ── /ev data table: one sticky header (clears the 96px two-tier nav), hairline rows, hover = background only ── */
-.ev-table th { position: sticky; top: calc(131px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 9px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; }
-.ev-table td { padding: 10px 12px; vertical-align: middle; border-bottom: 1px solid #151822; }
-.ev-table tbody tr { transition: background-color 120ms ease; }
-.ev-table tbody tr[data-row]:hover { background: #171a24; }
-.ev-table tbody tr:last-child td { border-bottom: none; }
-@media (max-width: 1100px) { .ev-table-wrap { overflow-x: auto; } .ev-table th { position: static; } }
 
 /* ── /ev Odds Terminal: one row per prop side, one narrow column per book ────────────────────────── */
 .odds-table th { position: sticky; top: calc(131px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
@@ -652,7 +592,6 @@ a { color: inherit; }
   }
   .cockpit-close { display: none !important; }
 }
-
 
 /* Article tables, quotes and lists (rendered by lib/markdown.ts) */
 .article-body .table-wrap { overflow-x: auto; margin: 16px 0; }

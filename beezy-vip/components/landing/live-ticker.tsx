@@ -1,5 +1,4 @@
 import { apiGetRecentSettled as getRecentSettled } from '@/lib/betting-api'
-import { formatOdds } from '@/lib/odds'
 import { clsx } from 'clsx'
 import { systemLabel } from '@/lib/tokens'
 

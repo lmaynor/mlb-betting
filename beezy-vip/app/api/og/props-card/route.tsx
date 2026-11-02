@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { OgBrandBadge } from "@/lib/og-brand";
+import { OgBrandBadge, type OgPick } from "@/lib/og-brand";
 import { headshotUrlById } from "@/lib/sport-assets";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
@@ -49,7 +49,7 @@ const SYS: Record<string, { accent: string; bg: string; label: string }> = {
 };
 
 function fmtOdds(o: number) { return o > 0 ? `+${o}` : `${o}`; }
-function fmtEdge(e: any) { return `+${(parseFloat(e) * 100).toFixed(1)}%`; }
+function fmtEdge(e: number | string) { return `+${(Number(e) * 100).toFixed(1)}%`; }
 function fmtPick(bt: string) {
   if (bt === "HR") return "HR Yes";
   if (bt.startsWith("K_OVER"))     return `Over ${bt.split("_")[2]} Ks`;
@@ -76,12 +76,12 @@ export async function GET() {
   ]);
   const pd = await pr.json();
   const sd = await sr.json();
-  const all: any[] = Array.isArray(pd) ? pd : pd.picks ?? [];
+  const all: OgPick[] = Array.isArray(pd) ? pd : pd.picks ?? [];
 
   // Player props: HR, K, OUTS only
   const picks = all
     .filter(p => p.kelly_triggered && ["HR","K","OUTS"].includes(p.system))
-    .sort((a,b) => parseFloat(b.edge) - parseFloat(a.edge))
+    .sort((a,b) => Number(b.edge) - Number(a.edge))
     .slice(0, 4);
 
   const ov = sd?.overall ?? {};
@@ -202,7 +202,7 @@ export async function GET() {
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", background:"rgba(0,0,0,0.6)", border:`1px solid ${sys.accent}66`, borderRadius:"12px", padding:"14px 20px", gap:"5px", flexShrink:0, boxShadow:`0 0 20px ${sys.accent}22` }}>
                   <span style={{ fontSize:"9px", color:"rgba(255,255,255,0.45)", letterSpacing:"2px" }}>EDGE</span>
                   <span style={{ fontSize:"30px", fontWeight:900, color:sys.accent, letterSpacing:"-1px" }}>{fmtEdge(pick.edge)}</span>
-                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.35)" }}>{pick.stake ? `${parseFloat(pick.stake).toFixed(2)}u` : ""}</span>
+                  <span style={{ fontSize:"10px", color:"rgba(255,255,255,0.35)" }}>{pick.stake ? `${Number(pick.stake).toFixed(2)}u` : ""}</span>
                 </div>
               </div>
             </div>

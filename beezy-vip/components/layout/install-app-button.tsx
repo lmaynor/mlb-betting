@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useFocusTrap } from '@/components/ui/use-focus-trap'
 
 export interface InstallAppButtonProps {
@@ -39,7 +39,10 @@ export function detectInstallPlatform(
 
 export function InstallAppButton({ compact = false, style, className }: InstallAppButtonProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [isInstalled, setIsInstalled] = useState(false)
+  // standalone (already installed) is read from the browser, not synced through an effect; appinstalled flips the state
+  const standalone = useSyncExternalStore(() => () => {}, () => isStandaloneMode(window), () => false)
+  const [installedEvent, setInstalledEvent] = useState(false)
+  const isInstalled = standalone || installedEvent
   const [modalOpen, setModalOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   // focus moves into the dialog, Tab wraps inside it, and focus returns to the Install button on close
@@ -47,10 +50,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (isStandaloneMode(window)) {
-      setIsInstalled(true)
-      return
-    }
+    if (isStandaloneMode(window)) return
 
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault()
@@ -58,7 +58,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
     }
 
     const handleAppInstalled = () => {
-      setIsInstalled(true)
+      setInstalledEvent(true)
       setDeferredPrompt(null)
       setModalOpen(false)
     }
@@ -92,7 +92,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
         await deferredPrompt.prompt()
         const choice = await deferredPrompt.userChoice
         if (choice.outcome === 'accepted') {
-          setIsInstalled(true)
+          setInstalledEvent(true)
           setDeferredPrompt(null)
         }
       } catch {

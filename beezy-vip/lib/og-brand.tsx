@@ -31,3 +31,20 @@ export function OgBrandMark({ width, color = BRAND_EMERALD }: { width: number; c
     </svg>
   )
 }
+
+/** A pick row as the public picks API returns it; the OG cards read only these fields. */
+export interface OgPick {
+  system: string
+  bet_type: string
+  player?: string | null
+  away_team?: string | null
+  home_team?: string | null
+  game?: string | null
+  odds: number
+  stake?: number | string | null
+  edge: number | string
+  book?: string | null
+  sport?: string | null
+  notes?: string | null
+  [field: string]: unknown
+}
