@@ -92,14 +92,14 @@ function SystemTile({ s }: { s: SystemCard }) {
                 ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--color-text-primary)' : 'var(--color-text-secondary)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
-                  <div className="ui-heading mb-1 tracking-[0.1em] text-text-secondary">{label}</div>
+                  <div className="ui-heading mb-1 tracking-label text-text-secondary">{label}</div>
                   <div className="mono text-caption-1-semibold" style={{ color }}>{val}</div>
                 </div>
               ))}
             </div>
             <Link
               href={s.href}
-              className="times text-body-2-semibold text-[var(--link)] no-underline hover:underline"
+              className="times text-body-2-semibold text-link no-underline hover:underline"
             >
               View picks &rarr;
             </Link>

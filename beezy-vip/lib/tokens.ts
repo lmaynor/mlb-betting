@@ -10,6 +10,10 @@ import { isWinterSport } from '@/lib/bet-notes'
 import { propStatLabel } from '@/lib/sports'
 import type { Bet } from '@/lib/types'
 
+// Hex mirror of the @theme status palette in app/globals.css, for the places a class cannot reach (recharts props,
+// SVG attributes, meta tags, OG routes). tests/tokens.test.ts fails if the two drift.
+export const PALETTE = { signal: '#57f287', warn: '#facc15', link: '#38bdf8', gold: '#f59e0b', loss: '#ef4444' } as const
+
 // Hairline border -- replaces the old hard 1px-black Dell frame.
 export const B = '1px solid var(--basalt)'
 // Subtler inner border for table rows and nested dividers.

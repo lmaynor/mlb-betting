@@ -11,7 +11,7 @@ import { SystemBadge } from '@/components/ui/primitives'
 import { collapseBooks } from '@/lib/dedupe'
 import { isWinterSport, readableNotes } from '@/lib/bet-notes'
 
-const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary'
+const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold uppercase tracking-caps text-text-secondary'
 const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
 export function CommandCenterClient({ bets }: { bets: Bet[] }) {
@@ -23,8 +23,8 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
       <div className="mb-3 flex items-center justify-between gap-4">
         <h2 className="text-headline-bold text-text-primary">Today&apos;s top plays</h2>
         <span className="flex gap-3.5">
-          <Link href="/ev" className="text-caption-1-semibold text-[var(--link)] hover:underline">Odds Terminal &rarr;</Link>
-          <Link href="/picks" className="text-caption-1-semibold text-[var(--link)] hover:underline">All picks &rarr;</Link>
+          <Link href="/ev" className="text-caption-1-semibold text-link hover:underline">Odds Terminal &rarr;</Link>
+          <Link href="/picks" className="text-caption-1-semibold text-link hover:underline">All picks &rarr;</Link>
         </span>
       </div>
       <div className="overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card">
@@ -59,12 +59,12 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
                       <td className={cx('mono whitespace-nowrap text-caption-1-regular text-text-primary', TD)}>
                         {b.book ? book.short : '--'}{b.bookCount > 1 ? ` +${b.bookCount - 1}` : ''} {formatOdds(b.odds)}
                       </td>
-                      <td className={cx('mono text-right text-body-2-bold text-[var(--signal)]', TD)}>+{edge.toFixed(1)}%</td>
+                      <td className={cx('mono text-right text-body-2-bold text-signal', TD)}>+{edge.toFixed(1)}%</td>
                     </tr>
                     {isOpen && (
                       <tr><td colSpan={3} className={cx(TD, 'bg-background-secondary-default')}>
                         <ul className="m-0 grid list-none gap-1 p-0">
-                          {bullets.map((t, i) => <li key={i} className="mono text-[11px] text-text-secondary">&middot; {t}</li>)}
+                          {bullets.map((t, i) => <li key={i} className="mono text-mini text-text-secondary">&middot; {t}</li>)}
                         </ul>
                       </td></tr>
                     )}

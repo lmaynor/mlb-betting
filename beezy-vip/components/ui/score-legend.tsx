@@ -5,7 +5,7 @@ export function ScoreLegend() {
   return (
     <details style={{ marginTop: '14px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '10px 14px' }}>
       <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-neutral-300)' }}>How the Beezy Score works</summary>
-      <div className="text-[12.5px] text-[var(--color-neutral-300)] leading-[1.65] mt-2.5 grid gap-2">
+      <div className="text-[12.5px] text-neutral-300 leading-[1.65] mt-2.5 grid gap-2">
         <p className="m-0">
           A 0-100 strength score for one flagged price. It is not a win probability. Hover a score to see its parts.
         </p>

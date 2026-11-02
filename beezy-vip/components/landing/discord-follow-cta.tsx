@@ -8,12 +8,9 @@ import { X_URL } from '@/lib/links'
 export function DiscordFollowCTA() {
   return (
     <section className="pb-2 pt-14">
-      <div className="flex flex-wrap items-center justify-between gap-5 rounded-2xl p-6 shadow-md" style={{
-        border: '1px solid color-mix(in oklab, #5865f2 32%, var(--color-separator-border))',
-        background: 'linear-gradient(135deg, color-mix(in oklab, #5865f2 14%, var(--color-background-primary-default)), var(--color-background-primary-default))',
-      }}>
+      <div className="flex flex-wrap items-center justify-between gap-5 rounded-xl border border-separator-border bg-background-primary-default p-6 shadow-card">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#5865f2] text-white" style={{ boxShadow: '0 0 24px -4px color-mix(in oklab, #5865f2 60%, transparent)' }}>
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#5865f2] text-white">
             <DiscordMark size={26} color="currentColor" />
           </div>
           <div>
@@ -31,8 +28,8 @@ export function DiscordFollowCTA() {
             href={DISCORD_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn"
-            style={{ background: '#5865f2', color: '#fff', border: '1px solid color-mix(in oklab, #5865f2 70%, white)' }}
+            className="btn bg-[#5865f2] text-white"
+            style={{ border: '1px solid color-mix(in oklab, #5865f2 70%, white)' }}
           >
             <DiscordMark size={15} color="currentColor" />
             Join free

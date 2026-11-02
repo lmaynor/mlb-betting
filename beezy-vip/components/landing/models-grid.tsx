@@ -50,7 +50,7 @@ export async function ModelsGrid() {
           <Link key={p.slug} href={`/picks/${p.slug}`} className="block rounded-xl border border-separator-border bg-background-primary-default p-3.5 no-underline shadow-card" style={{ borderLeft: `3px solid ${p.accent}` }}>
             <div className="mb-1.5 flex justify-between gap-2">
               <span className="text-body-2-bold" style={{ color: p.accent }}>{p.shortName}</span>
-              <span className="mono text-[10px] text-text-secondary">{p.seasonBadge}</span>
+              <span className="mono text-micro text-text-secondary">{p.seasonBadge}</span>
             </div>
             <div className="text-caption-1-regular text-text-secondary">
               {p.markets.filter(m => m.kind === 'prop' || m.kind === 'game').slice(0, 6).map(m => m.label.replace(/ O\/U| \(Yes\/No\)/, '')).join(' \u00b7 ')}

@@ -37,13 +37,15 @@ function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '5px 11px', fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
-      fontWeight: active ? 600 : 500, borderRadius: 'var(--radius-pill)',
+    <button className="py-[5px] px-[11px] cursor-pointer tracking-fine" onClick={onClick} style={{
+      fontSize: '10px',
+      fontFamily: 'var(--font-mono), monospace',
+      fontWeight: active ? 600 : 500,
+      borderRadius: 'var(--radius-pill)',
       border: `1px solid ${active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-separator-border)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--color-neutral-300)'} 16%, var(--color-background-full))` : 'var(--color-background-primary-default)',
       color: active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)',
-      cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+      textTransform: 'uppercase' as const,
       transition: 'all var(--dur) var(--ease-out)',
     }}>{label}</button>
   )
@@ -52,14 +54,15 @@ function Chip({ label, active, color, onClick }: {
 function SystemPill({ system, edgePct }: { system: string; edgePct: number }) {
   const p = SYSTEM_PILL[system] ?? SYSTEM_PILL['ALL']
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '5px',
-      padding: '3px 8px', background: p.bg, border: p.border,
-      fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
-      fontWeight: 600, letterSpacing: '0.06em',
+    <span className="inline-flex items-center gap-[5px] py-[3px] px-2 tracking-head" style={{
+      background: p.bg,
+      border: p.border,
+      fontSize: '10px',
+      fontFamily: 'var(--font-mono), monospace',
+      fontWeight: 600,
     }}>
       <span style={{ color: p.color }}>{system}</span>
-      <span style={{ color: edgeColor(edgePct), borderLeft: `1px solid ${p.border.slice(11)}`, paddingLeft: '5px' }}>
+      <span className="pl-[5px]" style={{ color: edgeColor(edgePct), borderLeft: `1px solid ${p.border.slice(11)}` }}>
         {fmt(edgePct)}
       </span>
     </span>
@@ -85,18 +88,18 @@ function PickDetail({ pick }: { pick: SlatePick }) {
   const notes  = pick.notes?.split(' . ').filter(Boolean) ?? []
 
   return (
-    <div style={{ padding: '14px 16px', borderTop: B, background: 'var(--color-background-secondary-default)' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: notes.length ? '10px' : 0 }}>
+    <div className="py-[14px] px-4 bg-background-secondary-default" style={{ borderTop: B }}>
+      <div className="flex items-start justify-between gap-4 flex-wrap" style={{ marginBottom: notes.length ? '10px' : 0 }}>
         <div>
-          <div className="text-[12px] text-text-primary font-semibold mb-1">{label}</div>
+          <div className="text-compact text-text-primary font-semibold mb-1">{label}</div>
           <div className="flex gap-3 items-center">
-            <span className="mono text-[11px] text-text-secondary">
+            <span className="mono text-mini text-text-secondary">
               {fmtOdds(pick.odds)}
             </span>
-            <span className="mono" style={{ fontSize: '11px', color: edgeColor(pick.edge_pct), fontWeight: 600 }}>
+            <span className="mono text-mini font-semibold" style={{ color: edgeColor(pick.edge_pct) }}>
               edge {fmt(pick.edge_pct)}
             </span>
-            <span className="mono text-[11px] text-text-secondary">
+            <span className="mono text-mini text-text-secondary">
               model {pick.model_prob_pct.toFixed(1)}%
             </span>
           </div>
@@ -106,7 +109,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
       {notes.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {notes.map((n, i) => (
-            <span key={i} className="mono text-[10px] text-text-secondary bg-[var(--color-background-primary-default)] py-[3px] px-2 border border-[color:var(--color-separator-border)]">
+            <span key={i} className="mono text-micro text-text-secondary bg-background-primary-default py-[3px] px-2 border border-separator-border">
               {n}
             </span>
           ))}
@@ -123,13 +126,10 @@ function GameRow({ game }: { game: SlateGame }) {
   return (
     <div style={{ borderBottom: B }}>
       {/* Game header row - clickable */}
-      <div
+      <div className="grid gap-4 py-[14px] px-4"
         onClick={() => hasPicks && setOpen(o => !o)}
         style={{
-          display: 'grid',
           gridTemplateColumns: '1fr auto',
-          gap: '16px',
-          padding: '14px 16px',
           cursor: hasPicks ? 'pointer' : 'default',
           background: open ? 'var(--color-background-secondary-default)' : 'transparent',
           transition: 'background 0.1s',
@@ -143,11 +143,11 @@ function GameRow({ game }: { game: SlateGame }) {
               {game.away_team} @ {game.home_team}
             </span>
             {game.start_time && (
-              <span className="mono text-[10px] text-text-secondary">{game.start_time}</span>
+              <span className="mono text-micro text-text-secondary">{game.start_time}</span>
             )}
           </div>
           {/* Starters */}
-          <div className="mono text-[11px] text-text-secondary mb-2">
+          <div className="mono text-mini text-text-secondary mb-2">
             {game.away_pitcher
               ? <>{game.away_pitcher} <span className="text-text-secondary">vs</span> {game.home_pitcher ?? 'TBA'}</>
               : <span className="text-text-secondary">Starters TBA</span>
@@ -161,14 +161,14 @@ function GameRow({ game }: { game: SlateGame }) {
               ))}
             </div>
           ) : (
-            <span className="mono text-[10px] text-text-secondary">No picks today</span>
+            <span className="mono text-micro text-text-secondary">No picks today</span>
           )}
         </div>
 
         {/* Right: expand toggle */}
         {hasPicks && (
           <div className="flex items-center">
-            <span className="mono text-[12px] text-text-secondary select-none">
+            <span className="mono text-compact text-text-secondary select-none">
               {open ? '-' : '+'}
             </span>
           </div>
@@ -211,24 +211,24 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
   const totalPicks = slateData.total_picks
 
   return (
-    <div className="max-w-[1200px] mx-auto py-6 px-5">
+    <div className="max-w-page mx-auto py-6 px-5">
 
       {/* Header */}
       <div className="mb-6 flex justify-between items-start flex-wrap gap-3">
         <div className="flex items-baseline gap-3.5 flex-wrap">
           <h1 className="text-[20px] font-bold text-text-primary m-0">Today&apos;s Slate</h1>
-          <span className="mono text-[12px] text-text-secondary">{dateLabel} &middot; {slateData.total_games} games &middot; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</span>
+          <span className="mono text-compact text-text-secondary">{dateLabel} &middot; {slateData.total_games} games &middot; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</span>
         </div>
         <div className="flex items-center gap-3">
           {slateData.as_of && (
-            <span className="mono text-[10px] text-text-secondary">
+            <span className="mono text-micro text-text-secondary">
               Updated {new Date(slateData.as_of).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })} CT
             </span>
           )}
-          <button
+          <button className="tracking-head uppercase py-[6px] px-[14px] bg-transparent"
             onClick={() => void refresh()}
             disabled={refreshing}
-            style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '6px 14px', border: B, background: 'transparent', color: refreshing ? 'var(--color-border-button-active)' : 'var(--color-text-secondary)', cursor: refreshing ? 'default' : 'pointer' }}
+            style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', border: B, color: refreshing ? 'var(--color-border-button-active)' : 'var(--color-text-secondary)', cursor: refreshing ? 'default' : 'pointer' }}
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -236,32 +236,31 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       </div>
 
       {/* Filter bar */}
-      <div style={{ border: B, padding: '12px 16px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="py-3 px-4 mb-4 flex gap-3 items-center flex-wrap" style={{ border: B }}>
         <label className="flex items-center gap-2 cursor-pointer">
-          <span
+          <span className="w-7 h-4 rounded-control inline-block shrink-0 cursor-pointer"
             onClick={() => setPicksOnly(o => !o)}
             style={{
-              width: '28px', height: '16px',
               background: picksOnly ? 'var(--signal)' : 'var(--color-separator-border)',
-              borderRadius: '8px', position: 'relative' as const, display: 'inline-block',
-              flexShrink: 0, cursor: 'pointer', transition: 'background 0.15s',
+              position: 'relative' as const,
+              transition: 'background 0.15s',
             }}
           >
-            <span style={{
-              position: 'absolute', top: '2px',
+            <span className="absolute w-3 h-3" style={{
+              top: '2px',
               left: picksOnly ? '14px' : '2px',
-              width: '12px', height: '12px',
               background: picksOnly ? 'var(--color-background-full)' : 'var(--color-border-button-active)',
-              borderRadius: '50%', transition: 'left 0.15s',
+              borderRadius: '50%',
+              transition: 'left 0.15s',
             }} />
           </span>
-          <span className="mono text-[10px] text-text-secondary tracking-[0.05em] uppercase select-none">Picks only</span>
+          <span className="mono text-micro text-text-secondary tracking-[0.05em] uppercase select-none">Picks only</span>
         </label>
 
-        <div  className="w-[0.5px] bg-[var(--color-separator-border)] h-[20px] shrink-0"/>
+        <div  className="w-[0.5px] bg-separator-border h-5 shrink-0"/>
 
         <div className="flex gap-1 flex-wrap items-center">
-          <span className="mono text-[10px] text-text-secondary mr-1 tracking-[0.08em] uppercase">System</span>
+          <span className="mono text-micro text-text-secondary mr-1 tracking-caps uppercase">System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
@@ -277,12 +276,12 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
       {/* Games list */}
       {filtered.length === 0 ? (
-        <div style={{ border: B, padding: '60px 20px', textAlign: 'center' }}>
-          <div className="mono text-[12px] text-text-secondary mb-2">
+        <div className="py-15 px-5 text-center" style={{ border: B }}>
+          <div className="mono text-compact text-text-secondary mb-2">
             {slateData.total_games === 0 ? 'No games scheduled today.' : 'No games match the current filter.'}
           </div>
           {slateData.total_games === 0 && (
-            <div className="mono text-[11px] text-text-secondary">
+            <div className="mono text-mini text-text-secondary">
               The slate is built from the MLB Stats API. Check back after 10 AM ET.
             </div>
           )}
@@ -290,11 +289,11 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       ) : (
         <div style={{ border: B }}>
           {/* Column headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '8px 16px', background: 'var(--color-background-primary-default)', borderBottom: B }}>
-            <span className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary">
+          <div className="grid py-2 px-4 bg-background-primary-default" style={{ gridTemplateColumns: '1fr auto', borderBottom: B }}>
+            <span className="mono text-micro tracking-label uppercase text-text-secondary">
               Game -- Starters -- Picks
             </span>
-            <span className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary">
+            <span className="mono text-micro tracking-label uppercase text-text-secondary">
               {filtered.length} games
             </span>
           </div>
@@ -306,8 +305,8 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
       {/* Footer note */}
       <div className="mt-4">
-        <p className="mono text-[11px] text-text-secondary leading-[1.6]">
-          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" className="text-[var(--link)]">Odds Terminal</a>.
+        <p className="mono text-mini text-text-secondary leading-[1.6]">
+          Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" className="text-link">Odds Terminal</a>.
           Refreshes every 5 minutes.
         </p>
       </div>

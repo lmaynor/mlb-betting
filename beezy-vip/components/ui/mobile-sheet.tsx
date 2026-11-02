@@ -165,17 +165,10 @@ export function MobileBottomSheet({
       }}
     >
       {/* Backdrop */}
-      <div
+      <div className="fixed bg-[rgba(0,_0,_0,_0.75)] cursor-pointer"
         data-testid="bottom-sheet-backdrop"
         onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(4px)',
-          WebkitBackdropFilter: 'blur(4px)',
-          cursor: 'pointer',
-        }}
+        style={{ inset: 0, backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
       />
 
       {/* Sheet Surface */}
@@ -198,16 +191,9 @@ export function MobileBottomSheet({
         }}
       >
         {/* Drag handle pill */}
-        <div
+        <div className="w-9 h-1 bg-border-button-hover rounded-[2px] shrink-0"
           data-testid="bottom-sheet-drag-handle"
-          style={{
-            width: '36px',
-            height: '4px',
-            background: 'var(--color-border-button-hover)',
-            borderRadius: '2px',
-            margin: '8px auto 4px auto',
-            flexShrink: 0,
-          }}
+          style={{ margin: '8px auto 4px auto' }}
         />
 
         {/* Header bar */}
@@ -226,7 +212,7 @@ export function MobileBottomSheet({
               {subtitle && (
                 <div
                  
-                 className="text-[11px] text-text-secondary leading-[1.3] mt-0.5">
+                 className="text-mini text-text-secondary leading-[1.3] mt-0.5">
                   {subtitle}
                 </div>
               )}
@@ -237,21 +223,15 @@ export function MobileBottomSheet({
               onClick={onClose}
               aria-label="Close"
              
-             className="bg-transparent border border-[color:var(--color-separator-border)] rounded-[6px] text-text-secondary w-[28px] h-[28px] cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
+             className="bg-transparent border border-separator-border rounded-[6px] text-text-secondary w-7 h-7 cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
               {'\u2715'}
             </button>
           </div>
         )}
 
         {/* Scrollable body */}
-        <div
-          style={{
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            padding: '14px 16px',
-            flex: 1,
-            boxSizing: 'border-box',
-          }}
+        <div className="overflow-y-auto py-[14px] px-4 flex-1 box-border"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {children}
         </div>
@@ -260,7 +240,7 @@ export function MobileBottomSheet({
         {footer && (
           <div
            
-           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
+           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-background-secondary-default shrink-0 box-border">
             {footer}
           </div>
         )}

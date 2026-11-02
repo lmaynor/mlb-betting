@@ -34,10 +34,10 @@ const IMPORTANCE: Record<string, { color: string; border: string; bg: string }> 
 
 function StatBlock({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div style={{ padding: '18px', borderRight: B }}>
-      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
-      {sub && <div className="times text-[11px] text-text-secondary">{sub}</div>}
+    <div className="p-[18px]" style={{ borderRight: B }}>
+      <div className="mono text-micro tracking-label text-text-secondary mb-[6px]" style={{ textTransform: 'uppercase' as const }}>{label}</div>
+      <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
+      {sub && <div className="times text-mini text-text-secondary">{sub}</div>}
     </div>
   )
 }
@@ -87,12 +87,12 @@ export default async function ModelDetailPage({ params }: Props) {
     spec.oosAUC.toFixed(3)
 
   return (
-    <div className="max-w-[1200px] mx-auto py-10 px-6">
+    <div className="max-w-page mx-auto py-10 px-6">
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-6">
-        <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
-        <span className="mono text-[11px] text-text-secondary">&middot;</span>
+        <Link href="/models" className="times text-cozy text-link no-underline">Models</Link>
+        <span className="mono text-mini text-text-secondary">&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 
@@ -100,28 +100,28 @@ export default async function ModelDetailPage({ params }: Props) {
       <div className="mb-7">
         <div className="flex items-center gap-3 mb-2.5">
           <h1 className="ui-display text-[30px] text-text-primary">{spec.name}</h1>
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>{spec.version}</span>
+          <span className="mono text-mini text-neutral-300 py-[3px] px-[10px]" style={{ border: B, borderRadius: 'var(--radius-pill)' }}>{spec.version}</span>
         </div>
-        <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.65] max-w-[560px] mb-2.5">{spec.description}</p>
+        <p className="text-cozy text-neutral-300 leading-[1.65] max-w-[560px] mb-2.5">{spec.description}</p>
         {spec.learnSlug && (
-          <Link href={`/learn/${spec.learnSlug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
+          <Link href={`/learn/${spec.learnSlug}`} className="times text-cozy text-link no-underline">
             Read the betting guide &rarr;
           </Link>
         )}
       </div>
 
       {/* Performance stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', overflow: 'hidden', marginBottom: '28px' }}>
+      <div className="grid grid-cols-[repeat(5,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <StatBlock label={metricLabel}  value={metricValue}                                                    sub="Out-of-sample" />
         <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
         <div className="p-4.5">
-          <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-1.5">Avg Edge</div>
-          <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--color-text-secondary)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+          <div className="ui-heading text-micro tracking-label text-text-secondary mb-1.5">Avg Edge</div>
+          <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: avgEdge === null ? 'var(--color-text-secondary)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
-          <div className="times text-[11px] text-text-secondary">Model vs implied</div>
+          <div className="times text-mini text-text-secondary">Model vs implied</div>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ export default async function ModelDetailPage({ params }: Props) {
       <div className="grid grid-cols-2 gap-4 mb-7">
 
         {/* Config */}
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
+        <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="ui-display text-[16px] text-text-primary mb-4">Model configuration</div>
           {[
             { label: 'Algorithm',      value: spec.algorithm ?? 'XGBoost (gradient boosted trees)' },
@@ -139,21 +139,21 @@ export default async function ModelDetailPage({ params }: Props) {
             { label: 'Kelly Fraction', value: `${spec.kellyFraction * 100}% Kelly` },
             { label: 'Bet Gate',       value: `${bets}/200 (${bets >= 200 ? 'cleared' : 'in progress'})` },
           ].map((row, i, arr) => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < arr.length - 1 ? B : undefined }}>
-              <span className="mono text-[11px] text-text-secondary">{row.label}</span>
-              <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: row.label === 'Bet Gate' && bets >= 200 ? 'var(--signal)' : 'var(--color-text-primary)' }}>{row.value}</span>
+            <div className="flex justify-between py-[9px] px-0" key={row.label} style={{ borderBottom: i < arr.length - 1 ? B : undefined }}>
+              <span className="mono text-mini text-text-secondary">{row.label}</span>
+              <span className="mono text-mini font-semibold" style={{ color: row.label === 'Bet Gate' && bets >= 200 ? 'var(--signal)' : 'var(--color-text-primary)' }}>{row.value}</span>
             </div>
           ))}
         </div>
 
         {/* Calibration */}
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
+        <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="flex items-baseline gap-2 mb-4">
-            <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--color-text-primary)' }}>Calibration</span>
-            <span className="mono text-[10px] text-text-secondary">Model prob vs actual hit rate</span>
+            <span className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Calibration</span>
+            <span className="mono text-micro text-text-secondary">Model prob vs actual hit rate</span>
           </div>
           {Object.keys(buckets).length === 0 ? (
-            <p className="mono text-[11px] text-text-secondary">Available after more settled bets.</p>
+            <p className="mono text-mini text-text-secondary">Available after more settled bets.</p>
           ) : (
             <>
               {Object.entries(buckets).sort().map(([bucket, data]) => {
@@ -161,16 +161,16 @@ export default async function ModelDetailPage({ params }: Props) {
                 return (
                   <div key={bucket} className="mb-2.5">
                     <div className="flex justify-between mb-1">
-                      <span className="mono text-[10px] text-text-secondary">{bucket}</span>
-                      <span className="mono text-[10px] text-text-secondary">{(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})</span>
+                      <span className="mono text-micro text-text-secondary">{bucket}</span>
+                      <span className="mono text-micro text-text-secondary">{(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})</span>
                     </div>
-                    <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
-                      <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--signal)', width: `${Math.round(hitRate * 100)}%` }} />
+                    <div className="h-[6px] rounded-[var(--radius-pill)] overflow-hidden" style={{ background: 'var(--slate)' }}>
+                      <div className="h-[6px] rounded-[var(--radius-pill)]" style={{ background: 'var(--signal)', width: `${Math.round(hitRate * 100)}%` }} />
                     </div>
                   </div>
                 )
               })}
-              <p className="mono text-[10px] text-text-secondary mt-2.5">
+              <p className="mono text-micro text-text-secondary mt-2.5">
                 Well-calibrated: bar width should match bucket label.
               </p>
             </>
@@ -179,23 +179,23 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Feature table */}
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', overflow: 'hidden', marginBottom: '28px' }}>
-        <div style={{ padding: '14px 18px', borderBottom: B, background: 'var(--color-background-secondary-default)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--color-text-primary)' }}>Feature List</div>
-          <div className="mono text-[10px] text-text-secondary mt-[3px]">{spec.features.length} features &middot; XGBoost importance ranking</div>
+      <div className="bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+        <div className="py-[14px] px-[18px] bg-background-secondary-default" style={{ borderBottom: B }}>
+          <div className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Feature List</div>
+          <div className="mono text-micro text-text-secondary mt-[3px]">{spec.features.length} features &middot; XGBoost importance ranking</div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', background: 'var(--color-background-secondary-default)', borderBottom: B }}>
+        <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: B }}>
           {['Feature', 'Description', 'Importance'].map(h => (
-            <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)', padding: '9px 14px' }}>{h}</div>
+            <div key={h} className="mono text-micro tracking-label text-text-secondary py-[9px] px-[14px]" style={{ textTransform: 'uppercase' as const }}>{h}</div>
           ))}
         </div>
         {spec.features.map((f, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined, alignItems: 'center' }}>
-            <div className="mono text-[11px] font-semibold text-text-primary py-2.5 px-3.5">{f.name}</div>
-            <div className="text-[11px] text-[var(--color-neutral-300)] py-2.5 px-3.5">{f.description}</div>
+          <div className="grid items-center" key={i} style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined }}>
+            <div className="mono text-mini font-semibold text-text-primary py-2.5 px-3.5">{f.name}</div>
+            <div className="text-mini text-neutral-300 py-2.5 px-3.5">{f.description}</div>
             <div className="py-2.5 px-3.5">
-              <span className="mono" style={{
-                fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
+              <span className="mono text-micro font-semibold py-[3px] px-2" style={{
+                borderRadius: 'var(--radius-pill)',
                 color: IMPORTANCE[f.importance]?.color ?? 'var(--color-text-secondary)',
                 border: `1px solid ${IMPORTANCE[f.importance]?.border ?? 'var(--color-border-button-default)'}`,
                 background: IMPORTANCE[f.importance]?.bg ?? 'transparent',
@@ -206,18 +206,18 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Gate progress */}
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '18px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+      <div className="bg-background-primary-default py-[18px] px-5 mb-7 flex items-center gap-6" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div className="flex-1">
           <div className="flex justify-between mb-1.5">
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)' }}>200-Bet Gate Progress</span>
-            <span className="mono text-[10px] text-text-secondary">{bets}/200</span>
+            <span className="mono text-micro tracking-label text-text-secondary" style={{ textTransform: 'uppercase' as const }}>200-Bet Gate Progress</span>
+            <span className="mono text-micro text-text-secondary">{bets}/200</span>
           </div>
-          <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
-            <div style={{ height: '8px', borderRadius: 'var(--radius-pill)', background: spec.color, width: `${gatePct}%` }} />
+          <div className="h-2 rounded-[var(--radius-pill)] overflow-hidden" style={{ background: 'var(--slate)' }}>
+            <div className="h-2 rounded-[var(--radius-pill)]" style={{ background: spec.color, width: `${gatePct}%` }} />
           </div>
         </div>
-        <span className="mono" style={{
-          fontSize: '10px', letterSpacing: '0.08em', padding: '5px 11px', borderRadius: 'var(--radius-pill)',
+        <span className="mono text-micro tracking-caps py-[5px] px-[11px]" style={{
+          borderRadius: 'var(--radius-pill)',
           border: bets >= 200 ? '1px solid var(--win-border)' : B,
           color: bets >= 200 ? 'var(--signal)' : 'var(--color-text-secondary)',
           background: bets >= 200 ? 'var(--win-wash)' : 'var(--slate)',
@@ -228,14 +228,14 @@ export default async function ModelDetailPage({ params }: Props) {
 
       {/* P&L summary */}
       {totalPnl !== null && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', overflow: 'hidden', marginBottom: '28px' }}>
+        <div className="grid grid-cols-[repeat(4,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
           <div className="p-4.5">
-            <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-1.5">Sample Size</div>
+            <div className="ui-heading text-micro tracking-label text-text-secondary mb-1.5">Sample Size</div>
             <div className="mono text-[20px] font-semibold leading-[1] mb-1 text-text-primary">{bets}</div>
-            <div className="times text-[11px] text-text-secondary">Settled bets</div>
+            <div className="times text-mini text-text-secondary">Settled bets</div>
           </div>
         </div>
       )}
@@ -243,14 +243,14 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Full bet history */}
       <div className="flex justify-between items-center mb-3.5">
         <h2 className="ui-display text-[20px] text-text-primary">Full settled history</h2>
-        <Link href={`/picks/mlb/${spec.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
+        <Link href={`/picks/mlb/${spec.slug}`} className="times text-cozy text-link no-underline">
           Today&apos;s Picks &rarr;
         </Link>
       </div>
 
       {history.length === 0 ? (
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '48px', textAlign: 'center' as const }}>
-          <p className="mono text-[12px] text-text-secondary">No settled bets yet.</p>
+        <div className="bg-background-primary-default p-12" style={{ border: B, borderRadius: 'var(--radius-lg)', textAlign: 'center' as const }}>
+          <p className="mono text-compact text-text-secondary">No settled bets yet.</p>
         </div>
       ) : (
         <PicksTable bets={history} />

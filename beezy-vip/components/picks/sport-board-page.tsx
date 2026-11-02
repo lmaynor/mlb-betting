@@ -78,28 +78,28 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
         {tracked && view === 'picks' && (
           <nav aria-label="Pick type" className="flex gap-3.5 text-[12.5px]">
-            <Link href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400, textDecoration: 'none' }}>Player picks</Link>
-            <Link href="/picks/games" aria-current={kind === 'game' ? 'page' : undefined} style={{ color: kind === 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind === 'game' ? 600 : 400, textDecoration: 'none' }}>Game picks</Link>
+            <Link className="no-underline" href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400 }}>Player picks</Link>
+            <Link className="no-underline" href="/picks/games" aria-current={kind === 'game' ? 'page' : undefined} style={{ color: kind === 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind === 'game' ? 600 : 400 }}>Game picks</Link>
           </nav>
         )}
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />
-      <div className="gutter-m max-w-[1200px] mx-auto p-6">
+      <div className="gutter-m max-w-page mx-auto p-6">
         <div className="mb-3.5 flex items-baseline justify-between gap-3 flex-wrap">
           <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
-            <span className="ui-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
+            <span className="ui-heading text-micro py-[2px] px-2" title={pillar.description} style={{ color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
-              <span className="ui-heading text-[10px] text-[var(--warn)] border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+              <span className="ui-heading text-micro text-warn border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
                >UNVALIDATED</span>
             )}
           </div>
-          <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
+          <span className="mono text-compact text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>
         {view === 'picks' && (
           <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
-            <span className="mono text-[11px] text-text-secondary tracking-[0.06em]">TIER:</span>
+            <span className="mono text-mini text-text-secondary tracking-head">TIER:</span>
             {[
               { id: 'all', label: 'All Actionable' },
               { id: 'official', label: 'Official Plays Only' },
@@ -111,19 +111,12 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
                 <Link
                   key={t.id}
                   href={`/picks/${sport}?${q}`}
-                  className="mono"
+                  className="mono text-mini min-h-11 inline-flex items-center py-2 px-3 no-underline box-border"
                   style={{
-                    fontSize: '11px',
-                    minHeight: '44px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '8px 12px',
                     borderRadius: '4px',
-                    textDecoration: 'none',
                     background: active ? 'var(--color-separator-border)' : 'transparent',
                     border: `1px solid ${active ? pillar.accent : 'var(--color-separator-border)'}`,
                     color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                    boxSizing: 'border-box',
                   }}
                 >
                   {t.label}
@@ -136,7 +129,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${copy.what}`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         {!tracked && view === 'picks' && f.day === 'today' && (
           <>
-            <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Market prices</h2>
+            <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
             <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={board.lockedPrices} block={board.block} confluenceKeys={board.confluenceKeys} />
           </>
         )}

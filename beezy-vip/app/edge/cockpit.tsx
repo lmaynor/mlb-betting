@@ -130,7 +130,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
   const [bad, setBad] = useState(false)
   const src = headshotUrlById(r.sport, r.sport === 'nfl' ? r.headshot_id : r.player_id)
   return (
-    <span style={{ width: size, height: size, flex: '0 0 auto', borderRadius: size > 48 ? '14px' : '10px', background: 'var(--color-background-tertiary-default)', border: `1px solid ${HAIR}`, display: 'inline-flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', color: 'var(--color-text-secondary)', fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
+    <span className="flex-none bg-background-tertiary-default inline-flex items-end justify-center overflow-hidden text-text-secondary" style={{ width: size, height: size, borderRadius: size > 48 ? '14px' : '10px', border: `1px solid ${HAIR}`, fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
       {src && !bad ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
@@ -144,13 +144,13 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
 
 function BookBadge({ book }: { book: string | null | undefined }) {
   const b = bookDisplay(book)
-  return <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px', whiteSpace: 'nowrap' }}>{b.label}</span>
+  return <span className="text-mini font-bold py-[2px] px-[7px] whitespace-nowrap" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
 }
 
 function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' }) {
   const pos = (ev ?? 0) >= 0
   return (
-    <span className="mono" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, color: 'var(--color-background-secondary-default)', background: pos ? GOOD : BAD, borderRadius: '6px', padding: size === 'lg' ? '5px 10px' : '3px 7px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
       {evText(ev)}
     </span>
   )
@@ -160,8 +160,8 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   return (
     <section className={cx(CARD, 'px-4 py-3.5')}>
       <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="ui-heading tracking-[0.08em] text-text-secondary">{title}</h3>
-        {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
+        <h3 className="ui-heading tracking-caps text-text-secondary">{title}</h3>
+        {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
       </div>
       {children}
     </section>
@@ -236,7 +236,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
           </g>
         )}
       </svg>
-      <div className="flex gap-3.5 flex-wrap mt-1.5 text-[11px] text-[var(--color-neutral-300)]">
+      <div className="flex gap-3.5 flex-wrap mt-1.5 text-mini text-neutral-300">
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: GOOD, borderRadius: 2, marginRight: 5 }} />Cleared the {under ? 'under' : 'over'}</span>
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: BAD, borderRadius: 2, marginRight: 5 }} />Missed</span>
         <span className="text-text-secondary">{cleared} of {games.length} games</span>
@@ -248,7 +248,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         { label: 'LINE', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
-        <div className="text-[11px] text-text-secondary mt-2">
+        <div className="text-mini text-text-secondary mt-2">
           Season hit rate {pct0(szn)} over {form.szn_games} games.
         </div>
       )}
@@ -306,7 +306,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         { label: 'LAST 3 AVG', value: fmt(recent) },
         { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
-      <div className="text-[12px] text-[var(--color-neutral-300)] mt-2 leading-[1.5]">
+      <div className="text-compact text-neutral-300 mt-2 leading-[1.5]">
         {label} are <b style={{ color: trendColor }}>{trend}</b>
         {prior != null ? <>: {fmt(recent)} over the last 3 games vs {fmt(prior)} before that.</> : '.'}
       </div>
@@ -347,7 +347,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
               style={{ gridTemplateColumns: cols }}>
               <span role="cell" className="flex items-center gap-1.5 flex-wrap">
                 <BookBadge book={quote.book} />
-                {flagged && <span className="ui-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
+                {flagged && <span className="ui-heading text-micro" style={{ color: SKY }}>TARGET</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
@@ -378,7 +378,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           <Avatar r={r} size={56} />
           <div className="min-w-0 flex-1">
             <div className="mb-[3px] flex flex-wrap items-center gap-2">
-              <span className="ui-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
+              <span className="ui-heading text-micro py-[1px] px-[6px]" style={{ color: accent, border: `1px solid ${accent}55`, borderRadius: '4px' }}>{r.sport.toUpperCase()}</span>
               <span className="mono text-caption-1-regular text-text-secondary">{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
             </div>
             <h2 className="ui-display text-[clamp(19px,3vw,24px)] leading-[1.15] [overflow-wrap:anywhere]">{r.player ?? 'Unknown player'}</h2>
@@ -433,9 +433,9 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="truncate text-[14.5px] font-bold text-text-primary">{r.player ?? 'Unknown player'}</span>
         <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
         <span className="flex min-w-0 items-center gap-[7px]">
-          <span className="ui-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
-          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
-          <span className="mono min-w-0 flex-1 truncate text-[11px] text-text-secondary">{meta}</span>
+          <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
+          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
+          <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
       <span className="grid justify-items-end gap-1.5">
@@ -444,7 +444,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
           <BookBadge book={r.book} />
           <span className="mono text-body-2-bold text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</span>
         </span>
-        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-[11px] font-bold" style={{ color: rateColor(l10) }}>
+        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-mini font-bold" style={{ color: rateColor(l10) }}>
           L10: {pct0(l10)}
         </span>
       </span>

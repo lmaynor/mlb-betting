@@ -28,7 +28,7 @@ export default function KellyCalculatorPage() {
     <div className="max-w-[680px] mx-auto p-6">
       <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
 
-      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-6 mb-4">
+      <div className="border border-separator-border rounded-control bg-background-primary-default p-6 mb-4">
         <div className="mb-4">
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
@@ -37,13 +37,13 @@ export default function KellyCalculatorPage() {
           <div>
             <label style={labelStyle}>Line (American)</label>
             <input type="number" value={odds} onChange={e => setOdds(e.target.value)} placeholder="-110" style={inputStyle} />
-            {impliedP && <p className="mono text-[11px] text-text-secondary mt-1">Implied: {formatProb(impliedP)}</p>}
+            {impliedP && <p className="mono text-mini text-text-secondary mt-1">Implied: {formatProb(impliedP)}</p>}
           </div>
           <div>
             <label style={labelStyle}>Your Win Prob (%)</label>
             <input type="number" value={prob} onChange={e => setProb(e.target.value)} placeholder="55.0" min="0" max="100" step="0.1" style={inputStyle} />
             {impliedP && !isNaN(p) && p > 0 && (
-              <p className="mono" style={{ fontSize: '11px', marginTop: '4px', color: p > impliedP ? 'var(--signal)' : 'var(--loss)' }}>
+              <p className="mono text-mini mt-1" style={{ color: p > impliedP ? 'var(--signal)' : 'var(--loss)' }}>
                 Edge: {p > impliedP ? '+' : ''}{((p - impliedP) * 100).toFixed(1)}%
               </p>
             )}
@@ -52,21 +52,21 @@ export default function KellyCalculatorPage() {
       </div>
 
       {result && (
-        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
-            <div style={{ padding: '20px', borderRight: B_INNER }}>
-              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Full Kelly</div>
-              <div className="mono text-[28px] font-bold text-[var(--signal)]">{result.fullKelly}%</div>
-              <div className="mono text-[13px] text-[var(--signal)] mt-1">${result.stakeFullDollars.toFixed(2)}</div>
+        <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
+          <div className="grid grid-cols-2" style={{ borderBottom: B_INNER }}>
+            <div className="p-5" style={{ borderRight: B_INNER }}>
+              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Full Kelly</div>
+              <div className="mono text-[28px] font-bold text-signal">{result.fullKelly}%</div>
+              <div className="mono text-cozy text-signal mt-1">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
             <div className="p-5">
-              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Half Kelly</div>
+              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Half Kelly</div>
               <div className="mono text-[28px] font-bold text-text-primary">{result.halfKelly}%</div>
-              <div className="mono text-[13px] text-text-secondary mt-1">${result.stakeHalfDollars.toFixed(2)}</div>
+              <div className="mono text-cozy text-text-secondary mt-1">${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>
           <div className="py-3.5 px-5">
-            <p className="times text-[12px] text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
+            <p className="times text-compact text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
           </div>
         </div>
       )}

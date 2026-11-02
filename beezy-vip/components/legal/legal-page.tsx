@@ -4,7 +4,7 @@ import { SITE_CONFIG } from '@/lib/site-config'
 /** Shared frame for the four /legal pages: title row, operator statement, then the article body. */
 export function LegalPage({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="max-w-[760px] mx-auto pt-[32px] px-[20px] pb-[48px]">
+    <div className="max-w-[760px] mx-auto pt-8 px-5 pb-12">
       <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f3f4f6', margin: '0 0 6px' }}>{title}</h1>
       <p style={{ color: '#7d8596', fontSize: '13px', margin: '0 0 28px' }}>
         Last updated: {SITE_CONFIG.legalUpdated}. {SITE_CONFIG.operatorStatement}
