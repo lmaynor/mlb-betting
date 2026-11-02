@@ -18,17 +18,17 @@ export default async function DashboardSettingsPage() {
   return (
     <div className="max-w-lg">
       {/* Account */}
-      <div className="border border-[var(--border)] p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-muted mb-4">Account</p>
+      <div className="border border-separator-border p-5 mb-4">
+        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Account</p>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted">Email</span>
-            <span className="mono text-xs text-text">
+            <span className="text-xs text-text-secondary">Email</span>
+            <span className="mono text-xs text-text-primary">
               {user?.emailAddresses[0]?.emailAddress ?? '—'}
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-xs text-muted">Plan</span>
+            <span className="text-xs text-text-secondary">Plan</span>
             <span className="mono text-xs text-accent font-semibold">
               {tierLabel(tier)}
             </span>
@@ -37,18 +37,18 @@ export default async function DashboardSettingsPage() {
       </div>
 
       {/* Subscription */}
-      <div className="border border-[var(--border)] p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-muted mb-4">Subscription</p>
-        <p className="text-xs text-muted mb-4 leading-relaxed">
+      <div className="border border-separator-border p-5 mb-4">
+        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Subscription</p>
+        <p className="text-xs text-text-secondary mb-4 leading-relaxed">
           Manage billing, cancel, or change your plan via the Stripe customer portal. Cancelling keeps access through the end of the paid period.
         </p>
         <a
           href="/api/stripe/portal"
-          className="mono text-xs uppercase tracking-widest px-4 py-2.5 border border-[var(--border-bright)] text-text hover:border-accent hover:text-accent transition-colors inline-block"
+          className="mono text-xs uppercase tracking-widest px-4 py-2.5 border border-[var(--border-bright)] text-text-primary hover:border-accent hover:text-accent transition-colors inline-block"
         >
           Manage Billing →
         </a>
-        <p className="text-xs text-muted mt-4 leading-relaxed">
+        <p className="text-xs text-text-secondary mt-4 leading-relaxed">
           Billing or Discord role-sync trouble? Email{' '}
           <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-accent">{SITE_CONFIG.supportEmail}</a> or ask in the{' '}
           <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="text-accent">Discord</a>.
@@ -56,18 +56,18 @@ export default async function DashboardSettingsPage() {
       </div>
 
       {/* Bankroll setting */}
-      <div className="border border-[var(--border)] p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-muted mb-4">Bankroll</p>
-        <p className="text-xs text-muted mb-4">
+      <div className="border border-separator-border p-5 mb-4">
+        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Bankroll</p>
+        <p className="text-xs text-text-secondary mb-4">
           Set your bankroll to get personalised Kelly stake amounts in dollars on the picks tab.
         </p>
         <BankrollInput defaultValue={(user?.publicMetadata?.bankroll as number) ?? 1000} />
       </div>
 
       {/* Notifications */}
-      <div className="border border-[var(--border)] p-5">
-        <p className="mono text-xs uppercase tracking-widest text-muted mb-4">Notifications</p>
-        <p className="text-xs text-muted">
+      <div className="border border-separator-border p-5">
+        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Notifications</p>
+        <p className="text-xs text-text-secondary">
           Picks are delivered via Discord. Join the Pro channel for push notifications.
         </p>
         <a
