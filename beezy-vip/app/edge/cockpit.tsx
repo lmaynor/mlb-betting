@@ -435,7 +435,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="dell-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
           {r.sport !== 'mlb' && <span className="dell-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
-          <span className="mono truncate text-[11px] text-text-secondary">{meta}</span>
+          <span className="mono min-w-0 flex-1 truncate text-[11px] text-text-secondary">{meta}</span>
         </span>
       </span>
       <span className="grid justify-items-end gap-1.5">
