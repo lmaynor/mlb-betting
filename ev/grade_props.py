@@ -15,7 +15,9 @@ Grading rules (documented because books differ):
     Sportsbook rules for DNPs vary (NHL: most void a scratched skater; goalie props void if the goalie does not start
     -- a backup who enters mid-game is NOT modelled here) so voids are reported, never counted as losses.
   * Game not final yet: 'pending'.
-  * NHL stats that need play-by-play (power-play POINTS) are 'ungradable' for now.
+  * NHL power-play POINTS are not in the boxscore (no powerPlayPoints / PP-assist field): they are derived from the game's
+    play-by-play goals (nhl.data.powerplay). If the play-by-play cannot be fetched the stat is left off the player's
+    record and the quote grades 'ungradable' -- never a 0, which would grade every Over as a loss.
 Verdict discipline (repo rule): ROI on a few hundred correlated quotes is NOISE -- the summary reports n, voids and a
 t-stat, and the verdict stays UNDETERMINED until CLV vs the closing line is added. This never changes a stake.
 
@@ -41,6 +43,7 @@ _UA = {"User-Agent": "Mozilla/5.0 (compatible; beezy-fyi-data/1.0)"}
 
 NHL_SCHEDULE = "https://api-web.nhle.com/v1/schedule/{day}"
 NHL_BOX = "https://api-web.nhle.com/v1/gamecenter/{gid}/boxscore"
+NHL_PBP = "https://api-web.nhle.com/v1/gamecenter/{gid}/play-by-play"
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={ymd}"
 ESPN_SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={eid}"
 
@@ -78,12 +81,20 @@ def nhl_actuals(day: str, away: str, home: str, get=_http_json):
     if not final:
         return {"final": False, "players": {}, "reason": "not final"}
     box = get(NHL_BOX.format(gid=gid)) or {}
+    try:
+        from nhl.data.powerplay import pp_points_from_pbp
+        pp = pp_points_from_pbp(get(NHL_PBP.format(gid=gid)) or {})
+    except Exception as exc:                                                             # noqa: BLE001
+        log.warning("play-by-play unavailable for game %s (%r): pp_points stay ungradable", gid, exc)
+        pp = None
     out = {}
     for side in ("awayTeam", "homeTeam"):
         grp = (box.get("playerByGameStats") or {}).get(side) or {}
         for p in (grp.get("forwards") or []) + (grp.get("defense") or []):
             rec = {stat: p.get(f, 0) or 0 for stat, f in NHL_SKATER.items()}
             rec["_played"] = _toi_sec(p.get("toi")) > 0
+            if pp is not None:
+                rec["pp_points"] = pp.get(int(p["playerId"]), {}).get("pp_points", 0)
             out[int(p["playerId"])] = rec
         for p in grp.get("goalies") or []:
             out[int(p["playerId"])] = {"saves": p.get("saves", 0) or 0, "_played": _toi_sec(p.get("toi")) > 0}
