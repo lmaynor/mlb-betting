@@ -224,7 +224,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
             </>
           )}
         </td>
-        <td style={{ textAlign: 'right' }}>
+        <td className="text-right">
           <div className="mono" style={{ fontSize: '12px', color: stake > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }} title={`1/4 Kelly on a ${fmtMoney(bankroll)} bankroll`}>{stake > 0 ? fmtMoney(stake) : '--'}</div>
         </td>
         {columns.map(c => {

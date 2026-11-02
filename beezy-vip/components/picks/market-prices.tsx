@@ -74,20 +74,20 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
             const point = r.point ?? r.line
             return (
               <tr key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`} style={{ borderBottom: '1px solid var(--color-border-table)' }}>
-                <td style={{ padding: '10px 12px', color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                <td className="py-[10px] px-[12px] text-text-primary font-semibold">
                   <span className="inline-flex items-center gap-[8px]">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
                     <span>{r.player} <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>{point} {propStatLabel(r.stat ?? r.market)}</span></span>
                     {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="dell-heading" title="The projection also favors this side" style={{ fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' }}>MODEL + MARKET</span>}
                   </span>
                 </td>
-                <td className="mono" style={{ padding: '10px 12px', color: 'var(--color-neutral-300)' }}>{(r.game_key ?? '').split(':')[2]}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--color-neutral-300)' }}>{String(r.side).toUpperCase()}</td>
-                <td style={{ padding: '10px 12px' }}>
+                <td className="mono py-[10px] px-[12px] text-[var(--color-neutral-300)]">{(r.game_key ?? '').split(':')[2]}</td>
+                <td className="py-[10px] px-[12px] text-[var(--color-neutral-300)]">{String(r.side).toUpperCase()}</td>
+                <td className="py-[10px] px-[12px]">
                   <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.label}</span>
                 </td>
-                <td className="mono" style={{ padding: '10px 12px' }}>{formatOdds(r.american)}</td>
-                <td className="mono" style={{ padding: '10px 12px' }}>{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
+                <td className="mono py-[10px] px-[12px]">{formatOdds(r.american)}</td>
+                <td className="mono py-[10px] px-[12px]">{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
                 <td className="mono" style={{ padding: '10px 12px', color: r.n_books >= 3 ? 'var(--color-neutral-300)' : 'var(--warn)' }}>{r.n_books}</td>
                 <td className="mono" style={{ padding: '10px 12px', fontWeight: 700, color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
                 <td className="dell-heading" style={{ padding: '10px 12px', fontSize: '10px', color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'FLAGGED' : reasonLabel(r.reason)}</td>

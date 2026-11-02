@@ -153,10 +153,10 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       </div>
 
       <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '18px 20px', marginBottom: '28px', display: 'grid', gap: '10px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.6 }}>
-        <div><strong style={{ color: 'var(--color-text-primary)' }}>What the live board runs.</strong> {gap ? 'Nothing: this stat is not projected.' : LIVE_ENGINE.summary}</div>
-        {model && <div><strong style={{ color: 'var(--color-text-primary)' }}>Research model result.</strong> {model.verdict}</div>}
-        <div><strong style={{ color: 'var(--color-text-primary)' }}>Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
-        <div><strong style={{ color: 'var(--color-text-primary)' }}>Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show. Paper mode.</div>
+        <div><strong className="text-text-primary">What the live board runs.</strong> {gap ? 'Nothing: this stat is not projected.' : LIVE_ENGINE.summary}</div>
+        {model && <div><strong className="text-text-primary">Research model result.</strong> {model.verdict}</div>}
+        <div><strong className="text-text-primary">Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
+        <div><strong className="text-text-primary">Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show. Paper mode.</div>
         <div className="text-text-secondary text-[11.5px]">Source: {spec.sources} Baselines are the best trailing-average forecaster in each study. The live board does not run the research model.</div>
       </div>
 
