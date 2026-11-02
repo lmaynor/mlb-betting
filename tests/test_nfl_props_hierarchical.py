@@ -237,6 +237,12 @@ def test_redistribute_conserves_the_pool():
     assert cg.redistribute({"slot": 0.1}, []) == {}
 
 
+def test_redistribute_with_zero_share_peers_spills_instead_of_dividing_by_zero():
+    """Found on real data: a role whose active peers all have 0 share crashed with ZeroDivisionError."""
+    added = cg.redistribute({"slot": 0.1}, [("a", "slot", 0.0), ("b", "perimeter", 0.2)])
+    assert sum(added.values()) == pytest.approx(0.1) and added["b"] == pytest.approx(0.1) and added["a"] == 0.0
+
+
 def test_absence_weights_follow_the_spec():
     w = cg.absence_weight
     assert [w(s) for s in ("Out", "IR", "PUP", "Suspended")] == [1.0] * 4

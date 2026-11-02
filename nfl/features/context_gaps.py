@@ -462,8 +462,9 @@ def redistribute(pool_by_role: dict, active: list, spill: float = 0.30) -> dict:
         tot_peer = sum(s for _, s in peers)
         same = (1.0 - spill) * pool if tot_peer > 0 else 0.0
         rest = pool - same
-        for k, s in peers:
-            added[k] += same * s / tot_peer
+        if tot_peer > 0:
+            for k, s in peers:
+                added[k] += same * s / tot_peer
         for k, _, s in active:
             added[k] += rest * max(s, 0.0) / tot_all
     return added

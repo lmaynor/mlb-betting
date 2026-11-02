@@ -33,8 +33,7 @@ The serving board is unchanged until someone sets `NFL_ENGINE=hierarchical` on t
 8. Retractable-roof and canopy stadiums (ATL, DAL, ARI, HOU, IND, LAR, LAC) are treated as neutral per the spec unless the schedule says `open`.
 
 ## NOT verified
-- **The walk-forward comparison has not been run on real data** (no mirrored data in this environment). The harness is tested on synthetic leagues only.
-  Run: `PYTHONPATH=. python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical --hier-context --hier-cache /tmp/h.parquet`.
+- ~~The comparison has not been run~~ -- it HAS now: see "Real-data replay" below. Still not run: live GCS service path, Open-Meteo, the daily-projections job.
 - Nothing ran against live GCS, the nflverse mirror, Open-Meteo or the real participation schema (column names are from nflreadr's dictionary:
   `defense_coverage_type`, `defense_man_zone_type`, `was_pressure`; unverified against a downloaded file).
 - Cost of `LiveContext.load` (2 seasons of pbp per `daily-projections` run) was not measured; `NFL_HIER_CONTEXT=0` skips it, `NFL_WEATHER_FETCH=0` skips the forecast.
@@ -45,3 +44,34 @@ The serving board is unchanged until someone sets `NFL_ENGINE=hierarchical` on t
 - vs a same-moment Normal the gamma is lighter just above the mean and heavier only ~1.5 sd out (rush 100.5 lighter, 120.5+ heavier): the alt-ladder
   claim needs the real comparison, not the argument.
 - Re-run `engine_eval --write-calibration` is unaffected; the hierarchical engine has no calibration of its own beyond the shipped scale.
+
+## Real-data replay (2024-2025 held out, 18,992 scored player-stat rows, run 2026-11-01 from the GCS mirror)
+`python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical [--hier-context]`; baseline = the shipped engine incl. calibration.
+Verdict: **NOT a general improvement; leave NFL_ENGINE off.** Log score (hierarchical minus baseline; se in parens):
+
+| stat | no context | with context (injuries, pbp, participation, snaps) |
+|---|---|---|
+| pass_attempts | -0.292 (0.044) WORSE | same (no absence/shell input for it) |
+| pass_completions | -0.123 (0.028) WORSE | -0.122 WORSE |
+| pass_yds | -0.163 (0.042) WORSE | -0.165 WORSE |
+| pass_tds | +0.019 (0.010) | +0.019 (tails over-predicted: 0.285 vs realised 0.229 at +200) |
+| interceptions | -0.033 (0.038) | -0.033 |
+| rush_attempts | +0.041 (0.010) | +0.044 (0.011) |
+| rush_yds | -0.021 (0.051) | -0.016 (0.052); CRPS -0.43 |
+| receptions | -0.004 (0.003) | -0.017 (0.005) WORSE |
+| rec_yds | +0.091 (0.035), z 2.6 | +0.080 (0.035) |
+| anytime_td | -0.267 (0.023) WORSE | -0.231 (0.018) WORSE |
+
+- MAE is essentially unchanged on every stat: any gain is distribution shape, not a better mean.
+- Tail calibration at fair +200/+400 improves for pass/rush/rec yards and attempts WITHOUT context (rec_yds 0.273/0.175 vs realised 0.276/0.178, baseline 0.333/0.200).
+- **Context made receptions / rec_yds worse.** 84-90% of receiver rows moved (+7-8% mean) and the hierarchical mean over-projects: mean(y - mu) is
+  -0.29 receptions and -3.6 rec yds with context (-0.03 / -0.5 without; the baseline's is -0.03 / -0.16). Hypothesis (NOT tested): the practice-weighted
+  redistribution double-counts. A teammate who has been out for weeks is already absent from the other receivers' trailing targets, and Questionable
+  players (weights 0.25-0.55) mostly play, yet their full trailing share is re-allocated every week.
+- The ADOPT verdict in `compare_hierarchical` only checks the SIGN of the Brier difference: rush_attempts is flagged ADOPT with Brier z ~1.4. Tighten it
+  before trusting a verdict. Two test seasons also reduce "better in >= 4 of 5 seasons" to 2 of 2.
+- Bugs real data found and fixed: blank-string coverage tags diluted `def_man_rate`; `redistribute` divided by zero when a role's peers all had 0 share.
+
+## Next (not done)
+Fix the absence double-count (only count players whose share is still visible in the teammates' trailing window / out for the first time), tune the
+passing-distribution width and the pass_tds anchor on 2021-2023 only, re-run on 2024-2025; consider a per-stat allowlist (rec_yds, rush_attempts).
