@@ -55,14 +55,37 @@ REJ_LOW_ROI = "REJ_LOW_ROI"
 REJ_NO_EDGE = "REJ_NO_EDGE"
 REJ_SINGLE_LEG_OFF = "REJ_SINGLE_LEG_OFF"
 
-# Same-game pairwise correlation of the two events happening, both in the "more / yes" direction. UNVALIDATED
-# starting values from the spec; the repo's own empirical study (research/sgp-empirical-rho) found real but small
-# prop correlations, so these are generous (= conservative for a lay-only maker). Negative entries are clamped to
-# 0 at use (we must never underprice positive correlation, and ignoring a negative one only overprices the lay).
+# Same-game pairwise correlation of the two events happening, both in the "more / yes" direction, DIFFERENT PLAYERS (the pricer rejects a combo
+# holding two legs of one player). NFL / NBA entries are the realized Gaussian-copula MLE on 8,881 settled Kalshi legs (169k real combos, 10-16..11-02,
+# game-clustered bootstrap; scripts/kalshi_sgp_rho.py realized, docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md): point estimates rounded to 0.02, only
+# where the 95% CI is not wider than ~0.3 (the rest fall to sgp_default_rho). The earlier MLB study (research/sgp-empirical-rho) says nothing about these
+# sports. k_over x nrfi is still the spec's value. Negative entries are clamped to 0 at use (ignoring a negative correlation only overprices the lay).
 SGP_CORR_TABLE = {
-    frozenset(("pass_yds", "rec_yds")): 0.38,
-    frozenset(("rush_yds", "pass_yds")): -0.15,
     frozenset(("k_over", "nrfi_yes")): 0.22,
+    # NFL
+    frozenset(("pass_yds", "rec_yds")): 0.26,          # the spec said 0.38; realized 0.26 [0.15, 0.35]
+    frozenset(("pass_yds", "receptions")): 0.18,
+    frozenset(("rush_yds", "pass_yds")): -0.14,
+    frozenset(("rec_yds", "receptions")): 0.06,
+    frozenset(("rec_yds", "rush_yds")): 0.00,
+    frozenset(("receptions", "rush_yds")): 0.02,
+    frozenset(("rec_yds",)): 0.04,                      # rec_yds x rec_yds (a one-element set is a same-stat pair)
+    frozenset(("receptions",)): 0.06,
+    frozenset(("rush_yds",)): -0.14,                    # teammates split the carries
+    frozenset(("pass_tds", "rec_yds")): 0.08,
+    frozenset(("pass_tds", "receptions")): 0.08,
+    frozenset(("pass_tds", "rush_yds")): 0.04,
+    # NBA
+    frozenset(("points",)): 0.14,
+    frozenset(("points", "rebounds")): 0.16,
+    frozenset(("points", "threes")): 0.18,
+    frozenset(("assists", "points")): 0.14,
+    frozenset(("rebounds", "threes")): 0.14,
+    frozenset(("assists", "rebounds")): 0.20,
+    frozenset(("assists", "threes")): 0.28,
+    frozenset(("rebounds",)): 0.16,
+    frozenset(("threes",)): 0.22,
+    frozenset(("assists",)): 0.20,
 }
 
 
@@ -95,6 +118,11 @@ class PricerConfig:
     leg_safety_pad: float = 0.008
     min_collateral_roi: float = 0.030
     sgp_pair_buffer: float = 0.025
+    # The buffer is per PAIR, so it grows with m^2 and saturated at the Frechet bound min(p) for any same-game group of 4+ priced
+    # legs (13 props + winner => p_cons ~ 0.5 > longshot_max_p => every long SGP rejected as NOT_LONGSHOT). The copula already
+    # runs at rho 0.15, ~3x the empirical prop correlation (research/sgp-empirical-rho: ~1.08-1.10x pairwise lift), so the buffer
+    # is a second layer. Cap the total (3 pairs' worth leaves groups of <= 3 legs unchanged). UNVALIDATED.
+    sgp_buffer_cap: float = 0.075
     sgp_default_rho: float = 0.15
     sgp_mc_draws: int = 100_000
     model_guard: float = 0.15               # |p_model - p_cons| above this => trust the market (winner's curse)
@@ -490,7 +518,7 @@ class KalshiRFQPricer:
                     R[i, j] = R[j, i] = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg)
             pairs = m * (m - 1) // 2
             pj = _copula_joint(ps, R, cfg.sgp_mc_draws)
-            total *= min(min(ps), pj + cfg.sgp_pair_buffer * pairs)
+            total *= min(min(ps), pj + min(cfg.sgp_buffer_cap, cfg.sgp_pair_buffer * pairs))
         return total
 
 
