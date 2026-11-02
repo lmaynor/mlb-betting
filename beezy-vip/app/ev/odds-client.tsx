@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { apiGetOddsBoard } from '@/lib/betting-api'
 import { bookDisplay, canonBook, SURFACE_CARD } from '@/lib/tokens'
 import { americanToDecimal, fmtMoney, kellySizing } from '@/lib/ev-math'
+import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
@@ -541,30 +542,30 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
 
   return (
     <div style={{ maxWidth: '1680px', margin: '0 auto', padding: isMobile ? '12px 12px 64px' : '20px 24px 64px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, letterSpacing: '-0.01em' }}>Odds Terminal</h1>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="mono" style={{ fontSize: '12px', color: meta.stale ? '#facc15' : 'var(--color-text-secondary)' }}>
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <h1 className="text-title-2-bold text-text-primary">Odds Terminal</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={cx('mono text-caption-1-regular', meta.stale ? 'text-[#facc15]' : 'text-text-secondary')}>
             {nRows} ROWS &middot; {meta.age != null ? `LINES ${ageLabel(meta.age).toUpperCase()} OLD` : 'OFFSEASON / NO GAMES'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
           </span>
-          <button onClick={refresh} disabled={loading} className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: '12px' }}>{loading ? 'Refreshing...' : 'Refresh'}</button>
+          <button onClick={refresh} disabled={loading} className="btn btn-ghost px-3 py-[5px] text-xs">{loading ? 'Refreshing...' : 'Refresh'}</button>
         </div>
       </div>
 
       {PRE_LAUNCH && (
-        <div style={{ ...SURFACE_CARD, padding: '10px 16px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderColor: 'rgba(87,242,135,0.35)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', color: 'var(--signal)', background: 'var(--brand-dim)', padding: '3px 8px', borderRadius: '4px' }}>PRE-LAUNCH PREVIEW</span>
-            <span style={{ fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>The full Odds Terminal is unlocked for early visitors (included in All-Access Pro at launch).</span>
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(87,242,135,0.35)] bg-background-primary-default px-4 py-2.5 shadow-card">
+          <div className="flex items-center gap-2.5">
+            <span className="dell-heading rounded-[4px] bg-[var(--brand-dim)] px-2 py-[3px] tracking-[0.08em] text-[var(--signal)]">PRE-LAUNCH PREVIEW</span>
+            <span className="text-body-2-regular text-text-secondary">The full Odds Terminal is unlocked for early visitors (included in All-Access Pro at launch).</span>
           </div>
-          <Link href="/pricing" style={{ fontSize: '11.5px', color: 'var(--signal)', textDecoration: 'none', fontWeight: 600 }}>Lock pre-launch pricing &rarr;</Link>
+          <Link href="/pricing" className="text-caption-1-semibold text-[var(--signal)] no-underline hover:underline">Lock pre-launch pricing &rarr;</Link>
         </div>
       )}
 
       <LedgerStrip h={headline} />
 
       {isMobile ? (
-        <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
+        <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
           <HorizontalPillStrip padding="8px 10px" gap="6px">
             {MODES.map(m => {
               const n = badgeFor(m.key)
@@ -662,7 +663,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           </div>
         </section>
       ) : (
-        <section style={{ ...SURFACE_CARD, padding: 0, marginBottom: '10px' }} aria-label="Filters">
+        <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
           <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
             <PillGroup label="Mode">
               {MODES.map(m => {
@@ -1498,7 +1499,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
               </div>
             </div>
           )}
-          <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+          <div className="odds-table-wrap rounded-xl border border-separator-border bg-background-primary-default shadow-card">
             <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
@@ -1559,7 +1560,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
               </div>
             </div>
           )}
-          <div className="odds-table-wrap" style={{ ...SURFACE_CARD, padding: 0 }}>
+          <div className="odds-table-wrap rounded-xl border border-separator-border bg-background-primary-default shadow-card">
             <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -2843,15 +2844,15 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
 /** One strip above the SGP view: every row is UNVALIDATED model output, and the flagged extreme rows are counted, not silently dropped. */
 function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
   return (
-    <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: '3px solid #facc15' }}>
-      <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15' }}>UNVALIDATED</span>
-      <span style={{ fontSize: '12px', color: 'var(--color-neutral-300)', flex: 1, minWidth: '240px' }}>
+    <div role="note" className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-separator-border border-l-[3px] border-l-[#facc15] bg-background-primary-default px-3 py-2 shadow-card">
+      <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15]">UNVALIDATED</span>
+      <span className="min-w-[240px] flex-1 text-caption-1-regular text-text-secondary">
         {SGP_UNVALIDATED_LABEL}. Correlation and book hold are assumed constants, so a gap here is a place to look, not an edge.
       </span>
-      <span className="mono" style={{ fontSize: '11px', color: extremeCount > 0 ? '#ff5a4f' : 'var(--color-text-secondary)' }}>
+      <span className={cx('mono text-[11px]', extremeCount > 0 ? 'text-[#ff5a4f]' : 'text-text-secondary')}>
         {extremeCount} EXTREME (EV OVER {SGP_ARTIFACT_EV_PCT}%){includeExtreme ? ' SHOWN' : ' HIDDEN'}
       </span>
-      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost" style={{ padding: '3px 10px', fontSize: '11px' }}>
+      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost px-2.5 py-[3px] text-[11px]">
         Include extreme
       </button>
     </div>
@@ -2860,8 +2861,8 @@ function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: n
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-      <label htmlFor={htmlFor} className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{label}</label>
+    <div className="flex items-center gap-2">
+      <label htmlFor={htmlFor} className="dell-heading text-text-secondary">{label}</label>
       {children}
     </div>
   )
@@ -2870,7 +2871,7 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; 
 function Select({ id, value, onChange, options }: { id: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
   return (
     <select id={id} value={value} onChange={e => onChange(e.target.value)}
-      style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 8px', fontSize: '12px', maxWidth: '200px' }}>
+      className="h-[34px] max-w-[200px] rounded-lg border border-border-button-default bg-background-secondary-default px-2 text-caption-1-regular text-text-primary outline-none focus:border-accent-500">
       {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
     </select>
   )
@@ -2879,17 +2880,15 @@ function Select({ id, value, onChange, options }: { id: string; value: string; o
 function Pill({ children, active, onClick, title }: { children: React.ReactNode; active: boolean; onClick: () => void; title?: string }) {
   return (
     <button onClick={onClick} title={title} aria-pressed={active}
-      style={{
-        fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em', padding: '6px 11px', borderRadius: '6px', cursor: 'pointer',
-        color: active ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', background: active ? 'var(--color-background-tertiary-default)' : 'transparent', border: `1px solid ${active ? 'var(--color-border-button-hover)' : 'transparent'}`,
-      }}>
+      className={cx('button-press-motion cursor-pointer rounded-md border px-[11px] py-1.5 text-caption-1-semibold tracking-[0.03em]',
+        active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
       {children}
     </button>
   )
 }
 
 function PillGroup({ children, label }: { children: React.ReactNode; label?: string }) {
-  return <div role={label ? 'group' : undefined} aria-label={label} style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', maxWidth: '100%' }}>{children}</div>
+  return <div role={label ? 'group' : undefined} aria-label={label} className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">{children}</div>
 }
 
 /** A button that opens a checklist of books (a popover closed by outside click or Escape). `emptyMeansAll`: none ticked = every book. */
@@ -3185,9 +3184,9 @@ function MobileBookChecklist({
 
 function Empty({ title, body }: { title: string; body: string }) {
   return (
-    <div style={{ ...SURFACE_CARD, padding: '36px 20px', textAlign: 'center' }}>
-      <div style={{ color: 'var(--color-text-primary)', fontWeight: 600, marginBottom: '6px' }}>{title}</div>
-      <div style={{ color: 'var(--color-text-secondary)', fontSize: '13px', maxWidth: '60ch', margin: '0 auto', lineHeight: 1.55 }}>{body}</div>
+    <div className="rounded-xl border border-separator-border bg-background-primary-default px-5 py-9 text-center shadow-card">
+      <div className="mb-1.5 text-body-semibold text-text-primary">{title}</div>
+      <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">{body}</div>
     </div>
   )
 }
