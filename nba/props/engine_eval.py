@@ -42,6 +42,7 @@ from ev import daily_projections as DP
 from mlb_core.data import cockpit_form as cf
 from nba.props import hierarchical as H
 from nba.props import team_context as TC
+from nba.props.data import sb_team
 
 log = logging.getLogger("nba.props.engine_eval")
 
@@ -68,6 +69,10 @@ def load_master(path: str) -> tuple:
     """Box-score master CSV -> (cockpit-shaped index {norm name: [row dicts]}, dnp {(team, date): {norm name}})."""
     df = pd.read_csv(path, low_memory=False)
     df = df[~df["season_type"].astype(str).str.lower().eq("preseason")].copy()
+    # the master spells five teams GS / NO / NY / SA / PHO; the engine's opponent factor and the team-games table key on the
+    # tricodes (GSW / NOP / NYK / SAS / PHX), so an unfolded code left the factor at 1.0 for those teams (same fold as
+    # cockpit_form._load_nba, idempotent for rows that already carry a tricode)
+    df["team_abbr"] = [sb_team(a) or a for a in df["team_abbr"]]
     df["_date"] = df["date"].astype(str).str[:10]
     played = df["played"].astype(str).str.lower().isin(["true", "1", "1.0"])
     teams_of = df.groupby("game_id")["team_abbr"].agg(lambda s: sorted(set(s)))

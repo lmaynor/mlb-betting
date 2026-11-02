@@ -82,6 +82,8 @@ def _boot_roi(g: pd.DataFrame, n_boot: int = 2000, seed: int = 7):
     g = g[g["result"].isin(["win", "loss"])]
     if g.empty:
         return {"n": 0}
+    # tracked-tier rows are zero-stake monitoring rows graded on a 1-unit reference (settle_bets._settle_winter_bets): ROI per unit
+    g = g.assign(stake=g["stake"].astype(float).where(g["stake"].astype(float) > 0, 1.0))
     stake, pnl = float(g["stake"].sum()), float(g["profit"].sum())
     days = g.groupby("game_date")[["stake", "profit"]].sum()
     rng = np.random.default_rng(seed)
