@@ -238,22 +238,29 @@ Why coverage is still low: this is mostly NOT cleansing. Of 1,248,194 leg occurr
   10-30): the sweep did not run or did not bank them. `bettingpros_live/nfl` and `bestbook_live/nfl` hold only `latest.json` (overwritten), so there is
   nothing to backfill from: **start banking point-in-time snapshots of the live feeds** if replay coverage matters.
 
-Results (120 min max age; every pull window truncated at 8,000 scanned markets, so a SAMPLE):
-| | 40 min | 120 min |
+Second pass (2026-11-02): raw all-book NFL / NBA / NHL snapshots (`EVSweep/nfl_props/raw`, `OddsAccum/{basketball_nba,icehockey_nhl}/raw`; NBA/NHL props are
+banked ~10-14x/day since ~10-29, 2x before), the alternate-line ladder fit (`ev/prop_ladder.py`), one-sided de-vig (anytime TD, alternate ladders), and the
+name-code fix (hyphenated first names: `Amon-Ra St. Brown` -> `astbrown`). `audit` hit rate on all legs 5.1% -> 13.2%. Replay (120 min max age; every pull
+window truncated at 8,000 scanned markets, so a SAMPLE):
+| | cycle rows only | + raw books, ladder, one-sided |
 |---|---|---|
-| replayed | 18,259 | 38,283 |
-| >= 1 priced leg | 7,401 | 17,185 |
-| fully priced | 83 | 243 |
-| would-quote / would-fill | 1,631 / 12 | 4,025 / 44 |
+| replayed | 38,283 | 60,964 |
+| fully priced | 243 | 2,653 |
+| would-quote / would-fill | 4,025 / 44 | 10,319 / 249 |
 
-* Fully priced (n=243): mean yes price 0.215, mean p_true 0.258, realized yes 10.3%, laying at the traded price +10.2c per contract after fees. **Do not read the
-  naive se (1.8c)**: the rows are three game days (10-18: 69 combos, yes 34.8%, -11.6c; 10-23: 76, yes 0%; 10-27: 81, yes 0%) and each day is a few games.
-  Day-cluster bootstrap 95% CI of the lay P&L: [-8.6c, +19.5c] over 7 clusters; volume-weighted it is -2c. No conclusion.
-* Bounded (n=16,942, `p_true` an upper bound): price 11.0% vs realized 4.4%, lay +6.0c (day-cluster 95% CI [-2.6c, +10.1c], 15 days). By leg count: 2-3 legs
-  +11.1c, 4-7 +6.5c, 8-15 +4.2c, 16+ +0.8c: the "long combos are -EV for retail" intuition is NOT supported (the longest are closest to fair).
-* Would-fill (n=44, our no_bid >= the traded NO price): those combos traded at a mean yes price of 0.61 against our p_true 0.25 and hit 45.5%; mean P&L -15c
-  (se 7c). Where we would have out-bid the market we were on the wrong side: a winner's-curse signature, mostly one day (10-18: 28 of 44).
-Verdict so far: coverage and clustering, not edge, are the binding limits; the sign of "retail overpays" flips with which days and legs join.
+* Fully priced (n=2,653 over 11 days): mean yes price 0.212, mean p_true 0.257, realized yes 9.4%; laying at the traded price earned +10.9c per contract after
+  fees; **day-cluster 95% CI [-1.6c, +17.7c]**, volume-weighted +6.6c. It is NOT uniform: cross-game combos (n=332) hit 27.7% against a 27.0% price (-1.7c, fair);
+  SAME-GAME combos (n=2,321) hit 6.8% against a 20.4% price (+12.7c), and 10-23 / 10-27 alone are 1,548 combos that almost never hit (a few games each). The
+  retail-overpay signal is an SGP signal resting on a handful of games, not a broad one.
+* Bounded (n=20,966): +3.4c (CI [-3.8c, +7.6c], 17 days). By leg count: 2-3 legs +7.4c, 4-7 +3.9c, 8-15 +1.7c, 16+ -1.0c.
+* **Our p_true is not usable as a price.** On fully priced combos it is 25.7% against 9.4% realized (same-game: 26.3% vs 6.8%): the copula (rho 0.15, capped buffer)
+  is far too conservative for same-game props, and quintile calibration shows the same overstatement at every level (top quintile 46% predicted vs 20% realized).
+* **Would-fill (n=249, 10 days): -21c per contract** (naive se 3c; 61% same-game). Where our bid reaches the price that traded, the combos traded at a mean yes
+  price of 0.55 against our p_true of 0.21 and hit 47%: the market was right and we were not. Adverse selection by construction: our quote only fills where we
+  disagree with the market most.
+Verdict: the join is now good enough to say something, and what it says is not "quote more". Retail combos do look overpriced on average (the lay-at-market result
+is positive and mostly same-game), but our fair value is badly calibrated on exactly the combos where we would win the quote. Fix the SGP model (empirical
+correlations from `research/sgp-empirical-rho`) and re-test on a held-out set of games before any quoting beyond the demo exchange.
 
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,
