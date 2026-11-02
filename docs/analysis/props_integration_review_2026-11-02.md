@@ -10,7 +10,7 @@ to review. This document is that hand-off. **Everything below is paper / UNVALID
 |---|---|---|
 | Are the new engines profitable? | **No evidence of it, and the NBA picks lose.** | Section 3 |
 | Do any beat the market on real lines? | No. NBA / NHL engines are worse than the market alone; NFL hierarchical is better than the old NFL engine on 3 stats but still loses to the market | Section 3, linked reports |
-| Are they running? | Locally yes, on live data, all three sports (Section 5). Backend deploy status: Section 8 | Section 5, 8 |
+| Are they running? | Locally on live data yes (Section 5); **NOT deployed** (build blocked by the permission layer, Section 8) | Section 5, 8 |
 | Is every pick tracked? | Now yes: new ledger system `PROPS`, settlement, CLV, recap split, heartbeat monitor | Section 4 |
 | Discord? | Official-tier picks only, via the existing sport alerts channels, labelled paper / unvalidated | Section 4 |
 | Mobile? | Rendered at 375px, real problems fixed (props board was unusable), tsc + jest green | Section 6 |
@@ -87,10 +87,13 @@ shows the desktop filter bar (SSR), `/ev/games` prints a raw engine id, `LIVE_EN
 5. `daily_projections` merge summary can print a negative `games_parlay_only` (NFL showed -10): cosmetic counter bug, not fixed.
 6. `BetTracker.log_bet` only dedups when `game_pk` is set, which winter bets never have; `ev.model_picks` dedups itself. The existing `EV` winter alerts rely on upstream notify-state instead.
 
-## 8. Deployment state (be careful: this section is the one most likely to age)
-See the final lines of the PR / session summary for what was actually deployed. Not deployable from here: the Vercel frontend; the prod `mlb-betting:latest` image (changes every MLB job's next run, owner's
-call). Consequences of not retagging prod: the `props-model-picks` recap fields and the `monitor_ops` heartbeat check only take effect on the prod image; until then the recap's existing
-`props (unvalidated)` field counts PROPS bets together with `EV` alerts.
+## 8. Deployment state
+**Nothing was deployed.** The attempt to build the feeds images (`SKIP_PROD=1 ALLOW_NON_MAIN=1 bash deploy/build_all_images.sh`) was blocked by the session's permission layer and not retried. So:
+the new NBA / NHL / NFL engines, the NBA loader fix, `pp_points` rows and the `props-model-picks` job are NOT live; the live boards still run what was deployed on 2026-11-02 (service rev 00351; the
+`daily-projections` job has no `NFL_ENGINE` env, so NFL is on the old engine). Verified instead by running the new code locally against live GCS data (section 5) with no writes, and by the full test suites
+(pytest 3,093 passed; tsc clean; jest 759 passed). To go live, in order: build the feeds images (command above), `bash deploy/setup_daily_projections_job.sh` (sets `NFL_ENGINE=hierarchical`),
+`bash deploy/setup_model_picks.sh`, check `python -m ev.model_picks --sport all --dry-run`, and deploy the Vercel frontend. Retagging prod `mlb-betting:latest` (needed for the recap fields and the
+`monitor_ops` heartbeat check) is a separate owner decision because it changes every MLB job's next run; until then the recap's existing `props (unvalidated)` field counts PROPS bets together with `EV` alerts.
 
 ## 9. Questions a reviewer should push on
 - Is the forward audit's replay faithful to what the job will log, given it uses last-state rather than first-sighting rows? (It cannot reproduce the 30-minute gate.)
