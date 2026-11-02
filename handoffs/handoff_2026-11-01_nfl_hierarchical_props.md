@@ -82,7 +82,7 @@ for experiments. **2026 clean confirmation (8 weeks, 208-658 rows per stat; noth
 (0.034), rush_attempts +0.052 (0.023), rec_yds +0.171 (0.028); pass_completions -0.107 (0.030) WORSE, pass_yds -0.054, pass_attempts -0.094,
 anytime_td -0.001. Brier z is below 1.645 on all four (n is small). The 2024-25 verdicts both selected the allowlist and tested it, so 2026 is the
 only clean evidence and it is thin.
-To turn it on: set `NFL_ENGINE=hierarchical` on the `daily-projections` job (and rebuild its image). NOT done here.
+To turn it on: separate PR (stacked on #148) sets `NFL_ENGINE=hierarchical` + `NFL_HIER_CONTEXT=0` in `deploy/setup_daily_projections_job.sh`; it takes effect only when that script is re-run against an image containing this code. NOT done: nothing was built, tagged or deployed. WARNING: any rebuild from a tree containing main's #149 also ships the NHL hierarchical engine (ungated), so the image build is the owner's call, not part of the NFL work.
 
 ## Next (not done)
 rec_yds: check Brier / CRPS at REAL book lines (the replay's proxy line is the L5 mean). rush_attempts: ADOPT only with context. Isolate which

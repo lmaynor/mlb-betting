@@ -55,9 +55,19 @@ fi
 gcloud iam service-accounts describe "$SA_EMAIL" --quiet >/dev/null || { echo "ERROR: $SA_EMAIL not found."; exit 1; }
 gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 || { echo "ERROR: $IMAGE not found."; exit 1; }
 
+# NFL pricing engine. "hierarchical" serves ONLY the stats in nfl/props/hierarchical_allowlist.json (evidence-gated, currently
+# pass_tds + rush_yds; every other NFL stat keeps the legacy price) -- docs/solutions/conventions/nfl-hierarchical-engine-adoption.md.
+# NFL_HIER_CONTEXT=0 skips the pbp / participation / snap-count load: the allowlist was cleared on the replay WITHOUT that context
+# and the context layers did not help in it (receptions / rec_yds got worse), so there is no reason to pay for it in the job.
+# ROLL BACK without a rebuild:  NFL_ENGINE=ewm PROJECT_ID=... CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_daily_projections_job.sh
+# (or: gcloud run jobs update daily-projections --region=us-central1 --update-env-vars=NFL_ENGINE=ewm). The NEXT 30-min run reverts the board.
+# Needs an image that contains nfl/models/hierarchical_*.py; an older image ignores these variables.
+NFL_ENGINE="${NFL_ENGINE:-hierarchical}"
+NFL_HIER_CONTEXT="${NFL_HIER_CONTEXT:-0}"
+
 FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
        --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
-       --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
+       --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},NFL_ENGINE=${NFL_ENGINE},NFL_HIER_CONTEXT=${NFL_HIER_CONTEXT}"
        --command="python" --args="-m,ev.daily_projections,--all,--write-gcs"
        --memory=2Gi --cpu=1 --task-timeout=900 --max-retries=0 --quiet)
 if gcloud run jobs describe "$JOB" --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
