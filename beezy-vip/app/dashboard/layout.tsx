@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 pb-12 pt-5">
+    <div className="mx-auto max-w-page px-6 pb-12 pt-5">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Dashboard</h1>
         <span className="mono text-caption-1-regular text-text-secondary">Pro</span>

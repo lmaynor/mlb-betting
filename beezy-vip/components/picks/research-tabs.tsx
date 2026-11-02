@@ -10,7 +10,7 @@ const TABS: { id: ResearchView; label: string; href: string; title: string }[] =
 /** The two halves of Prop Research: the flagged-line cockpit, and the model's projection for every player prop. */
 export function ResearchTabs({ active }: { active: ResearchView }) {
   return (
-    <nav aria-label="Prop research views" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
+    <nav aria-label="Prop research views" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
       {TABS.map(t => (
         <Link key={t.id} href={t.href} title={t.title} aria-current={active === t.id ? 'page' : undefined}
           style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',

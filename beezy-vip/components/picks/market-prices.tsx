@@ -15,7 +15,7 @@ function Empty({ title, body, cta }: { title: string; body: string; cta?: { href
   return (
     <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
       <div className="text-text-primary font-semibold mb-1.5">{title}</div>
-      <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">{body}</div>
+      <div className="text-text-secondary text-cozy max-w-[62ch] mx-auto leading-[1.55]">{body}</div>
       {cta && <Link href={cta.href} className="btn btn-ghost" style={{ marginTop: '16px' }}>{cta.label}</Link>}
     </div>
   )
@@ -48,8 +48,8 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
   const confluence = useMemo(() => new Set(confluenceKeys), [confluenceKeys])
   return (
     <div className="grid gap-4">
-      <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[12.5px] text-[var(--color-neutral-300)] leading-[1.55]">
-        <strong className="text-[#38bdf8]">PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
+      <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[12.5px] text-neutral-300 leading-[1.55]">
+        <strong className="text-link">PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
         {' '}Kalshi asks are on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link>.
       </div>
       {rows.length === 0
@@ -63,10 +63,10 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
 function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; sport: ProjectionSport; confluence?: Set<string> }) {
   return (
     <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
-      <table className="w-full border-collapse min-w-[760px] text-[13px]">
+      <table className="w-full border-collapse min-w-[760px] text-cozy">
         <thead>
           <tr>{['Player / prop', 'Game', 'Side', 'Book', 'Price', 'Fair', 'Books', 'EV', 'Status'].map(h => (
-            <th key={h} className="ui-heading text-left py-2.5 px-3 text-[10px] text-text-secondary border-b border-b-[color:var(--color-separator-border)]">{h}</th>))}</tr>
+            <th key={h} className="ui-heading text-left py-2.5 px-3 text-micro text-text-secondary border-b border-b-[color:var(--color-separator-border)]">{h}</th>))}</tr>
         </thead>
         <tbody>
           {rows.filter(r => !isOffshore(r.book)).slice(0, 60).map(r => {
@@ -78,11 +78,11 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                   <span className="inline-flex items-center gap-2">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
                     <span>{r.player} <span className="text-text-secondary font-normal">{point} {propStatLabel(r.stat ?? r.market)}</span></span>
-                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-[10px] text-[#57F287] border border-[color:rgba(87,242,135,0.35)] rounded-[4px] py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">MODEL + MARKET</span>}
+                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">MODEL + MARKET</span>}
                   </span>
                 </td>
-                <td className="mono py-2.5 px-3 text-[var(--color-neutral-300)]">{(r.game_key ?? '').split(':')[2]}</td>
-                <td className="py-2.5 px-3 text-[var(--color-neutral-300)]">{String(r.side).toUpperCase()}</td>
+                <td className="mono py-2.5 px-3 text-neutral-300">{(r.game_key ?? '').split(':')[2]}</td>
+                <td className="py-2.5 px-3 text-neutral-300">{String(r.side).toUpperCase()}</td>
                 <td className="py-2.5 px-3">
                   <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.label}</span>
                 </td>

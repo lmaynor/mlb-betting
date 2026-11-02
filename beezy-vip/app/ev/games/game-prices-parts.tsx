@@ -123,7 +123,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
               </label>
             ))}
           </div>
-          <span className="text-[11px] text-text-secondary leading-[1.45]">{note}</span>
+          <span className="text-mini text-text-secondary leading-[1.45]">{note}</span>
         </div>
       )}
     </div>
@@ -143,7 +143,7 @@ function BestCell({ s }: { s: GameSidePrice }) {
       <div className="flex items-center gap-2">
         <BookLogo book={s.book} size={24} />
         <div>
-          <div className="mono text-[13px] font-bold text-text-primary">{formatOdds(s.american)}</div>
+          <div className="mono text-cozy font-bold text-text-primary">{formatOdds(s.american)}</div>
           <div className="mono odds-sub" title={`${s.label} at ${bookDisplay(s.book).label}`}>{s.label} &middot; {bookDisplay(s.book).short}</div>
         </div>
       </div>
@@ -196,7 +196,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
     <>
       <tr data-row="game-prices" data-arb={r.arbLive ? 'true' : undefined}>
         <td className="odds-prop" style={r.arbLive ? { borderLeft: `3px solid ${GREEN}` } : undefined}>
-          <div className="text-[13px] font-semibold text-text-primary leading-[1.3]">{r.matchup}</div>
+          <div className="text-cozy font-semibold text-text-primary leading-[1.3]">{r.matchup}</div>
           <div className="mono odds-sub">
             {r.row.sport.toUpperCase()} &middot; {startLabel(r.row.commence)} &middot; {r.marketLabel === 'Moneyline' ? 'ML' : r.lineLabel}
           </div>
@@ -206,7 +206,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
         <td className="odds-ev">
           {noFair ? (
             <>
-              <div className="mono text-[13px] font-bold text-text-secondary">--</div>
+              <div className="mono text-cozy font-bold text-text-secondary">--</div>
               <div className="mono odds-sub" title="Fewer than 3 reference books priced this line both ways; a fair value needs 3">{Math.max(r.a.nRef, r.b.nRef)} of 3 bk</div>
             </>
           ) : (
@@ -217,7 +217,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
           )}
         </td>
         <td className="odds-ev">
-          {noFair ? <div className="mono text-[13px] font-bold text-text-secondary">--</div> : (
+          {noFair ? <div className="mono text-cozy font-bold text-text-secondary">--</div> : (
             <>
               <SideLine s={r.a}><span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: evColor(r.a) }}>{r.a.ev == null ? '--' : signedPct(r.a.ev)}</span></SideLine>
               <SideLine s={r.b}><span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: evColor(r.b) }}>{r.b.ev == null ? '--' : signedPct(r.b.ev)}</span></SideLine>
@@ -269,8 +269,8 @@ export function PriceCard({ r, columns, copied, onCopy }: {
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', borderTop: `1px solid ${HAIR}` }}>
       {s.book ? <BookLogo book={s.book} size={22} /> : <span  className="w-[22px]"/>}
       <span className="flex-1 text-[12.5px] text-text-primary font-semibold">{s.label}</span>
-      <span className="mono text-[13px] font-bold text-text-primary">{s.american == null ? '--' : formatOdds(s.american)}</span>
-      <span className="mono text-[11px] text-text-secondary min-w-[48px] text-right">{pctText(s.pFair)}</span>
+      <span className="mono text-cozy font-bold text-text-primary">{s.american == null ? '--' : formatOdds(s.american)}</span>
+      <span className="mono text-mini text-text-secondary min-w-[48px] text-right">{pctText(s.pFair)}</span>
       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, minWidth: '52px', textAlign: 'right', color: s.ev != null && s.ev > 0 ? GREEN : 'var(--color-text-secondary)' }}>{s.ev == null ? '--' : signedPct(s.ev)}</span>
     </div>
   )
@@ -278,9 +278,9 @@ export function PriceCard({ r, columns, copied, onCopy }: {
     <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid var(--color-separator-border)' }}>
       <div className="flex justify-between gap-2 items-baseline">
         <span className="text-[13.5px] font-bold text-text-primary">{r.matchup}</span>
-        <span className="mono text-[11px] text-text-secondary">{startLabel(r.row.commence)}</span>
+        <span className="mono text-mini text-text-secondary">{startLabel(r.row.commence)}</span>
       </div>
-      <div className="mono text-[11px] text-text-secondary mb-1">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
+      <div className="mono text-mini text-text-secondary mb-1">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
       {side(r.a)}
       {side(r.b)}
       {r.arbLive && <div style={{ paddingTop: '6px', borderTop: `1px solid ${HAIR}` }}><ArbLine r={r} copied={copied} onCopy={onCopy} /></div>}

@@ -19,7 +19,7 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   ]
   return (
     <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
-      <div className="gutter-m max-w-[1200px] mx-auto py-0 px-6 flex items-center justify-between gap-y-1 gap-x-4 flex-wrap">
+      <div className="gutter-m max-w-page mx-auto py-0 px-6 flex items-center justify-between gap-y-1 gap-x-4 flex-wrap">
         <div className="flex items-baseline gap-2.5 py-2.5 px-0">
           <span style={{ fontSize: '13px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
           <span className="mono text-[11.5px] text-text-secondary">&middot; {n} Systems</span>

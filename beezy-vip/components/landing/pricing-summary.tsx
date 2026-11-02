@@ -17,7 +17,7 @@ export function PricingSummary() {
       <div className="pricing-grid gap-2.5">
         {TIERS.map(t => (
           <Link key={t.name} href="/pricing" className={cx('block rounded-xl border bg-background-primary-default p-3.5 no-underline shadow-card', t.featured ? 'border-[rgba(87,242,135,0.55)]' : 'border-separator-border')}>
-            <div className={cx('mono mb-1.5 text-[10px] tracking-[0.06em]', t.featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{t.name.toUpperCase()}</div>
+            <div className={cx('mono mb-1.5 text-micro tracking-head', t.featured ? 'text-signal' : 'text-text-secondary')}>{t.name.toUpperCase()}</div>
             <div className="mb-1.5 flex items-baseline gap-1.5">
               <span className="mono text-[24px] font-bold text-text-primary">{t.price}</span>
               <span className="text-caption-1-regular text-text-secondary">{t.period}</span>

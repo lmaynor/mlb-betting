@@ -15,9 +15,9 @@ export function ToolHeader({ title, hint, current }: { title: string; hint?: str
     <div className="flex items-center justify-between gap-y-2 gap-x-4 flex-wrap mb-3.5">
       <h1 className="text-[20px] font-bold text-text-primary m-0">{title}</h1>
       <span className="flex items-center gap-2.5 flex-wrap">
-        {hint && <span className="mono text-[12px] text-text-secondary">{hint}</span>}
+        {hint && <span className="mono text-compact text-text-secondary">{hint}</span>}
         {current && (
-          <nav aria-label="Calculators" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
+          <nav aria-label="Calculators" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
             {CALCULATORS.map(c => (
               <Link key={c.href} href={c.href} aria-current={c.href === current ? 'page' : undefined}
                 style={{ fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',

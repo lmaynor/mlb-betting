@@ -62,7 +62,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
         </button>
       </div>
       {error && (
-        <p className="mono text-[11px] text-[var(--loss)] mt-1.5">
+        <p className="mono text-mini text-loss mt-1.5">
           {error}
         </p>
       )}

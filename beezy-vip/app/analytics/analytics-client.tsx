@@ -212,7 +212,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
             <tbody>
               {rows.map(b => (
                 <tr key={b.bucket} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
-                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span className="text-[var(--warn)] ml-1.5 text-[10px]">low n</span>}</Td>
+                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span className="text-warn ml-1.5 text-micro">low n</span>}</Td>
                   <Td mono>{b.hit_rate != null ? `${b.hit_rate.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_model_prob != null ? `${b.avg_model_prob.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_market_prob != null ? `${b.avg_market_prob.toFixed(1)}%` : '--'}</Td>
@@ -261,7 +261,7 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
                 const b = bookDisplay(r.book)
                 return (
                   <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-[10px] text-text-secondary">exchange</span>}</Td>
+                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>

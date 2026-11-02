@@ -43,10 +43,10 @@ export async function LiveTicker() {
   const duration = Math.max(24, ticks.length * 4.5)
 
   return (
-    <div className="live-ticker-shell border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] overflow-hidden py-2 px-0 flex items-center relative z-[1]">
-      <div className="z-[10] bg-[var(--color-background-primary-default)] pt-0 pr-3.5 pb-0 pl-5 shrink-0 flex items-center gap-2 border-r border-r-[color:var(--color-separator-border)]">
+    <div className="live-ticker-shell border-b border-b-[color:var(--color-separator-border)] bg-background-primary-default overflow-hidden py-2 px-0 flex items-center relative z-[1]">
+      <div className="z-[10] bg-background-primary-default pt-0 pr-3.5 pb-0 pl-5 shrink-0 flex items-center gap-2 border-r border-r-[color:var(--color-separator-border)]">
         <span className="live-dot" />
-        <span className="mono ticker-label text-[10px] tracking-[0.1em] uppercase text-[var(--color-neutral-300)] whitespace-nowrap">Latest results</span>
+        <span className="mono ticker-label text-micro tracking-label uppercase text-neutral-300 whitespace-nowrap">Latest results</span>
       </div>
       {/* Clipping viewport: the animated track lives inside it so translateX never reaches the label. */}
       <div className="ticker-viewport flex-1 min-w-0 overflow-hidden relative">
@@ -55,13 +55,13 @@ export async function LiveTicker() {
             const tone = t.win ? 'var(--signal)' : 'var(--loss)'
             const sysColor = SYSTEM_COLOR[t.system] ?? 'var(--color-neutral-300)'
             return (
-              <span key={i} className="mono text-[12px] text-text-primary tracking-[0.02em] whitespace-nowrap py-0 px-4.5 inline-flex items-center gap-[9px]">
+              <span key={i} className="mono text-compact text-text-primary tracking-[0.02em] whitespace-nowrap py-0 px-4.5 inline-flex items-center gap-[9px]">
                 <span style={{ color: tone, fontWeight: 700 }}>{t.win ? 'W' : 'L'}</span>
                 <span style={{ color: sysColor, fontWeight: 600 }}>{systemLabel(t.system, true)}</span>
                 <span>{t.label}</span>
-                {t.unvalidated && <span className="text-[#f59e0b] text-[10px]">UNVALIDATED</span>}
+                {t.unvalidated && <span className="text-gold text-micro">UNVALIDATED</span>}
                 <span style={{ color: tone, fontWeight: 600 }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
-                <span className="text-[var(--color-separator-border)] py-0 px-3">|</span>
+                <span className="text-separator-border py-0 px-3">|</span>
               </span>
             )
           })}

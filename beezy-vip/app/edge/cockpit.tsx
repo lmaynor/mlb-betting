@@ -160,8 +160,8 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   return (
     <section className={cx(CARD, 'px-4 py-3.5')}>
       <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="ui-heading tracking-[0.08em] text-text-secondary">{title}</h3>
-        {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
+        <h3 className="ui-heading tracking-caps text-text-secondary">{title}</h3>
+        {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
       </div>
       {children}
     </section>
@@ -236,7 +236,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
           </g>
         )}
       </svg>
-      <div className="flex gap-3.5 flex-wrap mt-1.5 text-[11px] text-[var(--color-neutral-300)]">
+      <div className="flex gap-3.5 flex-wrap mt-1.5 text-mini text-neutral-300">
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: GOOD, borderRadius: 2, marginRight: 5 }} />Cleared the {under ? 'under' : 'over'}</span>
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: BAD, borderRadius: 2, marginRight: 5 }} />Missed</span>
         <span className="text-text-secondary">{cleared} of {games.length} games</span>
@@ -248,7 +248,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         { label: 'LINE', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
-        <div className="text-[11px] text-text-secondary mt-2">
+        <div className="text-mini text-text-secondary mt-2">
           Season hit rate {pct0(szn)} over {form.szn_games} games.
         </div>
       )}
@@ -306,7 +306,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         { label: 'LAST 3 AVG', value: fmt(recent) },
         { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
-      <div className="text-[12px] text-[var(--color-neutral-300)] mt-2 leading-[1.5]">
+      <div className="text-compact text-neutral-300 mt-2 leading-[1.5]">
         {label} are <b style={{ color: trendColor }}>{trend}</b>
         {prior != null ? <>: {fmt(recent)} over the last 3 games vs {fmt(prior)} before that.</> : '.'}
       </div>
@@ -433,9 +433,9 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="truncate text-[14.5px] font-bold text-text-primary">{r.player ?? 'Unknown player'}</span>
         <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
         <span className="flex min-w-0 items-center gap-[7px]">
-          <span className="ui-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
-          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
-          <span className="mono min-w-0 flex-1 truncate text-[11px] text-text-secondary">{meta}</span>
+          <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
+          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
+          <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
       <span className="grid justify-items-end gap-1.5">
@@ -444,7 +444,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
           <BookBadge book={r.book} />
           <span className="mono text-body-2-bold text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</span>
         </span>
-        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-[11px] font-bold" style={{ color: rateColor(l10) }}>
+        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-mini font-bold" style={{ color: rateColor(l10) }}>
           L10: {pct0(l10)}
         </span>
       </span>

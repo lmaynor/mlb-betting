@@ -51,7 +51,7 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
           aria-label={`All games: ${games.length} games, ${total} rows`} title={`${games.length} games, ${total} rows`}
           style={{ ...CARD, minWidth: '56px', ...(!selected ? ON : {}) }}>
           <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: !selected ? 'var(--signal)' : 'var(--color-neutral-300)' }}>ALL</span>
-          <span className="mono text-[10px] text-text-secondary">{games.length}</span>
+          <span className="mono text-micro text-text-secondary">{games.length}</span>
         </Link>
         {games.map(g => {
           const on = g.key === selected

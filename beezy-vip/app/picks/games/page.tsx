@@ -22,7 +22,7 @@ export default async function GamePicksPage({ searchParams }: { searchParams: Pr
   return (
     <>
       {isMlbOffseason() && (
-        <div role="note" className="max-w-[1200px] mx-auto pt-3 px-6 pb-0 text-[12.5px] text-[var(--color-neutral-300)]">
+        <div role="note" className="max-w-page mx-auto pt-3 px-6 pb-0 text-[12.5px] text-neutral-300">
           MLB is in the offseason, so there are no game picks until it resumes in March. NBA and NHL game lines are in the{' '}
           <Link href="/ev/games" style={{ color: 'var(--link)' }}>Odds Terminal &rarr; Game Lines</Link>.
         </div>

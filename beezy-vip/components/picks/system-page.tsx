@@ -66,7 +66,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>
       )}
-      <div className="gutter-m max-w-[1200px] mx-auto p-6">
+      <div className="gutter-m max-w-page mx-auto p-6">
         <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
           <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
@@ -115,7 +115,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
             )}
           </>
         )}
-        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}</div>}
+        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-gold">DATA GAP.</strong> {system.gap}</div>}
 
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Methodology</h2>
         <SystemMethodology system={system} />

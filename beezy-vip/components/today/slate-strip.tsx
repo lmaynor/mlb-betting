@@ -44,7 +44,7 @@ export async function SlateStrip() {
               display: 'flex', flexDirection: 'column', gap: '6px',
               flexShrink: 0,
             }}>
-              <div className="mono text-[11px] font-semibold text-text-primary whitespace-nowrap">
+              <div className="mono text-mini font-semibold text-text-primary whitespace-nowrap">
                 {away} @ {home}
               </div>
               {hasPick && topPick ? (
@@ -61,12 +61,12 @@ export async function SlateStrip() {
                   </span>
                 </div>
               ) : (
-                <div className="mono text-[10px] text-text-secondary">
+                <div className="mono text-micro text-text-secondary">
                   no pick
                 </div>
               )}
               {gamePicks.length > 1 && (
-                <div className="mono text-[10px] text-text-secondary">
+                <div className="mono text-micro text-text-secondary">
                   +{gamePicks.length - 1} more
                 </div>
               )}

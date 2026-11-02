@@ -35,7 +35,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
 
   return (
-    <div className="max-w-[1200px] mx-auto p-6">
+    <div className="max-w-page mx-auto p-6">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
         <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
         <div role="group" aria-label="Range" className="flex gap-1.5">
@@ -51,7 +51,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         </div>
       </div>
 
-      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-3.5 mb-3.5 text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-1.5 gap-x-4 flex-wrap">
+      <div className="mono bg-background-primary-default border border-separator-border rounded-control py-[9px] px-3.5 mb-3.5 text-[12.5px] text-neutral-300 flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -61,7 +61,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
       </div>
 
       {history.length === 0 ? (
-        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-9 px-5 text-center text-text-secondary text-[13px]">
+        <div className="bg-background-primary-default border border-separator-border rounded-control py-9 px-5 text-center text-text-secondary text-cozy">
           No settled cards in this range yet.
         </div>
       ) : (

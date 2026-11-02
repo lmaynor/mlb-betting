@@ -52,11 +52,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <div className="max-w-[780px] mx-auto py-10 px-5">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
-        <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-2.5">
+        <div className="mono text-micro tracking-label uppercase text-text-secondary mb-2.5">
           {article.category}
         </div>
         <h1 className="text-[24px] font-bold text-text-primary leading-[1.3]">{article.title}</h1>
-        <p className="mono text-[11px] text-text-secondary mt-2.5">
+        <p className="mono text-mini text-text-secondary mt-2.5">
           Published <time dateTime={article.datePublished}>{article.datePublished}</time>
           {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>
         </p>
@@ -72,7 +72,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
             {related.map(r => <Link key={r.href} href={r.href} style={{ color: 'var(--link)' }}>{r.label} &rarr;</Link>)}
           </div>
         )}
-        <p className="mono text-[11px] text-text-secondary leading-[1.6] m-0">
+        <p className="mono text-mini text-text-secondary leading-[1.6] m-0">
           Educational content, not financial advice. Beezy.FYI results are paper-tracked. 21+. If gambling is a problem, call 1-800-GAMBLER.
         </p>
         <Link href="/learn" style={{ fontSize: '12.5px', color: 'var(--link)' }}>&larr; All guides</Link>

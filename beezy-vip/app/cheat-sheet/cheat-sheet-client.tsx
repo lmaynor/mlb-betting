@@ -94,8 +94,8 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
           {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
         </div>
         <div className="text-[16px] font-extrabold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap">{pick.who}</div>
-        {market && <div className="text-[13px] font-semibold text-[var(--color-neutral-300)] leading-[1.25] mt-0.5">{market}</div>}
-        {meta && <div className="mono text-[11px] text-text-secondary mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{meta}</div>}
+        {market && <div className="text-cozy font-semibold text-neutral-300 leading-[1.25] mt-0.5">{market}</div>}
+        {meta && <div className="mono text-mini text-text-secondary mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{meta}</div>}
         {expanded && (
           <div className="flex flex-col gap-[3px] mt-2">
             {details.map((b, i) => (
@@ -112,9 +112,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
         <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
         {isOfficialCardPlay(pick) ? (
-          <span className="ui-heading text-[10px] tracking-[0.04em] py-0.5 px-[5px] rounded-[4px] border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-[#57F287] whitespace-nowrap">OFFICIAL PLAY</span>
+          <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">OFFICIAL PLAY</span>
         ) : isEvOutlier(pick) ? (
-          <span className="ui-heading text-[10px] tracking-[0.04em] py-0.5 px-[5px] rounded-[4px] border border-[color:#38bdf8] bg-[rgba(56,189,248,0.12)] text-[#38bdf8] whitespace-nowrap">+EV OUTLIER</span>
+          <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#38bdf8] bg-[rgba(56,189,248,0.12)] text-link whitespace-nowrap">+EV OUTLIER</span>
         ) : null}
       </div>
     </div>
@@ -128,7 +128,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
       <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
-      <span className="mono text-[10px] text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
+      <span className="mono text-micro text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
         {pick.who}{pick.what ? ` / ${pick.what}` : ''}
       </span>
     </div>
@@ -157,15 +157,15 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
   }
 
   return (
-    <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-4 mb-4 rounded-[var(--radius)] w-full box-border">
-      <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-3">POST TO X</div>
+    <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)] w-full box-border">
+      <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-3">POST TO X</div>
       {sheets.map(sh => {
         const n = postLength(sh.text)
         return (
           <div key={sh.id} className="mb-3.5">
             <div className="flex items-center gap-2.5 mb-1.5">
-              <span className="ui-heading text-[11px] tracking-[0.08em] text-text-primary">{sh.label}</span>
-              <span className="mono text-[10px] text-[var(--color-border-button-active)]">{n}/{POST_LIMIT}</span>
+              <span className="ui-heading text-mini tracking-caps text-text-primary">{sh.label}</span>
+              <span className="mono text-micro text-border-button-active">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
             </div>
@@ -176,7 +176,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
       })}
       <div className="border-t border-t-[color:var(--color-separator-border)] pt-3">
         <div className="flex items-center gap-2.5 mb-1.5">
-          <span className="ui-heading text-[11px] tracking-[0.08em] text-text-primary">REPLY</span>
+          <span className="ui-heading text-mini tracking-caps text-text-primary">REPLY</span>
           <div  className="flex-1"/>
           <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
         </div>
@@ -238,20 +238,20 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   }
 
   return (
-    <div className="bg-[var(--color-background-full)] flex flex-col items-center pt-4.5 px-3 pb-10">
+    <div className="bg-background-full flex flex-col items-center pt-4.5 px-3 pb-10">
       <div className="cheat-sheet-layout">
-        <div className="w-full max-w-[390px] border border-[color:var(--color-separator-border)] bg-[var(--color-background-full)] rounded-[var(--radius)] overflow-hidden shrink-0">
+        <div className="w-full max-w-[390px] border border-separator-border bg-background-full rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
-          <div className="bg-[var(--color-background-primary-default)] pt-4 px-4 pb-3 border-b border-b-[color:var(--color-separator-border)]">
+          <div className="bg-background-primary-default pt-4 px-4 pb-3 border-b border-b-[color:var(--color-separator-border)]">
             <div className="flex items-start justify-between mb-2.5 gap-3">
               <div>
                 <BrandWordmark size="lg" />
                 <div className="text-[15px] font-extrabold text-text-primary leading-[1.15] mt-2">{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
-                <div className="mono text-[10px] text-text-secondary tracking-[0.1em] mt-[5px]">{today}</div>
-                <div className="text-[11.5px] text-[var(--color-neutral-300)] leading-[1.45] mt-2">
+                <div className="mono text-micro text-text-secondary tracking-label mt-[5px]">{today}</div>
+                <div className="text-[11.5px] text-neutral-300 leading-[1.45] mt-2">
                   Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
                 </div>
-                <div className="text-[11px] text-[#57F287] bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-[4px] py-1.5 px-2.5 mt-2 leading-[1.4]">
+                <div className="text-mini text-signal bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
                   <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
                 </div>
               </div>
@@ -278,10 +278,10 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           {list.length > 0 && (
             <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
-              <span className="mono text-[10px] text-text-secondary tracking-[0.08em]">{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
-              {strong > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{strong} STRONG</span>}
-              {lean > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{lean} LEAN</span>}
-              {best > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">BEST EDGE +{best.toFixed(1)}%</span>}
+              <span className="mono text-micro text-text-secondary tracking-caps">{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
+              {strong > 0 && <span className="ui-heading text-micro text-signal tracking-head">{strong} STRONG</span>}
+              {lean > 0 && <span className="ui-heading text-micro text-signal tracking-head">{lean} LEAN</span>}
+              {best > 0 && <span className="ui-heading text-micro text-signal tracking-head">BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
@@ -291,15 +291,15 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <LockedNotice locked={gamesLocked} what="MLB game picks" plan="Game picks are on the MLB Pass or All-Access Pro." />
               ) : (
                 <>
-                  <div className="mono text-[10px] text-text-secondary tracking-[0.08em] mb-3.5 text-center">
+                  <div className="mono text-micro text-text-secondary tracking-caps mb-3.5 text-center">
                     NO PICKS ON THE CARD YET. THEY POST WHEN TODAY&apos;S LINES ARE IN.
                   </div>
                   {yesterday.length > 0 && (
                     <>
-                      <div className="mono text-[10px] text-text-secondary tracking-[0.1em] mb-1.5 text-center">YESTERDAY&apos;S RESULTS</div>
+                      <div className="mono text-micro text-text-secondary tracking-label mb-1.5 text-center">YESTERDAY&apos;S RESULTS</div>
                       {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
                       {ydayWins + ydayLosses > 0 && (
-                        <div className="mono text-[10px] text-text-secondary text-center mt-2.5">{ydayWins}-{ydayLosses} yesterday</div>
+                        <div className="mono text-micro text-text-secondary text-center mt-2.5">{ydayWins}-{ydayLosses} yesterday</div>
                       )}
                     </>
                   )}
@@ -310,7 +310,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <>
               {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
               {list.length > DEFAULT_LIMIT && (
-                <div className="mono py-2 px-4 text-[10px] tracking-[0.08em] text-text-secondary border-t border-t-[color:var(--color-separator-border)] text-center">
+                <div className="mono py-2 px-4 text-micro tracking-caps text-text-secondary border-t border-t-[color:var(--color-separator-border)] text-center">
                   +{list.length - DEFAULT_LIMIT} MORE ON <Link href={mode === 'games' ? '/picks/games' : '/picks'} style={{ color: 'var(--link)' }}>THE PICKS PAGE</Link>
                 </div>
               )}
@@ -318,7 +318,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             </>
           )}
 
-          <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-[var(--color-background-full)]">
+          <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-background-full">
             <button onClick={handleShare} className="ui-heading"
               style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
@@ -335,12 +335,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         <aside className="cheat-sheet-sidebar">
           {canPost && <PostToX sheets={sheets} />}
 
-          <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-4 mb-4 rounded-[var(--radius)]">
-            <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-2.5">WHAT IS THIS</div>
+          <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)]">
+            <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">WHAT IS THIS</div>
             <p style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 10px' }}>
               The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
-            <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.6] m-0">
+            <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
               Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
             </p>
             <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[12.5px]">
@@ -348,8 +348,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             </div>
           </div>
 
-          <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-4 rounded-[var(--radius)]">
-            <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-2.5">SCORE LEGEND</div>
+          <div className="border border-separator-border bg-background-primary-default p-4 rounded-[var(--radius)]">
+            <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">SCORE LEGEND</div>
             {[
               { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
               { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
@@ -359,7 +359,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               return (
                 <div key={t} className="flex items-center gap-2.5 mb-2">
                   <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
-                  <span className="mono text-[10px] text-text-secondary">{row.desc}</span>
+                  <span className="mono text-micro text-text-secondary">{row.desc}</span>
                 </div>
               )
             })}

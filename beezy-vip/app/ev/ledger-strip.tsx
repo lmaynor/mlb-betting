@@ -10,7 +10,7 @@ function Metric({ label, value, tone, sub }: { label: string; value: React.React
     <div style={{ padding: '10px 18px', borderRight: `1px solid ${HAIR}`, display: 'grid', gap: '3px', alignContent: 'center', minWidth: 0 }}>
       <span className="ui-heading text-text-secondary">{label}</span>
       <span className="mono" style={{ fontSize: '16px', fontWeight: 700, color: tone ?? 'var(--color-text-primary)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{value}</span>
-      {sub != null && <span className="mono text-[11px] text-text-secondary whitespace-nowrap">{sub}</span>}
+      {sub != null && <span className="mono text-mini text-text-secondary whitespace-nowrap">{sub}</span>}
     </div>
   )
 }

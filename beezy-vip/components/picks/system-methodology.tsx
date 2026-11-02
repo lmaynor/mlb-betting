@@ -11,7 +11,7 @@ function Stat({ label, value, title }: { label: string; value: string; title?: s
   return (
     <div title={title}>
       <div className="ui-heading text-text-secondary">{label}</div>
-      <div className="mono text-[13px] text-text-primary mt-0.5">{value}</div>
+      <div className="mono text-cozy text-text-primary mt-0.5">{value}</div>
     </div>
   )
 }
@@ -46,8 +46,8 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
   return (
     <div style={CARD}>
       {system.gap && (
-        <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-[8px] py-2.5 px-3">
-          <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
+        <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-control py-2.5 px-3">
+          <strong className="text-gold">DATA GAP.</strong> {system.gap}
         </div>
       )}
       <div>

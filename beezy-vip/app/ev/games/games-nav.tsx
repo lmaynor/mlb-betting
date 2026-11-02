@@ -34,7 +34,7 @@ export function gamesHref(view: GamesView, sport: GameSport): string {
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
     <div className="flex items-center gap-y-2 gap-x-4 flex-wrap">
-      <nav aria-label="Game lines view" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
+      <nav aria-label="Game lines view" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
         {VIEW_TABS.map(t => (
           <Link
             key={t.key}

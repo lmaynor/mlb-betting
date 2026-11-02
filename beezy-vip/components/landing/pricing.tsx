@@ -56,7 +56,7 @@ function Plan({ name, price, period, note, featured, children }: {
 }) {
   return (
     <div className={cx(CARD, 'flex flex-col px-4.5 pb-5 pt-4.5', featured && 'border-[rgba(87,242,135,0.55)]')}>
-      <div className={cx('ui-heading mb-2.5 text-[11px] tracking-[0.06em]', featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{name.toUpperCase()}</div>
+      <div className={cx('ui-heading mb-2.5 text-mini tracking-head', featured ? 'text-signal' : 'text-text-secondary')}>{name.toUpperCase()}</div>
       <div className="mb-1 flex items-baseline gap-[5px]">
         <span className="mono text-[34px] font-bold leading-none text-text-primary">{price}</span>
         <span className="text-body-2-regular text-text-secondary">{period}</span>
@@ -89,7 +89,7 @@ export function PricingSection() {
       <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-4.5 py-3.5')}>
         <div>
           <div className="flex items-center gap-2">
-            <span className="ui-heading text-[11px] tracking-[0.08em] text-[var(--signal)]">EXPLORER TIER</span>
+            <span className="ui-heading text-mini tracking-caps text-signal">EXPLORER TIER</span>
             <span className="mono text-body-2-bold text-text-primary">$0 / Free Forever</span>
           </div>
           <div className="mt-[3px] text-body-2-regular text-text-secondary">
@@ -108,7 +108,7 @@ export function PricingSection() {
               <button key={l} role="radio" aria-checked={league === l} onClick={() => setLeague(l)}
                 className={cx('button-press-motion cursor-pointer rounded-lg border px-3 py-[5px] text-caption-1-semibold',
                   league === l
-                    ? 'border-[var(--signal)] bg-[var(--signal)] text-[var(--color-background-secondary-default)]'
+                    ? 'border-signal bg-signal text-background-secondary-default'
                     : 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}>
                 {LEAGUE_LABEL[l]}
               </button>
@@ -144,7 +144,7 @@ export function PricingSection() {
       </div>
 
       <div className={cx(CARD, 'mt-5')}>
-        <div className="ui-heading border-b border-separator-border px-4 py-3 text-[11px] text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
+        <div className="ui-heading border-b border-separator-border px-4 py-3 text-mini text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
         <div className="pricing-grid" style={{ gap: 0 }}>
           {ENGINES.map((e, i) => (
             <div key={e.n} className={cx('px-4 py-3.5', i > 0 && 'border-l border-separator-border')}>
@@ -162,7 +162,7 @@ export function PricingSection() {
       )}
       <p className="mt-2 text-caption-1-regular text-text-secondary">
         Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
-        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-[var(--link)]">{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} className="text-[var(--link)]">Discord</a>.
+        Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-link">{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} className="text-link">Discord</a>.
       </p>
     </section>
   )

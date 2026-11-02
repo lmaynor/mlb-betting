@@ -226,7 +226,7 @@ export function MobileBottomSheet({
               {subtitle && (
                 <div
                  
-                 className="text-[11px] text-text-secondary leading-[1.3] mt-0.5">
+                 className="text-mini text-text-secondary leading-[1.3] mt-0.5">
                   {subtitle}
                 </div>
               )}
@@ -237,7 +237,7 @@ export function MobileBottomSheet({
               onClick={onClose}
               aria-label="Close"
              
-             className="bg-transparent border border-[color:var(--color-separator-border)] rounded-[6px] text-text-secondary w-[28px] h-[28px] cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
+             className="bg-transparent border border-separator-border rounded-[6px] text-text-secondary w-[28px] h-[28px] cursor-pointer inline-flex items-center justify-center text-[14px] p-0 shrink-0">
               {'\u2715'}
             </button>
           </div>
@@ -260,7 +260,7 @@ export function MobileBottomSheet({
         {footer && (
           <div
            
-           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
+           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-background-secondary-default shrink-0 box-border">
             {footer}
           </div>
         )}

@@ -40,11 +40,11 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
     <section aria-labelledby="systems-h">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-2.5">
         <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
-        <span className="mono text-[12px] text-text-secondary">
+        <span className="mono text-compact text-text-secondary">
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>
       </div>
-      <div className="overflow-x-auto border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)]">
+      <div className="overflow-x-auto border border-separator-border rounded-control bg-background-primary-default">
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: tracked ? '1040px' : '1240px' }}>
           <thead>
             <tr>

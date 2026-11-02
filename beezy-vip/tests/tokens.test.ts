@@ -11,7 +11,9 @@
  * producing genuinely broken user-facing text like
  * "Gerrit Cole Under K_3PLUS_3.0 Strikeouts".
  */
-import { pickLabel, resolveEvUnderlying } from '../lib/tokens'
+import fs from 'fs'
+import path from 'path'
+import { PALETTE, pickLabel, resolveEvUnderlying } from '../lib/tokens'
 import type { Bet } from '../lib/types'
 
 function makeBet(overrides: Partial<Bet>): Bet {
@@ -265,5 +267,14 @@ describe('learn links', () => {
     ].filter(Boolean)
     expect(used.length).toBeGreaterThan(0)
     for (const u of used) expect(slugs.has(u)).toBe(true)
+  })
+})
+
+describe('PALETTE', () => {
+  it('matches the @theme colour tokens in app/globals.css', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../app/globals.css'), 'utf8')
+    for (const [name, hex] of Object.entries(PALETTE)) {
+      expect(css).toMatch(new RegExp(`--color-${name}:\\s*${hex}\\b`, 'i'))
+    }
   })
 })

@@ -41,11 +41,11 @@ export default function BoostEvPage() {
     <div className="max-w-[680px] mx-auto p-6">
       <ToolHeader title="Boost EV Calculator" hint="Example values shown; edit them" current="/tools/boost-ev" />
 
-      <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-6 mb-4">
+      <div className="border border-separator-border rounded-control bg-background-primary-default p-6 mb-4">
         <div className="mb-4">
           <label htmlFor="boosted" style={labelStyle}>Boosted line you&apos;re offered (American)</label>
           <input id="boosted" type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
-          {validBoost && <p className="mono text-[11px] text-text-secondary mt-1">Implied: {formatProb(americanToImpliedProb(bo))}</p>}
+          {validBoost && <p className="mono text-mini text-text-secondary mt-1">Implied: {formatProb(americanToImpliedProb(bo))}</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -58,32 +58,32 @@ export default function BoostEvPage() {
           </div>
         </div>
         {fairProb != null && (
-          <p className="mono text-[11px] text-text-secondary mt-2">
+          <p className="mono text-mini text-text-secondary mt-2">
             Devigged fair win probability: <span className="text-text-primary">{formatProb(fairProb)}</span>
           </p>
         )}
       </div>
 
       {ev != null && kellyPct != null ? (
-        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
+        <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
             <div style={{ padding: '20px', borderRight: B }}>
-              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Expected value</div>
+              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Expected value</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
               </div>
-              <div className="mono text-[13px] text-text-secondary mt-1">
+              <div className="mono text-cozy text-text-secondary mt-1">
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}&cent; per $1 staked
               </div>
             </div>
             <div className="p-5">
-              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-2">Kelly fraction</div>
+              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Kelly fraction</div>
               <div className="mono text-[28px] font-bold text-text-primary">{(kellyPct * 100).toFixed(1)}%</div>
-              <div className="mono text-[13px] text-text-secondary mt-1">of bankroll (full Kelly; bet a quarter of this)</div>
+              <div className="mono text-cozy text-text-secondary mt-1">of bankroll (full Kelly; bet a quarter of this)</div>
             </div>
           </div>
           <div className="py-3.5 px-5">
-            <p className="times text-[12px] text-text-secondary leading-[1.5]">
+            <p className="times text-compact text-text-secondary leading-[1.5]">
               {ev > 0
                 ? 'Positive EV: the boosted price pays more than the fair probability implies. Max out the boost limit if the Kelly fraction supports it.'
                 : 'Negative EV: even boosted, this price is below fair value. Skip it.'}
@@ -91,7 +91,7 @@ export default function BoostEvPage() {
           </div>
         </div>
       ) : (
-        <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] p-6 text-center text-text-secondary text-[13px]">
+        <div className="border border-separator-border rounded-control bg-background-primary-default p-6 text-center text-text-secondary text-cozy">
           Enter the boosted price and two-way market lines above to compute Expected Value and Kelly sizing.
         </div>
       )}

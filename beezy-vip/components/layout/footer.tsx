@@ -14,7 +14,7 @@ export function Footer() {
   return (
     <footer className="mt-18 border-t border-separator-border bg-background-secondary-default pb-[env(safe-area-inset-bottom)]">
 
-      <div className="mx-auto max-w-[1200px] px-6 py-12">
+      <div className="mx-auto max-w-page px-6 py-12">
         <div className="footer-grid mb-10">
           <div>
             <div className="mb-3">
@@ -41,7 +41,7 @@ export function Footer() {
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>
-              <div className="ui-heading mb-3.5 text-[11px] tracking-[0.1em] text-text-secondary">
+              <div className="ui-heading mb-3.5 text-mini tracking-label text-text-secondary">
                 {col.title}
               </div>
               {col.links.map(([label, href]) => (

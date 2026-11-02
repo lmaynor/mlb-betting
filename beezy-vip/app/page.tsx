@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="max-w-[1200px] mx-auto py-0 px-6">
+    <div className="max-w-page mx-auto py-0 px-6">
       <Suspense fallback={
         <div style={{ marginTop: "28px", height: '320px', borderRadius: '8px', border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)' }} className="reveal" />
       }>

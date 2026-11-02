@@ -49,7 +49,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
     return (
       <div style={{ ...SURFACE, padding: '28px 20px', textAlign: 'center' }}>
         <div className="text-text-primary font-semibold mb-1.5">Nothing to show</div>
-        <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">
+        <div className="text-text-secondary text-cozy max-w-[62ch] mx-auto leading-[1.55]">
           {emptyBody ?? `No ${pillar.shortName} rows match. The board fills in once a slate and prices are available.`}
         </div>
       </div>
@@ -68,7 +68,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
     <div>
       {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)', marginBottom: '8px' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
-        <table className="pb-table w-full border-collapse text-[13px]">
+        <table className="pb-table w-full border-collapse text-cozy">
           <thead><tr>{heads.map(h => <th key={h} className={`ui-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
@@ -110,11 +110,11 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   <td className="pb-hide-m" style={TD}>
                     {r.team ? (
-                      <span className="mono inline-flex items-center gap-1.5 text-[var(--color-neutral-300)] text-[12px]">
+                      <span className="mono inline-flex items-center gap-1.5 text-neutral-300 text-compact">
                         <SportLogo sport={r.sport} team={r.team} size={20} />{r.team}
                       </span>
                     ) : r.away && r.home ? (
-                      <span className="mono inline-flex items-center gap-[5px] text-[var(--color-neutral-300)] text-[12px]" title="The feed does not name this player's team">
+                      <span className="mono inline-flex items-center gap-[5px] text-neutral-300 text-compact" title="The feed does not name this player's team">
                         <SportLogo sport={r.sport} team={r.away} size={16} />{r.away}<span className="text-text-secondary">@</span><SportLogo sport={r.sport} team={r.home} size={16} />{r.home}
                       </span>
                     ) : <span className="text-text-secondary">--</span>}
@@ -128,7 +128,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   {showModel && (
                     <td className="pb-model" style={TD}>
                       <span className="mono text-text-primary font-bold">{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-[var(--color-neutral-300)]" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
+                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-neutral-300" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showFair && (
@@ -143,7 +143,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                           <span style={{ color: hitColor(r.l5) }}>L5 {pct(r.l5)}</span> <span className="text-text-secondary">&middot;</span> <span style={{ color: hitColor(r.l10) }}>L10 {pct(r.l10)}</span>
                         </span>
                       ) : r.avg10 != null || r.avgSzn != null ? (
-                        <span title="The player's average in this stat over his last 10 games and this season" className="text-[var(--color-neutral-300)]">
+                        <span title="The player's average in this stat over his last 10 games and this season" className="text-neutral-300">
                           L10 avg {num(r.avg10)} <span className="text-text-secondary">&middot;</span> szn {num(r.avgSzn)}
                         </span>
                       ) : <span className="text-text-secondary">--</span>}
@@ -160,7 +160,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
                     {r.confluence && <span className="ui-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-[var(--signal)]">PICK</span>}
+                    {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-signal">PICK</span>}
                   </td>
                   {showEv && (
                     <td className="pb-hide-m" style={TD}>
@@ -215,7 +215,7 @@ function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showRes
           {showResult && r.result && item('RESULT', r.result.toUpperCase())}
           {r.engine && item('ENGINE', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div className="mt-2 text-[11px] text-[var(--warn)]">Unvalidated model output. Paper only, not in the public results.</div>}
+        {r.sport !== 'mlb' && <div className="mt-2 text-mini text-warn">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )

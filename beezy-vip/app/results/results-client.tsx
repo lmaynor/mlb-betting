@@ -18,8 +18,8 @@ import {
 } from 'recharts'
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
-const LBL = 'mono text-[10px] uppercase tracking-[0.1em] text-text-secondary'
-const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.04em]'
+const LBL = 'mono text-micro uppercase tracking-label text-text-secondary'
+const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-mini uppercase tracking-fine'
 const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
 const PILL = SYSTEM_COLOR
 
@@ -154,7 +154,7 @@ const fmtDisplayDate = (d: string) => formatDateKey(d, { month: 'short', day: 'n
 const PnLTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="min-w-[120px] rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-[11px] shadow-dropdown">
+    <div className="min-w-[120px] rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-mini shadow-dropdown">
       <div className="mb-1.5 text-text-secondary">{label}</div>
       {payload
         .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
@@ -170,7 +170,7 @@ const PnLTooltip = ({ active, payload, label }: any) => {
 const EdgeTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-[11px] shadow-dropdown">
+    <div className="rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-mini shadow-dropdown">
       <div className="mb-1.5 text-text-secondary">{label}</div>
       {payload.map((p: any) => (
         <div key={p.dataKey} style={{ color: p.color, marginBottom: '2px' }}>
@@ -209,7 +209,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <SystemBadge system={bet.system} />
-          <span className="mono whitespace-nowrap text-[11px] text-text-secondary">{fmtDisplayDate(bet.game_date)}</span>
+          <span className="mono whitespace-nowrap text-mini text-text-secondary">{fmtDisplayDate(bet.game_date)}</span>
         </div>
         <ResultPill result={bet.result} />
       </div>
@@ -319,11 +319,11 @@ export function ResultsClient({
   const ev     = sum(initialStats.filter(s => s.system === 'EV'))
   const money  = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
-  const pagerBtn = 'mono button-press-motion cursor-pointer rounded-lg border border-border-button-default bg-transparent px-3 py-1.5 text-[11px] text-text-secondary hover:bg-background-primary-hover disabled:cursor-not-allowed disabled:opacity-50'
+  const pagerBtn = 'mono button-press-motion cursor-pointer rounded-lg border border-border-button-default bg-transparent px-3 py-1.5 text-mini text-text-secondary hover:bg-background-primary-hover disabled:cursor-not-allowed disabled:opacity-50'
   const renderPager = (className: string) => (
     <div className={cx('flex items-center justify-between', className)}>
       <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0} className={pagerBtn}>Prev</button>
-      <span className="mono text-[11px] text-text-secondary">
+      <span className="mono text-mini text-text-secondary">
         {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
       </span>
       <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={pageIndex >= pageCount - 1} className={pagerBtn}>Next</button>
@@ -331,7 +331,7 @@ export function ResultsClient({
   )
 
   return (
-    <div className="mx-auto max-w-[1200px] px-6 py-10">
+    <div className="mx-auto max-w-page px-6 py-10">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Results</h1>
         <span className="mono text-caption-1-regular text-text-secondary">{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
@@ -349,8 +349,8 @@ export function ResultsClient({
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-2.5">
             <span className={LBL}>Cumulative P&L, full season ($)</span>
             <span className="flex gap-3.5">
-              <span className="mono text-[10px] text-[#57f287]">-- +EV alerts, flat $100</span>
-              <span className="mono text-[10px] text-text-primary">-- models, paper stakes</span>
+              <span className="mono text-micro text-signal">-- +EV alerts, flat $100</span>
+              <span className="mono text-micro text-text-primary">-- models, paper stakes</span>
             </span>
           </div>
           {mounted && (
@@ -379,12 +379,12 @@ export function ResultsClient({
               {[...chartSystems, 'ALL'].map(s => (
                 <span key={s} className="flex items-center gap-[5px]">
                   <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: PILL[s] ?? 'var(--color-text-primary)' }} />
-                  <span className="mono text-[10px] text-text-secondary">{s}</span>
+                  <span className="mono text-micro text-text-secondary">{s}</span>
                 </span>
               ))}
               <span className="flex items-center gap-[5px]">
                 <span className="inline-block h-1.5 w-2" style={{ background: 'color-mix(in oklab, var(--loss) 30%, transparent)' }} />
-                <span className="mono text-[10px] text-text-secondary">drawdown</span>
+                <span className="mono text-micro text-text-secondary">drawdown</span>
               </span>
             </div>
           </div>
@@ -420,11 +420,11 @@ export function ResultsClient({
               <span className={LBL}>
                 Model Edge vs Realized ROI
               </span>
-              <span className="mono ml-2 text-[10px] text-text-secondary">7-day rolling</span>
+              <span className="mono ml-2 text-micro text-text-secondary">7-day rolling</span>
             </div>
             <div className="flex gap-4">
-              <span className="mono text-[10px] text-[var(--signal)]">-- model edge</span>
-              <span className="mono text-[10px] text-[var(--link)]">-- realized ROI</span>
+              <span className="mono text-micro text-signal">-- model edge</span>
+              <span className="mono text-micro text-link">-- realized ROI</span>
             </div>
           </div>
           {mounted && (
@@ -471,14 +471,14 @@ export function ResultsClient({
                   const pc = PILL[s.system] ?? 'var(--color-neutral-300)'
                   return (
                     <div key={s.system} className="grid min-w-[500px] grid-cols-6 items-center border-b border-border-table transition-colors hover:bg-background-primary-hover">
-                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pc }}>{s.system}</div>
-                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">
+                      <div className="mono px-3 py-2.5 text-mini font-semibold" style={{ color: pc }}>{s.system}</div>
+                      <div className="mono px-3 py-2.5 text-mini text-text-primary">
                         {s.total_bets}{parseInt(String(s.total_bets)) < GATE && <span className="text-text-tertiary"> / {GATE}</span>}
                       </div>
-                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
-                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
-                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{fmtSigned(s.avg_edge)}</div>
+                      <div className="mono px-3 py-2.5 text-mini text-text-primary">{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
+                      <div className="mono px-3 py-2.5 text-mini font-semibold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
+                      <div className="mono px-3 py-2.5 text-mini font-semibold" style={{ color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
+                      <div className="mono px-3 py-2.5 text-mini text-text-primary">{fmtSigned(s.avg_edge)}</div>
                     </div>
                   )
                 }),
@@ -505,7 +505,7 @@ export function ResultsClient({
                         <div key={s.system} className={cx('px-[13px] py-3', CARD)}>
                           <div className="mb-2.5 flex items-center justify-between gap-3">
                             <span className="mono text-xs font-extrabold" style={{ color: pc }}>{s.system}</span>
-                            <span className="mono text-[11px] font-extrabold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
+                            <span className="mono text-mini font-extrabold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
                           </div>
                           <div className="grid grid-cols-4 gap-2.5">
                             {[
@@ -516,7 +516,7 @@ export function ResultsClient({
                             ].map(([label, value, color]) => (
                               <div key={label}>
                                 <div className={cx(LBL, 'mb-[3px]')}>{label}</div>
-                                <div className="mono text-[11px] font-bold" style={{ color }}>{value}</div>
+                                <div className="mono text-mini font-bold" style={{ color }}>{value}</div>
                               </div>
                             ))}
                           </div>
@@ -579,12 +579,12 @@ export function ResultsClient({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <label className="mono flex cursor-pointer items-center gap-1.5 text-[10px] text-text-secondary" title="The same prop flagged at several books shows as one row">
+            <label className="mono flex cursor-pointer items-center gap-1.5 text-micro text-text-secondary" title="The same prop flagged at several books shows as one row">
               <input type="checkbox" checked={onePerProp} onChange={e => { setOnePerProp(e.target.checked); setPage(0) }} /> One row per prop
             </label>
-            <span className="mono text-[10px] text-text-secondary">{filtered.length} bets</span>
+            <span className="mono text-micro text-text-secondary">{filtered.length} bets</span>
             {filtered.length > 0 && (
-              <button onClick={() => exportCSV(filtered)} className="mono button-press-motion cursor-pointer rounded-full border border-separator-border bg-background-primary-default px-2.5 py-1 text-[10px] uppercase tracking-[0.05em] text-text-secondary hover:bg-background-primary-hover">Export CSV</button>
+              <button onClick={() => exportCSV(filtered)} className="mono button-press-motion cursor-pointer rounded-full border border-separator-border bg-background-primary-default px-2.5 py-1 text-micro uppercase tracking-[0.05em] text-text-secondary hover:bg-background-primary-hover">Export CSV</button>
             )}
           </div>
         </div>
@@ -595,7 +595,7 @@ export function ResultsClient({
         <div className={cx('px-5 py-16 text-center', CARD)}>
           <p className="mono mb-2 text-xs text-text-secondary">No bets match these filters.</p>
           <p className="times mb-3.5 text-caption-1-regular text-text-secondary">Try a different system, result, or date range.</p>
-          <button className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-[11px] text-text-secondary hover:bg-background-primary-hover" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}>
+          <button className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-mini text-text-secondary hover:bg-background-primary-hover" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}>
             Reset filters
           </button>
         </div>
@@ -629,20 +629,20 @@ export function ResultsClient({
           {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => {
             return (
               <div key={bet.id ?? i} className="grid min-w-[860px] items-center border-b border-border-table transition-colors hover:bg-background-primary-hover" style={{ gridTemplateColumns: COL }}>
-                <div className="mono px-3 py-2 text-[11px] text-text-secondary">
+                <div className="mono px-3 py-2 text-mini text-text-secondary">
                   {fmtDisplayDate(bet.game_date)}
                 </div>
                 <div className="px-3 py-2"><SystemBadge system={bet.system} /></div>
                 <div className="min-w-0 px-3 py-2"><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
-                <div className="mono truncate px-3 py-2 text-[11px] text-text-primary">{pickLabel(bet)}</div>
-                <div className="mono px-3 py-2 text-[11px] text-text-primary">{formatOdds(bet.odds)}</div>
-                <div className="mono px-3 py-2 text-[11px] text-[var(--signal)]">
+                <div className="mono truncate px-3 py-2 text-mini text-text-primary">{pickLabel(bet)}</div>
+                <div className="mono px-3 py-2 text-mini text-text-primary">{formatOdds(bet.odds)}</div>
+                <div className="mono px-3 py-2 text-mini text-signal">
                   {bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--'}
                 </div>
-                <div className="mono px-3 py-2 text-[11px] text-text-primary">
+                <div className="mono px-3 py-2 text-mini text-text-primary">
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}
                 </div>
-                <div className="mono px-3 py-2 text-[10px] capitalize text-text-secondary">
+                <div className="mono px-3 py-2 text-micro capitalize text-text-secondary">
                   {bet.book ? bookText(bet.book) : '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
                 </div>
                 <div className="px-3 py-2"><ResultPill result={bet.result} /></div>

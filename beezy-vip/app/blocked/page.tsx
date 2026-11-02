@@ -25,7 +25,7 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
         <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
           Think this is a mistake, or on a VPN? Turn it off and reload, or ask in the Discord.
         </p>
-        <div className="flex gap-4 flex-wrap text-[13px]">
+        <div className="flex gap-4 flex-wrap text-cozy">
           <Link href="/tools" style={{ color: 'var(--link)' }}>Calculators</Link>
           <Link href="/learn" style={{ color: 'var(--link)' }}>Guides</Link>
           <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link>
