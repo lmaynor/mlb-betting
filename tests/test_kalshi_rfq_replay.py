@@ -110,3 +110,72 @@ def test_summarize_groups_fully_priced_vs_bounded():
     s = rp.summarize(recs)
     assert (s["combos"], s["priced_any_leg"], s["fully_priced"], s["bounded"]) == (3, 2, 1, 1)
     assert s["fully_priced_stats"]["edge_ex_ante"]["mean"] == 0.1 and s["by_day"]["2026-10-25"]["combos"] == 3
+
+
+# ------------------------------------------------------------------------------------------ rung curve + protected twins
+def cyc(rows_, ts=T0):
+    cols = [dict(r, exact_n_books=r["n_books"], team=r.get("team", "BUF"), player=r["player_norm"]) for r in rows_]
+    return pd.DataFrame(cols)
+
+
+def prop_row(series, strike, p, n=4, player="jim smith", ts=T0):
+    n_plus = int(strike + 0.5)
+    t = f"{series}-26OCT25BUFKC-BUFJSMITH12-{n_plus}"
+    return {"ticker": t, "game_key": "nfl:2026-10-25:BUF@KC", "stat": "rec_yds", "strike": strike, "p_over": p, "n_books": n,
+            "disp": 0.01, "ts": datetime.fromtimestamp(ts, timezone.utc).isoformat(), "consensus_src": "exact",
+            "player_norm": player}
+
+
+def test_other_rung_is_interpolated_from_the_snapshots_own_curve():
+    frame = cyc([prop_row("KXNFLRECYDS", 49.5, 0.60), prop_row("KXNFLRECYDS", 69.5, 0.30)])
+    s = rp.SnapshotStore.from_cycle_frames([frame])
+    book = s.book_at(T0 + 60)
+    banked = book.get("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50")
+    assert banked is not None and banked.p_cons_yes == pytest.approx(0.60) and not banked.pooled
+    mid = book.get("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-60")                     # 59.5 was never swept
+    assert mid is not None and mid.pooled and 0.30 < mid.p_cons_yes < 0.60
+
+
+def test_protected_twin_resolves_to_the_base_series_fair_value():
+    from ev.kalshi_props import parse_prop_ticker, ParsedPropTicker
+    p = parse_prop_ticker("KXNFLRECYDSPROT-26OCT25BUFKC-BUFJSMITH12-50")
+    assert isinstance(p, ParsedPropTicker) and p.stat == "rec_yds" and p.strike == 49.5
+    s = rp.SnapshotStore.from_cycle_frames([cyc([prop_row("KXNFLRECYDS", 49.5, 0.60), prop_row("KXNFLRECYDS", 69.5, 0.30)])])
+    leg = s.book_at(T0 + 60).get("KXNFLRECYDSPROT-26OCT25BUFKC-BUFJSMITH12-50")
+    assert leg is not None and leg.p_cons_yes == pytest.approx(0.60)
+    assert s.may_price([["KXNFLRECYDSPROT-26OCT25BUFKC-BUFJSMITH12-60", "yes"]]) and not s.may_price([["KXNBAPTS-X-Y-1", "yes"]])
+
+
+def test_curve_never_extrapolates_far_past_its_anchors():
+    s = rp.SnapshotStore.from_cycle_frames([cyc([prop_row("KXNFLRECYDS", 49.5, 0.60), prop_row("KXNFLRECYDS", 69.5, 0.30)])])
+    assert s.book_at(T0 + 60).get("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-200") is None
+
+
+# ------------------------------------------------------------------------------------------ started games, max age, audit
+def test_a_leg_whose_game_kicked_off_is_not_priced_from_a_pregame_snapshot():
+    r = prop_row("KXNFLRECYDS", 49.5, 0.60)
+    frame = cyc([r]); frame["commence"] = datetime.fromtimestamp(T0 + 900, timezone.utc).isoformat()
+    s = rp.SnapshotStore.from_cycle_frames([frame])
+    tk = "KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50"
+    assert s.book_at(T0 + 600).get(tk) is not None                               # 5 min before kickoff: fine
+    assert s.book_at(T0 + 1000).get(tk) is None                                  # after kickoff: unpriceable, not stale-priced
+    assert s.started_games(T0 + 1000, 0) == frozenset({"nfl:2026-10-25:BUF@KC"})
+
+
+def test_max_age_is_a_parameter():
+    s = rp.SnapshotStore([snap(T0, row("A1", "X@Y"))])
+    assert s.book_at(T0 + 3000) is None and s.book_at(T0 + 3000, 7200) is not None
+
+
+def test_audit_labels_every_outcome():
+    frame = cyc([prop_row("KXNFLRECYDS", 49.5, 0.60), prop_row("KXNFLRECYDS", 69.5, 0.30)])
+    frame["commence"] = datetime.fromtimestamp(T0 + 5000, timezone.utc).isoformat()
+    s = rp.SnapshotStore.from_cycle_frames([frame])
+    mk = lambda tk, created: {"created_time": iso(created), "legs": [[tk, "yes"]]}
+    combos = [mk("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50", T0 + 60), mk("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-60", T0 + 60),
+              mk("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50", T0 + 9000), mk("KXNFLSPREAD-26OCT25BUFKC-KC3", T0 + 60),
+              mk("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50", T0 - 5000)]
+    a = rp.audit_legs(combos, s)
+    assert a["KXNFLRECYDS"]["HIT_exact"] == 1 and a["KXNFLRECYDS"]["HIT_curve"] == 1
+    assert a["KXNFLRECYDS"]["NO_SNAPSHOT"] == 2                                  # one too old (age gate), one before the first snapshot
+    assert a["KXNFLSPREAD"] == {"MISS_no_game_line": 1}                          # a covered league, but no game lines are banked

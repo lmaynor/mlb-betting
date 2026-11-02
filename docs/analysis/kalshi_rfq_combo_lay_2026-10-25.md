@@ -219,16 +219,41 @@ permissive "measure" config and once with the daemon's quote config.
 python scripts/kalshi_rfq_replay.py pull   --start 2026-10-16 --end 2026-11-01 --out combos.jsonl     # public API, capped sample per window
 GCS_BUCKET=<data bucket> python scripts/kalshi_rfq_replay.py replay --combos combos.jsonl --csv out.csv
 ```
-Full pull (all 102 four-hour windows 10-16 to 11-02, every window truncated at 8,000 scanned markets, so a SAMPLE): 169,186 traded all-sports combos,
-but only ~20k had any leg ever banked and 6,009 had a snapshot in time. Of those 1,703 had >= 1 priced leg and just **19 were fully priced**.
-* Fully priced (n=19): mean yes price 0.225 vs mean p_true 0.192, i.e. +3.2c ex-ante edge, but the realized yes rate was 36.8% and laying at the
-  traded price lost 15c per contract. n=19, naive se ~10c: no conclusion either way.
-* Bounded (1,684 combos with 1+ dropped legs): p_true is an UPPER bound (mean 0.458) so `yes_price - p_true` is meaningless as an edge. The
-  realized lay P&L at the traded price was -2.1c per contract (naive se 0.7c): these combos hit 13.3% against a mean price of 11.7%. That is
-  a warning against "retail overpays" on this subset, but it is clustered on two game days (10-18, 10-25) and selected on having a banked leg.
-* Would-quote: 357 of 6,009; would-fill (our no_bid >= traded NO price): 9, mean -35c (n=9, noise).
-Read: the data to JOIN exists only for NFL props, and coverage (not edge) is the binding limit. The replay is built and tested; the
-verdict needs fully priced volume (NFL game lines, NBA/NHL per-book props, TD/anytime legs) which the banks do not hold.
+Defects found and fixed in the join (`python scripts/kalshi_rfq_replay.py audit --combos combos.jsonl` prints the per-series table):
+1. **`<SERIES>PROT` "Protected" twins were unregistered** (~half the NFL prop legs and most NBA points legs in real flow). `ev/kalshi_props.PROTECTED_SUFFIX`
+   now maps each twin to the base stat (priced as the base P(over); approximation: a mid-game exit settles at the pre-kickoff fair price).
+2. **Other rungs were not interpolated**: the replay now builds the live `PropFairIndex` from each cycle's exact rows.
+3. **Started games were priceable from a pre-game snapshot** (a bias: a live parlay is not priced by a pre-game consensus). `SnapshotStore.book_at` now drops
+   legs/index entries of games whose `commence` <= the combo's created_time (the live index drops started games too).
+4. **Snapshot max age** is now a parameter (`--max-age-min`, default 120). The sweep runs every 30 min early on a game day but hourly near kickoff
+   and stops at kickoff, so the old 40-min gate threw away ~half the combos; results at 40 min are the same sign (below).
+
+Why coverage is still low: this is mostly NOT cleansing. Of 1,248,194 leg occurrences in 169,186 traded combos, 5.1% hit. The misses (`audit`, 120 min):
+* **Sports with no data banked** (largest): NCAAF game/spread/total (~17% of all legs), UCL / EPL / Serie A soccer (~8%), NFL/NBA/NHL game, spread, total
+  and team-total lines (`no_game_line`: the sweep banks props only), NBA props (`unknown_series`: no NBA index in the replay; NBA is banked twice a day, best price only).
+* **Anytime TD** (33.8k + 30.2k legs): 74% of the Protected twin's misses are `no_stat` (not swept).
+* **Players books do not quote** (`no_stat` 16-29% on yardage props, `no_rung` 15-31% on receptions): Kalshi lists every player and rung; books quote the
+  top players. The curve will not extrapolate past its anchors; a Poisson/NegBin family fit from one line would add some rungs (modelling, not cleansing).
+* **Games outside the sweep window** (`no_game` 9-21% of base NFL props) and **days with no cycles at all** (10-15 TNF 4,740 combos, 10-16, 10-20, 10-23, 10-27,
+  10-30): the sweep did not run or did not bank them. `bettingpros_live/nfl` and `bestbook_live/nfl` hold only `latest.json` (overwritten), so there is
+  nothing to backfill from: **start banking point-in-time snapshots of the live feeds** if replay coverage matters.
+
+Results (120 min max age; every pull window truncated at 8,000 scanned markets, so a SAMPLE):
+| | 40 min | 120 min |
+|---|---|---|
+| replayed | 18,259 | 38,283 |
+| >= 1 priced leg | 7,401 | 17,185 |
+| fully priced | 83 | 243 |
+| would-quote / would-fill | 1,631 / 12 | 4,025 / 44 |
+
+* Fully priced (n=243): mean yes price 0.215, mean p_true 0.258, realized yes 10.3%, laying at the traded price +10.2c per contract after fees. **Do not read the
+  naive se (1.8c)**: the rows are three game days (10-18: 69 combos, yes 34.8%, -11.6c; 10-23: 76, yes 0%; 10-27: 81, yes 0%) and each day is a few games.
+  Day-cluster bootstrap 95% CI of the lay P&L: [-8.6c, +19.5c] over 7 clusters; volume-weighted it is -2c. No conclusion.
+* Bounded (n=16,942, `p_true` an upper bound): price 11.0% vs realized 4.4%, lay +6.0c (day-cluster 95% CI [-2.6c, +10.1c], 15 days). By leg count: 2-3 legs
+  +11.1c, 4-7 +6.5c, 8-15 +4.2c, 16+ +0.8c: the "long combos are -EV for retail" intuition is NOT supported (the longest are closest to fair).
+* Would-fill (n=44, our no_bid >= the traded NO price): those combos traded at a mean yes price of 0.61 against our p_true 0.25 and hit 45.5%; mean P&L -15c
+  (se 7c). Where we would have out-bid the market we were on the wrong side: a winner's-curse signature, mostly one day (10-18: 28 of 44).
+Verdict so far: coverage and clustering, not edge, are the binding limits; the sign of "retail overpays" flips with which days and legs join.
 
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,

@@ -113,19 +113,69 @@ def load_combos(path: str) -> tuple[list[dict], list[dict]]:
 
 
 # ------------------------------------------------------------------------------------------ snapshots (point in time)
+def build_rung_index(df, ts: float, sport: str = "nfl"):
+    """One sweep cycle -> the same PropFairIndex the live daemon resolves tickers with, so a leg whose exact rung was not swept can
+    still be interpolated from the player's other rungs. Only EXACT-consensus rows with >= CURVE_MIN_BOOKS books anchor a curve."""
+    from ev.kalshi_props import kalshi_player_codes
+    from ev.kalshi_rfq_props import PropFairIndex, _PlayerStat
+    from ev.odds_board import CURVE_MIN_BOOKS, fit_curve
+    idx = PropFairIndex(sport, ts)
+    seen = set()
+    for r in df.to_dict("records"):
+        if r.get("consensus_src") != "exact" or not r.get("game_key") or not r.get("player_norm"):
+            continue
+        p, n = r.get("p_over"), int(r.get("exact_n_books") or r.get("n_books") or 0)
+        if p is None or not (0.0 < float(p) < 1.0) or n < 1:
+            continue
+        game = idx.games.setdefault(r["game_key"], {"codes": {}, "data": {}})
+        pn, team = r["player_norm"], str(r.get("team") or "")
+        if (r["game_key"], pn) not in seen:
+            seen.add((r["game_key"], pn))
+            for code in kalshi_player_codes(pn, r.get("player") or pn):
+                game["codes"].setdefault(code, []).append((pn, {team} if team else set()))
+        ps = game["data"].setdefault((pn, r["stat"]), _PlayerStat())
+        ps.rungs[float(r["strike"])] = (float(p), n, float(r.get("disp") or 0.0))
+    for game in idx.games.values():
+        for (pn, stat), ps in game["data"].items():
+            anchors = [(pt, v[0], v[1]) for pt, v in ps.rungs.items() if v[1] >= CURVE_MIN_BOOKS]
+            if not anchors:
+                continue                      # single-book rungs never anchor a curve in replay
+            ps.curve = fit_curve(anchors, stat)
+            if ps.curve is not None:
+                ps.anchor_n = min(a[2] for a in anchors)
+                ps.anchor_disp = max(ps.rungs[a[0]][2] for a in anchors)
+    return idx
+
+
 class SnapshotStore:
-    """Time-ordered fair-value snapshots. `book_at(t)` never returns a snapshot stamped after t."""
+    """Time-ordered fair-value snapshots. `book_at(t)` never returns a snapshot stamped after t, and never prices a leg whose game
+    had already kicked off by t (a pre-game consensus is not a fair value for a live parlay; the live index drops started games too)."""
 
     def __init__(self, snaps):
-        self._snaps = sorted(((float(ts), list(legs)) for ts, legs in snaps if legs), key=lambda s: s[0])
+        # snaps: (ts, legs) | (ts, legs, rung_index) | (ts, legs, rung_index, {game_key: commence_epoch})
+        norm = [(float(x[0]), list(x[1]), x[2] if len(x) > 2 else None, dict(x[3]) if len(x) > 3 and x[3] else {}) for x in snaps]
+        self._snaps = sorted((s for s in norm if s[1]), key=lambda s: s[0])
         self._ts = [s[0] for s in self._snaps]
-        self.tickers = {leg.ticker for _, legs in self._snaps for leg in legs}      # any snapshot: a cheap prefilter
+        self._books: dict = {}
+        self.tickers = {leg.ticker for _, legs, _, _ in self._snaps for leg in legs}      # any snapshot: a cheap prefilter
+        self.game_keys = {leg.game_key for _, legs, _, _ in self._snaps for leg in legs}
 
     def __len__(self) -> int:
         return len(self._snaps)
 
+    def may_price(self, legs) -> bool:
+        """Cheap prefilter: some leg is a banked ticker, or a registered prop of a game some snapshot covers (a curve may resolve it)."""
+        from ev.kalshi_props import ParsedPropTicker, parse_prop_ticker
+        for t, _ in legs:
+            if t in self.tickers:
+                return True
+            p = parse_prop_ticker(t)
+            if isinstance(p, ParsedPropTicker) and p.game_key in self.game_keys:
+                return True
+        return False
+
     @classmethod
-    def from_cycle_frames(cls, frames):
+    def from_cycle_frames(cls, frames, curves: bool = True):
         """frames: pandas DataFrames of sweep `cycle_*.csv` (one cycle each; `ts` identical across a file)."""
         snaps = []
         for df in frames:
@@ -133,16 +183,40 @@ class SnapshotStore:
                 continue
             t = epoch(df["ts"].iloc[0])
             legs = [lf for lf in (leg_from_row(r, t) for r in df.to_dict("records")) if lf is not None]
-            snaps.append((t, legs))
+            commence = {}
+            if "commence" in df.columns:
+                for gk, c in zip(df["game_key"], df["commence"]):
+                    if isinstance(gk, str) and isinstance(c, str):
+                        commence.setdefault(gk, epoch(c))
+            snaps.append((t, legs, build_rung_index(df, t) if curves else None, commence))
         return cls(snaps)
 
-    def book_at(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
+    def snapshot_index(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
         i = bisect.bisect_right(self._ts, t) - 1
-        if i < 0 or t - self._ts[i] > max_age:
+        return None if i < 0 or t - self._ts[i] > max_age else i
+
+    def started_games(self, t: float, i: int) -> frozenset:
+        return frozenset(g for g, c in self._snaps[i][3].items() if c <= t)
+
+    def book_at(self, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC):
+        i = self.snapshot_index(t, max_age)
+        if i is None:
             return None
-        book = InMemoryFairBook(clock=lambda: t)
-        book.replace_all(self._snaps[i][1])
-        return book
+        live = self.started_games(t, i)
+        key = (i, live)
+        if key not in self._books:
+            _, legs, idx, _ = self._snaps[i]
+            book = InMemoryFairBook(clock=lambda: t)
+            book.replace_all([l for l in legs if l.game_key not in live])
+            if idx is not None:
+                if live:
+                    from ev.kalshi_rfq_props import PropFairIndex
+                    view = PropFairIndex(idx.sport, idx.updated_ts)
+                    view.games = {g: v for g, v in idx.games.items() if g not in live}
+                    idx = view
+                book.attach_prop_indices({"nfl": idx})      # direct rows still win; the curve fills the gaps
+            self._books[key] = book
+        return self._books[key]
 
 
 def fetch_cycle_frames(days, storage=None, workers: int = 12):
@@ -164,22 +238,22 @@ def _rfq(combo: dict) -> dict:
             "mve_selected_legs": [{"event_ticker": "", "market_ticker": t, "side": s} for t, s in combo["legs"]]}
 
 
-def replay_one(combo: dict, store: SnapshotStore) -> dict | None:
+def replay_one(combo: dict, store: SnapshotStore, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> dict | None:
     """-> one record, or None when no snapshot precedes the combo (or the result is not yes/no)."""
     t = epoch(combo["created_time"])
-    book = store.book_at(t)
+    book = store.book_at(t, max_age)
     y = float(combo.get("last_price_dollars") or 0.0)
     if book is None or combo.get("result") not in ("yes", "no") or not (0.0 < y < 1.0):
         return None
     rfq = _rfq(combo)
-    m = KalshiRFQPricer(book, MEASURE_CFG).price(rfq, t)
+    m = KalshiRFQPricer(book, replace(MEASURE_CFG, max_staleness_sec=max_age)).price(rfq, t)
     n_priced = int(m.notes.get("n_priced", 0))
     rec = {"ticker": combo["ticker"], "day": combo["close_time"][:10], "created": combo["created_time"], "n_legs": len(combo["legs"]),
            "n_priced": n_priced, "n_unpriced": int(m.notes.get("n_unpriced", len(combo["legs"]))), "yes_price": y,
            "yes_won": combo["result"] == "yes", "volume": float(combo.get("volume_fp") or 0.0),
            "p_true": m.p_yes_true, "p_cons": m.p_yes_cons, "measure_reason": m.reason,
            "same_game": bool(m.notes.get("same_game"))}
-    q = KalshiRFQPricer(book, QUOTE_CFG).price(rfq, t)
+    q = KalshiRFQPricer(book, replace(QUOTE_CFG, max_staleness_sec=max_age)).price(rfq, t)
     rec.update(quoted=q.quoted, quote_reason=q.reason, no_bid=q.no_bid if q.quoted else None)
     return grade(rec)
 
@@ -233,3 +307,32 @@ def summarize(recs: list[dict]) -> dict:
         out["by_day"][d] = {"combos": len(rows), "fully_priced": sum(1 for r in rows if r["p_true"] is not None and r["n_unpriced"] == 0),
                             "would_fill": len(f), "pnl_at_our_bid": _stats([r["pnl_at_our_bid"] for r in f])}
     return out
+
+
+# ------------------------------------------------------------------------------------------ coverage audit
+def audit_legs(combos, store: SnapshotStore, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> dict:
+    """Every leg occurrence of every combo -> {series family: Counter(outcome)}. Outcomes: HIT_exact / HIT_curve, NO_SNAPSHOT (nothing
+    stamped within max_age before the combo), STARTED (a registered prop whose game had kicked off), or MISS_<why> from the fair book."""
+    from collections import Counter, defaultdict
+    from ev.kalshi_props import ParsedPropTicker, parse_prop_ticker
+    out = defaultdict(Counter)
+    for c in combos:
+        t = epoch(c["created_time"])
+        i = store.snapshot_index(t, max_age)
+        book = None if i is None else store.book_at(t, max_age)
+        live = frozenset() if i is None else store.started_games(t, i)
+        for tk, _ in c["legs"]:
+            fam = tk.split("-")[0]
+            if book is None:
+                out[fam]["NO_SNAPSHOT"] += 1
+                continue
+            p = parse_prop_ticker(tk)
+            if isinstance(p, ParsedPropTicker) and p.game_key in live:
+                out[fam]["STARTED"] += 1
+                continue
+            leg = book.get(tk, t)
+            if leg is not None:
+                out[fam]["HIT_curve" if leg.pooled else "HIT_exact"] += 1
+            else:
+                out[fam]["MISS_" + str(book.why_unmapped(tk))] += 1
+    return {k: dict(v) for k, v in out.items()}

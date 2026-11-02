@@ -155,11 +155,19 @@ _SERIES_INDEX: dict = {}
 _ONLY_N1 = {("nfl", "anytime_td")}
 
 
+# "Protected" twins (<SERIES>PROT, e.g. KXNFLRECYDSPROT, KXNBAPTSPROT): same stat, same N+ ladder, but a player who plays the first half and
+# not the second settles at the pre-kickoff fair price instead of on the stats. Real RFQ flow is dominated by them (2026-10-16..11-02: ~half of the
+# NFL prop legs, and most NBA points legs), and without the alias every such leg was an unmapped ticker. Priced as the base series' P(over): an
+# approximation (the protection only matters on a mid-game exit; books void such props the same way). UNVALIDATED.
+PROTECTED_SUFFIX = "PROT"
+
+
 def _rebuild_series_index() -> None:
     _SERIES_INDEX.clear()
     for sp, tbl in KALSHI_PROP_SERIES_BY_SPORT.items():
         for series, stat in tbl.items():
             _SERIES_INDEX[series] = (sp, stat)
+            _SERIES_INDEX[series + PROTECTED_SUFFIX] = (sp, stat)
 
 
 _rebuild_series_index()

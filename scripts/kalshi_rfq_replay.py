@@ -14,7 +14,9 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ev.kalshi_rfq_replay import SnapshotStore, fetch_cycle_frames, load_combos, pull_combos, replay_one, summarize  # noqa: E402
+from ev.kalshi_rfq_replay import (  # noqa: E402
+    SnapshotStore, audit_legs, fetch_cycle_frames, load_combos, pull_combos, replay_one, summarize,
+)
 
 
 def _day(s: str) -> datetime:
@@ -33,7 +35,13 @@ def main(argv=None) -> int:
     r = sub.add_parser("replay")
     r.add_argument("--combos", required=True)
     r.add_argument("--csv", default=None)
+    r.add_argument("--max-age-min", type=float, default=120.0, help="oldest pre-game snapshot a combo may be priced from (default 120)")
     r.add_argument("--days", default=None, help="comma list of EVSweep/nfl_props day folders (default: every day the combos span, +1 before)")
+    au = sub.add_parser("audit", help="per-series leg coverage: why legs do or do not join")
+    au.add_argument("--combos", required=True)
+    au.add_argument("--max-age-min", type=float, default=120.0)
+    au.add_argument("--top", type=int, default=30)
+    au.add_argument("--days", default=None)
     a = ap.parse_args(argv)
 
     if a.cmd == "pull":
@@ -43,6 +51,7 @@ def main(argv=None) -> int:
         return 0
 
     combos, windows = load_combos(a.combos)
+    max_age = a.max_age_min * 60.0
     days = a.days.split(",") if a.days else sorted({
         (datetime.fromisoformat(c["created_time"].replace("Z", "+00:00")).date() + timedelta(days=k)).isoformat()
         for c in combos for k in (-1, 0)})
@@ -52,12 +61,21 @@ def main(argv=None) -> int:
                          "to the data bucket, or point MLB_BASE_DATA at a local copy")
     print(f"combos with volume+result: {len(combos)} | windows {len(windows)} (truncated {sum(w['truncated'] for w in windows)}) | "
           f"snapshots {len(store)} over {len(days)} day folders | tickers banked {len(store.tickers)}", file=sys.stderr)
+    if a.cmd == "audit":
+        res = audit_legs(combos, store, max_age)
+        tot = {f: sum(c.values()) for f, c in res.items()}
+        grand = sum(tot.values())
+        hit = sum(v for c in res.values() for k, v in c.items() if k.startswith("HIT"))
+        print(f"leg occurrences {grand} | hit {hit / grand:.1%}")
+        for f, n in sorted(tot.items(), key=lambda x: -x[1])[:a.top]:
+            print(f"{f:22s} {n:8d} {n / grand:6.1%}  " + ", ".join(f"{k}:{v / n:.0%}" for k, v in sorted(res[f].items(), key=lambda x: -x[1])[:5]))
+        return 0
     recs, skipped = [], 0
     for c in combos:
-        if not any(t in store.tickers for t, _ in c["legs"]):
-            skipped += 1                                     # no leg was ever banked: unpriceable, cheap to skip
+        if not store.may_price(c["legs"]):
+            skipped += 1                                     # no leg can map to a banked game: unpriceable, cheap to skip
             continue
-        rec = replay_one(c, store)
+        rec = replay_one(c, store, max_age)
         if rec:
             recs.append(rec)
     print(f"replayed {len(recs)} | skipped (no banked leg) {skipped}", file=sys.stderr)
