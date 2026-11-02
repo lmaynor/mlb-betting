@@ -14,6 +14,10 @@ Parsing mirrors the game engines (nba.game.run_daily / nhl.game.run_daily extrac
   * h2h: outcomes matched to home / away by team code.
 Side convention of a row's books[]: a = AWAY side (ml, spread) or OVER (total); b = HOME side or UNDER.
 
+A second, fresher source is unioned in when present: the BestBook live crawl's full-game ladders (ev.bestbook_game_lines, hourly,
+17 venues, ALTERNATE spread / total rungs the ParlayAPI feed does not carry). Per (row, book) the fresher snapshot wins; either
+source alone is enough to build a board.
+
 Written to EVSweep/{sport}_games/odds_board_latest.json by ev.daily_projections (right after the game-model refresh),
 served by mlb/runners/public_api.py::get_game_odds_board at GET /api/public/games/odds. Never computed on a web request.
 """
@@ -38,6 +42,9 @@ SPORTS = ("nba", "nhl")
 PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl"}
 OUT_KEY = "EVSweep/{sport}_games/odds_board_latest.json"
 LINES_SOURCE = "oddsaccum_game_lines"
+BESTBOOK_SOURCE = "bestbook"
+BESTBOOK_MAX_AGE_MIN = 180.0        # the bb-live-* crawl is hourly: three missed runs and its ladders are not live
+LADDER_MAX_ROWS = 21                # per (game, market): the rungs nearest the modal line; the ladders run to 100 rungs a game
 MARKETS = ("ml", "spread", "total")
 MIN_BOOKS = 2                       # a one-book line is not a comparison
 # The game-lines banker runs ~6x a day (daytime gaps up to 4 h) and a snapshot older than odds_feed.MAX_AGE_MIN (360) is refused
@@ -158,16 +165,58 @@ def _drop_flipped_books(sport: str, row: dict) -> int:
     return dropped
 
 
-def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Optional[dict] = None) -> dict:
-    """Banked game-line events -> the board payload for one sport (see the module docstring for the row shape).
+def _put(rows: Dict[str, dict], sport: str, gk: str, away: str, home: str, start: datetime, market: str, line: Optional[float],
+         book: str, a_p: Optional[int], b_p: Optional[int], src: str, wins: bool) -> bool:
+    """Add one book's two-way quote to its (game, market, line) row. Returns True when the quote was stored.
+
+    Two quotes for the same book from the SAME source fold (gaps filled: a clone onto its twin, a repeated market). From a
+    DIFFERENT source, the fresher feed (`wins`) replaces the whole older quote, so a row never mixes an a-price and a b-price of
+    different snapshots; the older feed only supplies a book the fresher one lacks."""
+    key = f"{gk}|{market}|{_fmt_line(line)}"
+    row = rows.get(key)
+    if row is None:
+        row = rows[key] = {"key": key, "sport": sport, "game_key": gk, "away": away, "home": home,
+                           "commence": start.astimezone(timezone.utc).isoformat(), "market": market, "line": line, "books": {}}
+    old = row["books"].get(book)
+    if old is None:
+        row["books"][book] = {"book": book, "a": a_p, "b": b_p, "_src": src}
+        return True
+    if old["_src"] == src:
+        if old["a"] is None:
+            old["a"] = a_p
+        if old["b"] is None:
+            old["b"] = b_p
+        return True
+    if wins and sum(p is not None for p in (a_p, b_p)) >= sum(p is not None for p in (old["a"], old["b"])):
+        old.update(a=a_p, b=b_p, _src=src)
+        return True
+    return False
+
+
+def _ts(v: Any) -> Optional[datetime]:
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Optional[dict] = None,
+                     bb_games: Optional[list] = None, bb_meta: Optional[dict] = None) -> dict:
+    """Banked game-line events (+ the BestBook ladders) -> the board payload for one sport (see the module docstring).
 
     One row per (game, market, line); a row needs >= MIN_BOOKS books (a book counts when at least one side is priced). DFS /
     pick'em apps are skipped, a game that has started is dropped, a malformed price is skipped and never aborts the build, and
     a side quote whose decimal payout is above ROGUE_RATIO x the side's median is dropped when >= ROGUE_MIN_BOOKS books quote it."""
     meta = meta or {}
+    bb_meta = bb_meta or {}
     code_of = _resolver(sport)
     rows: Dict[str, dict] = {}
     n_events = n_started = n_unmapped = 0
+    pa_ts, bb_ts = _ts(meta.get("snapshot_ts")), _ts(bb_meta.get("fetched_at"))
+    bb_wins = bb_ts is not None and (pa_ts is None or bb_ts > pa_ts)             # an unknown-age snapshot is the older feed
+    pa_wins = pa_ts is not None and (bb_ts is None or pa_ts > bb_ts)
+    n_bb_games = n_bb_quotes = 0
     for ev in events or []:
         if not isinstance(ev, dict):
             continue
@@ -203,21 +252,37 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
                 if parsed is None:
                     continue
                 line, a_p, b_p = parsed
-                market = _MARKET_OF[mk["key"]]
-                key = f"{gk}|{market}|{_fmt_line(line)}"
-                row = rows.get(key)
-                if row is None:
-                    row = rows[key] = {"key": key, "sport": sport, "game_key": gk, "away": away, "home": home,
-                                       "commence": start.astimezone(timezone.utc).isoformat(), "market": market,
-                                       "line": line, "books": {}}
-                old = row["books"].get(book)
-                if old is None:
-                    row["books"][book] = {"book": book, "a": a_p, "b": b_p}
-                else:                                   # a clone folded onto its twin (or a repeated market): fill gaps only
-                    if old["a"] is None:
-                        old["a"] = a_p
-                    if old["b"] is None:
-                        old["b"] = b_p
+                _put(rows, sport, gk, away, home, start, _MARKET_OF[mk["key"]], line, book, a_p, b_p, LINES_SOURCE, pa_wins)
+
+    for g in bb_games or []:
+        if not isinstance(g, dict):
+            continue
+        start = _ts(g.get("commence_time"))
+        if start is None:
+            continue
+        if start <= now:
+            n_started += 1
+            continue
+        away, home = code_of(str(g.get("away_team", ""))), code_of(str(g.get("home_team", "")))
+        if not away or not home:
+            n_unmapped += 1
+            continue
+        n_bb_games += 1
+        gk = _game_key(sport, start, away, home)
+        for q in g.get("quotes") or []:
+            try:
+                book = canonical_book(str(q.get("book") or "")).strip()
+                market = q.get("market")
+                if not book or book in DFS_BOOKS or market not in MARKETS:
+                    continue
+                a_p, b_p = _price(q.get("a")), _price(q.get("b"))
+                line = None if market == "ml" else _num(q.get("line"))
+                if (a_p is None and b_p is None) or (market != "ml" and line is None):
+                    continue
+            except Exception:                                                           # noqa: BLE001
+                continue
+            if _put(rows, sport, gk, away, home, start, market, line, book, a_p, b_p, BESTBOOK_SOURCE, bb_wins):
+                n_bb_quotes += 1
 
     n_flipped = 0
     for row in rows.values():
@@ -240,7 +305,8 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
 
     kept: List[dict] = []
     for row in rows.values():
-        books = sorted((b for b in row["books"].values() if b["a"] is not None or b["b"] is not None), key=lambda b: b["book"])
+        books = sorted(({"book": b["book"], "a": b["a"], "b": b["b"]} for b in row["books"].values()
+                        if b["a"] is not None or b["b"] is not None), key=lambda b: b["book"])
         if len(books) >= MIN_BOOKS:
             kept.append({**row, "books": books})
 
@@ -258,20 +324,34 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
                              0.0 if r["market"] == "ml" else abs(r["line"] - modal[(r["game_key"], r["market"])][1]),
                              r["line"] if r["line"] is not None else 0.0))
 
+    # the ladders reach 100 rungs a game: keep the LADDER_MAX_ROWS rows nearest the modal line (the sort above is by that distance)
+    seen_n: Dict[tuple, int] = {}
+    capped: List[dict] = []
+    for r in kept:
+        gm = (r["game_key"], r["market"])
+        seen_n[gm] = seen_n.get(gm, 0) + 1
+        if r["market"] == "ml" or seen_n[gm] <= LADDER_MAX_ROWS:
+            capped.append(r)
+    kept = capped
+
     per_game: Dict[str, dict] = {}
     for r in kept:
         g = per_game.setdefault(r["game_key"], {"game_key": r["game_key"], "away": r["away"], "home": r["home"],
                                                 "start": r["commence"], "n_rows": 0})
         g["n_rows"] += 1
     book_keys = sorted({b["book"] for r in kept for b in r["books"]})
+    used = ([LINES_SOURCE] if events else []) + ([BESTBOOK_SOURCE] if n_bb_games else [])
+    stamps = [t for t in (pa_ts if events else None, bb_ts if n_bb_games else None) if t is not None]
+    ages = [x for x in (meta.get("age_min") if events else None, bb_meta.get("age_min") if n_bb_games else None) if x is not None]
     return {
-        "sport": sport, "ts": now.isoformat(), "as_of": meta.get("snapshot_ts") or now.isoformat(), "validated": False,
-        "status": "live" if kept else "awaiting_lines", "lines_source": LINES_SOURCE,
-        "lines_age_minutes": meta.get("age_min"), "count": len(kept), "rows": kept, "books": book_keys,
+        "sport": sport, "ts": now.isoformat(), "as_of": max(stamps).isoformat() if stamps else now.isoformat(), "validated": False,
+        "status": "live" if kept else "awaiting_lines", "lines_source": "+".join(used) or LINES_SOURCE,
+        "lines_age_minutes": min(ages) if ages else None, "count": len(kept), "rows": kept, "books": book_keys,
         "offshore_books": sorted(b for b in book_keys if b in OFFSHORE_BOOKS),
         "games": sorted(per_game.values(), key=lambda g: (g["start"], g["game_key"])),
         "summary": {"events": n_events, "events_started": n_started, "events_unmapped": n_unmapped,
-                    "banked_events": meta.get("banked_events"), "flipped_quotes_dropped": n_flipped},
+                    "banked_events": meta.get("banked_events"), "flipped_quotes_dropped": n_flipped,
+                    "bestbook_games": n_bb_games, "bestbook_quotes_used": n_bb_quotes},
     }
 
 
@@ -290,21 +370,26 @@ def write_game_board(payload: dict, sport: str) -> bool:
 
 
 def run(sport: str, now: Optional[datetime] = None, write: bool = True) -> dict:
-    """Load the banked game-line snapshot, build and (by default) write the board. A refused / missing snapshot returns an
-    'unavailable' (or 'stale', when the snapshot is merely too old) payload with rows [] and a `reason`, and leaves the
-    previous good file untouched."""
+    """Load the banked ParlayAPI game-line snapshot and the BestBook ladders, build and (by default) write the board. Either source
+    alone is enough. With neither, a refused / missing snapshot returns an 'unavailable' (or 'stale', when the ParlayAPI snapshot
+    is merely too old) payload with rows [] and a `reason`, and leaves the previous good file untouched."""
     from nba.game import odds_feed
     if sport not in SPORTS:
         raise ValueError(f"unknown game odds sport {sport!r}; expected one of {SPORTS}")
     now = now or datetime.now(timezone.utc)
     events, meta = odds_feed.read_banked_game_lines(PARLAY_KEY[sport], now)
-    if not events:
+    try:
+        from ev import bestbook_events
+        bb_games, bb_meta = bestbook_events.read_latest_game_lines(sport, now, BESTBOOK_MAX_AGE_MIN)
+    except Exception as exc:                                                            # noqa: BLE001 -- a second source never blocks the first
+        bb_games, bb_meta = None, {"reason": f"BestBook game lines unreadable ({type(exc).__name__})"}
+    if not events and not bb_games:
         old = meta.get("age_min") is not None and meta["age_min"] > odds_feed.MAX_AGE_MIN
         return {"sport": sport, "ts": now.isoformat(), "as_of": meta.get("snapshot_ts"), "validated": False,
                 "status": "stale" if old else "unavailable", "lines_source": LINES_SOURCE, "count": 0, "rows": [],
                 "books": [], "offshore_books": [], "games": [], "lines_age_minutes": meta.get("age_min"),
                 "reason": meta.get("reason") or "no banked game-line snapshot", "summary": {}}
-    payload = build_game_board(sport, events, now, meta)
+    payload = build_game_board(sport, events, now, meta, bb_games, bb_meta)
     if write:
         write_game_board(payload, sport)
     return payload

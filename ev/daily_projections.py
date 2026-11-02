@@ -78,6 +78,7 @@ from nba.data import tracking as _trk
 from nba.props import config as _nbacfg
 from nba.props import hierarchical as _hier
 from nba.props import team_context as _tc
+from nfl.models import hierarchical_live as _hl
 from nfl.props import env_adjust as _ea
 from nhl.props import hierarchical as _nh
 
@@ -86,6 +87,7 @@ _ET = ZoneInfo("America/New_York")
 _CT = ZoneInfo("America/Chicago")               # the site clock: archive days and the Today / Yesterday split are Central
 
 ENGINE = "empirical_ewm_v2"
+ENGINE_NFL_HIER = _hl.ENGINE            # "hierarchical_v1": served for NFL only when NFL_ENGINE=hierarchical (default off)
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 ARCHIVE_KEY = "EVSweep/{sport}_props/archive/{day}.json"      # {day} = the game's America/Chicago start date
@@ -125,6 +127,17 @@ STAT_PARAMS = {
     "nfl": {"rec_yds": {"halflife": 7.0, "ewm_weight": 1.0, "opp_k": 200.0},
             "anytime_td": {"halflife": 7.0, "ewm_weight": 0.3, "opp_k": 200.0}},
 }
+
+
+def engine_id(sport: str) -> str:
+    """The engine id of a sport's board payload. NFL is "empirical_ewm_v2+hierarchical_v1" (a mix; each row carries its own
+    `engine`) only when NFL_ENGINE=hierarchical AND at least one stat is allowlisted; otherwise the legacy id. The hierarchical
+    engine changes the price of the stats it serves, so it ships OFF and only for stats whose held-out evidence cleared the
+    adoption bar (nfl/props/hierarchical_allowlist.json;
+    docs/solutions/conventions/nfl-hierarchical-engine-adoption.md)."""
+    if sport == "nfl" and _hl.enabled() and _hl.allowed_stats():
+        return f"{ENGINE}+{ENGINE_NFL_HIER}"
+    return ENGINE
 
 
 def stat_params(sport: str, stat: str) -> tuple:
@@ -274,15 +287,18 @@ def calibration(sport: str, stat: str) -> dict | None:
 
 class EnvTuple(tuple):
     """2-tuple (implied_total, team_spread) that also exposes wind, roof, and temp attributes."""
-    def __new__(cls, implied_total, team_spread, wind=None, roof=None, temp=None):
+    def __new__(cls, implied_total, team_spread, wind=None, roof=None, temp=None, season=None, week=None, home=None):
         return super().__new__(cls, (float(implied_total), float(team_spread)))
 
-    def __init__(self, implied_total, team_spread, wind=None, roof=None, temp=None):
+    def __init__(self, implied_total, team_spread, wind=None, roof=None, temp=None, season=None, week=None, home=None):
         self.implied_total = float(implied_total)
         self.team_spread = float(team_spread)
         self.wind = wind
         self.roof = roof
         self.temp = temp
+        self.season = None if season is None or season != season else int(season)    # nflverse season / week of the game
+        self.week = None if week is None or week != week else int(week)
+        self.home = home                                                              # canonical HOME club (its stadium)
 
 
 def _load_env_lines() -> dict:
@@ -307,12 +323,16 @@ def _load_env_lines() -> dict:
             wind=float(w) if has_w and pd.notna(w) else None,
             roof=str(r) if has_r and pd.notna(r) else None,
             temp=float(tp) if has_tp and pd.notna(tp) else None,
+            season=se, week=wk, home=hm,
         )
-        for tm, gd, it, sp, w, r, tp in zip(
+        for tm, gd, it, sp, w, r, tp, se, wk, hm in zip(
             t["team"], t["gameday"], t["implied_total"], t["team_spread"],
             t["wind"] if has_w else [None] * len(t),
             t["roof"] if has_r else [None] * len(t),
             t["temp"] if has_tp else [None] * len(t),
+            t["season"] if "season" in t.columns else [None] * len(t),
+            t["week"] if "week" in t.columns else [None] * len(t),
+            t["home_team"] if "home_team" in t.columns else [None] * len(t),
         )
     }
 
@@ -407,6 +427,32 @@ class GameLogs:
             if self._env is None:
                 self._env = _load_env_lines()
             return self._env
+
+    def nfl_team_ctx(self) -> dict:
+        """Per-team trailing pass attempts / carries / targets and per-player shares (hierarchical engine), built once."""
+        with self._lock:
+            if getattr(self, "_nfl_team", None) is None:
+                try:
+                    self._nfl_team = _hl.build_team_ctx(self.idx["all"]) if self.sport == "nfl" else {}
+                except Exception as exc:                                                # noqa: BLE001
+                    log.warning("nfl team context failed (%s): hierarchical engine falls back", exc)
+                    self._nfl_team = {}
+            return self._nfl_team
+
+    def nfl_live(self):
+        """The optional pbp / participation / injury layers (hierarchical engine), loaded once and never raising."""
+        with self._lock:
+            if getattr(self, "_nfl_live", None) is None:
+                import os
+                self._nfl_live = False
+                if self.sport == "nfl":
+                    try:
+                        newest = max((r[-1].get("season") or 0) for r in self.idx["all"].values() if r)
+                        self._nfl_live = _hl.LiveContext.load(int(newest),
+                                                              with_pbp=os.environ.get("NFL_HIER_CONTEXT", "1") != "0")
+                    except Exception as exc:                                            # noqa: BLE001
+                        log.warning("nfl live context failed (%s): neutral context", exc)
+            return self._nfl_live or None
 
     def nba_absences(self) -> dict:
         """{team_code: {player_norm: P(absent)}} from the latest NBA injury report."""
@@ -1235,6 +1281,15 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     else:
         p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
         p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
+    engine = ENGINE
+    if sport == "nfl" and team is not None and _hl.stat_enabled(stat):
+        env_t = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat())) if start is not None else None
+        hier = _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start)
+        if hier is not None:
+            engine = ENGINE_NFL_HIER
+            mu, mu_raw, mult = hier.mean, hier.mean, hier.vol_mult
+            p_model_over = hier.p_over(line) if line is not None else None
+            p_floor, p_ceil = (None, None) if family == "anytime" else (hier.dist.ppf(0.10), hier.dist.ppf(0.90))
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -1265,9 +1320,28 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "p_over_market": _f(p_mkt_over), "n_books": n_books,
         "model_edge": _f(ef["model_edge"]), "market_ev": _f(ef["market_ev"]), "confluence": ef["confluence"],
         "edge_capped": ef["edge_capped"], "beezy_score": score, "score_basis": basis,
-        "validated": False, "engine": ENGINE, **extra,
+        "validated": False, "engine": engine, **extra,
         **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
+
+
+def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):
+    """The hierarchical price for one NFL row, or None (the caller keeps the legacy price). Never raises."""
+    try:
+        weather = None
+        if env_t is not None and getattr(env_t, "home", None):
+            import os
+            from nfl.data import weather as _wx
+            weather = _wx.kickoff_weather(env_t.home, start, schedule_wind=env_t.wind, schedule_temp=env_t.temp,
+                                          schedule_roof=env_t.roof, fetch=os.environ.get("NFL_WEATHER_FETCH", "1") != "0")
+            if weather["source"] == "none":
+                weather = None
+        return _hl.price_row(stat, rows, team, logs.nfl_team_ctx(), env_t, _hl.AlphaLookup(logs.context), coef,
+                             live=logs.nfl_live(), mu_engine=mu_raw if stat == "anytime_td" else None, weather=weather,
+                             pid=rows[-1].get("player_id"), opp=opp)
+    except Exception as exc:                                                            # noqa: BLE001
+        log.warning("hierarchical price failed for %s (%s): legacy price kept", stat, exc)
+        return None
 
 
 def _sort_key(r: dict):
@@ -1715,7 +1789,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     if sport not in PROJECT_STATS:
         raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
     logs = logs or GameLogs.load(sport)
-    base = {"sport": sport, "engine": ENGINE, "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
+    base = {"sport": sport, "engine": engine_id(sport), "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
             "stats": list(PROJECT_STATS[sport]), "status": "unavailable", "lines_age_minutes": None, "lines_stale": False,
             "lines_source": [], "games": [], "horizon_hours": HORIZON_HOURS[sport],
             "gamelog_latest": None, "stale_gamelog": None, "summary": {}}
@@ -2000,7 +2074,12 @@ def main(argv=None) -> int:
     ap.add_argument("--write-gcs", action="store_true",
                     help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
     ap.add_argument("--no-write", action="store_true", help="print the summary, do not write to GCS/local storage")
+    ap.add_argument("--nfl-engine", choices=["ewm", "hierarchical"], default=None,
+                    help="NFL pricing engine (default: $NFL_ENGINE, else ewm). hierarchical = nfl.models.hierarchical_props")
     a = ap.parse_args(argv)
+    if a.nfl_engine:
+        import os
+        os.environ["NFL_ENGINE"] = a.nfl_engine
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.write_gcs and a.no_write:
         ap.error("--write-gcs and --no-write are mutually exclusive")
