@@ -56,6 +56,7 @@ so STRONG (>= 70) needs a large edge on BOTH sides of the dual engine.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import math
@@ -73,6 +74,11 @@ from ev import rosters as _rosters
 from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
+from nba.data import tracking as _trk
+from nba.props import config as _nbacfg
+from nba.props import hierarchical as _hier
+from nba.props import team_context as _tc
+from nfl.models import hierarchical_live as _hl
 from nfl.props import env_adjust as _ea
 from nhl.props import hierarchical as _nh
 
@@ -81,6 +87,7 @@ _ET = ZoneInfo("America/New_York")
 _CT = ZoneInfo("America/Chicago")               # the site clock: archive days and the Today / Yesterday split are Central
 
 ENGINE = "empirical_ewm_v2"
+ENGINE_NFL_HIER = _hl.ENGINE            # "hierarchical_v1": served for NFL only when NFL_ENGINE=hierarchical (default off)
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 ARCHIVE_KEY = "EVSweep/{sport}_props/archive/{day}.json"      # {day} = the game's America/Chicago start date
@@ -122,6 +129,17 @@ STAT_PARAMS = {
 }
 
 
+def engine_id(sport: str) -> str:
+    """The engine id of a sport's board payload. NFL is "empirical_ewm_v2+hierarchical_v1" (a mix; each row carries its own
+    `engine`) only when NFL_ENGINE=hierarchical AND at least one stat is allowlisted; otherwise the legacy id. The hierarchical
+    engine changes the price of the stats it serves, so it ships OFF and only for stats whose held-out evidence cleared the
+    adoption bar (nfl/props/hierarchical_allowlist.json;
+    docs/solutions/conventions/nfl-hierarchical-engine-adoption.md)."""
+    if sport == "nfl" and _hl.enabled() and _hl.allowed_stats():
+        return f"{ENGINE}+{ENGINE_NFL_HIER}"
+    return ENGINE
+
+
 def stat_params(sport: str, stat: str) -> tuple:
     """-> (halflife, ewm_weight, opp_shrink_k) for a sport/stat: the override if one was validated, else defaults."""
     o = STAT_PARAMS.get(sport, {}).get(stat, {})
@@ -138,10 +156,6 @@ MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of
 
 CONFLUENCE_MIN_BOOKS = 3
 BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
-# Per-sport / per-stat override of BLEND_C. NHL values are the design spec's: sog 0.30 is the blend coefficient the repo's
-# 30,613-prop study measured for the TRAINED SOG research model (c = +0.31, t = +4.9;
-# docs/analysis/bettingpros_model_vs_market_2026-10-15.md), NOT for this empirical engine -- applied here as a prior, and
-# display-only like BLEND_C (it feeds neither the edge, the confluence flag nor the Beezy Score).
 TRAINED_KEY = "EVSweep/nhl_props/trained_latest.json"      # written by nhl.props.serve_trained (the scoring job)
 TRAINED_MAX_AGE_H = 36.0
 
@@ -172,8 +186,51 @@ def load_trained(now: datetime | None = None) -> dict:
         return {}
 
 
-BLEND_C_BY_SPORT_STAT = {"nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10,
-                                 "assists": 0.12, "pp_points": 0.10}}
+# Per-sport / per-stat override of BLEND_C (stat missing -> the sport's "default" entry, else BLEND_C). DISPLAY-ONLY like the
+# blend itself: it feeds neither the edge, the confluence flag nor the Beezy Score. PROVENANCE, stated precisely: the
+# 2026-10-15 BettingPros study (docs/analysis/bettingpros_model_vs_market_2026-10-15.md; mlb_core/risk/calibration.py
+# BLEND_C) MEASURED c for the TRAINED research models only: NBA points +0.07, rebounds +0.19, assists +0.18, threes +0.28,
+# pra +0.05, NHL SOG +0.30. Nothing was measured for THIS empirical engine, and nothing at all for NBA pr / pa / ra /
+# steals / blocks (the calibration table gives those c = 0). NHL values are the design spec's (sog 0.30 = the trained SOG
+# model's measured c, applied as a prior). The NBA numbers are the PR #147 specification's priors: near the measured ones
+# where one exists (pra 0.12 and points 0.10 are ABOVE the measured 0.05 / 0.07) and unmeasured elsewhere. NFL is untouched.
+BLEND_C_BY_SPORT_STAT = {
+    "nba": {"threes": 0.25, "rebounds": 0.18, "assists": 0.18, "ra": 0.18, "pr": 0.14, "pa": 0.14, "pra": 0.12,
+            "points": 0.10, "steals": 0.12, "blocks": 0.12},
+    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10, "assists": 0.12,
+            "pp_points": 0.10},
+}
+# NBA engine feature switches, consulted at projection time; `nba_features(...)` flips them for a replay. A switch is ON only
+# where nba/props/engine_eval.py showed a held-out gain past its bar (selected on 2023-24, scored on 2024-25 / 2025-26:
+# docs/analysis/nba_engine_walkforward_2026-11-01.md): eta_scale 0.4 with steals / blocks excluded (the spec's 0.55-0.65
+# elasticities were ~4x too strong) and shot_gamma 0.5. Rejected on that evidence and left OFF: dvp_k (positional DvP),
+# pool_gamma (missed-shot-pool rebounds), zinb (zero-inflated steals / blocks).
+#   dvp_k       shrinkage k of the (opponent, position-group) factor; None = team-wide factor only
+#   pool_gamma  exponent on the missed-shot-pool ratio (rebounds); 0 = off
+#   shot_gamma  exponent on the team-makes ratio (assists); 0 = off
+#   zinb        zero-inflated NegBin steals / blocks
+#   eta_scale / eta_off  multiplier on the absence-redistribution elasticities, and the stats that get none
+#   trk_ast / trk_reb  exponent on the PRIOR-season tracking ratio (potential assists / rebound chances luck removal;
+#                      nba.data.tracking); 0 = off. Needs GameLogs.nba_tracking, else no effect.
+NBA_FEATURES = {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.5, "zinb": False, "eta_scale": 0.4,
+                "eta_off": ("steals", "blocks"), "trk_ast": 0.0, "trk_reb": 0.0}
+
+
+@contextlib.contextmanager
+def nba_features(**kw):
+    unknown = set(kw) - set(NBA_FEATURES)
+    if unknown:
+        raise KeyError(f"unknown NBA feature switch(es): {sorted(unknown)}")
+    old = dict(NBA_FEATURES)
+    NBA_FEATURES.update(kw)
+    try:
+        yield
+    finally:
+        NBA_FEATURES.clear()
+        NBA_FEATURES.update(old)
+
+
+NBA_MODEL = "hier_v1"                                # NBA rows: role redistribution + minutes + attempt-first threes + coherent combos
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
 MAX_AGE_MIN = 240.0                                  # banked lines older than this are not live: they are flagged stale
 # The odds bankers run twice a day (17:30 / 22:30 UTC), so between the evening snapshot and the next afternoon one every
@@ -260,15 +317,18 @@ def calibration(sport: str, stat: str) -> dict | None:
 
 class EnvTuple(tuple):
     """2-tuple (implied_total, team_spread) that also exposes wind, roof, and temp attributes."""
-    def __new__(cls, implied_total, team_spread, wind=None, roof=None, temp=None):
+    def __new__(cls, implied_total, team_spread, wind=None, roof=None, temp=None, season=None, week=None, home=None):
         return super().__new__(cls, (float(implied_total), float(team_spread)))
 
-    def __init__(self, implied_total, team_spread, wind=None, roof=None, temp=None):
+    def __init__(self, implied_total, team_spread, wind=None, roof=None, temp=None, season=None, week=None, home=None):
         self.implied_total = float(implied_total)
         self.team_spread = float(team_spread)
         self.wind = wind
         self.roof = roof
         self.temp = temp
+        self.season = None if season is None or season != season else int(season)    # nflverse season / week of the game
+        self.week = None if week is None or week != week else int(week)
+        self.home = home                                                              # canonical HOME club (its stadium)
 
 
 def _load_env_lines() -> dict:
@@ -293,12 +353,16 @@ def _load_env_lines() -> dict:
             wind=float(w) if has_w and pd.notna(w) else None,
             roof=str(r) if has_r and pd.notna(r) else None,
             temp=float(tp) if has_tp and pd.notna(tp) else None,
+            season=se, week=wk, home=hm,
         )
-        for tm, gd, it, sp, w, r, tp in zip(
+        for tm, gd, it, sp, w, r, tp, se, wk, hm in zip(
             t["team"], t["gameday"], t["implied_total"], t["team_spread"],
             t["wind"] if has_w else [None] * len(t),
             t["roof"] if has_r else [None] * len(t),
             t["temp"] if has_tp else [None] * len(t),
+            t["season"] if "season" in t.columns else [None] * len(t),
+            t["week"] if "week" in t.columns else [None] * len(t),
+            t["home_team"] if "home_team" in t.columns else [None] * len(t),
         )
     }
 
@@ -312,6 +376,10 @@ class StatContext:
     opp_cnt: dict = field(default_factory=dict)         # canonical opponent code -> player-games behind that ratio
     alpha: float = 0.25                                  # NegBin dispersion (var = mu + alpha mu^2)
     cv: float = 0.5                                      # within-player sd / mean (Normal family)
+    nba_opp_pos_raw: dict = field(default_factory=dict)     # (opponent, position group) -> UNSHRUNK allowed/expected ratio (NBA)
+    nba_opp_pos_cnt: dict = field(default_factory=dict)     # (opponent, position group) -> player-games behind that ratio
+    nba_zi_pi: float = 0.0                                   # NBA steals / blocks: structural-zero probability (0 = not inflated)
+    nba_zi_alpha: float | None = None                        # NBA steals / blocks: NegBin dispersion fitted jointly with nba_zi_pi
     league_mean: float = 0.0
     n_players: int = 0
 
@@ -338,6 +406,12 @@ class GameLogs:
         self.opp_shrink_k = opp_shrink_k          # None = the per-stat validated value (stat_params)
         self._ctx: dict = {}
         self._env: dict | None = None
+        self._nba_teams: dict | None = None       # team -> {player_norm: rows}, built lazily (nba_team_rows)
+        self._nba_team_games = None                   # nba.props.team_context.TeamGames, built lazily (nba_team_games)
+        self.nba_tracking = None                      # nba.data.tracking.Tracking (prior-season tables) or None
+        self._nba_roles: dict = {}                # (team, as_of) -> {player_norm: {stat: multiplier}}
+        self._spreads: dict = {}                  # NBA game_key -> |consensus spread| (set_nba_spreads)
+        self.nba_replay = False                       # True: replaying a PAST board -> NBA history is cut before the tip's UTC day
         self._latest: object = _AUTO
         self._pace: dict = {}
         self._by_team: dict = {}
@@ -387,6 +461,37 @@ class GameLogs:
                 self._env = _load_env_lines()
             return self._env
 
+    def nfl_team_ctx(self) -> dict:
+        """Per-team trailing pass attempts / carries / targets and per-player shares (hierarchical engine), built once."""
+        with self._lock:
+            if getattr(self, "_nfl_team", None) is None:
+                try:
+                    self._nfl_team = _hl.build_team_ctx(self.idx["all"]) if self.sport == "nfl" else {}
+                except Exception as exc:                                                # noqa: BLE001
+                    log.warning("nfl team context failed (%s): hierarchical engine falls back", exc)
+                    self._nfl_team = {}
+            return self._nfl_team
+
+    def nfl_live(self):
+        """The optional injury / pbp / participation layers (hierarchical engine), loaded once and never raising.
+        $NFL_HIER_LAYERS = 'none' (default: nothing is loaded -- the layers failed their ablation) | 'all' | 'absence,shell,...'."""
+        with self._lock:
+            if getattr(self, "_nfl_live", None) is None:
+                import os
+                self._nfl_live = False
+                raw = os.environ.get("NFL_HIER_LAYERS", "none").strip().lower()
+                layers = () if raw in ("", "none") else (_hl.LAYERS if raw == "all" else
+                                                         tuple(x.strip() for x in raw.split(",") if x.strip() in _hl.LAYERS))
+                if self.sport == "nfl" and layers:
+                    try:
+                        newest = max((r[-1].get("season") or 0) for r in self.idx["all"].values() if r)
+                        self._nfl_live = _hl.LiveContext.load(
+                            int(newest), with_pbp=os.environ.get("NFL_HIER_CONTEXT", "1") != "0" and layers != ("absence",),
+                            layers=layers)
+                    except Exception as exc:                                            # noqa: BLE001
+                        log.warning("nfl live context failed (%s): neutral context", exc)
+            return self._nfl_live or None
+
     def nba_absences(self) -> dict:
         """{team_code: {player_norm: P(absent)}} from the latest NBA injury report."""
         if self.sport != "nba":
@@ -408,6 +513,70 @@ class GameLogs:
                 except Exception as e:
                     log.info("nba injuries fetch failed: %s", e)
             return self._nba_abs
+
+    def set_nba_spreads(self, spreads: dict | None) -> None:
+        """{game_key: |consensus point spread|} for the minutes model's blowout term. Unset = no spread = no blowout trim."""
+        with self._lock:
+            self._spreads = dict(spreads or {})
+
+    def nba_spread(self, game_key: str | None) -> float | None:
+        v = self._spreads.get(game_key)
+        return None if v is None else float(v)
+
+    def set_nba_tracking(self, tracking) -> None:
+        """Prior-season player tracking for the assist / rebound luck-removal factors (None = none loaded)."""
+        with self._lock:
+            self.nba_tracking = tracking
+
+    def nba_team_games(self):
+        """The per-team game table (missed-shot pool / team makes) behind the rebound and assist environment factors."""
+        with self._lock:
+            if self._nba_team_games is None:
+                self._nba_team_games = _tc.TeamGames(self.idx.get("all") or {})
+            return self._nba_team_games
+
+    def nba_team_rows(self, team: str) -> dict:
+        """{player_norm: chronological rows} of the players whose LATEST game was for `team` and within 45 days of the
+        newest game in the master (a long-term absentee is not vacating anything tonight)."""
+        if self.sport != "nba":
+            return {}
+        with self._lock:
+            if self._nba_teams is None:
+                table = self.idx.get("all") or {}
+                newest = max((rows[-1].get("_sort") or "" for rows in table.values() if rows), default="")
+                try:
+                    cutoff = (datetime.fromisoformat(str(newest)[:10]) - timedelta(days=45)).date().isoformat()
+                except ValueError:
+                    cutoff = ""
+                teams: dict = {}
+                for name, rows in table.items():
+                    if str(name).startswith("id:") or not rows:
+                        continue
+                    if str(rows[-1].get("_sort") or "")[:10] < cutoff:
+                        continue
+                    t = canon_team("nba", rows[-1].get("team_abbr"))
+                    if t:
+                        teams.setdefault(t, {})[name] = rows
+                self._nba_teams = teams
+            return self._nba_teams.get(team, {})
+
+    def nba_role_boosts(self, team: str | None, as_of: str | None) -> dict:
+        """{player_norm: {stat: multiplier}} for the active rotation of `team` given tonight's injury-report absences
+        (nba.props.hierarchical.compute_vacated_shares). {} when nobody on the team is listed or the team is unknown."""
+        if self.sport != "nba" or not team:
+            return {}
+        absences = self.nba_absences().get(team, {})
+        if not absences:
+            return {}
+        key = (team, as_of, tuple(sorted(absences.items())), NBA_FEATURES["eta_scale"], NBA_FEATURES["eta_off"])
+        with self._lock:
+            hit = self._nba_roles.get(key)
+        if hit is None:
+            hit = _hier.compute_vacated_shares(self.nba_team_rows(team), absences, as_of,
+                                               eta_scale=NBA_FEATURES["eta_scale"], eta_off=NBA_FEATURES["eta_off"])["boost"]
+            with self._lock:
+                self._nba_roles[key] = hit
+        return hit
 
     def latest_date(self) -> str | None:
         """Newest game date in the master (YYYY-MM-DD; NFL: 'season Wweek')."""
@@ -587,6 +756,10 @@ class GameLogs:
         got: dict = {}
         exp: dict = {}
         cnt: dict = {}
+        pgot: dict = {}
+        pexp: dict = {}
+        pcnt: dict = {}
+        zi_pairs: list = []
         var_sum = mean_sq_sum = mean_sum = 0.0
         n_players = 0
         for name, rows in table.items():
@@ -600,6 +773,9 @@ class GameLogs:
             base = sum(g[0] for g in season) / len(season)
             if base <= 0:
                 continue
+            grp = _nbacfg.POS_GROUP.get(str(rows[-1].get("position") or "").upper()) if self.sport == "nba" else None
+            if self.sport == "nba" and stat in ("steals", "blocks"):
+                zi_pairs.extend((g[0], base) for g in season)
             for v, _, s, opp in season:
                 oc = canon_team(self.sport, opp)
                 if oc is None:
@@ -607,6 +783,10 @@ class GameLogs:
                 got[oc] = got.get(oc, 0.0) + v
                 exp[oc] = exp.get(oc, 0.0) + base
                 cnt[oc] = cnt.get(oc, 0) + 1
+                if grp is not None:
+                    pgot[(oc, grp)] = pgot.get((oc, grp), 0.0) + v
+                    pexp[(oc, grp)] = pexp.get((oc, grp), 0.0) + base
+                    pcnt[(oc, grp)] = pcnt.get((oc, grp), 0) + 1
             recent = [g[0] for g in h[-20:]]
             if len(recent) >= MIN_DISP_GAMES:
                 m = sum(recent) / len(recent)
@@ -622,6 +802,12 @@ class GameLogs:
                 ctx.opp_factor[oc] = min(max(1.0 + (got[oc] / e - 1.0) * w, OPP_CLIP[0]), OPP_CLIP[1])
                 ctx.opp_raw[oc] = got[oc] / e
                 ctx.opp_cnt[oc] = cnt[oc]
+        for key, e in pexp.items():
+            if e > 0:
+                ctx.nba_opp_pos_raw[key] = pgot[key] / e
+                ctx.nba_opp_pos_cnt[key] = pcnt[key]
+        if len(zi_pairs) >= 500:
+            ctx.nba_zi_pi, ctx.nba_zi_alpha = _fit_zinb(zi_pairs)
         if n_players and mean_sq_sum > 0:
             # method of moments over the whole population: var = mu + alpha*mu^2 (NegBin), var = (cv*mu)^2 (Normal)
             ctx.alpha = min(max((var_sum - mean_sum) / mean_sq_sum, ALPHA_RANGE[0]), ALPHA_RANGE[1])
@@ -629,6 +815,30 @@ class GameLogs:
             ctx.league_mean = mean_sum / n_players
         ctx.n_players = n_players
         return ctx
+
+
+def _fit_zinb(pairs: list) -> tuple:
+    """(pi, alpha) of a zero-inflated NegBin by maximum likelihood over (observed count, the player's mean) pairs: each
+    count ~ pi*0 + (1-pi)*NB(mean/(1-pi), alpha), so the player's mean is preserved. pi < 0.01 -> 0 (not inflated)."""
+    from scipy.optimize import minimize
+    from scipy.special import expit
+    v = np.array([p[0] for p in pairs], dtype=float)
+    base = np.array([p[1] for p in pairs], dtype=float)
+    zero = v == 0
+
+    def nll(theta):
+        alpha, pi = math.exp(theta[0]), float(expit(theta[1]))
+        n = 1.0 / alpha
+        m = base / (1.0 - pi)
+        pmf = nbinom.pmf(v, n, n / (n + m))
+        like = np.where(zero, pi + (1.0 - pi) * pmf, (1.0 - pi) * pmf)
+        return float(-np.sum(np.log(np.maximum(like, 1e-300))))
+
+    best = minimize(nll, np.array([math.log(0.3), -3.0]), method="Nelder-Mead", options={"maxiter": 120, "xatol": 1e-3,
+                                                                                      "fatol": 1e-3})
+    alpha, pi = math.exp(float(best.x[0])), float(expit(best.x[1]))
+    alpha = min(max(alpha, ALPHA_RANGE[0]), ALPHA_RANGE[1])
+    return (pi if pi >= 0.01 else 0.0), alpha
 
 
 # ------------------------------------------------------------------------------------------- projection + P(over)
@@ -655,9 +865,12 @@ def project_mu(hist: list, halflife: float, opp_factor: float = 1.0, ewm_weight:
     return {"mu": max(mu * opp_factor, 0.0), "n_games": n, "usage_proj": usage_proj, "opp_factor": opp_factor}
 
 
-def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None) -> float | None:
+def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None,
+           sd: float | None = None, alpha: float | None = None, zi: float = 0.0) -> float | None:
     """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything). `sd_mu` is the mean
-    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread."""
+    the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread.
+    `sd` / `alpha` (NBA hierarchical path) replace the league-wide Normal sd / NegBin dispersion outright. `zi` > 0 makes
+    the NegBin zero-inflated while keeping `mu` the overall mean (the NegBin part has mean mu / (1 - zi))."""
     if mu is None or not math.isfinite(mu) or line is None:
         return None
     if family == "anytime":
@@ -665,27 +878,41 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
     if mu <= 0:
         return 0.0 if line >= 0 else 1.0
     if family == "negbin":
-        n = 1.0 / ctx.alpha
+        n = 1.0 / (ctx.alpha if alpha is None else alpha)
+        if zi > 0:
+            if line < 0:
+                return 1.0
+            m = mu / (1.0 - zi)
+            return float((1.0 - zi) * (1.0 - nbinom.cdf(math.floor(line), n, n / (n + m))))
         return float(1.0 - nbinom.cdf(math.floor(line), n, n / (n + mu)))
+    if sd is not None:
+        return float(1.0 - norm.cdf((line - mu) / max(sd, 1e-6)))
     ref = mu if sd_mu is None else sd_mu
     sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(1.0 - norm.cdf((line - mu) / sd))
 
 
-def blend_c(sport: str, stat: str) -> float:
-    return BLEND_C_BY_SPORT_STAT.get(sport, {}).get(stat, BLEND_C)
+def blend_c(sport: str | None, stat: str | None) -> float:
+    """The blend weight for a sport/stat: BLEND_C_BY_SPORT_STAT, else that sport's "default", else BLEND_C."""
+    table = BLEND_C_BY_SPORT_STAT.get(sport or "", {})
+    return float(table.get(stat, table.get("default", BLEND_C)))
 
 
-def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float = BLEND_C) -> float | None:
+def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float | None = None,
+                 sport: str | None = None, stat: str | None = None) -> float | None:
     """Market-anchored posterior: logit(p) = logit(market) + c * (logit(model) - logit(market)).
 
     This is the form the repo's own model-vs-market studies test (blend coefficient `c`; docs/analysis/
     bettingpros_model_vs_market_2026-10-15.md): c = 0 trusts the market entirely, c = 1 trusts the model entirely. Those
     studies measured c = +0.02 .. +0.30 for the TRAINED research models; nothing has been measured for this empirical
     engine, so BLEND_C is a deliberately small, UNVALIDATED shrinkage prior. It is display-only: it feeds neither the
-    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability."""
+    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability.
+
+    `c` explicit wins; else the per-stat weight for (sport, stat) (blend_c); else BLEND_C."""
     if p_model_over is None or p_mkt_over is None:
         return None
+    if c is None:
+        c = blend_c(sport, stat)
     lo, hi = 0.01, 0.99
     pm = min(max(float(p_model_over), lo), hi)
     pk = min(max(float(p_mkt_over), lo), hi)
@@ -694,7 +921,7 @@ def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float 
 
 
 def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
-               sd_mu: float | None = None):
+               sd_mu: float | None = None, sd: float | None = None, alpha: float | None = None, zi: float = 0.0):
     """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
     one-sided anytime market. Yards are floored at 0 (the board shows a rate-style range, not a loss). These describe
     the MODEL'S spread (league-wide within-player variance), not an interval with validated coverage."""
@@ -703,11 +930,18 @@ def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: f
     if mu <= 0:
         return 0.0, 0.0
     if family == "negbin":
-        n = 1.0 / ctx.alpha
+        n = 1.0 / (ctx.alpha if alpha is None else alpha)
+        if zi > 0:
+            pr = n / (n + mu / (1.0 - zi))
+
+            def q(level):
+                return 0.0 if level <= zi else float(nbinom.ppf((level - zi) / (1.0 - zi), n, pr))
+            return q(lo), q(hi)
         pr = n / (n + mu)
         return float(nbinom.ppf(lo, n, pr)), float(nbinom.ppf(hi, n, pr))
-    ref = mu if sd_mu is None else sd_mu
-    sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
+    if sd is None:
+        ref = mu if sd_mu is None else sd_mu
+        sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
 
 
@@ -879,6 +1113,104 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, ros
     return out, st
 
 
+def _nba_days(logs: GameLogs, start) -> tuple:
+    """-> (day, as_of) in the master's date system (the UTC date of the tip; the master labels games that way). `day` dates
+    tonight for the rest calculation; `as_of` is the history cutoff and is None for live serving (the master holds only
+    finished games, and an ET cutoff would drop last night's late game, whose UTC date is tonight's ET date)."""
+    if start is None:
+        return None, None
+    day = start.astimezone(timezone.utc).date().isoformat()
+    return day, (day if logs.nba_replay else None)
+
+
+def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
+    """One NBA stat's calibrated marginal -> {"mu", "family", "sd", "alpha", "proj"} or None (thin history).
+
+    mu = engine EWM (threes: EWM(3PA) x shrunk 3P%) x opponent factor x the stat's role-redistribution multiplier x the
+    minutes factor (blowout / back-to-back trim). The spread is the league-wide one (Normal: cv, floored; NegBin: alpha),
+    widened by the shot-diet scale (points) and by the minutes distribution's EXTRA relative variance. Uses only rows
+    dated before the replay cutoff (none when serving live)."""
+    day, as_of = _nba_days(logs, start)
+    sdef = cf.NBA_STATS[stat]
+    ctx = logs.context(stat)
+    family = PROJECT_STATS["nba"][stat]
+    prior = _hier.prior_rows(rows, as_of)
+    hl, ewm_w, _ = stat_params("nba", stat)
+    opp_f = ctx.opp_factor.get(opp, 1.0) if opp else 1.0
+    k_dvp = NBA_FEATURES["dvp_k"]
+    grp = _nbacfg.POS_GROUP.get(str(rows[-1].get("position") or "").upper()) if rows else None
+    if k_dvp and opp and grp and (opp, grp) in ctx.nba_opp_pos_raw:
+        c = ctx.nba_opp_pos_cnt[(opp, grp)]
+        opp_f = min(max(1.0 + (ctx.nba_opp_pos_raw[(opp, grp)] - 1.0) * c / (c + k_dvp), OPP_CLIP[0]), OPP_CLIP[1])
+    proj = project_mu(_hist(prior, sdef), hl, opp_f, ewm_w)
+    if proj is None:
+        return None
+    mu = proj["mu"]
+    if team and opp and day:
+        if stat == "rebounds" and NBA_FEATURES["pool_gamma"]:
+            mu *= logs.nba_team_games().pool_factor(prior, team, opp, day, NBA_FEATURES["pool_gamma"])
+        elif stat == "assists" and NBA_FEATURES["shot_gamma"]:
+            mu *= logs.nba_team_games().shotmaking_factor(prior, team, opp, day, NBA_FEATURES["shot_gamma"])
+    if day and getattr(logs, "nba_tracking", None) is not None:
+        if stat == "assists" and NBA_FEATURES["trk_ast"]:
+            mu *= logs.nba_tracking.assist_factor(pn, _trk.season_year_of(day), NBA_FEATURES["trk_ast"])
+        elif stat == "rebounds" and NBA_FEATURES["trk_reb"]:
+            mu *= logs.nba_tracking.rebound_factor(pn, _trk.season_year_of(day), NBA_FEATURES["trk_reb"])
+    if stat == "threes":
+        t = _hier.project_nba_threes(prior)                           # None when the master carries no attempts
+        if t is not None:
+            mu = max(t["mu_3pm"] * opp_f, 0.0)
+    mu *= logs.nba_role_boosts(team, as_of).get(pn, {}).get(stat, 1.0)
+    extra = 0.0
+    mu_min = _hier.ewm_minutes(prior)
+    if mu_min:
+        md = _hier.project_minutes_distribution(mu_min, spread=logs.nba_spread(gk), rest=_hier.rest_days(prior, day),
+                                                pf36=_hier.pf_per36(prior))
+        mu *= md["factor"]
+        extra = md["extra_rel_var"]
+    alpha = sd = None
+    zi = 0.0
+    if family == "negbin":
+        if NBA_FEATURES["zinb"] and stat in ("steals", "blocks") and ctx.nba_zi_pi > 0 and ctx.nba_zi_alpha:
+            zi = ctx.nba_zi_pi
+            alpha = ctx.nba_zi_alpha + extra
+            m = mu / (1.0 - zi)
+            sd = math.sqrt(max((1.0 - zi) * (m + alpha * m * m) + zi * (1.0 - zi) * m * m, 0.0))
+        else:
+            alpha = ctx.alpha + extra                                 # var = mu + alpha mu^2: extra relative variance adds to alpha
+            sd = math.sqrt(max(mu + alpha * mu * mu, 0.0))
+    else:
+        sd = max(ctx.cv * mu, MIN_SD_FRAC * mu, 1e-6)
+        if stat == "points":
+            sd *= _hier.shot_diet_sd_scale(prior)
+        sd = math.sqrt(sd * sd + extra * mu * mu)
+    return {"mu": mu, "family": family, "sd": sd, "alpha": alpha, "zi": zi, "proj": proj}
+
+
+def _nba_projection(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
+    """-> {"mu", "family", "sd", "alpha", "proj"} for any NBA stat. pra / pr / pa / ra are NEVER projected on their own:
+    they are built from the points / rebounds / assists marginals (each rounded to the 3 decimals the board shows, so the
+    published means add up exactly) and the player's shrunken within-player correlation matrix:
+    mu_C = sum mu_k; var_C = sum sd_k^2 + 2 sum_{j<k} R_jk sd_j sd_k, distributed Normal."""
+    members = _hier.COMBOS.get(stat)
+    if members is None:
+        return _nba_component(stat, pn, rows, logs, team, opp, gk, start)
+    comps = {}
+    for k in members:
+        c = _nba_component(k, pn, rows, logs, team, opp, gk, start)
+        if c is None:
+            return None
+        c["mu"] = round(c["mu"], 3)
+        comps[k] = c
+    corr = _hier.within_player_corr(rows, _nba_days(logs, start)[1])
+    mu, sd = _hier.combo_moments({k: (c["mu"], c["sd"]) for k, c in comps.items()}, corr, members)
+    wsum = sum(c["mu"] for c in comps.values()) or 1.0
+    first = comps[members[0]]["proj"]
+    proj = {"mu": mu, "n_games": min(c["proj"]["n_games"] for c in comps.values()), "usage_proj": first["usage_proj"],
+            "opp_factor": sum(c["mu"] * c["proj"]["opp_factor"] for c in comps.values()) / wsum}
+    return {"mu": mu, "family": "normal", "sd": sd, "alpha": None, "zi": 0.0, "proj": proj}
+
+
 def _starter_rows(rows: list) -> list:
     """Goalie rows of games he started (the `starter` flag), or every row when the flag is absent from the data."""
     flagged = [r for r in rows if r.get("starter") is not None and r.get("starter") == r.get("starter")]
@@ -1009,25 +1341,28 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     family = PROJECT_STATS[sport][stat]
     as_of = nhl_as_of(start) if sport == "nhl" else None
     ctx = logs.context(stat, as_of)
-    hl, ewm_w, _ = stat_params(sport, stat)
     dist, extra = None, {}
-    if sport == "nhl":
-        proj, dist, extra = project_nhl(stat, rows, sdef, logs, team, opp, as_of, roster, pn)
-    else:
-        proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
-    if proj is None:
-        return None
-    mu_raw = proj["mu"]
-
-    # 1. NBA injury scratch & teammate usage redistribution
-    if sport == "nba" and team is not None:
-        team_abs = logs.nba_absences().get(team, {})
-        if team_abs.get(pn, 0.0) >= 0.8:
+    nb = None
+    if sport == "nba":
+        # 1. NBA: injury scratch, then the hierarchical projection (role-weighted teammate redistribution, minutes
+        #    distribution, attempt-first threes, covariance-coherent combos -- nba.props.hierarchical)
+        if team is not None and logs.nba_absences().get(team, {}).get(pn, 0.0) >= 0.8:
             return None
-        teammate_abs_wt = sum(w for p, w in team_abs.items() if p != pn)
-        if teammate_abs_wt > 0:
-            nba_boost = min(1.20, 1.0 + 0.04 * min(teammate_abs_wt, 4.0))
-            mu_raw = mu_raw * nba_boost
+        nb = _nba_projection(stat, pn, rows, logs, team, opp, gk, start)
+        if nb is None:
+            return None
+        proj, mu_raw = nb["proj"], nb["mu"]
+    elif sport == "nhl":
+        proj, dist, extra = project_nhl(stat, rows, sdef, logs, team, opp, as_of, roster, pn)
+        if proj is None:
+            return None
+        mu_raw = proj["mu"]
+    else:
+        hl, ewm_w, _ = stat_params(sport, stat)
+        proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
+        if proj is None:
+            return None
+        mu_raw = proj["mu"]
 
     # 3. NFL dynamic game environment + stadium weather
     coef = calibration(sport, stat)
@@ -1046,12 +1381,25 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         mult = _ea.multiplier(coef)
 
     mu = mu_raw * mult
-    if dist is not None:
+    if nb is not None:
+        p_model_over = (p_over(nb["family"], mu, line, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"])
+                        if line is not None else None)
+        p_floor, p_ceil = proj_range(nb["family"], mu, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"])
+    elif dist is not None:
         p_model_over = dist.p_over(line) if line is not None else None
         p_floor, p_ceil = dist.ppf(0.10), dist.ppf(0.90)
     else:
         p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
         p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
+    engine = ENGINE
+    if sport == "nfl" and team is not None and _hl.stat_enabled(stat):
+        env_t = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat())) if start is not None else None
+        hier = _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start)
+        if hier is not None:
+            engine = ENGINE_NFL_HIER
+            mu, mu_raw, mult = hier.mean, hier.mean, hier.vol_mult
+            p_model_over = hier.p_over(line) if line is not None else None
+            p_floor, p_ceil = (None, None) if family == "anytime" else (hier.dist.ppf(0.10), hier.dist.ppf(0.90))
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -1082,8 +1430,33 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "p_over_market": _f(p_mkt_over), "n_books": n_books,
         "model_edge": _f(ef["model_edge"]), "market_ev": _f(ef["market_ev"]), "confluence": ef["confluence"],
         "edge_capped": ef["edge_capped"], "beezy_score": score, "score_basis": basis,
-        "validated": False, "engine": ENGINE, **extra,
+        "validated": False, "engine": engine, **extra,
+        **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
+
+
+def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):
+    """The hierarchical price for one NFL row, or None (the caller keeps the legacy price). Never raises.
+
+    The served configuration is the TESTED one: no context layers (NFL_HIER_LAYERS, default none -- the ablation found no layer that
+    helps and two that hurt) and no weather (NFL_HIER_WEATHER=1 opts in: the schedule's wind is realised game-day data and the
+    replay evidence was produced without it)."""
+    import os
+    try:
+        use_weather = os.environ.get("NFL_HIER_WEATHER", "0") == "1"
+        weather = None
+        if use_weather and env_t is not None and getattr(env_t, "home", None):
+            from nfl.data import weather as _wx
+            weather = _wx.kickoff_weather(env_t.home, start, schedule_wind=env_t.wind, schedule_temp=env_t.temp,
+                                          schedule_roof=env_t.roof, fetch=os.environ.get("NFL_WEATHER_FETCH", "1") != "0")
+            if weather["source"] == "none":
+                weather = None
+        return _hl.price_row(stat, rows, team, logs.nfl_team_ctx(), env_t, _hl.AlphaLookup(logs.context), coef,
+                             live=logs.nfl_live(), mu_engine=mu_raw if stat == "anytime_td" else None, weather=weather,
+                             pid=rows[-1].get("player_id"), opp=opp, use_weather=use_weather)
+    except Exception as exc:                                                            # noqa: BLE001
+        log.warning("hierarchical price failed for %s (%s): legacy price kept", stat, exc)
+        return None
 
 
 def _sort_key(r: dict):
@@ -1489,6 +1862,39 @@ def _run_game_board(sport: str, now: datetime) -> bool:
         return False
 
 
+def _load_nba_tracking(now: datetime):
+    """Prior-season tracking tables from the NBA/tracking mirror (nba.data.tracking), or None when nothing is mirrored. Only
+    the prior COMPLETED season is read. (Tests neutralise this hook in tests/conftest.py.)"""
+    try:
+        tr = _trk.load([_trk.season_year_of(now.astimezone(timezone.utc).date().isoformat())])
+        return tr if tr.years else None
+    except Exception as exc:                                                           # noqa: BLE001
+        log.info("nba tracking unavailable: %s", exc)
+        return None
+
+
+def _load_nba_spreads(now: datetime) -> dict:
+    """{game_key: |consensus home spread|} from the banked NBA game-line snapshot (no extra credits); {} on any failure or a
+    stale snapshot -- the minutes model then simply has no blowout term. (Tests neutralise this hook in tests/conftest.py.)"""
+    out: dict = {}
+    try:
+        from nba.game import odds_feed
+        from nba.game.run_daily import extract_game_market_odds
+        events, _ = odds_feed.read_banked_game_lines("basketball_nba", now)
+        for ev in events or []:
+            try:
+                start = datetime.fromisoformat(str(ev.get("commence_time")).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            away, home = canon_team("nba", ev.get("away_team")), canon_team("nba", ev.get("home_team"))
+            line = (extract_game_market_odds(ev).get("spreads") or {}).get("line")
+            if away and home and line is not None and math.isfinite(float(line)):
+                out[game_key_of("nba", start, away, home)] = abs(float(line))
+    except Exception as exc:                                                           # noqa: BLE001
+        log.info("nba spreads unavailable: %s", exc)
+    return out
+
+
 def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = None, events=None, meta=None,
               games=None, write: bool = True, roster=_AUTO) -> dict:
     """Compute one sport's board. `logs` / `events` / `games` / `roster` are injectable (tests, local runs; roster=None
@@ -1498,7 +1904,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     if sport not in PROJECT_STATS:
         raise ValueError(f"unknown sport {sport!r}; expected one of {SPORTS}")
     logs = logs or GameLogs.load(sport)
-    base = {"sport": sport, "engine": ENGINE, "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
+    base = {"sport": sport, "engine": engine_id(sport), "validated": False, "ts": now.isoformat(), "rows": [], "count": 0,
             "stats": list(PROJECT_STATS[sport]), "status": "unavailable", "lines_age_minutes": None, "lines_stale": False,
             "lines_source": [], "games": [], "horizon_hours": HORIZON_HOURS[sport],
             "gamelog_latest": None, "stale_gamelog": None, "summary": {}}
@@ -1507,6 +1913,9 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         return _finish(base, sport, write, now)
     if sport == "nhl" and trained_enabled():
         logs.set_trained(load_trained(now))
+    if sport == "nba" and write:
+        logs.set_nba_spreads(_load_nba_spreads(now))
+        logs.set_nba_tracking(_load_nba_tracking(now))
     base["gamelog_latest"] = logs.latest_date()
     gl = base["gamelog_latest"]
     if sport != "nfl" and gl:
@@ -1782,7 +2191,12 @@ def main(argv=None) -> int:
     ap.add_argument("--write-gcs", action="store_true",
                     help="write EVSweep/{sport}_props/projections_latest.json (the default; spelled out for the job)")
     ap.add_argument("--no-write", action="store_true", help="print the summary, do not write to GCS/local storage")
+    ap.add_argument("--nfl-engine", choices=["ewm", "hierarchical"], default=None,
+                    help="NFL pricing engine (default: $NFL_ENGINE, else ewm). hierarchical = nfl.models.hierarchical_props")
     a = ap.parse_args(argv)
+    if a.nfl_engine:
+        import os
+        os.environ["NFL_ENGINE"] = a.nfl_engine
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if a.write_gcs and a.no_write:
         ap.error("--write-gcs and --no-write are mutually exclusive")

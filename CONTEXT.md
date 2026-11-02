@@ -3507,7 +3507,8 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
   format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for
   the deviations and the demo-exchange verification list (`accepted_side` semantics first).
-  **GCP recorder (2026-10-25):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
+  **GCP recorder (2026-10-25; as of 2026-11-01 only the DEMO job `mlb-kalshi-rfq-recorder-demo` exists in GCP -- the production job, its
+  `-daily` scheduler and the `kalshi-prod-*` secrets are NOT provisioned; runbook in the analysis doc):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
   daily 10:00 UTC scheduler, tape -> `Kalshi/rfq_tape/production/{day}/*.jsonl`, creds from Secret Manager (`kalshi-prod-api-key-id`,
   `kalshi-prod-private-key`). Fails loud if the stream never connects (Kalshi CDN may block Cloud Run egress -- unverified).
   **Props/spreads/totals (2026-10-26):** `ev/kalshi_props.parse_prop_ticker` + `ev/kalshi_rfq_props.PropFairIndex` resolve NFL/NBA/NHL player-prop legs
@@ -4114,6 +4115,17 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   hoopR files fall back to the master alone. The nightly `nba-hoopr-refresh` job (13:45 UTC) is what keeps the 2027 file current; its 2027
   box files did not exist at the 2026-10-19 run. Tests: `tests/test_nba_inseason_gamelogs.py`.
 
+- **Hierarchical NBA prop engine (2026-11-01, branch `claude/nba-props-quantitative-upgrade-816ba8`, UNVALIDATED, undeployed):** the
+  serving board's NBA rows (`ev/daily_projections.py`) now run `nba/props/hierarchical.py` (role-weighted teammate-absence redistribution,
+  blowout / back-to-back minutes, attempt-first threes with empirical-Bayes 3P%, coherent pra/pr/pa/ra built from the points / rebounds /
+  assists marginals, per-stat display blend `BLEND_C_BY_SPORT_STAT`). No walk-forward evidence behind the constants; the master's `_date` is
+  the UTC tip date so live serving applies NO as-of cut (`GameLogs.nba_replay` for replays). See
+  `docs/solutions/conventions/nba-hierarchical-props-engine-unvalidated.md`. Follow-up (`nba/props/engine_eval.py`, accuracy-only
+  walk-forward on the box-score master, ORACLE absences, no spreads): absence boost shipped at 0.4x the spec's strength with steals /
+  blocks excluded, team-makes assist factor on; DvP / pool rebounds / ZINB steals-blocks rejected and OFF (`NBA_FEATURES`).
+  Evidence: `docs/analysis/nba_engine_walkforward_2026-11-01.md`. Prior-season tracking (`nba/data/tracking.py`, community mirror
+  gabriel1200/site_Data, season aggregates, unlicensed, NOT in the bucket) was tested for assists / rebounds and rejected (OFF).
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
@@ -4185,6 +4197,36 @@ backbone. Full detail in `nfl/README.md`.
     MAE 5/5 seasons); `rec_yds` / `anytime_td` got validated per-stat params (`STAT_PARAMS`) and a spread/total game term on top of the scale;
     the pbp context features gave NO measurable gain to the XGBoost models (kept off: `include_pbp_ctx`). Shipped file:
     `nfl/props/projection_calibration.json` (only stats that cleared the bar). Re-run `engine_eval --write-calibration` each offseason.
+
+- **2026-11-01 hierarchical NFL prop engine (branch `claude/nfl-props-generative-model-dafff0`, PR #148; shipped OFF -- `NFL_ENGINE=ewm` is the
+  default).** `nfl/models/hierarchical_props.py` prices the 10 NFL stats as ONE generative process instead of 10 independent Normal / NegBin
+  averages: pass attempts (3-regime game-script mixture from the spread) -> completions (Beta-Binomial marginalised over the attempts pmf, so
+  P(C > A) = 0 exactly) -> pass yards / rush yards / receiving yards (NegBin counts x gamma per-event yards, compound mean / variance by the law
+  of total variance, hurdle at 0) ; targets -> receptions -> rec yards with a coverage-shell target multiplier and an aDOT-driven spread;
+  anytime TD = 3-zone intensity shrunk toward the market-implied team TDs (`max(0.8, (implied - 4.5) / 6.9)`, weight 0.35). EVERY coefficient is a
+  hand-set prior (`PRIORS`), none fitted, none validated against prices; rows stay `validated: false`.
+  - **Spread sign:** the module's `team_spread` is NEGATIVE = favoured (the spec's); `env_adjust` / the engine's env tuple is POSITIVE = favoured.
+    `hierarchical_props.spread_from_favoured_positive` converts, `hierarchical_live.price_row` does it at the boundary.
+  - **Serving:** `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (or `--nfl-engine hierarchical`) AND only for stats in
+    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rec_yds`, `rush_yds`; empty / missing
+    file = nothing served; served WITHOUT context layers (`NFL_HIER_LAYERS=none`) and WITHOUT weather (`NFL_HIER_WEATHER` off): the ablation found no layer that helps). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
+    price. Real-data verdict (2024-25 held out, priors tuned on 2021-23, 2026 wks 1-8 as the clean confirmation): NOT a general improvement -- better
+    for pass_tds / rush_yds / rec_yds (also at REAL book lines, Brier z +2.7 / +3.0 / +2.3; the market still beats both engines), worse for passing attempts / completions / yards, parity on anytime_td, MAE
+    unchanged everywhere (shape not mean), injury / coverage / OL context did not help. Details: docs/solutions/conventions/nfl-hierarchical-engine-adoption.md and
+    handoffs/handoff_2026-11-01_nfl_hierarchical_props.md. The shipped calibration scales the VOLUME input (TD stats: scale only, since
+    the implied total already enters through the anchor).
+  - **Data gaps filled (all optional, degrade to neutral):** `nfl/features/context_gaps.py` (coverage-shell rates from `pbp_participation`,
+    receiver aDOT / wopr / racr / deep share, passer CPOE, trailing sack+hit / stuff / pressure rates, starting-OL-out count, `net_pressure_mismatch`
+    as a ratio with 1.0 = league average [the spec's literal formula has the units of a rate], practice-weighted teammate absences redistributed by
+    receiver role), `nfl/data/weather.py` (32-stadium table, closed roofs neutral with no network, cached 2 s-timeout Open-Meteo kickoff forecast that
+    never raises). `participation` / `ftn_charting` were already in the ingest registry; `ftn_charting` is registered but NOT used by any feature.
+  - **Training-side change:** `props_features.team_missing_*_l5` now WEIGHT each absent teammate (Out/IR/PUP/Suspended 1.0, Doubtful 0.80,
+    Questionable by practice DNP 0.55 / LP 0.25 / FP 0) and gained `team_missing_rz_touch_share_l5` (inside-10 carries + inside-20 targets; NaN without
+    the pbp table) and `team_missing_air_yards_share_l5`. Still experimental / not in default model features; previously Doubtful counted 1.0 and
+    Questionable 0.
+  - Findings while building: vs a Normal with the same mean and variance the gamma is LIGHTER just above the mean and heavier only ~1.5 sd out
+    (rush yds: 100.5 lighter, 120.5+ heavier), so the "Normal underprices 80+/100+ rungs" claim holds for deep tails and for high-variance
+    receivers, not uniformly. Live path has no red-zone split in the game logs: vacated touches stand in for it.
 
 ---
 
@@ -4280,12 +4322,11 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
 
 - **ParlayAPI is the 100k/month plan (confirmed by the owner 2026-11-01).** Budgets live in ONE place, `nba/config.py`, and `snapshot_odds`,
   `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins: live sports >= 95k, total + floor <= 100k,
-  and that the script defaults equal the Python constants). Owner-set 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k (METERED by the
+  and that the script defaults equal the Python constants). Owner-set 2026-11-01, rebalanced the same day: NBA 35k, NHL 35k, NFL sweep 29k (the sweep pulls 10 markets/event now, incl. `player_anytime_td`, ~1 + 10 x games per firing, `--max-credits 260`; NBA/NHL were pacing to ~20k each at 10 props runs/day) (METERED by the
   same ledger since 2026-11-01 under `NFL_SWEEP_LEDGER_SPORT`: allowance before every pull, spend recorded after, soonest games first when the budget
   only covers part of the slate, cumulative monthly cap with NO linear pace because NFL demand is Thu/Sun/Mon-shaped; `--max-credits` still caps one
-  firing) = 95k live, plus a 4.5k test budget (historical pulls 3k,
-  NFL accumulator ledger 1.5k, no banker job). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
-  45k + 40k + 19.5k = 104.5k does not fit, so re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
+  firing) = 99k live, plus a 500-credit test budget (historical pulls; NFL accumulator ledger 0). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
+  35k + 35k + 19.5k = 89.5k fits; still check the ledgers and re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
   `credit_ledger.record()` is generation-match safe (props + game_lines jobs share one ledger file).
 - **Winter (NHL/NBA/NFL) alert bets and settlement.** `sport_alerts.log_sport_alert_bets` needs `MLB_DB_URL` + Cloud SQL on the job (`setup_props_alerts.sh`,
   `setup_nfl_sweep_schedule.sh`; re-run both to take effect), refuses to write to an ephemeral sqlite inside Cloud Run, never invents a -110 price, logs
@@ -4335,6 +4376,16 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   `stale` = lines older than 270 min (the banker runs ~6x/day). Frontend: `lib/game-odds.ts` adapts rows to the terminal's two-way math (`buildScreenRows`,
   `computeRowArb`, Kalshi fee), `app/ev/games/game-prices-client.tsx` (best price, leave-self-out fair >= 3 reference books, EV, 1/4 Kelly, arb with Copy hedge, per-book
   columns, mobile cards), proxy `/api/games/odds` and `limitGameOdds` (free viewers see the best-covered preview). Prices are market data, labelled UNVALIDATED like the
-  terminal. Not built: middles between different lines; the feed may carry only main lines (alternate_* keys accepted if present, unverified against real payloads).
+  terminal. Not built: middles between different lines.
+  **Second source: BestBook ladders (2026-11-01, owner decision to wire it after the probe).** The ParlayAPI feed was MAIN LINES ONLY (verified on banked data) and its
+  snapshots run 6x/day (a 300-min daytime gap > the 270-min stale cutoff), so the board now also unions the BestBook crawl's full-game ladders: `ev/bestbook_game_lines.py`
+  turns the 'lines' rows of each game snapshot (the SAME multi-MB stream the props crawl already fetches, no extra request) into per-book two-way quotes (17-18 venues,
+  ~10 NHL / ~90 NBA rungs a game), `bb-live-*` stores them in `Odds/bestbook_live/{sport}/game_lines_latest.json` (own file; props `latest.json` is unchanged), and
+  `game_odds_board.run` unions them (`_put`): per (row, book) the FRESHER snapshot replaces the whole older quote (never a mix of two snapshots' a/b), a book only one
+  source has is added, either source alone builds a board, `as_of` = the newest source, `lines_source` = `oddsaccum_game_lines+bestbook`. The board rebuilds at :25/:55 and
+  the crawl is hourly at :20, so a live board is <= ~40 min old. Rows keep the `LADDER_MAX_ROWS` (21) nearest the modal line per (game, market) (moneyline uncapped);
+  one-venue rungs are dropped at crawl time; exchange sides at <3c / >97c are placeholders and dropped; DFS venues skipped; the flip guard and rogue filter run on the union.
+  Validated live against ParlayAPI on the same (row, book) pairs: 51 NBA pairs 28 identical / 23 within 5%, 35 NHL pairs 29 identical / 5 within 5% / 1 within 20%,
+  zero >= 20%, no flipped sides. Row semantics: `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 

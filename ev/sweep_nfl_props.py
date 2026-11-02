@@ -55,9 +55,12 @@ SPORT = "americanfootball_nfl"
 _ET = ZoneInfo("America/New_York")
 PREFIX = "EVSweep/nfl_props"
 # markets requested from ParlayAPI per event (1 credit each). Alternate ladders are ONE-SIDED prices (not
-# decision-grade without an NFL-calibrated vig) so they are not requested in v1 -- ~45% fewer credits.
+# decision-grade without an NFL-calibrated vig) so they are not requested in v1. 2026-11-01: widened from 5 to 10 to cover
+# every stat the projection board models (anytime TD, completions, attempts, interceptions, rush attempts); keys checked
+# against the live /v1/markets catalog (interceptions is `player_pass_interceptions` there). 10 credits per event.
 PARLAY_MARKETS = ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_receptions",
-                  "player_pass_tds"]
+                  "player_pass_tds", "player_anytime_td", "player_pass_completions", "player_pass_attempts",
+                  "player_pass_interceptions", "player_rush_attempts"]
 
 
 def _f(x):
@@ -172,7 +175,7 @@ def _ledger_record(today, n: int) -> None:
 
 
 def refresh_single_event_consensus(pc, sport: str, event_id: str, comm_iso: str, gk: str, now: datetime | None = None):
-    """On-demand consensus for ONE game: a single ParlayAPI event pull (len(PARLAY_MARKETS) = 5 credits) instead of
+    """On-demand consensus for ONE game: a single ParlayAPI event pull (len(PARLAY_MARKETS) = 10 credits) instead of
     waiting for the next full-slate cycle. -> a snapshot entry (same shape as consensus_snapshot's, plus 'ts' = the
     fetch time, which is the consensus's true age anchor) or None when the pull returned nothing (API error / out of
     credits / game gone) -- the caller must then NOT treat any older consensus as fresh."""

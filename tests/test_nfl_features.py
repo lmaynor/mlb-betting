@@ -264,7 +264,7 @@ def _with_injuries(fr, entries, drop_rows=True):
     for e in entries:
         rows.append(_inj_row(*e))
         if drop_rows and e[3] is not None:
-            w, _, pid, _ = e
+            w, pid = e[0], e[2]
             fr.player_stats = fr.player_stats[~((fr.player_stats["player_id"] == pid) & (fr.player_stats["week"] == w))]
             fr.snap_counts = fr.snap_counts[~((fr.snap_counts["player"] == pid) & (fr.snap_counts["week"] == w))]
     fr.injuries = pd.DataFrame(rows)
@@ -301,7 +301,8 @@ def test_team_missing_rush_and_pass_att_shares():
     fr = _with_injuries(make_frames(), [(6, "CCC", "rb_CCC", "Doubtful"), (6, "DDD", "qb_DDD", "Out")])
     out = F.build_from_frames(fr, [SEASON])
     r = out[(out["player_id"] == "wr1_CCC") & (out["week"] == 6)].iloc[0]
-    assert r["team_missing_rush_share_l5"] == pytest.approx(_expected_share(fr, "rb_CCC", 6, "carries"))
+    # a Doubtful teammate counts at weight 0.80 (context_gaps.absence_weight); an Out QB at 1.0
+    assert r["team_missing_rush_share_l5"] == pytest.approx(0.80 * _expected_share(fr, "rb_CCC", 6, "carries"))
     assert r["team_missing_rush_share_l5"] > 0.2
     d = out[(out["player_id"] == "rb_DDD") & (out["week"] == 6)].iloc[0]
     assert d["team_missing_pass_att_share_l5"] == pytest.approx(_expected_share(fr, "qb_DDD", 6, "attempts"))
@@ -309,15 +310,54 @@ def test_team_missing_rush_and_pass_att_shares():
 
 
 def test_team_missing_status_mapping():
-    # Questionable and blank do NOT count; Doubtful / Out / IR aliases (any case) do
-    ents = [(5, "AAA", "wr1_AAA", "Questionable"), (5, "BBB", "wr1_BBB", "OUT"), (5, "CCC", "wr1_CCC", " doubtful "),
-            (5, "DDD", "wr1_DDD", "Injured Reserve")]
+    # Out / IR aliases (any case) count fully, Doubtful at 0.80, Questionable by Friday practice (FP 0, LP 0.25, DNP 0.55)
+    ents = [(5, "AAA", "wr1_AAA", "Questionable", "Full Participation in Practice"), (5, "BBB", "wr1_BBB", "OUT"),
+            (5, "CCC", "wr1_CCC", " doubtful "), (5, "DDD", "wr1_DDD", "Injured Reserve")]
     out = F.build_from_frames(_with_injuries(make_frames(), ents, drop_rows=False), [SEASON])
     wk5 = out[(out["week"] == 5) & (out["player_id"] == "te_AAA")].iloc[0]
-    assert wk5["team_missing_target_share_l5"] == 0.0                    # Questionable only
+    assert wk5["team_missing_target_share_l5"] == 0.0                    # Questionable but practised fully
     for team, other in (("BBB", "te_BBB"), ("CCC", "te_CCC"), ("DDD", "te_DDD")):
         r = out[(out["week"] == 5) & (out["player_id"] == other)].iloc[0]
         assert r["team_missing_target_share_l5"] > 0.05, team
+
+
+def test_team_missing_questionable_is_weighted_by_practice_progression():
+    def share(practice):
+        fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Questionable", practice)], drop_rows=False)
+        out = F.build_from_frames(fr, [SEASON])
+        return out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]["team_missing_target_share_l5"], fr
+    full_out = _expected_share(_with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")]), "wr1_AAA", 5, "targets")
+    dnp, _ = share("Did Not Participate In Practice")
+    lp, _ = share("Limited Participation in Practice")
+    fp, _ = share("Full Participation in Practice")
+    assert dnp == pytest.approx(0.55 * full_out) and lp == pytest.approx(0.25 * full_out) and fp == 0.0
+    assert dnp > lp > fp
+
+
+def test_team_missing_rz_touch_share_uses_the_pbp_redzone_table():
+    fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")])
+    ps = fr.player_stats[["game_id", "player_id", "team", "week"]].copy()
+    rz = ps[["game_id", "player_id"]].copy()
+    rz["rz_car"] = 0.0
+    rz["gl_car"] = 0.0
+    rz["rz_tgt"] = np.where(ps["player_id"] == "wr1_AAA", 3.0, np.where(ps["player_id"] == "wr2_AAA", 1.0, 0.0))
+    fr.pbp_rz = rz
+    out = F.build_from_frames(fr, [SEASON])
+    row = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]
+    # wr1 held 3 of the team's 4 red-zone touches in every game he played
+    assert row["team_missing_rz_touch_share_l5"] == pytest.approx(0.75)
+    q = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Questionable", "Limited Participation in Practice")])
+    q.pbp_rz = rz
+    qo = F.build_from_frames(q, [SEASON])
+    assert qo[(qo["player_id"] == "wr2_AAA") & (qo["week"] == 5)].iloc[0]["team_missing_rz_touch_share_l5"] == pytest.approx(0.25 * 0.75)
+
+
+def test_team_missing_air_yards_share_and_rz_unknown_without_pbp():
+    fr = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out")])
+    out = F.build_from_frames(fr, [SEASON])
+    row = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]
+    assert row["team_missing_air_yards_share_l5"] >= 0.0 and row["team_missing_air_yards_share_l5"] == row["team_missing_air_yards_share_l5"]
+    assert np.isnan(row["team_missing_rz_touch_share_l5"])              # no pbp red-zone table: unknown, never 0
 
 
 def test_team_missing_own_listing_never_feeds_own_row():
@@ -327,7 +367,7 @@ def test_team_missing_own_listing_never_feeds_own_row():
     me = out[(out["player_id"] == "wr1_AAA") & (out["week"] == 5)].iloc[0]
     mate = out[(out["player_id"] == "wr2_AAA") & (out["week"] == 5)].iloc[0]
     for c in TM_COLS:
-        assert me[c] == 0.0
+        assert me[c] == 0.0 or c == "team_missing_rz_touch_share_l5"    # (rz needs the pbp table: NaN in this fixture)
     assert mate["team_missing_target_share_l5"] > 0.05
     # two absent teammates: each only sees the OTHER one
     fr2 = _with_injuries(make_frames(), [(5, "AAA", "wr1_AAA", "Out"), (5, "AAA", "wr2_AAA", "Out")], drop_rows=False)
@@ -406,7 +446,8 @@ def test_leakage_with_injury_reports_scrambles_outcomes_and_snaps(wk, drop_rows)
     assert r["changed_cols"] == [], r["changed_cols"]
     assert r["n_checked"] > 0 and r["n_changed_after"] > 0
     built = F.build_from_frames(fr, [SEASON])
-    assert built[TM_COLS].notna().all().all() and (built["team_missing_target_share_l5"] > 0).any()
+    assert built[[c for c in TM_COLS if "rz_touch" not in c]].notna().all().all()    # rz needs the pbp table (absent here)
+    assert (built["team_missing_target_share_l5"] > 0).any()
     assert set(TM_COLS) <= set(F.feature_columns(built, include_experimental=True))   # the check covered them
 
 

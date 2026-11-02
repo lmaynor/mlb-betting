@@ -155,11 +155,19 @@ _SERIES_INDEX: dict = {}
 _ONLY_N1 = {("nfl", "anytime_td")}
 
 
+# "Protected" twins (<SERIES>PROT, e.g. KXNFLRECYDSPROT, KXNBAPTSPROT): same stat, same N+ ladder, but a player who plays the first half and
+# not the second settles at the pre-kickoff fair price instead of on the stats. Real RFQ flow is dominated by them (2026-10-16..11-02: ~half of the
+# NFL prop legs, and most NBA points legs), and without the alias every such leg was an unmapped ticker. Priced as the base series' P(over): an
+# approximation (the protection only matters on a mid-game exit; books void such props the same way). UNVALIDATED.
+PROTECTED_SUFFIX = "PROT"
+
+
 def _rebuild_series_index() -> None:
     _SERIES_INDEX.clear()
     for sp, tbl in KALSHI_PROP_SERIES_BY_SPORT.items():
         for series, stat in tbl.items():
             _SERIES_INDEX[series] = (sp, stat)
+            _SERIES_INDEX[series + PROTECTED_SUFFIX] = (sp, stat)
 
 
 _rebuild_series_index()
@@ -238,10 +246,14 @@ def kalshi_player_codes(player_norm: str, display: str | None = None) -> set[str
         core = [t for t in toks if t not in _GENERATIONAL]
         if len(core) < 2:
             continue
-        base = core[0][0] + "".join(core[1:])
-        out.add(base)
-        if suffix:
-            out.add(base + "".join(suffix))
+        # Kalshi: first initial + SURNAME. A hyphenated first name ("Amon-Ra St. Brown" -> ASTBROWN) or a multi-word surname makes the split
+        # ambiguous once hyphens are tokens, so try the first name spanning 1 (or 2) tokens; a code only counts when it is the UNIQUE match in a game.
+        for k in (1, 2):
+            if k < len(core):
+                base = core[0][0] + "".join(core[k:])
+                out.add(base)
+                if suffix:
+                    out.add(base + "".join(suffix))
     return {c for c in out if len(c) >= 2}
 
 

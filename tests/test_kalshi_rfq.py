@@ -433,9 +433,14 @@ def test_kill_switch_uses_its_own_key_and_is_manual_reset():
     assert not gate.killed
 
 
+# The shipped defaults are scaffolding-loose (2026-11-01); the gate MECHANICS are tested against the original tight caps.
+TIGHT = RFQConfig(max_liability_per_quote_dollars=50.0, max_exposure_per_game_dollars=150.0,
+                  max_exposure_per_player_dollars=75.0, max_open_quotes=25)
+
+
 def test_player_exposure_capped_across_open_combo_quotes():
     legs = three_cross_game() + [mk_leg("T4", "nfl:2026-10-25:A4@B4", "p4"), mk_leg("T5", "nfl:2026-10-25:A5@B5", "p5")]
-    m, _, ledger, gate = make_maker(legs)
+    m, _, ledger, gate = make_maker(legs, cfg=TIGHT)
     d1 = m.on_rfq_created(combo_rfq(["T1", "T2", "T3"], "r1", 50.0))
     assert d1.quoted and d1.collateral <= 50.0
     d2 = m.on_rfq_created(combo_rfq(["T1", "T4", "T5"], "r2", 50.0))      # p1 again: ~41 + ~41 > $75
@@ -447,7 +452,7 @@ def test_player_exposure_capped_across_open_combo_quotes():
 
 
 def test_per_quote_liability_game_and_open_quote_caps():
-    m, *_ = make_maker(three_cross_game())
+    m, *_ = make_maker(three_cross_game(), cfg=TIGHT)
     big = m.on_rfq_created(combo_rfq(["T1", "T2", "T3"], "r1", 200.0))        # ~$164 collateral > $50
     assert big.reason == "REJ_RISK_SIZE"
     m2, *_ = make_maker(three_cross_game(), cfg=RFQConfig(max_open_quotes=1))
@@ -1187,3 +1192,62 @@ def test_unmapped_reasons_for_game_tickers():
     assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"
     assert b.why_unmapped("KXBTC15M-26OCT251945-45") == "unknown_series"
     assert b.why_unmapped("KXNFLGAME-26OCT25BUFKC-KC") is None                       # priced
+
+
+# ------------------------------------------------------------------------------------------ quote more (2026-11-01)
+def test_sgp_buffer_is_capped_so_long_same_game_combos_can_be_quoted():
+    gk = "nba:2026-10-25:TOR@MIN"
+    legs = [mk_leg(f"L{i}", gk, f"pl{i}", stat=f"s{i % 4}", p=0.5) for i in range(14)]
+    d = KalshiRFQPricer(book_of(*legs), PricerConfig(allow_same_game_combos=True, max_unpriced_legs=16)).price(
+        combo_rfq([l.ticker for l in legs]), NOW)
+    assert d.quoted and d.notes["same_game"]
+    assert d.p_yes_cons < 0.15 and d.no_bid >= 0.8                       # was NOT_LONGSHOT: 91 pairs * 2.5c saturated at min(p)
+    uncapped = KalshiRFQPricer(book_of(*legs), PricerConfig(allow_same_game_combos=True, sgp_buffer_cap=9.0)).price(
+        combo_rfq([l.ticker for l in legs]), NOW)
+    assert uncapped.reason == "REJ_COMBO_NOT_LONGSHOT"                   # the old behaviour, reachable via the knob
+
+
+def test_sgp_buffer_cap_leaves_small_groups_unchanged():
+    cfg_new, cfg_old = PricerConfig(allow_same_game_combos=True), PricerConfig(allow_same_game_combos=True, sgp_buffer_cap=9.0)
+    a = KalshiRFQPricer(same_game_book(), cfg_new).price(combo_rfq(["P", "R", "X"]), NOW)
+    b = KalshiRFQPricer(same_game_book(), cfg_old).price(combo_rfq(["P", "R", "X"]), NOW)
+    assert a.p_yes_true == b.p_yes_true and a.no_bid == b.no_bid
+
+
+def test_long_same_game_combo_with_mostly_unpriced_legs_is_a_sound_bound():
+    gk = "nba:2026-10-25:TOR@MIN"
+    priced = [mk_leg(f"L{i}", gk, f"pl{i}", stat=f"s{i}", p=0.55) for i in range(3)]
+    tickers = [l.ticker for l in priced] + [f"U{i}" for i in range(11)]              # 14 legs, 11 unpriceable
+    cfg = PricerConfig(allow_same_game_combos=True, max_unpriced_legs=16)
+    d = KalshiRFQPricer(book_of(*priced), cfg).price(combo_rfq(tickers), NOW)
+    assert d.quoted and d.notes["bounded"] and d.notes["n_unpriced"] == 11
+    assert d.p_yes_true <= 0.55                                           # never above the weakest priced leg (Frechet)
+
+
+def test_risk_caps_are_overridable_and_default_unchanged():
+    d = _daemon()
+    base = d.risk_config_from_args(type("A", (), {})())
+    assert base == RFQConfig()
+    ns = type("A", (), {"max_liability_per_quote": 120.0, "max_exposure_per_game": None,
+                        "max_exposure_per_player": 200.0, "max_open_quotes": 40})()
+    cfg = d.risk_config_from_args(ns)
+    assert (cfg.max_liability_per_quote_dollars, cfg.max_exposure_per_player_dollars, cfg.max_open_quotes) == (120.0, 200.0, 40)
+    assert cfg.max_exposure_per_game_dollars == RFQConfig().max_exposure_per_game_dollars
+
+
+def test_a_14_leg_64_contract_rfq_fits_the_scaffolding_defaults_but_not_the_old_caps():
+    """The demo tape's 14-leggers are 64.18 contracts: at no_bid ~0.86-0.93 that is $55-60, over the old $50 per-quote cap."""
+    legs = [{"game_key": "g", "player_norm": "p"}]
+    assert RFQRiskGate(TIGHT, RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (False, "REJ_RISK_SIZE")
+    assert RFQRiskGate(RFQConfig(), RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (True, "")
+
+
+def test_sgp_corr_table_holds_empirical_different_player_estimates():
+    from ev.kalshi_rfq_pricer import SGP_CORR_TABLE, PricerConfig, _pair_rho
+    assert SGP_CORR_TABLE[frozenset(("pass_yds", "rec_yds"))] == 0.26                    # the spec's 0.38 was too high (realized 0.26)
+    assert SGP_CORR_TABLE[frozenset(("assists", "threes"))] == 0.28 and SGP_CORR_TABLE[frozenset(("rec_yds",))] == 0.04
+    assert all(1 <= len(k) <= 2 and -0.5 <= v <= 0.9 for k, v in SGP_CORR_TABLE.items())
+    a, b = mk_leg("A", stat="rec_yds"), mk_leg("B", stat="rec_yds", player="p2")
+    assert _pair_rho(a, 1, b, 1, PricerConfig()) == pytest.approx(0.04)                    # same-stat pair uses the one-element key
+    assert _pair_rho(a, 1, mk_leg("C", stat="unmapped_stat", player="p3"), 1, PricerConfig()) == PricerConfig().sgp_default_rho
+    assert _pair_rho(mk_leg("D", stat="rush_yds"), 1, mk_leg("E", stat="pass_yds", player="p4"), 1, PricerConfig()) == 0.0   # negative clamped
