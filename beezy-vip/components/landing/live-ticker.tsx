@@ -1,6 +1,7 @@
 import { apiGetRecentSettled as getRecentSettled } from '@/lib/betting-api'
 import { formatOdds } from '@/lib/odds'
 import { clsx } from 'clsx'
+import { systemLabel } from '@/lib/tokens'
 
 // Seed data used when DB unavailable
 const SEED_TICKS = [
@@ -47,7 +48,7 @@ export async function LiveTicker() {
           >
             <span>{t.result}</span>
             <span className="text-muted">·</span>
-            <span>{t.system}</span>
+            <span>{systemLabel(t.system, true)}</span>
             <span className="text-muted">·</span>
             <span>{t.game}</span>
             <span className="text-muted">·</span>

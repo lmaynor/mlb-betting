@@ -186,14 +186,16 @@ describe('system methodology and the validation data', () => {
     expect(screen.getByText(/does not model injuries/i)).toBeInTheDocument()
     expect(screen.getByText(/No graded history is published for NBA projections/)).toBeInTheDocument()
   })
-  it('a stat no study covered prints dashes, and the PP-points gap is stated instead of a made-up projection', () => {
+  it('a stat no study covered prints dashes, and PP points (live since the backend serves them) is a normal projected system with no gap banner', () => {
     const { unmount } = render(<SystemMethodology system={getSportSystemBySlug('nba', 'steals')!} />)
     expect(screen.getByText('No trained model; unvalidated')).toBeInTheDocument()
     expect(screen.getByText('No study has compared this stat with prices.')).toBeInTheDocument()
     unmount()
     render(<SystemMethodology system={getSportSystemBySlug('nhl', 'pp-points')!} />)
-    expect(screen.getByText('DATA GAP.')).toBeInTheDocument()
-    expect(screen.getByText(/no power-play assists column/i)).toBeInTheDocument()
+    expect(screen.queryByText('DATA GAP.')).toBeNull()
+    expect(screen.getByText(/Empirical EWM \+ position prior \+ NegBin/)).toBeInTheDocument()
+    expect(screen.getByText('No trained model; unvalidated')).toBeInTheDocument()
+    expect(screen.getByText('No study has compared this stat with prices.')).toBeInTheDocument()
   })
   it('NBA validation numbers are the study\'s, and a metric no study produced is null', () => {
     const pts = SPORT_MODEL_SPECS.nba.models.find(m => m.key === 'points')!.validation!
@@ -211,7 +213,7 @@ describe('system methodology and the validation data', () => {
     for (const p of Object.values(SPORT_PILLARS)) {
       expect(p.status).toBe('live')
       expect(p.seasonBadge).toMatch(/\+EV SCANNER$/)
-      for (const m of p.markets) expect(m.status).toBe(p.slug === 'mlb' ? m.status : m.key === 'pp_points' ? 'Data gap' : 'Active')
+      for (const m of p.markets) expect(m.status).toBe(p.slug === 'mlb' ? m.status : 'Active')   // incl. NHL pp_points: live since 2026-11-01
     }
   })
 })

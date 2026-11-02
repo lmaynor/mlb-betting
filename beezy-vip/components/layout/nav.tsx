@@ -129,7 +129,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           </div>
 
           {/* Mobile: auth + Discord + Install. BottomNav handles routing. */}
-          <div className="mobile-only" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          <div className="mobile-only nav-mobile-actions" style={{ alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
             <InstallAppButton compact />
             {isSignedIn ? (
               userButton
@@ -145,7 +145,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
 
       {/* TIER 2 -- multi-sport context bar */}
       <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
+        <div className="sport-ribbon" style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
           <SportLink href={sportHref('all')} label="ALL SPORTS" active={sportActive(pathname, 'all')} />
           {LIVE_SPORTS.map(p => (
             <SportLink
@@ -167,6 +167,7 @@ function SportLink({ href, label, active, accent }: { href: string; label: strin
   return (
     <Link
       href={href}
+      className="sport-ribbon-link"
       style={{
         display: 'inline-flex', alignItems: 'center', gap: '7px', textDecoration: 'none',
         fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.05em', color,

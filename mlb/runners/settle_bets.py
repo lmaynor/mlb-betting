@@ -859,15 +859,17 @@ def _winter_season_start(settle_date: str) -> str:
     return f"{y if m >= 8 else y - 1}-08-01"
 
 
-def _winter_sport_stats(engine, settle_date: str) -> dict:
-    """Season record of the logged NFL / NBA / NHL alert bets, one entry per sport (None when nothing has settled), for
-    the #daily-recap embed. Same fields as the per-system MLB stats."""
+def _winter_sport_stats(engine, settle_date: str, system: str = "EV") -> dict:
+    """Season record of the logged NFL / NBA / NHL bets of one system ('EV' = book-outlier alerts, 'PROPS' = the model's own
+    picks, ev.model_picks), one entry per sport (None when nothing has settled), for the #daily-recap embed. Same fields as
+    the per-system MLB stats. The two systems are kept apart: the model-pick record is the one that says whether the engines work."""
     from sqlalchemy import text
     try:
         with engine.connect() as conn:
             rows = pd.read_sql(
-                text("SELECT * FROM bets WHERE game_date >= :s AND game_date <= :e AND sport IN ('nfl', 'nba', 'nhl')"),
-                conn, params={"s": _winter_season_start(settle_date), "e": settle_date},
+                text("SELECT * FROM bets WHERE game_date >= :s AND game_date <= :e AND sport IN ('nfl', 'nba', 'nhl') "
+                     "AND system = :sys"),
+                conn, params={"s": _winter_season_start(settle_date), "e": settle_date, "sys": system},
             )
     except Exception as e:                                                                  # noqa: BLE001
         logger.warning("settle: winter recap stats unavailable: %r", e)
@@ -1098,12 +1100,13 @@ def run(settle_date: str = None) -> dict:
         }
 
     sport_stats = _winter_sport_stats(engine, settle_date)
+    model_stats = _winter_sport_stats(engine, settle_date, system="PROPS")
 
     from mlb_core.config import is_mlb_offseason
     # In-season always posts; in the MLB offseason post whenever ANY sport settled bets (NFL/NBA/NHL results used to be
     # swallowed when no MLB bet was pending).
     if not is_mlb_offseason() or not mlb_pending.empty or all_outcomes:
-        post_all_systems_summary(system_stats, settle_date=settle_date, sport_stats=sport_stats)
+        post_all_systems_summary(system_stats, settle_date=settle_date, sport_stats=sport_stats, model_stats=model_stats)
 
     return {
         "status":      "ok",

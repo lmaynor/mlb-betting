@@ -3,6 +3,7 @@
  * NBA projection boards. Everything is scored on the same Beezy Score scale and labelled by where it came from, so a
  * tracked MLB pick is never presented as if it were a validated projection.
  */
+import { betTier, isWinterSport, notesBookCount } from '@/lib/bet-notes'
 import { isOffshore } from '@/lib/offshore'
 import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
@@ -42,6 +43,8 @@ export interface TopPick {
   confluence?: boolean
   modelEdge?: number | null
   marketEv?: number | null
+  /** a tracked NFL / NBA / NHL bet: it settles in the ledger like MLB but the model behind it has no tested edge, so it is labelled paper / unvalidated */
+  unvalidated?: boolean
 }
 
 const edgeFraction = (e: number | null | undefined): number | null => {
@@ -59,9 +62,15 @@ export function fromBet(bet: Bet): TopPick {
   const what = player ? (rest || label) : ''
   const away = bet.away_team ?? ''
   const home = bet.home_team ?? ''
+  // A winter bet (NFL / NBA / NHL: the model's own 'PROPS' picks and the sweep's 'EV' alerts) keeps ITS sport. It was hard-coded
+  // 'mlb', which sent winter picks through the MLB official-card branch of isOfficialCardPlay (validated model, no confluence needed).
+  const winter = isWinterSport(bet.sport)
+  const sport: SportSlug = winter ? (bet.sport!.toLowerCase() as SportSlug) : 'mlb'
+  // The backend's own gate is the tier in the notes: an 'official' model pick passed the model + market confluence gate.
+  const confluence = winter ? bet.system === 'PROPS' && betTier(bet) === 'official' : bet.system !== 'EV'
   return {
-    key: `mlb|${bet.id}`,
-    sport: 'mlb',
+    key: `${sport}|${bet.id}`,
+    sport,
     who,
     what,
     game: away && home ? `${away} @ ${home}` : '',
@@ -69,11 +78,13 @@ export function fromBet(bet: Bet): TopPick {
     book: bet.book,
     edge: edgeFraction(bet.edge),
     score: beezyscore(bet),
-    basis: bet.system === 'EV' ? 'ev' : 'model',
+    basis: bet.system === 'EV' ? 'ev' : 'model',      // 'PROPS' (the model's own winter picks) is a model basis, never 'ev'
     tracked: true,
+    unvalidated: winter,
     result: bet.result,
     bet,
-    confluence: bet.system !== 'EV',
+    nBooks: winter ? notesBookCount(bet.notes) : undefined,
+    confluence,
   }
 }
 

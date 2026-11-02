@@ -6,6 +6,8 @@
  * brand accent, and a per-system color taxonomy (Discord-style) so each
  * betting system reads as its own identity color across the product.
  */
+import { isWinterSport } from '@/lib/bet-notes'
+import { propStatLabel } from '@/lib/sports'
 import type { Bet } from '@/lib/types'
 
 // Hairline border -- replaces the old hard 1px-black Dell frame.
@@ -111,6 +113,9 @@ export const SYSTEM_COLOR: Record<string, string> = {
                             // deliberately not a per-market hue since EV
                             // isn't its own market, it pools alerts across
                             // every market above.
+  // The model's own NFL / NBA / NHL prop picks (ev/model_picks.py, system='PROPS', paper, flat 1u, UNVALIDATED). Not per-sport:
+  // the sport is the bet's own `sport` column and the market is in its bet_type.
+  PROPS:       '#8fd4c1',   // seafoam: clear of EV orchid, Kalshi teal and the sport hue families
   ALL:         '#c9c6cf',   // neutral silver
 }
 
@@ -144,7 +149,7 @@ export const SYSTEM_LABEL: Record<string, string> = {
   F5: 'F5', F3: 'F3', F7: 'F7', F1H: '1st Half', GAME: 'Game',
   HR: 'HR', K: 'K', OUTS: 'Outs',
   BATTER_TB: 'Total Bases', BATTER_HITS: 'Hits', BATTER_K: 'Batter K', SB: 'Stolen Bases',
-  PITCHER_ER: 'Earned Runs', EV: 'EV', KALSHI_EV: 'Kalshi EV',
+  PITCHER_ER: 'Earned Runs', EV: 'EV', KALSHI_EV: 'Kalshi EV', PROPS: 'Model pick',
   PASS_YDS: 'Pass Yds', RUSH_YDS: 'Rush Yds', REC_YDS: 'Rec Yds',
   RECEPTIONS: 'Receptions', PASS_TDS: 'Pass TDs',
   NFL_PASS_YDS: 'Pass Yds', NFL_PASS_TDS: 'Pass TDs', NFL_PASS_COMP: 'Completions', NFL_PASS_ATT: 'Pass Attempts',
@@ -162,7 +167,7 @@ export const SYSTEM_LABEL: Record<string, string> = {
 export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   ...SYSTEM_LABEL,
   BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K', SB: 'SB',
-  PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME',
+  PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME', PROPS: 'MODEL',
   // compact chip / table-pill wording for the multi-sport systems
   NFL_PASS_YDS: 'PASS YDS', NFL_PASS_TDS: 'PASS TDS', NFL_PASS_COMP: 'COMP', NFL_PASS_ATT: 'ATT', NFL_INT: 'INT',
   NFL_RUSH_YDS: 'RUSH YDS', NFL_RUSH_ATT: 'CARRIES', NFL_REC_YDS: 'REC YDS', NFL_RECEPTIONS: 'REC', NFL_ANYTIME_TD: 'ANYTIME TD',
@@ -289,7 +294,29 @@ function resolveEvSystem(bt: string): string | null {
 // market too, not just this file's own pickLabel().
 export function resolveEvUnderlying(bet: Bet): { system: string; bet_type: string } {
   const bt = stripEvBookSuffix(bet.bet_type ?? '', bet.book)
+  // winter (NFL / NBA / NHL) alerts are '<stat>_<side>_<line>' and have no MLB underlying system: never guess one from a prefix
+  if (isWinterSport(bet.sport)) return { system: 'EV', bet_type: bt }
   return { system: resolveEvSystem(bt) ?? 'EV', bet_type: bt }
+}
+
+// -- Winter (NFL / NBA / NHL) bet types --------------------------------------------------------------------------------
+// The sport alerts ('EV') and the model's own picks ('PROPS') store bet_type as '<stat>_<side>_<line>' in lower case
+// ('rebounds_over_10.5', 'pass_yds_under_250.5', 'pp_points_over_0.5'); a stat can contain underscores, so the side is
+// matched from the right. Anytime TD may carry no line ('anytime_td_over').
+export function parseWinterBetType(bt: string | null | undefined): { stat: string; side: 'over' | 'under'; line: number | null } | null {
+  const m = /^([a-z][a-z0-9_]*?)_(over|under)(?:_(-?\d+(?:\.\d+)?))?$/i.exec((bt ?? '').trim())
+  if (!m) return null
+  return { stat: m[1].toLowerCase(), side: m[2].toLowerCase() as 'over' | 'under', line: m[3] == null ? null : Number(m[3]) }
+}
+
+/** '<Player> Over 10.5 Rebounds' for a winter bet type; anytime TD reads '<Player> Anytime TD' / '<Player> No Anytime TD'. */
+export function winterPickLabel(player: string, bt: string): string {
+  const p = parseWinterBetType(bt)
+  const who = player ? `${player} ` : ''
+  if (!p) return `${who}${bt.replace(/_/g, ' ')}`.trim()
+  if (p.stat === 'anytime_td') return `${who}${p.side === 'under' ? 'No ' : ''}Anytime TD`.trim()
+  const side = p.side === 'under' ? 'Under' : 'Over'
+  return `${who}${side}${p.line == null ? '' : ` ${p.line}`} ${propStatLabel(p.stat)}`.trim()
 }
 
 // The actual per-system label logic, factored out of pickLabel so an EV
@@ -395,6 +422,10 @@ export function pickLabel(bet: Bet): string {
   // system -- format through the market they actually resolve to (see
   // resolveEvUnderlying) so the label reads like a native pick instead of
   // leaking the raw "{bet_type}_{book}" string (e.g. "K_OVER_7.5_draftkings").
+  // The model's own winter picks (system 'PROPS') and winter +EV alerts store '<stat>_<side>_<line>': read like '<Player> Over 10.5 Rebounds'.
+  if (bet.system === 'PROPS' || (bet.system === 'EV' && isWinterSport(bet.sport))) {
+    return winterPickLabel(player, bet.system === 'EV' ? resolveEvUnderlying(bet).bet_type : (bet.bet_type ?? ''))
+  }
   if (bet.system === 'EV') {
     const { system, bet_type } = resolveEvUnderlying(bet)
     return formatPick(system, bet_type, player, team, away, home)

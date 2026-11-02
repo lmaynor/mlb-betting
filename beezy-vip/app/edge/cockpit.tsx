@@ -429,6 +429,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span style={{ fontSize: '13px', color: 'var(--ash)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{propText(r)}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
           <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 5px', flex: '0 0 auto' }}>{r.sport.toUpperCase()}</span>
+          {r.sport !== 'mlb' && <span className="dell-heading" title="NFL, NHL and NBA output has no tested edge against prices" style={{ fontSize: '10px', color: '#f59e0b', flex: '0 0 auto' }}>UNVALIDATED</span>}
           <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta}</span>
         </span>
       </span>

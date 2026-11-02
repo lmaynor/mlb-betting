@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying, bookText } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
+import { isWinterSport, readableNotes } from '@/lib/bet-notes'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey } from '@/lib/dates'
 import type { Bet } from '@/lib/types'
@@ -127,6 +128,11 @@ function pickDetail(label: string, player: string | null) {
     .replace(/^[-\s]+/, '')
 }
 
+/** A tracked NFL / NBA / NHL bet: graded like any pick, but the model has no tested edge, so it says so on every row. */
+function UnvalidatedTag() {
+  return <span className="dell-heading" title="Paper-tracked model output with no tested edge against prices" style={{ fontSize: '10px', color: '#f59e0b' }}>UNVALIDATED &middot; PAPER</span>
+}
+
 function systemDisplay(system: string) {
   return systemLabel(system, true)
 }
@@ -148,7 +154,7 @@ function TableRow({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[effectiveSystem(bet) as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
-  const notes = splitNotes(bet.notes)
+  const notes = splitNotes(readableNotes(bet.notes))
   const detail = pickDetail(label, bet.player)
   const description = pickDescription(bet, detail)
 
@@ -203,6 +209,7 @@ function TableRow({ bet }: { bet: Bet }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
             <span style={{ fontSize: '12px', color: 'var(--ash)', fontWeight: 650 }}>{label}</span>
             {description && <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{description}</span>}
+            {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
         )}
         {notes.length > 0 && (
@@ -237,7 +244,7 @@ function BetCard({ bet }: { bet: Bet }) {
   const pill = SYSTEM_PILL[effectiveSystem(bet) as keyof typeof SYSTEM_PILL] ?? SYSTEM_PILL.ALL
   const label = pickLabel(bet)
   const hasProp = PROP_SYSTEMS.has(effectiveSystem(bet))
-  const notes = splitNotes(bet.notes)
+  const notes = splitNotes(readableNotes(bet.notes))
   const score = beezyscore(bet)
   const tierColor = TIER_COLOR[scoreTier(score)]
   const detail = pickDetail(label, bet.player)
@@ -286,6 +293,7 @@ function BetCard({ bet }: { bet: Bet }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span style={{ fontSize: '15px', fontWeight: 750, color: 'var(--ash)' }}>{label}</span>
             {description && <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{description}</span>}
+            {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
         )}
         {notes.length > 0 && (

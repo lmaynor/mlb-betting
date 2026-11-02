@@ -78,7 +78,7 @@ def test_bestbook_live_setup_is_ungated_and_has_pause_and_resume_switches():
 
 def test_alert_sweep_jobs_that_log_bets_are_wired_for_the_database():
     """sport_alerts.log_sport_alert_bets writes the bets table; a job without MLB_DB_URL + Cloud SQL used to lose every row."""
-    for name in ("setup_props_alerts.sh", "setup_nfl_sweep_schedule.sh", "setup_fast_alert.sh"):
+    for name in ("setup_props_alerts.sh", "setup_nfl_sweep_schedule.sh", "setup_fast_alert.sh", "setup_model_picks.sh"):
         s = (DEPLOY / name).read_text()
         assert "MLB_DB_URL=mlb-db-url:latest" in s, name
         assert "cloudsql-instances" in s and "mlb-betting-db" in s, name

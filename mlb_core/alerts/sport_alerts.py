@@ -126,6 +126,7 @@ def alert_embed(r: dict) -> dict:
     where = " | ".join(x for x in (matchup(r), kickoff(r)) if x)
     desc = (f"**{book_display(r['book'])} {price:+d}**  |  EV **{r['ev'] * 100:+.1f}%**\n"
             f"That price needs {implied:.1%} to hit. The other {r['n_books']} books put it at {r['p_fair']:.1%}."
+            + (f"\nModel: {r['p_model']:.1%} on this side." if r.get("p_model") is not None else "")
             + (f"\n{where}" if where else ""))
     score = r.get("score")
     t = tier(score) if score is not None else "watch"
@@ -159,7 +160,7 @@ def signal_message(rows: list[dict], sport: str | None = None) -> tuple[str, lis
 
 # -- delivery --------------------------------------------------------------------------------------------------------
 
-def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
+def post_sport_alerts(sport: str, rows: list[dict], log_bets: bool = True) -> bool:
     """Post already-gated rows (see gate()) to the sport's alerts channel. True only if something was delivered, so
     callers can leave undelivered rows un-notified and retry on the next pass. Never raises.
 
@@ -168,9 +169,11 @@ def post_sport_alerts(sport: str, rows: list[dict]) -> bool:
     possible from a webhook)."""
     if not rows:
         return False
-    # Log gated official alerts into the unified bets ledger
+    # Log gated official alerts into the unified bets ledger (log_bets=False: the caller owns its own ledger rows, e.g.
+    # ev.model_picks logs system='PROPS' itself and must not also create system='EV' duplicates)
     try:
-        log_sport_alert_bets(sport, rows)
+        if log_bets:
+            log_sport_alert_bets(sport, rows)
     except Exception:                                                                    # noqa: BLE001
         # a ledger failure must not stop the member post, but it must never be silent either
         log.exception("log_sport_alert_bets(%s) failed; %d alert(s) were NOT recorded in the bets ledger", sport, len(rows))

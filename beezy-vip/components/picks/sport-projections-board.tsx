@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import { useIsMobile } from '@/components/ui/mobile-sheet'
 import { PlayerHeadshot, SportLogo } from '@/components/ui/sport-assets'
 import { fairAmerican, type BoardRow } from '@/lib/board-rows'
 import { scoreTier, TIER_META } from '@/lib/beezy-score'
@@ -13,6 +14,9 @@ const SURFACE = SURFACE_CARD
 const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
+/** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps SCORE, PLAYER, PICK, MODEL, BEST PRICE and EDGE */
+const HIDE_ON_PHONE = new Set(['TEAM', 'MARKET FAIR', 'FORM', 'PRICE EV', 'RESULT'])
+const TAP_PX = 44
 const HEAD_TIPS: Record<string, string> = {
   SCORE: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
   'MARKET FAIR': 'The books\' consensus probability for this side with the vig removed.',
@@ -37,6 +41,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
 }) {
   const pillar = SPORT_PILLARS[sport]
   const [limit, setLimit] = useState(PAGE)
+  // phone only: a row opens a detail line with the columns the phone table drops. Desktop shows every column, so it never renders one.
+  const isMobile = useIsMobile(768)
+  const [open, setOpen] = useState<string | null>(null)
 
   if (rows.length === 0) {
     return (
@@ -60,9 +67,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   return (
     <div>
       {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--fog)', marginBottom: '8px' }}>{status}</div>}
-      <div style={{ ...SURFACE, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '980px', fontSize: '13px' }}>
-          <thead><tr>{heads.map(h => <th key={h} className="dell-heading" title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
+      <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
+        <table className="pb-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead><tr>{heads.map(h => <th key={h} className={`dell-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
               const b = r.book ? bookDisplay(r.book) : null
@@ -70,29 +77,38 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
               const ev = r.marketEv ?? 0
               const isOfficial = ev >= 0.03 && ev <= 0.10 && r.score >= 68 && (r.sport === 'mlb' ? r.isPick !== false : (!!r.confluence && (r.nBooks == null || r.nBooks >= 4) && (r.modelEdge == null || r.modelEdge >= 0.015)))
               const isOutlier = ev >= 0.025 && ev <= 0.15 && (r.nBooks == null || r.nBooks >= 3) && !isOfficial
+              const isOpen = isMobile && open === r.key
               return (
-                <tr key={r.key} className="sys-row">
-                  <td style={TD}>
+                <Fragment key={r.key}>
+                <tr className="sys-row" onClick={isMobile ? () => setOpen(isOpen ? null : r.key) : undefined} style={isMobile ? { cursor: 'pointer' } : undefined}>
+                  <td className="pb-score" style={TD}>
                     {r.score > 0 ? (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         {isOfficial ? (
-                          <span className="dell-heading" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
                         ) : isOutlier ? (
-                          <span className="dell-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
                         ) : null}
                         <span className="mono" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--silver)', fontWeight: 700 }}>{r.score}</span>
                       </div>
                     ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                   </td>
-                  <td style={TD}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      {r.headshotId != null && hasHeadshots(r.sport) && <PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} />}
-                      <span>
-                        <span style={{ color: 'var(--chalk)', fontWeight: 600 }}>{r.player}</span>
+                  <td className="pb-player" style={TD}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '100%' }}>
+                      {r.headshotId != null && hasHeadshots(r.sport) && <span className="pb-hide-m" style={{ display: 'inline-flex' }}><PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} /></span>}
+                      <span style={{ minWidth: 0 }}>
+                        {isMobile ? (
+                          <button type="button" className="pb-name" aria-expanded={isOpen} title={r.player}
+                            style={{ color: 'var(--chalk)', fontWeight: 600, background: 'none', border: 'none', padding: 0, font: 'inherit', textAlign: 'left', cursor: 'pointer', minHeight: `${TAP_PX}px`, display: 'block', maxWidth: '100%' }}>
+                            <span className="pb-name-text">{r.player}</span>
+                          </button>
+                        ) : (
+                          <span className="pb-name" title={r.player} style={{ color: 'var(--chalk)', fontWeight: 600 }}>{r.player}</span>
+                        )}
                       </span>
                     </span>
                   </td>
-                  <td style={TD}>
+                  <td className="pb-hide-m" style={TD}>
                     {r.team ? (
                       <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--silver)', fontSize: '12px' }}>
                         <SportLogo sport={r.sport} team={r.team} size={20} />{r.team}
@@ -103,25 +119,25 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                       </span>
                     ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                   </td>
-                  <td style={{ ...TD, color: 'var(--silver)' }}>
+                  <td className="pb-pick" style={{ ...TD, color: 'var(--silver)' }}>
                     {r.hasLine && r.line != null
-                      ? <span><span className="mono" style={{ color: 'var(--chalk)' }}>{r.side === 'under' ? 'Under' : 'Over'} {r.line}</span> {r.marketLabel}</span>
-                      : r.hasLine ? <span>{r.marketLabel}</span>
-                        : <span>{r.marketLabel} <span style={{ color: 'var(--fog)' }}>(no line yet)</span></span>}
+                      ? <span><span className="mono pb-line" style={{ color: 'var(--chalk)' }}>{r.side === 'under' ? 'Under' : 'Over'} {r.line}</span>{' '}<span className="pb-mkt">{r.marketLabel}</span></span>
+                      : r.hasLine ? <span className="pb-mkt">{r.marketLabel}</span>
+                        : <span><span className="pb-mkt">{r.marketLabel}</span>{' '}<span className="pb-noline" style={{ color: 'var(--fog)' }}>(no line yet)</span></span>}
                   </td>
                   {showModel && (
-                    <td style={TD}>
+                    <td className="pb-model" style={TD}>
                       <span className="mono" style={{ color: 'var(--chalk)', fontWeight: 700 }}>{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono" title="The model's probability for the listed side" style={{ marginLeft: '8px', fontSize: '11.5px', color: 'var(--silver)' }}>{pct(r.pModel)}</span>}
+                      {r.pModel != null && <span className="mono pb-hide-m" title="The model's probability for the listed side" style={{ marginLeft: '8px', fontSize: '11.5px', color: 'var(--silver)' }}>{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showFair && (
-                    <td className="mono" style={{ ...TD, color: 'var(--silver)' }}>
+                    <td className="mono pb-hide-m" style={{ ...TD, color: 'var(--silver)' }}>
                       {r.pFair == null ? '--' : <span>{pct(r.pFair)}{fair != null ? ` ${formatOdds(fair)}` : ''}{r.nBooks != null ? <span style={{ color: r.nBooks >= 3 ? 'var(--fog)' : 'var(--warn)' }}> {r.nBooks} bk</span> : null}</span>}
                     </td>
                   )}
                   {showForm && (
-                    <td className="mono" style={{ ...TD, fontSize: '12px' }}>
+                    <td className="mono pb-hide-m" style={{ ...TD, fontSize: '12px' }}>
                       {r.l5 != null || r.l10 != null ? (
                         <span title="Share of the last 5 and last 10 games that landed on the listed side of the line">
                           <span style={{ color: hitColor(r.l5) }}>L5 {pct(r.l5)}</span> <span style={{ color: 'var(--fog)' }}>&middot;</span> <span style={{ color: hitColor(r.l10) }}>L10 {pct(r.l10)}</span>
@@ -133,35 +149,37 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                       ) : <span style={{ color: 'var(--fog)' }}>--</span>}
                     </td>
                   )}
-                  <td style={TD}>
+                  <td className="pb-price" style={TD}>
                     {r.odds == null || !b ? <span style={{ color: 'var(--fog)' }}>--</span> : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
+                        <span className="pb-book" data-short={b.short} title={b.label} style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
                         <span className="mono" style={{ color: 'var(--chalk)' }}>{formatOdds(r.odds)}</span>
                       </span>
                     )}
                   </td>
-                  <td style={TD}>
+                  <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.modelEdge)}</span>
-                    {r.confluence && <span className="dell-heading" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="dell-heading" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
+                    {r.confluence && <span className="dell-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.isPick && <span className="dell-heading pb-hide-m" style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--signal)' }}>PICK</span>}
                   </td>
                   {showEv && (
-                    <td style={TD}>
+                    <td className="pb-hide-m" style={TD}>
                       <span className="mono" title="Best price against the market's fair probability, not the model's" style={{ color: (r.marketEv ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{signed(r.marketEv)}</span>
                     </td>
                   )}
                   {showResult && (
-                    <td className="dell-heading" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--fog)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
+                    <td className="dell-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--fog)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
                   )}
                 </tr>
+                {isOpen && <DetailRow r={r} span={heads.length} showResult={showResult} />}
+                </Fragment>
               )
             })}
           </tbody>
         </table>
       </div>
       {rows.length > limit && (
-        <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost" style={{ marginTop: '10px' }}>Show {Math.min(PAGE, rows.length - limit)} more</button>
+        <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m" style={{ marginTop: '10px' }}>Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
       <p style={{ fontSize: '11.5px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.55 }}>
         Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
@@ -170,5 +188,35 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       </p>
       {note}
     </div>
+  )
+}
+
+/** The phone's tap-open line: every column the phone table drops, plus the engine that priced the row and the unvalidated reminder. */
+function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showResult: boolean }) {
+  const fair = fairAmerican(r.pFair)
+  const item = (label: string, value: React.ReactNode) => (
+    <div style={{ display: 'flex', gap: '6px', minWidth: 0 }}>
+      <dt className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', flex: '0 0 auto' }}>{label}</dt>
+      <dd className="mono" style={{ margin: 0, color: 'var(--silver)', fontSize: '12px', minWidth: 0 }}>{value}</dd>
+    </div>
+  )
+  return (
+    <tr className="pb-detail">
+      <td colSpan={span} style={{ ...TABLE_TD, background: '#0e1016', padding: '10px 12px' }}>
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px 14px' }}>
+          {item('GAME', r.matchup || '--')}
+          {r.team && item('TEAM', r.team)}
+          {r.pModel != null && item('MODEL', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
+          {r.pFair != null && item('MARKET FAIR', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
+          {(r.l5 != null || r.l10 != null) && item('FORM', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
+          {r.l5 == null && r.l10 == null && (r.avg10 != null || r.avgSzn != null) && item('AVG', `L10 ${num(r.avg10)} \u00b7 szn ${num(r.avgSzn)}`)}
+          {r.marketEv != null && item('PRICE EV', signed(r.marketEv))}
+          {r.confluence && item('SIGNAL', 'Model + market agree')}
+          {showResult && r.result && item('RESULT', r.result.toUpperCase())}
+          {r.engine && item('ENGINE', r.engine)}
+        </dl>
+        {r.sport !== 'mlb' && <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--warn)' }}>Unvalidated model output. Paper only, not in the public results.</div>}
+      </td>
+    </tr>
   )
 }

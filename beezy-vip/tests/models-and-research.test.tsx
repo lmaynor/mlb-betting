@@ -43,11 +43,12 @@ describe('a model page for every listed system', () => {
       unmount()
     })
 
-  it('a data-gap system says so and shows no performance strip', async () => {
+  it('NHL PP points is a live projected system: no data-gap banner, the performance strip prints dashes (no accuracy study exists yet)', async () => {
     const { container } = render(await ProjectionModelDetail({ system: getSportSystemBySlug('nhl', 'pp-points')! }))
-    expect(screen.getAllByText(/DATA GAP/).length).toBeGreaterThan(0)
-    expect(screen.queryByText('Live MAE')).toBeNull()
-    expect(container.textContent).toContain('Not projected')
+    expect(screen.queryByText(/DATA GAP/)).toBeNull()
+    expect(screen.getByText('Live MAE')).toBeInTheDocument()
+    expect(screen.getByText('no live accuracy file')).toBeInTheDocument()
+    expect(container.textContent).not.toContain('Not projected')
   })
 })
 

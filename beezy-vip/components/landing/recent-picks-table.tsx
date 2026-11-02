@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
-import { SYSTEM_PILL, SURFACE_CARD, pickLabel } from '@/lib/tokens'
+import { isWinterSport } from '@/lib/bet-notes'
+import { SYSTEM_PILL, SURFACE_CARD, pickLabel, systemLabel } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { collapseBooks } from '@/lib/dedupe'
 import { BookLogo } from '@/components/ui/book-logo'
@@ -62,13 +63,13 @@ export async function RecentPicksTable() {
                   <tr key={b.id}>
                     <td style={{ ...TD, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '6px', background: pill.bg, color: pill.color, border: pill.border }}>{b.system}</span>
+                        <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '6px', background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(b.system, true)}</span>
                         <span style={{ flexShrink: 0, width: 30, height: 30, display: 'inline-flex' }}>
                           {b.player && <PlayerHeadshot sport={sp} id={playerIdByName(sp, b.player)} name={b.player} size={30} />}
                         </span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{b.player ?? pickText(b)}</div>
-                          {b.player && <div style={{ fontSize: '12px', color: '#9ca3af' }}>{pickText(b)}</div>}
+                          {b.player && <div style={{ fontSize: '12px', color: '#9ca3af' }}>{pickText(b)}{isWinterSport(b.sport) && <span className="dell-heading" title="Paper-tracked model output with no tested edge" style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b' }}>{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>

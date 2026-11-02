@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 import { collapseBooks } from '@/lib/dedupe'
-import { SYSTEM_COLOR, pickLabel } from '@/lib/tokens'
+import { isWinterSport } from '@/lib/bet-notes'
+import { SYSTEM_COLOR, pickLabel, systemLabel } from '@/lib/tokens'
 import type { Bet } from '@/lib/types'
 
-type Tick = { system: string; label: string; u: number; win: boolean }
+type Tick = { system: string; label: string; u: number; win: boolean; unvalidated?: boolean }
 
 const PER_SIDE = 6
 
@@ -19,7 +20,7 @@ export async function LiveTicker() {
       if (!b.kelly_triggered || (b.result !== 'win' && b.result !== 'loss')) continue
       // Units = profit / stake, so a $100 flat EV bet and a $10 model bet both read as 1u risked.
       const unit = b.stake && b.stake > 0 ? b.stake : 10
-      const tick: Tick = { system: b.system, label: pickLabel(b), u: (b.profit ?? 0) / unit, win: b.result === 'win' }
+      const tick: Tick = { system: b.system, label: pickLabel(b), u: (b.profit ?? 0) / unit, win: b.result === 'win', unvalidated: isWinterSport(b.sport) }
       if (tick.win && wins.length < PER_SIDE) wins.push(tick)
       if (!tick.win && losses.length < PER_SIDE) losses.push(tick)
       if (wins.length === PER_SIDE && losses.length === PER_SIDE) break
@@ -56,8 +57,9 @@ export async function LiveTicker() {
             return (
               <span key={i} className="mono" style={{ fontSize: '12px', color: 'var(--ash)', letterSpacing: '0.02em', whiteSpace: 'nowrap', padding: '0 18px', display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
                 <span style={{ color: tone, fontWeight: 700 }}>{t.win ? 'W' : 'L'}</span>
-                <span style={{ color: sysColor, fontWeight: 600 }}>{t.system}</span>
+                <span style={{ color: sysColor, fontWeight: 600 }}>{systemLabel(t.system, true)}</span>
                 <span>{t.label}</span>
+                {t.unvalidated && <span style={{ color: '#f59e0b', fontSize: '10px' }}>UNVALIDATED</span>}
                 <span style={{ color: tone, fontWeight: 600 }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
                 <span style={{ color: 'var(--basalt)', padding: '0 12px' }}>|</span>
               </span>

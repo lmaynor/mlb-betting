@@ -389,7 +389,25 @@ def _load_nba() -> dict | None:
     df["minutes"] = df["minutes"].map(_minutes)
     df["_date"] = df["date"].astype(str).str[:10]
     df["_sort"] = df["_date"]
-    df["_opp"] = df["opp_abbr"] if "opp_abbr" in df.columns else None
+    # The player box master carries NO opponent column and spells five teams differently from the tricodes the engine keys
+    # on (GS / NO / NY / SA / PHO). Without the two steps below the opponent factor was empty and the team-makes assist
+    # factor was inert on the live board, while every replay (nba/props/engine_eval.py) had both. Fold the codes to the
+    # tricode (idempotent for rows that already carry one, e.g. the hoopR top-up), then derive the opponent from the
+    # two teams that share a game_id.
+    from nba.props.data import sb_team
+    if "team_abbr" in df.columns:
+        df["team_abbr"] = [sb_team(a) or a for a in df["team_abbr"]]
+    if "opp_abbr" in df.columns:
+        df["_opp"] = df["opp_abbr"].map(lambda a: sb_team(a) or a if isinstance(a, str) else None)
+    elif {"game_id", "team_abbr"} <= set(df.columns):
+        teams = df.groupby("game_id")["team_abbr"].agg(lambda t: sorted(set(t)))
+        opp = {}
+        for gid, ts in teams.items():
+            if len(ts) == 2:
+                opp[(gid, ts[0])], opp[(gid, ts[1])] = ts[1], ts[0]
+        df["_opp"] = [opp.get((g, t)) for g, t in zip(df["game_id"], df["team_abbr"])]
+    else:
+        df["_opp"] = None
     df = df.sort_values("_date", kind="stable")
     return {"all": _index(df, "name", None)}
 

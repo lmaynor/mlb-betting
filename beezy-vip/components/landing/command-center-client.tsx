@@ -8,6 +8,7 @@ import { bookDisplay, SURFACE_CARD, pickLabel } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { SystemBadge } from '@/components/ui/primitives'
 import { collapseBooks } from '@/lib/dedupe'
+import { isWinterSport, readableNotes } from '@/lib/bet-notes'
 
 const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #1e2230' }
 const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #151822', verticalAlign: 'middle' }
@@ -42,7 +43,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
             <tbody>
               {top.map(b => {
                 const book = bookDisplay(b.book)
-                const bullets = (b.notes ?? '').split(' . ').map(s => s.trim()).filter(Boolean)
+                const bullets = (readableNotes(b.notes) ?? '').split(' . ').map(s => s.trim()).filter(Boolean)
                 const isOpen = open === b.id
                 const edge = Math.abs(b.edge ?? 0) < 2 ? (b.edge ?? 0) * 100 : (b.edge ?? 0)
                 return (

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useRef } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import type { BoardDay } from '@/lib/board-days'
 import { addDaysToDateKey } from '@/lib/dates'
@@ -41,17 +42,27 @@ export function DayToggle({ today, yesterday, days, selected, pinDates = true }:
     const qs = p.toString()
     return qs ? `${pathname}?${qs}` : pathname
   }
+  // On a phone the strip scrolls sideways and starts at YESTERDAY, so a later selected day (TUE, THU) would sit off screen: bring it into view
+  // by moving the strip itself, never the page.
+  const strip = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = strip.current
+    const on = nav?.querySelector<HTMLElement>('[aria-current="date"]')
+    if (!nav || !on || nav.scrollWidth <= nav.clientWidth) return
+    const left = on.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft
+    nav.scrollLeft = Math.max(0, left - (nav.clientWidth - on.offsetWidth) / 2)
+  }, [selected])
   const chips = [...(yesterday ? [{ ...yesterday, yest: true }] : []), ...days.map(d => ({ ...d, yest: false }))]
   const name = (c: { date: string; label: string }) =>
     c.date === today ? `TODAY ${c.label}` : c.date === addDaysToDateKey(today, -1) ? `YESTERDAY ${c.label}` : c.label
   return (
-    <nav aria-label="Day" style={{ display: 'inline-flex', maxWidth: '100%', overflowX: 'auto' }}>
+    <nav ref={strip} aria-label="Day" style={{ display: 'inline-flex', maxWidth: '100%', overflowX: 'auto' }}>
       {chips.map((c, i) => {
         const on = c.date === selected
         const [word, ...rest] = name(c).split(' ')
         const dated = word === 'TODAY' || word === 'YESTERDAY'
         return (
-          <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined}
+          <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined} className="tap-m"
             title={c.count == null ? undefined : `${c.count} ${c.count === 1 ? 'row' : 'rows'}`}
             style={{ ...SEG, borderRadius: `${i === 0 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === chips.length - 1 ? 'var(--radius)' : 0} ${i === 0 ? 'var(--radius)' : 0}`, ...(i > 0 ? { borderLeft: 'none' } : {}), ...(on ? ON : {}) }}>
             {dated ? <>{word} <span style={{ color: 'var(--fog)', fontWeight: 400 }}>{rest.join(' ')}</span></> : name(c)}

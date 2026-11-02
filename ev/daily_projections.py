@@ -257,7 +257,10 @@ ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0
                               "pr": 20.0, "pa": 20.0, "ra": 20.0, "steals": 20.0, "blocks": 20.0}}
 ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds", "pass_attempts", "pass_completions",
                           "rush_attempts"),
-                  "nhl": ("sog", "points", "saves", "blocked_shots"),
+                  # pp_points has NO sportsbook line on any feed we hold (probed 2026-11-02: ParlayAPI serves player_power_play_points
+                  # only at the DFS apps sleeper / underdog, which are excluded as price sources; BettingPros and BestBook carry none), so
+                  # the stat only ever reaches the board as a projection-only rotation row
+                  "nhl": ("sog", "points", "saves", "blocked_shots", "pp_points"),
                   "nba": ("points", "rebounds", "assists", "pra", "pr", "pa", "ra", "steals", "blocks")}
 
 _NFL_CANON = {"JAX": "JAC", "LA": "LAR", "STL": "LAR", "OAK": "LV", "SD": "LAC", "WSH": "WAS"}
