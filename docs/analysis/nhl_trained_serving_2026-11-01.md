@@ -62,15 +62,27 @@ two most-used goalies per team); points = goals + assists to 1e-5. With the flag
 rest stay empirical); served and empirical means agree on average (saves 23.75 vs 23.81, points 0.626 vs 0.628, correlation 0.85-0.89).
 The NHL roster endpoint rate-limited during the run, so the off-roster exclusion was skipped (its designed fallback).
 
-## What a deploy still needs (none of it done)
+## Deployed 2026-11-02 (jobs only; the board is NOT switched)
 
-1. Build the image, run `python -m nhl.props.serve_trained train --write` INSIDE it (never publish a laptop-trained bundle).
-2. Two Cloud Run jobs + schedulers: a retrain (weekly; the evaluation refit quarterly, so weekly is more than enough) and a score job
-   (e.g. every 2-3 hours on game days). Peak memory and runtime in the image are unmeasured (laptop: train ~13 min, score ~4 min; the xG
-   build reads ~1M shot rows).
-3. Set `NHL_TRAINED_PROPS=1` on `daily-projections` only after the file is being written reliably.
-4. Forward paper-tracking of the saves predictions against real lines and closes: not built; it is the only evidence that is not the
-   history already analysed.
+| What | State |
+|---|---|
+| Image | `gcr.io/concrete-crow-445205-m4/mlb-betting-nhl-trained:nhl-269554b` (digest `sha256:ec9257fe...`), a DEDICATED repository built from the reviewed commit; no existing image tag was touched (`mlb-betting:latest`, `-feeds`, `-ev`, `-bp-crawl` unchanged). |
+| Bundle | Trained and published INSIDE that image: `Models/nhl_props/20261102T053829Z` + `latest.json`. Validation scores equal the laptop fit's (goals -0.4546). |
+| Jobs / schedulers (Central) | `nhl-trained-train` Sun 08:00 (weekly retrain); `nhl-trained-score` 09:30, 13:30, 17:00 daily (a day with no game leaves the file alone); `nhl-paper-snapshot` :10/:40, 10:00-20:40; `nhl-paper-settle` 07:30. All `max-retries 0`, run as `mlb-betting-sa`, scheduler path proven (empty status, execution started). Pause all: `PAUSE=1 PROJECT_ID=... bash deploy/setup_nhl_trained_jobs.sh`. |
+| Measured in the image | train 245 s, peak RSS 2.15 GB; score 159 s, peak RSS 2.17 GB (19 games, 2,317 predictions, same count as the laptop run); sized 4 GiB / 4 cpu. |
+| Paper-tracking | First snapshot logged 263 priced props (4 games; goals / assists / points; no saves lines were posted yet). Settlement and the report fill in as games finish: `python -m nhl.props.paper_track report`. |
+
+## When to flip `NHL_TRAINED_PROPS` (NOT done; all must hold)
+
+1. Reliability of the predictions file: >= 6 consecutive scheduled `nhl-trained-score` runs over >= 2 Central days, every one exit 0 with `count > 0` and the file younger than 36 h at each board compute.
+2. The first scheduled weekly retrain succeeded and a later score run loaded its bundle (the canary passed in production).
+3. The code is in the image `daily-projections` runs: that job uses `mlb-betting-feeds`, built only from a clean `origin/main` by `deploy/build_all_images.sh` (see RUNBOOKS s8 for the blast radius: `SKIP_PROD=1` leaves `mlb-betting:latest` alone), after PR #156 is on `main`.
+4. A first read of the paper-tracking report shows nothing broken (settled props accrue, model log loss not wildly off the market).
+Then `gcloud run jobs update daily-projections --update-env-vars NHL_TRAINED_PROPS=1`; revert by removing the variable (no redeploy). Until then the board is unchanged and a served file is simply ignored.
+
+## Still open
+
+Forward evidence is accumulating, not concluded; the saves ROI above stays UNDETERMINED until the paper-tracking report (first settled props within days, a meaningful sample in weeks) says otherwise.
 
 ## Not modelled (the placeholder rows cannot know)
 

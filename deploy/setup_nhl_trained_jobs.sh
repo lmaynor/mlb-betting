@@ -39,8 +39,8 @@ TZ_NAME="America/Chicago"
 # CT cadence: nhl-refresh-data lands yesterday's games ~06:30 CT, so train (Sun) and score run after it; daily-projections refreshes the
 # board at :25/:55, so the paper snapshot runs at :10/:40 and always sees a fresh board. Score exits cleanly when no game is in the window.
 JOBS=(
-  "nhl-trained-train|-m,nhl.props.serve_trained,train,--write|8Gi|4|3300|0 8 * * 0"
-  "nhl-trained-score|-m,nhl.props.serve_trained,score,--hours,72|8Gi|4|1800|30 9,13 * * *;0 17 * * *"
+  "nhl-trained-train|-m,nhl.props.serve_trained,train,--write|4Gi|4|3300|0 8 * * 0"
+  "nhl-trained-score|-m,nhl.props.serve_trained,score,--hours,72|4Gi|4|1800|30 9,13 * * *;0 17 * * *"
   "nhl-paper-snapshot|-m,nhl.props.paper_track,snapshot|1Gi|1|300|10,40 10-20 * * *"
   "nhl-paper-settle|-m,nhl.props.paper_track,settle|1Gi|1|900|30 7 * * *"
 )
