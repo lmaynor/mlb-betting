@@ -774,6 +774,13 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     seasons = parse_seasons(args.seasons)
+    if args.hierarchical:
+        report = _run_hierarchical(args, seasons)
+        print(report)
+        if args.out:
+            with open(args.out, "w") as fh:
+                fh.write(report)
+        return 0
     variants = [SHIPPED] if args.no_grid else GRID
     import os
     if args.cache and os.path.exists(args.cache):
@@ -784,13 +791,6 @@ def main(argv=None) -> int:
         res = replay(df, replay_seasons, variants)
         if args.cache:
             res.to_parquet(args.cache)
-    if args.hierarchical:
-        report = _run_hierarchical(args, seasons)
-        print(report)
-        if args.out:
-            with open(args.out, "w") as fh:
-                fh.write(report)
-        return 0
     ev = evaluate(res[res["season"].isin(seasons)], variants, args.tune_through, seasons)
     report = render(ev, seasons, int(res["season"].isin(seasons).sum()))
     if args.calibrate or args.write_calibration:

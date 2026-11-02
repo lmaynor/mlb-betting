@@ -209,7 +209,10 @@ def test_wr1_out_lifts_wr2_and_te1_receptions_and_yards():
             assert out.mean > base.mean, (name, stat)
     # role-weighted: the WR peers gain more than the TE does, per unit of their own share
     g = {n: _price("receptions", n, live=_out("wr1")).mean / _price("receptions", n).mean for n in ("wr2", "te1")}
-    assert g["wr2"] > g["te1"] > 1.0
+    assert g["wr2"] > g["te1"] + 0.02 and g["te1"] > 1.0              # a real margin, not float noise
+    # and the roles agree whether or not the logs carry air yards (the bug CI caught: unknown aDOT split the roles)
+    assert HL._role("WR", None) == HL._role("WR", HL.POS_ADOT["WR"]) == "perimeter"
+    assert HL._role("TE", None) == "slot" and HL._role("RB", None) == "rb"
     assert _price("receptions", "wr2", live=_out("wr1")).inputs.vacated_target_share > 0
 
 
@@ -520,6 +523,20 @@ def test_coverage_shell_rates_from_participation():
     assert d["def_man_rate"] == pytest.approx(2 / 6) and d["def_zone_rate"] == pytest.approx(4 / 6)
     assert d["def_short_target_share_allowed"] == 1.0 and d["def_deep_target_share_allowed"] == 0.0
     assert d["def_yac_per_rec_allowed"] == 3.0
+
+
+def test_blank_coverage_tags_are_unknown_not_a_category():
+    """The real participation file writes '' for untagged plays; they must not enter the man / coverage denominators."""
+    pbp = pd.DataFrame({
+        "game_id": ["g1"] * 4, "play_id": range(4), "season": 2025, "week": 1, "season_type": "REG", "posteam": "AAA",
+        "defteam": "BBB", "play_type": "pass", "qb_dropback": 1.0, "sack": 0.0, "qb_hit": 0.0, "air_yards": 8.0,
+        "yards_after_catch": 3.0, "complete_pass": 1.0, "yards_gained": 11.0, "rushing_yards": np.nan,
+        "receiver_player_id": "r1"})
+    part = pd.DataFrame({"nflverse_game_id": ["g1"] * 4, "play_id": range(4),
+                         "defense_coverage_type": ["COVER_2", None, None, "COVER_1"],
+                         "defense_man_zone_type": ["ZONE_COVERAGE", "", "", "MAN_COVERAGE"], "was_pressure": [False] * 4})
+    d = cg.defense_context_before(pbp, 2025, 2, None, part).loc["BBB"]
+    assert d["def_man_rate"] == pytest.approx(0.5) and d["def_two_high_rate"] == pytest.approx(0.5)
 
 
 def test_receiver_and_passer_profiles():

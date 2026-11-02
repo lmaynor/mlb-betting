@@ -438,21 +438,21 @@ def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, 
             if _same(p, pid, last):
                 continue
             if p.get("pid") in absent_ids:
-                absent.append({"weight": absent_ids[p["pid"]], "pos": p["pos"], "adot": p.get("adot"),
+                absent.append({"weight": absent_ids[p["pid"]], "pos": p["pos"], "adot": p.get("adot") if p.get("adot") is not None else POS_ADOT.get(str(p["pos"]).upper()),
                                "tgt": p.get("tgt"), "rush": p.get("rush"), "air": p.get("air"), "rz": None})
             elif _is_active(p, t):
                 active.append(p)
         pools = cg.vacated_pools(absent)
-        my_role = cg.role_of(pos, pi.adot if stat in ("receptions", "rec_yds") else POS_ADOT.get(pos))
+        my_role = _role(pos, pi.adot if stat in ("receptions", "rec_yds") else None)
         me_tgt = _fin(me.get("tgt") if me else None, pi.target_share)
-        add_t = cg.redistribute(pools["tgt"], [("me", my_role, me_tgt)] + [(p["pid"], cg.role_of(p["pos"], p.get("adot")),
+        add_t = cg.redistribute(pools["tgt"], [("me", my_role, me_tgt)] + [(p["pid"], _role(p["pos"], p.get("adot")),
                                                                              _fin(p.get("tgt"), 0.0)) for p in active])
         pi.vacated_target_share = add_t.get("me", 0.0)
         my_rush_role = "rb" if pos in ("RB", "FB") else ("qb" if pos == "QB" else "other")
-        rpool = {("rb" if cg.role_of(a["pos"], a.get("adot")) == "rb" else ("qb" if a["pos"] == "QB" else "other")): 0.0
+        rpool = {("rb" if _role(a["pos"], a.get("adot")) == "rb" else ("qb" if a["pos"] == "QB" else "other")): 0.0
                  for a in absent}
         for a in absent:
-            r = "rb" if cg.role_of(a["pos"], a.get("adot")) == "rb" else ("qb" if a["pos"] == "QB" else "other")
+            r = "rb" if _role(a["pos"], a.get("adot")) == "rb" else ("qb" if a["pos"] == "QB" else "other")
             if a.get("rush") and math.isfinite(a["rush"]):
                 rpool[r] += a["weight"] * a["rush"]
         add_r = cg.redistribute(rpool, [("me", my_rush_role, pi.rush_share)] + [
@@ -470,6 +470,13 @@ def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, 
     if dist.mean is None or not math.isfinite(dist.mean):
         return None
     return HierResult(dist, vol, pi, game, notes)
+
+
+def _role(pos, adot) -> str:
+    """Receiver role with ONE aDOT fallback (the position default) for everyone: an unknown aDOT must put the absent player and
+    the player being priced in the same role, or the role-based redistribution silently never matches."""
+    a = adot if adot is not None and isinstance(adot, (int, float, np.floating)) and math.isfinite(adot) else POS_ADOT.get(str(pos).upper())
+    return cg.role_of(pos, a)
 
 
 def _is_active(p: dict, t: dict) -> bool:

@@ -152,8 +152,11 @@ def _flags(p: pd.DataFrame, positions: Optional[dict]) -> pd.DataFrame:
         p["_press"] = np.where(wp.notna() & (p["_pass"] == 1), wp, p["_press"])
     ry = _num(p, "rushing_yards")
     p["_stuff"] = ((p["_rush"] == 1) & (ry <= 0)).astype(float)
-    cov = p["defense_coverage_type"].astype("object").map(lambda v: str(v).upper() if pd.notna(v) else None)
-    mz = p["defense_man_zone_type"].astype("object").map(lambda v: str(v).upper() if pd.notna(v) else None)
+    # the real participation file writes '' (not null) for plays with no coverage tag: that is UNKNOWN, not a category
+    def _tag(v):
+        return str(v).strip().upper() or None if pd.notna(v) else None
+    cov = p["defense_coverage_type"].astype("object").map(_tag)
+    mz = p["defense_man_zone_type"].astype("object").map(_tag)
     p["_cov_known"] = ((p["_pass"] == 1) & cov.notna()).astype(float)
     p["_single"] = p["_cov_known"] * cov.isin(SINGLE_HIGH)
     p["_two"] = p["_cov_known"] * cov.isin(TWO_HIGH)
