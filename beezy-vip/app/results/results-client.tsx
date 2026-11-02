@@ -6,7 +6,8 @@ import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
-import { B, SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel, bookText } from '@/lib/tokens'
+import { cx } from '@/utils/cx'
+import { SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel, bookText } from '@/lib/tokens'
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats, BankrollPoint } from '@/lib/types'
@@ -16,6 +17,9 @@ import {
   ResponsiveContainer, ComposedChart, Area,
 } from 'recharts'
 
+const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
+const LBL = 'mono text-[10px] uppercase tracking-[0.1em] text-text-secondary'
+const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.04em]'
 const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
 const PILL = SYSTEM_COLOR
 
@@ -50,27 +54,16 @@ function Chip({ label, active, color, onClick }: {
 }) {
   const activeColor = color ?? 'var(--silver)'
   return (
-    <button onClick={onClick} style={{
-      padding: '5px 12px', fontSize: '11px', fontFamily: 'var(--font-mono), monospace',
-      fontWeight: active ? 700 : 500,
-      border: `1px solid ${active ? activeColor : 'var(--basalt)'}`,
-      borderRadius: 'var(--radius-pill)',
-      background: active ? `color-mix(in oklab, ${activeColor} 16%, var(--carbon))` : 'var(--graphite)',
-      color: active ? activeColor : 'var(--silver)',
-      cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase' as const,
-      transition: 'all var(--dur) var(--ease-out)',
-    }}>{label}</button>
+    <button onClick={onClick}
+      className={cx('mono', PILLBTN, active ? 'font-bold' : 'border-separator-border bg-background-primary-default font-medium text-text-secondary hover:bg-background-primary-hover')}
+      style={active ? { borderColor: activeColor, color: activeColor, background: `color-mix(in oklab, ${activeColor} 16%, var(--carbon))` } : undefined}>
+      {label}
+    </button>
   )
 }
 
 function GroupLabel({ label }: { label: string }) {
-  return (
-    <span style={{
-      fontFamily: 'var(--font-mono), monospace', fontSize: '10px',
-      letterSpacing: '0.1em', textTransform: 'uppercase' as const,
-      color: 'var(--fog)', padding: '0 4px', whiteSpace: 'nowrap' as const,
-    }}>{label}</span>
-  )
+  return <span className={cx(LBL, 'whitespace-nowrap px-1')}>{label}</span>
 }
 
 function buildPnLChart(bets: Bet[], activeSystem: string) {
@@ -161,8 +154,8 @@ const fmtDisplayDate = (d: string) => formatDateKey(d, { month: 'short', day: 'n
 const PnLTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: 'var(--graphite)', border: B, padding: '10px 14px', fontSize: '11px', fontFamily: 'monospace', minWidth: '120px' }}>
-      <div style={{ color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
+    <div className="min-w-[120px] rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-[11px] shadow-dropdown">
+      <div className="mb-1.5 text-text-secondary">{label}</div>
       {payload
         .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
         .map((p: any) => (
@@ -177,8 +170,8 @@ const PnLTooltip = ({ active, payload, label }: any) => {
 const EdgeTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: 'var(--graphite)', border: B, padding: '10px 14px', fontSize: '11px', fontFamily: 'monospace' }}>
-      <div style={{ color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
+    <div className="rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-[11px] shadow-dropdown">
+      <div className="mb-1.5 text-text-secondary">{label}</div>
       {payload.map((p: any) => (
         <div key={p.dataKey} style={{ color: p.color, marginBottom: '2px' }}>
           {p.dataKey === 'edge' ? 'Avg edge' : 'Realized ROI'}: {p.value >= 0 ? '+' : ''}{p.value}%
@@ -212,44 +205,33 @@ function exportCSV(bets: Bet[]) {
 
 function ResultBetCard({ bet }: { bet: Bet }) {
   return (
-    <div className="card-hover" style={{
-      border: B,
-      borderRadius: 'var(--radius)',
-      background: 'var(--graphite)',
-      boxShadow: 'var(--shadow-card)',
-      padding: '13px 14px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '11px',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 }}>
+    <div className={cx('card-hover flex flex-col gap-[11px] px-3.5 py-[13px]', CARD)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <SystemBadge system={bet.system} />
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', whiteSpace: 'nowrap' }}>
-            {fmtDisplayDate(bet.game_date)}
-          </span>
+          <span className="mono whitespace-nowrap text-[11px] text-text-secondary">{fmtDisplayDate(bet.game_date)}</span>
         </div>
         <ResultPill result={bet.result} />
       </div>
 
       <div>
-        <div style={{ marginBottom: '5px' }}><Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" /></div>
-        <div style={{ fontSize: '15px', lineHeight: 1.35, fontWeight: 700, color: 'var(--ash)' }}>{pickLabel(bet)}</div>
+        <div className="mb-[5px]"><Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" /></div>
+        <div className="text-headline-bold text-text-primary">{pickLabel(bet)}</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px', alignItems: 'end' }}>
+      <div className="grid grid-cols-4 items-end gap-2.5">
         {[
           { label: 'Odds', value: formatOdds(bet.odds), color: 'var(--ash)' },
           { label: 'Edge', value: bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--', color: 'var(--signal)' },
           { label: 'Book', value: bet.book ? bookText(bet.book) : '--', color: 'var(--silver)' },
         ].map(item => (
-          <div key={item.label} style={{ minWidth: 0 }}>
-            <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>{item.label}</div>
-            <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: item.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.value}</div>
+          <div key={item.label} className="min-w-0">
+            <div className={cx(LBL, 'mb-[3px]')}>{item.label}</div>
+            <div className="mono truncate text-xs font-bold" style={{ color: item.color }}>{item.value}</div>
           </div>
         ))}
         <div>
-          <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '3px' }}>P&L</div>
+          <div className={cx(LBL, 'mb-[3px]')}>P&L</div>
           <PnL value={bet.profit} stake={bet.stake} result={bet.result} />
         </div>
       </div>
@@ -337,25 +319,36 @@ export function ResultsClient({
   const ev     = sum(initialStats.filter(s => s.system === 'EV'))
   const money  = (n: number) => `${n >= 0 ? '+' : '-'}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
+  const pagerBtn = 'mono button-press-motion cursor-pointer rounded-lg border border-border-button-default bg-transparent px-3 py-1.5 text-[11px] text-text-secondary hover:bg-background-primary-hover disabled:cursor-not-allowed disabled:opacity-50'
+  const renderPager = (className: string) => (
+    <div className={cx('flex items-center justify-between', className)}>
+      <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0} className={pagerBtn}>Prev</button>
+      <span className="mono text-[11px] text-text-secondary">
+        {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+      </span>
+      <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={pageIndex >= pageCount - 1} className={pagerBtn}>Next</button>
+    </div>
+  )
+
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Results</h1>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
+    <div className="mx-auto max-w-[1200px] px-6 py-10">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="text-title-2-bold text-text-primary">Results</h1>
+        <span className="mono text-caption-1-regular text-text-secondary">{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
       </div>
 
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
-      <div className="mono" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 22px', alignItems: 'center', minHeight: '38px', padding: '8px 14px', background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', fontSize: '12px', color: 'var(--silver)', marginBottom: '20px' }}>
-        <span><span style={{ color: 'var(--fog)' }}>MODELS</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
-        <span><span style={{ color: 'var(--fog)' }}>+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
+      <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-[22px] gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
+        <span><span className="text-text-tertiary">MODELS</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
+        <span><span className="text-text-tertiary">+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
       </div>
 
       {/* Season curve: cumulative P&L of the models (paper stakes) vs the +EV alerts (flat $100), from the first graded bet. */}
       {system === 'ALL' && curve.length > 2 && (
-        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', marginBottom: '20px', padding: '14px 16px 8px 8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 10px', gap: '12px', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>Cumulative P&L, full season ($)</span>
-            <span style={{ display: 'flex', gap: '14px' }}>
+        <div className={cx('mb-5 pb-2 pl-2 pr-4 pt-3.5', CARD)}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-2.5">
+            <span className={LBL}>Cumulative P&L, full season ($)</span>
+            <span className="flex gap-3.5">
               <span className="mono" style={{ fontSize: '10px', color: '#57f287' }}>-- +EV alerts, flat $100</span>
               <span className="mono" style={{ fontSize: '10px', color: '#f3f4f6' }}>-- models, paper stakes</span>
             </span>
@@ -377,21 +370,21 @@ export function ResultsClient({
 
       {/* P&L Chart: per system, over the recent rows loaded here */}
       {system !== 'ALL' && pnlRows.length > 2 && (
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', marginBottom: '24px', padding: '20px 16px 12px 8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px 16px' }}>
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
+        <div className={cx('mb-6 pb-3 pl-2 pr-4 pt-5', CARD)}>
+          <div className="flex items-center justify-between px-5 pb-4">
+            <span className={LBL}>
               Cumulative P&L ($ at paper stakes)
             </span>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="flex flex-wrap items-center gap-2.5">
               {[...chartSystems, 'ALL'].map(s => (
-                <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: PILL[s] ?? 'var(--ash)', flexShrink: 0, display: 'inline-block' }} />
-                  <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{s}</span>
+                <span key={s} className="flex items-center gap-[5px]">
+                  <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: PILL[s] ?? 'var(--ash)' }} />
+                  <span className="mono text-[10px] text-text-secondary">{s}</span>
                 </span>
               ))}
-              <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ width: '8px', height: '6px', background: 'color-mix(in oklab, var(--loss) 30%, transparent)', display: 'inline-block' }} />
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>drawdown</span>
+              <span className="flex items-center gap-[5px]">
+                <span className="inline-block h-1.5 w-2" style={{ background: 'color-mix(in oklab, var(--loss) 30%, transparent)' }} />
+                <span className="mono text-[10px] text-text-secondary">drawdown</span>
               </span>
             </div>
           </div>
@@ -421,15 +414,15 @@ export function ResultsClient({
 
       {/* Edge vs ROI chart */}
       {edgeRows.length > 2 && (
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', marginBottom: '24px', padding: '20px 16px 12px 8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px 16px' }}>
+        <div className={cx('mb-6 pb-3 pl-2 pr-4 pt-5', CARD)}>
+          <div className="flex items-center justify-between px-5 pb-4">
             <div>
-              <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>
+              <span className={LBL}>
                 Model Edge vs Realized ROI
               </span>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginLeft: '8px' }}>7-day rolling</span>
+              <span className="mono ml-2 text-[10px] text-text-secondary">7-day rolling</span>
             </div>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="flex gap-4">
               <span className="mono" style={{ fontSize: '10px', color: 'var(--signal)' }}>-- model edge</span>
               <span className="mono" style={{ fontSize: '10px', color: 'var(--link)' }}>-- realized ROI</span>
             </div>
@@ -456,10 +449,10 @@ export function ResultsClient({
       {/* Per-system stats table -- groups by type with subtle dividers */}
       {initialStats.length > 0 && (
         <>
-          <div className="results-model-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', marginBottom: '24px', overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px', background: 'var(--obsidian)', borderBottom: B }}>
+          <div className={cx('results-model-desktop mb-6 overflow-x-auto', CARD)}>
+            <div className="grid min-w-[500px] grid-cols-6 border-b border-separator-border bg-background-secondary-default">
               {['System', 'Bets', 'Win Rate', 'ROI', 'P&L', 'Avg Edge'].map(h => (
-                <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', padding: '9px 12px' }}>{h}</div>
+                <div key={h} className={cx(LBL, 'px-3 py-2.5')}>{h}</div>
               ))}
             </div>
             {Object.entries(SYSTEM_GROUPS).flatMap(([groupName, systems]) => {
@@ -469,33 +462,23 @@ export function ResultsClient({
               if (groupStats.length === 0) return []
 
               return [
-                <div key={`hdr-${groupName}`} style={{
-                  display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
-                  borderBottom: B, background: 'var(--carbon)',
-                }}>
-                  <div className="mono" style={{
-                    gridColumn: '1 / -1', padding: '6px 12px',
-                    fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase',
-                    color: 'var(--fog)',
-                  }}>{groupName}</div>
+                <div key={`hdr-${groupName}`} className="grid min-w-[500px] grid-cols-6 border-b border-separator-border bg-background-full">
+                  <div className={cx(LBL, 'col-span-full px-3 py-1.5')}>{groupName}</div>
                 </div>,
                 ...groupStats.map(s => {
                   const r = s.roi == null ? null : parseFloat(String(s.roi))
                   const pnl = parseFloat(String(s.total_pnl ?? 0))
                   const pc = PILL[s.system] ?? 'var(--silver)'
                   return (
-                    <div key={s.system} style={{
-                      display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', minWidth: '500px',
-                      borderBottom: B, alignItems: 'center',
-                    }}>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pc }}>{s.system}</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>
-                        {s.total_bets}{parseInt(String(s.total_bets)) < GATE && <span style={{ color: 'var(--fog)' }}> / {GATE}</span>}
+                    <div key={s.system} className="grid min-w-[500px] grid-cols-6 items-center border-b border-border-table transition-colors hover:bg-background-primary-hover">
+                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pc }}>{s.system}</div>
+                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">
+                        {s.total_bets}{parseInt(String(s.total_bets)) < GATE && <span className="text-text-tertiary"> / {GATE}</span>}
                       </div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 600, color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
-                      <div className="mono" style={{ padding: '10px 12px', fontSize: '11px', color: 'var(--ash)' }}>{fmtSigned(s.avg_edge)}</div>
+                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
+                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
+                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
+                      <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{fmtSigned(s.avg_edge)}</div>
                     </div>
                   )
                 }),
@@ -503,7 +486,7 @@ export function ResultsClient({
             })}
           </div>
 
-          <div className="results-model-mobile" style={{ marginBottom: '24px' }}>
+          <div className="results-model-mobile mb-6">
             {Object.entries(SYSTEM_GROUPS).map(([groupName, systems]) => {
               const groupStats = systems
                 .map(s => initialStats.find(stat => stat.system === s))
@@ -511,20 +494,20 @@ export function ResultsClient({
               if (groupStats.length === 0) return null
 
               return (
-                <div key={groupName} style={{ marginBottom: '14px' }}>
-                  <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '8px' }}>{groupName}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div key={groupName} className="mb-3.5">
+                  <div className={cx(LBL, 'mb-2')}>{groupName}</div>
+                  <div className="flex flex-col gap-2">
                     {groupStats.map(s => {
                       const r = s.roi == null ? null : parseFloat(String(s.roi))
                       const pnl = parseFloat(String(s.total_pnl ?? 0))
                       const pc = PILL[s.system] ?? 'var(--silver)'
                       return (
-                        <div key={s.system} style={{ border: B, borderRadius: 'var(--radius)', background: 'var(--graphite)', padding: '12px 13px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
-                            <span className="mono" style={{ fontSize: '12px', fontWeight: 800, color: pc }}>{s.system}</span>
-                            <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
+                        <div key={s.system} className={cx('px-[13px] py-3', CARD)}>
+                          <div className="mb-2.5 flex items-center justify-between gap-3">
+                            <span className="mono text-xs font-extrabold" style={{ color: pc }}>{s.system}</span>
+                            <span className="mono text-[11px] font-extrabold" style={{ color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
+                          <div className="grid grid-cols-4 gap-2.5">
                             {[
                               ['Bets', parseInt(String(s.total_bets)) < GATE ? `${s.total_bets} / ${GATE}` : String(s.total_bets), 'var(--ash)'],
                               ['Win', `${parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%`, 'var(--ash)'],
@@ -532,8 +515,8 @@ export function ResultsClient({
                               ['Edge', fmtSigned(s.avg_edge), 'var(--ash)'],
                             ].map(([label, value, color]) => (
                               <div key={label}>
-                                <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '3px' }}>{label}</div>
-                                <div className="mono" style={{ fontSize: '11px', fontWeight: 700, color }}>{value}</div>
+                                <div className={cx(LBL, 'mb-[3px]')}>{label}</div>
+                                <div className="mono text-[11px] font-bold" style={{ color }}>{value}</div>
                               </div>
                             ))}
                           </div>
@@ -549,18 +532,18 @@ export function ResultsClient({
       )}
 
       {/* System filter chips -- grouped with labels */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', marginBottom: '10px' }}>
+      <div className="mb-4">
+        <div className="mb-2.5 flex flex-wrap items-center gap-5">
 
           {/* ALL chip */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>System</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cx(LBL, 'mr-1')}>System</span>
             <Chip label={`ALL (${countsBySystem['ALL'] ?? 0})`} active={system === 'ALL'} onClick={() => { setSystem('ALL'); setPage(0) }} />
           </div>
 
           {/* Grouped system chips */}
           {Object.entries(SYSTEM_GROUPS).map(([groupName, systems]) => (
-            <div key={groupName} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div key={groupName} className="flex flex-wrap items-center gap-1.5">
               <GroupLabel label={groupName} />
               {systems.map(s => (
                 <Chip key={s} label={`${SYSTEM_LABEL[s] ?? s}${countsBySystem[s] ? ` (${countsBySystem[s]})` : ''}`} active={system === s}
@@ -571,46 +554,37 @@ export function ResultsClient({
         </div>
 
         {/* Result + Sort row */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Result</span>
+        <div className="flex flex-wrap items-center gap-5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cx(LBL, 'mr-1')}>Result</span>
             {RESULTS.map(r => (
               <Chip key={r} label={r} active={result === r}
                 color={r === 'WIN' ? 'var(--signal)' : r === 'LOSS' ? 'var(--loss)' : r === 'VOID' ? 'var(--fog)' : undefined}
                 onClick={() => { setResult(r); setPage(0) }} />
             ))}
           </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginRight: '4px' }}>Sort</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cx(LBL, 'mr-1')}>Sort</span>
             {(['date', 'edge', 'odds', 'pnl'] as const).map(s => (
               <button key={s}
                 onClick={() => {
                   if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
                   else { setSortBy(s); setSortDir('desc') }
                 }}
-                className="mono"
-                style={{
-                  fontSize: '11px', padding: '5px 11px', borderRadius: 'var(--radius-pill)', cursor: 'pointer',
-                  border: `1px solid ${sortBy === s ? 'var(--steel)' : 'var(--basalt)'}`,
-                  color: sortBy === s ? 'var(--chalk)' : 'var(--fog)',
-                  background: sortBy === s ? 'var(--slate)' : 'var(--graphite)',
-                  letterSpacing: '0.04em', textTransform: 'uppercase' as const,
-                }}>
+                className={cx('mono', PILLBTN, sortBy === s
+                  ? 'border-border-button-hover bg-background-tertiary-default text-text-primary'
+                  : 'border-separator-border bg-background-primary-default text-text-secondary hover:bg-background-primary-hover')}>
                 {s}{sortBy === s ? (sortDir === 'desc' ? ' v' : ' ^') : ''}
               </button>
             ))}
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <label className="mono" style={{ fontSize: '10px', color: 'var(--silver)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} title="The same prop flagged at several books shows as one row">
+          <div className="ml-auto flex items-center gap-3">
+            <label className="mono flex cursor-pointer items-center gap-1.5 text-[10px] text-text-secondary" title="The same prop flagged at several books shows as one row">
               <input type="checkbox" checked={onePerProp} onChange={e => { setOnePerProp(e.target.checked); setPage(0) }} /> One row per prop
             </label>
-            <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{filtered.length} bets</span>
+            <span className="mono text-[10px] text-text-secondary">{filtered.length} bets</span>
             {filtered.length > 0 && (
-              <button onClick={() => exportCSV(filtered)} className="mono" style={{
-                fontSize: '10px', padding: '4px 10px', cursor: 'pointer',
-                border: '1px solid var(--basalt)', color: 'var(--silver)', background: 'var(--graphite)', borderRadius: 'var(--radius-pill)',
-                letterSpacing: '0.05em', textTransform: 'uppercase' as const,
-              }}>Export CSV</button>
+              <button onClick={() => exportCSV(filtered)} className="mono button-press-motion cursor-pointer rounded-full border border-separator-border bg-background-primary-default px-2.5 py-1 text-[10px] uppercase tracking-[0.05em] text-text-secondary hover:bg-background-primary-hover">Export CSV</button>
             )}
           </div>
         </div>
@@ -618,18 +592,17 @@ export function ResultsClient({
 
       {/* Bets table */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 20px', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)' }}>
-          <p className="mono" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '8px' }}>No bets match these filters.</p>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--silver)', marginBottom: '14px' }}>Try a different system, result, or date range.</p>
-          <button className="mono" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}
-            style={{ fontSize: '11px', padding: '6px 14px', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: 'var(--fog)', cursor: 'pointer' }}>
+        <div className={cx('px-5 py-16 text-center', CARD)}>
+          <p className="mono mb-2 text-xs text-text-secondary">No bets match these filters.</p>
+          <p className="times mb-3.5 text-caption-1-regular text-text-secondary">Try a different system, result, or date range.</p>
+          <button className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-[11px] text-text-secondary hover:bg-background-primary-hover" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}>
             Reset filters
           </button>
         </div>
       ) : (
         <>
-        <div className="results-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', background: 'var(--obsidian)', borderBottom: B }}>
+        <div className={cx('results-desktop overflow-x-auto', CARD)}>
+          <div className="grid min-w-[860px] border-b border-separator-border bg-background-secondary-default" style={{ gridTemplateColumns: COL }}>
             {([
               { label: 'Date',   key: 'date' as const },
               { label: 'System' },
@@ -646,81 +619,47 @@ export function ResultsClient({
                 if (sortBy === col.key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
                 else { setSortBy(col.key!); setSortDir('desc') }
                 setPage(0)
-              }} className="mono" style={{
-                padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase',
-                color: sortBy === col.key ? 'var(--ash)' : 'var(--fog)',
-                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-              }}>
+              }} className={cx(LBL, 'cursor-pointer border-none bg-transparent px-3 py-2.5 text-left hover:text-text-primary', sortBy === col.key && 'text-text-primary')}>
                 {col.label}{sortBy === col.key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
             ) : (
-              <div key={col.label} className="mono" style={{ padding: '9px 12px', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)' }}>{col.label}</div>
+              <div key={col.label} className={cx(LBL, 'px-3 py-2.5')}>{col.label}</div>
             ))}
           </div>
           {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => {
             return (
-              <div key={bet.id ?? i} style={{ display: 'grid', gridTemplateColumns: COL, minWidth: '860px', borderBottom: B, alignItems: 'center' }}>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--fog)' }}>
+              <div key={bet.id ?? i} className="grid min-w-[860px] items-center border-b border-border-table transition-colors hover:bg-background-primary-hover" style={{ gridTemplateColumns: COL }}>
+                <div className="mono px-3 py-2 text-[11px] text-text-secondary">
                   {fmtDisplayDate(bet.game_date)}
                 </div>
-                <div style={{ padding: '8px 12px' }}><SystemBadge system={bet.system} /></div>
-                <div style={{ padding: '8px 12px', minWidth: 0 }}><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--ash)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickLabel(bet)}</div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--ash)' }}>{formatOdds(bet.odds)}</div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--signal)' }}>
+                <div className="px-3 py-2"><SystemBadge system={bet.system} /></div>
+                <div className="min-w-0 px-3 py-2"><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
+                <div className="mono truncate px-3 py-2 text-[11px] text-text-primary">{pickLabel(bet)}</div>
+                <div className="mono px-3 py-2 text-[11px] text-text-primary">{formatOdds(bet.odds)}</div>
+                <div className="mono px-3 py-2 text-[11px]" style={{ color: 'var(--signal)' }}>
                   {bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--'}
                 </div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--ash)' }}>
+                <div className="mono px-3 py-2 text-[11px] text-text-primary">
                   {bet.stake != null && bet.stake > 0 ? `$${bet.stake.toFixed(0)}` : '--'}
                 </div>
-                <div className="mono" style={{ padding: '8px 12px', fontSize: '10px', color: 'var(--fog)', textTransform: 'capitalize' }}>
+                <div className="mono px-3 py-2 text-[10px] capitalize text-text-secondary">
                   {bet.book ? bookText(bet.book) : '--'}{onePerProp && (bet as { bookCount?: number }).bookCount! > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
                 </div>
-                <div style={{ padding: '8px 12px' }}><ResultPill result={bet.result} /></div>
-                <div style={{ padding: '8px 12px' }}><PnL value={bet.profit} stake={bet.stake} result={bet.result} /></div>
+                <div className="px-3 py-2"><ResultPill result={bet.result} /></div>
+                <div className="px-3 py-2"><PnL value={bet.profit} stake={bet.stake} result={bet.result} /></div>
               </div>
             )
           })}
           {/* Pagination */}
-          {filtered.length > PAGE_SIZE && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: B, background: 'var(--obsidian)' }}>
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex === 0 ? 'not-allowed' : 'pointer', opacity: pageIndex === 0 ? 0.5 : 1, border: B, background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
-                Prev
-              </button>
-              <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
-                {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
-              </span>
-              <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                disabled={pageIndex >= pageCount - 1}
-                className="mono" style={{ fontSize: '11px', padding: '5px 12px', cursor: pageIndex >= pageCount - 1 ? 'not-allowed' : 'pointer', opacity: pageIndex >= pageCount - 1 ? 0.5 : 1, border: B, background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
-                Next
-              </button>
-            </div>
-          )}
+          {filtered.length > PAGE_SIZE && renderPager("border-t border-separator-border bg-background-secondary-default px-4 py-3")}
         </div>
         <div className="results-mobile">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="flex flex-col gap-2.5">
             {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => (
               <ResultBetCard key={bet.id ?? i} bet={bet} />
             ))}
           </div>
-          {filtered.length > PAGE_SIZE && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 2px', marginTop: '12px' }}>
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageIndex === 0}
-                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex === 0 ? 'not-allowed' : 'pointer', opacity: pageIndex === 0 ? 0.5 : 1, border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex === 0 ? 'var(--iron)' : 'var(--fog)' }}>
-                Prev
-              </button>
-              <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
-                {pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
-              </span>
-              <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                disabled={pageIndex >= pageCount - 1}
-                className="mono" style={{ fontSize: '11px', padding: '6px 12px', cursor: pageIndex >= pageCount - 1 ? 'not-allowed' : 'pointer', opacity: pageIndex >= pageCount - 1 ? 0.5 : 1, border: B, borderRadius: 'var(--radius)', background: 'transparent', color: pageIndex >= pageCount - 1 ? 'var(--iron)' : 'var(--fog)' }}>
-                Next
-              </button>
-            </div>
-          )}
+          {filtered.length > PAGE_SIZE && renderPager("mt-3 px-0.5 py-3")}
         </div>
         </>
       )}
