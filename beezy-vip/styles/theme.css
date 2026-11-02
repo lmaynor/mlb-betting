@@ -1,4 +1,4 @@
-/* BoardUI theme tokens — adapted for beezy.fyi (always-dark)
+/* BoardUI theme tokens - adapted for beezy.fyi (always-dark)
  * Source: https://www.boardui.com/installation (manual install, step 2)
  * The accent ramp defaults to blue but beezy overrides it to signal-green below. */
 
@@ -60,7 +60,7 @@
   --input-transition-ms:  150ms;
 }
 
-/* Semantic tokens — beezy always runs dark, so we set dark-mode values on :root directly.
+/* Semantic tokens - beezy always runs dark, so we set dark-mode values on :root directly.
  * BoardUI components that reference these tokens will render correctly without a .dark toggle. */
 :root {
   /* Foreground */
@@ -203,7 +203,7 @@
   --gradient-button-danger-disabled:  linear-gradient(180deg, var(--color-red-900) 0%, var(--color-red-950) 100%);
 }
 
-/* Re-export semantic tokens as Tailwind inline utilities so light↔dark flips work. */
+/* Re-export semantic tokens as Tailwind inline utilities so light<->dark flips work. */
 @theme inline {
   --color-foreground-full:              var(--color-foreground-full);
   --color-foreground-icon-primary:      var(--color-foreground-icon-primary);
