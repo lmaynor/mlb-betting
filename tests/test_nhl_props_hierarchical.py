@@ -57,13 +57,14 @@ def skater_rows(name, pos, toi, rng, dates, team="TOR", game_ids=None, **over):
     return rows
 
 
-def goalie_rows(name, rng, dates, team="TOR"):
+def goalie_rows(name, rng, dates, team="TOR", pid=900, sv=0.905):
     rows = []
     for i, d in enumerate(dates):
         sa = float(rng.poisson(29))
-        rows.append({"name": name, "team_abbr": team, "_date": d, "_sort": d, "_opp": "BOS", "game_id": 5000 + i,
-                     "season_year": 2025, "starter": True, "toi_sec": 3600, "shots_against": sa,
-                     "saves": float(rng.binomial(int(sa), 0.905))})
+        sv_n = float(rng.binomial(int(sa), sv))
+        rows.append({"name": name, "player_id": pid, "team_abbr": team, "_date": d, "_sort": d, "_opp": "BOS",
+                     "game_id": 5000 + i, "season_year": 2025, "starter": True, "toi_sec": 3600, "shots_against": sa,
+                     "saves": sv_n, "goals_against": sa - sv_n})
     return rows
 
 
@@ -89,6 +90,8 @@ def make_logs(seed=11, n_days=30, extra_future=0, wild=False):
                          ("Dan Defense", "D", 23.0), ("Eli Blue", "D", 20.0), ("Fay Third", "L", 13.0)):
         sk[cf.norm_name(nm)] = skater_rows(nm, pos, toi, rng, dates)
     gl = {cf.norm_name("Gus Goalie"): goalie_rows("Gus Goalie", rng, dates)}
+    for nm, team, pid, sv in (("Wall Mtl", "MTL", 901, 0.935), ("Leaky Ott", "OTT", 902, 0.865), ("Mid Bos", "BOS", 903, 0.905)):
+        gl[cf.norm_name(nm)] = goalie_rows(nm, rng, dates, team, pid, sv)
     tm = team_rows(rng, dates)
     if extra_future:
         fut = _dates(extra_future, AS_OF)
@@ -424,6 +427,53 @@ def test_goalie_saves_row_carries_the_eb_save_pct_and_a_mixture_range():
     assert 0.88 < r["sv_pct_eb"] < 0.93 and r["usage_label"] == "Shots faced"
     assert r["proj_p10"] < r["proj_mean"] < r["proj_p90"]
     assert H.eb_save_pct([{"saves": 90, "shots_against": 100}], k=400, prior=0.9) == pytest.approx((90 + 360) / 500)
+
+
+# ------------------------------------------------------------------ opposing goalie and shooter-quality hooks
+def test_goalie_factor_math():
+    assert H.goalie_factor(0.3, beta=1.0) == pytest.approx(1 - 0.3 / 2.95)
+    assert H.goalie_factor(-0.3, beta=1.0) > 1.0 > H.goalie_factor(0.3, beta=1.0)
+    assert H.goalie_factor(9.0, beta=1.0) == 0.85 and H.goalie_factor(-9.0, beta=1.0) == 1.15
+    assert H.goalie_factor(None, beta=1.0) == 1.0 and H.goalie_factor(0.3, beta=0.0) == 1.0
+
+
+def test_opposing_goalie_term_moves_scoring_only_when_switched_on(monkeypatch):
+    monkeypatch.setattr(H, "GOALIE_BETA", 0.0)
+    logs = make_logs()
+    off = row_for(logs, "goals", "Ann Forward", opp="MTL")["proj_mean"], row_for(logs, "goals", "Ann Forward", opp="OTT")["proj_mean"]
+    assert off[0] == off[1]                                        # off: the opponent goalie changes nothing
+    monkeypatch.setattr(H, "GOALIE_BETA", 1.0)
+    logs = make_logs()
+    wall, leaky = (row_for(logs, "goals", "Ann Forward", opp=o) for o in ("MTL", "OTT"))
+    assert leaky["proj_mean"] > off[1] > wall["proj_mean"]         # a 93.5% goalie trims, an 86.5% goalie boosts
+    assert wall["opp_goalie_factor"] < 1.0 < leaky["opp_goalie_factor"]
+    for o in ("MTL", "OTT"):                                        # and points == goals + assists still holds
+        g, a, p = (row_for(logs, st, "Ann Forward", opp=o)["proj_mean"] for st in ("goals", "assists", "points"))
+        assert p == pytest.approx(g + a, abs=1.1e-3)
+
+
+def test_goalie_tracker_is_as_of_safe_and_centred(monkeypatch):
+    clean, dirty = make_logs(), make_logs(extra_future=6, wild=True)
+    for t in ("MTL", "OTT", "BOS"):
+        assert clean.opp_goalie_gsax(t, AS_OF) == dirty.opp_goalie_gsax(t, AS_OF)
+    vals = [clean.opp_goalie_gsax(t, AS_OF) for t in ("MTL", "OTT", "BOS", "TOR")]
+    assert vals[0] > 0 > vals[1] and abs(sum(vals)) < 1e-9        # centred on the mean over teams
+    assert clean.opp_goalie_gsax(None, AS_OF) is None and clean.opp_goalie_gsax("MTL", None) is None
+    monkeypatch.setattr(H, "GOALIE_BETA", 1.0)
+    assert _fingerprint(make_logs(extra_future=6, wild=True)) == _fingerprint(make_logs())
+
+
+def test_xg_scaled_prior_scales_the_position_prior_by_shot_quality(monkeypatch):
+    elite = [{"ixg_sog": 0.14, "sog_pop": 1.0, "goals": 0.0, "sog": 1.0} for _ in range(60)]
+    poor = [{"ixg_sog": 0.06, "sog_pop": 1.0, "goals": 0.0, "sog": 1.0} for _ in range(60)]
+    assert H.xg_scaled_prior(elite, "C") > 1.0 > H.xg_scaled_prior(poor, "C")
+    assert 0.9 < H.xg_scaled_prior([{"ixg_sog": 0.095, "sog_pop": 1.0}] * 5, "C") < 1.1     # a few shots stay near the mean
+    assert H.xg_scaled_prior([{"goals": 1.0}], "C") is None                                  # no xG columns: flat prior
+    monkeypatch.setattr(H, "XG_PRIOR", False)
+    assert H.shooting_pct_from_rows(elite, "C") == H.shooting_pct_from_rows(poor, "C")       # off: shot quality ignored
+    monkeypatch.setattr(H, "XG_PRIOR", True)
+    assert H.shooting_pct_from_rows(elite, "C") > H.shooting_pct_from_rows(poor, "C")
+    assert H.shooting_pct_from_rows([{"goals": 1.0, "sog": 2.0}], "C") == H.eb_shooting_pct(1.0, 2.0, "C")
 
 
 # ------------------------------------------------------------------------------------------ vacated opportunity
