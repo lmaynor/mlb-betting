@@ -356,7 +356,7 @@ export function ResultsClient({
           {mounted && (
             <ResponsiveContainer width="100%" height={220} minWidth={0} minHeight={220}>
               <LineChart data={curve} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(1, Math.floor(curve.length / 7))} />
+                <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval="equidistantPreserveStart" minTickGap={56} />
                 <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toLocaleString()}`} width={68} />
                 <Tooltip contentStyle={{ background: 'var(--color-background-tertiary-default)', border: '1px solid var(--color-separator-border)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: 'var(--color-text-secondary)' }} formatter={(v) => money(Number(v))} />
                 <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
@@ -393,7 +393,7 @@ export function ResultsClient({
               <ComposedChart data={pnlRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false} axisLine={false} tickFormatter={fmtDate}
-                  interval={Math.floor(pnlRows.length / 6)} />
+                  interval="equidistantPreserveStart" minTickGap={56} />
                 <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false} axisLine={false}
                   tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(0)}`} width={60} />
@@ -432,7 +432,7 @@ export function ResultsClient({
               <LineChart data={edgeRows} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false} axisLine={false} tickFormatter={fmtDate}
-                  interval={Math.floor(edgeRows.length / 6)} />
+                  interval="equidistantPreserveStart" minTickGap={56} />
                 <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false} axisLine={false}
                   tickFormatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`} width={44} />
