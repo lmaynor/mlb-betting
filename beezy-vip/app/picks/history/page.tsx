@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { apiGetPicks } from '@/lib/betting-api'
 import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
 import { recordOf, topFromBets, TOP_N } from '@/lib/top-picks'
+import { withHeadshotIds } from '@/lib/sport-assets.server'
 import type { Bet } from '@/lib/types'
 import { HistoryTable, type HistoryDay } from './history-table'
 
@@ -26,7 +27,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const cards = await Promise.all(dates.map(d => apiGetPicks({ date: d, limit: 200 }).catch(() => [] as Bet[])))
   const history: HistoryDay[] = dates
     .map((date, i) => {
-      const picks = topFromBets(cards[i], TOP_N)
+      const picks = withHeadshotIds(topFromBets(cards[i], TOP_N))
       return { date, picks, record: recordOf(picks) }
     })
     .filter(d => d.picks.length > 0)

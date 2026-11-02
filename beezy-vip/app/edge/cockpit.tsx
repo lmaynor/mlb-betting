@@ -22,6 +22,7 @@ import { americanToDecimal, fairAmerican } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { headshotUrlById } from '@/lib/sport-assets'
+import { HeadshotFallback } from '@/components/ui/sport-assets'
 import { isOffshore, onshoreQuotes } from '@/lib/offshore'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
@@ -69,12 +70,6 @@ function whenText(r: CockpitRow): string {
   const m = r.mins_to_kick
   if (m == null) return ''
   return m < 90 ? `in ${Math.round(m)}m` : `in ${(m / 60).toFixed(1)}h`
-}
-
-function initials(name: string | null | undefined): string {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return '?'
-  return ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '')).toUpperCase()
 }
 
 const evText = (ev: number | null) => (ev == null ? '--' : `${ev >= 0 ? '+' : ''}${(ev * 100).toFixed(1)}%`)
@@ -136,7 +131,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
           onError={() => setBad(true)} style={{ objectFit: 'contain', objectPosition: 'center bottom', width: '100%', height: '100%' }} />
       ) : (
-        <span className="self-center">{initials(r.player)}</span>
+        <HeadshotFallback size={size} />
       )}
     </span>
   )

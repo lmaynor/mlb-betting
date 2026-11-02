@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { HeadshotImg } from '@/components/ui/sport-assets'
 import { LINK_REPLY, POST_LIMIT, postLength, SHEET_SIZE, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
@@ -61,12 +62,10 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       }}
     >
       <div className="w-[96px] min-w-[96px] relative overflow-hidden flex items-center justify-center" style={{ background: `${color}18`, borderRight: `1px solid ${color}44` }}>
-        {pick.headshotUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={pick.headshotUrl} alt={pick.who}
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
+        {pick.headshotUrl || !isGame ? (
+          <HeadshotImg
+            src={pick.headshotUrl} alt={pick.who} size={96} className="absolute inset-0 size-full"
+            style={{ objectFit: 'cover', objectPosition: 'center top' }}
           />
         ) : isGame && (pick.awayLogoUrl || pick.homeLogoUrl) ? (
           <div className="flex flex-col items-center gap-1 z-[1]">

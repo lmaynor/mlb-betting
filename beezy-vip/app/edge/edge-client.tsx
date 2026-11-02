@@ -9,6 +9,7 @@ import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookTe
 import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import { cx } from '@/utils/cx'
+import { HeadshotImg } from '@/components/ui/sport-assets'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -632,10 +633,8 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
     <div className="edge-detail">
       <div className="edge-detail-head">
         <div className="edge-portrait" style={{ background: `${color}14`, borderColor: `${color}40` }}>
-          {!isGame && p.headshotUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.headshotUrl} alt={p.player ?? ''} className="edge-portrait-img"
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+          {!isGame ? (
+            <HeadshotImg src={p.headshotUrl} alt={p.player ?? ''} className="edge-portrait-img" />
           ) : (
             <div className="edge-logos">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1146,10 +1145,8 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                     aria-current={active || undefined}>
                     <span className="edge-row-rank">{inSlip ? <span className="edge-row-slipmark">&#10003;</span> : i + 1}</span>
                     <span className="edge-row-thumb" style={{ background: `${color}14`, borderColor: `${color}38` }}>
-                      {!isGame && p.headshotUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.headshotUrl} alt="" className="edge-row-img"
-                          onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
+                      {!isGame ? (
+                        <HeadshotImg src={p.headshotUrl} className="edge-row-img" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         p.homeLogoUrl ? <img src={p.homeLogoUrl} alt="" className="edge-row-logo" /> : null

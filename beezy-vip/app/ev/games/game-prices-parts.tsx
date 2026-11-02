@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { BookLogo } from '@/components/ui/book-logo'
+import { Matchup } from '@/components/ui/sport-assets'
 import { fmtMoney } from '@/lib/ev-math'
 import { startLabel, type GameBookColumn, type GamePriceRow, type GameSidePrice } from '@/lib/game-odds'
 import { formatOdds } from '@/lib/odds'
@@ -203,7 +204,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
     <>
       <tr data-row="game-prices" data-arb={r.arbLive ? 'true' : undefined}>
         <td className="odds-prop" style={r.arbLive ? { borderLeft: `3px solid ${GREEN}` } : undefined}>
-          <div className="text-cozy font-semibold text-text-primary leading-[1.3]">{r.matchup}</div>
+          <div className="text-cozy font-semibold text-text-primary leading-[1.3]"><Matchup sport={r.row.sport} away={r.row.away} home={r.row.home} size={18} /></div>
           <div className="mono odds-sub">
             {r.row.sport.toUpperCase()} &middot; {startLabel(r.row.commence)} &middot; {r.marketLabel === 'Moneyline' ? 'ML' : r.lineLabel}
           </div>
@@ -284,7 +285,7 @@ export function PriceCard({ r, columns, copied, onCopy }: {
   return (
     <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid var(--color-separator-border)' }}>
       <div className="flex justify-between gap-2 items-baseline">
-        <span className="text-[13.5px] font-bold text-text-primary">{r.matchup}</span>
+        <span className="text-[13.5px] font-bold text-text-primary"><Matchup sport={r.row.sport} away={r.row.away} home={r.row.home} size={20} /></span>
         <span className="mono text-mini text-text-secondary">{startLabel(r.row.commence)}</span>
       </div>
       <div className="mono text-mini text-text-secondary mb-1">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>

@@ -76,7 +76,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
               <tr className="border-b border-b-[color:var(--color-border-table)]" key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`}>
                 <td className="py-2.5 px-3 text-text-primary font-semibold">
                   <span className="inline-flex items-center gap-2">
-                    {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
+                    <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />
                     <span>{r.player} <span className="text-text-secondary font-normal">{point} {propStatLabel(r.stat ?? r.market)}</span></span>
                     {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">MODEL + MARKET</span>}
                   </span>
