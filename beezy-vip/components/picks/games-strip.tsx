@@ -6,10 +6,10 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { gameTimeLabel, localTimeLabel, type BoardGame } from '@/lib/board-games'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 const CARD: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '6px 10px', border: B,
-  borderRadius: 'var(--radius)', background: 'var(--graphite)', color: 'var(--silver)', textDecoration: 'none', flex: '0 0 auto',
+  borderRadius: 'var(--radius)', background: 'var(--color-background-primary-default)', color: 'var(--color-neutral-300)', textDecoration: 'none', flex: '0 0 auto',
   scrollSnapAlign: 'start',
 }
 const ON: React.CSSProperties = { borderColor: 'var(--win-border)', background: 'var(--win-wash)' }
@@ -45,13 +45,13 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
     return qs ? `${pathname}?${qs}` : pathname
   }
   return (
-    <nav aria-label="Games" style={{ overflowX: 'auto', scrollSnapType: 'x proximity', borderBottom: B, background: 'var(--carbon)' }}>
+    <nav aria-label="Games" style={{ overflowX: 'auto', scrollSnapType: 'x proximity', borderBottom: B, background: 'var(--color-background-full)' }}>
       <div className="gutter-m" style={{ display: 'flex', gap: '8px', width: 'max-content', padding: '8px 24px', marginLeft: 'max(0px, calc((100% - 1200px) / 2))' }}>
         <Link href={hrefFor(null)} scroll={false} aria-current={!selected ? 'true' : undefined}
           aria-label={`All games: ${games.length} games, ${total} rows`} title={`${games.length} games, ${total} rows`}
           style={{ ...CARD, minWidth: '56px', ...(!selected ? ON : {}) }}>
-          <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: !selected ? 'var(--signal)' : 'var(--silver)' }}>ALL</span>
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{games.length}</span>
+          <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: !selected ? 'var(--signal)' : 'var(--color-neutral-300)' }}>ALL</span>
+          <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{games.length}</span>
         </Link>
         {games.map(g => {
           const on = g.key === selected
@@ -62,10 +62,10 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
               title={`${g.away} @ ${g.home}${time ? ` \u00b7 ${time}` : ''} \u00b7 ${g.count} ${g.count === 1 ? 'row' : 'rows'}`}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <SportLogo sport={g.sport} team={g.away} size={20} />
-                <span style={{ color: on ? 'var(--signal)' : 'var(--fog)', fontSize: '10px' }} aria-hidden="true">@</span>
+                <span style={{ color: on ? 'var(--signal)' : 'var(--color-text-secondary)', fontSize: '10px' }} aria-hidden="true">@</span>
                 <SportLogo sport={g.sport} team={g.home} size={20} />
               </span>
-              <span className="mono" suppressHydrationWarning style={{ fontSize: '10px', color: on ? 'var(--signal)' : 'var(--fog)', whiteSpace: 'nowrap' }}>{time}</span>
+              <span className="mono" suppressHydrationWarning style={{ fontSize: '10px', color: on ? 'var(--signal)' : 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{time}</span>
             </Link>
           )
         })}

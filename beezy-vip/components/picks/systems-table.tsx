@@ -39,8 +39,8 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
   return (
     <section aria-labelledby="systems-h">
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{heading}</Heading>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>
+        <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>
       </div>
@@ -93,32 +93,32 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                     </Link>
                   </td>
                   <td style={{ ...TD, fontSize: '13.5px', fontWeight: 600 }}>
-                    <Link href={href} style={{ color: 'var(--chalk)', textDecoration: 'none' }}>{s.name}</Link>
+                    <Link href={href} style={{ color: 'var(--color-text-primary)', textDecoration: 'none' }}>{s.name}</Link>
                   </td>
-                  <td style={{ ...TD, fontSize: '12px', color: 'var(--silver)' }}>{s.market === 'game' ? 'Game' : 'Prop'}</td>
-                  <td style={{ ...TD, fontSize: '12px', color: 'var(--silver)' }}>{s.family}</td>
-                  <td style={{ ...TD, fontSize: '12px', color: s.gap ? '#f59e0b' : 'var(--silver)' }}>{status.get(s.key) ?? '--'}</td>
+                  <td style={{ ...TD, fontSize: '12px', color: 'var(--color-neutral-300)' }}>{s.market === 'game' ? 'Game' : 'Prop'}</td>
+                  <td style={{ ...TD, fontSize: '12px', color: 'var(--color-neutral-300)' }}>{s.family}</td>
+                  <td style={{ ...TD, fontSize: '12px', color: s.gap ? '#f59e0b' : 'var(--color-neutral-300)' }}>{status.get(s.key) ?? '--'}</td>
                   {tracked ? (
                     <>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--chalk)' }}>{bets}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--chalk)' }}>{wr !== null ? `${wr.toFixed(1)}%` : '--'}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', fontWeight: 600, color: roi == null ? 'var(--fog)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-text-primary)' }}>{bets}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-text-primary)' }}>{wr !== null ? `${wr.toFixed(1)}%` : '--'}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', fontWeight: 600, color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
                         {roi == null ? '--' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`}
                       </td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12px', color: 'var(--fog)' }}>{bets >= 200 ? '200+ bets' : `${bets}/200 bets`}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '12px', color: 'var(--color-text-secondary)' }}>{bets >= 200 ? '200+ bets' : `${bets}/200 bets`}</td>
                     </>
                   ) : (
                     <>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--silver)' }}>
-                        {t ? <span>{t.rows} <span style={{ color: 'var(--fog)' }}>/</span> <span style={{ color: t.priced > 0 ? 'var(--chalk)' : 'var(--fog)' }}>{t.priced}</span></span> : '--'}
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>
+                        {t ? <span>{t.rows} <span style={{ color: 'var(--color-text-secondary)' }}>/</span> <span style={{ color: t.priced > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{t.priced}</span></span> : '--'}
                       </td>
                       <td className="mono" title={live ? `${live.sample}; ${live.n.toLocaleString('en-US')} player-games. ${live.method}. Engine minus L5 MAE ${live.dMae.toFixed(3)} (se ${live.dMaeSe.toFixed(3)}).` : 'No replay covers this stat yet.'}
-                        style={{ ...TD, ...R, fontSize: '12.5px', color: live && live.dMae < 0 ? 'var(--signal)' : 'var(--silver)' }}>
+                        style={{ ...TD, ...R, fontSize: '12.5px', color: live && live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>
                         {live ? `${maeText(live.mae)} / ${maeText(live.baselineMae)}` : '--'}
                       </td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--silver)' }}>{v?.mae != null ? `${fix(v.mae, 3)} / ${fix(v.baselineMae, 3)}` : '--'}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--silver)' }}>{fix(v?.brier, 4)}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--silver)' }}>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>{v?.mae != null ? `${fix(v.mae, 3)} / ${fix(v.baselineMae, 3)}` : '--'}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>{fix(v?.brier, 4)}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>
                         {spec?.blend ? `${spec.blend.c >= 0 ? '+' : ''}${spec.blend.c.toFixed(2)} (${spec.blend.t >= 0 ? '+' : ''}${spec.blend.t.toFixed(1)})` : '--'}
                       </td>
                     </>
@@ -132,7 +132,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
           </tbody>
         </table>
       </div>
-      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '10px 2px 0', lineHeight: 1.55 }}>
+      <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '10px 2px 0', lineHeight: 1.55 }}>
         {tracked ? (
           <>Log-only systems record every pick but are not counted as a live card until they clear 200 settled bets. Every result is public on the <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link> ledger.</>
         ) : (

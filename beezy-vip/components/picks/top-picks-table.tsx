@@ -15,8 +15,8 @@ const BASIS_LABEL: Record<PickBasis, string> = { model: 'Model', ev: '+EV alert'
 const RESULT: Record<string, { label: string; color: string }> = {
   win: { label: 'WIN', color: 'var(--signal)' },
   loss: { label: 'LOSS', color: 'var(--loss)' },
-  push: { label: 'PUSH', color: 'var(--silver)' },
-  void: { label: 'VOID', color: 'var(--fog)' },
+  push: { label: 'PUSH', color: 'var(--color-neutral-300)' },
+  void: { label: 'VOID', color: 'var(--color-text-secondary)' },
 }
 
 export const fmtEdge = (e: number | null) => (e == null ? '--' : `${e >= 0 ? '+' : ''}${(e * 100).toFixed(1)}%`)
@@ -65,10 +65,10 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                     ) : isOutlier ? (
                       <span className="dell-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
                     ) : null}
-                    <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--silver)', fontWeight: 700 }}>{p.score}</span>
+                    <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{p.score}</span>
                   </div>
                 </td>
-                <td className={cx('mono', TD)} style={{ color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--fog)' }}>{fmtEdge(p.edge)}</td>
+                <td className={cx('mono', TD)} style={{ color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{fmtEdge(p.edge)}</td>
                 <td className={cx('mono whitespace-nowrap text-text-secondary', TD)}>{p.game || '--'}</td>
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}

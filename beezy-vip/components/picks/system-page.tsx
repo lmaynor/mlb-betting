@@ -69,7 +69,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{pillar.shortName} {system.name}</h1>
+            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{pillar.shortName} {system.name}</h1>
             <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
             </span>
@@ -78,13 +78,13 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
         </div>
 
         {!system.gap && (
-          <div className="mono" style={{ ...SURFACE, padding: '9px 14px', marginBottom: '16px', fontSize: '12.5px', color: 'var(--silver)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+          <div className="mono" style={{ ...SURFACE, padding: '9px 14px', marginBottom: '16px', fontSize: '12.5px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
             {tracked ? (
               <>
                 <span>{n} settled</span>
                 <span>{winRate != null ? `${winRate.toFixed(1)}% win` : '-- win'}</span>
-                <span style={{ color: roi == null ? 'var(--fog)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '-- ROI' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
-                <span style={{ color: n >= 200 ? 'var(--signal)' : 'var(--fog)' }}>{n >= 200 ? '200+ bets, paper' : `${n}/200 bets, paper`}</span>
+                <span style={{ color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi == null ? '-- ROI' : `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`}</span>
+                <span style={{ color: n >= 200 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{n >= 200 ? '200+ bets, paper' : `${n}/200 bets, paper`}</span>
                 <Link href={`/results?system=${system.key}`} style={{ color: 'var(--link)' }}>Full history &rarr;</Link>
               </>
             ) : (
@@ -92,8 +92,8 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
                 <span>{base.length} projections</span>
                 <span>{priced} with a posted line</span>
                 <span>{confluence} model + market</span>
-                {live && <span title={live.method} style={{ color: live.dMae < 0 ? 'var(--signal)' : 'var(--silver)' }}>MAE {live.mae.toFixed(live.mae >= 10 ? 1 : 3)} vs {live.baselineMae.toFixed(live.baselineMae >= 10 ? 1 : 3)} (last-5 average)</span>}
-                <span style={{ color: 'var(--fog)' }}>not tracked in the public results</span>
+                {live && <span title={live.method} style={{ color: live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>MAE {live.mae.toFixed(live.mae >= 10 ? 1 : 3)} vs {live.baselineMae.toFixed(live.baselineMae >= 10 ? 1 : 3)} (last-5 average)</span>}
+                <span style={{ color: 'var(--color-text-secondary)' }}>not tracked in the public results</span>
               </>
             )}
           </div>
@@ -109,17 +109,17 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
             <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${system.shortName} rows`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
             {!tracked && f.day === 'today' && (
               <>
-                <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '32px 0 10px' }}>Market prices</h2>
+                <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Market prices</h2>
                 <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={0} block={board.block} confluenceKeys={board.confluenceKeys} />
               </>
             )}
           </>
         )}
-        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55 }}><strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}</div>}
+        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}</div>}
 
-        <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)', margin: '32px 0 10px' }}>Methodology</h2>
+        <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Methodology</h2>
         <SystemMethodology system={system} />
-        <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>{system.description}</p>
+        <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>{system.description}</p>
       </div>
     </div>
   )

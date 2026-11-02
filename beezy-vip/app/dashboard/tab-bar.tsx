@@ -17,7 +17,7 @@ export function DashboardTabBar() {
         const active = pathname === t.href || pathname.startsWith(t.href + '/')
         return (
           <Link key={t.href} href={t.href} aria-current={active ? 'page' : undefined}
-            style={{ fontSize: '13px', fontWeight: 600, padding: '10px 14px', textDecoration: 'none', borderBottom: `2px solid ${active ? 'var(--signal)' : 'transparent'}`, color: active ? 'var(--chalk)' : 'var(--silver)', marginBottom: '-1px' }}>
+            style={{ fontSize: '13px', fontWeight: 600, padding: '10px 14px', textDecoration: 'none', borderBottom: `2px solid ${active ? 'var(--signal)' : 'transparent'}`, color: active ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', marginBottom: '-1px' }}>
             {t.label}
           </Link>
         )

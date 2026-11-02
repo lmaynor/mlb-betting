@@ -12,8 +12,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 24px 48px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Dashboard</h1>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Pro</span>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Dashboard</h1>
+        <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>Pro</span>
       </div>
       <DashboardTabBar />
       {children}
