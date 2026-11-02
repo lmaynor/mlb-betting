@@ -41,8 +41,9 @@ this empirical engine or for pr / pa / ra / steals / blocks, so those NBA entrie
 edge, the confluence flag nor the Beezy Score. Do not read the combo coherence as edge: it makes the board internally
 consistent; the replay (accuracy, not edge) shows it beats the old projection on the held-out seasons.
 Built in the follow-up but left OFF because the replay rejected them: positional DvP, missed-shot-pool rebounds, zero-inflated
-steals / blocks. Overtime is a variance-only regime (untestable without spreads). Not built: tracking-data joins (NBA person ids
-vs the board's name keys need a crosswalk). `nba/props/score.py` has an opt-in `--coherent-combos` PRA (default off, unvalidated).
+steals / blocks, and the prior-season tracking factors (`nba/data/tracking.py`: potential-assist / rebound-chance luck removal from the
+unlicensed community mirror gabriel1200/site_Data; season aggregates only, so prior season only; rebound-chance files stop at 2022-23).
+Overtime is a variance-only regime (untestable without spreads). `nba/props/score.py` has an opt-in `--coherent-combos` PRA (default off, unvalidated).
 
 ## Gotcha: the master's `_date` is the UTC date of the tip
 

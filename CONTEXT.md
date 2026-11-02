@@ -4122,7 +4122,8 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   `docs/solutions/conventions/nba-hierarchical-props-engine-unvalidated.md`. Follow-up (`nba/props/engine_eval.py`, accuracy-only
   walk-forward on the box-score master, ORACLE absences, no spreads): absence boost shipped at 0.4x the spec's strength with steals /
   blocks excluded, team-makes assist factor on; DvP / pool rebounds / ZINB steals-blocks rejected and OFF (`NBA_FEATURES`).
-  Evidence: `docs/analysis/nba_engine_walkforward_2026-11-01.md`.
+  Evidence: `docs/analysis/nba_engine_walkforward_2026-11-01.md`. Prior-season tracking (`nba/data/tracking.py`, community mirror
+  gabriel1200/site_Data, season aggregates, unlicensed, NOT in the bucket) was tested for assists / rebounds and rejected (OFF).
 
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
