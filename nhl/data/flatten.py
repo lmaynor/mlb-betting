@@ -23,6 +23,7 @@ Missing stat blocks are tolerated: the game row is always emitted.
 """
 import math
 
+from nhl.data.powerplay import pp_points_from_goals
 from nhl.data.settings import GOAL_X, SHOT_EVENTS
 
 
@@ -185,9 +186,12 @@ def _goals_by_period(pbp, away_id, home_id) -> dict:
 
 
 # -- boxscore -------------------------------------------------------------------
-def _skater_row(p, base, names):
+def _skater_row(p, base, names, pp=None):
+    """`pp` = {player_id: {pp_assists, pp_points, ...}} derived from the game's play-by-play (nhl.data.powerplay), or
+    None when there is no play-by-play: the boxscore has no power-play assists / points, and None is not zero."""
     toi = toi_seconds(p.get("toi"))
     pid = p.get("playerId")
+    pp_rec = {} if pp is None else pp.get(pid, {})
     return {
         **base,
         "player_id": pid,
@@ -203,6 +207,8 @@ def _skater_row(p, base, names):
         "pim": p.get("pim"),
         "hits": p.get("hits"),
         "power_play_goals": p.get("powerPlayGoals"),
+        "power_play_assists": None if pp is None else pp_rec.get("pp_assists", 0),
+        "power_play_points": None if pp is None else pp_rec.get("pp_points", 0),
         "sog": p.get("sog"),
         "blocked_shots": p.get("blockedShots"),
         "shifts": p.get("shifts"),
@@ -272,6 +278,9 @@ def flatten_game(box: dict, pbp: dict = None) -> dict:
     }
     game.update(_goals_by_period(pbp, away.get("id"), home.get("id")))
 
+    shots = flatten_shots(pbp, gid)
+    pp = pp_points_from_goals(shots) if (pbp or {}).get("plays") else None
+
     pbgs = box.get("playerByGameStats") or {}
     teams, skaters, goalies = [], [], []
     for side, team, opp in (("awayTeam", away, home), ("homeTeam", home, away)):
@@ -281,7 +290,7 @@ def flatten_game(box: dict, pbp: dict = None) -> dict:
             "team_id": team.get("id"), "team_abbr": team.get("abbrev"),
             "is_home": side == "homeTeam",
         }
-        t_sk = [_skater_row(p, base, names) for grp in ("forwards", "defense") for p in block.get(grp, []) or []]
+        t_sk = [_skater_row(p, base, names, pp) for grp in ("forwards", "defense") for p in block.get(grp, []) or []]
         t_g = [_goalie_row(p, base, names) for p in block.get("goalies", []) or []]
         skaters.extend(t_sk)
         goalies.extend(t_g)
@@ -304,5 +313,4 @@ def flatten_game(box: dict, pbp: dict = None) -> dict:
                 "pim": sum(pim) if pim else None,
             })
 
-    return {"game": game, "teams": teams, "skaters": skaters, "goalies": goalies,
-            "shots": flatten_shots(pbp, gid)}
+    return {"game": game, "teams": teams, "skaters": skaters, "goalies": goalies, "shots": shots}

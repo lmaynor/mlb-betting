@@ -325,9 +325,10 @@ def test_replay_cutoff_is_what_removes_late_rows_and_live_serving_keeps_every_ro
 def test_blend_weights_are_per_sport_and_stat_with_defaults():
     assert dp.blend_c("nba", "threes") == 0.25 and dp.blend_c("nba", "pra") == 0.12 and dp.blend_c("nba", "ra") == 0.18
     assert dp.blend_c("nba", "points") == 0.10 and dp.blend_c("nba", "blocks") == 0.12
-    assert dp.blend_c("nhl", "sog") == 0.25 and dp.blend_c("nhl", "goals") == 0.10
-    assert dp.blend_c("nfl", "rec_yds") == 0.15 and dp.blend_c("nfl", "anytime_td") == 0.12
-    assert dp.blend_c("nfl", "pass_yds") == 0.10 and dp.blend_c("mlb", "k") == dp.BLEND_C and dp.blend_c(None, None) == dp.BLEND_C
+    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nhl", "goals") == 0.10      # NHL table is main's, not the spec's
+    assert dp.blend_c("nhl", "shots_unlisted") == dp.BLEND_C
+    assert dp.blend_c("nfl", "rec_yds") == dp.BLEND_C and dp.blend_c("nfl", "anytime_td") == dp.BLEND_C   # NFL untouched
+    assert dp.blend_c("mlb", "k") == dp.BLEND_C and dp.blend_c(None, None) == dp.BLEND_C
     hi = dp.blend_p_over(0.70, 0.50, sport="nba", stat="threes")
     lo = dp.blend_p_over(0.70, 0.50, sport="nba", stat="points")
     assert hi > lo > 0.5
