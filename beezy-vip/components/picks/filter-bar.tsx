@@ -11,13 +11,13 @@ import { SYSTEM_LABEL_SHORT } from '@/lib/tokens'
 import { useMyBooks } from '@/lib/use-my-books'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 const CONTROL: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 9px', borderRadius: 'var(--radius)', border: B, background: 'var(--graphite)',
-  color: 'var(--chalk)',
+  fontFamily: 'var(--font-mono)', fontSize: '11px', padding: '6px 9px', borderRadius: 'var(--radius-2lg)', border: B, background: 'var(--color-background-primary-default)',
+  color: 'var(--color-text-primary)',
 }
 // each labelled control grows to share the row, so on a phone they stack two or one to a row instead of ragged wraps
-const LABEL: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--fog)', letterSpacing: '0.08em', flex: '1 1 150px', minWidth: 0 }
+const LABEL: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', letterSpacing: '0.08em', flex: '1 1 150px', minWidth: 0 }
 const SELECT: React.CSSProperties = { flex: '1 1 auto', minWidth: 0 }
 
 /**
@@ -90,7 +90,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             gap: '5px',
             cursor: 'pointer',
             height: '44px',
-            color: active > 0 ? 'var(--signal)' : 'var(--chalk)',
+            color: active > 0 ? 'var(--signal)' : 'var(--color-text-primary)',
             borderColor: active > 0 ? 'var(--signal)' : undefined,
             flexShrink: 0,
           }}
@@ -116,7 +116,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           <button
             type="button"
             onClick={clear}
-            style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)', height: '44px', flexShrink: 0 }}
+            style={{ ...CONTROL, cursor: 'pointer', color: 'var(--color-neutral-300)', height: '44px', flexShrink: 0 }}
           >
             Clear
           </button>
@@ -152,8 +152,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {sport === 'all' ? (
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px', letterSpacing: '0.06em' }}>SPORT</div>
-                <div style={{ display: 'flex', gap: '4px', background: '#090a0f', padding: '3px', borderRadius: '8px', border: B }}>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px', letterSpacing: '0.06em' }}>SPORT</div>
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '3px', borderRadius: '8px', border: B }}>
                   {[{ slug: 'all', shortName: 'ALL' }, ...LIVE_SPORTS].map(s => {
                     const isActive = sportParam === s.slug
                     return (
@@ -168,9 +168,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           fontSize: '11.5px',
                           fontFamily: 'var(--font-mono)',
                           fontWeight: 600,
-                          border: isActive ? '1px solid #3a4156' : '1px solid transparent',
-                          background: isActive ? '#1b1f2b' : 'transparent',
-                          color: isActive ? '#ffffff' : 'var(--silver)',
+                          border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                          background: isActive ? 'var(--color-background-tertiary-default)' : 'transparent',
+                          color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                           cursor: 'pointer',
                         }}
                       >
@@ -181,9 +181,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                 </div>
               </div>
             ) : !fixedMarket && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: '#090a0f', padding: '10px', borderRadius: '8px', border: B }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--color-background-secondary-default)', padding: '10px', borderRadius: '8px', border: B }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.06em' }}>MARKET / SYSTEM</span>
+                  <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>MARKET / SYSTEM</span>
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -211,7 +211,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         type="button"
                         onClick={() => set('market', market === 'EV' ? 'ALL' : 'EV', 'ALL')}
                         aria-pressed={market === 'EV'}
-                        style={{ background: 'transparent', border: 'none', color: market === 'EV' ? 'var(--chalk)' : 'var(--silver)', fontSize: '12px', fontWeight: market === 'EV' ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'transparent', border: 'none', color: market === 'EV' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: market === 'EV' ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
                       >
                         +EV alerts
                       </button>
@@ -228,9 +228,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           padding: '3px 7px',
                           minHeight: '26px',
                           borderRadius: '4px',
-                          border: market === 'EV' ? '1px solid var(--signal)' : `1px solid var(--basalt)`,
+                          border: market === 'EV' ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                           background: market === 'EV' ? 'var(--win-wash)' : 'transparent',
-                          color: market === 'EV' ? 'var(--signal)' : 'var(--fog)',
+                          color: market === 'EV' ? 'var(--signal)' : 'var(--color-text-secondary)',
                           cursor: 'pointer',
                           flexShrink: 0,
                         }}
@@ -259,7 +259,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           type="button"
                           onClick={() => set('market', isActive ? 'ALL' : s.key, 'ALL')}
                           aria-pressed={isActive}
-                          style={{ background: 'transparent', border: 'none', color: isActive ? 'var(--chalk)' : 'var(--silver)', fontSize: '12px', fontWeight: isActive ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
+                          style={{ background: 'transparent', border: 'none', color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: isActive ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
                         >
                           {SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}
                         </button>
@@ -276,9 +276,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                             padding: '3px 7px',
                             minHeight: '26px',
                             borderRadius: '4px',
-                            border: isActive ? '1px solid var(--signal)' : `1px solid var(--basalt)`,
+                            border: isActive ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                             background: isActive ? 'var(--win-wash)' : 'transparent',
-                            color: isActive ? 'var(--signal)' : 'var(--fog)',
+                            color: isActive ? 'var(--signal)' : 'var(--color-text-secondary)',
                             cursor: 'pointer',
                             flexShrink: 0,
                           }}
@@ -293,8 +293,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px', letterSpacing: '0.06em' }}>SHOW</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: '#090a0f', padding: '4px', borderRadius: '8px', border: B }}>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px', letterSpacing: '0.06em' }}>SHOW</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '4px', borderRadius: '8px', border: B }}>
                 {[{ value: 'all', label: 'Everything' }, ...SIGNAL_OPTIONS].map(o => {
                   const isActive = signal.toLowerCase() === o.value.toLowerCase()
                   return (
@@ -309,9 +309,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         fontSize: '11px',
                         fontFamily: 'var(--font-mono)',
                         fontWeight: 600,
-                        border: isActive ? '1px solid #3a4156' : '1px solid transparent',
-                        background: isActive ? '#1b1f2b' : 'transparent',
-                        color: isActive ? '#ffffff' : 'var(--silver)',
+                        border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                        background: isActive ? 'var(--color-background-tertiary-default)' : 'transparent',
+                        color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                         cursor: 'pointer',
                       }}
                     >
@@ -322,9 +322,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: '#090a0f', padding: '10px', borderRadius: '8px', border: B }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--color-background-secondary-default)', padding: '10px', borderRadius: '8px', border: B }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', letterSpacing: '0.06em' }}>BOOK</span>
+                <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>BOOK</span>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button
                     type="button"
@@ -382,7 +382,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                             else p.set('book', param)
                           })
                         }}
-                        style={{ background: 'transparent', border: 'none', color: isSelected ? 'var(--chalk)' : 'var(--silver)', fontSize: '12px', fontWeight: isSelected ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'transparent', border: 'none', color: isSelected ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: isSelected ? 700 : 400, textAlign: 'left', flex: 1, cursor: 'pointer', padding: 0 }}
                       >
                         {b}
                       </button>
@@ -406,9 +406,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           padding: '3px 7px',
                           minHeight: '26px',
                           borderRadius: '4px',
-                          border: isSelected ? '1px solid var(--signal)' : `1px solid var(--basalt)`,
+                          border: isSelected ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                           background: isSelected ? 'var(--win-wash)' : 'transparent',
-                          color: isSelected ? 'var(--signal)' : 'var(--fog)',
+                          color: isSelected ? 'var(--signal)' : 'var(--color-text-secondary)',
                           cursor: 'pointer',
                           flexShrink: 0,
                         }}
@@ -423,8 +423,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
 
             {showResult && (
               <div>
-                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px', letterSpacing: '0.06em' }}>RESULT</div>
-                <div style={{ display: 'flex', gap: '4px', background: '#090a0f', padding: '3px', borderRadius: '8px', border: B }}>
+                <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px', letterSpacing: '0.06em' }}>RESULT</div>
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '3px', borderRadius: '8px', border: B }}>
                   {['all', 'win', 'loss', 'pending'].map(r => {
                     const isActive = result.toLowerCase() === r
                     return (
@@ -440,9 +440,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           fontFamily: 'var(--font-mono)',
                           fontWeight: 600,
                           textTransform: 'uppercase',
-                          border: isActive ? '1px solid #3a4156' : '1px solid transparent',
-                          background: isActive ? '#1b1f2b' : 'transparent',
-                          color: isActive ? (r === 'win' ? 'var(--signal)' : r === 'loss' ? 'var(--loss)' : '#ffffff') : 'var(--silver)',
+                          border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                          background: isActive ? 'var(--color-background-tertiary-default)' : 'transparent',
+                          color: isActive ? (r === 'win' ? 'var(--signal)' : r === 'loss' ? 'var(--loss)' : 'var(--color-text-primary)') : 'var(--color-neutral-300)',
                           cursor: 'pointer',
                         }}
                       >
@@ -455,8 +455,8 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)', marginBottom: '6px', letterSpacing: '0.06em' }}>SORT BY</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: '#090a0f', padding: '4px', borderRadius: '8px', border: B, marginBottom: '6px' }}>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px', letterSpacing: '0.06em' }}>SORT BY</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '4px', borderRadius: '8px', border: B, marginBottom: '6px' }}>
                 {sortOptions.map(o => {
                   const isActive = sort === o.value
                   return (
@@ -471,9 +471,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         fontSize: '11px',
                         fontFamily: 'var(--font-mono)',
                         fontWeight: 600,
-                        border: isActive ? '1px solid #3a4156' : '1px solid transparent',
-                        background: isActive ? '#1b1f2b' : 'transparent',
-                        color: isActive ? '#ffffff' : 'var(--silver)',
+                        border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                        background: isActive ? 'var(--color-background-tertiary-default)' : 'transparent',
+                        color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                         cursor: 'pointer',
                       }}
                     >
@@ -483,7 +483,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                 })}
               </div>
 
-              <div style={{ display: 'flex', gap: '4px', background: '#090a0f', padding: '3px', borderRadius: '8px', border: B }}>
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '3px', borderRadius: '8px', border: B }}>
                 <button
                   type="button"
                   onClick={() => push(p => { p.delete('dir') })}
@@ -494,9 +494,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                     fontSize: '11px',
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 600,
-                    border: dir === 'desc' ? '1px solid #3a4156' : '1px solid transparent',
-                    background: dir === 'desc' ? '#1b1f2b' : 'transparent',
-                    color: dir === 'desc' ? '#ffffff' : 'var(--silver)',
+                    border: dir === 'desc' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                    background: dir === 'desc' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                    color: dir === 'desc' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                     cursor: 'pointer',
                   }}
                 >
@@ -512,9 +512,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                     fontSize: '11px',
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 600,
-                    border: dir === 'asc' ? '1px solid #3a4156' : '1px solid transparent',
-                    background: dir === 'asc' ? '#1b1f2b' : 'transparent',
-                    color: dir === 'asc' ? '#ffffff' : 'var(--silver)',
+                    border: dir === 'asc' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                    background: dir === 'asc' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                    color: dir === 'asc' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                     cursor: 'pointer',
                   }}
                 >
@@ -524,7 +524,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
 
             {my.books.length === 0 && bookValue === 'MY' && (
-              <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
             )}
           </div>
         </MobileBottomSheet>
@@ -597,10 +597,10 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
       </label>
 
       {active > 0 && (
-        <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--silver)' }}>Clear {active}</button>
+        <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--color-neutral-300)' }}>Clear {active}</button>
       )}
       {my.books.length === 0 && bookValue === 'MY' && (
-        <span style={{ fontSize: '11px', color: 'var(--fog)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
+        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
       )}
     </AlignedBar>
   )
