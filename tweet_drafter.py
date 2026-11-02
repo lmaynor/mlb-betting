@@ -1048,7 +1048,7 @@ STAT_LABELS = {
     "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "pass_completions": "Completions",
     "pass_attempts": "Pass Attempts", "rush_attempts": "Carries", "interceptions": "Interceptions",
     "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
-    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots",
+    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots", "pp_points": "PP Points",
     "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast", "pr": "Pts+Reb", "pa": "Pts+Ast",
     "ra": "Reb+Ast", "steals": "Steals", "blocks": "Blocks",
 }

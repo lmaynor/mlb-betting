@@ -73,6 +73,9 @@ NHL_SKATER_STATS = {
     "hits":          (("hits",), ("toi_min",), "TOI (min)"),
     "blocked_shots": (("blocked_shots",), ("toi_min",), "TOI (min)"),
     "pim":           (("pim",), ("toi_min",), "TOI (min)"),
+    # power-play goals + assists. The boxscore has NO such column (power_play_goals only): it is derived from the
+    # play-by-play goals (nhl.data.powerplay), written at ingest and, for older rows, filled from the shots masters below.
+    "pp_points":     (("power_play_points",), ("toi_min",), "TOI (min)"),
 }
 NHL_GOALIE_STATS = {"saves": (("saves",), ("shots_against",), "Shots faced")}
 NBA_STATS = {
@@ -93,6 +96,11 @@ NFL_KEY = "NFL/nflverse/player_stats/player_stats_{season}.parquet"
 NHL_SKATER_KEYS = ("NHL/skater_boxscores_master.csv", "NHL/skaters_master.csv")
 NHL_GOALIE_KEYS = ("NHL/goalie_boxscores_master.csv", "NHL/goalies_master.csv")
 NHL_TEAM_KEY = "NHL/team_boxscores_master.csv"
+NHL_SHOTS_KEY = "NHL/shots/shots_{season}.csv"
+_NHL_SHOTS_COLS = ["game_id", "event", "is_home", "period_type", "situation_code", "shooter_id", "assist1_id",
+                   "assist2_id"]
+_NHL_TEAM_COLS = ["game_id", "team_id", "team_abbr", "date", "game_type", "season_year", "opp_abbr", "sog",
+                  "shots_against", "goals", "goals_against", "pim"]
 NBA_KEYS = ("NBA/player_boxscores_master.parquet", "NBA/player_boxscores_master.csv", "NBA/player_box_master.parquet")
 NBA_HOOPR_KEY = "NBA/hoopr/player_boxscores/player_box_{season}.parquet"   # hoopR season = the year the season ENDS
 # hoopR/ESPN season_type code -> the SportsBlaze strings the master uses (preseason is dropped below either way)
@@ -228,8 +236,37 @@ def _load_nfl() -> dict | None:
     return {"all": _index(df, name_col, None)}
 
 
+def _fill_nhl_power_play(sk: pd.DataFrame) -> pd.DataFrame:
+    """Skater rows with no `power_play_points` (every row written before the ingest derived it) get it from the shots
+    masters of the kept seasons; a row whose game has no shots data stays NaN. Best effort: any failure leaves the column
+    as it was and `pp_points` simply has no history (no row), never a fabricated 0."""
+    try:
+        from nhl.data import powerplay
+        if "power_play_points" in sk.columns:
+            keep = sorted(_num(sk["season_year"]).dropna().unique())[-KEEP_SEASONS:]
+            rel = sk[_num(sk["season_year"]).isin(keep)]
+            if "game_type" in rel.columns:
+                rel = rel[_num(rel["game_type"]).isin([2, 3])]
+            if len(rel) and rel["power_play_points"].notna().mean() >= 0.99:      # backfilled: no need to read the shots ...
+                cut = (pd.to_datetime(rel["date"], errors="coerce").max() - pd.Timedelta(days=14))
+                recent = rel[pd.to_datetime(rel["date"], errors="coerce") >= cut]
+                if len(recent) and recent["power_play_points"].notna().all():     # ... unless the newest games lack it
+                    return sk
+        years = sorted(_num(sk["season_year"]).dropna().unique())[-KEEP_SEASONS:]
+        for y in years:
+            try:
+                shots = _read([NHL_SHOTS_KEY.format(season=int(y))], "nhl shots", _NHL_SHOTS_COLS)
+            except FileNotFoundError:
+                continue
+            sk = powerplay.fill_skater_frame(sk, shots)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("nhl power-play points unavailable: %s", exc)
+    return sk
+
+
 def _load_nhl() -> dict | None:
     sk = _read(NHL_SKATER_KEYS, "nhl skaters")
+    sk = _fill_nhl_power_play(sk)
     sk["toi_min"] = _num(sk.get("toi_sec")) / 60.0
     try:
         gl = _read(NHL_GOALIE_KEYS, "nhl goalies")
@@ -259,6 +296,24 @@ def _load_nhl() -> dict | None:
 
     out = {"skater": _index(prep(sk), "name", "player_id")}
     out["goalie"] = _index(prep(gl), "name", "player_id") if gl is not None else {}
+    out["team"] = _team_rows(prep)
+    return out
+
+
+def _team_rows(prep) -> dict:
+    """{team_abbr: [team-game row dicts, chronological]} from the team box master (shots for / against, goals, PIM): the
+    opponent shot-pace context of the NHL hierarchical engine. {} when the master is unreadable (the engine then skips
+    its team terms and keeps the player-only estimate)."""
+    try:
+        tb = _read([NHL_TEAM_KEY], "nhl teams", _NHL_TEAM_COLS)
+        tb = prep(tb)
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict = {}
+    for row in tb.to_dict("records"):
+        ab = row.get("team_abbr")
+        if isinstance(ab, str) and ab:
+            out.setdefault(ab, []).append(row)
     return out
 
 

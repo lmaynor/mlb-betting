@@ -45,33 +45,37 @@ The serving board is unchanged until someone sets `NFL_ENGINE=hierarchical` on t
   claim needs the real comparison, not the argument.
 - Re-run `engine_eval --write-calibration` is unaffected; the hierarchical engine has no calibration of its own beyond the shipped scale.
 
-## Real-data replay (2024-2025 held out, 18,992 scored player-stat rows, run 2026-11-01 from the GCS mirror)
+## Real-data replay (2024-2025 held out, 18,992 scored player-stat rows; GCS mirror; FINAL numbers)
 `python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical [--hier-context]`; baseline = the shipped engine incl. calibration.
-Verdict: **NOT a general improvement; leave NFL_ENGINE off.** Log score (hierarchical minus baseline; se in parens):
+Priors were tuned on 2021-2023 ONLY (7 + 5 parallel replays, paired log score); 2024-2025 was never used for selection. Log score,
+hierarchical minus baseline (se):
 
-| stat | no context | with context (injuries, pbp, participation, snaps) |
-|---|---|---|
-| pass_attempts | -0.292 (0.044) WORSE | same (no absence/shell input for it) |
-| pass_completions | -0.123 (0.028) WORSE | -0.122 WORSE |
-| pass_yds | -0.163 (0.042) WORSE | -0.165 WORSE |
-| pass_tds | +0.019 (0.010) | +0.019 (tails over-predicted: 0.285 vs realised 0.229 at +200) |
-| interceptions | -0.033 (0.038) | -0.033 |
-| rush_attempts | +0.041 (0.010) | +0.044 (0.011) |
-| rush_yds | -0.021 (0.051) | -0.016 (0.052); CRPS -0.43 |
-| receptions | -0.004 (0.003) | -0.017 (0.005) WORSE |
-| rec_yds | +0.091 (0.035), z 2.6 | +0.080 (0.035) |
-| anytime_td | -0.267 (0.023) WORSE | -0.231 (0.018) WORSE |
+| stat | no context | with context | verdict (strict rule) |
+|---|---|---|---|
+| pass_attempts | -0.109 (0.017) | same | WORSE |
+| pass_completions | -0.085 (0.016) | -0.085 | WORSE |
+| pass_yds | -0.039 (0.013) | -0.043 | WORSE |
+| pass_tds | +0.024 (0.007) | +0.024 | **ADOPT** (Brier z 1.9) |
+| interceptions | +0.018 (0.011) | +0.017 | no clear gain |
+| rush_attempts | +0.037 (0.008) | +0.042 (0.009) | ADOPT only with context (Brier z 1.9) |
+| rush_yds | +0.066 (0.015) | +0.071 (0.016) | **ADOPT** (CRPS -0.30 / -0.42) |
+| receptions | -0.003 (0.003) | -0.010 (0.004) | no clear gain; context hurts |
+| rec_yds | +0.177 (0.013) | +0.171 (0.013) | no clear gain: log score huge, but Brier z only ~1.3 / 0.8 |
+| anytime_td | -0.000 (0.001) | +0.002 (0.001) | parity |
 
-- MAE is essentially unchanged on every stat: any gain is distribution shape, not a better mean.
-- Tail calibration at fair +200/+400 improves for pass/rush/rec yards and attempts WITHOUT context (rec_yds 0.273/0.175 vs realised 0.276/0.178, baseline 0.333/0.200).
-- **Context made receptions / rec_yds worse.** 84-90% of receiver rows moved (+7-8% mean) and the hierarchical mean over-projects: mean(y - mu) is
-  -0.29 receptions and -3.6 rec yds with context (-0.03 / -0.5 without; the baseline's is -0.03 / -0.16). Hypothesis (NOT tested): the practice-weighted
-  redistribution double-counts. A teammate who has been out for weeks is already absent from the other receivers' trailing targets, and Questionable
-  players (weights 0.25-0.55) mostly play, yet their full trailing share is re-allocated every week.
-- The ADOPT verdict in `compare_hierarchical` only checks the SIGN of the Brier difference: rush_attempts is flagged ADOPT with Brier z ~1.4. Tighten it
-  before trusting a verdict. Two test seasons also reduce "better in >= 4 of 5 seasons" to 2 of 2.
-- Bugs real data found and fixed: blank-string coverage tags diluted `def_man_rate`; `redistribute` divided by zero when a role's peers all had 0 share.
+- **Two harness artifacts inflated the first report and are fixed**: anytime_td was scored as a count pmf for one engine and a 0/1 indicator for the
+  other; and the baseline's log score floors mu at 0.05 while the hierarchical side had no floor (rows with ~0 projected TDs that scored cost -20 nats).
+  The first "anytime_td WORSE" and the "wider attempt spread is better" tuning signal were both artifacts of those.
+- MAE is still essentially unchanged on every stat (rec_yds with context is worse: 25.84 vs 25.14): any gain is DISTRIBUTION SHAPE, not a better mean.
+- **Context (injuries, coverage, OL) still does not help.** After the absence discount (a teammate's share is scaled by the fraction of the team's recent games
+  he has NOT already missed) the over-projection shrank, but receptions / rec_yds MAE and tail calibration (rec_yds +200: 0.296 vs realised 0.276) are still
+  worse with context than without it. Coverage-shell and OL terms are untested in isolation.
+- Passing (attempts / completions / yards) is genuinely worse than the baseline's Normal / NegBin; widening the attempts distribution did NOT help once
+  scoring was fair (default width 1.0 was best on train; narrower 0.65 / 0.8 not significantly different).
+- Adopted-by-selection (train only): comp_kappa 15 (edge of grid, +0.012 +/- 0.005 on pass_completions, provisional), pass_td anchor 0.15.
+- Bugs real data found and fixed: blank-string coverage tags diluted `def_man_rate`; `redistribute` divided by zero; role mismatch without air-yards.
 
 ## Next (not done)
-Fix the absence double-count (only count players whose share is still visible in the teammates' trailing window / out for the first time), tune the
-passing-distribution width and the pass_tds anchor on 2021-2023 only, re-run on 2024-2025; consider a per-stat allowlist (rec_yds, rush_attempts).
+Per-stat allowlist (`make_row` currently switches ALL NFL stats): pass_tds, rush_yds, (rush_attempts with context), rec_yds are the candidates; keep
+passing / receptions on the legacy price. rec_yds needs a proper Brier / CRPS check at REAL lines, not the L5 proxy line. Isolate which context layer hurts
+receptions. Everything remains accuracy evidence, not edge: no historical NFL prop lines.

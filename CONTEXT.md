@@ -4282,6 +4282,15 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   `docs/analysis/nhl_xg_saves_goals_validation_2026-10-16.md`. Not deployed; no job, scheduler, bets-table write or Discord post.
 - **Data sources:** `docs/solutions/integration-issues/nhl-nba-data-source-availability.md` (SportsBlaze has no NHL box scores; NHL API
   rate-limits per IP; cdn.nba.com/stats.nba.com blocked, ESPN works).
+- **NHL hierarchical prop engine (2026-11-01, branch `claude/nhl-props-engine-upgrade-11b452`, NOT deployed):** `nhl/props/hierarchical.py` +
+  `ev.daily_projections.project_nhl`. goals = 0.55 trailing + 0.45 sog x EB shooting %; points == goals + assists exactly; pp_points is the 7th
+  live NHL stat (PP goals + assists derived from play-by-play, `nhl/data/powerplay.py`, exact vs the box's power_play_goals; the boxscore has NO
+  powerPlayPoints, see `docs/solutions/integration-issues/nhl-boxscore-has-no-power-play-points.md`); saves = EB save % x (team SA + opp shot pace)
+  x start share, priced by a two-regime hook mixture; every NHL input and league context is cut to games before the game date (`GameLogs(as_of)`).
+  `BLEND_C_BY_SPORT_STAT` (sog 0.30 ...) is display-only. Replay (accuracy only): `docs/analysis/nhl_hierarchical_engine_2026-11-01.md`
+  (log score up on goals/assists/points/pp_points/saves; SOG and blocks unchanged: the spec's blocks pace factor lost and was reverted). The skater master was BACKFILLED 2026-11-01
+  (`python -m nhl.data.powerplay`, 279,191 rows from 2021, backup under `NHL/backups/`); deploy the image next; beezy-vip still lists pp_points as
+  `Data gap` (`lib/sports.ts`, `lib/prop-model-specs.ts`, 3 pinned tests): flip AFTER the backend serves pp_points rows.
 
 ---
 
