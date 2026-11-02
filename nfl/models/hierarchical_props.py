@@ -40,6 +40,9 @@ from scipy.stats import betabinom, binom, gamma as _gamma, nbinom, norm
 N_MAX = 100                      # support of every count pmf (0..N_MAX-1); tail mass beyond it is < 1e-12 for NFL counts
 
 # --------------------------------------------------------------------------------------------------------- priors
+# Hand-set, EXCEPT comp_kappa (60 -> 15) and pass_td_* (0.65 / 0.35 -> 0.85 / 0.15), which were chosen on the 2021-2023 replay
+# only (paired log score vs the shipped engine; 2024-2025 never used for selection). comp_kappa 15 is the edge of the grid tried
+# (60 / 30 / 120 / 15) and +0.012 +/- 0.005 log score on pass_completions: treat it as provisional.
 PRIORS = {
     # game script (spread -> regime weights, attempt / carry shifts)
     "trail_center": 3.5, "lead_center": 6.5, "script_scale": 13.5,
@@ -47,7 +50,7 @@ PRIORS = {
     "car_boost_lead": 3.2, "car_boost_trail": -2.6, "car_share_ref": 0.55, "car_share_cap": 1.2,
     "league_spread_sd": 6.0,
     # completions
-    "comp_kappa": 60.0, "comp_lo": 0.45, "comp_hi": 0.80,
+    "att_var_mult": 1.0, "comp_kappa": 15.0, "comp_lo": 0.45, "comp_hi": 0.80,
     "comp_wind_per_mph": 0.004, "comp_pressure_slope": 0.03, "comp_adot_slope": 0.0035, "comp_cpoe_slope": 0.002,
     # yards per completion / reception / carry
     "ypc_yac_share": 0.45, "ypc_two_high_slope": 0.10, "ypc_wind_per_mph": 0.004, "att_wind_per_mph": 0.004,
@@ -59,7 +62,7 @@ PRIORS = {
     "shell_short_boost": 0.06, "shell_deep_boost": 0.07, "shell_scale": 0.15,
     "slot_adot_max": 9.0, "deep_adot_min": 11.0, "catch_adot_slope": -0.055, "catch_cpoe_slope": 0.04,
     # touchdowns / interceptions
-    "td_w_gl": 0.45, "td_w_rz": 0.35, "td_w_ex": 0.20, "td_prior_w": 0.65, "td_anchor_w": 0.35,
+    "td_w_gl": 0.45, "td_w_rz": 0.35, "td_w_ex": 0.20, "td_prior_w": 0.65, "td_anchor_w": 0.35, "pass_td_prior_w": 0.85, "pass_td_anchor_w": 0.15,
     "team_td_floor": 0.8, "team_td_offset": 4.5, "team_td_div": 6.9, "pass_td_div": 7.0, "pass_td_share": 0.62,
     "int_trail_slope": 0.35,
     # league reference rates used to centre the coverage-shell effects
@@ -373,7 +376,7 @@ def price_pass_funnel(pi: PlayerInputs, game: GameContext) -> dict:
     it = game.implied_team_total
     if it is not None and math.isfinite(it) and it > 0:
         anchor = it / P["pass_td_div"] * P["pass_td_share"]
-        lam_ptd = P["td_prior_w"] * lam_ptd + P["td_anchor_w"] * anchor
+        lam_ptd = P["pass_td_prior_w"] * lam_ptd + P["pass_td_anchor_w"] * anchor
     ptd_d = _pmf_dist(_nb_pmf(lam_ptd, pi.alpha_pass_td))
     return {"pass_attempts": att_d, "pass_completions": comp_d, "pass_yds": yds_d, "pass_tds": ptd_d,
             "interceptions": int_d}

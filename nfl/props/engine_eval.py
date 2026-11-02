@@ -511,8 +511,11 @@ def _write_calibration(res: pd.DataFrame, env_tbl: pd.DataFrame, cal: dict, seas
 # --------------------------------------------------------------------------------------------------------------
 HIER_STATS = ("pass_attempts", "pass_completions", "pass_yds", "pass_tds", "interceptions", "rush_attempts", "rush_yds",
               "receptions", "rec_yds", "anytime_td")
+MU_FLOOR = 0.05                  # = the floor _logscore applies to the baseline's mean
+MASS_FLOOR = 1e-4                # common floor on a count / 1-unit-bin mass (both engines)
 ALT_P = {"plus200": 1.0 / 3.0, "plus400": 1.0 / 5.0}          # fair P(over) at +200 / +400 American odds
 ADOPT_Z_HIER = float(norm.ppf(1 - 0.05 / (2 * len(HIER_STATS))))
+ADOPT_Z_BRIER = 1.645           # the secondary guard must itself be significant (one-sided 5%), not merely the right sign
 _CRPS_GRID = {"yards": np.arange(0, 601, 2.0), "count": np.arange(0, 61, 1.0)}
 
 
@@ -642,9 +645,19 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
                     vals = np.array([g[0] for g in h], dtype=float)
                     l5 = float(vals[-5:].mean())
                     line = float(proxy_line(np.array([l5]), stat)[0])
+                    # Both engines are scored on the SAME footing: the baseline's log score floors mu at MU_FLOOR (see _logscore), so
+                    # the hierarchical side gets the equivalent floor (a player with ~0 projected TDs who scores must not cost
+                    # -20 nats on one side only), and count / yard masses share one floor.
+                    if family == "anytime":      # the market is 1+ TD: the 0/1 indicator for BOTH engines
+                        p1 = min(max(hr.p_over(0.5), 1.0 - math.exp(-MU_FLOOR)), 1.0 - 1e-9)
+                        ls_hier = float(np.log(p1 if y >= 1 else 1.0 - p1))
+                        ls_base = float(np.log(base.mass(y)))
+                    else:
+                        ls_hier = float(np.log(max(float(hr.dist.mass(y)), MASS_FLOOR)))
+                        ls_base = float(np.log(max(float(base.mass(y)), MASS_FLOOR)))
                     rec = {"season": season, "week": int(week), "player": r["_name"], "stat": stat, "y": float(y),
                            "line": line, "mu_base": mu_base, "mu_hier": hr.mean,
-                           "ls_base": float(np.log(base.mass(y))), "ls_hier": float(np.log(hr.dist.mass(y))),
+                           "ls_base": ls_base, "ls_hier": ls_hier,
                            "p_base": base.sf(line), "p_hier": hr.p_over(line),
                            "crps_base": _crps(base, float(y), stat, family), "crps_hier": _crps(hr.dist, float(y), stat, family)}
                     if family != "anytime":
@@ -664,7 +677,7 @@ def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict
 
     d_logscore > 0, d_brier < 0, d_crps < 0 favour the hierarchical engine. `tails[k]` = mean predicted P(over) vs the realised
     hit rate at the fair +200 / +400 rung (calibration error = predicted - realised; closer to 0 is better).
-    verdict ADOPT needs log score and Brier to agree, pooled z >= ADOPT_Z_HIER (Bonferroni over the 10 stats), and the log score
+    verdict ADOPT needs pooled log-score z >= ADOPT_Z_HIER (Bonferroni over the 10 stats), the Brier gain itself significant (z >= ADOPT_Z_BRIER), and the log score
     better in at least 4/5 test seasons (all of them when fewer than 5 are scored)."""
     seasons = sorted(set(test_seasons))
     r = res[res["season"].isin(seasons)]
@@ -684,9 +697,10 @@ def compare_hierarchical(res: pd.DataFrame, test_seasons: Iterable[int]) -> dict
         per_season = {int(s): float((g["ls_hier"] - g["ls_base"]).mean()) for s, g in d.groupby("season")}
         z = float(dls.mean() / se(dls)) if se(dls) > 0 else float("nan")
         zb = float(-dbr.mean() / se(dbr)) if se(dbr) > 0 else float("nan")
+        zb = -float("inf") if zb != zb else zb
         n_better = sum(1 for v in per_season.values() if v > 0)
         need = 4 if len(per_season) >= 5 else len(per_season)
-        verdict = "ADOPT" if (z >= ADOPT_Z_HIER and zb > 0 and n_better >= need) else (
+        verdict = "ADOPT" if (z >= ADOPT_Z_HIER and zb >= ADOPT_Z_BRIER and n_better >= need) else (
             "WORSE" if z <= -ADOPT_Z_HIER else "NO CLEAR GAIN")
         tails = {}
         for name in ALT_P:
@@ -722,7 +736,7 @@ def render_hierarchical(cmp: dict, test_seasons: list) -> str:
         for name, t in cmp.get(stat, {}).get("tails", {}).items():
             lines.append(f"  {stat:<16}{name:<8} n={t['n']:<6} realised {t['realised']:.3f}  baseline {t['pred_base']:.3f}  "
                          f"hierarchical {t['pred_hier']:.3f}")
-    lines.append(f"adoption bar: pooled z >= {ADOPT_Z_HIER:.2f} on log score, Brier agrees, better in >= 4/5 seasons. "
+    lines.append(f"adoption bar: pooled z >= {ADOPT_Z_HIER:.2f} on log score, Brier z >= {ADOPT_Z_BRIER:.2f}, better in >= 4/5 seasons. "
                  "Until a stat clears it, NFL_ENGINE stays 'ewm'.")
     return "\n".join(lines) + "\n"
 

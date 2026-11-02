@@ -126,7 +126,8 @@ def build_team_ctx(table: dict) -> dict:
     out: dict = {}
     for team, g in tg.sort_values("key", kind="mergesort").groupby("team", sort=False):
         t = {"pass_att": _wmean(g["att"].to_numpy(float), VOL_HALFLIFE), "carries": _wmean(g["car"].to_numpy(float), VOL_HALFLIFE),
-             "targets": _wmean(g["tgt"].to_numpy(float), VOL_HALFLIFE), "last_key": int(g["key"].iloc[-1]), "players": []}
+             "targets": _wmean(g["tgt"].to_numpy(float), VOL_HALFLIFE), "last_key": int(g["key"].iloc[-1]), "players": [],
+             "recent_keys": [int(k) for k in g["key"].tail(MISS_WINDOW_GAMES)]}
         out[team] = t
     tot = tg.set_index(["team", "season", "week"])
     newest = int(df["key"].max())
@@ -134,6 +135,7 @@ def build_team_ctx(table: dict) -> dict:
         t = out.get(team)
         if t is None:
             continue
+        all_keys = g["key"].to_numpy()
         g = g.tail(12)
         tot_rows = [tot.loc[(team, s, w)] for s, w in zip(g["season"], g["week"])]
         att = np.array([float(x["att"]) for x in tot_rows])
@@ -146,10 +148,27 @@ def build_team_ctx(table: dict) -> dict:
         tgt_sum, ay_sum = np.nansum(g["tgt"].to_numpy(float)), np.nansum(g["ay"].to_numpy(float))
         t["players"].append({
             "pid": pid, "name": name, "pos": g["pos"].iloc[-1], "last_key": int(g["key"].iloc[-1]),
+            "miss": _missed_fraction(t["recent_keys"], set(int(k) for k in all_keys)),
             "tgt": _wmean(tshare, 4.0), "rush": _wmean(rshare, 4.0), "air": _wmean(ashare, 4.0),
             "adot": float(ay_sum / tgt_sum) if tgt_sum > 0 and ay_sum > 0 else None,
             "td": _wmean(g["td"].to_numpy(float), TD_HALFLIFE)})
     return {"teams": out, "newest": newest}
+
+
+MISS_WINDOW_GAMES = 12
+
+
+def _missed_fraction(team_keys: list, played_keys: set) -> float:
+    """Recency-weighted share (same half-life as the volume EWMs) of the team's last games a player did NOT appear in.
+
+    A receiver's trailing targets / carries already contain the games in which this teammate was absent, so only the
+    NOT-yet-embedded part of his absence may be redistributed again: new weight = weight * (1 - missed_fraction)."""
+    n = len(team_keys)
+    if n == 0:
+        return 0.0
+    w = 0.5 ** ((n - 1 - np.arange(n)) / VOL_HALFLIFE)
+    miss = np.array([0.0 if k in played_keys else 1.0 for k in team_keys])
+    return float(np.sum(w * miss) / np.sum(w))
 
 
 def _f(x, default=float("nan")) -> float:
@@ -390,7 +409,7 @@ def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, 
         cvs = ctx_alpha.cv("pass_attempts") if hasattr(ctx_alpha, "cv") else None
         if cvs:
             between = float(np.var([hp.PRIORS["att_shift_trail"], 0.0, hp.PRIORS["att_shift_lead"]]))
-            pi.alpha_att = hp.nb_alpha_from_var(att, (cvs * att) ** 2 - between)
+            pi.alpha_att = hp.nb_alpha_from_var(att, (cvs * att) ** 2 * hp.PRIORS["att_var_mult"] - between)
         pi.alpha_pass_td = _fin(ctx_alpha("pass_tds"), pi.alpha_pass_td)
         pi.alpha_int = _fin(ctx_alpha("interceptions"), pi.alpha_int)
 
@@ -438,7 +457,7 @@ def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, 
             if _same(p, pid, last):
                 continue
             if p.get("pid") in absent_ids:
-                absent.append({"weight": absent_ids[p["pid"]], "pos": p["pos"], "adot": p.get("adot") if p.get("adot") is not None else POS_ADOT.get(str(p["pos"]).upper()),
+                absent.append({"weight": absent_ids[p["pid"]] * (1.0 - _fin(p.get("miss"), 0.0)), "pos": p["pos"], "adot": p.get("adot") if p.get("adot") is not None else POS_ADOT.get(str(p["pos"]).upper()),
                                "tgt": p.get("tgt"), "rush": p.get("rush"), "air": p.get("air"), "rz": None})
             elif _is_active(p, t):
                 active.append(p)

@@ -216,6 +216,23 @@ def test_wr1_out_lifts_wr2_and_te1_receptions_and_yards():
     assert _price("receptions", "wr2", live=_out("wr1")).inputs.vacated_target_share > 0
 
 
+def test_an_absence_already_in_the_trailing_window_is_not_redistributed_again():
+    """Found on real data: a teammate out for weeks is already missing from everyone's trailing targets, so re-adding his
+    share every week over-projected receptions by ~8%. Only the not-yet-embedded part of an absence may be added."""
+    fresh = _price("receptions", "wr2", live=_out("wr1")).inputs.vacated_target_share
+    table = _team_rows()
+    table["wr1"] = [r for r in table["wr1"] if r["week"] <= 3]                  # wr1 has missed games 4..8 (5 of the last 8)
+    for r in table["wr2"]:
+        if r["week"] >= 4:
+            r["targets"] = 6.0 + 9.8 * 0.7                                      # wr2 absorbed most of it already
+    stale = _price("receptions", "wr2", live=_out("wr1"), table=table).inputs.vacated_target_share
+    assert 0.0 <= stale < 0.45 * fresh
+    mp = HL._missed_fraction([1, 2, 3, 4], {1, 2, 3, 4})
+    assert mp == 0.0 and HL._missed_fraction([1, 2, 3, 4], set()) == pytest.approx(1.0)
+    assert HL._missed_fraction([1, 2, 3, 4], {1, 2}) > HL._missed_fraction([1, 2, 3, 4], {3, 4})   # recent misses weigh more
+    assert HL._missed_fraction([], {1}) == 0.0
+
+
 def test_questionable_teammate_counts_less_than_an_out_teammate():
     base = _price("receptions", "wr2").mean
     q = _price("receptions", "wr2", live=_out("wr1", weight=cg.absence_weight("Questionable", "Limited Participation in Practice"))).mean
@@ -677,10 +694,18 @@ def test_hierarchical_replay_scores_both_engines_on_identical_rows(monkeypatch):
     assert (res["season"] == 2024).all()
     assert np.isfinite(res[["ls_base", "ls_hier", "p_base", "p_hier", "crps_base", "crps_hier"]].to_numpy()).all()
     assert res["p_hier"].between(0, 1).all() and res["p_base"].between(0, 1).all()
+    td = res[res["stat"] == "anytime_td"]
+    want = np.log(np.where(td["y"] >= 1, td["p_hier"].clip(1e-9, 1 - 1e-9), 1 - td["p_hier"].clip(1e-9, 1 - 1e-9)))
+    # (p_hier is at the proxy line 0.5 for anytime_td, so the indicator score is directly checkable)
+    assert np.allclose(td["ls_hier"], want)
     assert "p_hier_plus200" in res.columns and res.loc[res["stat"] == "rec_yds", "hit_plus400"].isin([0.0, 1.0]).all()
     cmp = EE.compare_hierarchical(res, [2024])
     ry = cmp["rec_yds"]
     assert ry["n"] > 20 and ry["verdict"] in ("ADOPT", "WORSE", "NO CLEAR GAIN")
+    fake = res.copy()                                   # an ADOPT needs the Brier gain itself significant, not just its sign
+    fake.loc[fake["stat"] == "rec_yds", "ls_hier"] += 5.0
+    fake.loc[fake["stat"] == "rec_yds", "p_hier"] = fake.loc[fake["stat"] == "rec_yds", "p_base"] + 1e-4
+    assert EE.compare_hierarchical(fake, [2024])["rec_yds"]["verdict"] != "ADOPT"
     assert set(ry["tails"]) == {"plus200", "plus400"}
     # the baseline's rung IS ~1/3 and ~1/5 by construction: its mean predicted P(over) sits near them
     assert 0.2 < ry["tails"]["plus200"]["pred_base"] < 0.5 and 0.08 < ry["tails"]["plus400"]["pred_base"] < 0.35
