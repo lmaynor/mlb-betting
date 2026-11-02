@@ -20,6 +20,10 @@ import pandas as pd
 LG_SV = 0.905                  # league save% prior (on-target, non-empty-net); shrinkage target only
 SV_PRIOR_SHOTS = 400.0         # prior strength in shots for save% / GSAx shrinkage
 GAME_TYPES = (2, 3)
+# Live scoring appends one PLACEHOLDER row per entity for each UNPLAYED game (nhl.props.live_features). Their game ids start
+# here; the builders below keep them even though they carry no outcome / xG / TOI, so a placeholder's features are computed by
+# exactly the code that computes a played game's (shift(1) first: an outcome-less row never enters its own features).
+PLACEHOLDER_BASE = 9_000_000_000
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -35,6 +39,17 @@ def prior_roll(df: pd.DataFrame, by: str, col: str, w: int, how: str = "mean", m
 def prior_ewm(df: pd.DataFrame, by: str, col: str, halflife: float, min_periods: int = 1) -> pd.Series:
     sh = df.groupby(by, sort=False)[col].shift(1)
     return sh.groupby(df[by], sort=False).transform(lambda x: x.ewm(halflife=halflife, min_periods=min_periods).mean())
+
+
+def post_ratio(df: pd.DataFrame, by: str, num: str, den: str, w: int, prior_num: float = 0.0, prior_den: float = 0.0,
+               min_periods: int = 1) -> pd.Series:
+    """prior_ratio INCLUDING the current row (a goalie's form as it stands AFTER his own appearance). Only ever used as an
+    as-of lookup for a LATER date (expected_starter_features), never as a feature of the row itself."""
+    def roll(col):
+        return df.groupby(by, sort=False)[col].transform(lambda x: x.rolling(w, min_periods=min_periods).sum())
+    n, d = roll(num), roll(den)
+    out = (n + prior_num) / (d + prior_den).where((d + prior_den) > 0)
+    return out.where(n.notna())
 
 
 def prior_ratio(df: pd.DataFrame, by: str, num: str, den: str, w: int, prior_num: float = 0.0, prior_den: float = 0.0,
@@ -79,7 +94,7 @@ def team_table(games: pd.DataFrame, xg_team: pd.DataFrame) -> pd.DataFrame:
     keep = ["game_id", "team_id", "att_for", "xgf", "sog_for", "xgf_sog", "goals_for_pop", "hd_for", "att_pp_for",
             "att_against", "xga", "sog_against", "xga_sog", "goals_against_pop", "hd_against", "att_pp_against"]
     t = t.merge(xg_team[[c for c in keep if c in xg_team.columns]], on=["game_id", "team_id"], how="left")
-    t = t.dropna(subset=["xgf"]).sort_values(["team_id", "date", "game_id"]).reset_index(drop=True)
+    t = t[t["xgf"].notna() | (t["game_id"] >= PLACEHOLDER_BASE)].sort_values(["team_id", "date", "game_id"]).reset_index(drop=True)
     dt = pd.to_datetime(t["date"])
     t["rest_days"] = (dt - dt.groupby(t["team_id"]).shift(1)).dt.days.clip(upper=8).fillna(8)
     t["b2b"] = (t["rest_days"] <= 1).astype(int)
@@ -101,7 +116,7 @@ def goalie_table(games: pd.DataFrame, goalies: pd.DataFrame, xg_goalie: pd.DataF
     """One row per goalie appearance (TOI > 0) with outcome columns and prior-only rolling form. `is_start` marks the
     goalie who started the game for his team (the box `starter` flag)."""
     g = game_table(games)
-    b = goalies[goalies["game_type"].isin(GAME_TYPES) & (goalies["toi_sec"] > 0)].copy()
+    b = goalies[goalies["game_type"].isin(GAME_TYPES) & ((goalies["toi_sec"] > 0) | (goalies["game_id"] >= PLACEHOLDER_BASE))].copy()
     b = b.merge(g[["game_id", "home_id", "away_id", "home_abbr", "away_abbr"]], on="game_id", how="inner")
     b["opp_id"] = np.where(b["is_home"].astype(bool), b["away_id"], b["home_id"])
     b["opp"] = np.where(b["is_home"].astype(bool), b["away_abbr"], b["home_abbr"])
@@ -136,6 +151,9 @@ def goalie_table(games: pd.DataFrame, goalies: pd.DataFrame, xg_goalie: pd.DataF
     b["gsax100_l60"] = 100.0 * prior_ratio(b, "player_id", "gsax", "shots_faced", 60, 0.0, SV_PRIOR_SHOTS)
     b["xga_shot_l30"] = prior_ratio(b, "player_id", "xga", "shots_faced", 30)
     b["hd_share_l30"] = prior_ratio(b, "player_id", "hd_faced", "shots_faced", 30)
+    b["sv_l60_post"] = post_ratio(b, "player_id", "saves", "shots_against", 60, LG_SV * SV_PRIOR_SHOTS, SV_PRIOR_SHOTS)
+    b["gsax100_l60_post"] = 100.0 * post_ratio(b, "player_id", "gsax", "shots_faced", 60, 0.0, SV_PRIOR_SHOTS)
+    b["xga_shot_l30_post"] = post_ratio(b, "player_id", "xga", "shots_faced", 30)
     b["lg_sv_l30"] = league_prior_mean(b["date"], b["saves"] / b["shots_against"].where(b["shots_against"] > 0), 30)
     return b
 
@@ -208,14 +226,14 @@ SKATER_FEATURES_NOXG = [f for f in SKATER_FEATURES if f not in _SKATER_XG_ONLY] 
 
 def skater_table(games: pd.DataFrame, skaters: pd.DataFrame, xg_skater: pd.DataFrame) -> pd.DataFrame:
     g = game_table(games)
-    s = skaters[skaters["game_type"].isin(GAME_TYPES) & (skaters["toi_sec"] > 0)].copy()
+    s = skaters[skaters["game_type"].isin(GAME_TYPES) & ((skaters["toi_sec"] > 0) | (skaters["game_id"] >= PLACEHOLDER_BASE))].copy()
     s = s.merge(g[["game_id", "home_abbr", "away_abbr", "home_id", "away_id"]], on="game_id", how="inner")
     s["team"] = s["team_abbr"]
     s["opp"] = np.where(s["is_home"].astype(bool), s["away_abbr"], s["home_abbr"])
     s["opp_id"] = np.where(s["is_home"].astype(bool), s["away_id"], s["home_id"])
     s["is_home"] = s["is_home"].astype(int)
     s["date"] = s["date"].astype(str)
-    s = s[s["game_id"].isin(set(xg_skater["game_id"]))]                       # games without any shots rows are unusable
+    s = s[s["game_id"].isin(set(xg_skater["game_id"])) | (s["game_id"] >= PLACEHOLDER_BASE)]   # no shots rows: unusable
     s = s.merge(xg_skater, on=["game_id", "player_id"], how="left")
     for c in ("attempts", "ixg", "ixg_ev", "ixg_pp", "att_ev", "att_pp", "hd_att", "sog_pop", "ixg_sog", "goals_pop"):
         s[c] = s[c].fillna(0.0)
@@ -251,8 +269,49 @@ def skater_table(games: pd.DataFrame, skaters: pd.DataFrame, xg_skater: pd.DataF
     return s
 
 
-def skater_features(st: pd.DataFrame, tt: pd.DataFrame, gt: pd.DataFrame) -> pd.DataFrame:
-    """One feature row per skater appearance. `gt` = goalie_table (supplies the opposing starter's prior-only form)."""
+def expected_starter_features(gt: pd.DataFrame, tt: pd.DataFrame, last_n: int = 10) -> pd.DataFrame:
+    """The opposing goalie as he can be known BEFORE the puck drops: for every (game, team) the goalie with the most starts in
+    the team's previous `last_n` starts (strictly earlier dates), or his backup when the team plays on zero days' rest and that
+    starter also started its previous game (the nhl.game.goalie_model back-to-back rule). His form is the latest AFTER-game
+    value strictly before the game date. -> (game_id, opp_id, opp_g_gsax100_l60, opp_g_sv_l60, opp_g_xga_shot_l30,
+    exp_is_actual): `opp_id` is the goalie's own team (the skater's opponent), exp_is_actual flags a correct guess."""
+    starts = gt[gt["is_start"] == 1][["game_id", "team_id", "player_id", "date"]].sort_values(["team_id", "date", "game_id"])
+    actual = starts.drop_duplicates(["game_id", "team_id"], keep="first").set_index(["game_id", "team_id"])["player_id"]
+    hist: dict = {}
+    for tid, g in starts.groupby("team_id", sort=False):
+        hist[tid] = list(zip(g["date"], g["player_id"]))
+    rows = []
+    for gid, tid, d, rest in tt[["game_id", "team_id", "date", "rest_days"]].itertuples(index=False):
+        prev = [x for x in hist.get(tid, []) if x[0] < d][-last_n:]
+        if not prev:
+            continue
+        counts: dict = {}
+        for _, pid in prev:
+            counts[pid] = counts.get(pid, 0) + 1
+        order = sorted(counts, key=lambda k: (-counts[k], -max(i for i, x in enumerate(prev) if x[1] == k)))
+        pick = order[0]
+        if rest <= 1 and prev[-1][1] == pick and len(order) > 1:
+            pick = order[1]
+        rows.append((gid, tid, d, pick, int(actual.get((gid, tid), -1) == pick)))
+    e = pd.DataFrame(rows, columns=["game_id", "opp_id", "date", "player_id", "exp_is_actual"])
+    post = gt[["player_id", "date", "sv_l60_post", "gsax100_l60_post", "xga_shot_l30_post"]].copy()
+    post["date"] = pd.to_datetime(post["date"])
+    post = post.sort_values("date")
+    e["_d"] = pd.to_datetime(e["date"])
+    e = e.sort_values("_d")
+    m = pd.merge_asof(e, post, left_on="_d", right_on="date", by="player_id", direction="backward",
+                      allow_exact_matches=False, suffixes=("", "_p"))
+    m = m.rename(columns={"sv_l60_post": "opp_g_sv_l60", "gsax100_l60_post": "opp_g_gsax100_l60",
+                          "xga_shot_l30_post": "opp_g_xga_shot_l30"})
+    return m[["game_id", "opp_id", "opp_g_gsax100_l60", "opp_g_sv_l60", "opp_g_xga_shot_l30", "exp_is_actual"]]
+
+
+def skater_features(st: pd.DataFrame, tt: pd.DataFrame, gt: pd.DataFrame, starter_mode: str = "actual") -> pd.DataFrame:
+    """One feature row per skater appearance. `gt` = goalie_table (supplies the opposing starter's prior-only form).
+    `starter_mode`: "actual" = the goalie who really started (the PR #70 research setting, NOT knowable before the puck drops
+    without a confirmation feed) or "expected" = expected_starter_features (what a live scorer can know)."""
+    if starter_mode not in ("actual", "expected"):
+        raise ValueError(f"starter_mode must be 'actual' or 'expected', got {starter_mode!r}")
     own = tt[["game_id", "team_id", "xgf_l10", "xgf_l30", "ppf_l30"]].rename(
         columns={"team_id": "tid", "xgf_l10": "t_xgf_l10", "xgf_l30": "t_xgf_l30", "ppf_l30": "t_ppf_l30"})
     tt2 = tt.assign(goala_l30=prior_roll(tt, "team_id", "goals_against_pop", 30),
@@ -264,10 +323,15 @@ def skater_features(st: pd.DataFrame, tt: pd.DataFrame, gt: pd.DataFrame) -> pd.
                  "ppa_l30": "o_ppa_l30"})
     f = st.merge(own, left_on=["game_id", "team_id"], right_on=["game_id", "tid"], how="left").drop(columns=["tid"])
     f = f.merge(opp, on=["game_id", "opp_id"], how="left")
-    starters = gt[gt["is_start"] == 1][["game_id", "team_id", "gsax100_l60", "sv_l60", "xga_shot_l30"]].rename(
-        columns={"team_id": "opp_id", "gsax100_l60": "opp_g_gsax100_l60", "sv_l60": "opp_g_sv_l60",
-                 "xga_shot_l30": "opp_g_xga_shot_l30"})
-    starters = starters.drop_duplicates(["game_id", "opp_id"], keep="first")
+    if starter_mode == "expected":
+        starters = expected_starter_features(gt, tt).drop(columns=["exp_is_actual"]).drop_duplicates(["game_id", "opp_id"])
+    elif starter_mode == "actual":
+        starters = gt[gt["is_start"] == 1][["game_id", "team_id", "gsax100_l60", "sv_l60", "xga_shot_l30"]].rename(
+            columns={"team_id": "opp_id", "gsax100_l60": "opp_g_gsax100_l60", "sv_l60": "opp_g_sv_l60",
+                     "xga_shot_l30": "opp_g_xga_shot_l30"})
+        starters = starters.drop_duplicates(["game_id", "opp_id"], keep="first")
+    else:
+        raise ValueError(f"starter_mode must be 'actual' or 'expected', got {starter_mode!r}")
     f = f.merge(starters, on=["game_id", "opp_id"], how="left")
     keys = ["game_id", "player_id", "date", "team", "opp", "team_id", "opp_id", "season_year", "game_type", "name", "position"]
     return f[keys + SKATER_FEATURES + ["goals", "assists", "points", "toi_sec"]].reset_index(drop=True)
