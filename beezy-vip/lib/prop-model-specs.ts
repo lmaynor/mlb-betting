@@ -66,7 +66,7 @@ const none = (sample: string): ModelValidation => ({ sample, mae: null, baseline
 export const LIVE_ENGINE = {
   name: 'Empirical projection (empirical_ewm_v2)',
   summary:
-    'The daily board runs an empirical estimator: exponentially weighted game-log average, blended with a usage-adjusted rate, scaled by an opponent-allowed factor, with a negative-binomial or normal spread fitted from the league\'s own game-to-game variance. NFL means are calibrated on 2021-2025 outcomes (accuracy only: the pool of quoted players is over-projected by 3-7%). It does not model injuries, lineups, minutes, weather or teammate absences, and it has not been validated against prices.',
+    'The daily board runs an empirical estimator: exponentially weighted game-log average, blended with a usage-adjusted rate, scaled by an opponent-allowed factor, with a negative-binomial or normal spread fitted from the league\'s own game-to-game variance. NBA rows add a hierarchical layer (teammate-absence redistribution from the injury report, minutes adjustments, attempt-first threes); NHL rows price goals from shots and shooting percentage and saves from shot volume; NFL pass TDs, rush yards and receiving yards use a hierarchical model and the other NFL stats the estimator alone. NFL means are calibrated on 2021-2025 outcomes (accuracy only: the pool of quoted players is over-projected by 3-7%). It does not model weather, and it has not been validated against prices: on real lines the NBA and NHL engines are worse than the market alone.',
 }
 
 const NBA_SAMPLE = '4 rolling-origin test seasons (2022-2025), 186,447 played player-games in the master'

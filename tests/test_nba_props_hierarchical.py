@@ -323,9 +323,11 @@ def test_replay_cutoff_is_what_removes_late_rows_and_live_serving_keeps_every_ro
 
 # --------------------------------------------------------------------------------------------- 5. blend weights
 def test_blend_weights_are_per_sport_and_stat_with_defaults():
-    assert dp.blend_c("nba", "threes") == 0.25 and dp.blend_c("nba", "pra") == 0.12 and dp.blend_c("nba", "ra") == 0.18
-    assert dp.blend_c("nba", "points") == 0.10 and dp.blend_c("nba", "blocks") == 0.12
-    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nhl", "goals") == 0.10      # NHL table is main's, not the spec's
+    # measured c of THIS engine on 362,777 real props (nba_engine_vs_market_2026-11-01.md, ship_noabs); ra / blocks are unmeasured priors
+    assert dp.blend_c("nba", "threes") == 0.19 and dp.blend_c("nba", "rebounds") == 0.13 and dp.blend_c("nba", "assists") == 0.09
+    assert dp.blend_c("nba", "pra") == 0.02 and dp.blend_c("nba", "points") == 0.02
+    assert dp.blend_c("nba", "ra") == 0.11 and dp.blend_c("nba", "blocks") == 0.05
+    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nhl", "goals") == 0.03       # NHL goals measured +0.03 (nhl_engine_vs_market)
     assert dp.blend_c("nhl", "shots_unlisted") == dp.BLEND_C
     assert dp.blend_c("nfl", "rec_yds") == dp.BLEND_C and dp.blend_c("nfl", "anytime_td") == dp.BLEND_C   # NFL untouched
     assert dp.blend_c("mlb", "k") == dp.BLEND_C and dp.blend_c(None, None) == dp.BLEND_C
@@ -347,3 +349,23 @@ def test_nba_rows_keep_the_public_row_schema():
         assert k in r
     assert r["calib_mult"] == 1.0 and r["validated"] is False and 0.0 < r["p_over_model"] < 1.0
     assert r["proj_p10"] < r["proj_mean"] < r["proj_p90"]
+
+
+
+# ------------------------------------------------------------------- blended EV (Official-tier gate of ev.model_picks)
+def test_blend_side_ev_prices_the_best_quote_at_the_blended_posterior():
+    best = {"over": ("fanduel", 2.10, 110), "under": ("draftkings", 1.80, -125)}
+    p_blend = dp.blend_p_over(0.62, 0.50, 0.13)
+    p_over, ev_over = dp.blend_side_ev(p_blend, "over", best)
+    p_under, ev_under = dp.blend_side_ev(p_blend, "under", best)
+    assert p_over == p_blend and p_under == pytest.approx(1 - p_blend)
+    assert ev_over == pytest.approx(p_blend * 2.10 - 1) and ev_under == pytest.approx((1 - p_blend) * 1.80 - 1)
+    assert dp.blend_side_ev(None, "over", best) == (None, None) and dp.blend_side_ev(p_blend, None, best) == (None, None)
+    assert dp.blend_side_ev(p_blend, "over", {"over": None, "under": None})[1] is None
+
+
+def test_a_low_c_stat_earns_far_less_blended_ev_than_a_high_c_stat_on_the_same_model_gap():
+    """points (c 0.02) barely moves off the market; threes (c 0.19) does: the point of gating Official on blend_ev."""
+    best = {"over": ("fanduel", 2.0, 100), "under": None}
+    ev = {st: dp.blend_side_ev(dp.blend_p_over(0.62, 0.50, dp.blend_c("nba", st)), "over", best)[1] for st in ("points", "threes")}
+    assert ev["points"] < 0.025 < ev["threes"]

@@ -3,6 +3,7 @@ ev.model_picks -- track, announce and score the MODEL's own NFL / NBA / NHL prop
 
     python -m ev.model_picks --sport nba|nhl|nfl [--dry-run] [--no-post]     one pass: select -> log -> post -> closing lines
     python -m ev.model_picks --sport nba --closing-only                      CLV capture only
+    python -m ev.model_picks --fix-tracked-stakes [--dry-run]                one-off: demote pre-split 'tracked' rows to stake 0
 
 Until this module the engines' output was only DISPLAYED (the /picks boards, GET /api/public/projections). Nothing logged a
 model pick as a bet, nothing graded it, and the only tracked winter-sport bets (system 'EV') are the BOOK-OUTLIER alerts of
@@ -10,10 +11,16 @@ ev.sweep_props_alerts, which do not use the model at all. This closes that gap w
 
   * SELECTION (pre-registered, not tuned): a board row is a TRACKED pick when it has a real line and a real price at a non-offshore,
     non-DFS book for the side the model prefers, `confluence` is true (model and market agree on the side, both edges positive,
-    not edge-capped, >= CONFLUENCE_MIN_BOOKS reference books) and the game is >= MIN_MINS_TO_START away. A tracked pick that also
-    passes the repo's own Official Card gate (ev.daily_card.is_official_card_play) is tier 'official': only those are posted.
-  * LEDGER: bets table, system='PROPS', sport=<sport>, flat 1 unit, paper. First qualifying sighting wins (never re-priced or
-    re-logged), so the record cannot be cherry-picked after the fact. Settlement is the existing winter settler
+    not edge-capped, >= CONFLUENCE_MIN_BOOKS reference books) and the game is >= MIN_MINS_TO_START away. A pick that also passes
+    the repo's own Official Card gate (ev.daily_card.is_official_card_play) AND whose market-anchored blended EV (`blend_ev`, the
+    best quote priced at the blended posterior, c measured per stat) is >= OFFICIAL_MIN_BLEND_EV is tier 'official'; every other
+    confluence row is tier 'tracked'. Only official picks are posted and staked.
+  * LEDGER: bets table, system='PROPS', sport=<sport>, paper. Official = flat 1 unit, kelly_triggered=True (the public record: /picks,
+    /results, the #daily-recap headline all count only kelly_triggered, stake > 0 rows). Tracked = kelly_triggered=False, stake 0:
+    monitoring rows, the same contract as every MLB system's unplaced predictions. They are still settled (on a 1-unit reference,
+    settle_bets._settle_winter_bets) and still get closing lines, so the forward CLV / calibration study keeps every row without
+    the unvetted ones reaching the public ledger. First qualifying sighting wins (never re-priced or re-logged), so the record
+    cannot be cherry-picked after the fact. Settlement is the existing winter settler
     (settle_bets._settle_winter_bets: league player id, fail-closed, void only on a proven DNP) -- it keys on sport, not system.
   * CLV: closing_odds / closing_prob / clv_pct from the board archive's LAST pre-game state of the same prop (same line only).
   * DISCORD: official-tier picks only, through the sport's alerts channel, labelled paper / unvalidated. Never #ops-alerts, never
@@ -44,6 +51,10 @@ MAX_PAYLOAD_AGE_MIN = 45.0          # a board older than this is not live; log n
 MAX_POSTS_PER_PASS = 5              # mirrors the Official Card's own cap
 HEARTBEAT_KEY = "ModelPicks/last_run.json"          # {ts, sports: {sport: {status, selected, logged, ...}}}; monitor_ops reads it
 STAKE = 1.0
+# Official tier also needs the market-anchored blended EV to clear this. The engines' own standalone P(side) is noisier than the
+# market (NBA log loss 0.7164 vs 0.6859), so a raw model-vs-market gap is mostly winner's curse; the blend shrinks it to what the
+# stat's measured c says the engine adds (points / pra c = 0.02 add almost nothing, so they rarely clear this).
+OFFICIAL_MIN_BLEND_EV = 0.025
 
 
 def _num(x):
@@ -80,7 +91,11 @@ def qualifies(r: dict, now: datetime | None = None) -> str | None:
     mins = _num(r.get("mins_to_start"))
     if mins is None or mins < MIN_MINS_TO_START:
         return None
-    return "official" if DC.is_official_card_play(r, allow_dislocation=False) else "tracked"
+    if not DC.is_official_card_play(r, allow_dislocation=False):
+        return "tracked"
+    # a board written before `blend_ev` existed (or a row with no blend) cannot show the engine clears the bar: not official
+    blend_ev = _num(r.get("blend_ev"))
+    return "official" if blend_ev is not None and blend_ev >= OFFICIAL_MIN_BLEND_EV else "tracked"
 
 
 def to_pick(r: dict) -> dict:
@@ -93,6 +108,7 @@ def to_pick(r: dict) -> dict:
         "sport": r["sport"], "player": r["player"], "player_norm": r.get("player_norm"), "stat": r["stat"], "side": side,
         "point": float(r["line"]), "book": book, "american": price, "odds": price,
         "ev": _num(r.get("market_ev")), "p_fair": p_mkt, "p_model": p_model, "model_edge": _num(r.get("model_edge")),
+        "p_blend": _num(r.get("p_blend_side")), "blend_ev": _num(r.get("blend_ev")),
         "n_books": r.get("n_books"), "score": r.get("beezy_score"), "game_key": r.get("game_key"),
         "commence": r.get("commence"), "mins_to_start": r.get("mins_to_start"), "proj_mean": _num(r.get("proj_mean")),
         "engine": r.get("engine"), "team": r.get("team"), "opp": r.get("opp"), "row_key": DP.row_key(r),
@@ -149,6 +165,12 @@ def _already_logged(tracker, sport: str, game_day: str, p: dict) -> bool:
     return any(str(t[0]).rsplit("_", 2)[0] == p["stat"] for t in types)
 
 
+def ledger_stake(p: dict) -> tuple:
+    """(stake, kelly_triggered) of a pick: official = a flat staked 1u bet on the public record, anything else = a zero-stake
+    monitoring row (kelly_triggered=False) that is settled and closing-line-captured but never counted in the public record."""
+    return (STAKE, True) if p.get("tier") == "official" else (0.0, False)
+
+
 def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
     """Log picks not seen before. -> the picks that were NEWLY logged (each gets `bet_id`). Never raises per pick."""
     from mlb_core.alerts.sport_alerts import alert_game_day
@@ -170,17 +192,19 @@ def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
             a, h = _teams(p)
             mkt = american_to_implied_prob(p["american"])
             model_p = p["p_model"] if p["p_model"] is not None else (p["p_fair"] or mkt)
+            stake, triggered = ledger_stake(p)
             bid = tracker.log_bet(
                 game_date=day, player=p["player"], away_team=a, home_team=h, bet_type=bet_type_of(p),
                 model_prob=float(model_p), market_prob=float(mkt),
                 edge=float(p["model_edge"]) if p["model_edge"] is not None else float(model_p) - float(mkt),
-                odds=int(p["american"]), stake=STAKE, kelly_triggered=True, paper=True, book=p["book"],
+                odds=int(p["american"]), stake=stake, kelly_triggered=triggered, paper=True, book=p["book"],
                 proj_mean=p["proj_mean"],
                 notes=json.dumps({
                     "stat": p["stat"], "point": p["point"], "side": p["side"], "n_books": p["n_books"], "tier": p["tier"],
                     "player_id": p.get("player_id") or _pid_from_norm(p.get("player_norm")), "game_key": p["game_key"],
                     "row_key": p["row_key"], "engine": p["engine"], "commence": p["commence"],
                     "p_fair": p["p_fair"], "ev": p["ev"], "score": p["score"],
+                    "p_blend": p.get("p_blend"), "blend_ev": p.get("blend_ev"),
                 }, default=str),
             )
             if bid is not None and bid > 0:
@@ -212,6 +236,44 @@ def post_official(sport: str, picks: list[dict]) -> bool:
     if not rows:
         return False
     return post_sport_alerts(sport, rows, log_bets=False)
+
+
+# -- one-off ledger repair ---------------------------------------------------------------------------------------------
+
+def fix_tracked_stakes(tracker=None, dry_run: bool = False) -> dict:
+    """Demote PROPS rows logged as staked bets before the tier split (tier 'tracked' in notes, kelly_triggered true / stake > 0) to
+    monitoring rows: kelly_triggered = false, stake = 0. Idempotent. Settled rows keep their result and profit (the 1u reference
+    profit), so the shadow record survives; they simply stop counting in the public record (/picks, /results, the recap headline).
+    Rows with unparseable notes are left alone. Run it where the DB is reachable (the Cloud Run job):
+        gcloud run jobs execute props-model-picks --region us-central1 --args="-m,ev.model_picks,--fix-tracked-stakes" --wait
+    -> {"candidates", "updated", "unparsed"}"""
+    from sqlalchemy import text
+    if tracker is None:
+        path = _db_path()
+        if path is None:
+            return {"candidates": 0, "updated": 0, "unparsed": 0, "error": "no db"}
+        from mlb_core.tracking import BetTracker
+        tracker = BetTracker(path, system=SYSTEM, sport="nba")        # the sport only scopes the tracker's own reads; the SQL below is explicit
+    with tracker.engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, notes FROM bets WHERE system = :sys AND kelly_triggered = :t"),
+                            {"sys": SYSTEM, "t": True}).fetchall()
+    ids, unparsed = [], 0
+    for bid, notes_s in rows:
+        try:
+            tier = json.loads(notes_s or "{}").get("tier")
+        except (TypeError, ValueError):
+            unparsed += 1
+            continue
+        if tier == "tracked":
+            ids.append(int(bid))
+    if ids and not dry_run:
+        with tracker.engine.begin() as conn:
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                keys = {f"i{n}": v for n, v in enumerate(chunk)}
+                conn.execute(text("UPDATE bets SET kelly_triggered = :f, stake = 0 WHERE id IN (%s)" % ", ".join(":" + k for k in keys)),
+                             {"f": False, **keys})
+    return {"candidates": len(ids), "updated": 0 if dry_run else len(ids), "unparsed": unparsed}
 
 
 # -- closing lines -----------------------------------------------------------------------------------------------------
@@ -290,6 +352,7 @@ def run(sport: str, dry_run: bool = False, post: bool = True, closing_only: bool
             else:
                 new = log_picks(sport, picks)
                 out["logged"] = len(new)
+                out["logged_official"] = sum(p["tier"] == "official" for p in new)
                 if post and new:
                     out["posted"] = post_official(sport, new)
     if not dry_run:
@@ -306,7 +369,7 @@ def _heartbeat(sport: str, out: dict, now: datetime) -> None:
             hb = json.loads(storage.read_bytes(HEARTBEAT_KEY)) if storage.exists(HEARTBEAT_KEY) else {}
         except Exception:                                                                    # noqa: BLE001
             hb = {}
-        keep = {k: out.get(k) for k in ("status", "selected", "official", "logged", "posted", "closing")}
+        keep = {k: out.get(k) for k in ("status", "selected", "official", "logged", "logged_official", "posted", "closing")}
         hb = {"ts": now.isoformat(), "sports": {**(hb.get("sports") or {}), sport: {**keep, "ts": now.isoformat()}}}
         storage.write_bytes(json.dumps(hb, default=str).encode(), HEARTBEAT_KEY)
     except Exception:                                                                        # noqa: BLE001
@@ -315,12 +378,20 @@ def _heartbeat(sport: str, out: dict, now: datetime) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--sport", required=True, choices=SPORTS + ("all",))
+    ap.add_argument("--sport", choices=SPORTS + ("all",), help="required unless --fix-tracked-stakes")
     ap.add_argument("--dry-run", action="store_true", help="select and print only; no ledger, Discord or closing writes")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--closing-only", action="store_true")
+    ap.add_argument("--fix-tracked-stakes", action="store_true",
+                    help="one-off: demote PROPS rows logged as staked bets with tier 'tracked' to kelly_triggered=false, stake=0 "
+                         "(honours --dry-run); does nothing else")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    if a.fix_tracked_stakes:
+        print(json.dumps(fix_tracked_stakes(dry_run=a.dry_run)))
+        return 0
+    if a.sport is None:
+        ap.error("--sport is required")
     for sport in (SPORTS if a.sport == "all" else (a.sport,)):
         try:
             res = run(sport, dry_run=a.dry_run, post=not a.no_post, closing_only=a.closing_only)

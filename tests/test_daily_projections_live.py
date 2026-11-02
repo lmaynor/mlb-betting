@@ -105,6 +105,19 @@ def test_union_fills_missing_stats_of_a_shared_book_and_adds_unmatched_games_who
     assert events[1]["id"] == "p2" and events[2]["id"] == "bp9" or events[2]["id"] == "bp3"
 
 
+def test_games_parlay_only_counts_unmatched_parlay_games_and_never_goes_negative():
+    """A third feed matching a BettingPros-only game used to push len(parlay) - len(matched) below zero (NFL showed -10)."""
+    parlay = ([pev([book("draftkings", -110, -110)])], {"age_min": 50.0})
+    bp = ([bev([book("fanduel", -110, -110)]),                                                    # matches the ParlayAPI game
+           bev([book("novig", -110, -110)], start=START + timedelta(days=1), away="NYK", home="BKN", eid="bp3")],   # BP-only game
+          {"age_min": 10.0})
+    bb = ([{**bev([book("betmgm", -110, -110)], start=START + timedelta(days=1), away="NYK", home="BKN", eid="bb1"),
+            "source": "bestbook"}], {"age_min": 5.0})                                             # matches the BP-only game
+    events, meta = dp.union_events("nba", parlay, bp, bb)
+    m = meta["merge"]
+    assert len(events) == 2 and m["games_matched"] == 2 and m["games_parlay_only"] == 0           # was 1 - 2 = -1
+
+
 def test_one_source_down_degrades_to_the_other_both_ways():
     good = ([pev(FAIR)], {"age_min": 30.0, "banked_events": 1})
     down = (None, {"reason": "no latest_props.json pointer yet"})

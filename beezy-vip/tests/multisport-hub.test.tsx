@@ -183,7 +183,9 @@ describe('system methodology and the validation data', () => {
     render(<SystemMethodology system={getSportSystemBySlug('nba', 'pts')!} />)
     expect(screen.getByText('4.547 vs 4.634')).toBeInTheDocument()
     expect(screen.getByText('+0.07 (+3.0)')).toBeInTheDocument()
-    expect(screen.getByText(/does not model injuries/i)).toBeInTheDocument()
+    expect(screen.getByText(/teammate-absence redistribution from the injury report/i)).toBeInTheDocument()
+    expect(screen.getByText(/has not been validated against prices/i)).toBeInTheDocument()
+    expect(screen.queryByText(/does not model injuries/i)).toBeNull()
     expect(screen.getByText(/No graded history is published for NBA projections/)).toBeInTheDocument()
   })
   it('a stat no study covered prints dashes, and PP points (live since the backend serves them) is a normal projected system with no gap banner', () => {

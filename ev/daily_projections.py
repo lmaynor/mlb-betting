@@ -186,19 +186,22 @@ def load_trained(now: datetime | None = None) -> dict:
         return {}
 
 
-# Per-sport / per-stat override of BLEND_C (stat missing -> the sport's "default" entry, else BLEND_C). DISPLAY-ONLY like the
-# blend itself: it feeds neither the edge, the confluence flag nor the Beezy Score. PROVENANCE, stated precisely: the
-# 2026-10-15 BettingPros study (docs/analysis/bettingpros_model_vs_market_2026-10-15.md; mlb_core/risk/calibration.py
-# BLEND_C) MEASURED c for the TRAINED research models only: NBA points +0.07, rebounds +0.19, assists +0.18, threes +0.28,
-# pra +0.05, NHL SOG +0.30. Nothing was measured for THIS empirical engine, and nothing at all for NBA pr / pa / ra /
-# steals / blocks (the calibration table gives those c = 0). NHL values are the design spec's (sog 0.30 = the trained SOG
-# model's measured c, applied as a prior). The NBA numbers are the PR #147 specification's priors: near the measured ones
-# where one exists (pra 0.12 and points 0.10 are ABOVE the measured 0.05 / 0.07) and unmeasured elsewhere. NFL is untouched.
+# Per-sport / per-stat override of BLEND_C (stat missing -> the sport's "default" entry, else BLEND_C). Feeds the blended posterior
+# `p_over_blend` and `blend_ev` (the Official-tier gate of ev.model_picks); it does NOT feed the edge, the confluence flag or the
+# Beezy Score. PROVENANCE, stated per stat:
+#   MEASURED on THIS engine (docs/analysis/nba_engine_vs_market_2026-11-01.md, 362,777 real BettingPros props, `ship_noabs` = the
+#   shipped engine with no absence info, the live pricer's closest variant): NBA threes +0.19, rebounds +0.13, assists +0.09,
+#   pra +0.02, points +0.02. NHL (docs/analysis/nhl_engine_vs_market_2026-11-01.md): goals +0.03, assists +0.06, points +0.03;
+#   saves pooled +0.48 but regime-dependent (-0.23 / +0.84 / +0.19 by season), so it keeps the 0.15 prior.
+#   NOT measured (BettingPros carries no NBA pr / pa / ra / steals / blocks, no NHL blocks / pp_points line): NBA ra .11, pr .06,
+#   pa .05, steals .05, blocks .05 and NHL blocked_shots .10, pp_points .05 are priors set at or below the components' measured c
+#   (the 2026-11-02 review's values), NHL sog .30 is the TRAINED SOG model's measured c applied as a prior. NFL has no table: the
+#   BLEND_C default applies (the one measured NFL c is rush_yds +0.25, t 2.9, from the hierarchical-engine real-line study).
 BLEND_C_BY_SPORT_STAT = {
-    "nba": {"threes": 0.25, "rebounds": 0.18, "assists": 0.18, "ra": 0.18, "pr": 0.14, "pa": 0.14, "pra": 0.12,
-            "points": 0.10, "steals": 0.12, "blocks": 0.12},
-    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10, "assists": 0.12,
-            "pp_points": 0.10},
+    "nba": {"threes": 0.19, "rebounds": 0.13, "assists": 0.09, "ra": 0.11, "pr": 0.06, "pa": 0.05, "pra": 0.02,
+            "points": 0.02, "steals": 0.05, "blocks": 0.05},
+    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.10, "points": 0.03, "goals": 0.03, "assists": 0.06,
+            "pp_points": 0.05},
 }
 # NBA engine feature switches, consulted at projection time; `nba_features(...)` flips them for a replay. A switch is ON only
 # where nba/props/engine_eval.py showed a held-out gain past its bar (selected on 2023-24, scored on 2024-25 / 2025-26:
@@ -923,6 +926,18 @@ def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float 
     return 1.0 / (1.0 + math.exp(-z))
 
 
+def blend_side_ev(p_blend_over: float | None, side: str | None, best: dict) -> tuple:
+    """(P(side) under the blended posterior, EV of the best quote on that side at that probability); None where the blend, the
+    side or a real quote on the side is missing. `blend_ev` is the market-anchored counterpart of `market_ev` (which prices the
+    best quote at the bare consensus): with a small measured c it stays near market_ev, and it is what the engine's own
+    information is worth once shrunk to what it was measured to add."""
+    if p_blend_over is None or side not in ("over", "under"):
+        return None, None
+    p_side = p_blend_over if side == "over" else 1.0 - p_blend_over
+    b = best.get(side)
+    return p_side, (p_side * b[1] - 1.0) if b else None
+
+
 def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
                sd_mu: float | None = None, sd: float | None = None, alpha: float | None = None, zi: float = 0.0):
     """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
@@ -1413,6 +1428,8 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     p_mkt_side = None if p_mkt_over is None or side is None else (p_mkt_over if side == "over" else 1 - p_mkt_over)
     score, basis = score_inputs(ef, cons.n_books if cons is not None else None, p_model_side, p_mkt_side)
     bo, bu = best["over"], best["under"]
+    p_blend_over = blend_p_over(p_model_over, p_mkt_over, blend_c(sport, stat))
+    p_blend_side, blend_ev = blend_side_ev(p_blend_over, side, best)
     return {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
@@ -1421,7 +1438,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
-        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over, blend_c(sport, stat))),
+        "p_over_blend": _f(p_blend_over), "p_blend_side": _f(p_blend_side), "blend_ev": _f(blend_ev),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
@@ -1746,7 +1763,9 @@ def union_events(sport: str, parlay: tuple, bp: tuple, bestbook: tuple | None = 
             matched.add(i)
             counts["games_matched"] += 1
     if "parlayapi" in used:
-        counts["games_parlay_only"] = len(avail["parlayapi"]) - len(matched)
+        # ParlayAPI events are `out[0:len(avail["parlayapi"])]` (it is the base feed whenever it is used); `matched` also holds
+        # indices of BP-only events that a third feed matched, so a plain length difference could go negative (NFL showed -10)
+        counts["games_parlay_only"] = sum(1 for i in range(len(avail["parlayapi"])) if i not in matched)
     meta["merge"] = counts
     return out, meta
 

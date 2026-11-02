@@ -16,6 +16,7 @@ def row(**kw):
         "best_over_odds": 105, "best_over_book": "fanduel", "best_under_odds": -125, "best_under_book": "draftkings",
         "n_books": 6, "model_edge": 0.05, "market_ev": 0.0865, "confluence": True, "edge_capped": False,
         "beezy_score": 72, "engine": "empirical_ewm_v2", "validated": False,
+        "p_blend_side": 0.545, "blend_ev": 0.07,
     }
     r.update(kw)
     return r
@@ -38,6 +39,16 @@ def test_official_tier_needs_the_cards_own_gate():
     assert MP.qualifies(row()) == "official"                       # ev 8.65%, model edge 5%, 6 books, score 72
     assert MP.qualifies(row(beezy_score=50)) == "tracked"          # below the card's score floor
     assert MP.qualifies(row(n_books=3)) == "tracked"               # below the card's 4-book floor
+
+
+def test_official_tier_also_needs_the_market_anchored_blend_to_clear_the_bar():
+    assert MP.qualifies(row(blend_ev=MP.OFFICIAL_MIN_BLEND_EV)) == "official"
+    assert MP.qualifies(row(blend_ev=0.024)) == "tracked"          # the card's gate passes, the blended EV does not (low-c stat)
+    assert MP.qualifies(row(blend_ev=None)) == "tracked"           # a board with no blend cannot show the engine clears the bar
+    r = row()
+    r.pop("blend_ev")
+    assert MP.qualifies(r) == "tracked"
+    assert MP.qualifies(row(blend_ev=0.5, beezy_score=50)) == "tracked"      # the card's own gate still applies first
 
 
 def test_under_side_uses_the_under_quote():
@@ -77,7 +88,7 @@ def test_log_is_idempotent_and_first_sighting_wins(tracker):
     assert len(df) == 1
     b = df.iloc[0]
     assert (b["system"], b["sport"], b["bet_type"], int(b["odds"]), b["book"]) == ("PROPS", "nba", "rebounds_over_10.5", 105, "fanduel")
-    assert b["game_date"] == "2026-10-25" and bool(b["paper"]) and float(b["stake"]) == 1.0
+    assert b["game_date"] == "2026-10-25" and bool(b["paper"]) and float(b["stake"]) == 1.0 and bool(b["kelly_triggered"])
     import json
     n = json.loads(b["notes"])
     assert n["player_id"] == "4594268" and n["tier"] == "official" and n["row_key"].endswith("|rebounds")
@@ -180,3 +191,79 @@ def test_heartbeat_merges_per_sport(monkeypatch):
     MP._heartbeat("nhl", {"status": "stale_or_missing_board"}, NOW)
     hb = json.loads(store[MP.HEARTBEAT_KEY])
     assert set(hb["sports"]) == {"nba", "nhl"} and hb["sports"]["nba"]["logged"] == 2
+
+
+def _ledger(tracker):
+    import pandas as pd
+    from sqlalchemy import text
+    with tracker.engine.connect() as c:
+        return pd.read_sql(text("SELECT * FROM bets ORDER BY id"), c)
+
+
+def test_tracked_rows_are_zero_stake_monitoring_rows_and_official_rows_are_staked(tracker):
+    off = {**MP.to_pick(row()), "tier": "official"}
+    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
+    assert len(MP.log_picks("nba", [off, trk], tracker)) == 2
+    df = _ledger(tracker).set_index("player")
+    assert (float(df.loc["Jalen Duren", "stake"]), bool(df.loc["Jalen Duren", "kelly_triggered"])) == (1.0, True)
+    assert (float(df.loc["B", "stake"]), bool(df.loc["B", "kelly_triggered"])) == (0.0, False)
+    import json
+    n = json.loads(df.loc["B", "notes"])
+    assert n["tier"] == "tracked" and n["blend_ev"] == pytest.approx(0.07) and n["p_blend"] == pytest.approx(0.545)
+
+
+def test_closing_lines_are_captured_on_official_and_tracked_rows(tracker):
+    off = {**MP.to_pick(row()), "tier": "official"}
+    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
+    MP.log_picks("nba", [off, trk], tracker)
+    started = NOW + timedelta(hours=5)
+    arch = {"rows": [row(best_over_odds=-110, p_mkt_side=0.55), row(player="B", player_norm="id2", best_over_odds=-115, p_mkt_side=0.56)]}
+    res = MP.capture_closing("nba", started, get_archive=lambda s, d: arch, tracker=tracker)
+    assert res["updated"] == 2
+    df = _ledger(tracker).set_index("player")
+    assert df.loc["Jalen Duren", "closing_odds"] == -110 and df.loc["B", "closing_odds"] == -115
+    assert df.loc["B", "clv_pct"] > 0 and bool(df.loc["B", "kelly_triggered"]) is False       # CLV on a row that is not staked
+
+
+def test_settlement_grades_zero_stake_rows_on_a_one_unit_reference_and_the_recap_counts_only_staked_rows(tracker, monkeypatch):
+    """A tracked row settles (profit on 1u) but never reaches the recap headline; the staked row alone does."""
+    from sqlalchemy import text
+    from mlb.runners import settle_bets as SB
+    off = {**MP.to_pick(row()), "tier": "official"}
+    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
+    MP.log_picks("nba", [off, trk], tracker)
+    df = _ledger(tracker)
+    # grade both as winners through the settler's own profit rule (no network): +105 on a 1u reference
+    assert SB._calc_profit(float(df.loc[df["player"] == "B", "stake"].iloc[0]) or 1.0, 105, "win") == pytest.approx(1.05)
+    with tracker.engine.begin() as c:
+        c.execute(text("UPDATE bets SET result = 'win', profit = 1.05"))
+    monkeypatch.setattr(SB, "_winter_season_start", lambda d: "2026-08-01")
+    stats = SB._winter_sport_stats(tracker.engine, "2026-10-26", system="PROPS")
+    assert stats["NBA"]["bets"] == 1 and stats["NBA"]["roi"] == pytest.approx(105.0) and stats["NBA"]["pending"] == 0
+
+
+def test_fix_tracked_stakes_demotes_only_pre_split_tracked_rows_and_is_idempotent(tracker):
+    import json
+    from sqlalchemy import text
+    off = {**MP.to_pick(row()), "tier": "official"}
+    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
+    MP.log_picks("nba", [off, trk], tracker)
+    with tracker.engine.begin() as c:                     # re-create the pre-split state: the tracked row was staked
+        c.execute(text("UPDATE bets SET kelly_triggered = :t, stake = 1.0"), {"t": True})
+        c.execute(text("UPDATE bets SET notes = 'not json' WHERE player = 'Jalen Duren'"))
+        c.execute(text("UPDATE bets SET notes = :n WHERE player = 'Jalen Duren'"), {"n": json.dumps({"tier": "official"})})
+    dry = MP.fix_tracked_stakes(tracker, dry_run=True)
+    assert dry == {"candidates": 1, "updated": 0, "unparsed": 0}
+    assert bool(_ledger(tracker).set_index("player").loc["B", "kelly_triggered"]) is True       # a dry run changes nothing
+    assert MP.fix_tracked_stakes(tracker) == {"candidates": 1, "updated": 1, "unparsed": 0}
+    df = _ledger(tracker).set_index("player")
+    assert (float(df.loc["B", "stake"]), bool(df.loc["B", "kelly_triggered"])) == (0.0, False)
+    assert (float(df.loc["Jalen Duren", "stake"]), bool(df.loc["Jalen Duren", "kelly_triggered"])) == (1.0, True)
+    assert MP.fix_tracked_stakes(tracker)["candidates"] == 0
+
+
+def test_cli_needs_a_sport_unless_fixing_stakes(monkeypatch):
+    with pytest.raises(SystemExit):
+        MP.main([])
+    monkeypatch.setattr(MP, "fix_tracked_stakes", lambda dry_run=False: {"candidates": 0, "updated": 0, "unparsed": 0})
+    assert MP.main(["--fix-tracked-stakes", "--dry-run"]) == 0
