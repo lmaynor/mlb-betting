@@ -33,9 +33,12 @@ power-play goal), so do not simplify it. The power-play share of all NHL points 
 
 - ingest: `flatten_game` writes `power_play_assists` / `power_play_points` on skater rows when the game has play-by-play,
   and **None (not 0)** when it does not.
-- history: older master rows have no value. `cockpit_form._fill_nhl_power_play` fills them at load time from the shots
-  masters (`NHL/shots/shots_{season}.csv`, goal rows only) and only for games that HAVE shots data; the permanent fix is
-  `python -m nhl.data.powerplay --seasons 2022,2023,2024,2025,2026 --write` (dry run by default; not run by the PR).
+- history: older master rows had no value. **Backfilled 2026-11-01** with `python -m nhl.data.powerplay --seasons 2021,...,2026 --write`
+  (279,191 of 363,355 skater rows, 2021 onward; 2019-20 stay empty, the loader keeps two seasons). A game is filled only when its
+  shots data reproduces the box's own `power_play_goals` for that game (100 preseason rows and 2 regular-season rows did not, so
+  they stay NaN); every filled row satisfies `power_play_points == power_play_goals + power_play_assists <= points`. Pre-write copy:
+  `NHL/backups/skater_boxscores_master_pre_pp_2026-11-01.csv`. `cockpit_form._fill_nhl_power_play` remains as the fallback and skips
+  the shots reads once >= 99% of the kept seasons' regular-season rows are filled. The nightly upsert writes the columns for new games.
 - grading: `ev.grade_props.nhl_actuals` fetches the play-by-play and sets `pp_points` per player; if the fetch fails the stat
   is left off the record and the quote grades `ungradable`.
 

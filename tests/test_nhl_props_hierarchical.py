@@ -193,6 +193,20 @@ def test_fill_skater_frame_fills_only_games_with_play_by_play():
     assert out.loc[(1, 40), "power_play_points"] == 5.0
 
 
+def test_fill_skater_frame_skips_games_whose_shots_disagree_with_the_box():
+    shots = pd.DataFrame([
+        {"game_id": 1, "event": "goal", "is_home": False, "period_type": "REG", "situation_code": 1541,
+         "shooter_id": 10, "assist1_id": 20, "assist2_id": None},
+        {"game_id": 2, "event": "shot-on-goal", "is_home": True, "period_type": "REG", "situation_code": 1551,
+         "shooter_id": 11, "assist1_id": None, "assist2_id": None}])           # game 2: play-by-play missing its goal
+    sk = pd.DataFrame([{"game_id": 1, "player_id": 10, "power_play_goals": 1, "power_play_points": float("nan")},
+                       {"game_id": 1, "player_id": 20, "power_play_goals": 0, "power_play_points": float("nan")},
+                       {"game_id": 2, "player_id": 10, "power_play_goals": 1, "power_play_points": float("nan")}])
+    out = pp.fill_skater_frame(sk, shots).set_index(["game_id", "player_id"])
+    assert out.loc[(1, 10), "power_play_points"] == 1 and out.loc[(1, 20), "power_play_points"] == 1
+    assert math.isnan(out.loc[(2, 10), "power_play_points"])                    # box says a PP goal, shots show none
+
+
 def test_grade_pp_points_from_play_by_play_not_a_boxscore_field():
     box = json.load(open(FX / "nhl_boxscore_2026020087.json"))
     pbp = json.loads((FX / "nhl_pbp_sample.json").read_text())

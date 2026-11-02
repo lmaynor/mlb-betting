@@ -238,8 +238,13 @@ def _fill_nhl_power_play(sk: pd.DataFrame) -> pd.DataFrame:
     as it was and `pp_points` simply has no history (no row), never a fabricated 0."""
     try:
         from nhl.data import powerplay
-        if "power_play_points" in sk.columns and sk["power_play_points"].notna().all():
-            return sk
+        if "power_play_points" in sk.columns:
+            keep = sorted(_num(sk["season_year"]).dropna().unique())[-KEEP_SEASONS:]
+            rel = sk[_num(sk["season_year"]).isin(keep)]
+            if "game_type" in rel.columns:
+                rel = rel[_num(rel["game_type"]).isin([2, 3])]
+            if len(rel) and rel["power_play_points"].notna().mean() >= 0.99:      # backfilled: no need to read the shots
+                return sk
         years = sorted(_num(sk["season_year"]).dropna().unique())[-KEEP_SEASONS:]
         for y in years:
             try:

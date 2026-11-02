@@ -117,8 +117,9 @@ def derive_frame(shots: pd.DataFrame) -> pd.DataFrame:
 
 def fill_skater_frame(sk: pd.DataFrame, shots: pd.DataFrame) -> pd.DataFrame:
     """Fill `power_play_assists` / `power_play_points` on skater rows whose value is missing, from `shots` (the shots
-    master of the same games). A row is only filled when its game has play-by-play in `shots` (any shot event): a game
-    with no shots data stays NaN, never a fabricated 0. Rows that already carry a value are left alone."""
+    master of the same games). A row is only filled when its game has play-by-play in `shots` (any shot event) AND, when the
+    frame carries `power_play_goals`, the derived power-play goals of that game equal the box's: otherwise the rows stay
+    NaN, never a fabricated 0. Rows that already carry a value are left alone."""
     sk = sk.copy()
     for c in PP_COLUMNS:
         if c not in sk.columns:
@@ -131,6 +132,13 @@ def fill_skater_frame(sk: pd.DataFrame, shots: pd.DataFrame) -> pd.DataFrame:
     pids = pd.to_numeric(sk["player_id"], errors="coerce")
     miss = sk["power_play_points"].isna() & gids.notna() & pids.notna()
     miss &= gids.fillna(-1).astype(int).isin(have_pbp)
+    if "power_play_goals" in sk.columns:
+        # self-check: the shots data of a game must reproduce the box's own power-play goals for that game (incomplete
+        # play-by-play, mostly preseason, does not), else its rows stay unknown rather than carry a wrong value
+        box = sk.assign(_g=gids).groupby("_g")["power_play_goals"].sum(min_count=1)
+        der = derived.groupby("game_id")["pp_goals"].sum()
+        agree = {int(g) for g, v in box.items() if pd.notna(v) and float(der.get(int(g), 0)) == float(v)}
+        miss &= gids.fillna(-1).astype(int).isin(agree)
     idx = sk.index[miss]
     keys = list(zip(gids[miss].astype(int), pids[miss].astype(int)))
     sk.loc[idx, "power_play_assists"] = [ppa.get(k, 0) for k in keys]
