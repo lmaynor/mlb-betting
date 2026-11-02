@@ -127,7 +127,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           onClose={() => setMobileOpen(false)}
           title="Filter Picks"
           footer={
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="flex gap-[8px]">
               {active > 0 && (
                 <button
                   type="button"
@@ -149,7 +149,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="flex flex-col gap-[14px]">
             {sport === 'all' ? (
               <div>
                 <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginBottom: '6px', letterSpacing: '0.06em' }}>SPORT</div>
@@ -182,7 +182,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
               </div>
             ) : !fixedMarket && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--color-background-secondary-default)', padding: '10px', borderRadius: '8px', border: B }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="flex items-center justify-between">
                   <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>MARKET / SYSTEM</span>
                   <button
                     type="button"
@@ -323,9 +323,9 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--color-background-secondary-default)', padding: '10px', borderRadius: '8px', border: B }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="flex items-center justify-between">
                 <span className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>BOOK</span>
-                <div style={{ display: 'flex', gap: '4px' }}>
+                <div className="flex gap-[4px]">
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -524,7 +524,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
 
             {my.books.length === 0 && bookValue === 'MY' && (
-              <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
+              <span className="text-[11px] text-text-secondary">Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
             )}
           </div>
         </MobileBottomSheet>
@@ -600,7 +600,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
         <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--color-neutral-300)' }}>Clear {active}</button>
       )}
       {my.books.length === 0 && bookValue === 'MY' && (
-        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
+        <span className="text-[11px] text-text-secondary">Choose your books on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link> first.</span>
       )}
     </AlignedBar>
   )

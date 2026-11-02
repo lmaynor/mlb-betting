@@ -14,7 +14,7 @@ import type { EvBookOutlierRow } from '@/lib/types'
 function Empty({ title, body, cta }: { title: string; body: string; cta?: { href: string; label: string } }) {
   return (
     <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
-      <div style={{ color: 'var(--color-text-primary)', fontWeight: 600, marginBottom: '6px' }}>{title}</div>
+      <div className="text-text-primary font-semibold mb-[6px]">{title}</div>
       <div style={{ color: 'var(--color-text-secondary)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>{body}</div>
       {cta && <Link href={cta.href} className="btn btn-ghost" style={{ marginTop: '16px' }}>{cta.label}</Link>}
     </div>
@@ -47,7 +47,7 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
   const short = SPORT_PILLARS[sport].shortName
   const confluence = useMemo(() => new Set(confluenceKeys), [confluenceKeys])
   return (
-    <div style={{ display: 'grid', gap: '16px' }}>
+    <div className="grid gap-[16px]">
       <div role="note" style={{ border: '1px solid rgba(56,189,248,0.30)', background: 'rgba(56,189,248,0.06)', borderRadius: '10px', padding: '12px 14px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}>
         <strong style={{ color: '#38bdf8' }}>PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
         {' '}Kalshi asks are on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link>.
@@ -75,7 +75,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
             return (
               <tr key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`} style={{ borderBottom: '1px solid var(--color-border-table)' }}>
                 <td style={{ padding: '10px 12px', color: 'var(--color-text-primary)', fontWeight: 600 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="inline-flex items-center gap-[8px]">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
                     <span>{r.player} <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400 }}>{point} {propStatLabel(r.stat ?? r.market)}</span></span>
                     {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="dell-heading" title="The projection also favors this side" style={{ fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' }}>MODEL + MARKET</span>}

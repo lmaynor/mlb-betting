@@ -57,7 +57,7 @@ function Chip({ label, active, color, onClick }: {
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div style={{ padding: '16px 20px', flex: 1, minWidth: 0 }}>
+    <div className="py-[16px] px-[20px] flex-1 min-w-0">
       <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '6px' }}>{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--ash)', lineHeight: 1 }}>{value}</div>
       {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px' }}>{sub}</div>}
@@ -76,7 +76,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
       <div style={{ color: 'var(--fog)', marginBottom: '6px', fontSize: '10px' }}>{p.game_date}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
         <span style={{ color: 'var(--fog)' }}>Model edge</span>
-        <span className="mono" style={{ color: 'var(--signal)', fontWeight: 600 }}>{fmt1(p.x)}</span>
+        <span className="mono text-[var(--signal)] font-semibold">{fmt1(p.x)}</span>
         <span style={{ color: 'var(--fog)' }}>CLV</span>
         <span className="mono" style={{ color: p.y >= 0 ? 'var(--signal)' : 'var(--loss)', fontWeight: 600 }}>{fmt2(p.y)}</span>
         <span style={{ color: 'var(--fog)' }}>Result</span>
@@ -185,7 +185,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <div className="flex items-baseline justify-between gap-[12px] flex-wrap mb-[16px]">
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }} title="Each dot is a settled pick: edge at bet time (x) against closing line value (y).">CLV Tracker</h1>
         <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>Edge at bet time vs closing line value &middot; axes show the 1st-99th percentile</span>
       </div>
@@ -193,14 +193,14 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       {/* Filter bar */}
       <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         {/* Date range */}
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+        <div className="flex gap-[4px] items-center">
           <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+        <div className="flex gap-[4px] items-center">
           <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
@@ -210,7 +210,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* System chips */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <div className="flex gap-[6px] flex-wrap mb-[16px]">
         {ALL_SYSTEMS.map(sys => (
           <Chip
             key={sys}
@@ -230,8 +230,8 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       {/* Scatter chart */}
       <div style={{ border: B, background: 'var(--carbon)', marginBottom: '1px' }}>
         {filtered.length === 0 ? (
-          <div style={{ height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center' }}>
+          <div className="h-[420px] flex items-center justify-center">
+            <div className="text-center">
               <div className="mono" style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '8px' }}>No CLV data for this filter</div>
               <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>CLV is captured as picks approach game time.</div>
             </div>
@@ -299,9 +299,9 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* System legend */}
       {bySystem.length > 0 && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '16px', paddingLeft: '4px' }}>
+        <div className="flex gap-[16px] flex-wrap mb-[16px] pl-[4px]">
           {bySystem.map(({ sys, color }) => (
-            <span key={sys} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span key={sys} className="flex items-center gap-[5px]">
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
               <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{sys}</span>
             </span>

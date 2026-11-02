@@ -43,7 +43,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
                   </td>
                   <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--color-neutral-300)' }}>{d.picks.length}</td>
                   <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--color-text-primary)' }}>
-                    {r.graded === 0 ? <span style={{ color: 'var(--color-text-secondary)' }}>{r.pending > 0 ? 'pending' : '--'}</span> : `${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ''}`}
+                    {r.graded === 0 ? <span className="text-text-secondary">{r.pending > 0 ? 'pending' : '--'}</span> : `${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ''}`}
                   </td>
                   <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 700, color: r.graded === 0 ? 'var(--color-text-secondary)' : r.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
                     {r.graded === 0 ? '--' : `${r.units >= 0 ? '+' : ''}${r.units.toFixed(2)}u`}

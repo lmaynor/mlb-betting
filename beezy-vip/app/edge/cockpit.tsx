@@ -345,7 +345,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
             <div key={quote.book} role="row" data-best={best ? 'true' : undefined}
               className={cx('grid min-w-[320px] items-center gap-2 border-b border-border-table px-1 py-2', best ? 'bg-[rgba(87,242,135,0.06)]' : 'transition-colors hover:bg-background-primary-hover')}
               style={{ gridTemplateColumns: cols }}>
-              <span role="cell" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <span role="cell" className="flex items-center gap-[6px] flex-wrap">
                 <BookBadge book={quote.book} />
                 {flagged && <span className="dell-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
               </span>

@@ -43,11 +43,11 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
   return (
     <main>
       <header style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px 24px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="flex items-baseline justify-between gap-[12px] flex-wrap">
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Prop Research</h1>
           <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{rows.length} {rows.length === 1 ? 'projection' : 'projections'}{filtered ? ' after filters' : ''}</span>
         </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '14px' }}>
+        <div className="flex gap-[12px] flex-wrap items-center mt-[14px]">
           <ResearchTabs active="projections" />
           <nav aria-label="League" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
             {LIVE_SPORTS.map(p => (

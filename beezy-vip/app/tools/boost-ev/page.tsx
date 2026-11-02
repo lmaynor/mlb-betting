@@ -42,7 +42,7 @@ export default function BoostEvPage() {
       <ToolHeader title="Boost EV Calculator" hint="Example values shown; edit them" current="/tools/boost-ev" />
 
       <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
-        <div style={{ marginBottom: '16px' }}>
+        <div className="mb-[16px]">
           <label htmlFor="boosted" style={labelStyle}>Boosted line you&apos;re offered (American)</label>
           <input id="boosted" type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
           {validBoost && <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>Implied: {formatProb(americanToImpliedProb(bo))}</p>}
@@ -76,13 +76,13 @@ export default function BoostEvPage() {
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}&cent; per $1 staked
               </div>
             </div>
-            <div style={{ padding: '20px' }}>
+            <div className="p-[20px]">
               <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Kelly fraction</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--ash)' }}>{(kellyPct * 100).toFixed(1)}%</div>
               <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>of bankroll (full Kelly; bet a quarter of this)</div>
             </div>
           </div>
-          <div style={{ padding: '14px 20px' }}>
+          <div className="py-[14px] px-[20px]">
             <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.5 }}>
               {ev > 0
                 ? 'Positive EV: the boosted price pays more than the fair probability implies. Max out the boost limit if the Kelly fraction supports it.'

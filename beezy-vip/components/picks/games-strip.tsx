@@ -51,7 +51,7 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
           aria-label={`All games: ${games.length} games, ${total} rows`} title={`${games.length} games, ${total} rows`}
           style={{ ...CARD, minWidth: '56px', ...(!selected ? ON : {}) }}>
           <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: !selected ? 'var(--signal)' : 'var(--color-neutral-300)' }}>ALL</span>
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{games.length}</span>
+          <span className="mono text-[10px] text-text-secondary">{games.length}</span>
         </Link>
         {games.map(g => {
           const on = g.key === selected
@@ -60,7 +60,7 @@ export function GamesStrip({ games, selected, today, total }: { games: BoardGame
             <Link key={g.key} href={hrefFor(g.key)} scroll={false} aria-current={on ? 'true' : undefined} style={{ ...CARD, ...(on ? ON : {}) }}
               aria-label={`${g.away} at ${g.home}${time ? `, ${time}` : ''}, ${g.count} ${g.count === 1 ? 'row' : 'rows'}`}
               title={`${g.away} @ ${g.home}${time ? ` \u00b7 ${time}` : ''} \u00b7 ${g.count} ${g.count === 1 ? 'row' : 'rows'}`}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span className="inline-flex items-center gap-[4px]">
                 <SportLogo sport={g.sport} team={g.away} size={20} />
                 <span style={{ color: on ? 'var(--signal)' : 'var(--color-text-secondary)', fontSize: '10px' }} aria-hidden="true">@</span>
                 <SportLogo sport={g.sport} team={g.home} size={20} />

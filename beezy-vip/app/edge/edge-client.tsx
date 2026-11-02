@@ -1227,7 +1227,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <button className="edge-slip-expand" onClick={() => setSlipOpen(v => !v)}
               aria-expanded={slipOpen}>
               <span className="edge-slip-n">{slipIds.length} bet{slipIds.length === 1 ? '' : 's'} tracked</span>
-              <span aria-hidden style={{ fontSize: '10px' }}>{slipOpen ? '\u25be' : '\u25b4'}</span>
+              <span aria-hidden className="text-[10px]">{slipOpen ? '\u25be' : '\u25b4'}</span>
             </button>
             <span className="edge-slip-t">
               ${slipTotal.toFixed(0)}

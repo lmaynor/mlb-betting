@@ -223,31 +223,18 @@ export function MobileBottomSheet({
               gap: '12px',
             }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="flex-1 min-w-0">
               {title && (
                 <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: 'var(--color-text-primary)',
-                    lineHeight: 1.3,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+                 
+                 className="text-[14px] font-bold text-text-primary leading-[1.3] overflow-hidden text-ellipsis whitespace-nowrap">
                   {title}
                 </div>
               )}
               {subtitle && (
                 <div
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--color-text-secondary)',
-                    lineHeight: 1.3,
-                    marginTop: '2px',
-                  }}
-                >
+                 
+                 className="text-[11px] text-text-secondary leading-[1.3] mt-[2px]">
                   {subtitle}
                 </div>
               )}

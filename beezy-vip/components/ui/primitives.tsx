@@ -8,7 +8,7 @@ const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, var(--color-backgr
 
 export function LiveDot({ label }: { label?: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+    <span className="inline-flex items-center gap-[8px]">
       <span className="live-dot" />
       {label && (
         <span
@@ -50,7 +50,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
       >
         {value}
       </span>
-      {sub && <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{sub}</span>}
+      {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
     </div>
   )
 }
@@ -80,7 +80,7 @@ export function ResultPill({ result }: { result: string | null }) {
 /** Per-bet P&L in units of that bet's own stake (1u = the amount risked). Falls back to a $10 unit when the stake is unknown. */
 export function PnL({ value, stake, result }: { value: number | null; stake?: number | null; result?: string | null }) {
   // A void or push refunds the stake: no profit to show, and a green +0.00u reads as a win.
-  if (value === null || result === 'void' || result === 'push') return <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>&mdash;</span>
+  if (value === null || result === 'void' || result === 'push') return <span className="mono text-[12px] text-text-secondary">&mdash;</span>
   const pos = value >= 0
   const unit = stake != null && stake > 0 ? stake : 10
   return (
@@ -92,7 +92,7 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
 
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div style={{ marginBottom: '24px' }}>
+    <div className="mb-[24px]">
       <h2 className="dell-display" style={{ fontSize: '24px', color: 'var(--color-text-primary)' }}>{label}</h2>
       {sub && <p className="times" style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginTop: '7px', lineHeight: 1.5 }}>{sub}</p>}
     </div>
@@ -106,7 +106,7 @@ export function Button({ children, variant = 'primary', href, onClick }: { child
 }
 
 export function Divider() {
-  return <div style={{ width: '100%', height: '1px', background: 'var(--color-separator-border)' }} />
+  return <div  className="w-full h-[1px] bg-[var(--color-separator-border)]"/>
 }
 
 export function ScoreBadge({ bet }: { bet: Bet }) {
@@ -114,7 +114,7 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const tier  = scoreTier(score)
   const color = TIER_COLOR[tier]
   return (
-    <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+    <div title={explainScore(bet)} className="flex flex-col items-center gap-[4px]">
       <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>

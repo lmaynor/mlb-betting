@@ -90,15 +90,15 @@ export default async function ModelDetailPage({ params }: Props) {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
 
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+      <div className="flex items-center gap-[8px] mb-[24px]">
         <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
         <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 
       {/* Header */}
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+      <div className="mb-[28px]">
+        <div className="flex items-center gap-[12px] mb-[10px]">
           <h1 className="dell-display" style={{ fontSize: '30px', color: 'var(--chalk)' }}>{spec.name}</h1>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--silver)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>{spec.version}</span>
         </div>
@@ -116,7 +116,7 @@ export default async function ModelDetailPage({ params }: Props) {
         <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
-        <div style={{ padding: '18px' }}>
+        <div className="p-[18px]">
           <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Avg Edge</div>
           <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--fog)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
@@ -148,7 +148,7 @@ export default async function ModelDetailPage({ params }: Props) {
 
         {/* Calibration */}
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
+          <div className="flex items-baseline gap-[8px] mb-[16px]">
             <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--ash)' }}>Calibration</span>
             <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>Model prob vs actual hit rate</span>
           </div>
@@ -159,8 +159,8 @@ export default async function ModelDetailPage({ params }: Props) {
               {Object.entries(buckets).sort().map(([bucket, data]) => {
                 const hitRate = data.count > 0 ? data.wins / data.count : 0
                 return (
-                  <div key={bucket} style={{ marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div key={bucket} className="mb-[10px]">
+                    <div className="flex justify-between mb-[4px]">
                       <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{bucket}</span>
                       <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})</span>
                     </div>
@@ -193,7 +193,7 @@ export default async function ModelDetailPage({ params }: Props) {
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined, alignItems: 'center' }}>
             <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ash)', padding: '10px 14px' }}>{f.name}</div>
             <div style={{ fontSize: '11px', color: 'var(--silver)', padding: '10px 14px' }}>{f.description}</div>
-            <div style={{ padding: '10px 14px' }}>
+            <div className="py-[10px] px-[14px]">
               <span className="mono" style={{
                 fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
                 color: IMPORTANCE[f.importance]?.color ?? 'var(--fog)',
@@ -207,8 +207,8 @@ export default async function ModelDetailPage({ params }: Props) {
 
       {/* Gate progress */}
       <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--graphite)', padding: '18px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+        <div className="flex-1">
+          <div className="flex justify-between mb-[6px]">
             <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--fog)' }}>200-Bet Gate Progress</span>
             <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{bets}/200</span>
           </div>
@@ -232,7 +232,7 @@ export default async function ModelDetailPage({ params }: Props) {
           <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
-          <div style={{ padding: '18px' }}>
+          <div className="p-[18px]">
             <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '6px' }}>Sample Size</div>
             <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: 'var(--ash)' }}>{bets}</div>
             <div className="times" style={{ fontSize: '11px', color: 'var(--fog)' }}>Settled bets</div>
@@ -241,7 +241,7 @@ export default async function ModelDetailPage({ params }: Props) {
       )}
 
       {/* Full bet history */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+      <div className="flex justify-between items-center mb-[14px]">
         <h2 className="dell-display" style={{ fontSize: '20px', color: 'var(--chalk)' }}>Full settled history</h2>
         <Link href={`/picks/mlb/${spec.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           Today&apos;s Picks &rarr;

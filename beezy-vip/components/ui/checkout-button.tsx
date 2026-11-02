@@ -58,7 +58,7 @@ export function CheckoutButton({
         {loading ? 'Redirecting...' : label}
       </button>
       {error && (
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--loss)', marginTop: '8px', textAlign: 'center' }}>
+        <p className="mono text-[11px] text-[var(--loss)] mt-[8px] text-center">
           {error}
         </p>
       )}

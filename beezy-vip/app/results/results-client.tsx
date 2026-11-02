@@ -423,7 +423,7 @@ export function ResultsClient({
               <span className="mono ml-2 text-[10px] text-text-secondary">7-day rolling</span>
             </div>
             <div className="flex gap-4">
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--signal)' }}>-- model edge</span>
+              <span className="mono text-[10px] text-[var(--signal)]">-- model edge</span>
               <span className="mono" style={{ fontSize: '10px', color: 'var(--link)' }}>-- realized ROI</span>
             </div>
           </div>
@@ -636,7 +636,7 @@ export function ResultsClient({
                 <div className="min-w-0 px-3 py-2"><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
                 <div className="mono truncate px-3 py-2 text-[11px] text-text-primary">{pickLabel(bet)}</div>
                 <div className="mono px-3 py-2 text-[11px] text-text-primary">{formatOdds(bet.odds)}</div>
-                <div className="mono px-3 py-2 text-[11px]" style={{ color: 'var(--signal)' }}>
+                <div className="mono px-3 py-2 text-[11px] text-[var(--signal)]">
                   {bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--'}
                 </div>
                 <div className="mono px-3 py-2 text-[11px] text-text-primary">

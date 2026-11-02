@@ -53,7 +53,7 @@ function ResultPill({ result }: { result: string | null }) {
 
 function PnL({ profit, result, stake }: { profit: number | null; result: string | null; stake?: number | null }) {
   if (profit === null || result === null || result === 'pending' || result === 'void' || result === 'push') {
-    return <span className="mono" style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>--</span>
+    return <span className="mono text-text-secondary text-[12px]">--</span>
   }
   const units = (profit / (stake != null && stake > 0 ? stake : 10)).toFixed(2)
   const pos = profit >= 0
@@ -166,15 +166,15 @@ function TableRow({ bet }: { bet: Bet }) {
       borderBottom: '1px solid var(--color-border-table)',
       minWidth: TABLE_MIN_WIDTH,
     }}>
-      <div className="mono" style={{ padding: '11px 10px', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+      <div className="mono py-[11px] px-[10px] text-[11px] text-text-secondary">
         {fmtDate(bet.game_date)}
       </div>
 
-      <div style={{ padding: '9px 8px' }}>
+      <div className="py-[9px] px-[8px]">
         <CompactScore bet={bet} />
       </div>
 
-      <div style={{ padding: '10px 6px' }}>
+      <div className="py-[10px] px-[6px]">
         <span className="dell-heading" style={{
           display: 'inline-flex',
           maxWidth: '96px',
@@ -193,29 +193,29 @@ function TableRow({ bet }: { bet: Bet }) {
         </span>
       </div>
 
-      <div style={{ padding: '10px 6px' }}>
+      <div className="py-[10px] px-[6px]">
         <Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" />
       </div>
 
-      <div style={{ padding: '10px 6px', minWidth: 0 }}>
+      <div className="py-[10px] px-[6px] min-w-0">
         {hasProp && bet.player ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+          <div className="flex flex-col gap-[3px] min-w-0">
             <span style={{ fontSize: '12px', fontWeight: 750, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '10px', color: 'var(--color-neutral-300)', lineHeight: 1.4 }}>
+            <span className="mono text-[10px] text-[var(--color-neutral-300)] leading-[1.4]">
               {description}
             </span>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+          <div className="flex flex-col gap-[3px] min-w-0">
             <span style={{ fontSize: '12px', color: 'var(--color-text-primary)', fontWeight: 650 }}>{label}</span>
-            {description && <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{description}</span>}
+            {description && <span className="mono text-[10px] text-text-secondary">{description}</span>}
             {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
         )}
         {notes.length > 0 && (
-          <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          <div className="mt-[4px] flex flex-col gap-[1px]">
             {notes.slice(0, 2).map((n, i) => (
-              <div key={i} style={{ display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+              <div key={i} className="flex gap-[4px] items-start">
                 <span style={{ color: pill.color, fontSize: '10px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
                 <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', lineHeight: '14px' }}>{n}</span>
               </div>
@@ -224,18 +224,18 @@ function TableRow({ bet }: { bet: Bet }) {
         )}
       </div>
 
-      <div style={{ padding: '10px 6px' }}>
-        <div className="mono" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{fmtOdds(bet.odds)}</div>
-        <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{impliedLabel(bet.odds)}</div>
+      <div className="py-[10px] px-[6px]">
+        <div className="mono text-[12px] font-bold text-text-primary">{fmtOdds(bet.odds)}</div>
+        <div className="mono text-[10px] text-text-secondary mt-[2px]">{impliedLabel(bet.odds)}</div>
       </div>
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', fontWeight: 700, color: 'var(--signal)' }}>
+      <div className="mono py-[10px] px-[6px] text-[11px] font-bold text-[var(--signal)]">
         {fmtEdge(bet.edge)}
       </div>
-      <div className="mono" style={{ padding: '10px 6px', fontSize: '11px', color: 'var(--color-neutral-300)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div className="mono py-[10px] px-[6px] text-[11px] text-[var(--color-neutral-300)] overflow-hidden text-ellipsis">
         {bet.book ? bookText(bet.book) : '--'}{((bet as { bookCount?: number }).bookCount ?? 1) > 1 ? ` +${(bet as { bookCount?: number }).bookCount! - 1}` : ''}
       </div>
-      <div style={{ padding: '10px 6px' }}><ResultPill result={bet.result} /></div>
-      <div style={{ padding: '10px 6px' }}><PnL profit={bet.profit ?? null} result={bet.result} stake={bet.stake} /></div>
+      <div className="py-[10px] px-[6px]"><ResultPill result={bet.result} /></div>
+      <div className="py-[10px] px-[6px]"><PnL profit={bet.profit ?? null} result={bet.result} stake={bet.stake} /></div>
     </div>
   )
 }
@@ -260,9 +260,9 @@ function BetCard({ bet }: { bet: Bet }) {
       flexDirection: 'column',
     }}>
       <div style={{ height: '3px', background: tierColor, opacity: 0.85 }} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+      <div className="flex flex-col gap-[10px] p-[14px]">
+      <div className="flex items-start justify-between gap-[12px]">
+        <div className="flex items-center gap-[8px] min-w-0">
           <span className="dell-heading" style={{
             padding: '3px 8px',
             borderRadius: 'var(--radius-pill)',
@@ -274,7 +274,7 @@ function BetCard({ bet }: { bet: Bet }) {
           }}>
             {systemDisplay(effectiveSystem(bet))}
           </span>
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{fmtDate(bet.game_date)}</span>
+          <span className="mono text-[11px] text-text-secondary">{fmtDate(bet.game_date)}</span>
         </div>
         <CompactScore bet={bet} align="center" />
       </div>
@@ -283,25 +283,25 @@ function BetCard({ bet }: { bet: Bet }) {
 
       <div>
         {hasProp && bet.player ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--color-text-primary)' }}>{bet.player}</span>
-            <span className="mono" style={{ fontSize: '12px', color: 'var(--color-neutral-300)', lineHeight: 1.45 }}>
+          <div className="flex flex-col gap-[4px]">
+            <span className="text-[15px] font-extrabold text-text-primary">{bet.player}</span>
+            <span className="mono text-[12px] text-[var(--color-neutral-300)] leading-[1.45]">
               {description}
             </span>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div className="flex flex-col gap-[4px]">
             <span style={{ fontSize: '15px', fontWeight: 750, color: 'var(--color-text-primary)' }}>{label}</span>
-            {description && <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{description}</span>}
+            {description && <span className="mono text-[12px] text-text-secondary">{description}</span>}
             {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
         )}
         {notes.length > 0 && (
-          <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div className="mt-[5px] flex flex-col gap-[2px]">
             {notes.slice(0, 2).map((n, i) => (
-              <div key={i} style={{ display: 'flex', gap: '6px' }}>
+              <div key={i} className="flex gap-[6px]">
                 <span style={{ color: pill.color, fontSize: '10px', flexShrink: 0 }}>&middot;</span>
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{n}</span>
+                <span className="mono text-[10px] text-text-secondary">{n}</span>
               </div>
             ))}
           </div>
@@ -315,9 +315,9 @@ function BetCard({ bet }: { bet: Bet }) {
           { label: 'BOOK', value: bet.book ? bookText(bet.book) : '--' },
         ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
-            <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', letterSpacing: '0.08em', marginBottom: '2px' }}>{l}</div>
+            <div className="mono text-[10px] text-text-secondary tracking-[0.08em] mb-[2px]">{l}</div>
             <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--color-text-primary)' : 'var(--color-neutral-300)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-            {sub && <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{sub}</div>}
+            {sub && <div className="mono text-[10px] text-text-secondary mt-[2px]">{sub}</div>}
           </div>
         ))}
         <div><ResultPill result={bet.result} /></div>
@@ -414,7 +414,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
                 {c.label}{sortIndicator(c.sortKey)}
               </button>
             ) : (
-              <div key={c.label} className="mono" style={{ padding: '8px 10px', fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)' }}>{c.label}</div>
+              <div key={c.label} className="mono py-[8px] px-[10px] text-[10px] tracking-[0.1em] text-text-secondary">{c.label}</div>
             ))}
           </div>
           {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}
@@ -422,7 +422,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
       </div>
 
       <div className="picks-mobile">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 0' }}>
+        <div className="flex flex-col gap-[10px] py-[12px] px-[0px]">
           {visible.map(bet => <BetCard key={bet.id} bet={bet} />)}
         </div>
       </div>
@@ -434,7 +434,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
             style={{ fontSize: '11px', padding: '6px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: page === 0 ? 'var(--color-border-button-default)' : 'var(--color-text-secondary)' }}>
             Prev
           </button>
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+          <span className="mono text-[11px] text-text-secondary">
             {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page === pages - 1}

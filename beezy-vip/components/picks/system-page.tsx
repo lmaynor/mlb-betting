@@ -68,7 +68,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       )}
       <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="flex items-baseline gap-[12px] flex-wrap">
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{pillar.shortName} {system.name}</h1>
             <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
@@ -93,7 +93,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
                 <span>{priced} with a posted line</span>
                 <span>{confluence} model + market</span>
                 {live && <span title={live.method} style={{ color: live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>MAE {live.mae.toFixed(live.mae >= 10 ? 1 : 3)} vs {live.baselineMae.toFixed(live.baselineMae >= 10 ? 1 : 3)} (last-5 average)</span>}
-                <span style={{ color: 'var(--color-text-secondary)' }}>not tracked in the public results</span>
+                <span className="text-text-secondary">not tracked in the public results</span>
               </>
             )}
           </div>

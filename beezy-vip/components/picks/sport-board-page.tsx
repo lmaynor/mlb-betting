@@ -86,8 +86,8 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />
       <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-        <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="mb-[14px] flex items-baseline justify-between gap-[12px] flex-wrap">
+          <div className="flex items-baseline gap-[12px] flex-wrap">
             <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
             <span className="dell-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
@@ -95,11 +95,11 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
                 style={{ fontSize: '10px', color: 'var(--warn)', border: '1px solid rgba(245,158,11,0.45)', borderRadius: '6px', padding: '2px 8px' }}>UNVALIDATED</span>
             )}
           </div>
-          <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
+          <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>
         {view === 'picks' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', letterSpacing: '0.06em' }}>TIER:</span>
+          <div className="flex items-center gap-[6px] mb-[14px] flex-wrap">
+            <span className="mono text-[11px] text-text-secondary tracking-[0.06em]">TIER:</span>
             {[
               { id: 'all', label: 'All Actionable' },
               { id: 'official', label: 'Official Plays Only' },

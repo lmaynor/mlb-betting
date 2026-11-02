@@ -86,9 +86,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         <span className="mono" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, fontSize: '10px', fontWeight: 800, color: 'var(--ash)', background: 'var(--carbon)', padding: '2px 6px', borderBottomRightRadius: '4px' }}>#{rank}</span>
       </div>
 
-      <div style={{ flex: 1, padding: '10px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-        <div style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+      <div className="flex-1 py-[10px] px-[12px] flex flex-col justify-center min-w-0">
+        <div className="mb-[6px] flex items-center justify-between gap-[8px]">
+          <span className="inline-flex items-center gap-[6px] min-w-0">
             <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
           </span>
           {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
@@ -97,9 +97,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         {market && <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--silver)', lineHeight: 1.25, marginTop: '2px' }}>{market}</div>}
         {meta && <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta}</div>}
         {expanded && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '8px' }}>
+          <div className="flex flex-col gap-[3px] mt-[8px]">
             {details.map((b, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+              <div key={i} className="flex items-start gap-[6px]">
                 <span style={{ color, fontSize: '11px', lineHeight: '15px', flexShrink: 0 }}>&bull;</span>
                 <span style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: '15px' }}>{b}</span>
               </div>
@@ -162,11 +162,11 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
       {sheets.map(sh => {
         const n = postLength(sh.text)
         return (
-          <div key={sh.id} style={{ marginBottom: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div key={sh.id} className="mb-[14px]">
+            <div className="flex items-center gap-[10px] mb-[6px]">
               <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--chalk)' }}>{sh.label}</span>
               <span className="mono" style={{ fontSize: '10px', color: 'var(--steel)' }}>{n}/{POST_LIMIT}</span>
-              <div style={{ flex: 1 }} />
+              <div  className="flex-1"/>
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
@@ -175,9 +175,9 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
         )
       })}
       <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+        <div className="flex items-center gap-[10px] mb-[6px]">
           <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--chalk)' }}>REPLY</span>
-          <div style={{ flex: 1 }} />
+          <div  className="flex-1"/>
           <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
         </div>
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
@@ -243,7 +243,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         <div style={{ width: '100%', maxWidth: '390px', border: '1px solid var(--basalt)', background: 'var(--carbon)', borderRadius: 'var(--radius)', overflow: 'hidden', flexShrink: 0 }}>
           {/* Header */}
           <div style={{ background: 'var(--graphite)', padding: '16px 16px 12px', borderBottom: '1px solid var(--basalt)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px', gap: '12px' }}>
+            <div className="flex items-start justify-between mb-[10px] gap-[12px]">
               <div>
                 <BrandWordmark size="lg" />
                 <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ash)', lineHeight: 1.15, marginTop: '8px' }}>{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
@@ -252,7 +252,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                   Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
                 </div>
                 <div style={{ fontSize: '11px', color: '#57F287', background: 'rgba(87,242,135,0.08)', border: '1px solid rgba(87,242,135,0.22)', borderRadius: '4px', padding: '6px 10px', marginTop: '8px', lineHeight: 1.4 }}>
-                  <span className="mono" style={{ fontWeight: 700 }}>{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
+                  <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
                 </div>
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
@@ -261,12 +261,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               </button>
             </div>
 
-            <div role="group" aria-label="Pick type" style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+            <div role="group" aria-label="Pick type" className="flex gap-[6px] mb-[8px]">
               <button className="mono" aria-pressed={mode === 'players'} onClick={() => { setMode('players'); setExpanded(new Set()) }} style={chip(mode === 'players')}>Player picks</button>
               <button className="mono" aria-pressed={mode === 'games'} onClick={() => { setMode('games'); setExpanded(new Set()) }} style={chip(mode === 'games')}>Game picks</button>
             </div>
             {mode === 'players' && sports.length > 1 && (
-              <div role="group" aria-label="Sport" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <div role="group" aria-label="Sport" className="flex flex-wrap gap-[6px]">
                 {(['all', ...sports] as SportFilter[]).map(s => (
                   <button key={s} className="mono" aria-pressed={sport === s} onClick={() => { setSport(s); setExpanded(new Set()) }} style={chip(sport === s)}>
                     {s === 'all' ? 'All' : SPORT_PILLARS[s].shortName}
@@ -286,7 +286,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           )}
 
           {list.length === 0 ? (
-            <div style={{ padding: '20px 16px' }}>
+            <div className="py-[20px] px-[16px]">
               {mode === 'games' && gamesLocked > 0 ? (
                 <LockedNotice locked={gamesLocked} what="MLB game picks" plan="Game picks are on the MLB Pass or All-Access Pro." />
               ) : (
@@ -323,7 +323,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--basalt)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
-            <div style={{ flex: 1 }} />
+            <div  className="flex-1"/>
             <BrandWordmark size="sm" />
           </div>
         </div>
@@ -357,7 +357,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             ].map(row => {
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
-                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div key={t} className="flex items-center gap-[10px] mb-[8px]">
                   <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
                   <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>{row.desc}</span>
                 </div>

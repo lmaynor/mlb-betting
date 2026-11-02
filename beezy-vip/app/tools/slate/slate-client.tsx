@@ -89,7 +89,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: notes.length ? '10px' : 0 }}>
         <div>
           <div style={{ fontSize: '12px', color: 'var(--ash)', fontWeight: 600, marginBottom: '4px' }}>{label}</div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div className="flex gap-[12px] items-center">
             <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
               {fmtOdds(pick.odds)}
             </span>
@@ -104,7 +104,7 @@ function PickDetail({ pick }: { pick: SlatePick }) {
         <ResultPill result={pick.result} />
       </div>
       {notes.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        <div className="flex flex-wrap gap-[6px]">
           {notes.map((n, i) => (
             <span key={i} className="mono" style={{ fontSize: '10px', color: 'var(--fog)', background: 'var(--graphite)', padding: '3px 8px', border: '1px solid var(--basalt)' }}>
               {n}
@@ -138,7 +138,7 @@ function GameRow({ game }: { game: SlateGame }) {
         {/* Left: game info */}
         <div>
           {/* Teams + time */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px' }}>
+          <div className="flex items-baseline gap-[10px] mb-[4px]">
             <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ash)' }}>
               {game.away_team} @ {game.home_team}
             </span>
@@ -155,7 +155,7 @@ function GameRow({ game }: { game: SlateGame }) {
           </div>
           {/* Pick pills */}
           {hasPicks ? (
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <div className="flex gap-[6px] flex-wrap">
               {game.picks.map((pick, i) => (
                 <SystemPill key={i} system={pick.system} edgePct={pick.edge_pct} />
               ))}
@@ -167,7 +167,7 @@ function GameRow({ game }: { game: SlateGame }) {
 
         {/* Right: expand toggle */}
         {hasPicks && (
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div className="flex items-center">
             <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)', userSelect: 'none' }}>
               {open ? '-' : '+'}
             </span>
@@ -214,12 +214,12 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '14px', flexWrap: 'wrap' }}>
+      <div className="mb-[24px] flex justify-between items-start flex-wrap gap-[12px]">
+        <div className="flex items-baseline gap-[14px] flex-wrap">
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Today&apos;s Slate</h1>
           <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{dateLabel} &middot; {slateData.total_games} games &middot; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="flex items-center gap-[12px]">
           {slateData.as_of && (
             <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)' }}>
               Updated {new Date(slateData.as_of).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })} CT
@@ -260,7 +260,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
         <div style={{ width: '0.5px', background: 'var(--basalt)', height: '20px', flexShrink: 0 }} />
 
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="flex gap-[4px] flex-wrap items-center">
           <span className="mono" style={{ fontSize: '10px', color: 'var(--fog)', marginRight: '4px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
@@ -305,7 +305,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       )}
 
       {/* Footer note */}
-      <div style={{ marginTop: '16px' }}>
+      <div className="mt-[16px]">
         <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.6 }}>
           Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</a>.
           Refreshes every 5 minutes.

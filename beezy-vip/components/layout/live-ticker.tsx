@@ -55,7 +55,7 @@ export async function LiveTicker() {
             const tone = t.win ? 'var(--signal)' : 'var(--loss)'
             const sysColor = SYSTEM_COLOR[t.system] ?? 'var(--color-neutral-300)'
             return (
-              <span key={i} className="mono" style={{ fontSize: '12px', color: 'var(--color-text-primary)', letterSpacing: '0.02em', whiteSpace: 'nowrap', padding: '0 18px', display: 'inline-flex', alignItems: 'center', gap: '9px' }}>
+              <span key={i} className="mono text-[12px] text-text-primary tracking-[0.02em] whitespace-nowrap py-[0px] px-[18px] inline-flex items-center gap-[9px]">
                 <span style={{ color: tone, fontWeight: 700 }}>{t.win ? 'W' : 'L'}</span>
                 <span style={{ color: sysColor, fontWeight: 600 }}>{systemLabel(t.system, true)}</span>
                 <span>{t.label}</span>

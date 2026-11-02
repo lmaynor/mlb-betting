@@ -29,7 +29,7 @@ export default function KellyCalculatorPage() {
       <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
 
       <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
-        <div style={{ marginBottom: '16px' }}>
+        <div className="mb-[16px]">
           <label style={labelStyle}>Bankroll ($)</label>
           <input type="number" value={bankroll} onChange={e => setBankroll(e.target.value)} placeholder="1000" style={inputStyle} />
         </div>
@@ -56,16 +56,16 @@ export default function KellyCalculatorPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
               <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Full Kelly</div>
-              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--signal)' }}>{result.fullKelly}%</div>
-              <div className="mono" style={{ fontSize: '13px', color: 'var(--signal)', marginTop: '4px' }}>${result.stakeFullDollars.toFixed(2)}</div>
+              <div className="mono text-[28px] font-bold text-[var(--signal)]">{result.fullKelly}%</div>
+              <div className="mono text-[13px] text-[var(--signal)] mt-[4px]">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
-            <div style={{ padding: '20px' }}>
+            <div className="p-[20px]">
               <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Half Kelly</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--ash)' }}>{result.halfKelly}%</div>
               <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>
-          <div style={{ padding: '14px 20px' }}>
+          <div className="py-[14px] px-[20px]">
             <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.6 }}>Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
           </div>
         </div>

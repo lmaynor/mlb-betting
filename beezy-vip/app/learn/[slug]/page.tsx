@@ -52,11 +52,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 20px' }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
-        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+        <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-[10px]">
           {article.category}
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{article.title}</h1>
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '10px' }}>
+        <p className="mono text-[11px] text-text-secondary mt-[10px]">
           Published <time dateTime={article.datePublished}>{article.datePublished}</time>
           {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>
         </p>
@@ -67,12 +67,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
       />
       <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: B, display: 'grid', gap: '12px' }}>
         {related.length > 0 && (
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13.5px' }}>
-            <span style={{ color: 'var(--color-text-secondary)' }}>Try it:</span>
+          <div className="flex gap-[16px] flex-wrap text-[13.5px]">
+            <span className="text-text-secondary">Try it:</span>
             {related.map(r => <Link key={r.href} href={r.href} style={{ color: 'var(--link)' }}>{r.label} &rarr;</Link>)}
           </div>
         )}
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
+        <p className="mono text-[11px] text-text-secondary leading-[1.6] m-0">
           Educational content, not financial advice. Beezy.FYI results are paper-tracked. 21+. If gambling is a problem, call 1-800-GAMBLER.
         </p>
         <Link href="/learn" style={{ fontSize: '12.5px', color: 'var(--link)' }}>&larr; All guides</Link>

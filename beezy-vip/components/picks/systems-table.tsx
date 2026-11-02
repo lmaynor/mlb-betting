@@ -40,7 +40,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
     <section aria-labelledby="systems-h">
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '10px' }}>
         <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+        <span className="mono text-[12px] text-text-secondary">
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>
       </div>
@@ -110,7 +110,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                   ) : (
                     <>
                       <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>
-                        {t ? <span>{t.rows} <span style={{ color: 'var(--color-text-secondary)' }}>/</span> <span style={{ color: t.priced > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{t.priced}</span></span> : '--'}
+                        {t ? <span>{t.rows} <span className="text-text-secondary">/</span> <span style={{ color: t.priced > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{t.priced}</span></span> : '--'}
                       </td>
                       <td className="mono" title={live ? `${live.sample}; ${live.n.toLocaleString('en-US')} player-games. ${live.method}. Engine minus L5 MAE ${live.dMae.toFixed(3)} (se ${live.dMaeSe.toFixed(3)}).` : 'No replay covers this stat yet.'}
                         style={{ ...TD, ...R, fontSize: '12.5px', color: live && live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>

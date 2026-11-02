@@ -14,8 +14,8 @@ export function ToolHeader({ title, hint, current }: { title: string; hint?: str
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
       <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{title}</h1>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-        {hint && <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{hint}</span>}
+      <span className="flex items-center gap-[10px] flex-wrap">
+        {hint && <span className="mono text-[12px] text-text-secondary">{hint}</span>}
         {current && (
           <nav aria-label="Calculators" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px' }}>
             {CALCULATORS.map(c => (

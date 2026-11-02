@@ -44,11 +44,11 @@ export async function SlateStrip() {
               display: 'flex', flexDirection: 'column', gap: '6px',
               flexShrink: 0,
             }}>
-              <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+              <div className="mono text-[11px] font-semibold text-text-primary whitespace-nowrap">
                 {away} @ {home}
               </div>
               {hasPick && topPick ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className="flex items-center gap-[6px]">
                   <span className="dell-heading" style={{
                     fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
                     padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`, color: sysColor,
@@ -61,12 +61,12 @@ export async function SlateStrip() {
                   </span>
                 </div>
               ) : (
-                <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>
+                <div className="mono text-[10px] text-text-secondary">
                   no pick
                 </div>
               )}
               {gamePicks.length > 1 && (
-                <div className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>
+                <div className="mono text-[10px] text-text-secondary">
                   +{gamePicks.length - 1} more
                 </div>
               )}
