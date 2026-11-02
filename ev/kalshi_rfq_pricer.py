@@ -95,6 +95,11 @@ class PricerConfig:
     leg_safety_pad: float = 0.008
     min_collateral_roi: float = 0.030
     sgp_pair_buffer: float = 0.025
+    # The buffer is per PAIR, so it grows with m^2 and saturated at the Frechet bound min(p) for any same-game group of 4+ priced
+    # legs (13 props + winner => p_cons ~ 0.5 > longshot_max_p => every long SGP rejected as NOT_LONGSHOT). The copula already
+    # runs at rho 0.15, ~3x the empirical prop correlation (research/sgp-empirical-rho: ~1.08-1.10x pairwise lift), so the buffer
+    # is a second layer. Cap the total (3 pairs' worth leaves groups of <= 3 legs unchanged). UNVALIDATED.
+    sgp_buffer_cap: float = 0.075
     sgp_default_rho: float = 0.15
     sgp_mc_draws: int = 100_000
     model_guard: float = 0.15               # |p_model - p_cons| above this => trust the market (winner's curse)
@@ -490,7 +495,7 @@ class KalshiRFQPricer:
                     R[i, j] = R[j, i] = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg)
             pairs = m * (m - 1) // 2
             pj = _copula_joint(ps, R, cfg.sgp_mc_draws)
-            total *= min(min(ps), pj + cfg.sgp_pair_buffer * pairs)
+            total *= min(min(ps), pj + min(cfg.sgp_buffer_cap, cfg.sgp_pair_buffer * pairs))
         return total
 
 

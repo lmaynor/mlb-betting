@@ -189,6 +189,23 @@ Kill switch key: `kill_reason:kalshi_rfq` (own key; never halts the other venues
 * Per-leg `legs` diagnostics are present on only 32 records, so the `why` histogram cannot be built from this tape.
 * Not exercised: `quote_accepted`, confirm latency, `accepted_side`, tick grid. The recorder never quotes.
 
+## Quoting more, long combos first (2026-11-01; all UNVALIDATED, quoting still demo-only)
+Why the demo tape's 14-leggers never quoted: (a) 234 RFQs are only THREE distinct combos (one demo bot repeating), each ONE game
+(winner + 13 NBA props), so they hit `REJ_SGP_DISABLED` / `REJ_COMBO_LEG_UNVALIDATED`; (b) with SGP allowed, the additive pair buffer
+(2.5c per PAIR, 91 pairs) saturated at min(p) and rejected every same-game group of 4+ priced legs as `REJ_COMBO_NOT_LONGSHOT`;
+(c) in shadow/live the risk gate would still reject them: 64.18 contracts x no_bid 0.86-0.93 = $55-60 > the $50 per-quote cap
+(`REJ_RISK_SIZE`), and one combo charges its whole collateral to EACH of 14 players (cap $75).
+Changes: `PricerConfig.sgp_buffer_cap` (0.075, i.e. 3 pairs' worth: groups of <= 3 legs price exactly as before; a 14-leg same-game combo at
+p=0.5 per leg now quotes at no_bid ~0.86 instead of rejecting); daemon `--allow-same-game` also via `KALSHI_RFQ_ALLOW_SAME_GAME=1`;
+new `--max-liability-per-quote / --max-exposure-per-game / --max-exposure-per-player / --max-open-quotes` (defaults unchanged); recorder
+script defaults `MAX_UNPRICED_LEGS=16` and `ALLOW_SAME_GAME=1` (record-only, so it only widens the would-be-quote tape).
+To quote long combos on the DEMO exchange: `KALSHI_RFQ_LIVE=1 python scripts/kalshi_rfq_daemon.py --mode live --allow-same-game
+--max-unpriced-legs 16 --max-liability-per-quote 100 --max-exposure-per-player 150`.
+Caveats: dropping unpriced legs is a sound upper bound only if the PRICED legs and their correlations are right (copula rho 0.15 is ~3x the
+measured pairwise lift, plus the capped buffer). Whether other makers undercut our no_bid (0.86-0.93 against a fair ~0.995+) is unknowable
+offline; fill rate is the open question. "14-legs are -EV for retail" rests on 3 distinct combos so far. A leg count above 8 or so with
+only 2-3 legs priced gives a loose bound, so expect those quotes to be uncompetitive until the NBA prop mapper's coverage improves.
+
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,
 2 secrets, 1 Cloud Run Job, 1 scheduler; ParlayAPI game pulls capped at 120 credits/day (`KALSHI_RFQ_GAME_BUDGET`).

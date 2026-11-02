@@ -1187,3 +1187,53 @@ def test_unmapped_reasons_for_game_tickers():
     assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"
     assert b.why_unmapped("KXBTC15M-26OCT251945-45") == "unknown_series"
     assert b.why_unmapped("KXNFLGAME-26OCT25BUFKC-KC") is None                       # priced
+
+
+# ------------------------------------------------------------------------------------------ quote more (2026-11-01)
+def test_sgp_buffer_is_capped_so_long_same_game_combos_can_be_quoted():
+    gk = "nba:2026-10-25:TOR@MIN"
+    legs = [mk_leg(f"L{i}", gk, f"pl{i}", stat=f"s{i % 4}", p=0.5) for i in range(14)]
+    d = KalshiRFQPricer(book_of(*legs), PricerConfig(allow_same_game_combos=True, max_unpriced_legs=16)).price(
+        combo_rfq([l.ticker for l in legs]), NOW)
+    assert d.quoted and d.notes["same_game"]
+    assert d.p_yes_cons < 0.15 and d.no_bid >= 0.8                       # was NOT_LONGSHOT: 91 pairs * 2.5c saturated at min(p)
+    uncapped = KalshiRFQPricer(book_of(*legs), PricerConfig(allow_same_game_combos=True, sgp_buffer_cap=9.0)).price(
+        combo_rfq([l.ticker for l in legs]), NOW)
+    assert uncapped.reason == "REJ_COMBO_NOT_LONGSHOT"                   # the old behaviour, reachable via the knob
+
+
+def test_sgp_buffer_cap_leaves_small_groups_unchanged():
+    cfg_new, cfg_old = PricerConfig(allow_same_game_combos=True), PricerConfig(allow_same_game_combos=True, sgp_buffer_cap=9.0)
+    a = KalshiRFQPricer(same_game_book(), cfg_new).price(combo_rfq(["P", "R", "X"]), NOW)
+    b = KalshiRFQPricer(same_game_book(), cfg_old).price(combo_rfq(["P", "R", "X"]), NOW)
+    assert a.p_yes_true == b.p_yes_true and a.no_bid == b.no_bid
+
+
+def test_long_same_game_combo_with_mostly_unpriced_legs_is_a_sound_bound():
+    gk = "nba:2026-10-25:TOR@MIN"
+    priced = [mk_leg(f"L{i}", gk, f"pl{i}", stat=f"s{i}", p=0.55) for i in range(3)]
+    tickers = [l.ticker for l in priced] + [f"U{i}" for i in range(11)]              # 14 legs, 11 unpriceable
+    cfg = PricerConfig(allow_same_game_combos=True, max_unpriced_legs=16)
+    d = KalshiRFQPricer(book_of(*priced), cfg).price(combo_rfq(tickers), NOW)
+    assert d.quoted and d.notes["bounded"] and d.notes["n_unpriced"] == 11
+    assert d.p_yes_true <= 0.55                                           # never above the weakest priced leg (Frechet)
+
+
+def test_risk_caps_are_overridable_and_default_unchanged():
+    d = _daemon()
+    base = d.risk_config_from_args(type("A", (), {})())
+    assert base == RFQConfig()
+    ns = type("A", (), {"max_liability_per_quote": 120.0, "max_exposure_per_game": None,
+                        "max_exposure_per_player": 200.0, "max_open_quotes": 40})()
+    cfg = d.risk_config_from_args(ns)
+    assert (cfg.max_liability_per_quote_dollars, cfg.max_exposure_per_player_dollars, cfg.max_open_quotes) == (120.0, 200.0, 40)
+    assert cfg.max_exposure_per_game_dollars == RFQConfig().max_exposure_per_game_dollars
+
+
+def test_a_14_leg_64_contract_rfq_needs_more_than_the_default_per_quote_cap():
+    """The demo tape's 14-leggers are 64.18 contracts: at no_bid ~0.86-0.93 that is $55-60 > the $50 default, so even a
+    priced 14-leg lay is REJ_RISK_SIZE in shadow/live until --max-liability-per-quote is raised."""
+    gate = RFQRiskGate(RFQConfig(), RFQLedger(":memory:"), "shadow")
+    assert gate.check_quote(64.18 * 0.9, [{"game_key": "g", "player_norm": "p"}]) == (False, "REJ_RISK_SIZE")
+    gate2 = RFQRiskGate(RFQConfig(max_liability_per_quote_dollars=100.0), RFQLedger(":memory:"), "shadow")
+    assert gate2.check_quote(64.18 * 0.9, [{"game_key": "g", "player_norm": "p"}]) == (True, "")
