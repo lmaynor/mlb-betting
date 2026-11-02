@@ -156,12 +156,18 @@ BLEND_C_BY_SPORT_STAT = {
     "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10, "assists": 0.12,
             "pp_points": 0.10},
 }
-# NBA engine feature switches, consulted at projection time. Each is OFF until nba/props/engine_eval.py shows a held-out gain
-# past its bar (docs/solutions/conventions/nba-hierarchical-props-engine-unvalidated.md); `nba_features(...)` flips them for a
-# replay. dvp_k: shrinkage k of the (opponent, position-group) factor, None = team-wide factor only. pool_gamma / shot_gamma:
-# exponent on the missed-shot-pool (rebounds) / team-makes (assists) ratio, 0 = off. zinb: zero-inflated NegBin steals/blocks.
-# eta_scale / eta_off: multiplier on the absence-redistribution elasticities and the stats that get none.
-NBA_FEATURES = {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.0, "zinb": False, "eta_scale": 1.0, "eta_off": ()}
+# NBA engine feature switches, consulted at projection time; `nba_features(...)` flips them for a replay. A switch is ON only
+# where nba/props/engine_eval.py showed a held-out gain past its bar (selected on 2023-24, scored on 2024-25 / 2025-26:
+# docs/analysis/nba_engine_walkforward_2026-11-01.md): eta_scale 0.4 with steals / blocks excluded (the spec's 0.55-0.65
+# elasticities were ~4x too strong) and shot_gamma 0.5. Rejected on that evidence and left OFF: dvp_k (positional DvP),
+# pool_gamma (missed-shot-pool rebounds), zinb (zero-inflated steals / blocks).
+#   dvp_k       shrinkage k of the (opponent, position-group) factor; None = team-wide factor only
+#   pool_gamma  exponent on the missed-shot-pool ratio (rebounds); 0 = off
+#   shot_gamma  exponent on the team-makes ratio (assists); 0 = off
+#   zinb        zero-inflated NegBin steals / blocks
+#   eta_scale / eta_off  multiplier on the absence-redistribution elasticities, and the stats that get none
+NBA_FEATURES = {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.5, "zinb": False, "eta_scale": 0.4,
+                "eta_off": ("steals", "blocks")}
 
 
 @contextlib.contextmanager

@@ -104,24 +104,41 @@ def _logs_with_box_totals():
     return logs
 
 
-def test_pool_and_shot_switches_move_only_their_stat_and_default_off():
+def test_pool_and_shot_switches_move_only_their_stat():
     logs = _logs_with_box_totals()
-    for r in logs.idx["all"]["opp man"]:                                          # BOS misses far more tonight than usual
-        r["field_goals_made"] = 3.0
-    base = {s: row(logs, s, "Pf Forward")["proj_mean"] for s in ("rebounds", "assists", "points")}
-    assert dp.NBA_FEATURES == {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.0, "zinb": False, "eta_scale": 1.0,
-                               "eta_off": ()}
-    with dp.nba_features(pool_gamma=1.0):
-        pooled = {s: row(logs, s, "Pf Forward")["proj_mean"] for s in ("rebounds", "assists", "points")}
-        assert dp.NBA_FEATURES["pool_gamma"] == 1.0
-    assert pooled["assists"] == base["assists"] and pooled["points"] == base["points"]
-    assert dp.NBA_FEATURES["pool_gamma"] == 0.0                                   # restored on exit
-    with dp.nba_features(shot_gamma=1.0):
-        shot = {s: row(logs, s, "Pf Forward")["proj_mean"] for s in ("rebounds", "assists", "points")}
-    assert shot["rebounds"] == base["rebounds"] and shot["points"] == base["points"]
+    for name, rows_ in logs.idx["all"].items():                                   # both teams' recent shooting turns cold
+        for r in rows_[-8:]:
+            r["field_goals_made"] = 3.0 if name == "opp man" else 3.5
+    stats = ("rebounds", "assists", "points")
+
+    def proj(**kw):
+        with dp.nba_features(**kw):
+            return {s: row(logs, s, "Pf Forward")["proj_mean"] for s in stats}
+    base = proj(pool_gamma=0.0, shot_gamma=0.0)
+    pooled = proj(pool_gamma=1.0, shot_gamma=0.0)
+    assert pooled["assists"] == base["assists"] and pooled["points"] == base["points"] and pooled["rebounds"] != base["rebounds"]
+    shot = proj(pool_gamma=0.0, shot_gamma=1.0)
+    assert shot["rebounds"] == base["rebounds"] and shot["points"] == base["points"] and shot["assists"] != base["assists"]
     with pytest.raises(KeyError):
         with dp.nba_features(nope=1):
             pass
+
+
+def test_shipped_defaults_follow_the_walk_forward_evidence():
+    assert dp.NBA_FEATURES == {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.5, "zinb": False, "eta_scale": 0.4,
+                               "eta_off": ("steals", "blocks")}
+    with dp.nba_features(pool_gamma=1.0):
+        assert dp.NBA_FEATURES["pool_gamma"] == 1.0
+    assert dp.NBA_FEATURES["pool_gamma"] == 0.0                                   # restored on exit
+    base, hurt = team_logs(), team_logs()
+    hurt._nba_abs = {"LAL": {cf.norm_name("Pat Guard"): 1.0}}
+    for stat in ("steals", "blocks"):                                             # no absence boost where the replay said it hurts
+        assert row(hurt, stat, "Bo Backup")["proj_mean"] == row(base, stat, "Bo Backup")["proj_mean"]
+    mild = row(hurt, "assists", "Wes Wing")["proj_mean"]
+    assert mild > row(base, "assists", "Wes Wing")["proj_mean"]
+    with dp.nba_features(eta_scale=1.0):
+        strong = row(hurt, "assists", "Wes Wing")["proj_mean"]
+    assert strong > mild                                                          # the shipped strength is the weaker one
 
 
 # ------------------------------------------------------------------------------------------------ positional DvP
