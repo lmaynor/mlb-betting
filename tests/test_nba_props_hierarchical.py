@@ -76,7 +76,7 @@ def test_combo_means_are_the_exact_sum_of_the_component_means(scenario):
         logs._nba_abs = {"LAL": {cf.norm_name("Pat Guard"): 1.0, cf.norm_name("Wes Wing"): 0.5}}
     if scenario == "spread_and_replay":
         logs.set_nba_spreads({"nba:2026-02-19:BOS@LAL": 17.5})
-        logs.replay = True
+        logs.nba_replay = True
     for player in ("Bo Backup", "Cy Center", "Pf Forward"):
         m = {s: row(logs, s, player)["proj_mean"] for s in ("points", "rebounds", "assists", "pr", "pa", "ra", "pra")}
         assert m["pr"] == pytest.approx(m["points"] + m["rebounds"], abs=1e-3)
@@ -289,7 +289,7 @@ def test_engine_rows_before_the_cutoff_are_bit_for_bit_unchanged_by_later_data()
     cutoff = start.date().isoformat()
     poisoned = dp.GameLogs("nba", {"all": {k: _poison(v, cutoff) for k, v in clean.idx["all"].items()}})
     for logs in (clean, poisoned):
-        logs.replay = True
+        logs.nba_replay = True
         logs._nba_abs = {"LAL": {cf.norm_name("Pat Guard"): 1.0}}
         logs.set_nba_spreads({"nba:2026-02-19:BOS@LAL": 9.0})
     assert any(r["_date"] >= cutoff for rows in clean.idx["all"].values() for r in rows)    # the poison has rows to hit
@@ -313,7 +313,7 @@ def test_replay_cutoff_is_what_removes_late_rows_and_live_serving_keeps_every_ro
     idx = {cf.norm_name("Q"): rows, cf.norm_name("Opp Man"): mk_rows("Opp Man", "BOS", opp="LAL", seed=9)}
     start = datetime(2026, 1, 20, 1, 0, tzinfo=timezone.utc)
     live, replay = dp.GameLogs("nba", {"all": idx}), dp.GameLogs("nba", {"all": idx})
-    replay.replay = True
+    replay.nba_replay = True
     args = ("nba", "points", "Q", cf.norm_name("Q"), rows, cf.NBA_STATS["points"])
     tail = (None, None, [], "LAL", "BOS", "nba:2026-01-19:BOS@LAL", start, 300.0)
     a, b = dp.make_row(*args, live, 20.5, *tail[1:]), dp.make_row(*args, replay, 20.5, *tail[1:])

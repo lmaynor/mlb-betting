@@ -126,7 +126,7 @@ def test_pool_and_shot_switches_move_only_their_stat():
 
 def test_shipped_defaults_follow_the_walk_forward_evidence():
     assert dp.NBA_FEATURES == {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.5, "zinb": False, "eta_scale": 0.4,
-                               "eta_off": ("steals", "blocks")}
+                               "eta_off": ("steals", "blocks"), "trk_ast": 0.0, "trk_reb": 0.0}
     with dp.nba_features(pool_gamma=1.0):
         assert dp.NBA_FEATURES["pool_gamma"] == 1.0
     assert dp.NBA_FEATURES["pool_gamma"] == 0.0                                   # restored on exit
@@ -161,8 +161,8 @@ def _pos_logs():
 def test_context_records_opponent_position_ratios_and_dvp_splits_the_factor():
     logs = _pos_logs()
     ctx = logs.context("points")
-    g, b = ctx.opp_pos_raw[("BOS", "G")], ctx.opp_pos_raw[("BOS", "B")]
-    assert g > 1.0 > b and ctx.opp_pos_cnt[("BOS", "G")] > 0
+    g, b = ctx.nba_opp_pos_raw[("BOS", "G")], ctx.nba_opp_pos_raw[("BOS", "B")]
+    assert g > 1.0 > b and ctx.nba_opp_pos_cnt[("BOS", "G")] > 0
     pn = cf.norm_name("PG0")
     rows, sdef = logs.rows_for("points", pn)
     kw = dict(sport="nba", stat="points", player="PG0", pn=pn, rows=rows, sdef=sdef, logs=logs, line=None, cons=None, at_pt=[],
@@ -218,14 +218,14 @@ def test_zinb_distribution_is_mean_preserving_and_has_the_extra_zeros():
 def test_zinb_switch_changes_steals_only_when_the_context_found_inflation():
     logs = team_logs()
     ctx = logs.context("steals")
-    ctx.zi_pi, ctx.zi_alpha = 0.18, 0.25
+    ctx.nba_zi_pi, ctx.nba_zi_alpha = 0.18, 0.25
     off = row(logs, "steals", "Pf Forward", 0.5)
     with dp.nba_features(zinb=True):
         on = row(logs, "steals", "Pf Forward", 0.5)
         pts_on = row(logs, "points", "Pf Forward", 20.5)
     assert on["proj_mean"] == off["proj_mean"] and on["p_over_model"] != off["p_over_model"]
     assert pts_on["p_over_model"] == row(logs, "points", "Pf Forward", 20.5)["p_over_model"]
-    ctx.zi_pi = 0.0
+    ctx.nba_zi_pi = 0.0
     with dp.nba_features(zinb=True):
         assert row(logs, "steals", "Pf Forward", 0.5)["p_over_model"] == off["p_over_model"]
 

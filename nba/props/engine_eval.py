@@ -51,9 +51,15 @@ COMBO_PARTS = {"pr": ("points", "rebounds"), "pa": ("points", "assists"), "ra": 
 ELIG_MIN_MPG = 20.0
 HISTORY_SEASONS = 2                      # current + previous season, like the production loader
 ADOPT_Z = float(norm.ppf(1 - 0.05 / (2 * len(STATS))))
-GRID = {"dvp": [75.0, 150.0, 300.0], "pool": [0.5, 1.0], "shot": [0.5, 1.0], "eta": [0.15, 0.25, 0.4, 0.6]}
+GRID = {"dvp": [75.0, 150.0, 300.0], "pool": [0.5, 1.0], "shot": [0.5, 1.0], "eta": [0.15, 0.25, 0.4, 0.6],
+        "trkast": [0.5, 1.0], "trkreb": [0.5, 1.0]}
+# PR #147 exactly as specified (spec-strength boost, no extra factors): an empty switch set would now mean the SHIPPED defaults
+HIER_SW = {"eta_scale": 1.0, "eta_off": (), "shot_gamma": 0.0, "pool_gamma": 0.0, "dvp_k": None, "zinb": False,
+           "trk_ast": 0.0, "trk_reb": 0.0}
+SHIP = "eta_0.4+shot_0.5"
 ETA_OFF = ("steals", "blocks")           # the tune season showed boosts on these hurt even with oracle absences
-FEATURE_STATS = {"eta": STATS, "dvp": STATS, "pool": ("rebounds", "pr", "ra", "pra"), "shot": ("assists", "pa", "ra", "pra"),
+FEATURE_STATS = {"trkast": ("assists", "pa", "ra", "pra"), "trkreb": ("rebounds", "pr", "ra", "pra"),
+                 "eta": STATS, "dvp": STATS, "pool": ("rebounds", "pr", "ra", "pra"), "shot": ("assists", "pa", "ra", "pra"),
                  "zinb": ("steals", "blocks")}
 
 
@@ -85,12 +91,13 @@ class ReplayLogs(DP.GameLogs):
     """GameLogs whose league context comes from a truncated index, whose team-game table is the shared full one (every
     lookup in it is strictly prior to the day asked about) and whose role boosts are injected per team and day."""
 
-    def __init__(self, idx, team_games, **kw):
+    def __init__(self, idx, team_games, tracking=None, **kw):
         super().__init__("nba", idx, **kw)
         self._tg = team_games
+        self.nba_tracking = tracking
         self.boosts: dict = {}
 
-    def team_games(self):
+    def nba_team_games(self):
         return self._tg
 
     def nba_role_boosts(self, team, as_of):
@@ -145,8 +152,8 @@ def _actual(row: dict, stat: str) -> float | None:
 
 def variant_table(phase: str, chosen: dict | None) -> dict:
     """name -> (kind, feature switches, stats it is scored on). tune: the whole grid; test: only the chosen parameter."""
-    v = {"old": ("old", {}, STATS), "old_noabs": ("old", {}, STATS), "hier": ("new", {}, STATS),
-         "hier_noabs": ("new", {}, STATS)}
+    v = {"old": ("old", {}, STATS), "old_noabs": ("old", {}, STATS), "hier": ("new", dict(HIER_SW), STATS),
+         "hier_noabs": ("new", dict(HIER_SW), STATS)}
     if phase == "tune":
         for k in GRID["dvp"]:
             v[f"dvp_{k:g}"] = ("new", {"dvp_k": k}, FEATURE_STATS["dvp"])
@@ -157,10 +164,11 @@ def variant_table(phase: str, chosen: dict | None) -> dict:
         v["zinb"] = ("new", {"zinb": True}, FEATURE_STATS["zinb"])
         for k in GRID["eta"]:
             v[f"eta_{k:g}"] = ("new", {"eta_scale": k, "eta_off": ETA_OFF}, FEATURE_STATS["eta"])
-    else:
-        for name, sw in (chosen or {}).items():
-            fams = [part.split("_")[0] for part in name.split("+")]
-            v[name] = ("new", sw, STATS if len(fams) > 1 else FEATURE_STATS[fams[0]])
+    for name, sw in (chosen or {}).items():                     # explicit variants, both phases (see parse_variant)
+        base_parts = set(SHIP.split("+"))
+        new_parts = [part.split("_")[0] for part in name.split("+") if part not in base_parts]
+        stats = sorted({st for fam in new_parts for st in FEATURE_STATS[fam]}, key=STATS.index) if new_parts else STATS
+        v[name] = ("new", sw, tuple(stats))
     return v
 
 
@@ -179,6 +187,10 @@ def parse_variant(name: str) -> dict:
             out["shot_gamma"] = float(val)
         elif fam == "zinb":
             out["zinb"] = True
+        elif fam == "trkast":
+            out["trk_ast"] = float(val)
+        elif fam == "trkreb":
+            out["trk_reb"] = float(val)
         else:
             raise ValueError(f"unknown variant part {part!r}")
     return out
@@ -188,7 +200,8 @@ def _boost_key(sw: dict) -> tuple:
     return (float(sw.get("eta_scale", 1.0)), tuple(sw.get("eta_off", ())))
 
 
-def replay(index: dict, dnp: dict, seasons: list, variants: dict, max_targets: int | None = None) -> pd.DataFrame:
+def replay(index: dict, dnp: dict, seasons: list, variants: dict, max_targets: int | None = None,
+           tracking=None) -> pd.DataFrame:
     full_dates = {n: [r["_date"] for r in rows] for n, rows in index.items()}
     team_games = TC.TeamGames(index)
     # month blocks of target rows
@@ -216,7 +229,7 @@ def replay(index: dict, dnp: dict, seasons: list, variants: dict, max_targets: i
             first = f"{block}-01"
             trunc = {n: rs[max(0, bisect_left([x["season_year"] for x in rs], r["season_year"] - HISTORY_SEASONS + 1)):
                            bisect_left(full_dates[n], first)] for n, rs in index.items()}
-            logs = ReplayLogs({"all": {n: rs for n, rs in trunc.items() if rs}}, team_games)
+            logs = ReplayLogs({"all": {n: rs for n, rs in trunc.items() if rs}}, team_games, tracking)
             team_cache = {}
             log.info("block %s: context from %d players", block, len(logs.idx["all"]))
         team, opp = r["team_abbr"], r["_opp"]
@@ -369,6 +382,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--rows-out", help="write the per-row scores here (parquet)")
     ap.add_argument("--max-targets", type=int)
+    ap.add_argument("--tracking-dir", help="local clone of the community tracking repo (enables the trk_* variants)")
+    ap.add_argument("--base", default="hier", help="baseline variant for the paired tables (default hier)")
     ap.add_argument("--only", default="", help="restrict to these variant names (comma list); hier is always kept")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -379,12 +394,17 @@ def main(argv=None) -> int:
     if a.only:
         keep = set(a.only.split(",")) | {"hier"}
         table = {k: v for k, v in table.items() if k in keep}
-    df = replay(index, dnp, seasons, table, a.max_targets)
+    tracking = None
+    if a.tracking_dir:
+        from nba.data import tracking as TR
+        tracking = TR.load(range(min(seasons), max(seasons) + 1), a.tracking_dir, source_layout=True)
+        log.info("tracking coverage: %s", tracking.coverage())
+    df = replay(index, dnp, seasons, table, a.max_targets, tracking)
     if a.rows_out:
         df.to_parquet(a.rows_out)
-    text = report(df, a.phase)
+    text = report(df, a.phase, a.base)
     if a.phase == "tune":
-        sel = choose(df)
+        sel = choose(df, a.base)
         text += "\n## Selected on this season\n\n" + (", ".join(sorted(sel)) or "(none)") + "\n"
     if a.out:
         with open(a.out, "w") as fh:

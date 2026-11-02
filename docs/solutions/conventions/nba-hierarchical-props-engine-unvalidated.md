@@ -50,7 +50,7 @@ vs the board's name keys need a crosswalk). `nba/props/score.py` has an opt-in `
 sportsblaze-master-date-is-utc.md), so for an evening game tonight's ET day equals the UTC date of LAST night's late game.
 A strict `_date < ET game day` history cut would silently drop yesterday's game from every live projection. Therefore:
 
-- live serving passes `as_of=None` (the master holds only finished games); `GameLogs.replay = True` switches on a cutoff at the
+- live serving passes `as_of=None` (the master holds only finished games); `GameLogs.nba_replay = True` switches on a cutoff at the
   tip's UTC day (replays of past boards; an afternoon tip also loses the previous evening's game -- stale, never leaking);
 - `rest_days` is computed between the newest prior row and the tip's UTC day, floored at 0 (it can miss a back-to-back across
   the UTC/ET labelling, never invent one);

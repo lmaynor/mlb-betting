@@ -74,6 +74,7 @@ from ev import rosters as _rosters
 from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_props
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
+from nba.data import tracking as _trk
 from nba.props import config as _nbacfg
 from nba.props import hierarchical as _hier
 from nba.props import team_context as _tc
@@ -166,8 +167,10 @@ BLEND_C_BY_SPORT_STAT = {
 #   shot_gamma  exponent on the team-makes ratio (assists); 0 = off
 #   zinb        zero-inflated NegBin steals / blocks
 #   eta_scale / eta_off  multiplier on the absence-redistribution elasticities, and the stats that get none
+#   trk_ast / trk_reb  exponent on the PRIOR-season tracking ratio (potential assists / rebound chances luck removal;
+#                      nba.data.tracking); 0 = off. Needs GameLogs.nba_tracking, else no effect.
 NBA_FEATURES = {"dvp_k": None, "pool_gamma": 0.0, "shot_gamma": 0.5, "zinb": False, "eta_scale": 0.4,
-                "eta_off": ("steals", "blocks")}
+                "eta_off": ("steals", "blocks"), "trk_ast": 0.0, "trk_reb": 0.0}
 
 
 @contextlib.contextmanager
@@ -323,10 +326,10 @@ class StatContext:
     opp_cnt: dict = field(default_factory=dict)         # canonical opponent code -> player-games behind that ratio
     alpha: float = 0.25                                  # NegBin dispersion (var = mu + alpha mu^2)
     cv: float = 0.5                                      # within-player sd / mean (Normal family)
-    opp_pos_raw: dict = field(default_factory=dict)     # (opponent, position group) -> UNSHRUNK allowed/expected ratio (NBA)
-    opp_pos_cnt: dict = field(default_factory=dict)     # (opponent, position group) -> player-games behind that ratio
-    zi_pi: float = 0.0                                   # NBA steals / blocks: structural-zero probability (0 = not inflated)
-    zi_alpha: float | None = None                        # NBA steals / blocks: NegBin dispersion fitted jointly with zi_pi
+    nba_opp_pos_raw: dict = field(default_factory=dict)     # (opponent, position group) -> UNSHRUNK allowed/expected ratio (NBA)
+    nba_opp_pos_cnt: dict = field(default_factory=dict)     # (opponent, position group) -> player-games behind that ratio
+    nba_zi_pi: float = 0.0                                   # NBA steals / blocks: structural-zero probability (0 = not inflated)
+    nba_zi_alpha: float | None = None                        # NBA steals / blocks: NegBin dispersion fitted jointly with nba_zi_pi
     league_mean: float = 0.0
     n_players: int = 0
 
@@ -354,10 +357,11 @@ class GameLogs:
         self._ctx: dict = {}
         self._env: dict | None = None
         self._nba_teams: dict | None = None       # team -> {player_norm: rows}, built lazily (nba_team_rows)
-        self._team_games = None                   # nba.props.team_context.TeamGames, built lazily (team_games)
+        self._nba_team_games = None                   # nba.props.team_context.TeamGames, built lazily (nba_team_games)
+        self.nba_tracking = None                      # nba.data.tracking.Tracking (prior-season tables) or None
         self._nba_roles: dict = {}                # (team, as_of) -> {player_norm: {stat: multiplier}}
         self._spreads: dict = {}                  # NBA game_key -> |consensus spread| (set_nba_spreads)
-        self.replay = False                       # True: replaying a PAST board -> NBA history is cut before the tip's UTC day
+        self.nba_replay = False                       # True: replaying a PAST board -> NBA history is cut before the tip's UTC day
         self._latest: object = _AUTO
         self._pace: dict = {}
         self._by_team: dict = {}
@@ -435,12 +439,17 @@ class GameLogs:
         v = self._spreads.get(game_key)
         return None if v is None else float(v)
 
-    def team_games(self):
+    def set_nba_tracking(self, tracking) -> None:
+        """Prior-season player tracking for the assist / rebound luck-removal factors (None = none loaded)."""
+        with self._lock:
+            self.nba_tracking = tracking
+
+    def nba_team_games(self):
         """The per-team game table (missed-shot pool / team makes) behind the rebound and assist environment factors."""
         with self._lock:
-            if self._team_games is None:
-                self._team_games = _tc.TeamGames(self.idx.get("all") or {})
-            return self._team_games
+            if self._nba_team_games is None:
+                self._nba_team_games = _tc.TeamGames(self.idx.get("all") or {})
+            return self._nba_team_games
 
     def nba_team_rows(self, team: str) -> dict:
         """{player_norm: chronological rows} of the players whose LATEST game was for `team` and within 45 days of the
@@ -650,10 +659,10 @@ class GameLogs:
                 ctx.opp_cnt[oc] = cnt[oc]
         for key, e in pexp.items():
             if e > 0:
-                ctx.opp_pos_raw[key] = pgot[key] / e
-                ctx.opp_pos_cnt[key] = pcnt[key]
+                ctx.nba_opp_pos_raw[key] = pgot[key] / e
+                ctx.nba_opp_pos_cnt[key] = pcnt[key]
         if len(zi_pairs) >= 500:
-            ctx.zi_pi, ctx.zi_alpha = _fit_zinb(zi_pairs)
+            ctx.nba_zi_pi, ctx.nba_zi_alpha = _fit_zinb(zi_pairs)
         if n_players and mean_sq_sum > 0:
             # method of moments over the whole population: var = mu + alpha*mu^2 (NegBin), var = (cv*mu)^2 (Normal)
             ctx.alpha = min(max((var_sum - mean_sum) / mean_sq_sum, ALPHA_RANGE[0]), ALPHA_RANGE[1])
@@ -966,7 +975,7 @@ def _nba_days(logs: GameLogs, start) -> tuple:
     if start is None:
         return None, None
     day = start.astimezone(timezone.utc).date().isoformat()
-    return day, (day if logs.replay else None)
+    return day, (day if logs.nba_replay else None)
 
 
 def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
@@ -985,18 +994,23 @@ def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk
     opp_f = ctx.opp_factor.get(opp, 1.0) if opp else 1.0
     k_dvp = NBA_FEATURES["dvp_k"]
     grp = _nbacfg.POS_GROUP.get(str(rows[-1].get("position") or "").upper()) if rows else None
-    if k_dvp and opp and grp and (opp, grp) in ctx.opp_pos_raw:
-        c = ctx.opp_pos_cnt[(opp, grp)]
-        opp_f = min(max(1.0 + (ctx.opp_pos_raw[(opp, grp)] - 1.0) * c / (c + k_dvp), OPP_CLIP[0]), OPP_CLIP[1])
+    if k_dvp and opp and grp and (opp, grp) in ctx.nba_opp_pos_raw:
+        c = ctx.nba_opp_pos_cnt[(opp, grp)]
+        opp_f = min(max(1.0 + (ctx.nba_opp_pos_raw[(opp, grp)] - 1.0) * c / (c + k_dvp), OPP_CLIP[0]), OPP_CLIP[1])
     proj = project_mu(_hist(prior, sdef), hl, opp_f, ewm_w)
     if proj is None:
         return None
     mu = proj["mu"]
     if team and opp and day:
         if stat == "rebounds" and NBA_FEATURES["pool_gamma"]:
-            mu *= logs.team_games().pool_factor(prior, team, opp, day, NBA_FEATURES["pool_gamma"])
+            mu *= logs.nba_team_games().pool_factor(prior, team, opp, day, NBA_FEATURES["pool_gamma"])
         elif stat == "assists" and NBA_FEATURES["shot_gamma"]:
-            mu *= logs.team_games().shotmaking_factor(prior, team, opp, day, NBA_FEATURES["shot_gamma"])
+            mu *= logs.nba_team_games().shotmaking_factor(prior, team, opp, day, NBA_FEATURES["shot_gamma"])
+    if day and getattr(logs, "nba_tracking", None) is not None:
+        if stat == "assists" and NBA_FEATURES["trk_ast"]:
+            mu *= logs.nba_tracking.assist_factor(pn, _trk.season_year_of(day), NBA_FEATURES["trk_ast"])
+        elif stat == "rebounds" and NBA_FEATURES["trk_reb"]:
+            mu *= logs.nba_tracking.rebound_factor(pn, _trk.season_year_of(day), NBA_FEATURES["trk_reb"])
     if stat == "threes":
         t = _hier.project_nba_threes(prior)                           # None when the master carries no attempts
         if t is not None:
@@ -1012,9 +1026,9 @@ def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk
     alpha = sd = None
     zi = 0.0
     if family == "negbin":
-        if NBA_FEATURES["zinb"] and stat in ("steals", "blocks") and ctx.zi_pi > 0 and ctx.zi_alpha:
-            zi = ctx.zi_pi
-            alpha = ctx.zi_alpha + extra
+        if NBA_FEATURES["zinb"] and stat in ("steals", "blocks") and ctx.nba_zi_pi > 0 and ctx.nba_zi_alpha:
+            zi = ctx.nba_zi_pi
+            alpha = ctx.nba_zi_alpha + extra
             m = mu / (1.0 - zi)
             sd = math.sqrt(max((1.0 - zi) * (m + alpha * m * m) + zi * (1.0 - zi) * m * m, 0.0))
         else:
@@ -1659,6 +1673,17 @@ def _run_game_board(sport: str, now: datetime) -> bool:
         return False
 
 
+def _load_nba_tracking(now: datetime):
+    """Prior-season tracking tables from the NBA/tracking mirror (nba.data.tracking), or None when nothing is mirrored. Only
+    the prior COMPLETED season is read. (Tests neutralise this hook in tests/conftest.py.)"""
+    try:
+        tr = _trk.load([_trk.season_year_of(now.astimezone(timezone.utc).date().isoformat())])
+        return tr if tr.years else None
+    except Exception as exc:                                                           # noqa: BLE001
+        log.info("nba tracking unavailable: %s", exc)
+        return None
+
+
 def _load_nba_spreads(now: datetime) -> dict:
     """{game_key: |consensus home spread|} from the banked NBA game-line snapshot (no extra credits); {} on any failure or a
     stale snapshot -- the minutes model then simply has no blowout term. (Tests neutralise this hook in tests/conftest.py.)"""
@@ -1699,6 +1724,7 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         return _finish(base, sport, write, now)
     if sport == "nba" and write:
         logs.set_nba_spreads(_load_nba_spreads(now))
+        logs.set_nba_tracking(_load_nba_tracking(now))
     base["gamelog_latest"] = logs.latest_date()
     gl = base["gamelog_latest"]
     if sport != "nfl" and gl:
