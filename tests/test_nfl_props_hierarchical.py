@@ -336,6 +336,40 @@ def test_every_hierarchical_stat_prices_with_no_environment_at_all():
         assert 0.0 <= r.p_over(0.5) <= 1.0 and r.dist.ppf(0.9) >= r.dist.ppf(0.1)
 
 
+def test_weather_is_off_unless_asked_for_and_realised_wind_never_leaks_in():
+    """The schedule's wind is the REALISED game-day value (NaN before the game live), and the replay evidence was produced without
+    weather: price_row must ignore env.wind / temp and the weather dict unless use_weather=True."""
+    windy = types.SimpleNamespace(**{**vars(_ENV), "wind": 28.0, "temp": 20.0})
+    table = _team_rows()
+    ctx = HL.build_team_ctx(table)
+    calm = HL.price_row("pass_yds", table["qb"], "AAA", ctx, _ENV, _ALPHA, None, pid="qb")
+    off = HL.price_row("pass_yds", table["qb"], "AAA", ctx, windy, _ALPHA, None, pid="qb")
+    on = HL.price_row("pass_yds", table["qb"], "AAA", ctx, windy, _ALPHA, None, pid="qb", use_weather=True)
+    forecast = HL.price_row("pass_yds", table["qb"], "AAA", ctx, _ENV, _ALPHA, None, pid="qb", use_weather=True,
+                            weather={"wind_mph": 28.0, "temp_f": 20.0})
+    assert off.mean == pytest.approx(calm.mean) and off.game.wind_mph is None
+    assert on.mean < calm.mean and forecast.mean == pytest.approx(on.mean, rel=1e-6)
+    fwd = HL.price_row("pass_yds", table["qb"], "AAA", ctx, _ENV, _ALPHA, None, pid="qb", weather={"wind_mph": 28.0})
+    assert fwd.mean == pytest.approx(calm.mean)                                       # a weather dict alone is ignored too
+
+
+def test_serving_loads_no_context_layers_by_default(monkeypatch):
+    from ev import daily_projections as dp
+    table = _team_rows()
+    logs = dp.GameLogs("nfl", {"all": table})
+    monkeypatch.delenv("NFL_HIER_LAYERS", raising=False)
+    called = []
+    monkeypatch.setattr(dp._hl.LiveContext, "load", classmethod(lambda cls, *a, **k: called.append(k) or cls()))
+    assert logs.nfl_live() is None and not called                                       # default 'none': nothing is read
+    monkeypatch.setenv("NFL_HIER_LAYERS", "absence")
+    logs2 = dp.GameLogs("nfl", {"all": table})
+    assert logs2.nfl_live() is not None and called[-1]["layers"] == ("absence",) and called[-1]["with_pbp"] is False
+    monkeypatch.setenv("NFL_HIER_LAYERS", "all")
+    logs3 = dp.GameLogs("nfl", {"all": table})
+    logs3.nfl_live()
+    assert set(called[-1]["layers"]) == set(dp._hl.LAYERS)
+
+
 def test_calibration_multiplier_scales_volume_only():
     table = _team_rows()
     ctx = HL.build_team_ctx(table)

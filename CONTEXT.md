@@ -4197,10 +4197,10 @@ backbone. Full detail in `nfl/README.md`.
   - **Spread sign:** the module's `team_spread` is NEGATIVE = favoured (the spec's); `env_adjust` / the engine's env tuple is POSITIVE = favoured.
     `hierarchical_props.spread_from_favoured_positive` converts, `hierarchical_live.price_row` does it at the boundary.
   - **Serving:** `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (or `--nfl-engine hierarchical`) AND only for stats in
-    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rush_yds`; empty / missing
-    file = nothing served). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
+    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rec_yds`, `rush_yds`; empty / missing
+    file = nothing served; served WITHOUT context layers (`NFL_HIER_LAYERS=none`) and WITHOUT weather (`NFL_HIER_WEATHER` off): the ablation found no layer that helps). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
     price. Real-data verdict (2024-25 held out, priors tuned on 2021-23, 2026 wks 1-8 as the clean confirmation): NOT a general improvement -- better
-    for pass_tds / rush_yds (rush_attempts, rec_yds promising but not cleared), worse for passing attempts / completions / yards, parity on anytime_td, MAE
+    for pass_tds / rush_yds / rec_yds (also at REAL book lines, Brier z +2.7 / +3.0 / +2.3; the market still beats both engines), worse for passing attempts / completions / yards, parity on anytime_td, MAE
     unchanged everywhere (shape not mean), injury / coverage / OL context did not help. Details: docs/solutions/conventions/nfl-hierarchical-engine-adoption.md and
     handoffs/handoff_2026-11-01_nfl_hierarchical_props.md. The shipped calibration scales the VOLUME input (TD stats: scale only, since
     the implied total already enters through the anchor).
