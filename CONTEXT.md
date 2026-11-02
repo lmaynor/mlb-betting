@@ -4273,12 +4273,11 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
 
 - **ParlayAPI is the 100k/month plan (confirmed by the owner 2026-11-01).** Budgets live in ONE place, `nba/config.py`, and `snapshot_odds`,
   `parlay_historical` and `deploy/setup_odds_banking.sh` read them (`tests/test_parlay_budget.py` pins: live sports >= 95k, total + floor <= 100k,
-  and that the script defaults equal the Python constants). Owner-set 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k (METERED by the
+  and that the script defaults equal the Python constants). Owner-set 2026-11-01, rebalanced the same day: NBA 35k, NHL 35k, NFL sweep 29k (the sweep pulls 10 markets/event now, incl. `player_anytime_td`, ~1 + 10 x games per firing, `--max-credits 260`; NBA/NHL were pacing to ~20k each at 10 props runs/day) (METERED by the
   same ledger since 2026-11-01 under `NFL_SWEEP_LEDGER_SPORT`: allowance before every pull, spend recorded after, soonest games first when the budget
   only covers part of the slate, cumulative monthly cap with NO linear pace because NFL demand is Thu/Sun/Mon-shaped; `--max-credits` still caps one
-  firing) = 95k live, plus a 4.5k test budget (historical pulls 3k,
-  NFL accumulator ledger 1.5k, no banker job). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
-  45k + 40k + 19.5k = 104.5k does not fit, so re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
+  firing) = 99k live, plus a 500-credit test budget (historical pulls; NFL accumulator ledger 0). The MLB snapshot ceiling (19.5k) is NOT in the winter total: MLB is paused until Mar 20 and
+  35k + 35k + 19.5k = 89.5k fits; still check the ledgers and re-balance `ODDS_BANK_BUDGET_<SPORTKEY>` before `resume_mlb_season.sh`. Reserve floor 500 everywhere.
   `credit_ledger.record()` is generation-match safe (props + game_lines jobs share one ledger file).
 - **Winter (NHL/NBA/NFL) alert bets and settlement.** `sport_alerts.log_sport_alert_bets` needs `MLB_DB_URL` + Cloud SQL on the job (`setup_props_alerts.sh`,
   `setup_nfl_sweep_schedule.sh`; re-run both to take effect), refuses to write to an ephemeral sqlite inside Cloud Run, never invents a -110 price, logs

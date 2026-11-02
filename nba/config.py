@@ -178,22 +178,22 @@ DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "f
 #                                                                     NFL_SWEEP_LEDGER_SPORT (cumulative cap, no linear pace: NFL spend is
 #                                                                     Thu/Sun/Mon-shaped); --max-credits still caps ONE firing
 #   historical pulls (nba.odds.parlay_historical) .................. PARLAY_HISTORICAL_MONTHLY_BUDGET (planning figure)
-# Owner decision 2026-11-01: NBA 45k, NHL 40k, NFL sweep 10k = 95k committed to the three live winter sports, plus ~4.5k kept
-# for testing (historical pulls 3k + the NFL accumulator ledger 1.5k, which has no banker job and exists for manual probes).
+# Owner decision 2026-11-01 (rebalanced same day after the NFL sweep went to 10 markets/event: NBA/NHL were pacing to ~20k each): NBA 35k, NHL 35k, NFL sweep 29k = 99k committed to the three live winter sports, plus 500 kept
+# for testing (historical pulls; owner decision 2026-11-01).
 # That is 99.5k, and the PARLAY_RESERVE_FLOOR (500) is the last 0.5k. The MLB snapshot ceiling is NOT in the winter total: MLB is
-# paused for the offseason (deploy/pause_mlb_offseason.sh, resumes Mar 20). When it resumes, NFL is over (its 10k is free) but
-# NBA + NHL + MLB = 104.5k does not fit: re-balance with ODDS_BANK_BUDGET_<SPORTKEY> BEFORE running resume_mlb_season.sh.
+# paused for the offseason (deploy/pause_mlb_offseason.sh, resumes Mar 20). When it resumes, NFL is over (its 29k is free) and
+# NBA + NHL + MLB = 89.5k fits, but check the ledgers first: re-balance with ODDS_BANK_BUDGET_<SPORTKEY> BEFORE running resume_mlb_season.sh.
 # Change a number HERE and the shell script's copies fail the test until they match.
 # Override a sport's ledger budget with ODDS_BANK_BUDGET_<SPORTKEY>.
 PARLAY_MONTHLY_QUOTA = 100_000
 MLB_SNAPSHOT_CEILING = 19_500
-NFL_SWEEP_MONTHLY_BUDGET = 10_000
+NFL_SWEEP_MONTHLY_BUDGET = 29_000
 NFL_SWEEP_LEDGER_SPORT = "americanfootball_nfl_sweep"     # OddsAccum/{this}/_credits/{month}.json
-PARLAY_HISTORICAL_MONTHLY_BUDGET = 3_000
+PARLAY_HISTORICAL_MONTHLY_BUDGET = 500
 ODDS_BANK_DEFAULT_BUDGET = {
-    "icehockey_nhl": 40000,
-    "basketball_nba": 45000,
-    "americanfootball_nfl": 1500,       # accumulator ledger only (no NFL banker job exists); the sweep is budgeted above
+    "icehockey_nhl": 35000,
+    "basketball_nba": 35000,
+    "americanfootball_nfl": 0,          # accumulator ledger only (no NFL banker job exists); manual probes use the 500 test budget
 }
 # Never spend the shared pool below this many remaining credits (read from x-requests-remaining). ONE floor for the ledger,
 # the MLB snapshot job and the historical puller (was 500 / none / 2500).
