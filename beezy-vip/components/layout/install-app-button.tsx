@@ -163,40 +163,18 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
           aria-label="Install beezy.fyi"
           tabIndex={-1}
           onClick={() => setModalOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.78)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            zIndex: 9999,
-            outline: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px',
-          }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 outline-none backdrop-blur-[4px]"
         >
           <div
             onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--color-background-primary-default)',
-              border: '1px solid var(--color-separator-border)',
-              borderRadius: '8px',
-              maxWidth: '440px',
-              width: '100%',
-              padding: '20px 22px',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-              color: '#f3f4f6',
-              position: 'relative',
-            }}
+            className="relative w-full max-w-[440px] rounded-xl border border-separator-border bg-background-primary-default px-[22px] py-5 text-text-primary shadow-xl"
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
+            <div className="mb-2.5 flex items-start justify-between gap-3">
               <div>
-                <h3 id="install-modal-title" style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#f3f4f6' }}>
+                <h3 id="install-modal-title" className="text-headline-bold text-text-primary">
                   Install beezy.fyi Terminal
                 </h3>
-                <p style={{ fontSize: '12px', color: '#7d8596', margin: '4px 0 0', lineHeight: 1.5 }}>
+                <p className="mt-1 text-caption-1-regular text-text-secondary">
                   Add beezy.fyi to your home screen or dock for fast, full-screen odds scanning with zero browser chrome.
                 </p>
               </div>
@@ -204,28 +182,20 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                 type="button"
                 onClick={() => setModalOpen(false)}
                 aria-label="Close install modal"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#7d8596',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  lineHeight: 1,
-                  padding: '2px 6px',
-                }}
+                className="cursor-pointer border-none bg-transparent px-1.5 py-0.5 text-[18px] leading-none text-text-secondary hover:text-text-primary"
               >
                 &times;
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px', marginBottom: '20px' }}>
+            <div className="mb-5 mt-4 flex flex-col gap-2.5">
               {platform === 'ios' ? (
                 <>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       1
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Tap the <strong>Share</strong> button in your Safari toolbar.
                     </span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#57F287" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -234,73 +204,73 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                       <line x1="12" y1="2" x2="12" y2="15" />
                     </svg>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       2
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Scroll down and tap <strong>&ldquo;Add to Home Screen&rdquo;</strong>.
                     </span>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       3
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Launch <strong>beezy.fyi</strong> from your Home Screen for full-screen standalone access.
                     </span>
                   </div>
                 </>
               ) : platform === 'macos_safari' ? (
                 <>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       1
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Click <strong>File</strong> (or the Share button) in the Safari menu bar.
                     </span>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       2
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Select <strong>&ldquo;Add to Dock...&rdquo;</strong>.
                     </span>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       3
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Open <strong>beezy.fyi</strong> directly from your Dock for a dedicated window experience.
                     </span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       1
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Click the <strong>Install</strong> icon in your browser address bar (or browser menu).
                     </span>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       2
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Select <strong>&ldquo;Install beezy.fyi&rdquo;</strong> or <strong>&ldquo;Add to Home Screen&rdquo;</strong>.
                     </span>
                   </div>
-                  <div style={{ background: '#171a24', border: '1px solid #2e3446', borderRadius: '6px', padding: '10px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ width: '22px', height: '22px', borderRadius: '4px', background: '#252a38', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '11px', flexShrink: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-[4px] bg-background-tertiary-default text-[11px] font-bold">
                       3
                     </span>
-                    <span style={{ flex: 1, color: '#c9cdd8' }}>
+                    <span className="flex-1 text-text-secondary">
                       Launch from your desktop or app drawer for instant, full-screen access.
                     </span>
                   </div>
@@ -308,20 +278,11 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                style={{
-                  padding: '7px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid #2e3446',
-                  background: '#171a24',
-                  color: '#f3f4f6',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="button-press-motion cursor-pointer rounded-lg border border-border-button-default bg-background-secondary-default px-4 py-[7px] text-caption-1-semibold text-text-primary hover:bg-background-primary-hover"
               >
                 Close
               </button>
