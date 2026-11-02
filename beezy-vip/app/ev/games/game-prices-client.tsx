@@ -115,10 +115,10 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
 
   return (
     <div>
-      <div data-testid="game-prices-strip" style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap', minHeight: '38px', padding: '6px 14px', marginBottom: '10px', background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', fontSize: '12px' }}>
+      <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" data-testid="game-prices-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
         <span className="mono font-bold text-text-primary">{sportLabel}</span>
         <span className="mono text-neutral-300">{visible.length} ROWS</span>
-        <span className="mono" style={{ color: 'var(--color-neutral-300)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
+        <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
         {stale && <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
         <span className="text-neutral-300">
           <span className="mono text-[10.5px] font-bold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
@@ -135,7 +135,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
         </div>
       ) : (
         <>
-          <div style={{ background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px', marginBottom: '10px' }}>
+          <div className="bg-background-primary-default py-[10px] px-3 flex flex-wrap items-center gap-y-2 gap-x-[14px] mb-[10px]" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
             <PillGroup label="Market">
               {MARKETS.map(m => <Pill key={m.key} active={market === m.key} onClick={() => { setMarket(m.key); reset() }}>{m.label}</Pill>)}
             </PillGroup>
@@ -152,8 +152,8 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <Toggle label="Exchanges" checked={exchanges} onChange={setExchanges} title="Count Kalshi, Novig and ProphetX in the arbitrage search (Kalshi's taker fee is taken off its leg)" />
             <Toggle label="Arbs only" checked={arbOnly} onChange={v => { setArbOnly(v); reset() }} />
             <Select id="gp-sort" label="SORT" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
-            <input type="search" aria-label="Search teams" placeholder="Search team" value={q} onChange={e => { setQ(e.target.value); reset() }}
-              style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 10px', fontSize: '12px', width: '140px' }} />
+            <input className="bg-background-secondary-default text-text-primary h-8 py-0 px-[10px] text-compact w-[140px]" type="search" aria-label="Search teams" placeholder="Search team" value={q} onChange={e => { setQ(e.target.value); reset() }}
+              style={{ border: `1px solid ${HAIR}`, borderRadius: '6px' }} />
           </div>
 
           {visible.length === 0 ? (
@@ -165,7 +165,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               {visible.slice(0, limit).map(r => <PriceCard key={r.key} r={r} columns={columns} copied={copied === r.key} onCopy={copyHedge} />)}
             </div>
           ) : (
-            <div className="odds-table-wrap" style={{ background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' }}>
+            <div className="odds-table-wrap bg-background-primary-default" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' }}>
               <table className="odds-table w-full border-collapse">
                 <thead>
                   <tr>
@@ -189,7 +189,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             </div>
           )}
           {visible.length > limit && (
-            <button type="button" className="btn btn-ghost" onClick={() => setLimit(l => l + PAGE)} style={{ marginTop: '10px', fontSize: '12px' }}>Show more ({visible.length - limit} left)</button>
+            <button type="button" className="btn btn-ghost mt-[10px] text-compact" onClick={() => setLimit(l => l + PAGE)}>Show more ({visible.length - limit} left)</button>
           )}
           <LockedNotice locked={locked} shown={allRows.length} what="game-line rows" plan="The game-line price screen is part of All-Access Pro." />
           <p className="text-compact text-text-secondary mt-3 leading-[1.5]">

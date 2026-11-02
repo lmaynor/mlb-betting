@@ -2551,7 +2551,7 @@ function OutlierCard({
       {/* Row 2: Player, Prop Line & Giant Outlier Price */}
       <div className="flex justify-between items-center gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="shrink-0 w-[36px] h-[36px] inline-flex">
+          <span className="shrink-0 w-9 h-9 inline-flex">
             <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
           </span>
           <div>
@@ -2601,10 +2601,10 @@ function OutlierCard({
       <div className="flex flex-col gap-2 pt-1.5 border-t border-t-[color:var(--color-border-table)]">
         {/* Outlier Book Row */}
         <div className="flex items-center gap-2.5">
-          <div className="w-[32px] flex justify-center shrink-0">
+          <div className="w-8 flex justify-center shrink-0">
             {isLocked ? <LockGlyph size={12} color="var(--color-text-secondary)" /> : <BookLogo book={item.outlierBook} size={20} />}
           </div>
-          <div className="flex-1 h-[8px] bg-background-tertiary-default rounded-chip overflow-hidden">
+          <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
             <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
           </div>
           <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '12px', fontWeight: 700, color: GREEN, flexShrink: 0 }}>
@@ -2615,13 +2615,13 @@ function OutlierCard({
         {/* Peer Books Rows (Up to 5) */}
         {item.peers.slice(0, 5).map((peer, idx) => (
           <div key={`${peer.book}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="w-[32px] flex justify-center shrink-0">
+            <div className="w-8 flex justify-center shrink-0">
               <BookLogo book={peer.book} size={20} />
             </div>
-            <div className="flex-1 h-[8px] bg-background-tertiary-default rounded-chip overflow-hidden">
+            <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
               <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
             </div>
-            <div className="mono w-[56px] text-right text-[11.5px] text-neutral-400 shrink-0">
+            <div className="mono w-14 text-right text-[11.5px] text-neutral-400 shrink-0">
               {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
             </div>
           </div>
@@ -2909,7 +2909,7 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
                 >
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: on.has(b.key) ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', cursor: 'pointer', flex: 1, minWidth: 0 }}>
                     <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
-                    <span className="min-w-[24px] inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
+                    <span className="min-w-6 inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
                     <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
                     <span className="mono text-[10.5px] text-text-secondary mr-0.5">{b.n}</span>
                   </label>
@@ -3088,7 +3088,7 @@ function MobileBookChecklist({
                       onChange={() => toggle(b.key)}
                       style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--signal)' }}
                     />
-                    <span className="min-w-[24px] inline-flex justify-center">
+                    <span className="min-w-6 inline-flex justify-center">
                       <BookLogo book={b.key} size={24} />
                     </span>
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: checked ? 600 : 400 }}>

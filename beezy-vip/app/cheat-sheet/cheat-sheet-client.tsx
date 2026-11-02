@@ -53,14 +53,14 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const details = bullets.length ? bullets.slice(0, 3) : [pick.game].filter(Boolean)
 
   return (
-    <div
+    <div className="bg-background-primary-default flex items-stretch min-h-[108px] overflow-hidden relative cursor-pointer"
       onClick={onToggle}
       style={{
-        background: 'var(--color-background-primary-default)', borderBottom: '1px solid var(--color-separator-border)', borderLeft: `3px solid ${tierColor}`,
-        display: 'flex', alignItems: 'stretch', minHeight: '108px', overflow: 'hidden', position: 'relative', cursor: 'pointer',
+        borderBottom: '1px solid var(--color-separator-border)',
+        borderLeft: `3px solid ${tierColor}`,
       }}
     >
-      <div style={{ width: '96px', minWidth: '96px', position: 'relative', overflow: 'hidden', background: `${color}18`, borderRight: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="w-[96px] min-w-[96px] relative overflow-hidden flex items-center justify-center" style={{ background: `${color}18`, borderRight: `1px solid ${color}44` }}>
         {pick.headshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -74,7 +74,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
               // eslint-disable-next-line @next/next/no-img-element
               <img src={pick.awayLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
             )}
-            <span className="mono" style={{ fontSize: '10px', color: `${color}99` }}>@</span>
+            <span className="mono text-micro" style={{ color: `${color}99` }}>@</span>
             {pick.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={pick.homeLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
@@ -83,7 +83,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         ) : (
           <span className="mono" style={{ fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>{pillar.shortName}</span>
         )}
-        <span className="mono" style={{ position: 'absolute', top: 0, left: 0, zIndex: 2, fontSize: '10px', fontWeight: 800, color: 'var(--color-text-primary)', background: 'var(--color-background-full)', padding: '2px 6px', borderBottomRightRadius: '4px' }}>#{rank}</span>
+        <span className="mono absolute top-0 left-0 z-[2] text-micro font-extrabold text-text-primary bg-background-full py-[2px] px-[6px]" style={{ borderBottomRightRadius: '4px' }}>#{rank}</span>
       </div>
 
       <div className="flex-1 py-2.5 px-3 flex flex-col justify-center min-w-0">
@@ -91,7 +91,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
           <span className="inline-flex items-center gap-1.5 min-w-0">
             <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
           </span>
-          {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
+          {edge && <span className="mono text-mini font-extrabold whitespace-nowrap" style={{ color: tierColor }}>{edge}</span>}
         </div>
         <div className="text-[16px] font-extrabold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap">{pick.who}</div>
         {market && <div className="text-cozy font-semibold text-neutral-300 leading-[1.25] mt-0.5">{market}</div>}
@@ -101,16 +101,16 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
             {details.map((b, i) => (
               <div key={i} className="flex items-start gap-1.5">
                 <span style={{ color, fontSize: '11px', lineHeight: '15px', flexShrink: 0 }}>&bull;</span>
-                <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '15px' }}>{b}</span>
+                <span className="text-compact text-text-secondary" style={{ lineHeight: '15px' }}>{b}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <div title={`Beezy Score ${pick.score}. Not a win probability.`}
-        style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
-        <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
+      <div className="min-w-16 flex flex-col items-center justify-center gap-1 py-2 px-[6px]" title={`Beezy Score ${pick.score}. Not a win probability.`}
+        style={{ borderLeft: `1px solid ${color}18`, background: `${tierColor}08` }}>
+        <span className="mono text-[22px] font-extrabold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
         {isOfficialCardPlay(pick) ? (
           <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">OFFICIAL PLAY</span>
         ) : isEvOutlier(pick) ? (
@@ -125,7 +125,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
   const win = pick.result === 'win'
   return (
     <div className="flex items-center gap-2 py-1.5 px-0 border-b border-b-[color:var(--color-separator-border)]">
-      <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
+      <span className="ui-heading text-micro tracking-head py-[2px] px-[5px] shrink-0" style={{ borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}` }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
       <span className="mono text-micro text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
@@ -170,7 +170,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
-            {sh.lines < sh.offered && <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
+            {sh.lines < sh.offered && <p className="text-mini text-text-secondary" style={{ margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
           </div>
         )
       })}
@@ -182,7 +182,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
         </div>
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
       </div>
-      <p style={{ fontSize: '11px', color: 'var(--color-text-secondary)', margin: '10px 0 0' }}>
+      <p className="text-mini text-text-secondary" style={{ margin: '10px 0 0' }}>
         Each box lists the same picks, in the same order, as the card above for that sport. No links in the posts (X deprioritizes them): post a sheet,
         then paste the REPLY under it. A line says EV only when it is a real +EV price; otherwise it says edge (model vs market). NFL, NHL and NBA rows are
         unvalidated projection signals.
@@ -255,8 +255,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                   <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
                 </div>
               </div>
-              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono"
-                style={{ fontSize: '10px', letterSpacing: '0.08em', color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', background: 'transparent', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}`, padding: '4px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro tracking-caps bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
+                style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
                 {allExpanded ? 'COLLAPSE' : 'EXPAND'}
               </button>
             </div>
@@ -311,7 +311,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
               {list.length > DEFAULT_LIMIT && (
                 <div className="mono py-2 px-4 text-micro tracking-caps text-text-secondary border-t border-t-[color:var(--color-separator-border)] text-center">
-                  +{list.length - DEFAULT_LIMIT} MORE ON <Link href={mode === 'games' ? '/picks/games' : '/picks'} style={{ color: 'var(--link)' }}>THE PICKS PAGE</Link>
+                  +{list.length - DEFAULT_LIMIT} MORE ON <Link className="text-link" href={mode === 'games' ? '/picks/games' : '/picks'}>THE PICKS PAGE</Link>
                 </div>
               )}
               {mode === 'games' && <div className="pt-0 px-3 pb-3"><LockedNotice locked={gamesLocked} shown={games.length} what="MLB game picks" plan="The full set is on the MLB Pass or All-Access Pro." /></div>}
@@ -319,8 +319,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           )}
 
           <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-background-full">
-            <button onClick={handleShare} className="ui-heading"
-              style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <button onClick={handleShare} className="ui-heading text-micro tracking-caps py-[6px] px-3 text-black border border-separator-border rounded-[var(--radius)] cursor-pointer whitespace-nowrap"
+              style={{ background: 'var(--signal)' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
             <div  className="flex-1"/>
@@ -337,14 +337,14 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)]">
             <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">WHAT IS THIS</div>
-            <p style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 10px' }}>
+            <p className="text-cozy text-neutral-300 leading-[1.6]" style={{ margin: '0 0 10px' }}>
               The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
             <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
               Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
             </p>
             <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[12.5px]">
-              {SPORT_SLUGS.map(s => <Link key={s} href={`${sportHref(s)}/systems`} style={{ color: 'var(--link)' }}>{SPORT_PILLARS[s].shortName}</Link>)}
+              {SPORT_SLUGS.map(s => <Link className="text-link" key={s} href={`${sportHref(s)}/systems`}>{SPORT_PILLARS[s].shortName}</Link>)}
             </div>
           </div>
 
@@ -358,7 +358,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
                 <div key={t} className="flex items-center gap-2.5 mb-2">
-                  <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
+                  <span className="ui-heading text-micro tracking-caps py-[2px] px-[6px] shrink-0" style={{ borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}` }}>{TIER_LABEL[t]}</span>
                   <span className="mono text-micro text-text-secondary">{row.desc}</span>
                 </div>
               )
@@ -367,7 +367,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         </aside>
       </div>
 
-      <Link href="/picks" className="mono cheat-sheet-picks-link" style={{ marginTop: '16px', fontSize: '10px', color: 'var(--color-text-secondary)', textDecoration: 'none', letterSpacing: '0.06em' }}>ALL PICKS &rarr;</Link>
+      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline tracking-head">ALL PICKS &rarr;</Link>
     </div>
   )
 }

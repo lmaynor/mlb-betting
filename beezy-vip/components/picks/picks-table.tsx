@@ -35,13 +35,8 @@ function ResultPill({ result }: { result: string | null }) {
   const r = result?.toLowerCase() ?? ''
   const c = cfg[r] ?? { label: 'PENDING', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--color-background-full))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--color-background-full))' }
   return (
-    <span className="ui-heading" style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      padding: '3px 8px',
+    <span className="ui-heading inline-flex items-center py-[3px] px-2 text-micro tracking-head" style={{
       borderRadius: 'var(--radius-pill)',
-      fontSize: '10px',
-      letterSpacing: '0.06em',
       color: c.color,
       background: c.bg,
       border: c.border,
@@ -58,7 +53,7 @@ function PnL({ profit, result, stake }: { profit: number | null; result: string 
   const units = (profit / (stake != null && stake > 0 ? stake : 10)).toFixed(2)
   const pos = profit >= 0
   return (
-    <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
+    <span className="mono text-compact font-bold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{units}u
     </span>
   )
@@ -73,20 +68,16 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
   const badgeLabel = isOfficial ? 'OFFICIAL PLAY' : isOutlier ? '+EV OUTLIER' : null
 
   return (
-    <div title={explainScore(bet)} style={{ display: 'flex', flexDirection: 'column', alignItems: align === 'center' ? 'center' : 'flex-start', gap: '2px' }}>
-      <span className="mono" style={{ fontSize: '16px', fontWeight: 800, color: badgeColor ?? 'var(--color-neutral-300)', lineHeight: 1 }}>
+    <div className="flex flex-col gap-[2px]" title={explainScore(bet)} style={{ alignItems: align === 'center' ? 'center' : 'flex-start' }}>
+      <span className="mono text-[16px] font-extrabold leading-[1]" style={{ color: badgeColor ?? 'var(--color-neutral-300)' }}>
         {score}
       </span>
       {badgeLabel && badgeColor && (
-        <span className="ui-heading" style={{
-          fontSize: '10px',
-          letterSpacing: '0.06em',
-          padding: '2px 5px',
+        <span className="ui-heading text-micro tracking-head py-[2px] px-[5px] whitespace-nowrap" style={{
           borderRadius: '4px',
           border: `1px solid ${badgeColor}`,
           background: `color-mix(in oklab, ${badgeColor} 14%, var(--color-background-full))`,
           color: badgeColor,
-          whiteSpace: 'nowrap',
         }}>
           {badgeLabel}
         </span>
@@ -159,13 +150,7 @@ function TableRow({ bet }: { bet: Bet }) {
   const description = pickDescription(bet, detail)
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: TABLE_GRID,
-      alignItems: 'center',
-      borderBottom: '1px solid var(--color-border-table)',
-      minWidth: TABLE_MIN_WIDTH,
-    }}>
+    <div className="grid items-center border-b border-b-[color:var(--color-border-table)]" style={{ gridTemplateColumns: TABLE_GRID, minWidth: TABLE_MIN_WIDTH }}>
       <div className="mono py-[11px] px-2.5 text-mini text-text-secondary">
         {fmtDate(bet.game_date)}
       </div>
@@ -175,19 +160,11 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="py-2.5 px-1.5">
-        <span className="ui-heading" style={{
-          display: 'inline-flex',
-          maxWidth: '96px',
-          padding: '3px 8px',
+        <span className="ui-heading inline-flex max-w-[96px] py-[3px] px-2 text-micro tracking-head overflow-hidden text-ellipsis whitespace-nowrap" style={{
           borderRadius: 'var(--radius-pill)',
-          fontSize: '10px',
-          letterSpacing: '0.06em',
           color: pill.color,
           background: pill.bg,
           border: pill.border,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}>
           {systemDisplay(effectiveSystem(bet))}
         </span>
@@ -200,14 +177,14 @@ function TableRow({ bet }: { bet: Bet }) {
       <div className="py-2.5 px-1.5 min-w-0">
         {hasProp && bet.player ? (
           <div className="flex flex-col gap-[3px] min-w-0">
-            <span style={{ fontSize: '12px', fontWeight: 750, color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bet.player}</span>
+            <span className="text-text-primary overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontSize: '12px', fontWeight: 750 }}>{bet.player}</span>
             <span className="mono text-micro text-neutral-300 leading-[1.4]">
               {description}
             </span>
           </div>
         ) : (
           <div className="flex flex-col gap-[3px] min-w-0">
-            <span style={{ fontSize: '12px', color: 'var(--color-text-primary)', fontWeight: 650 }}>{label}</span>
+            <span className="text-text-primary" style={{ fontSize: '12px', fontWeight: 650 }}>{label}</span>
             {description && <span className="mono text-micro text-text-secondary">{description}</span>}
             {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
@@ -216,8 +193,8 @@ function TableRow({ bet }: { bet: Bet }) {
           <div className="mt-1 flex flex-col gap-[1px]">
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} className="flex gap-1 items-start">
-                <span style={{ color: pill.color, fontSize: '10px', lineHeight: '14px', flexShrink: 0 }}>{'>'}</span>
-                <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', lineHeight: '14px' }}>{n}</span>
+                <span className="text-micro shrink-0" style={{ color: pill.color, lineHeight: '14px' }}>{'>'}</span>
+                <span className="mono text-micro text-text-secondary" style={{ lineHeight: '14px' }}>{n}</span>
               </div>
             ))}
           </div>
@@ -252,15 +229,12 @@ function BetCard({ bet }: { bet: Bet }) {
 
   return (
     <div className="card-hover bg-background-primary-default border border-separator-border rounded-[var(--radius-lg)] overflow-hidden flex flex-col">
-      <div style={{ height: '3px', background: tierColor, opacity: 0.85 }} />
+      <div className="h-[3px] opacity-[0.85]" style={{ background: tierColor }} />
       <div className="flex flex-col gap-2.5 p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="ui-heading" style={{
-            padding: '3px 8px',
+          <span className="ui-heading py-[3px] px-2 text-micro tracking-head" style={{
             borderRadius: 'var(--radius-pill)',
-            fontSize: '10px',
-            letterSpacing: '0.06em',
             color: pill.color,
             background: pill.bg,
             border: pill.border,
@@ -284,7 +258,7 @@ function BetCard({ bet }: { bet: Bet }) {
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            <span style={{ fontSize: '15px', fontWeight: 750, color: 'var(--color-text-primary)' }}>{label}</span>
+            <span className="text-text-primary" style={{ fontSize: '15px', fontWeight: 750 }}>{label}</span>
             {description && <span className="mono text-compact text-text-secondary">{description}</span>}
             {isWinterSport(bet.sport) && <UnvalidatedTag />}
           </div>
@@ -293,7 +267,7 @@ function BetCard({ bet }: { bet: Bet }) {
           <div className="mt-[5px] flex flex-col gap-0.5">
             {notes.slice(0, 2).map((n, i) => (
               <div key={i} className="flex gap-1.5">
-                <span style={{ color: pill.color, fontSize: '10px', flexShrink: 0 }}>&middot;</span>
+                <span className="text-micro shrink-0" style={{ color: pill.color }}>&middot;</span>
                 <span className="mono text-micro text-text-secondary">{n}</span>
               </div>
             ))}
@@ -301,7 +275,7 @@ function BetCard({ bet }: { bet: Bet }) {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '8px', alignItems: 'end' }}>
+      <div className="grid grid-cols-5 gap-2" style={{ alignItems: 'end' }}>
         {[
           { label: 'ODDS', value: fmtOdds(bet.odds), strong: true, sub: impliedLabel(bet.odds) },
           { label: 'EDGE', value: fmtEdge(bet.edge), strong: true, color: 'var(--signal)' },
@@ -309,7 +283,7 @@ function BetCard({ bet }: { bet: Bet }) {
         ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
             <div className="mono text-micro text-text-secondary tracking-caps mb-0.5">{l}</div>
-            <div className="mono" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--color-text-primary)' : 'var(--color-neutral-300)'), fontWeight: strong ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            <div className="mono overflow-hidden text-ellipsis" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--color-text-primary)' : 'var(--color-neutral-300)'), fontWeight: strong ? 700 : 500 }}>{value}</div>
             {sub && <div className="mono text-micro text-text-secondary mt-0.5">{sub}</div>}
           </div>
         ))}
@@ -359,7 +333,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
 
   if (total === 0) {
     return (
-      <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '12px', border: B, borderRadius: 'var(--radius)' }}>
+      <div className="py-12 px-6 text-center text-text-secondary" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', border: B, borderRadius: 'var(--radius)' }}>
         No picks match the selected filters.
       </div>
     )
@@ -383,26 +357,14 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
 
   return (
     <>
-      <div className="picks-desktop" style={{ border: B, borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', background: 'var(--color-background-primary-default)', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: TABLE_GRID,
-            borderBottom: B,
-            minWidth: TABLE_MIN_WIDTH,
-            background: 'var(--color-background-secondary-default)',
-          }}>
+      <div className="picks-desktop shadow-card bg-background-primary-default overflow-hidden" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: TABLE_GRID, borderBottom: B, minWidth: TABLE_MIN_WIDTH }}>
             {COLS.map(c => c.sortKey ? (
-              <button key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
-                padding: '8px 10px',
+              <button className="py-2 px-[10px] tracking-label bg-transparent bg-none border-0 cursor-pointer text-left" key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
                 fontSize: '10px',
                 fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.1em',
                 color: sortKey === c.sortKey ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
               }}>
                 {c.label}{sortIndicator(c.sortKey)}
               </button>
@@ -421,18 +383,18 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
       </div>
 
       {pages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 2px', borderTop: B, marginTop: '12px' }}>
+        <div className="flex items-center justify-between py-3 px-[2px] mt-3" style={{ borderTop: B }}>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-            className="mono"
-            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: page === 0 ? 'var(--color-border-button-default)' : 'var(--color-text-secondary)' }}>
+            className="mono text-mini py-[6px] px-3 bg-transparent"
+            style={{ cursor: page === 0 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', color: page === 0 ? 'var(--color-border-button-default)' : 'var(--color-text-secondary)' }}>
             Prev
           </button>
           <span className="mono text-mini text-text-secondary">
             {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page === pages - 1}
-            className="mono"
-            style={{ fontSize: '11px', padding: '6px 12px', cursor: page === pages - 1 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', background: 'transparent', color: page === pages - 1 ? 'var(--color-border-button-default)' : 'var(--color-text-secondary)' }}>
+            className="mono text-mini py-[6px] px-3 bg-transparent"
+            style={{ cursor: page === pages - 1 ? 'default' : 'pointer', border: B, borderRadius: 'var(--radius)', color: page === pages - 1 ? 'var(--color-border-button-default)' : 'var(--color-text-secondary)' }}>
             Next
           </button>
         </div>

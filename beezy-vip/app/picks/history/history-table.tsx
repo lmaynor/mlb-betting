@@ -35,7 +35,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
             const isOpen = open.has(d.date)
             return (
               <Fragment key={d.date}>
-                <tr className="sys-row" onClick={() => toggle(d.date)} style={{ cursor: 'pointer' }}>
+                <tr className="sys-row cursor-pointer" onClick={() => toggle(d.date)}>
                   <td style={{ ...TD, color: 'var(--color-text-primary)', fontWeight: 600 }}>
                     <button aria-expanded={isOpen} aria-label={`${isOpen ? 'Hide' : 'Show'} ${d.date}`} onClick={e => { e.stopPropagation(); toggle(d.date) }}
                       style={{ all: 'unset', cursor: 'pointer', color: 'var(--color-text-secondary)', width: '18px', display: 'inline-block' }}>{isOpen ? '-' : '+'}</button>

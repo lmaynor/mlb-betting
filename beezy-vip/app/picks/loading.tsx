@@ -3,12 +3,12 @@ const ROWS = Array.from({ length: 10 }, (_, i) => i)
 
 export default function Loading() {
   return (
-    <div aria-busy="true" aria-label="Loading picks" style={{ maxWidth: 1200, margin: '0 auto', padding: '16px' }}>
-      <div  className="h-[28px] w-[220px] bg-background-tertiary-default mb-4"/>
+    <div className="max-w-page mx-auto p-4" aria-busy="true" aria-label="Loading picks">
+      <div  className="h-7 w-[220px] bg-background-tertiary-default mb-4"/>
       <div className="border border-[color:#232634] bg-background-primary-default">
         {ROWS.map(i => (
-          <div key={i} style={{ height: 40, borderBottom: i === ROWS.length - 1 ? 'none' : '1px solid var(--color-background-tertiary-default)', display: 'flex', alignItems: 'center', gap: 16, padding: '0 12px' }}>
-            <div  className="h-[10px] w-[40px] bg-background-tertiary-default"/>
+          <div className="h-10 flex items-center gap-4 py-0 px-3" key={i} style={{ borderBottom: i === ROWS.length - 1 ? 'none' : '1px solid var(--color-background-tertiary-default)' }}>
+            <div  className="h-[10px] w-10 bg-background-tertiary-default"/>
             <div  className="h-[10px] w-[30%] bg-background-tertiary-default"/>
             <div  className="h-[10px] w-[20%] bg-background-tertiary-default"/>
           </div>

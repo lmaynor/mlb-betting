@@ -51,9 +51,13 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
           <ResearchTabs active="projections" />
           <nav aria-label="League" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
             {LIVE_SPORTS.map(p => (
-              <Link key={p.slug} href={`/edge/projections?league=${p.slug}`} aria-current={p.slug === league ? 'page' : undefined}
-                style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
-                  color: p.slug === league ? '#ffffff' : 'var(--color-neutral-300)', background: p.slug === league ? 'var(--color-background-tertiary-default)' : 'transparent', border: `1px solid ${p.slug === league ? 'var(--color-border-button-hover)' : 'transparent'}` }}>
+              <Link className="text-compact font-bold tracking-[0.05em] py-[7px] px-[13px] no-underline whitespace-nowrap" key={p.slug} href={`/edge/projections?league=${p.slug}`} aria-current={p.slug === league ? 'page' : undefined}
+                style={{
+                  borderRadius: '6px',
+                  color: p.slug === league ? '#ffffff' : 'var(--color-neutral-300)',
+                  background: p.slug === league ? 'var(--color-background-tertiary-default)' : 'transparent',
+                  border: `1px solid ${p.slug === league ? 'var(--color-border-button-hover)' : 'transparent'}`,
+                }}>
                 {p.shortName}
               </Link>
             ))}
@@ -70,7 +74,7 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
           emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'} />
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         <EdgeEvLegend />
-        <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+        <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
           MODEL is the projected value for the stat and the probability it goes over the line. Rows with no line yet are projections only;
           nothing here is a recommendation, and {league === 'mlb' ? 'only the highest-edge MLB plays are tracked in the public results' : `${pillar.shortName} projections are unvalidated and not tracked in the public results`}.
         </p>

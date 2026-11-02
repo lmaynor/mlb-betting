@@ -56,7 +56,7 @@ export function DayToggle({ today, yesterday, days, selected, pinDates = true }:
   const name = (c: { date: string; label: string }) =>
     c.date === today ? `TODAY ${c.label}` : c.date === addDaysToDateKey(today, -1) ? `YESTERDAY ${c.label}` : c.label
   return (
-    <nav ref={strip} aria-label="Day" style={{ display: 'inline-flex', maxWidth: '100%', overflowX: 'auto' }}>
+    <nav className="inline-flex overflow-x-auto" ref={strip} aria-label="Day" style={{ maxWidth: '100%' }}>
       {chips.map((c, i) => {
         const on = c.date === selected
         const [word, ...rest] = name(c).split(' ')

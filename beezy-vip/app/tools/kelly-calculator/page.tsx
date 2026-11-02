@@ -43,7 +43,7 @@ export default function KellyCalculatorPage() {
             <label style={labelStyle}>Your Win Prob (%)</label>
             <input type="number" value={prob} onChange={e => setProb(e.target.value)} placeholder="55.0" min="0" max="100" step="0.1" style={inputStyle} />
             {impliedP && !isNaN(p) && p > 0 && (
-              <p className="mono" style={{ fontSize: '11px', marginTop: '4px', color: p > impliedP ? 'var(--signal)' : 'var(--loss)' }}>
+              <p className="mono text-mini mt-1" style={{ color: p > impliedP ? 'var(--signal)' : 'var(--loss)' }}>
                 Edge: {p > impliedP ? '+' : ''}{((p - impliedP) * 100).toFixed(1)}%
               </p>
             )}
@@ -53,8 +53,8 @@ export default function KellyCalculatorPage() {
 
       {result && (
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
-            <div style={{ padding: '20px', borderRight: B_INNER }}>
+          <div className="grid grid-cols-2" style={{ borderBottom: B_INNER }}>
+            <div className="p-5" style={{ borderRight: B_INNER }}>
               <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Full Kelly</div>
               <div className="mono text-[28px] font-bold text-signal">{result.fullKelly}%</div>
               <div className="mono text-cozy text-signal mt-1">${result.stakeFullDollars.toFixed(2)}</div>

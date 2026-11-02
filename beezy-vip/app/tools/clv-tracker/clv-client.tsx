@@ -43,13 +43,14 @@ function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
   return (
-    <button onClick={onClick} style={{
-      padding: '4px 10px', fontSize: '10px', fontFamily: 'var(--font-mono), monospace',
+    <button className="py-1 px-[10px] cursor-pointer tracking-[0.05em]" onClick={onClick} style={{
+      fontSize: '10px',
+      fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 400,
       border: `1px solid ${active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-separator-border)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--color-neutral-300)'} 16%, var(--color-background-full))` : 'var(--color-background-primary-default)',
       color: active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)',
-      cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' as const,
+      textTransform: 'uppercase' as const,
       transition: 'all 0.15s',
     }}>{label}</button>
   )
@@ -59,7 +60,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
   return (
     <div className="py-4 px-5 flex-1 min-w-0">
       <div className="mono text-micro tracking-label uppercase text-text-secondary mb-1.5">{label}</div>
-      <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--color-text-primary)', lineHeight: 1 }}>{value}</div>
+      <div className="mono text-[22px] font-bold leading-[1]" style={{ color: color ?? 'var(--color-text-primary)' }}>{value}</div>
       {sub && <div className="mono text-micro text-text-secondary mt-1">{sub}</div>}
     </div>
   )
@@ -71,16 +72,16 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   const sys = p.system
   const color = SYSTEM_COLOR[sys] ?? 'var(--color-neutral-300)'
   return (
-    <div style={{ background: 'var(--color-background-primary-default)', border: B, padding: '12px 14px', fontSize: '11px', minWidth: '160px' }}>
+    <div className="bg-background-primary-default py-3 px-[14px] text-mini min-w-[160px]" style={{ border: B }}>
       <div className="mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
       <div className="text-text-secondary mb-1.5 text-micro">{p.game_date}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
+      <div className="grid" style={{ gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
         <span className="text-text-secondary">Model edge</span>
         <span className="mono text-signal font-semibold">{fmt1(p.x)}</span>
         <span className="text-text-secondary">CLV</span>
-        <span className="mono" style={{ color: p.y >= 0 ? 'var(--signal)' : 'var(--loss)', fontWeight: 600 }}>{fmt2(p.y)}</span>
+        <span className="mono font-semibold" style={{ color: p.y >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{fmt2(p.y)}</span>
         <span className="text-text-secondary">Result</span>
-        <span className="mono" style={{ color: p.result === 'win' ? 'var(--signal)' : 'var(--loss)', textTransform: 'uppercase' }}>{p.result}</span>
+        <span className="mono uppercase" style={{ color: p.result === 'win' ? 'var(--signal)' : 'var(--loss)' }}>{p.result}</span>
         <span className="text-text-secondary">Open odds</span>
         <span className="mono text-text-primary">{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
       </div>
@@ -191,7 +192,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Filter bar */}
-      <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+      <div className="py-[14px] px-4 mb-4 flex flex-wrap gap-3 items-center" style={{ border: B }}>
         {/* Date range */}
         <div className="flex gap-1 items-center">
           <span className="mono text-micro text-text-secondary mr-1.5 tracking-caps uppercase">Range</span>
@@ -206,7 +207,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
         </div>
-        {loading && <span className="mono" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>Loading...</span>}
+        {loading && <span className="mono text-micro text-text-secondary" style={{ marginLeft: 'auto' }}>Loading...</span>}
       </div>
 
       {/* System chips */}
@@ -221,14 +222,14 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
           />
         ))}
         {activeSystems.length > 0 && (
-          <button onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', color: 'var(--color-text-secondary)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
+          <button className="text-text-secondary bg-transparent bg-none border-0 cursor-pointer py-1 px-[6px]" onClick={() => setActiveSystems([])} style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace' }}>
             clear
           </button>
         )}
       </div>
 
       {/* Scatter chart */}
-      <div style={{ border: B, background: 'var(--color-background-full)', marginBottom: '1px' }}>
+      <div className="bg-background-full mb-[1px]" style={{ border: B }}>
         {filtered.length === 0 ? (
           <div className="h-[420px] flex items-center justify-center">
             <div className="text-center">
@@ -292,9 +293,9 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Quadrant labels (outside chart, below) */}
-      <div style={{ border: B, borderTop: 'none', display: 'flex', justifyContent: 'space-between', padding: '6px 16px', marginBottom: '16px' }}>
-        <span className="mono" style={{ fontSize: '10px', color: 'var(--signal)60', letterSpacing: '0.06em' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
-        <span className="mono" style={{ fontSize: '10px', color: 'var(--loss)60', letterSpacing: '0.06em' }}>BOTTOM LEFT: no edge, negative CLV</span>
+      <div className="flex justify-between py-[6px] px-4 mb-4" style={{ border: B, borderTop: 'none' }}>
+        <span className="mono text-micro tracking-head" style={{ color: 'var(--signal)60' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
+        <span className="mono text-micro tracking-head" style={{ color: 'var(--loss)60' }}>BOTTOM LEFT: no edge, negative CLV</span>
       </div>
 
       {/* System legend */}
@@ -302,7 +303,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         <div className="flex gap-4 flex-wrap mb-4 pl-1">
           {bySystem.map(({ sys, color }) => (
             <span key={sys} className="flex items-center gap-[5px]">
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+              <span className="w-2 h-2 inline-block shrink-0" style={{ borderRadius: '50%', background: color }} />
               <span className="mono text-micro text-text-secondary">{sys}</span>
             </span>
           ))}
@@ -311,7 +312,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Summary stat cards */}
       {stats && (
-        <div style={{ border: B, display: 'flex', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <div className="flex flex-wrap mb-4" style={{ border: B }}>
           <StatCard
             label="Mean CLV"
             value={fmt2(stats.meanCLV)}
@@ -343,15 +344,15 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Info panel */}
       <div style={{ border: B }}>
-        <button
+        <button className="w-full bg-transparent bg-none border-0 cursor-pointer py-3 px-4 flex items-center justify-between"
           onClick={() => setInfoOpen(o => !o)}
-          style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+         
         >
           <span className="mono text-micro tracking-caps uppercase text-text-secondary">What is CLV?</span>
           <span className="mono text-compact text-text-secondary">{infoOpen ? '-' : '+'}</span>
         </button>
         {infoOpen && (
-          <div style={{ padding: '0 16px 16px', borderTop: B }}>
+          <div className="pt-0 px-4 pb-4" style={{ borderTop: B }}>
             <p className="times text-compact text-text-secondary leading-[1.65] mt-3 mb-2">
               Closing line value (CLV) measures how much better Beezy&apos;s opening line was vs. the closing price at kickoff. When the model predicts NRFI at -115 and the line closes at -128, the edge was real -- sharp money agreed, moving the line in the same direction.
             </p>

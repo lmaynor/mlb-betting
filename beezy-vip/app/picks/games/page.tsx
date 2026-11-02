@@ -24,7 +24,7 @@ export default async function GamePicksPage({ searchParams }: { searchParams: Pr
       {isMlbOffseason() && (
         <div role="note" className="max-w-page mx-auto pt-3 px-6 pb-0 text-[12.5px] text-neutral-300">
           MLB is in the offseason, so there are no game picks until it resumes in March. NBA and NHL game lines are in the{' '}
-          <Link href="/ev/games" style={{ color: 'var(--link)' }}>Odds Terminal &rarr; Game Lines</Link>.
+          <Link className="text-link" href="/ev/games">Odds Terminal &rarr; Game Lines</Link>.
         </div>
       )}
       <SportBoardPage sport={mlb} view="picks" kind="game" searchParams={searchParams} />

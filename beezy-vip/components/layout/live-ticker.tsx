@@ -56,11 +56,11 @@ export async function LiveTicker() {
             const sysColor = SYSTEM_COLOR[t.system] ?? 'var(--color-neutral-300)'
             return (
               <span key={i} className="mono text-compact text-text-primary tracking-[0.02em] whitespace-nowrap py-0 px-4.5 inline-flex items-center gap-[9px]">
-                <span style={{ color: tone, fontWeight: 700 }}>{t.win ? 'W' : 'L'}</span>
-                <span style={{ color: sysColor, fontWeight: 600 }}>{systemLabel(t.system, true)}</span>
+                <span className="font-bold" style={{ color: tone }}>{t.win ? 'W' : 'L'}</span>
+                <span className="font-semibold" style={{ color: sysColor }}>{systemLabel(t.system, true)}</span>
                 <span>{t.label}</span>
                 {t.unvalidated && <span className="text-gold text-micro">UNVALIDATED</span>}
-                <span style={{ color: tone, fontWeight: 600 }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
+                <span className="font-semibold" style={{ color: tone }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
                 <span className="text-separator-border py-0 px-3">|</span>
               </span>
             )
@@ -69,8 +69,8 @@ export async function LiveTicker() {
       </div>
       <Link
         href="/results"
-        className="mono edge-ribbon-cta"
-        style={{ zIndex: 10, background: 'var(--color-background-primary-default)', padding: '0 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px', borderLeft: '1px solid var(--color-separator-border)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--signal)', textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap' }}
+        className="mono edge-ribbon-cta z-[10] bg-background-primary-default py-0 px-4 shrink-0 flex items-center gap-[6px] border-l border-l-[color:var(--color-separator-border)] text-micro tracking-label uppercase text-signal no-underline font-bold whitespace-nowrap"
+       
       >
         All results <span aria-hidden>&rarr;</span>
       </Link>

@@ -27,14 +27,14 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
     return (
       <div style={CARD}>
         <div>
-          <div className="ui-heading" style={{ fontSize: '10px', color: SPORT_PILLARS.mlb.accent, marginBottom: '6px' }}>HOW IT WORKS</div>
+          <div className="ui-heading text-micro mb-[6px]" style={{ color: SPORT_PILLARS.mlb.accent }}>HOW IT WORKS</div>
           <div><strong className="text-text-primary">Model.</strong> {system.family}.</div>
         </div>
         <div>
           <div className="ui-heading text-text-secondary mb-1.5">KEY FEATURES</div>
           <ul className="m-0 pl-4.5">{system.features.map(f => <li key={f}>{f}</li>)}</ul>
         </div>
-        {system.learnSlug && <div><Link href={`/learn/${system.learnSlug}`} style={{ color: 'var(--link)' }}>Read the guide to this market &rarr;</Link></div>}
+        {system.learnSlug && <div><Link className="text-link" href={`/learn/${system.learnSlug}`}>Read the guide to this market &rarr;</Link></div>}
       </div>
     )
   }
@@ -51,17 +51,17 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
         </div>
       )}
       <div>
-        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>DISTRIBUTION</div>
+        <div className="ui-heading text-micro mb-[6px]" style={{ color: pillar.accent }}>DISTRIBUTION</div>
         <div><strong className="text-text-primary">Live board.</strong> {system.family}.{system.gap ? '' : ` ${LIVE_ENGINE.summary}`}</div>
         {model && <div className="mt-1.5"><strong className="text-text-primary">Research model.</strong> {model.trained ? model.distribution : 'None trained for this stat.'}</div>}
       </div>
       <div>
-        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>WHAT THE LIVE BOARD LOOKS AT</div>
+        <div className="ui-heading text-micro mb-[6px]" style={{ color: pillar.accent }}>WHAT THE LIVE BOARD LOOKS AT</div>
         <ul className="m-0 pl-4.5">{system.features.map(f => <li key={f}>{f}</li>)}</ul>
       </div>
       {live && (
         <div>
-          <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>LIVE BOARD ACCURACY</div>
+          <div className="ui-heading text-micro mb-2" style={{ color: pillar.accent }}>LIVE BOARD ACCURACY</div>
           <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
             <Stat label="SAMPLE" value={live.sample} />
             <Stat label="PLAYER-GAMES" value={live.n.toLocaleString('en-US')} />
@@ -72,7 +72,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
         </div>
       )}
       <div>
-        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>RESEARCH MODEL VALIDATION</div>
+        <div className="ui-heading text-micro mb-2" style={{ color: pillar.accent }}>RESEARCH MODEL VALIDATION</div>
         <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
           <Stat label="SAMPLE" value={v?.sample ?? '--'} />
           <Stat label="MAE (MODEL VS BASELINE)" value={v ? pair(v.mae, v.baselineMae, 3) : '--'} title="Lower is better; the baseline is the best trailing-average forecaster in the study" />
@@ -97,7 +97,7 @@ export function SportEvidenceNote({ sport }: { sport: ProjectionSport }) {
   return (
     <div style={{ ...CARD, marginTop: '16px' }}>
       <div>
-        <div className="ui-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '6px' }}>KEY FEATURES (RESEARCH MODEL)</div>
+        <div className="ui-heading text-micro mb-[6px]" style={{ color: pillar.accent }}>KEY FEATURES (RESEARCH MODEL)</div>
         <ul className="m-0 pl-4.5">{spec.features.map(f => <li key={f}>{f}</li>)}</ul>
       </div>
       <div><strong className="text-text-primary">Against prices.</strong> {spec.marketVerdict}</div>

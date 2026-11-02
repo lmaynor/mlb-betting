@@ -24,7 +24,7 @@ const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
 export default function CompareOddsJamAlternativePage() {
   return (
     <div className="max-w-[860px] mx-auto pt-8 px-5 pb-12">
-      <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
+      <h1 className="text-[24px] font-bold text-text-primary" style={{ margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
       <div className="article-body">
         <p>
           Sports betting tools fall into three groups: odds scanners, prop research tools and bet trackers. beezy.fyi is
@@ -33,7 +33,7 @@ export default function CompareOddsJamAlternativePage() {
           and annual billing, and prices change, so confirm current pricing with the vendor.
         </p>
       </div>
-      <div style={{ overflowX: 'auto', margin: '16px 0 24px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)' }}>
+      <div className="overflow-x-auto border border-separator-border rounded-control bg-background-primary-default" style={{ margin: '16px 0 24px' }}>
         <table className="w-full border-collapse">
           <thead><tr><th style={th}>Tool</th><th style={th}>Price</th><th style={th}>What it is</th></tr></thead>
           <tbody>

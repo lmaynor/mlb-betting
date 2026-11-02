@@ -65,7 +65,7 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                     ) : isOutlier ? (
                       <span className="ui-heading text-micro text-link border border-[color:#38bdf8] rounded-chip py-[1px] px-[5px] bg-[rgba(56,189,248,0.12)]">+EV OUTLIER</span>
                     ) : null}
-                    <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{p.score}</span>
+                    <span className="mono font-bold" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{p.score}</span>
                   </div>
                 </td>
                 <td className={cx('mono', TD)} style={{ color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{fmtEdge(p.edge)}</td>

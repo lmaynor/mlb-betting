@@ -20,7 +20,7 @@ export default function HomePage() {
   return (
     <div className="max-w-page mx-auto py-0 px-6">
       <Suspense fallback={
-        <div style={{ marginTop: "28px", height: '320px', borderRadius: '8px', border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)' }} className="reveal" />
+        <div style={{ marginTop: "28px" }} className="reveal h-[320px] rounded-control border border-separator-border bg-background-primary-default" />
       }>
         <Hero />
       </Suspense>

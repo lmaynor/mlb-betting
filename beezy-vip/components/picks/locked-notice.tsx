@@ -9,7 +9,7 @@ export function LockedNotice({ locked, shown = 0, what, plan }: { locked: number
       <span className="text-neutral-300">
         <span className="mono text-text-primary font-bold">{locked}</span>{shown > 0 ? ' more' : ''} {what} today. {plan}
       </span>
-      <Link href="/pricing" style={{ color: 'var(--link)', fontSize: '12.5px', whiteSpace: 'nowrap' }}>{PRE_LAUNCH ? 'See plans' : 'Upgrade'} &rarr;</Link>
+      <Link className="text-link text-[12.5px] whitespace-nowrap" href="/pricing">{PRE_LAUNCH ? 'See plans' : 'Upgrade'} &rarr;</Link>
     </div>
   )
 }

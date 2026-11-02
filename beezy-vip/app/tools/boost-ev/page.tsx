@@ -66,10 +66,10 @@ export default function BoostEvPage() {
 
       {ev != null && kellyPct != null ? (
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
-            <div style={{ padding: '20px', borderRight: B }}>
+          <div className="grid grid-cols-2" style={{ borderBottom: B }}>
+            <div className="p-5" style={{ borderRight: B }}>
               <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Expected value</div>
-              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
+              <div className="mono text-[28px] font-bold" style={{ color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
               </div>
               <div className="mono text-cozy text-text-secondary mt-1">

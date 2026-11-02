@@ -45,7 +45,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
         </span>
       </div>
       <div className="overflow-x-auto border border-separator-border rounded-control bg-background-primary-default">
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: tracked ? '1040px' : '1240px' }}>
+        <table className="w-full border-collapse" style={{ minWidth: tracked ? '1040px' : '1240px' }}>
           <thead>
             <tr>
               <th style={TH}>SYSTEM</th>
@@ -88,12 +88,12 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
               return (
                 <tr key={s.key} className="sys-row">
                   <td style={TD}>
-                    <Link href={href} style={{ textDecoration: 'none' }}>
-                      <span className="ui-heading" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
+                    <Link className="no-underline" href={href}>
+                      <span className="ui-heading text-micro font-semibold tracking-[0.05em] py-[3px] px-2" style={{ borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
                     </Link>
                   </td>
                   <td style={{ ...TD, fontSize: '13.5px', fontWeight: 600 }}>
-                    <Link href={href} style={{ color: 'var(--color-text-primary)', textDecoration: 'none' }}>{s.name}</Link>
+                    <Link className="text-text-primary no-underline" href={href}>{s.name}</Link>
                   </td>
                   <td style={{ ...TD, fontSize: '12px', color: 'var(--color-neutral-300)' }}>{s.market === 'game' ? 'Game' : 'Prop'}</td>
                   <td style={{ ...TD, fontSize: '12px', color: 'var(--color-neutral-300)' }}>{s.family}</td>
@@ -124,7 +124,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                     </>
                   )}
                   <td style={{ ...TD, fontSize: '12px' }}>
-                    <Link href={href} style={{ color: 'var(--link)', textDecoration: 'none' }}>View System -&gt;</Link>
+                    <Link className="text-link no-underline" href={href}>View System -&gt;</Link>
                   </td>
                 </tr>
               )
@@ -132,9 +132,9 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
           </tbody>
         </table>
       </div>
-      <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '10px 2px 0', lineHeight: 1.55 }}>
+      <p className="text-[11.5px] text-text-secondary leading-[1.55]" style={{ margin: '10px 2px 0' }}>
         {tracked ? (
-          <>Log-only systems record every pick but are not counted as a live card until they clear 200 settled bets. Every result is public on the <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link> ledger.</>
+          <>Log-only systems record every pick but are not counted as a live card until they clear 200 settled bets. Every result is public on the <Link className="text-link" href="/results">Results</Link> ledger.</>
         ) : (
           <>The board runs an empirical estimator. LIVE MAE is that estimator&rsquo;s accuracy on past games against the trailing-5 average; RESEARCH MAE, Brier and blend c belong to the trained research models, which the board does not run. No projection is tracked in the public results yet, and none of these figures is edge against a price. <span className="mono">--</span> means no study produced a number.</>
         )}

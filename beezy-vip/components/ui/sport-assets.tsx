@@ -12,7 +12,7 @@ export function TeamLogo({ sport, team, size = 24, dark = true }: {
 }) {
   const [bad, setBad] = useState(false)
   const src = teamLogoUrl(sport, team, { dark })
-  if (!src || bad) return <span aria-hidden style={{ display: 'inline-block', width: size, height: size }} />
+  if (!src || bad) return <span className="inline-block" aria-hidden style={{ width: size, height: size }} />
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={team ?? ''} width={size} height={size} loading="lazy" decoding="async"
     onError={() => setBad(true)} style={{ objectFit: 'contain', flex: '0 0 auto' }} />
@@ -35,7 +35,7 @@ export function PlayerHeadshot({ sport, id, name, size = 48 }: {
 export function SportLogo({ sport, team, size = 20 }: { sport: LogoSport; team: string | null | undefined; size?: number }) {
   const [bad, setBad] = useState(false)
   const src = anyTeamLogoUrl(sport, team)
-  if (!src || bad) return <span aria-hidden style={{ display: 'inline-block', width: size, height: size, flex: '0 0 auto' }} />
+  if (!src || bad) return <span className="inline-block flex-none" aria-hidden style={{ width: size, height: size }} />
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt="" width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
     onError={() => setBad(true)} style={{ objectFit: 'contain', flex: '0 0 auto' }} />

@@ -18,18 +18,19 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (
-    <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
+    <nav className="border-b border-b-[color:var(--color-separator-border)] bg-background-secondary-default" aria-label={`${pillar.shortName} views`}>
       <div className="gutter-m max-w-page mx-auto py-0 px-6 flex items-center justify-between gap-y-1 gap-x-4 flex-wrap">
         <div className="flex items-baseline gap-2.5 py-2.5 px-0">
-          <span style={{ fontSize: '13px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
+          <span className="text-cozy font-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
           <span className="mono text-[11.5px] text-text-secondary">&middot; {n} Systems</span>
         </div>
         <div className="flex gap-0.5">
           {tabs.map(t => (
-            <Link key={t.id} href={t.href} aria-current={active === t.id ? 'page' : undefined} className="tap-m"
-              style={{ display: 'inline-flex', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '10px 12px', textDecoration: 'none',
+            <Link key={t.id} href={t.href} aria-current={active === t.id ? 'page' : undefined} className="tap-m inline-flex text-compact font-semibold tracking-fine py-[10px] px-3 no-underline mb-[-1px]"
+              style={{
                 color: active === t.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                borderBottom: `2px solid ${active === t.id ? pillar.accent : 'transparent'}`, marginBottom: '-1px' }}>
+                borderBottom: `2px solid ${active === t.id ? pillar.accent : 'transparent'}`,
+              }}>
               {t.label}
             </Link>
           ))}

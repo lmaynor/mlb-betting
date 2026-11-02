@@ -9,7 +9,7 @@ export function HowItWorks() {
   return (
     <section className="pt-8">
       <h2 className="mb-3 text-headline-bold text-text-primary">How it works</h2>
-      <div className="steps-grid overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card" style={{ gap: 0 }}>
+      <div className="steps-grid overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card gap-0">
         {STEPS.map((s, i) => (
           <div key={s.num} className={i === 0 ? 'flex gap-2.5 px-3.5 py-3' : 'flex gap-2.5 border-l border-border-table px-3.5 py-3'}>
             <span className="mono flex size-6 shrink-0 items-center justify-center rounded-md border border-[rgba(87,242,135,0.35)] text-micro font-bold text-signal">{s.num}</span>

@@ -41,10 +41,13 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
-              className="mono"
-              style={{ fontSize: '11.5px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none',
-                color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)', background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
-                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}` }}>
+              className="mono text-[11.5px] font-semibold py-[5px] px-[10px] no-underline"
+              style={{
+                borderRadius: '6px',
+                color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)',
+                background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
+                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}`,
+              }}>
               {r}D
             </Link>
           ))}
@@ -68,10 +71,10 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         <HistoryTable days={history} />
       )}
 
-      <p style={{ fontSize: '11.5px', color: 'var(--color-text-secondary)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
+      <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
         Each day shows that day&rsquo;s ten highest-scoring player picks from the tracked MLB card and +EV alerts, one row per prop at the best book, ranked the same way as
-        today&rsquo;s <Link href="/picks" style={{ color: 'var(--link)' }}>Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
-        are excluded. This is not the staked ledger: see <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link> for that.
+        today&rsquo;s <Link className="text-link" href="/picks">Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
+        are excluded. This is not the staked ledger: see <Link className="text-link" href="/results">Results</Link> for that.
         NFL, NHL and NBA picks are not tracked yet, so they have no history.
       </p>
     </div>

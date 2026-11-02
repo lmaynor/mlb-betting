@@ -167,7 +167,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: { label: string
       <span className="ui-heading flex justify-between text-text-secondary">
         {label}<span className="mono text-text-primary">{fmt(value)}</span>
       </span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ accentColor: '#57f287', padding: 0, background: 'transparent', border: 'none' }} />
+      <input className="p-0 bg-transparent border-0" type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ accentColor: '#57f287' }} />
     </label>
   )
 }
@@ -261,7 +261,7 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
                 const b = bookDisplay(r.book)
                 return (
                   <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
+                    <Td><span className="text-[11.5px] font-bold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>

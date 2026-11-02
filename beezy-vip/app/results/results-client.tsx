@@ -159,7 +159,7 @@ const PnLTooltip = ({ active, payload, label }: any) => {
       {payload
         .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
         .map((p: any) => (
-          <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? 'var(--color-text-primary)', marginBottom: '2px' }}>
+          <div className="mb-[2px]" key={p.dataKey} style={{ color: PILL[p.dataKey] ?? 'var(--color-text-primary)' }}>
             {p.dataKey}: {p.value >= 0 ? '+' : '-'}${Math.abs(p.value).toFixed(0)}
           </div>
         ))}
@@ -173,7 +173,7 @@ const EdgeTooltip = ({ active, payload, label }: any) => {
     <div className="rounded-lg border border-separator-border bg-background-primary-default px-3.5 py-2.5 font-mono text-mini shadow-dropdown">
       <div className="mb-1.5 text-text-secondary">{label}</div>
       {payload.map((p: any) => (
-        <div key={p.dataKey} style={{ color: p.color, marginBottom: '2px' }}>
+        <div className="mb-[2px]" key={p.dataKey} style={{ color: p.color }}>
           {p.dataKey === 'edge' ? 'Avg edge' : 'Realized ROI'}: {p.value >= 0 ? '+' : ''}{p.value}%
         </div>
       ))}

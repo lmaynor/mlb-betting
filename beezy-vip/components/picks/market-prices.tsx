@@ -16,7 +16,7 @@ function Empty({ title, body, cta }: { title: string; body: string; cta?: { href
     <div style={{ ...CARD_STYLE, padding: '36px 20px', textAlign: 'center' }}>
       <div className="text-text-primary font-semibold mb-1.5">{title}</div>
       <div className="text-text-secondary text-cozy max-w-[62ch] mx-auto leading-[1.55]">{body}</div>
-      {cta && <Link href={cta.href} className="btn btn-ghost" style={{ marginTop: '16px' }}>{cta.label}</Link>}
+      {cta && <Link href={cta.href} className="btn btn-ghost mt-4">{cta.label}</Link>}
     </div>
   )
 }
@@ -50,7 +50,7 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
     <div className="grid gap-4">
       <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[12.5px] text-neutral-300 leading-[1.55]">
         <strong className="text-link">PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
-        {' '}Kalshi asks are on the <Link href="/ev" style={{ color: 'var(--link)' }}>Odds Terminal</Link>.
+        {' '}Kalshi asks are on the <Link className="text-link" href="/ev">Odds Terminal</Link>.
       </div>
       {rows.length === 0
         ? <Empty title="No prices beating the market" body={`No ${short} prop price is beating the other books at the moment. Rows appear around game windows, before the game starts.`} cta={{ href: '/ev', label: 'Open the Odds Terminal' }} />
@@ -73,7 +73,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
             const b = bookDisplay(r.book)
             const point = r.point ?? r.line
             return (
-              <tr key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`} style={{ borderBottom: '1px solid var(--color-border-table)' }}>
+              <tr className="border-b border-b-[color:var(--color-border-table)]" key={`${r.game_key}-${r.player_norm ?? r.player}-${r.stat ?? r.market}-${point}-${r.side}-${r.book}`}>
                 <td className="py-2.5 px-3 text-text-primary font-semibold">
                   <span className="inline-flex items-center gap-2">
                     {headshotOf(sport, r) != null && <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />}
@@ -84,13 +84,13 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                 <td className="mono py-2.5 px-3 text-neutral-300">{(r.game_key ?? '').split(':')[2]}</td>
                 <td className="py-2.5 px-3 text-neutral-300">{String(r.side).toUpperCase()}</td>
                 <td className="py-2.5 px-3">
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{b.label}</span>
+                  <span className="text-mini font-bold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
                 </td>
                 <td className="mono py-2.5 px-3">{formatOdds(r.american)}</td>
                 <td className="mono py-2.5 px-3">{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
-                <td className="mono" style={{ padding: '10px 12px', color: r.n_books >= 3 ? 'var(--color-neutral-300)' : 'var(--warn)' }}>{r.n_books}</td>
-                <td className="mono" style={{ padding: '10px 12px', fontWeight: 700, color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
-                <td className="ui-heading" style={{ padding: '10px 12px', fontSize: '10px', color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'FLAGGED' : reasonLabel(r.reason)}</td>
+                <td className="mono py-[10px] px-3" style={{ color: r.n_books >= 3 ? 'var(--color-neutral-300)' : 'var(--warn)' }}>{r.n_books}</td>
+                <td className="mono py-[10px] px-3 font-bold" style={{ color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
+                <td className="ui-heading py-[10px] px-3 text-micro" style={{ color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'FLAGGED' : reasonLabel(r.reason)}</td>
               </tr>
             )
           })}

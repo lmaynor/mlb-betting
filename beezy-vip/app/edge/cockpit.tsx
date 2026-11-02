@@ -130,7 +130,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
   const [bad, setBad] = useState(false)
   const src = headshotUrlById(r.sport, r.sport === 'nfl' ? r.headshot_id : r.player_id)
   return (
-    <span style={{ width: size, height: size, flex: '0 0 auto', borderRadius: size > 48 ? '14px' : '10px', background: 'var(--color-background-tertiary-default)', border: `1px solid ${HAIR}`, display: 'inline-flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', color: 'var(--color-text-secondary)', fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
+    <span className="flex-none bg-background-tertiary-default inline-flex items-end justify-center overflow-hidden text-text-secondary" style={{ width: size, height: size, borderRadius: size > 48 ? '14px' : '10px', border: `1px solid ${HAIR}`, fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
       {src && !bad ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
@@ -144,13 +144,13 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
 
 function BookBadge({ book }: { book: string | null | undefined }) {
   const b = bookDisplay(book)
-  return <span style={{ fontSize: '11px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px', whiteSpace: 'nowrap' }}>{b.label}</span>
+  return <span className="text-mini font-bold py-[2px] px-[7px] whitespace-nowrap" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
 }
 
 function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' }) {
   const pos = (ev ?? 0) >= 0
   return (
-    <span className="mono" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, color: 'var(--color-background-secondary-default)', background: pos ? GOOD : BAD, borderRadius: '6px', padding: size === 'lg' ? '5px 10px' : '3px 7px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
       {evText(ev)}
     </span>
   )
@@ -347,7 +347,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
               style={{ gridTemplateColumns: cols }}>
               <span role="cell" className="flex items-center gap-1.5 flex-wrap">
                 <BookBadge book={quote.book} />
-                {flagged && <span className="ui-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
+                {flagged && <span className="ui-heading text-micro" style={{ color: SKY }}>TARGET</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
@@ -378,7 +378,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           <Avatar r={r} size={56} />
           <div className="min-w-0 flex-1">
             <div className="mb-[3px] flex flex-wrap items-center gap-2">
-              <span className="ui-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
+              <span className="ui-heading text-micro py-[1px] px-[6px]" style={{ color: accent, border: `1px solid ${accent}55`, borderRadius: '4px' }}>{r.sport.toUpperCase()}</span>
               <span className="mono text-caption-1-regular text-text-secondary">{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
             </div>
             <h2 className="ui-display text-[clamp(19px,3vw,24px)] leading-[1.15] [overflow-wrap:anywhere]">{r.player ?? 'Unknown player'}</h2>

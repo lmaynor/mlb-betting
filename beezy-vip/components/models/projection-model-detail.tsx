@@ -14,9 +14,9 @@ const maeDigits = (x: number) => (x >= 10 ? 1 : 3)
 
 function StatBlock({ label, value, sub, accent, last }: { label: string; value: string; sub?: string; accent?: boolean; last?: boolean }) {
   return (
-    <div style={{ padding: '18px', borderRight: last ? undefined : B }}>
-      <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>{label}</div>
-      <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
+    <div className="p-[18px]" style={{ borderRight: last ? undefined : B }}>
+      <div className="mono text-micro tracking-label text-text-secondary mb-[6px]" style={{ textTransform: 'uppercase' as const }}>{label}</div>
+      <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
       {sub && <div className="times text-mini text-text-secondary">{sub}</div>}
     </div>
   )
@@ -26,10 +26,10 @@ function StatBlock({ label, value, sub, accent, last }: { label: string; value: 
 function VersusBar({ label, model, baseline, color }: { label: string; model: number; baseline: number; color: string }) {
   const max = Math.max(model, baseline) || 1
   const row = (name: string, v: number, c: string) => (
-    <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 56px', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+    <div className="grid items-center gap-2 mb-[5px]" style={{ gridTemplateColumns: '64px 1fr 56px' }}>
       <span className="mono text-micro text-text-secondary">{name}</span>
-      <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--slate)', overflow: 'hidden' }}>
-        <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: c, width: `${Math.round((v / max) * 100)}%` }} />
+      <div className="h-[6px] rounded-[var(--radius-pill)] overflow-hidden" style={{ background: 'var(--slate)' }}>
+        <div className="h-[6px] rounded-[var(--radius-pill)]" style={{ background: c, width: `${Math.round((v / max) * 100)}%` }} />
       </div>
       <span className="mono text-micro text-neutral-300 text-right">{v.toFixed(v >= 10 ? 1 : 3)}</span>
     </div>
@@ -63,9 +63,9 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
   return (
     <div className="max-w-page mx-auto py-10 px-6">
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
+        <Link href="/models" className="times text-cozy text-link no-underline">Models</Link>
         <span className="mono text-mini text-text-secondary">&middot;</span>
-        <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
+        <span className="mono text-compact font-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
         <span className="mono text-mini text-text-secondary">&middot;</span>
         <SystemBadge system={system.key} />
       </div>
@@ -73,11 +73,11 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       <div className="mb-7">
         <div className="flex items-center gap-3 mb-2.5 flex-wrap">
           <h1 className="ui-display text-[30px] text-text-primary">{pillar.shortName} {system.name}</h1>
-          <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>empirical_ewm_v2</span>
+          <span className="mono text-mini text-neutral-300 py-[3px] px-[10px]" style={{ border: B, borderRadius: 'var(--radius-pill)' }}>empirical_ewm_v2</span>
           <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'DATA GAP' : 'UNVALIDATED'}</span>
         </div>
         <p className="text-cozy text-neutral-300 leading-[1.65] max-w-[640px] mb-2.5">{system.description}</p>
-        <Link href={`/picks/${sport}/${system.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
+        <Link href={`/picks/${sport}/${system.slug}`} className="times text-cozy text-link no-underline">
           Today&apos;s {system.name.toLowerCase()} board &rarr;
         </Link>
       </div>
@@ -89,7 +89,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       )}
 
       {!gap && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', overflow: 'hidden', marginBottom: '28px' }}>
+        <div className="grid grid-cols-[repeat(5,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <StatBlock label="Live MAE" value={live ? live.mae.toFixed(maeDigits(live.mae)) : '--'} sub={live ? `last-5 average ${live.baselineMae.toFixed(maeDigits(live.baselineMae))}` : 'no live accuracy file'} />
           <StatBlock label="Vs last-5 average" value={live ? `${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}%` : '--'} accent={live != null && live.dMae < 0} sub={live ? `se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%, lower is better` : undefined} />
           <StatBlock label="Player-games" value={live ? live.n.toLocaleString('en-US') : '--'} sub="live accuracy sample" />
@@ -99,7 +99,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       )}
 
       <div className="grid grid-cols-2 gap-4 mb-7">
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
+        <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="ui-display text-[16px] text-text-primary mb-4">Model configuration</div>
           {[
             { label: 'Live engine', value: gap ? 'Not projected' : LIVE_ENGINE.name },
@@ -109,16 +109,16 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
             { label: 'Validation', value: v?.sample ?? 'Live accuracy on past games, earlier games only' },
             { label: 'Public record', value: 'Not tracked in the results' },
           ].map((row, i, arr) => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', padding: '9px 0', borderBottom: i < arr.length - 1 ? B : undefined }}>
+            <div className="flex justify-between gap-4 py-[9px] px-0" key={row.label} style={{ borderBottom: i < arr.length - 1 ? B : undefined }}>
               <span className="mono text-mini text-text-secondary shrink-0">{row.label}</span>
               <span className="mono text-mini font-semibold text-text-primary text-right">{row.value}</span>
             </div>
           ))}
         </div>
 
-        <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
+        <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="flex items-baseline gap-2 mb-4">
-            <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--color-text-primary)' }}>Accuracy</span>
+            <span className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Accuracy</span>
             <span className="mono text-micro text-text-secondary">model vs baseline, shorter bar is better</span>
           </div>
           {live && <VersusBar label="Live engine MAE vs last-5 average" model={live.mae} baseline={live.baselineMae} color={color} />}
@@ -134,25 +134,25 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
         </div>
       </div>
 
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', overflow: 'hidden', marginBottom: '28px' }}>
-        <div style={{ padding: '14px 18px', borderBottom: B, background: 'var(--color-background-secondary-default)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--color-text-primary)' }}>Feature List</div>
+      <div className="bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+        <div className="py-[14px] px-[18px] bg-background-secondary-default" style={{ borderBottom: B }}>
+          <div className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Feature List</div>
           <div className="mono text-micro text-text-secondary mt-[3px]">{system.features.length} live-board inputs &middot; {spec.features.length} research-model inputs</div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', background: 'var(--color-background-secondary-default)', borderBottom: B }}>
-          {['Used by', 'Feature'].map(h => <div key={h} className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)', padding: '9px 14px' }}>{h}</div>)}
+        <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: '120px 1fr', borderBottom: B }}>
+          {['Used by', 'Feature'].map(h => <div key={h} className="mono text-micro tracking-label text-text-secondary py-[9px] px-[14px]" style={{ textTransform: 'uppercase' as const }}>{h}</div>)}
         </div>
         {[...system.features.map(f => ({ f, used: 'Live board' })), ...(gap ? [] : spec.features.map(f => ({ f, used: 'Research model' })))].map(({ f, used }, i, arr) => (
-          <div key={`${used}-${f}`} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: i < arr.length - 1 ? B : undefined, alignItems: 'center' }}>
+          <div className="grid items-center" key={`${used}-${f}`} style={{ gridTemplateColumns: '120px 1fr', borderBottom: i < arr.length - 1 ? B : undefined }}>
             <div className="py-2.5 px-3.5">
-              <span className="mono" style={{ fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)', color: used === 'Live board' ? 'var(--signal)' : 'var(--color-text-secondary)', border: `1px solid ${used === 'Live board' ? 'var(--win-border)' : 'var(--color-border-button-default)'}`, background: used === 'Live board' ? 'var(--win-wash)' : 'transparent' }}>{used}</span>
+              <span className="mono text-micro font-semibold py-[3px] px-2" style={{ borderRadius: 'var(--radius-pill)', color: used === 'Live board' ? 'var(--signal)' : 'var(--color-text-secondary)', border: `1px solid ${used === 'Live board' ? 'var(--win-border)' : 'var(--color-border-button-default)'}`, background: used === 'Live board' ? 'var(--win-wash)' : 'transparent' }}>{used}</span>
             </div>
             <div className="text-[11.5px] text-neutral-300 py-2.5 px-3.5">{f}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '18px 20px', marginBottom: '28px', display: 'grid', gap: '10px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.6 }}>
+      <div className="bg-background-primary-default py-[18px] px-5 mb-7 grid gap-[10px] text-[12.5px] text-neutral-300 leading-[1.6]" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div><strong className="text-text-primary">What the live board runs.</strong> {gap ? 'Nothing: this stat is not projected.' : LIVE_ENGINE.summary}</div>
         {model && <div><strong className="text-text-primary">Research model result.</strong> {model.verdict}</div>}
         <div><strong className="text-text-primary">Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
@@ -161,8 +161,8 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       </div>
 
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <Link href={`/picks/${sport}/systems`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>&larr; All {pillar.shortName} systems</Link>
-        <Link href={`/edge/projections?league=${sport}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Every {pillar.shortName} projection in Prop Research &rarr;</Link>
+        <Link href={`/picks/${sport}/systems`} className="times text-cozy text-link no-underline">&larr; All {pillar.shortName} systems</Link>
+        <Link href={`/edge/projections?league=${sport}`} className="times text-cozy text-link no-underline">Every {pillar.shortName} projection in Prop Research &rarr;</Link>
       </div>
     </div>
   )

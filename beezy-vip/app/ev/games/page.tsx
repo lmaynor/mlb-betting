@@ -62,7 +62,7 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
       </div>
       {body}
       <p className="text-compact text-text-secondary mt-4">
-        Looking for MLB game picks with a graded record? They are under <Link href="/picks/games" style={{ color: 'var(--link)' }}>Picks &rarr; Game Picks</Link>.
+        Looking for MLB game picks with a graded record? They are under <Link className="text-link" href="/picks/games">Picks &rarr; Game Picks</Link>.
       </p>
     </div>
   )

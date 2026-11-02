@@ -33,7 +33,7 @@ export default function OddsCalculatorPage() {
 
       {result && (
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden mb-4">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', background: 'var(--color-background-secondary-default)', borderBottom: B }}>
+          <div className="grid grid-cols-[repeat(3,1fr)] bg-background-secondary-default" style={{ borderBottom: B }}>
             <div /><div className="mono py-[9px] px-3 text-micro tracking-label uppercase text-text-secondary">Side 1</div>
             <div className="mono py-[9px] px-3 text-micro tracking-label uppercase text-text-secondary">Side 2</div>
           </div>
@@ -43,7 +43,7 @@ export default function OddsCalculatorPage() {
             { label: 'Fair Prob',    v1: formatProb(result.fair1),                v2: formatProb(result.fair2) },
             { label: 'Fair Odds',    v1: formatOdds(probToAmerican(result.fair1)),v2: formatOdds(probToAmerican(result.fair2)) },
           ].map((row, i) => (
-            <div key={row.label} style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', borderBottom: i < 3 ? B : undefined }}>
+            <div className="grid grid-cols-[repeat(3,1fr)]" key={row.label} style={{ borderBottom: i < 3 ? B : undefined }}>
               <div className="mono py-2.5 px-3 text-mini text-text-secondary">{row.label}</div>
               <div className="mono py-2.5 px-3 text-compact font-semibold text-text-primary">{row.v1}</div>
               <div className="mono py-2.5 px-3 text-compact font-semibold text-text-primary">{row.v2}</div>
@@ -51,7 +51,7 @@ export default function OddsCalculatorPage() {
           ))}
           <div className="grid grid-cols-3 bg-background-primary-default">
             <div className="mono py-2.5 px-3 text-mini text-text-secondary">Vig</div>
-            <div className="mono" style={{ padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: 'var(--loss)', gridColumn: 'span 2' }}>{result.vig.toFixed(2)}%</div>
+            <div className="mono py-[10px] px-3 text-compact font-semibold text-loss" style={{ gridColumn: 'span 2' }}>{result.vig.toFixed(2)}%</div>
           </div>
         </div>
       )}

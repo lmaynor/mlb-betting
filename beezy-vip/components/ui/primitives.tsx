@@ -27,8 +27,8 @@ export function SystemBadge({ system }: { system: string }) {
   const label = systemLabel(system, true)
   return (
     <span
-      className="ui-heading"
-      style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
+      className="ui-heading text-micro tracking-[0.05em] py-[3px] px-2 inline-block"
+      style={{ borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border }}
     >
       {label}
     </span>
@@ -45,8 +45,8 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
         {label}
       </span>
       <span
-        className="mono"
-        style={{ fontSize: '28px', fontWeight: 600, lineHeight: 1, color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}
+        className="mono text-[28px] font-semibold leading-[1]"
+        style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}
       >
         {value}
       </span>
@@ -84,7 +84,7 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
   const pos = value >= 0
   const unit = stake != null && stake > 0 ? stake : 10
   return (
-    <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: pos ? 'var(--signal)' : 'var(--loss)' }}>
+    <span className="mono text-compact font-semibold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{(value / unit).toFixed(2)}u
     </span>
   )

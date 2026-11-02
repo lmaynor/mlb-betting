@@ -19,15 +19,17 @@ export function ToolHeader({ title, hint, current }: { title: string; hint?: str
         {current && (
           <nav aria-label="Calculators" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
             {CALCULATORS.map(c => (
-              <Link key={c.href} href={c.href} aria-current={c.href === current ? 'page' : undefined}
-                style={{ fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
-                  color: c.href === current ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', background: c.href === current ? 'var(--color-background-tertiary-default)' : 'transparent' }}>
+              <Link className="text-compact font-semibold py-[5px] px-[10px] rounded-[6px] no-underline whitespace-nowrap" key={c.href} href={c.href} aria-current={c.href === current ? 'page' : undefined}
+                style={{
+                  color: c.href === current ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
+                  background: c.href === current ? 'var(--color-background-tertiary-default)' : 'transparent',
+                }}>
                 {c.label}
               </Link>
             ))}
           </nav>
         )}
-        <Link href="/tools" style={{ fontSize: '12.5px', color: 'var(--link)', textDecoration: 'none' }}>All tools &rarr;</Link>
+        <Link className="text-[12.5px] text-link no-underline" href="/tools">All tools &rarr;</Link>
       </span>
     </div>
   )

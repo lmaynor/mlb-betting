@@ -7,9 +7,9 @@ const HAIR = 'var(--color-separator-border)'
 
 function Metric({ label, value, tone, sub }: { label: string; value: React.ReactNode; tone?: string; sub?: React.ReactNode }) {
   return (
-    <div style={{ padding: '10px 18px', borderRight: `1px solid ${HAIR}`, display: 'grid', gap: '3px', alignContent: 'center', minWidth: 0 }}>
+    <div className="py-[10px] px-[18px] grid gap-[3px] min-w-0" style={{ borderRight: `1px solid ${HAIR}`, alignContent: 'center' }}>
       <span className="ui-heading text-text-secondary">{label}</span>
-      <span className="mono" style={{ fontSize: '16px', fontWeight: 700, color: tone ?? 'var(--color-text-primary)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{value}</span>
+      <span className="mono text-[16px] font-bold leading-[1.1] whitespace-nowrap" style={{ color: tone ?? 'var(--color-text-primary)' }}>{value}</span>
       {sub != null && <span className="mono text-mini text-text-secondary whitespace-nowrap">{sub}</span>}
     </div>
   )
@@ -31,12 +31,12 @@ export function LedgerStrip({ h }: { h: EvHeadline | null }) {
         <Metric label="1/4 KELLY" value={fmtMoney(h.kelly_ending_bankroll)} tone={tone(h.kelly_roi_pct)} sub={`from ${fmtMoney(h.bankroll)} \u00b7 ${roi(h.kelly_roi_pct)} ROI`} />
         <details style={{ marginLeft: 'auto', padding: '10px 18px', alignSelf: 'center', flex: '1 1 260px', minWidth: 0 }}>
           <summary style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)', cursor: 'pointer', textAlign: 'right' }}>Methodology &amp; audit notes</summary>
-          <p className="times" style={{ margin: '10px 0 0', fontSize: '12px', color: 'var(--color-neutral-300)', lineHeight: 1.6 }}>
+          <p className="times text-compact text-neutral-300 leading-[1.6]" style={{ margin: '10px 0 0' }}>
             Paper results only: no slippage, limits or line movement, and the same prop flagged at several books counts several
             times ({h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts). Voids are excluded
             from ROI; Kelly is {fmtPct(h.kelly_cap, 0)} per-bet capped and non-compounding. Rows on this screen are unvalidated market
             signals and are not part of this record. Per-book results on the{' '}
-            <Link href="/analytics?tab=bankroll" style={{ color: 'var(--link)' }}>analytics page</Link>.
+            <Link className="text-link" href="/analytics?tab=bankroll">analytics page</Link>.
           </p>
         </details>
       </div>

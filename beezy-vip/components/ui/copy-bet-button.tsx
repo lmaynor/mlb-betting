@@ -25,13 +25,13 @@ export function CopyBetButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="mono"
+      className="mono text-micro py-[3px] px-[9px] cursor-pointer"
       style={{
-        fontSize: '10px', color: copied ? 'var(--signal)' : 'var(--color-text-secondary)',
+        color: copied ? 'var(--signal)' : 'var(--color-text-secondary)',
         border: copied ? '1px solid var(--win-border)' : B,
         borderRadius: 'var(--radius-sm)',
-        padding: '3px 9px', background: copied ? 'var(--win-wash)' : 'transparent',
-        cursor: 'pointer', transition: 'all 0.15s',
+        background: copied ? 'var(--win-wash)' : 'transparent',
+        transition: 'all 0.15s',
       }}
     >
       {copied ? 'Copied' : 'Copy'}

@@ -20,13 +20,13 @@ export function SystemStrip({ sport, active }: { sport: SportSlug; active: strin
   const current = active ? PICK_SYSTEMS.find(s => s.sport === sport && s.key === active) : undefined
   const systems = current && !listed.includes(current) ? [...listed, current] : listed
   return (
-    <nav aria-label={`${SPORT_PILLARS[sport].shortName} systems`} style={{ display: 'flex', gap: '6px', overflowX: 'auto', padding: '10px 16px', borderBottom: B, background: 'var(--color-background-full)' }}>
+    <nav className="flex gap-[6px] overflow-x-auto py-[10px] px-4 bg-background-full" aria-label={`${SPORT_PILLARS[sport].shortName} systems`} style={{ borderBottom: B }}>
       <Link href={`/picks/${sport}/systems`} aria-current={active == null ? 'page' : undefined} style={{ ...CHIP, ...(active == null ? ON : {}) }}>ALL SYSTEMS</Link>
       {systems.map(s => {
         const on = s.key === active
         return (
           <Link key={s.key} href={`/picks/${sport}/${s.slug}`} aria-current={on ? 'page' : undefined} style={{ ...CHIP, ...(on ? ON : {}) }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: SYSTEM_COLOR[s.key] ?? 'var(--color-text-secondary)', flex: '0 0 auto' }} />
+            <span className="w-[6px] h-[6px] flex-none" style={{ borderRadius: '50%', background: SYSTEM_COLOR[s.key] ?? 'var(--color-text-secondary)' }} />
             {s.shortName}
           </Link>
         )

@@ -20,8 +20,8 @@ export async function SlateStrip() {
   const games = Array.from(byGame.entries())
 
   return (
-    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' }}>
-      <div style={{ display: 'flex', gap: '10px', padding: '12px 16px', minWidth: 'max-content' }}>
+    <div className="overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex gap-[10px] py-3 px-4" style={{ minWidth: 'max-content' }}>
         {games.map(([key, gamePicks]) => {
           const first = gamePicks[0]
           const away = first.away_team ?? '?'
@@ -36,23 +36,20 @@ export async function SlateStrip() {
           const sysColor = topPick ? (SYSTEM_COLOR[topPick.system] ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)'
 
           return (
-            <div key={key} style={{
-              minWidth: '116px', padding: '10px 12px',
-              background: 'var(--color-background-primary-default)',
+            <div className="min-w-[116px] py-[10px] px-3 bg-background-primary-default flex flex-col gap-[6px] shrink-0" key={key} style={{
               border: `1px solid ${hasPick ? `color-mix(in oklab, ${color} 40%, var(--color-background-full))` : 'var(--color-separator-border)'}`,
               borderRadius: 'var(--radius-lg)',
-              display: 'flex', flexDirection: 'column', gap: '6px',
-              flexShrink: 0,
             }}>
               <div className="mono text-mini font-semibold text-text-primary whitespace-nowrap">
                 {away} @ {home}
               </div>
               {hasPick && topPick ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="ui-heading" style={{
-                    fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
-                    padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`, color: sysColor,
-                    border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--color-background-full))`, borderRadius: 'var(--radius-pill)',
+                  <span className="ui-heading text-micro font-semibold tracking-fine py-[2px] px-[6px]" style={{
+                    background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`,
+                    color: sysColor,
+                    border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--color-background-full))`,
+                    borderRadius: 'var(--radius-pill)',
                   }}>
                     {topPick.system}
                   </span>

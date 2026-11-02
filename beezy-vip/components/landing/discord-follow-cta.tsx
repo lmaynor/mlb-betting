@@ -31,8 +31,8 @@ export function DiscordFollowCTA() {
             href={DISCORD_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn"
-            style={{ background: '#5865f2', color: '#fff', border: '1px solid color-mix(in oklab, #5865f2 70%, white)' }}
+            className="btn bg-[#5865f2] text-white"
+            style={{ border: '1px solid color-mix(in oklab, #5865f2 70%, white)' }}
           >
             <DiscordMark size={15} color="currentColor" />
             Join free

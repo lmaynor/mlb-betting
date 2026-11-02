@@ -145,7 +145,7 @@ export function PricingSection() {
 
       <div className={cx(CARD, 'mt-5')}>
         <div className="ui-heading border-b border-separator-border px-4 py-3 text-mini text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
-        <div className="pricing-grid" style={{ gap: 0 }}>
+        <div className="pricing-grid gap-0">
           {ENGINES.map((e, i) => (
             <div key={e.n} className={cx('px-4 py-3.5', i > 0 && 'border-l border-separator-border')}>
               <div className="mb-[5px] text-body-2-semibold text-text-primary">{e.n}. {e.title}</div>
