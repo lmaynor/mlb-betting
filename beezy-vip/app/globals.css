@@ -1,4 +1,24 @@
 @import "tailwindcss";
+@import "../styles/theme.css";
+@import "../styles/typography.css";
+
+/* BoardUI is class-based dark; beezy is always dark (<html class="dark">). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* BoardUI accent ramp re-tinted to beezy Signal Green. */
+@theme {
+  --color-accent-50:  var(--color-green-50);
+  --color-accent-100: var(--color-green-100);
+  --color-accent-200: var(--color-green-200);
+  --color-accent-300: var(--color-green-300);
+  --color-accent-400: var(--color-green-400);
+  --color-accent-500: var(--color-green-500);
+  --color-accent-600: var(--color-green-600);
+  --color-accent-700: var(--color-green-700);
+  --color-accent-800: var(--color-green-800);
+  --color-accent-900: var(--color-green-900);
+  --color-accent-950: var(--color-green-950);
+}
 
 /* Tailwind v4 theme colors for the custom utility names used in
    app/dashboard/* (text-accent, text-muted, bg-accent, border-bright, ...).
@@ -160,7 +180,8 @@ img, video { max-width: 100%; height: auto; }
   --z-tooltip:  100;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Layered so Tailwind utilities (p-*, m-*) can override it; unlayered it beat them. */
+@layer base { * { box-sizing: border-box; margin: 0; padding: 0; } }
 
 html {
   background: var(--carbon);

@@ -52,7 +52,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const shell = (
-    <html lang="en" className={`${uiSans.variable} ${displaySans.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`dark ${uiSans.variable} ${displaySans.variable} ${plexMono.variable}`}>
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString([ORGANIZATION_LD, WEBSITE_LD]) }} />
         <div className="page-frame">

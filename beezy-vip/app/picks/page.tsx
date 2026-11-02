@@ -11,6 +11,7 @@ import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
 import { LIVE_SPORTS } from '@/lib/sports'
 import { filterTopPicks, isOfficialCardPlay, isEvOutlier } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
+import { cx } from '@/utils/cx'
 
 export const metadata: Metadata = {
   title: 'Top Signals',
@@ -39,77 +40,69 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <FilterBar sport="all" />
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Top Signals</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: '11px', color: 'var(--fog)', letterSpacing: '0.06em' }}>TIER:</span>
-            {[
-              { id: 'all', label: 'All Actionable' },
-              { id: 'official', label: 'Official Plays Only' },
-              { id: 'outliers', label: '+EV Outliers' },
-            ].map(t => {
-              const active = tierParam === t.id
-              const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
-              return (
-                <Link
-                  key={t.id}
-                  href={`/picks?${q}`}
-                  className="mono"
-                  style={{
-                    fontSize: '11px',
-                    minHeight: '44px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    textDecoration: 'none',
-                    background: active ? '#1e2230' : 'transparent',
-                    border: `1px solid ${active ? '#38bdf8' : '#1e2230'}`,
-                    color: active ? 'var(--chalk)' : 'var(--fog)',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {t.label}
-                </Link>
-              )
-            })}
+      <div className="mx-auto max-w-[1200px] p-6">
+        <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+          <div>
+            <h1 className="text-title-2-bold text-text-primary">Top Signals</h1>
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <span className="mono text-caption-2-medium uppercase tracking-wider text-text-secondary">Tier</span>
+              {[
+                { id: 'all', label: 'All Actionable' },
+                { id: 'official', label: 'Official Plays Only' },
+                { id: 'outliers', label: '+EV Outliers' },
+              ].map(t => {
+                const active = tierParam === t.id
+                const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
+                return (
+                  <Link
+                    key={t.id}
+                    href={`/picks?${q}`}
+                    className={cx(
+                      'button-press-motion inline-flex min-h-11 items-center rounded-2lg border px-3 text-body-2-medium no-underline',
+                      active
+                        ? 'border-accent-500 bg-button-ghost-background text-button-ghost-foreground'
+                        : 'border-border-button-default bg-transparent text-text-secondary hover:border-border-button-hover hover:bg-background-primary-hover',
+                    )}
+                  >
+                    {t.label}
+                  </Link>
+                )
+              })}
+            </div>
           </div>
+          <span className="mono text-caption-1-regular text-text-secondary">
+            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
+          </span>
         </div>
-        <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>
-          {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
-        </span>
-      </div>
 
-      {displayPicks.length === 0 ? (
-        <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center' }}>
-          <div style={{ color: 'var(--chalk)', fontWeight: 600, marginBottom: '6px' }}>{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
-          <div style={{ color: 'var(--fog)', fontSize: '13px', maxWidth: '62ch', margin: '0 auto', lineHeight: 1.55 }}>
-            {filtered ? 'Clear a filter to widen the list. ' : 'Daily boards publish once sportsbook lines post for NFL, NBA, and NHL (MLB resumes in March). '}
-            See <Link href="/picks/history" style={{ color: 'var(--link)' }}>past days</Link> in the meantime.
+        {displayPicks.length === 0 ? (
+          <div className="rounded-xl border border-separator-border bg-background-primary-default px-5 py-9 text-center shadow-card">
+            <div className="mb-1.5 text-body-semibold text-text-primary">{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
+            <div className="mx-auto max-w-[62ch] text-body-2-regular text-text-secondary">
+              {filtered ? 'Clear a filter to widen the list. ' : 'Daily boards publish once sportsbook lines post for NFL, NBA, and NHL (MLB resumes in March). '}
+              See <Link href="/picks/history" className="text-accent-400 hover:underline">past days</Link> in the meantime.
+            </div>
           </div>
+        ) : (
+          <TopPicksTable picks={displayPicks} showResult={showResult} />
+        )}
+
+        <div className="mx-0.5 mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-body-2-regular">
+          <span className="text-text-secondary">Full boards</span>
+          {LIVE_SPORTS.map(p => (
+            <Link key={p.slug} href={sportHref(p.slug)} className="text-accent-400 hover:underline">{p.shortName} &rarr;</Link>
+          ))}
+          <Link href="/picks/games" className="text-accent-400 hover:underline">Game picks &rarr;</Link>
+          <Link href="/picks/history" className="text-accent-400 hover:underline">Picks history &rarr;</Link>
         </div>
-      ) : (
-        <TopPicksTable picks={displayPicks} showResult={showResult} />
-      )}
 
-      <div style={{ display: 'flex', gap: '8px 20px', flexWrap: 'wrap', alignItems: 'baseline', margin: '12px 2px 0', fontSize: '12.5px' }}>
-        <span style={{ color: 'var(--fog)' }}>Full boards</span>
-        {LIVE_SPORTS.map(p => (
-          <Link key={p.slug} href={sportHref(p.slug)} style={{ color: 'var(--link)' }}>{p.shortName} &rarr;</Link>
-        ))}
-        <Link href="/picks/games" style={{ color: 'var(--link)' }}>Game picks &rarr;</Link>
-        <Link href="/picks/history" style={{ color: 'var(--link)' }}>Picks history &rarr;</Link>
+        <p className="mx-0.5 mt-3.5 max-w-[90ch] text-caption-1-regular text-text-secondary">
+          MLB rows are the tracked model card and +EV alerts: every one is logged at the flagged price and settled on the Results ledger.
+          NFL, NHL and NBA rows come from the daily projection boards and are unvalidated: they are not tracked in the public results yet.
+          One row per prop, at the best available book. Odds can move before you bet.
+        </p>
+        <ScoreLegend />
       </div>
-
-      <p style={{ fontSize: '11.5px', color: 'var(--fog)', margin: '14px 2px 0', lineHeight: 1.55, maxWidth: '90ch' }}>
-        MLB rows are the tracked model card and +EV alerts: every one is logged at the flagged price and settled on the Results ledger.
-        NFL, NHL and NBA rows come from the daily projection boards and are unvalidated: they are not tracked in the public results yet.
-        One row per prop, at the best available book. Odds can move before you bet.
-      </p>
-      <ScoreLegend />
-    </div>
     </div>
   )
 }
