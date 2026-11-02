@@ -34,12 +34,14 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 
 from ev.props import DFS_BOOKS, build_consensus, parse_event_props
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 from nba.props import config as C
 from nba.props import data as D
 from nba.props import dist as Dd
+from nba.props import hierarchical as Hi
 from nba.props.features import FeatureContext, ID_COLS
 
 log = logging.getLogger("nba.props.score")
@@ -131,6 +133,31 @@ def outcome_probs(point: float, mu: float, var: float, family: str, model=None) 
     return po, max(0.0, 1.0 - po - pp), pp
 
 
+def coherent_pra(preds: dict) -> tuple | None:
+    """(mu, var, "normal_coherent") for PRA built from the points / rebounds / assists model predictions (arrays aligned on
+    the query rows) and the LEAGUE correlation prior (the feature frame carries no per-player history to estimate one).
+    mu_pra = sum of the component mus exactly; var = sum var + 2 sum_{j<k} R_jk sd_j sd_k. None if a component is missing."""
+    if not all(k in preds for k in Hi.CORR_ORDER):
+        return None
+    mus = [np.asarray(preds[k][0], float) for k in Hi.CORR_ORDER]
+    sds = [np.sqrt(np.asarray(preds[k][1], float)) for k in Hi.CORR_ORDER]
+    var = sum(sd ** 2 for sd in sds)
+    for a in range(3):
+        for b in range(a + 1, 3):
+            var = var + 2.0 * Hi.CORR_PRIOR[a, b] * sds[a] * sds[b]
+    return sum(mus), var, "normal_coherent"
+
+
+def normal_outcome_probs(point: float, mu: float, var: float) -> tuple[float, float, float]:
+    """(P(over), P(under), P(push)) of an integer count approximated by Normal(mu, var) with a continuity correction:
+    P(Y > line) = 1 - Phi((floor(line) + 0.5 - mu) / sd); a whole-number line carries the mass of that integer as a push."""
+    sd = max(float(np.sqrt(max(var, 1e-12))), 1e-6)
+    k = float(np.floor(point))
+    po = float(1.0 - norm.cdf((k + 0.5 - mu) / sd))
+    pp = float(norm.cdf((k + 0.5 - mu) / sd) - norm.cdf((k - 0.5 - mu) / sd)) if float(point) == k else 0.0
+    return po, max(0.0, 1.0 - po - pp), pp
+
+
 def ev_at(p_win: float, p_push: float, american: int) -> float:
     dec = american_to_decimal(american)
     p_loss = max(0.0, 1.0 - p_win - p_push)
@@ -159,8 +186,12 @@ def _refuse(stats: dict, reason: str, n: int = 1):
 
 
 def score_events(events: list, now: datetime, res: Resources, allow_rollover: bool | str = False,
-                 snapshot_meta: dict | None = None) -> tuple[pd.DataFrame, dict]:
-    """Score every banked event. Pure function of (events, history, models, crosswalk): no I/O."""
+                 snapshot_meta: dict | None = None, coherent_combos: bool = False) -> tuple[pd.DataFrame, dict]:
+    """Score every banked event. Pure function of (events, history, models, crosswalk): no I/O.
+
+    `coherent_combos` (default OFF, UNVALIDATED): replace the standalone PRA model with the sum of the points / rebounds /
+    assists model predictions and the league correlation prior (coherent_pra), so PRA can never contradict its parts. The
+    PRA model's own PIT recalibration does not apply to it. No walk-forward against prop lines backs this switch."""
     from nba.teams import team_code
     tf = res.team_fn or team_code
     stats = _empty_stats()
@@ -219,6 +250,11 @@ def score_events(events: list, now: datetime, res: Resources, allow_rollover: bo
         for stat, m in res.models.items():
             mu, var = m.predict(feats)
             preds[stat] = (np.asarray(mu, float), np.asarray(var, float), m.family)
+        coherent = False
+        if coherent_combos and "pra" in preds:
+            cp = coherent_pra(preds)
+            if cp is not None:
+                preds["pra"], coherent = cp, True
         abst = [abstain_reason(feats.iloc[i]) for i in range(len(feats))]
         # ---- quotes -> evidence rows
         for q in scoreable:
@@ -234,7 +270,10 @@ def score_events(events: list, now: datetime, res: Resources, allow_rollover: bo
             i = qmap[q.player_id]
             mu_a, var_a, fam = preds[q.stat]
             mu, var = float(mu_a[i]), float(var_a[i])
-            po, pu, pp = outcome_probs(q.point, mu, var, fam, res.models[q.stat])
+            if coherent and q.stat == "pra":
+                po, pu, pp = normal_outcome_probs(q.point, mu, var)
+            else:
+                po, pu, pp = outcome_probs(q.point, mu, var, fam, res.models[q.stat])
             fo, fu = devig_two_way(american_to_implied_prob(q.over), american_to_implied_prob(q.under), "proportional")
             cands = []
             for side, price, p_m, p_c, p_b in (("OVER", q.over, po, c.p_over, float(fo)),
@@ -327,7 +366,7 @@ def load_resources(local_dir: str | None, models_dir: str, xwalk: pd.DataFrame |
 
 def run_once(res: Resources, now: datetime | None = None, max_age_min: float = C.MAX_SNAPSHOT_AGE_MIN,
              allow_rollover: bool | str = "auto", events: list | None = None, out_dir: str | None = None,
-             write_gcs: bool = False) -> dict:
+             write_gcs: bool = False, coherent_combos: bool = False) -> dict:
     """One pass over the newest banked NBA props snapshot (or `events` supplied directly). Returns a summary dict."""
     from ev.sweep_props_alerts import SPORTS, read_latest_props
     now = now or datetime.now(timezone.utc)
@@ -337,9 +376,9 @@ def run_once(res: Resources, now: datetime | None = None, max_age_min: float = C
         if events is None:
             log.warning("NBA model scoring skipped: %s", meta.get("reason"))
             return {"status": "skipped", **meta}
-    df, stats = score_events(events, now, res, allow_rollover, meta)
+    df, stats = score_events(events, now, res, allow_rollover, meta, coherent_combos=coherent_combos)
     summary = {"status": "ok" if stats["rows"] else "no_rows", "ts": now.isoformat(), "system": SYSTEM,
-               "validated": False, **stats,
+               "validated": False, "coherent_combos": bool(coherent_combos), **stats,
                "history": res.history, "models": {s: m.family for s, m in res.models.items()}}
     day = D.et_day(now).date().isoformat()
     name = f"model_props_{now.strftime('%H%M%S')}.csv"
@@ -374,6 +413,9 @@ def main(argv=None) -> int:
                     help="force rollover on regardless of the date (default: automatic only in the season's opening "
                          "window, see nba.props.config.ROLLOVER_AUTO_DAYS); rolled-over rows are tagged ROLLOVER_HISTORY")
     ap.add_argument("--no-auto-rollover", action="store_true", help="never roll over: refuse STALE_HISTORY as before")
+    ap.add_argument("--coherent-combos", action="store_true",
+                    help="UNVALIDATED: price PRA as the sum of the points/rebounds/assists predictions + the league "
+                         "correlation prior instead of the standalone PRA model")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     models_dir = a.models_dir
@@ -385,7 +427,7 @@ def main(argv=None) -> int:
     events = json.load(open(a.events_file)) if a.events_file else None
     rollover = True if a.allow_rollover else (False if a.no_auto_rollover else "auto")
     out = run_once(res, max_age_min=a.max_age_min, allow_rollover=rollover, events=events, out_dir=a.out_dir,
-                   write_gcs=a.gcs)
+                   write_gcs=a.gcs, coherent_combos=a.coherent_combos)
     print(json.dumps({k: v for k, v in out.items() if k != "history"}, indent=1, default=str))
     return 0
 

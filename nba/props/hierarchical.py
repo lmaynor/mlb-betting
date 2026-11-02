@@ -61,6 +61,10 @@ BASE_MIN_CV = 0.15                 # regulation-regime sd as a fraction of the m
 BLOWOUT_MIN_CV = 0.22              # the blowout regime is looser: starters are pulled anywhere from the 3rd quarter on
 FOUL_WEIGHT, FOUL_SHIFT, PF36_REF = 0.06, -7.5, 2.8
 BLOWOUT_BENCH_GAIN = 6.0
+# Overtime: a right-tail regime (+5 minutes scaled to the player's load). The history already contains typical overtime, so
+# it moves VARIANCE only (the mean is fixed by the caller); its weight is the league rate at a typical spread and rises in
+# tight games. Spec PRIOR -- no historical spreads are in the box-score master, so it cannot be walk-forward tested.
+OT_WEIGHT_REF, OT_SPREAD_REF, OT_SPREAD_DECAY, OT_WEIGHT_CLIP, OT_MINUTES = 0.06, 9.0, 12.0, (0.02, 0.12), 5.0
 STARTER_BLOWOUT_CAP = 29.0         # starters are right-censored near here when the game is out of reach
 
 LEAGUE_3P_PCT = 0.362
@@ -167,11 +171,25 @@ def _l10_means(rows: list, as_of: str | None) -> dict | None:
     for stat in STATS:
         vals = [v for v in (_stat_value(r, stat) for r in games) if v == v]
         out[stat] = float(np.mean(vals)) if vals else 0.0
+    out["_dates"] = [d for d in (_day(r) for r in games) if d is not None]
     return out
 
 
+def _fresh_fraction(active_dates: list, absent_rows: list, as_of: str | None) -> float:
+    """Share of the active player's recent game days on which the absent teammate PLAYED. A teammate who has already been
+    missing for weeks is baked into the active player's recent numbers (his EWM has adapted), so counting his absence again
+    would double count; only the part of the absence that is NEW relative to the baseline window earns a boost. 1.0 when the
+    rows carry no dates (cannot tell)."""
+    if not active_dates:
+        return 1.0
+    played = {d for d in (_day(r) for r in prior_rows(absent_rows, as_of)[-60:]) if d is not None}
+    if not played:
+        return 1.0
+    return sum(1 for d in active_dates if d in played) / len(active_dates)
+
+
 def compute_vacated_shares(team_rows: dict, absences: dict, as_of: str | None = None,
-                           min_mpg: float = ROTATION_MIN_MPG) -> dict:
+                           min_mpg: float = ROTATION_MIN_MPG, eta_scale: float = 1.0, eta_off: tuple = ()) -> dict:
     """Stat-specific vacated-production shares and each active player's resulting multipliers.
 
     team_rows : {player_norm: chronological rows} for the players of ONE team
@@ -179,9 +197,12 @@ def compute_vacated_shares(team_rows: dict, absences: dict, as_of: str | None = 
     -> {"vacated": {stat: V}, "boost": {player_norm: {stat: multiplier >= 1}}, "rotation": [player_norm, ...]}
 
     V_stat = sum_j w_j * Xbar_j / sum_k Xbar_k over the L10 means of the rotation (min >= min_mpg). Active player i then
-    gains  eta_stat * (sum_j w_j * Xbar_j) * a_i / sum_a a   in that stat, where a_i = (1 - w_i) * minutes_i * rate_i^3 and
+    gains  eta_stat * (sum_j w_j * f_ij * Xbar_j) * a_i / sum_a a   in that stat, f_ij = the share of i's last 10 games
+    that j played in (an absence that has lasted for weeks is already in i's numbers and earns no boost), where a_i = (1 - w_i) * minutes_i * rate_i^3 and
     rate_i = Xbar_i / minutes_i. Only players already in the rotation absorb anything, and a one-stat boost is capped at
-    MAX_ROLE_BOOST (vacated production is therefore NOT conserved when one player would otherwise take all of it)."""
+    MAX_ROLE_BOOST (vacated production is therefore NOT conserved when one player would otherwise take all of it).
+    `eta_scale` multiplies every elasticity and `eta_off` zeroes the named stats (nba/props/engine_eval.py tunes both: the
+    specification's elasticities were measured to be several times too strong)."""
     rot = {}
     for pn, rows in team_rows.items():
         m = _l10_means(rows, as_of)
@@ -199,6 +220,7 @@ def compute_vacated_shares(team_rows: dict, absences: dict, as_of: str | None = 
     if not absent:
         return result
     boost = {pn: {} for pn in rot}
+    fresh = {(pn, j): _fresh_fraction(rot[pn]["_dates"], team_rows[j], as_of) for pn in rot for j in absent if j != pn}
     for stat in STATS:
         total = sum(m[stat] for m in rot.values())
         vacated = sum(w * rot[pn][stat] for pn, w in absent.items())
@@ -214,10 +236,12 @@ def compute_vacated_shares(team_rows: dict, absences: dict, as_of: str | None = 
         tot_aff = sum(affinity.values())
         for pn, a in affinity.items():
             x = rot[pn][stat]
-            if x <= 0 or tot_aff <= 0 or vacated <= 0:
+            # only the NEW part of each absence counts for this player (see _fresh_fraction)
+            vac_i = sum(w * rot[j][stat] * fresh[(pn, j)] for j, w in absent.items() if j != pn)
+            if x <= 0 or tot_aff <= 0 or vac_i <= 0:
                 b = 1.0
             else:
-                gain = ETA[stat] * vacated * (a / tot_aff)
+                gain = (0.0 if stat in eta_off else ETA[stat] * eta_scale) * vac_i * (a / tot_aff)
                 if stat == "minutes":
                     gain = min(gain, MAX_MINUTES_GAIN)
                 b = min(1.0 + gain / x, MAX_ROLE_BOOST)
@@ -228,23 +252,26 @@ def compute_vacated_shares(team_rows: dict, absences: dict, as_of: str | None = 
 
 # ------------------------------------------------------------------------------------------ 2. minutes distribution
 def _minutes_var(mean: float, spread: float | None, starter: bool, pf36: float | None) -> float:
-    """Variance of the three-regime minutes mixture around its own (recentred) mean: the regimes' own sd^2 (weighted) plus
+    """Variance of the four-regime (regulation / blowout / foul trouble / overtime) minutes mixture around its own (recentred) mean: the regimes' own sd^2 (weighted) plus
     the spread of the blowout / foul-trouble offsets. The mixture mean is NOT used -- the caller fixes the mean (the history already holds
     typical foul trouble and typical blowouts, so the mixture only supplies the extra left-tail variance)."""
     w_blow = 0.0 if spread is None else float(norm.cdf((spread - BLOWOUT_CENTER) / WEIGHT_SCALE))
     scale = 1.0 if pf36 is None else min(max(pf36 / PF36_REF, 0.6), 1.8)
     w_foul = FOUL_WEIGHT * scale
-    w_reg = max(1.0 - w_blow - w_foul, 0.2)
-    tot = w_reg + w_blow + w_foul
-    w_reg, w_blow, w_foul = w_reg / tot, w_blow / tot, w_foul / tot
+    w_ot = OT_WEIGHT_REF if spread is None else min(max(
+        OT_WEIGHT_REF * math.exp(-(spread - OT_SPREAD_REF) / OT_SPREAD_DECAY), OT_WEIGHT_CLIP[0]), OT_WEIGHT_CLIP[1])
+    w_reg = max(1.0 - w_blow - w_foul - w_ot, 0.2)
+    tot = w_reg + w_blow + w_foul + w_ot
+    w_reg, w_blow, w_foul, w_ot = w_reg / tot, w_blow / tot, w_foul / tot, w_ot / tot
     if starter:
         o_blow = -max(mean - STARTER_BLOWOUT_CAP, 4.0)
     else:
         o_blow = min(BLOWOUT_BENCH_GAIN, max(MAX_MEAN_MIN - mean, 0.0))
     o_foul = -min(mean, -FOUL_SHIFT)
-    offs = np.array([0.0, o_blow, o_foul])
-    ws = np.array([w_reg, w_blow, w_foul])
-    sds = mean * np.array([BASE_MIN_CV, BLOWOUT_MIN_CV, BASE_MIN_CV])
+    o_ot = OT_MINUTES * min(mean / 36.0, 1.0)
+    offs = np.array([0.0, o_blow, o_foul, o_ot])
+    ws = np.array([w_reg, w_blow, w_foul, w_ot])
+    sds = mean * np.array([BASE_MIN_CV, BLOWOUT_MIN_CV, BASE_MIN_CV, BASE_MIN_CV])
     centre = float(np.sum(ws * offs))
     return float(np.sum(ws * sds ** 2) + np.sum(ws * (offs - centre) ** 2))
 
