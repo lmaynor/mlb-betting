@@ -43,7 +43,7 @@ function Features({ items }: { items: string[] }) {
   return (
     <ul style={{ listStyle: 'none', margin: '0 0 20px', padding: 0, flex: 1 }}>
       {items.map(f => (
-        <li key={f} style={{ display: 'flex', gap: '9px', marginBottom: '10px', fontSize: '13.5px', color: 'var(--silver)', lineHeight: 1.45 }}>
+        <li key={f} style={{ display: 'flex', gap: '9px', marginBottom: '10px', fontSize: '13.5px', color: 'var(--color-neutral-300)', lineHeight: 1.45 }}>
           <Check /><span>{f}</span>
         </li>
       ))}
@@ -55,13 +55,13 @@ function Plan({ name, price, period, note, featured, children }: {
   name: string; price: string; period: string; note?: string; featured?: boolean; children: React.ReactNode
 }) {
   return (
-    <div style={{ ...SURFACE, display: 'flex', flexDirection: 'column', padding: '18px 18px 20px', borderColor: featured ? 'rgba(87,242,135,0.55)' : '#1e2230' }}>
-      <div className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.06em', color: featured ? 'var(--signal)' : 'var(--silver)', marginBottom: '10px' }}>{name.toUpperCase()}</div>
+    <div style={{ ...SURFACE, display: 'flex', flexDirection: 'column', padding: '18px 18px 20px', borderColor: featured ? 'rgba(87,242,135,0.55)' : 'var(--color-separator-border)' }}>
+      <div className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.06em', color: featured ? 'var(--signal)' : 'var(--color-neutral-300)', marginBottom: '10px' }}>{name.toUpperCase()}</div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', marginBottom: '4px' }}>
-        <span className="mono" style={{ fontSize: '34px', fontWeight: 700, color: 'var(--chalk)', lineHeight: 1 }}>{price}</span>
-        <span style={{ fontSize: '13px', color: 'var(--fog)' }}>{period}</span>
+        <span className="mono" style={{ fontSize: '34px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1 }}>{price}</span>
+        <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{period}</span>
       </div>
-      <div style={{ minHeight: '18px', fontSize: '12px', color: 'var(--fog)', marginBottom: '14px' }}>{note ?? ''}</div>
+      <div style={{ minHeight: '18px', fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '14px' }}>{note ?? ''}</div>
       {children}
     </div>
   )
@@ -80,8 +80,8 @@ export function PricingSection() {
   return (
     <section style={{ maxWidth: '1080px', margin: '0 auto', padding: '24px 24px 56px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0, letterSpacing: '-0.01em' }}>Pricing</h1>
-        <span style={{ fontSize: '12.5px', color: 'var(--fog)' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, letterSpacing: '-0.01em' }}>Pricing</h1>
+        <span style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)' }}>
           {PRE_LAUNCH ? 'Pre-launch: join the waitlist. Prices lock at launch.' : 'Cancel anytime in 1 click.'}
         </span>
       </div>
@@ -90,13 +90,13 @@ export function PricingSection() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="dell-heading" style={{ fontSize: '11px', letterSpacing: '0.08em', color: 'var(--signal)' }}>EXPLORER TIER</span>
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>$0 / Free Forever</span>
+            <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>$0 / Free Forever</span>
           </div>
-          <div style={{ fontSize: '12.5px', color: 'var(--silver)', marginTop: '3px' }}>
+          <div style={{ fontSize: '12.5px', color: 'var(--color-neutral-300)', marginTop: '3px' }}>
             Daily Top 10 cross-sport picks, full public results ledger, odds & vig calculator, and Kelly sizing. No account or credit card required.
           </div>
         </div>
-        <Link href="/picks" style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '7px 14px', borderRadius: '6px', background: 'var(--surface-elevated)', border: '1px solid #1e2230', color: 'var(--chalk)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+        <Link href="/picks" style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '7px 14px', borderRadius: '6px', background: 'var(--surface-elevated)', border: '1px solid var(--color-separator-border)', color: 'var(--color-text-primary)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
           Browse free picks &rarr;
         </Link>
       </div>
@@ -107,8 +107,8 @@ export function PricingSection() {
             {PICKER.map(l => (
               <button key={l} role="radio" aria-checked={league === l} onClick={() => setLeague(l)}
                 style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 600, padding: '5px 12px', borderRadius: '6px', cursor: 'pointer',
-                  color: league === l ? '#090a0f' : 'var(--silver)', background: league === l ? 'var(--signal)' : 'var(--surface-elevated)',
-                  border: `1px solid ${league === l ? 'var(--signal)' : '#1e2230'}`, transition: 'background 120ms ease, border-color 120ms ease' }}>
+                  color: league === l ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)', background: league === l ? 'var(--signal)' : 'var(--surface-elevated)',
+                  border: `1px solid ${league === l ? 'var(--signal)' : 'var(--color-separator-border)'}`, transition: 'background 120ms ease, border-color 120ms ease' }}>
                 {LEAGUE_LABEL[l]}
               </button>
             ))}
@@ -143,23 +143,23 @@ export function PricingSection() {
       </div>
 
       <div style={{ ...SURFACE, marginTop: '20px' }}>
-        <div className="dell-heading" style={{ fontSize: '11px', color: 'var(--silver)', padding: '12px 16px', borderBottom: '1px solid #1e2230' }}>HOW THE DUAL-ENGINE TERMINAL WORKS</div>
+        <div className="dell-heading" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', padding: '12px 16px', borderBottom: '1px solid var(--color-separator-border)' }}>HOW THE DUAL-ENGINE TERMINAL WORKS</div>
         <div className="pricing-grid" style={{ gap: 0 }}>
           {ENGINES.map((e, i) => (
-            <div key={e.n} style={{ padding: '14px 16px', borderLeft: i === 0 ? 'none' : '1px solid #1e2230' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--chalk)', marginBottom: '5px' }}>{e.n}. {e.title}</div>
-              <div style={{ fontSize: '12.5px', color: 'var(--fog)', lineHeight: 1.5 }}>{e.body}</div>
+            <div key={e.n} style={{ padding: '14px 16px', borderLeft: i === 0 ? 'none' : '1px solid var(--color-separator-border)' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '5px' }}>{e.n}. {e.title}</div>
+              <div style={{ fontSize: '12.5px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>{e.body}</div>
             </div>
           ))}
         </div>
       </div>
 
       {PRE_LAUNCH && (
-        <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '14px 0 0' }}>
+        <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '14px 0 0' }}>
           Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.
         </p>
       )}
-      <p style={{ fontSize: '12px', color: 'var(--fog)', margin: '8px 0 0', lineHeight: 1.55 }}>
+      <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: '8px 0 0', lineHeight: 1.55 }}>
         Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
         Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} style={{ color: 'var(--link)' }}>{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} style={{ color: 'var(--link)' }}>Discord</a>.
       </p>

@@ -10,13 +10,13 @@ import { InstallAppButton } from '@/components/layout/install-app-button'
 
 const socialBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: '36px', height: '36px', border: '1px solid var(--basalt)',
-  borderRadius: 'var(--radius)', textDecoration: 'none', background: 'var(--graphite)',
+  width: '36px', height: '36px', border: '1px solid var(--color-separator-border)',
+  borderRadius: 'var(--radius)', textDecoration: 'none', background: 'var(--color-background-primary-default)',
 }
 
 export function Footer() {
   return (
-    <footer style={{ borderTop: '1px solid var(--basalt)', background: 'var(--obsidian)', marginTop: '72px', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <footer style={{ borderTop: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)', marginTop: '72px', paddingBottom: 'env(safe-area-inset-bottom)' }}>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
         <div className="footer-grid" style={{ marginBottom: '40px' }}>
@@ -24,14 +24,14 @@ export function Footer() {
             <div style={{ marginBottom: '12px' }}>
               <BrandWordmark size="sm" showDomain />
             </div>
-            <p className="times" style={{ fontSize: '14px', color: 'var(--fog)', lineHeight: 1.65, marginBottom: '16px', maxWidth: '34ch' }}>
+            <p className="times" style={{ fontSize: '14px', color: 'var(--color-text-secondary)', lineHeight: 1.65, marginBottom: '16px', maxWidth: '34ch' }}>
               Model picks and a live +EV scanner, with every result public.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: '#8b92f0' }} aria-label="Join Discord">
                 <DiscordMark size={18} color="currentColor" />
               </a>
-              <a href={X_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: 'var(--silver)' }} aria-label="Follow Beezy.FYI on X">
+              <a href={X_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: 'var(--color-neutral-300)' }} aria-label="Follow Beezy.FYI on X">
                 <XMark size={15} color="currentColor" />
               </a>
               <InstallAppButton />
@@ -47,7 +47,7 @@ export function Footer() {
             <div key={col.title}>
               <div
                 className="dell-heading"
-                style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '14px' }}
+                style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '14px' }}
               >
                 {col.title}
               </div>
@@ -56,7 +56,7 @@ export function Footer() {
                   key={href}
                   href={href}
                   className="times"
-                  style={{ display: 'block', fontSize: '13.5px', color: 'var(--silver)', textDecoration: 'none', marginBottom: '9px', transition: 'color var(--dur) var(--ease-out)' }}
+                  style={{ display: 'block', fontSize: '13.5px', color: 'var(--color-neutral-300)', textDecoration: 'none', marginBottom: '9px', transition: 'color var(--dur) var(--ease-out)' }}
                 >
                   {label}
                 </Link>
@@ -65,9 +65,9 @@ export function Footer() {
           ))}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--basalt)', paddingTop: '20px' }}>
+        <div style={{ borderTop: '1px solid var(--color-separator-border)', paddingTop: '20px' }}>
           <p className="times" style={{ fontSize: '11px', color: '#7d8596', marginBottom: '6px', lineHeight: 1.55 }}>{SITE_CONFIG.riskDisclaimer} Plans and results are paper-tracked and hypothetical; no real money is wagered through beezy.fyi.</p>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '14px' }}>
+          <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '14px' }}>
             &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> beezy.fyi. Independent quantitative sports analytics.
           </p>
         </div>

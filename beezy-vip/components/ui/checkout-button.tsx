@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 
 export function CheckoutButton({
   tier,
@@ -50,7 +50,7 @@ export function CheckoutButton({
           opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s',
           borderRadius: 'var(--radius)',
           background: featured ? 'var(--signal)' : 'var(--slate)',
-          color:      featured ? 'var(--carbon)' : 'var(--ash)',
+          color:      featured ? 'var(--color-background-full)' : 'var(--color-text-primary)',
           border:     featured ? '1px solid var(--signal-led)' : B,
           boxShadow:  featured ? 'var(--shadow-inset)' : 'none',
         }}

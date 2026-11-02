@@ -27,11 +27,11 @@ export default function LearnPage() {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--chalk)', marginBottom: '8px' }}>Learn</h1>
-        <p className="times" style={{ fontSize: '15px', color: 'var(--fog)' }}>Data-driven betting education. No gut-feel advice.</p>
+        <h1 className="dell-display" style={{ fontSize: '32px', color: 'var(--color-text-primary)', marginBottom: '8px' }}>Learn</h1>
+        <p className="times" style={{ fontSize: '15px', color: 'var(--color-text-secondary)' }}>Data-driven betting education. No gut-feel advice.</p>
       </div>
 
-      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--fog)', marginBottom: '16px' }}>
+      <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-secondary)', marginBottom: '16px' }}>
         {ARTICLES.length} Articles
       </div>
 

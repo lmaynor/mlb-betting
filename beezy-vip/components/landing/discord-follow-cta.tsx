@@ -16,8 +16,8 @@ export function DiscordFollowCTA() {
         flexWrap: 'wrap',
         padding: '24px',
         borderRadius: 'var(--radius-xl)',
-        border: '1px solid color-mix(in oklab, #5865f2 32%, var(--basalt))',
-        background: 'linear-gradient(135deg, color-mix(in oklab, #5865f2 14%, var(--graphite)), var(--graphite))',
+        border: '1px solid color-mix(in oklab, #5865f2 32%, var(--color-separator-border))',
+        background: 'linear-gradient(135deg, color-mix(in oklab, #5865f2 14%, var(--color-background-primary-default)), var(--color-background-primary-default))',
         boxShadow: 'var(--shadow-md)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
@@ -36,10 +36,10 @@ export function DiscordFollowCTA() {
             <DiscordMark size={26} color="currentColor" />
           </div>
           <div>
-            <div className="dell-display" style={{ fontSize: '19px', color: 'var(--chalk)', marginBottom: '4px', letterSpacing: '-0.01em' }}>
+            <div className="dell-display" style={{ fontSize: '19px', color: 'var(--color-text-primary)', marginBottom: '4px', letterSpacing: '-0.01em' }}>
               Get the card the moment it drops
             </div>
-            <p className="times" style={{ fontSize: '14px', color: 'var(--silver)', lineHeight: 1.5, maxWidth: '52ch' }}>
+            <p className="times" style={{ fontSize: '14px', color: 'var(--color-neutral-300)', lineHeight: 1.5, maxWidth: '52ch' }}>
               Join the Discord for the daily card, model notes, and nightly results &mdash; pushed to you, no refresh required.
             </p>
           </div>

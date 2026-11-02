@@ -29,15 +29,15 @@ export function BottomNav() {
         alignItems: 'stretch',
         height: 'calc(60px + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        background: 'color-mix(in oklab, var(--graphite) 92%, transparent)',
+        background: 'color-mix(in oklab, var(--color-background-primary-default) 92%, transparent)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderTop: '1px solid var(--basalt)',
+        borderTop: '1px solid var(--color-separator-border)',
       }}
     >
       {TABS.map(tab => {
         const active = tab.href === '/' ? pathname === '/' : tab.prefixes.some(p => pathname === p || pathname.startsWith(p + '/'))
-        const color = active ? 'var(--signal)' : 'var(--fog)'
+        const color = active ? 'var(--signal)' : 'var(--color-text-secondary)'
         return (
           <Link
             key={tab.href}

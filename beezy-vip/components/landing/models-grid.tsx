@@ -38,7 +38,7 @@ export async function ModelsGrid() {
       })
       .map(s => {
         const i = stats.indexOf(s), r = sl[i]
-        return { system: s.system, ...META[s.system], tint: SYSTEM_COLOR[s.system] ?? 'var(--silver)', win_rate: s.win_rate, roi: s.roi, total_bets: s.total_bets, sparkline: r.status === 'fulfilled' ? r.value : null }
+        return { system: s.system, ...META[s.system], tint: SYSTEM_COLOR[s.system] ?? 'var(--color-neutral-300)', win_rate: s.win_rate, roi: s.roi, total_bets: s.total_bets, sparkline: r.status === 'fulfilled' ? r.value : null }
       })
   } catch { /* API unavailable: league cards still render */ }
 
@@ -60,7 +60,7 @@ export async function ModelsGrid() {
       </div>
       {systems.length > 0 && (
         <details style={{ ...SURFACE_CARD, marginTop: '10px', padding: '10px 14px' }}>
-          <summary style={{ cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--silver)' }}>MLB system records ({systems.length})</summary>
+          <summary style={{ cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: 'var(--color-neutral-300)' }}>MLB system records ({systems.length})</summary>
           <div style={{ marginTop: '12px' }}><ModelsGridClient systems={systems} /></div>
         </details>
       )}

@@ -16,10 +16,10 @@ export function PricingSummary() {
       <SectionHeader title="Pricing" href="/pricing" link={PRE_LAUNCH ? 'Join the waitlist \u2192' : 'Compare plans \u2192'} />
       <div className="pricing-grid" style={{ gap: '10px' }}>
         {TIERS.map(t => (
-          <Link key={t.name} href="/pricing" style={{ ...SURFACE_CARD, padding: '14px', textDecoration: 'none', borderColor: t.featured ? 'rgba(87,242,135,0.55)' : '#1e2230', display: 'block' }}>
-            <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.06em', color: t.featured ? 'var(--signal)' : 'var(--silver)', marginBottom: '6px' }}>{t.name.toUpperCase()}</div>
+          <Link key={t.name} href="/pricing" style={{ ...SURFACE_CARD, padding: '14px', textDecoration: 'none', borderColor: t.featured ? 'rgba(87,242,135,0.55)' : 'var(--color-separator-border)', display: 'block' }}>
+            <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.06em', color: t.featured ? 'var(--signal)' : 'var(--color-neutral-300)', marginBottom: '6px' }}>{t.name.toUpperCase()}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '6px' }}>
-              <span className="mono" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--chalk)' }}>{t.price}</span>
+              <span className="mono" style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{t.price}</span>
               <span style={{ fontSize: '12px', color: '#7d8596' }}>{t.period}</span>
             </div>
             <div style={{ fontSize: '12px', lineHeight: 1.45, color: '#9ca3af' }}>{t.body}</div>

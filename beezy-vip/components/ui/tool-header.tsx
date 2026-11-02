@@ -13,15 +13,15 @@ const CALCULATORS = [
 export function ToolHeader({ title, hint, current }: { title: string; hint?: string; current?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
-      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>{title}</h1>
+      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{title}</h1>
       <span style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-        {hint && <span className="mono" style={{ fontSize: '12px', color: 'var(--fog)' }}>{hint}</span>}
+        {hint && <span className="mono" style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>{hint}</span>}
         {current && (
-          <nav aria-label="Calculators" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
+          <nav aria-label="Calculators" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px' }}>
             {CALCULATORS.map(c => (
               <Link key={c.href} href={c.href} aria-current={c.href === current ? 'page' : undefined}
                 style={{ fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
-                  color: c.href === current ? 'var(--chalk)' : 'var(--silver)', background: c.href === current ? '#1b1f2b' : 'transparent' }}>
+                  color: c.href === current ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', background: c.href === current ? 'var(--color-background-tertiary-default)' : 'transparent' }}>
                 {c.label}
               </Link>
             ))}

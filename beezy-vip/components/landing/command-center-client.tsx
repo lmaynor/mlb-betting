@@ -10,8 +10,8 @@ import { SystemBadge } from '@/components/ui/primitives'
 import { collapseBooks } from '@/lib/dedupe'
 import { isWinterSport, readableNotes } from '@/lib/bet-notes'
 
-const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #1e2230' }
-const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #151822', verticalAlign: 'middle' }
+const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--color-separator-border)' }
+const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid var(--color-border-table)', verticalAlign: 'middle' }
 
 export function CommandCenterClient({ bets }: { bets: Bet[] }) {
   const [open, setOpen] = useState<number | null>(null)
@@ -20,7 +20,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
   return (
     <section style={{ marginTop: '28px' }} aria-label="Today's top plays">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '12px' }}>
-        <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--chalk)', margin: 0 }}>Today&apos;s top plays</h2>
+        <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Today&apos;s top plays</h2>
         <span style={{ display: 'flex', gap: '14px' }}>
           <Link href="/ev" style={{ color: 'var(--link)', fontSize: '12px', fontWeight: 600 }}>Odds Terminal &rarr;</Link>
           <Link href="/picks" style={{ color: 'var(--link)', fontSize: '12px', fontWeight: 600 }}>All picks &rarr;</Link>
@@ -28,7 +28,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
       </div>
       <div style={{ ...SURFACE_CARD, overflow: 'hidden' }}>
         {top.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px', lineHeight: 1.55 }}>
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px', lineHeight: 1.55 }}>
             No open plays right now. The model card publishes after the ~11:00 AM CT run and the +EV scanner re-checks lines every 15 minutes.
           </div>
         ) : (
@@ -52,10 +52,10 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
                       <td style={TD}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <SystemBadge system={b.system} />
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{pickLabel(b)}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{pickLabel(b)}</span>
                         </div>
                       </td>
-                      <td className="mono" style={{ ...TD, fontSize: '12px', color: 'var(--ash)', whiteSpace: 'nowrap' }}>
+                      <td className="mono" style={{ ...TD, fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
                         {b.book ? book.short : '--'}{b.bookCount > 1 ? ` +${b.bookCount - 1}` : ''} {formatOdds(b.odds)}
                       </td>
                       <td className="mono" style={{ ...TD, textAlign: 'right', fontSize: '13px', fontWeight: 700, color: 'var(--signal)' }}>+{edge.toFixed(1)}%</td>
@@ -63,7 +63,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
                     {isOpen && (
                       <tr><td colSpan={3} style={{ ...TD, background: '#0d0f16' }}>
                         <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: '4px' }}>
-                          {bullets.map((t, i) => <li key={i} className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>&middot; {t}</li>)}
+                          {bullets.map((t, i) => <li key={i} className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>&middot; {t}</li>)}
                         </ul>
                       </td></tr>
                     )}

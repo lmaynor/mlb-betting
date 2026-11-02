@@ -4,7 +4,7 @@ import { HeroPerfCard } from '@/components/landing/hero-perf-card'
 import { PLANS } from '@/lib/plans'
 import { SURFACE_CARD } from '@/lib/tokens'
 
-const B = '1px solid #1e2230'
+const B = '1px solid var(--color-separator-border)'
 
 export async function Hero() {
   const deep = await apiGetAnalyticsDeepDive('EV').catch(() => null)
@@ -22,7 +22,7 @@ export async function Hero() {
             NFL &middot; NBA &middot; NHL &middot; MLB
           </span>
 
-          <h1 className="dell-display hero-h1" style={{ fontSize: '40px', lineHeight: 1.06, color: 'var(--chalk)', marginBottom: '14px', letterSpacing: '-0.025em' }}>
+          <h1 className="dell-display hero-h1" style={{ fontSize: '40px', lineHeight: 1.06, color: 'var(--color-text-primary)', marginBottom: '14px', letterSpacing: '-0.025em' }}>
             Stop betting into vig. <span style={{ color: 'var(--signal)' }}>Strike market dislocations.</span>
           </h1>
 

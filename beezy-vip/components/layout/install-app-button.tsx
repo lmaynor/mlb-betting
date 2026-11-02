@@ -180,8 +180,8 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#11131a',
-              border: '1px solid #1e2230',
+              background: 'var(--color-background-primary-default)',
+              border: '1px solid var(--color-separator-border)',
               borderRadius: '8px',
               maxWidth: '440px',
               width: '100%',

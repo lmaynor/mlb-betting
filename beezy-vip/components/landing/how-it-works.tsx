@@ -10,13 +10,13 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <section style={{ paddingTop: '32px' }}>
-      <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 12px' }}>How it works</h2>
+      <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>How it works</h2>
       <div className="steps-grid" style={{ ...SURFACE_CARD, gap: 0, overflow: 'hidden' }}>
         {STEPS.map((s, i) => (
-          <div key={s.num} style={{ display: 'flex', gap: '10px', padding: '12px 14px', borderLeft: i === 0 ? 'none' : '1px solid #151822', borderTop: 'none' }}>
+          <div key={s.num} style={{ display: 'flex', gap: '10px', padding: '12px 14px', borderLeft: i === 0 ? 'none' : '1px solid var(--color-border-table)', borderTop: 'none' }}>
             <span className="mono" style={{ flexShrink: 0, width: '24px', height: '24px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--signal)', border: '1px solid rgba(87,242,135,0.35)' }}>{s.num}</span>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)', marginBottom: '2px' }}>{s.title}</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '2px' }}>{s.title}</div>
               <div style={{ fontSize: '12px', lineHeight: 1.45, color: '#9ca3af' }}>{s.desc}</div>
             </div>
           </div>

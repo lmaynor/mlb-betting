@@ -21,7 +21,7 @@ const RELATED: Record<string, { href: string; label: string }[]> = {
   'machine-learning-sports-betting': [{ href: '/models', label: 'Our models' }, { href: '/results', label: 'Results' }],
 }
 
-const B = '1px solid var(--basalt)'
+const B = '1px solid var(--color-separator-border)'
 
 export function generateStaticParams() {
   return ARTICLES.map(a => ({ slug: a.slug }))
@@ -52,11 +52,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 20px' }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
-        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', marginBottom: '10px' }}>
+        <div className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
           {article.category}
         </div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--ash)', lineHeight: 1.3 }}>{article.title}</h1>
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '10px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{article.title}</h1>
+        <p className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '10px' }}>
           Published <time dateTime={article.datePublished}>{article.datePublished}</time>
           {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>
         </p>
@@ -68,11 +68,11 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
       <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: B, display: 'grid', gap: '12px' }}>
         {related.length > 0 && (
           <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13.5px' }}>
-            <span style={{ color: 'var(--fog)' }}>Try it:</span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>Try it:</span>
             {related.map(r => <Link key={r.href} href={r.href} style={{ color: 'var(--link)' }}>{r.label} &rarr;</Link>)}
           </div>
         )}
-        <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.6, margin: 0 }}>
+        <p className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: 0 }}>
           Educational content, not financial advice. Beezy.FYI results are paper-tracked. 21+. If gambling is a problem, call 1-800-GAMBLER.
         </p>
         <Link href="/learn" style={{ fontSize: '12.5px', color: 'var(--link)' }}>&larr; All guides</Link>

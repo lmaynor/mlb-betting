@@ -18,11 +18,11 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
       <div style={{ width: '100%', maxWidth: '460px' }}>
         <div style={{ marginBottom: '20px' }}><BrandWordmark size="md" /></div>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--chalk)', margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
-        <p style={{ fontSize: '14px', color: 'var(--silver)', lineHeight: 1.6, margin: '0 0 12px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
+        <p style={{ fontSize: '14px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 12px' }}>
           Picks and +EV alerts are not offered where local rules restrict them. The free calculators, guides and the public results record remain available.
         </p>
-        <p style={{ fontSize: '13px', color: 'var(--fog)', lineHeight: 1.6, margin: '0 0 16px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
           Think this is a mistake, or on a VPN? Turn it off and reload, or ask in the Discord.
         </p>
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px' }}>

@@ -371,7 +371,7 @@ export function ResultsClient({
       {/* P&L Chart: per system, over the recent rows loaded here */}
       {system !== 'ALL' && pnlRows.length > 2 && (
         <div className={cx('mb-6 pb-3 pl-2 pr-4 pt-5', CARD)}>
-          <div className="flex items-center justify-between px-5 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-4">
             <span className={LBL}>
               Cumulative P&L ($ at paper stakes)
             </span>
@@ -415,7 +415,7 @@ export function ResultsClient({
       {/* Edge vs ROI chart */}
       {edgeRows.length > 2 && (
         <div className={cx('mb-6 pb-3 pl-2 pr-4 pt-5', CARD)}>
-          <div className="flex items-center justify-between px-5 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-4">
             <div>
               <span className={LBL}>
                 Model Edge vs Realized ROI

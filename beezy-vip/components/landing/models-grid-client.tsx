@@ -41,12 +41,12 @@ function SystemTile({ s }: { s: SystemCard }) {
   const panelId = useId()
   const roiPos = (s.roi ?? 0) >= 0
   const gateCleared = s.total_bets >= 200
-  const pill = SYSTEM_PILL[s.system] ?? { bg: 'var(--slate)', color: s.tint, border: '1px solid var(--iron)' }
+  const pill = SYSTEM_PILL[s.system] ?? { bg: 'var(--slate)', color: s.tint, border: '1px solid var(--color-border-button-default)' }
 
   return (
     <div
       className="card-hover"
-      style={{ display: 'flex', flexDirection: 'column', background: 'var(--graphite)', border: '1px solid var(--basalt)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}
+      style={{ display: 'flex', flexDirection: 'column', background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}
     >
       {/* Top accent line in the system hue */}
       <div style={{ height: '3px', background: s.tint, opacity: 0.85 }} />
@@ -81,13 +81,13 @@ function SystemTile({ s }: { s: SystemCard }) {
           <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: roiPos ? 'var(--signal)' : 'var(--loss)', flexShrink: 0 }}>
             {s.roi == null ? '--' : `${roiPos ? '+' : ''}${s.roi.toFixed(1)}%`}
           </span>
-          <Chevron open={open} color="var(--fog)" />
+          <Chevron open={open} color="var(--color-text-secondary)" />
         </span>
       </button>
 
       {/* Compact body: name + at-a-glance ROI sparkline */}
       <div style={{ padding: '10px 16px 6px' }}>
-        <div className="dell-display" style={{ fontSize: '17px', color: 'var(--chalk)', letterSpacing: '-0.01em' }}>
+        <div className="dell-display" style={{ fontSize: '17px', color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>
           {s.name}
         </div>
         {s.sparkline && <SystemSparkline data={s.sparkline} color={s.tint} positive={roiPos} />}
@@ -97,7 +97,7 @@ function SystemTile({ s }: { s: SystemCard }) {
       <div id={panelId} className="sys-expand" data-open={open}>
         <div className="sys-expand-inner">
           <div style={{ padding: '4px 16px 16px' }}>
-            <div className="times" style={{ fontSize: '13px', color: 'var(--silver)', lineHeight: 1.55, marginBottom: '14px' }}>
+            <div className="times" style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55, marginBottom: '14px' }}>
               {s.desc}
             </div>
             <div
@@ -106,17 +106,17 @@ function SystemTile({ s }: { s: SystemCard }) {
                 gridTemplateColumns: 'repeat(3,1fr)',
                 gap: '10px',
                 paddingTop: '12px',
-                borderTop: '1px solid var(--basalt)',
+                borderTop: '1px solid var(--color-separator-border)',
                 marginBottom: '14px',
               }}
             >
               {[
-                ['Win rate', s.win_rate.toFixed(1) + '%', 'var(--chalk)'] as const,
-                ['Bets', String(s.total_bets), 'var(--chalk)'] as const,
-                ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--chalk)' : 'var(--fog)'] as const,
+                ['Win rate', s.win_rate.toFixed(1) + '%', 'var(--color-text-primary)'] as const,
+                ['Bets', String(s.total_bets), 'var(--color-text-primary)'] as const,
+                ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--color-text-primary)' : 'var(--color-text-secondary)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
-                  <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '4px' }}>{label}</div>
+                  <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{label}</div>
                   <div className="mono" style={{ fontSize: '12px', fontWeight: 600, color }}>{val}</div>
                 </div>
               ))}

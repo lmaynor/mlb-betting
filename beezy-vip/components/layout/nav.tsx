@@ -16,20 +16,20 @@ import { InstallAppButton } from '@/components/layout/install-app-button'
 
 const iconBox: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: '34px', height: '34px', border: '1px solid var(--basalt)',
-  borderRadius: 'var(--radius)', color: 'var(--silver)', textDecoration: 'none',
-  background: 'var(--graphite)', transition: 'border-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
+  width: '34px', height: '34px', border: '1px solid var(--color-separator-border)',
+  borderRadius: 'var(--radius)', color: 'var(--color-neutral-300)', textDecoration: 'none',
+  background: 'var(--color-background-primary-default)', transition: 'border-color var(--dur) var(--ease-out), color var(--dur) var(--ease-out)',
 }
 
 const discordBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: '7px',
   fontFamily: 'var(--font-text), sans-serif', fontWeight: 600, fontSize: '13px',
   padding: '8px 14px', borderRadius: 'var(--radius)', textDecoration: 'none',
-  background: 'color-mix(in oklab, #5865f2 22%, var(--carbon))',
-  color: '#c6ccff', border: '1px solid color-mix(in oklab, #5865f2 50%, var(--carbon))',
+  background: 'color-mix(in oklab, #5865f2 22%, var(--color-background-full))',
+  color: '#c6ccff', border: '1px solid color-mix(in oklab, #5865f2 50%, var(--color-background-full))',
 }
 
-const SIGN_IN_STYLE: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--ash)', cursor: 'pointer', whiteSpace: 'nowrap' }
+const SIGN_IN_STYLE: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '13px', fontWeight: 600, background: 'transparent', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius-sm)', padding: '7px 12px', color: 'var(--color-text-primary)', cursor: 'pointer', whiteSpace: 'nowrap' }
 
 /** `authDisabled` (lib/auth-mode.ts) renders the nav with no Clerk hooks/components, so it works without a ClerkProvider. */
 export function Nav({ authDisabled = false }: { authDisabled?: boolean }) {
@@ -67,7 +67,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
   return (
     <header style={{ width: '100%', maxWidth: '100vw' }}>
       {/* TIER 1 -- product bar */}
-      <nav style={{ background: '#090a0f', borderBottom: '1px solid #1e2230', overflow: 'hidden' }}>
+      <nav style={{ background: 'var(--color-background-secondary-default)', borderBottom: '1px solid var(--color-separator-border)', overflow: 'hidden' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '56px', gap: '20px' }}>
 
           <Link href="/" aria-label="beezy.fyi home" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
@@ -84,7 +84,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: '7px',
                     fontSize: '13px', fontWeight: 500, textDecoration: 'none',
-                    color: active ? 'var(--signal)' : 'var(--silver)',
+                    color: active ? 'var(--signal)' : 'var(--color-neutral-300)',
                     padding: '7px 11px', borderRadius: 'var(--radius-sm)',
                     background: active ? 'var(--brand-dim)' : 'transparent',
                     transition: 'color var(--dur) var(--ease-out), background var(--dur) var(--ease-out)',
@@ -110,8 +110,8 @@ function NavShell({ isSignedIn, userButton, signIn }: {
                   href="/dashboard"
                   style={{
                     fontSize: '13px', fontWeight: 600, textDecoration: 'none',
-                    color: pathname.startsWith('/dashboard') ? 'var(--signal)' : 'var(--ash)',
-                    padding: '7px 12px', border: '1px solid #1e2230', borderRadius: 'var(--radius-sm)',
+                    color: pathname.startsWith('/dashboard') ? 'var(--signal)' : 'var(--color-text-primary)',
+                    padding: '7px 12px', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius-sm)',
                   }}
                 >
                   Dashboard
@@ -121,7 +121,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             ) : (
               <>
                 {signIn}
-                <Link href="/pricing" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none', background: '#57F287', color: '#090a0f', borderRadius: '6px', padding: '8px 12px', whiteSpace: 'nowrap' }}>
+                <Link href="/pricing" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.02em', textDecoration: 'none', background: '#57F287', color: 'var(--color-background-secondary-default)', borderRadius: '6px', padding: '8px 12px', whiteSpace: 'nowrap' }}>
                   {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
                 </Link>
               </>
@@ -144,7 +144,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
       </nav>
 
       {/* TIER 2 -- multi-sport context bar */}
-      <div style={{ background: '#11131a', borderBottom: '1px solid #1e2230', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ background: 'var(--color-background-primary-default)', borderBottom: '1px solid var(--color-separator-border)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div className="sport-ribbon" style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', height: '40px', gap: '4px', whiteSpace: 'nowrap' }}>
           <SportLink href={sportHref('all')} label="ALL SPORTS" active={sportActive(pathname, 'all')} />
           {LIVE_SPORTS.map(p => (
@@ -163,7 +163,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
 }
 
 function SportLink({ href, label, active, accent }: { href: string; label: string; active: boolean; accent?: string }) {
-  const color = active ? (accent ?? 'var(--chalk)') : 'var(--silver)'
+  const color = active ? (accent ?? 'var(--color-text-primary)') : 'var(--color-neutral-300)'
   return (
     <Link
       href={href}

@@ -1,9 +1,9 @@
 /** Explains the three numbers on every projection board: Model edge, Price EV and the Beezy Score. Collapsed by default. */
 export function EdgeEvLegend() {
   return (
-    <details style={{ marginTop: '14px', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '10px 14px' }}>
-      <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, color: 'var(--silver)' }}>Reading Model edge, Price EV and Score</summary>
-      <div style={{ fontSize: '12.5px', color: 'var(--silver)', lineHeight: 1.65, marginTop: '10px', display: 'grid', gap: '8px', maxWidth: '88ch' }}>
+    <details style={{ marginTop: '14px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '10px 14px' }}>
+      <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-neutral-300)' }}>Reading Model edge, Price EV and Score</summary>
+      <div style={{ fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.65, marginTop: '10px', display: 'grid', gap: '8px', maxWidth: '88ch' }}>
         <p style={{ margin: 0 }}>
           <strong>Model edge</strong> compares two opinions: the model&rsquo;s probability for the listed side minus the market&rsquo;s fair
           probability (the books&rsquo; consensus with the vig removed). A high edge means the model disagrees with the market. It does not

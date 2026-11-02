@@ -19,7 +19,7 @@ export function SystemSparkline({ data, positive }: { data: SparklinePoint[]; co
   const gid = 'spk' + rawId.replace(/:/g, '')
 
   return (
-    <div style={{ paddingTop: '10px', borderTop: '1px solid var(--basalt)' }}>
+    <div style={{ paddingTop: '10px', borderTop: '1px solid var(--color-separator-border)' }}>
       <ResponsiveContainer width="100%" height={38}>
         <AreaChart data={data} margin={{ top: 3, right: 4, left: 4, bottom: 2 }}>
           <defs>

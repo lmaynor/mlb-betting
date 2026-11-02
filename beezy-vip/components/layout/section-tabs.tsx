@@ -12,13 +12,13 @@ export function SectionTabs() {
   if (!section) return null
 
   return (
-    <nav aria-label={`${section.id} views`} style={{ borderBottom: '1px solid #1e2230', background: '#090a0f' }}>
+    <nav aria-label={`${section.id} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '2px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
         {section.tabs.map(t => {
           const active = tabActive(pathname, sp.get('tab'), t)
           return (
             <Link key={t.href} href={t.href} aria-current={active ? 'page' : undefined}
-              style={{ fontSize: '12.5px', fontWeight: 600, padding: '10px 12px', textDecoration: 'none', color: active ? 'var(--chalk)' : 'var(--fog)',
+              style={{ fontSize: '12.5px', fontWeight: 600, padding: '10px 12px', textDecoration: 'none', color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                 borderBottom: `2px solid ${active ? 'var(--signal)' : 'transparent'}`, marginBottom: '-1px' }}>
               {t.label}
             </Link>

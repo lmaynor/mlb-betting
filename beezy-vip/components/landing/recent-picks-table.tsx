@@ -11,8 +11,8 @@ import { playerIdByName } from '@/lib/sport-assets.server'
 import { SectionHeader } from './section-header'
 import type { Bet } from '@/lib/types'
 
-const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid #1e2230' }
-const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #151822', verticalAlign: 'middle' }
+const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--color-separator-border)' }
+const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid var(--color-border-table)', verticalAlign: 'middle' }
 
 function units(profit: number | null, stake: number | null) {
   if (profit == null) return '--'
@@ -42,7 +42,7 @@ export async function RecentPicksTable() {
       <SectionHeader title="Recent graded plays" href="/results" link="View full ledger &rarr;" />
       <div style={{ ...SURFACE_CARD, overflow: 'hidden' }}>
         {rows.length === 0 ? (
-          <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+          <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
             No settled bets yet. Check back after today&apos;s games.
           </div>
         ) : (
@@ -68,12 +68,12 @@ export async function RecentPicksTable() {
                           {b.player && <PlayerHeadshot sport={sp} id={playerIdByName(sp, b.player)} name={b.player} size={30} />}
                         </span>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--chalk)' }}>{b.player ?? pickText(b)}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{b.player ?? pickText(b)}</div>
                           {b.player && <div style={{ fontSize: '12px', color: '#9ca3af' }}>{pickText(b)}{isWinterSport(b.sport) && <span className="dell-heading" title="Paper-tracked model output with no tested edge" style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b' }}>{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>
-                    <td className="mono" style={{ ...TD, fontSize: '12px', color: 'var(--ash)', whiteSpace: 'nowrap' }}>
+                    <td className="mono" style={{ ...TD, fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                         {b.book ? <BookLogo book={b.book} size={22} /> : null}
                         {formatOdds(b.odds)}
