@@ -19,7 +19,7 @@ const TOOLS: { href: string; title: string; description: string; access: Access 
   { href: '/tools/bet-tracker',      title: 'Personal Bet Tracker',   description: 'Log your own bets and compare your ROI to the model.', access: 'Coming soon' },
 ]
 
-const ACCESS_COLOR: Record<Access, string> = { Free: 'var(--signal)', Pro: 'var(--lilac)', 'Coming soon': 'var(--fog)' }
+const ACCESS_COLOR: Record<Access, string> = { Free: 'var(--signal)', Pro: 'var(--lilac)', 'Coming soon': 'var(--color-text-secondary)' }
 
 const TH = 'border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left font-semibold tracking-[0.06em] text-text-secondary'
 const TD = 'border-b border-border-table p-3 align-middle'

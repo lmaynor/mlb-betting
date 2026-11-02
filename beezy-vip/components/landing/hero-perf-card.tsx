@@ -33,7 +33,7 @@ export function HeroPerfCard({ headline, curve }: { headline: EvHeadline | null;
               <defs><linearGradient id="hpc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={tone} stopOpacity={0.12} /><stop offset="100%" stopColor={tone} stopOpacity={0.12} /></linearGradient></defs>
               <YAxis hide domain={['dataMin', 'dataMax']} />
               <ReferenceLine y={headline?.bankroll ?? 1000} stroke="#2e3446" strokeDasharray="2 2" />
-              <Tooltip contentStyle={{ background: '#171a24', border: '1px solid var(--color-separator-border)', borderRadius: 8, fontSize: 12 }} formatter={(v) => fmtMoney(Number(v))} labelStyle={{ color: '#7d8596' }} />
+              <Tooltip contentStyle={{ background: 'var(--color-background-tertiary-default)', border: '1px solid var(--color-separator-border)', borderRadius: 8, fontSize: 12 }} formatter={(v) => fmtMoney(Number(v))} labelStyle={{ color: 'var(--color-text-secondary)' }} />
               <Area type="monotone" dataKey="bank" stroke={tone} strokeWidth={1.75} fill="url(#hpc)" dot={false} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>

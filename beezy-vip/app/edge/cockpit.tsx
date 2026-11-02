@@ -28,7 +28,7 @@ export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
 export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
-const HAIR = '#1e2230'
+const HAIR = 'var(--color-separator-border)'
 const GOOD = '#57F287'
 const BAD = '#ef4444'
 const NEUTRAL = '#4a5066'
@@ -56,7 +56,7 @@ function sideRate(games: CockpitGame[], line: number | null, under: boolean, n: 
 const pct0 = (x: number | null | undefined) => (x == null ? '--' : `${Math.round(x * 100)}%`)
 
 function rateColor(x: number | null): string {
-  if (x == null) return 'var(--fog)'
+  if (x == null) return 'var(--color-text-secondary)'
   return x >= 0.6 ? GOOD : x >= 0.4 ? '#e5e7eb' : BAD
 }
 
@@ -130,7 +130,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
   const [bad, setBad] = useState(false)
   const src = headshotUrlById(r.sport, r.sport === 'nfl' ? r.headshot_id : r.player_id)
   return (
-    <span style={{ width: size, height: size, flex: '0 0 auto', borderRadius: size > 48 ? '14px' : '10px', background: '#171a24', border: `1px solid ${HAIR}`, display: 'inline-flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', color: 'var(--fog)', fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
+    <span style={{ width: size, height: size, flex: '0 0 auto', borderRadius: size > 48 ? '14px' : '10px', background: 'var(--color-background-tertiary-default)', border: `1px solid ${HAIR}`, display: 'inline-flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden', color: 'var(--color-text-secondary)', fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
       {src && !bad ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
@@ -150,7 +150,7 @@ function BookBadge({ book }: { book: string | null | undefined }) {
 function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' }) {
   const pos = (ev ?? 0) >= 0
   return (
-    <span className="mono" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, color: '#090a0f', background: pos ? GOOD : BAD, borderRadius: '6px', padding: size === 'lg' ? '5px 10px' : '3px 7px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+    <span className="mono" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, color: 'var(--color-background-secondary-default)', background: pos ? GOOD : BAD, borderRadius: '6px', padding: size === 'lg' ? '5px 10px' : '3px 7px', whiteSpace: 'nowrap', display: 'inline-block' }}>
       {evText(ev)}
     </span>
   )
@@ -236,10 +236,10 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
           </g>
         )}
       </svg>
-      <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '6px', fontSize: '11px', color: 'var(--silver)' }}>
+      <div className="flex gap-[14px] flex-wrap mt-[6px] text-[11px] text-[var(--color-neutral-300)]">
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: GOOD, borderRadius: 2, marginRight: 5 }} />Cleared the {under ? 'under' : 'over'}</span>
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: BAD, borderRadius: 2, marginRight: 5 }} />Missed</span>
-        <span style={{ color: 'var(--fog)' }}>{cleared} of {games.length} games</span>
+        <span className="text-text-secondary">{cleared} of {games.length} games</span>
       </div>
       <StatPills items={[
         { label: 'L5 HIT%', value: pct0(l5), color: rateColor(l5) },
@@ -248,7 +248,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         { label: 'LINE', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
-        <div style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '8px' }}>
+        <div className="text-[11px] text-text-secondary mt-[8px]">
           Season hit rate {pct0(szn)} over {form.szn_games} games.
         </div>
       )}
@@ -306,7 +306,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         { label: 'LAST 3 AVG', value: fmt(recent) },
         { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
-      <div style={{ fontSize: '12px', color: 'var(--silver)', marginTop: '8px', lineHeight: 1.5 }}>
+      <div className="text-[12px] text-[var(--color-neutral-300)] mt-[8px] leading-[1.5]">
         {label} are <b style={{ color: trendColor }}>{trend}</b>
         {prior != null ? <>: {fmt(recent)} over the last 3 games vs {fmt(prior)} before that.</> : '.'}
       </div>
@@ -327,7 +327,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
   const ranked = rankQuotes(quotes, under)
   const cols = 'minmax(110px, 1.5fr) 1fr 1fr 1fr'
   const cell = (american: number | null, strong: boolean) => (
-    <span className="mono" style={{ fontSize: '13.5px', fontWeight: strong ? 800 : 600, color: strong ? GOOD : american == null ? 'var(--fog)' : 'var(--chalk)' }}>
+    <span className="mono" style={{ fontSize: '13.5px', fontWeight: strong ? 800 : 600, color: strong ? GOOD : american == null ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>
       {american == null ? <>&ndash;</> : formatOdds(american)}
     </span>
   )

@@ -107,7 +107,7 @@ function Legend({ items }: { items: LegendItem[] }) {
         <span key={i}>
           <i className={it.kind === 'dot' ? 'edge-lg-dot' : it.kind === 'ring' ? 'edge-lg-ring' : 'edge-lg-sq'}
             style={it.kind === 'ring'
-              ? { borderColor: it.color ?? '#7d8596', opacity: it.opacity }
+              ? { borderColor: it.color ?? 'var(--color-text-secondary)', opacity: it.opacity }
               : { background: it.color, opacity: it.opacity }} />
           {it.label}
         </span>
@@ -295,7 +295,7 @@ const PITCH_NAME: Record<string, string> = {
   FF: '4-Seam', SI: 'Sinker', FT: '2-Seam', FC: 'Cutter', SL: 'Slider', ST: 'Sweeper',
   CU: 'Curveball', KC: 'Knuckle-curve', CH: 'Changeup', FS: 'Splitter', SP: 'Splitter',
 }
-const pc = (p: string) => PITCH_COLORS[p] ?? '#9ca3af'
+const pc = (p: string) => PITCH_COLORS[p] ?? 'var(--color-neutral-400)'
 
 function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>; color: string }) {
   if (!points.length) return null
@@ -456,15 +456,15 @@ const STATUS_CFG: Record<PlayerStatus, { label: string; color: string; mark: str
   expected:  { label: 'Expected',       color: 'var(--warn)',   mark: '\u223c' },
   il:        { label: 'On IL',          color: 'var(--loss)',   mark: '\u2715' },
   out:       { label: 'Not in lineup',  color: 'var(--loss)',   mark: '\u2715' },
-  unknown:   { label: 'Lineup TBD',     color: 'var(--fog)',    mark: '\u00b7' },
+  unknown:   { label: 'Lineup TBD',     color: 'var(--color-text-secondary)',    mark: '\u00b7' },
 }
 function StatusChip({ status, compact = false }: { status?: PlayerStatus; compact?: boolean }) {
   const s = STATUS_CFG[status ?? 'unknown']
   return (
     <span className="edge-status" style={{
       color: s.color,
-      borderColor: `color-mix(in oklab, ${s.color} 42%, var(--carbon))`,
-      background: `color-mix(in oklab, ${s.color} 14%, var(--carbon))`,
+      borderColor: `color-mix(in oklab, ${s.color} 42%, var(--color-background-full))`,
+      background: `color-mix(in oklab, ${s.color} 14%, var(--color-background-full))`,
     }}>{s.mark}{compact ? '' : ` ${s.label}`}</span>
   )
 }
@@ -553,7 +553,7 @@ const NOTE_RULES: [RegExp, string][] = [
 ]
 function notePillColor(text: string): string {
   for (const [re, c] of NOTE_RULES) if (re.test(text)) return c
-  return 'var(--silver)'
+  return 'var(--color-neutral-300)'
 }
 
 // American odds from a model win probability (fair line)
@@ -585,7 +585,7 @@ function SeasonLine({ season }: { season?: SeasonStats | null }) {
       {items.map(s => (
         <span key={s.label} className="edge-season-cell">
           <span className="edge-season-k">{s.label}</span>
-          <span className="edge-season-v" style={dim ? { color: 'var(--silver)' } : undefined}>{s.value}</span>
+          <span className="edge-season-v" style={dim ? { color: 'var(--color-neutral-300)' } : undefined}>{s.value}</span>
         </span>
       ))}
     </div>
@@ -607,7 +607,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
   p: EdgePick; bankroll: number
   inSlip?: boolean; onToggleSlip?: (stake: number | null) => void
 }) {
-  const color = SYSTEM_COLOR[p.system] ?? '#9ca3af'
+  const color = SYSTEM_COLOR[p.system] ?? 'var(--color-neutral-400)'
   const pill = SYSTEM_PILL[p.system] ?? SYSTEM_PILL.ALL
   const isGame = groupOf(p.system) === 'game'
   const model = p.modelProbPct ?? 0
@@ -768,8 +768,8 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
               return (
                 <span key={i} className="edge-note-pill" style={{
                   color: c,
-                  borderColor: `color-mix(in oklab, ${c} 40%, var(--carbon))`,
-                  background: `color-mix(in oklab, ${c} 12%, var(--carbon))`,
+                  borderColor: `color-mix(in oklab, ${c} 40%, var(--color-background-full))`,
+                  background: `color-mix(in oklab, ${c} 12%, var(--color-background-full))`,
                 }}>{b}</span>
               )
             })}
@@ -1107,10 +1107,10 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
         <div className="edge-markets">
           {marketList.map(m => {
             const on = markets.includes(m)
-            const c = SYSTEM_COLOR[m] ?? 'var(--silver)'
+            const c = SYSTEM_COLOR[m] ?? 'var(--color-neutral-300)'
             return (
               <button key={m} onClick={() => toggleMarket(m)} className="edge-mchip"
-                style={on ? { color: c, borderColor: `color-mix(in oklab, ${c} 45%, var(--carbon))`, background: `color-mix(in oklab, ${c} 16%, var(--carbon))` } : undefined}>
+                style={on ? { color: c, borderColor: `color-mix(in oklab, ${c} 45%, var(--color-background-full))`, background: `color-mix(in oklab, ${c} 16%, var(--color-background-full))` } : undefined}>
                 {systemLabel(m, true)}
               </button>
             )
@@ -1136,7 +1136,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
         <div className="edge-grid">
           <ol className="edge-list" onKeyDown={onListKeyDown}>
             {visible.map((p, i) => {
-              const color = SYSTEM_COLOR[p.system] ?? '#9ca3af'
+              const color = SYSTEM_COLOR[p.system] ?? 'var(--color-neutral-400)'
               const active = selected?.id === p.id
               const isGame = groupOf(p.system) === 'game'
               const inSlip = slip[p.id] != null
@@ -1210,7 +1210,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                       <span className="edge-slip-item-name">{pk ? titleOf(pk) : `pick #${id}`}</span>
                       {pk && (
                         <span className="edge-slip-item-meta">
-                          <span style={{ color: SYSTEM_COLOR[pk.system] ?? 'var(--silver)' }}>{systemLabel(pk.system, true)}</span>
+                          <span style={{ color: SYSTEM_COLOR[pk.system] ?? 'var(--color-neutral-300)' }}>{systemLabel(pk.system, true)}</span>
                           {' '}{betTypeLabel(pk.bet_type, pk.system)} {fmtOdds(pk.odds)}
                         </span>
                       )}
@@ -1231,7 +1231,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             </button>
             <span className="edge-slip-t">
               ${slipTotal.toFixed(0)}
-              <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--fog)' }}>
+              <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--color-text-secondary)' }}>
                 {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' \u2014 heavy' : ''}
               </span>
             </span>

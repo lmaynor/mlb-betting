@@ -115,27 +115,27 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
 
   return (
     <div>
-      <div data-testid="game-prices-strip" style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap', minHeight: '38px', padding: '6px 14px', marginBottom: '10px', background: '#11131a', border: `1px solid ${HAIR}`, borderRadius: '8px', fontSize: '12px' }}>
-        <span className="mono" style={{ fontWeight: 700, color: 'var(--chalk)' }}>{sportLabel}</span>
-        <span className="mono" style={{ color: 'var(--silver)' }}>{visible.length} ROWS</span>
-        <span className="mono" style={{ color: 'var(--silver)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
+      <div data-testid="game-prices-strip" style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap', minHeight: '38px', padding: '6px 14px', marginBottom: '10px', background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', fontSize: '12px' }}>
+        <span className="mono font-bold text-text-primary">{sportLabel}</span>
+        <span className="mono text-[var(--color-neutral-300)]">{visible.length} ROWS</span>
+        <span className="mono" style={{ color: 'var(--color-neutral-300)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
         {stale && <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15', border: '1px solid #facc1555', borderRadius: '4px', padding: '0 5px' }}>STALE</span>}
-        <span style={{ color: 'var(--silver)' }}>
+        <span className="text-[var(--color-neutral-300)]">
           <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: '#facc15' }}>{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>
       </div>
 
       {unavailable ? (
-        <div role="status" style={{ padding: '24px 0', color: 'var(--silver)', fontSize: '13px' }}>
+        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
           Game-line prices are not published yet. NBA and NHL moneyline, spread and total prices refresh with the odds banker; check back shortly.
         </div>
       ) : allRows.length === 0 && locked === 0 ? (
-        <div role="status" style={{ padding: '24px 0', color: 'var(--silver)', fontSize: '13px' }}>
+        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
           No book has posted game lines for this slate yet. Prices appear as soon as a slate and its lines are posted.
         </div>
       ) : (
         <>
-          <div style={{ background: '#11131a', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px', marginBottom: '10px' }}>
+          <div style={{ background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '10px 12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px', marginBottom: '10px' }}>
             <PillGroup label="Market">
               {MARKETS.map(m => <Pill key={m.key} active={market === m.key} onClick={() => { setMarket(m.key); reset() }}>{m.label}</Pill>)}
             </PillGroup>
@@ -153,11 +153,11 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <Toggle label="Arbs only" checked={arbOnly} onChange={v => { setArbOnly(v); reset() }} />
             <Select id="gp-sort" label="SORT" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <input type="search" aria-label="Search teams" placeholder="Search team" value={q} onChange={e => { setQ(e.target.value); reset() }}
-              style={{ background: '#090a0f', color: 'var(--chalk)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 10px', fontSize: '12px', width: '140px' }} />
+              style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 10px', fontSize: '12px', width: '140px' }} />
           </div>
 
           {visible.length === 0 ? (
-            <div role="status" style={{ padding: '24px 0', color: 'var(--silver)', fontSize: '13px' }}>
+            <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
               No lines match these filters. Lower MIN EV, switch the market or clear the search.
             </div>
           ) : isMobile ? (
@@ -165,7 +165,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               {visible.slice(0, limit).map(r => <PriceCard key={r.key} r={r} columns={columns} copied={copied === r.key} onCopy={copyHedge} />)}
             </div>
           ) : (
-            <div className="odds-table-wrap" style={{ background: '#11131a', border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' }}>
+            <div className="odds-table-wrap" style={{ background: 'var(--color-background-primary-default)', border: `1px solid ${HAIR}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.45)' }}>
               <table className="odds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
@@ -192,7 +192,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <button type="button" className="btn btn-ghost" onClick={() => setLimit(l => l + PAGE)} style={{ marginTop: '10px', fontSize: '12px' }}>Show more ({visible.length - limit} left)</button>
           )}
           <LockedNotice locked={locked} shown={allRows.length} what="game-line rows" plan="The game-line price screen is part of All-Access Pro." />
-          <p style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '12px', lineHeight: 1.5 }}>
+          <p className="text-[12px] text-text-secondary mt-[12px] leading-[1.5]">
             Each book cell shows the away side (or over) above the home side (or under); green marks the best bettable price and an outlined price is a leg of an arbitrage. A spread row is
             labelled by the home line (home -3.5 means the away side gets +3.5); different lines of one game are separate rows. Offshore books (*) are shown for comparison and never
             counted as bettable. Fair value de-vigs each reference book two ways and averages them; whole-number lines can push, which this ignores. An arbitrage nets Kalshi&apos;s taker

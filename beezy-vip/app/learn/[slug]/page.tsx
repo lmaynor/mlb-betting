@@ -49,13 +49,13 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const related = RELATED[article.slug] ?? []
 
   return (
-    <div style={{ maxWidth: '780px', margin: '0 auto', padding: '40px 20px' }}>
+    <div className="max-w-[780px] mx-auto py-[40px] px-[20px]">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
         <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-[10px]">
           {article.category}
         </div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{article.title}</h1>
+        <h1 className="text-[24px] font-bold text-text-primary leading-[1.3]">{article.title}</h1>
         <p className="mono text-[11px] text-text-secondary mt-[10px]">
           Published <time dateTime={article.datePublished}>{article.datePublished}</time>
           {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>

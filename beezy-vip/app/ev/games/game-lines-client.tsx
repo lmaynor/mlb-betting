@@ -38,19 +38,19 @@ export function GameLinesClient({ feeds, sport }: { feeds: Record<string, GamePr
             className="mono"
             style={{
               fontSize: '11px', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer',
-              border: `1px solid ${market === m.key ? '#3a4156' : '#1e2230'}`,
-              background: market === m.key ? '#1b1f2b' : 'transparent',
-              color: market === m.key ? '#ffffff' : '#7d8596',
+              border: `1px solid ${market === m.key ? 'var(--color-border-button-hover)' : 'var(--color-separator-border)'}`,
+              background: market === m.key ? 'var(--color-background-tertiary-default)' : 'transparent',
+              color: market === m.key ? '#ffffff' : 'var(--color-text-secondary)',
             }}
           >{m.label}</button>
         ))}
       </div>
       {unavailable ? (
-        <div role="status" style={{ padding: '24px 0', color: 'var(--silver)', fontSize: '13px' }}>
+        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
           The NBA / NHL game-line feed is not published yet. It refreshes with the odds banker; check back shortly.
         </div>
       ) : shown === 0 ? (
-        <div role="status" style={{ padding: '24px 0', color: 'var(--silver)', fontSize: '13px' }}>
+        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
           No priced games for this selection. Game lines appear once a slate and book prices are posted.
         </div>
       ) : (

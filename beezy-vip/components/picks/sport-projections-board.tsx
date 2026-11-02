@@ -215,7 +215,7 @@ function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showRes
           {showResult && r.result && item('RESULT', r.result.toUpperCase())}
           {r.engine && item('ENGINE', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--warn)' }}>Unvalidated model output. Paper only, not in the public results.</div>}
+        {r.sport !== 'mlb' && <div className="mt-[8px] text-[11px] text-[var(--warn)]">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )

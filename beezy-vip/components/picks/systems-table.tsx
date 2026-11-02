@@ -38,13 +38,13 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
 
   return (
     <section aria-labelledby="systems-h">
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '10px' }}>
+      <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[10px]">
         <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
         <span className="mono text-[12px] text-text-secondary">
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a' }}>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: tracked ? '1040px' : '1240px' }}>
           <thead>
             <tr>

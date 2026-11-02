@@ -23,7 +23,7 @@ const GRID = '#1e2230'
 const AXIS = '#7d8596'
 const SYSTEM_CHIPS = ['EV', 'ALL', 'NRFI', 'HR', 'K', 'OUTS', 'F5', 'GAME', 'BATTER_TB', 'BATTER_HITS', 'SB']
 
-const tipStyle = { background: '#171a24', border: `1px solid ${GRID}`, borderRadius: 10, fontSize: 12, color: '#f3f4f6' }
+const tipStyle = { background: 'var(--color-background-tertiary-default)', border: `1px solid ${GRID}`, borderRadius: 10, fontSize: 12, color: 'var(--color-text-primary)' }
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
@@ -96,7 +96,7 @@ function SystemChips({ system, setSystem }: { system: string; setSystem: (s: str
           <button key={k} onClick={() => setSystem(k)} aria-pressed={on}
             className={cx('button-press-motion cursor-pointer rounded-lg border px-2.5 py-1.5 text-caption-1-semibold',
               !on && 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}
-            style={on ? { color: '#090a0f', background: c ?? 'var(--signal)', borderColor: c ?? 'var(--signal)' } : c ? { color: c } : undefined}>
+            style={on ? { color: 'var(--color-background-secondary-default)', background: c ?? 'var(--signal)', borderColor: c ?? 'var(--signal)' } : c ? { color: c } : undefined}>
             {k === 'ALL' ? 'ALL SYSTEMS' : systemLabel(k).toUpperCase()}
           </button>
         )
@@ -212,7 +212,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
             <tbody>
               {rows.map(b => (
                 <tr key={b.bucket} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
-                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span style={{ color: 'var(--warn)', marginLeft: '6px', fontSize: '10px' }}>low n</span>}</Td>
+                  <Td strong>{b.bucket}</Td><Td mono>{b.n}{b.n < 30 && <span className="text-[var(--warn)] ml-[6px] text-[10px]">low n</span>}</Td>
                   <Td mono>{b.hit_rate != null ? `${b.hit_rate.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_model_prob != null ? `${b.avg_model_prob.toFixed(1)}%` : '--'}</Td>
                   <Td mono>{b.avg_market_prob != null ? `${b.avg_market_prob.toFixed(1)}%` : '--'}</Td>
@@ -261,7 +261,7 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
                 const b = bookDisplay(r.book)
                 return (
                   <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span style={{ marginLeft: '8px', fontSize: '10px', color: 'var(--fog)' }}>exchange</span>}</Td>
+                    <Td><span style={{ fontSize: '11.5px', fontWeight: 700, color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '3px 8px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-[8px] text-[10px] text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>
@@ -295,13 +295,13 @@ function Health({ stats }: { stats: SystemStats[] }) {
               const n = Number(s.total_bets)
               const roi = s.roi == null ? null : Number(s.roi)
               const isEv = s.system === 'EV'
-              const color = SYSTEM_COLOR[s.system] ?? 'var(--silver)'
+              const color = SYSTEM_COLOR[s.system] ?? 'var(--color-neutral-300)'
               const status = isEv ? 'Tracked, not gated'
                 : logOnly.has(s.system) ? 'Log-only'
                 : n < GATE ? `Paper, ${n}/${GATE} bets`
                 : roi != null && roi < 0 ? '200+ bets, negative ROI'
                 : '200+ bets, paper'
-              const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--fog)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--silver)'
+              const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--color-text-secondary)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--color-neutral-300)'
               return (
                 <tr key={s.system} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
                   <Td><span style={{ color, fontWeight: 700 }}>{labelOf(s.system)}</span></Td>

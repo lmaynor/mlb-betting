@@ -3,7 +3,7 @@ import { liveAccuracy, LIVE_ENGINE, SPORT_MODEL_SPECS, type ModelValidation, typ
 import type { PickSystem } from '@/lib/pick-systems'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
 
-const CARD = { background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '14px 16px', display: 'grid', gap: '12px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.55 } as const
+const CARD = { background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '14px 16px', display: 'grid', gap: '12px', fontSize: '12.5px', color: 'var(--color-neutral-300)', lineHeight: 1.55 } as const
 const fmt = (x: number | null | undefined, d: number) => (x == null ? '--' : x.toFixed(d))
 const pair = (a: number | null, b: number | null, d: number) => (a == null ? '--' : `${a.toFixed(d)} vs ${fmt(b, d)}`)
 
@@ -47,7 +47,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
     <div style={CARD}>
       {system.gap && (
         <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)', borderRadius: '8px', padding: '10px 12px' }}>
-          <strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}
+          <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
         </div>
       )}
       <div>
@@ -62,7 +62,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
       {live && (
         <div>
           <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>LIVE BOARD ACCURACY</div>
-          <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
+          <div className="flex gap-y-[10px] gap-x-[28px] flex-wrap">
             <Stat label="SAMPLE" value={live.sample} />
             <Stat label="PLAYER-GAMES" value={live.n.toLocaleString('en-US')} />
             <Stat label="MAE (ENGINE VS L5)" value={pair(live.mae, live.baselineMae, live.mae >= 10 ? 1 : 3)} title="Mean absolute error of the projection on past games, using only earlier games; L5 is the player's average over the last five. Lower is better." />
@@ -73,7 +73,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
       )}
       <div>
         <div className="dell-heading" style={{ fontSize: '10px', color: pillar.accent, marginBottom: '8px' }}>RESEARCH MODEL VALIDATION</div>
-        <div style={{ display: 'flex', gap: '10px 28px', flexWrap: 'wrap' }}>
+        <div className="flex gap-y-[10px] gap-x-[28px] flex-wrap">
           <Stat label="SAMPLE" value={v?.sample ?? '--'} />
           <Stat label="MAE (MODEL VS BASELINE)" value={v ? pair(v.mae, v.baselineMae, 3) : '--'} title="Lower is better; the baseline is the best trailing-average forecaster in the study" />
           <Stat label="CRPS (MODEL VS BASELINE)" value={v ? pair(v.crps, v.baselineCrps, 3) : '--'} />

@@ -66,10 +66,10 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>
       )}
-      <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
+      <div className="gutter-m max-w-[1200px] mx-auto p-[24px]">
+        <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
           <div className="flex items-baseline gap-[12px] flex-wrap">
-            <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{pillar.shortName} {system.name}</h1>
+            <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
             <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
             </span>
@@ -115,7 +115,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
             )}
           </>
         )}
-        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}</div>}
+        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}</div>}
 
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '32px 0 10px' }}>Methodology</h2>
         <SystemMethodology system={system} />

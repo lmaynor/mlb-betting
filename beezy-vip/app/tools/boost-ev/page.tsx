@@ -4,9 +4,9 @@ import { ToolHeader } from '@/components/ui/tool-header'
 import { useState } from 'react'
 import { americanToImpliedProb, removeVig, formatProb } from '@/lib/odds'
 
-const B = '1px solid var(--basalt)'
-const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--ash)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fog)', display: 'block', marginBottom: '8px' }
+const B = '1px solid var(--color-separator-border)'
+const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
 
 function americanToDecimal(odds: number): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds)
@@ -38,14 +38,14 @@ export default function BoostEvPage() {
   }
 
   return (
-    <div style={{ maxWidth: '680px', margin: '0 auto', padding: '24px' }}>
+    <div className="max-w-[680px] mx-auto p-[24px]">
       <ToolHeader title="Boost EV Calculator" hint="Example values shown; edit them" current="/tools/boost-ev" />
 
-      <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', marginBottom: '16px' }}>
+      <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '24px', marginBottom: '16px' }}>
         <div className="mb-[16px]">
           <label htmlFor="boosted" style={labelStyle}>Boosted line you&apos;re offered (American)</label>
           <input id="boosted" type="number" value={boosted} onChange={e => setBoosted(e.target.value)} placeholder="+150" style={inputStyle} />
-          {validBoost && <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '4px' }}>Implied: {formatProb(americanToImpliedProb(bo))}</p>}
+          {validBoost && <p className="mono text-[11px] text-text-secondary mt-[4px]">Implied: {formatProb(americanToImpliedProb(bo))}</p>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
@@ -58,32 +58,32 @@ export default function BoostEvPage() {
           </div>
         </div>
         {fairProb != null && (
-          <p className="mono" style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '8px' }}>
-            Devigged fair win probability: <span style={{ color: 'var(--ash)' }}>{formatProb(fairProb)}</span>
+          <p className="mono text-[11px] text-text-secondary mt-[8px]">
+            Devigged fair win probability: <span className="text-text-primary">{formatProb(fairProb)}</span>
           </p>
         )}
       </div>
 
       {ev != null && kellyPct != null ? (
-        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', overflow: 'hidden' }}>
+        <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', overflow: 'hidden' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
             <div style={{ padding: '20px', borderRight: B }}>
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Expected value</div>
+              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>Expected value</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
               </div>
-              <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>
+              <div className="mono text-[13px] text-text-secondary mt-[4px]">
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}&cent; per $1 staked
               </div>
             </div>
             <div className="p-[20px]">
-              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--fog)', marginBottom: '8px' }}>Kelly fraction</div>
-              <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: 'var(--ash)' }}>{(kellyPct * 100).toFixed(1)}%</div>
-              <div className="mono" style={{ fontSize: '13px', color: 'var(--fog)', marginTop: '4px' }}>of bankroll (full Kelly; bet a quarter of this)</div>
+              <div className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>Kelly fraction</div>
+              <div className="mono text-[28px] font-bold text-text-primary">{(kellyPct * 100).toFixed(1)}%</div>
+              <div className="mono text-[13px] text-text-secondary mt-[4px]">of bankroll (full Kelly; bet a quarter of this)</div>
             </div>
           </div>
           <div className="py-[14px] px-[20px]">
-            <p className="times" style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.5 }}>
+            <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
               {ev > 0
                 ? 'Positive EV: the boosted price pays more than the fair probability implies. Max out the boost limit if the Kelly fraction supports it.'
                 : 'Negative EV: even boosted, this price is below fair value. Skip it.'}
@@ -91,7 +91,7 @@ export default function BoostEvPage() {
           </div>
         </div>
       ) : (
-        <div style={{ border: '1px solid #1e2230', borderRadius: '8px', background: '#11131a', padding: '24px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+        <div style={{ border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '24px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
           Enter the boosted price and two-way market lines above to compute Expected Value and Kelly sizing.
         </div>
       )}

@@ -248,7 +248,7 @@ export function ArbLine({ r, copied, onCopy }: { r: GamePriceRow; copied: boolea
   const a = r.arb
   if (!a) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap', fontSize: '11.5px' }}>
+    <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap text-[11.5px]">
       <span className="mono" style={{ fontWeight: 700, color: GREEN }} title={a.feeLeg ? `Gross ${a.arbPct.toFixed(2)}%, net of Kalshi's taker fee ${a.netArbPct.toFixed(2)}%` : 'No fee on either leg'}>
         ARB +{a.netArbPct.toFixed(2)}%{a.feeLeg ? ' NET OF KALSHI FEE' : ''}
       </span>
@@ -275,7 +275,7 @@ export function PriceCard({ r, columns, copied, onCopy }: {
     </div>
   )
   return (
-    <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid #1e2230' }}>
+    <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid var(--color-separator-border)' }}>
       <div className="flex justify-between gap-[8px] items-baseline">
         <span className="text-[13.5px] font-bold text-text-primary">{r.matchup}</span>
         <span className="mono text-[11px] text-text-secondary">{startLabel(r.row.commence)}</span>
@@ -286,7 +286,7 @@ export function PriceCard({ r, columns, copied, onCopy }: {
       {r.arbLive && <div style={{ paddingTop: '6px', borderTop: `1px solid ${HAIR}` }}><ArbLine r={r} copied={copied} onCopy={onCopy} /></div>}
       <details style={{ marginTop: '6px' }}>
         <summary style={{ fontSize: '11.5px', color: 'var(--link)', cursor: 'pointer' }}>All books</summary>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '4px' }}>
+        <table className="w-full border-collapse mt-[4px]">
           <tbody>
             {columns.filter(c => byBook.has(c.key)).map(c => {
               const q = byBook.get(c.key)!

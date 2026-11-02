@@ -29,7 +29,7 @@ function pickText(bet: Bet) {
 
 const RESULT: Record<string, { label: string; color: string }> = {
   win: { label: 'WIN', color: '#22c55e' }, loss: { label: 'LOSS', color: '#ef4444' },
-  push: { label: 'PUSH', color: '#9ca3af' }, void: { label: 'VOID', color: '#7d8596' },
+  push: { label: 'PUSH', color: 'var(--color-neutral-400)' }, void: { label: 'VOID', color: 'var(--color-text-secondary)' },
 }
 
 export async function RecentPicksTable() {
@@ -58,7 +58,7 @@ export async function RecentPicksTable() {
             <tbody>
               {rows.map(b => {
                 const pill = SYSTEM_PILL[b.system] ?? SYSTEM_PILL.ALL
-                const res = RESULT[b.result ?? ''] ?? { label: 'OPEN', color: '#7d8596' }
+                const res = RESULT[b.result ?? ''] ?? { label: 'OPEN', color: 'var(--color-text-secondary)' }
                 const sp: HeadshotSport = b.sport && hasHeadshots(b.sport.toLowerCase()) ? (b.sport.toLowerCase() as HeadshotSport) : 'mlb'
                 return (
                   <tr key={b.id}>

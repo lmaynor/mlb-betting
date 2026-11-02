@@ -108,7 +108,7 @@ export function PricingSection() {
               <button key={l} role="radio" aria-checked={league === l} onClick={() => setLeague(l)}
                 className={cx('button-press-motion cursor-pointer rounded-lg border px-3 py-[5px] text-caption-1-semibold',
                   league === l
-                    ? 'border-[var(--signal)] bg-[var(--signal)] text-[#090a0f]'
+                    ? 'border-[var(--signal)] bg-[var(--signal)] text-[var(--color-background-secondary-default)]'
                     : 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}>
                 {LEAGUE_LABEL[l]}
               </button>

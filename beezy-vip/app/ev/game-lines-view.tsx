@@ -72,13 +72,13 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           <>
             <div>
               <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL MARGIN</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {expMargin ?? '--'}
               </div>
             </div>
             <div>
               <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
               </div>
             </div>
@@ -94,7 +94,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           <>
             <div>
               <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>EXPECTED GOALS</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.lambda_a != null && game.lambda_h != null
                   ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
                   : '--'}
@@ -102,7 +102,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
             </div>
             <div>
               <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
+              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
                 {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
               </div>
             </div>
@@ -135,14 +135,14 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
               return (
                 <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid var(--color-border-table)', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
-                  <td style={{ padding: '8px', color: '#f3f4f6' }}>
+                  <td style={{ padding: '8px', color: 'var(--color-text-primary)' }}>
                     <div className="font-semibold">{m.market_label}</div>
                     <div className="mono text-[11px] text-[var(--color-neutral-300)]">{sideLabel}</div>
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6', fontWeight: 600 }}>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-primary)', fontWeight: 600 }}>
                     {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6' }}>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-primary)' }}>
                     {(m.p_model * 100).toFixed(1)}%
                   </td>
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-secondary)' }}>
@@ -216,26 +216,26 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 </td>
                 <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {r.player}
-                  <div className="mono" style={{ fontSize: '10.5px', color: '#7d8596', fontWeight: 400 }}>
+                  <div className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)', fontWeight: 400 }}>
                     {startLabel(r.commence)}
                   </div>
                 </td>
                 <td style={{ padding: '9px 12px', color: 'var(--color-neutral-300)' }}>
                   {r.stat_label}
                 </td>
-                <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: '#f3f4f6' }}>
+                <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {sideDisplay} {lineDisplay}
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#f3f4f6' }}>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: 'var(--color-text-primary)' }}>
                   {(r.p_model_side * 100).toFixed(1)}%
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#7d8596' }}>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: 'var(--color-text-secondary)' }}>
                   {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
                 </td>
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                   {r.model_edge != null ? `${m_edge(r.model_edge)}` : '--'}
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : '#7d8596' }}>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : 'var(--color-text-secondary)' }}>
                   {r.market_ev != null ? `${r.market_ev > 0 ? '+' : ''}${(r.market_ev * 100).toFixed(1)}%` : '--'}
                 </td>
                 <td style={{ textAlign: 'right', padding: '9px 12px' }}>
@@ -247,7 +247,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                       {bestBook && <BookTag book={bestBook} size={15} />}
                     </div>
                   ) : (
-                    <span className="mono" style={{ color: '#7d8596' }}>--</span>
+                    <span className="mono text-text-secondary">--</span>
                   )}
                 </td>
               </tr>

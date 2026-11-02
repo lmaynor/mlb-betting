@@ -12,8 +12,8 @@ const CALCULATORS = [
  */
 export function ToolHeader({ title, hint, current }: { title: string; hint?: string; current?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '14px' }}>
-      <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{title}</h1>
+    <div className="flex items-center justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[14px]">
+      <h1 className="text-[20px] font-bold text-text-primary m-0">{title}</h1>
       <span className="flex items-center gap-[10px] flex-wrap">
         {hint && <span className="mono text-[12px] text-text-secondary">{hint}</span>}
         {current && (

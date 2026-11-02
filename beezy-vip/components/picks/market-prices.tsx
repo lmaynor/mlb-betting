@@ -63,10 +63,10 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
 function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; sport: ProjectionSport; confluence?: Set<string> }) {
   return (
     <div style={{ ...CARD_STYLE, overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px', fontSize: '13px' }}>
+      <table className="w-full border-collapse min-w-[760px] text-[13px]">
         <thead>
           <tr>{['Player / prop', 'Game', 'Side', 'Book', 'Price', 'Fair', 'Books', 'EV', 'Status'].map(h => (
-            <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--color-text-secondary)', borderBottom: '1px solid #1e2230' }}>{h}</th>))}</tr>
+            <th key={h} className="dell-heading" style={{ textAlign: 'left', padding: '10px 12px', fontSize: '10px', color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-separator-border)' }}>{h}</th>))}</tr>
         </thead>
         <tbody>
           {rows.filter(r => !isOffshore(r.book)).slice(0, 60).map(r => {

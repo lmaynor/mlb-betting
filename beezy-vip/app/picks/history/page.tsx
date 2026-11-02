@@ -35,23 +35,23 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>Picks history</h1>
+    <div className="max-w-[1200px] mx-auto p-[24px]">
+      <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
+        <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
         <div role="group" aria-label="Range" className="flex gap-[6px]">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
               className="mono"
               style={{ fontSize: '11.5px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', textDecoration: 'none',
                 color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)', background: r === days ? 'var(--signal)' : 'var(--surface-elevated)',
-                border: `1px solid ${r === days ? 'var(--signal)' : '#1e2230'}` }}>
+                border: `1px solid ${r === days ? 'var(--signal)' : 'var(--color-separator-border)'}` }}>
               {r}D
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="mono" style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '9px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+      <div className="mono" style={{ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '9px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -61,7 +61,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
       </div>
 
       {history.length === 0 ? (
-        <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: '8px', padding: '36px 20px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+        <div style={{ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px', padding: '36px 20px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
           No settled cards in this range yet.
         </div>
       ) : (

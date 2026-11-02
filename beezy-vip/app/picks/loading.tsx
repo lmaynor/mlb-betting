@@ -4,13 +4,13 @@ const ROWS = Array.from({ length: 10 }, (_, i) => i)
 export default function Loading() {
   return (
     <div aria-busy="true" aria-label="Loading picks" style={{ maxWidth: 1200, margin: '0 auto', padding: '16px' }}>
-      <div style={{ height: 28, width: 220, background: '#171a24', marginBottom: 16 }} />
-      <div style={{ border: '1px solid #232634', background: '#11131a' }}>
+      <div style={{ height: 28, width: 220, background: 'var(--color-background-tertiary-default)', marginBottom: 16 }} />
+      <div style={{ border: '1px solid #232634', background: 'var(--color-background-primary-default)' }}>
         {ROWS.map(i => (
-          <div key={i} style={{ height: 40, borderBottom: i === ROWS.length - 1 ? 'none' : '1px solid #171a24', display: 'flex', alignItems: 'center', gap: 16, padding: '0 12px' }}>
-            <div style={{ height: 10, width: 40, background: '#171a24' }} />
-            <div style={{ height: 10, width: '30%', background: '#171a24' }} />
-            <div style={{ height: 10, width: '20%', background: '#171a24' }} />
+          <div key={i} style={{ height: 40, borderBottom: i === ROWS.length - 1 ? 'none' : '1px solid var(--color-background-tertiary-default)', display: 'flex', alignItems: 'center', gap: 16, padding: '0 12px' }}>
+            <div  className="h-[10px] w-[40px] bg-[var(--color-background-tertiary-default)]"/>
+            <div style={{ height: 10, width: '30%', background: 'var(--color-background-tertiary-default)' }} />
+            <div style={{ height: 10, width: '20%', background: 'var(--color-background-tertiary-default)' }} />
           </div>
         ))}
       </div>

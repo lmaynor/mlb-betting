@@ -61,7 +61,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
   const gap = Boolean(system.gap)
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
+    <div className="max-w-[1200px] mx-auto py-[40px] px-[24px]">
       <div className="flex items-center gap-[8px] mb-[24px] flex-wrap">
         <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
         <span className="mono text-[11px] text-text-secondary">&middot;</span>
@@ -84,7 +84,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       {gap && (
         <div role="note" style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.06)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', marginBottom: '28px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6 }}>
-          <strong style={{ color: '#f59e0b' }}>DATA GAP.</strong> {system.gap}
+          <strong className="text-[#f59e0b]">DATA GAP.</strong> {system.gap}
         </div>
       )}
 

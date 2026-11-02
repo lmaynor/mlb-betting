@@ -664,7 +664,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         </section>
       ) : (
         <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
-          <div style={{ padding: '10px 14px', display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="py-[10px] px-[14px] flex gap-y-[10px] gap-x-[18px] flex-wrap items-center">
             <PillGroup label="Mode">
               {MODES.map(m => {
                 const n = badgeFor(m.key)
@@ -2253,7 +2253,7 @@ function TierPill({ alt, modalPoint }: { alt: boolean; modalPoint?: number | nul
     : 'The main line'
   return (
     <span className="mono" title={tip}
-      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? 'var(--color-border-button-hover)' : HAIR}`, color: alt ? '#9ca3af' : 'var(--color-text-secondary)' }}>
+      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? 'var(--color-border-button-hover)' : HAIR}`, color: alt ? 'var(--color-neutral-400)' : 'var(--color-text-secondary)' }}>
       {alt ? '[ALT]' : 'MAIN'}
     </span>
   )
@@ -2273,7 +2273,7 @@ function PropCells({ row, label }: { row: BoardRow; label: string }) {
             <div className="mono odds-sub" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
               <span>{label} {STAT_LABEL[row.stat] ?? row.stat}</span>
               {row.is_alt === true && (
-                <span title={mainLineTip} style={{ fontSize: '10px', color: '#9ca3af', fontFamily: 'var(--font-mono), monospace' }}>[ALT]</span>
+                <span title={mainLineTip} style={{ fontSize: '10px', color: 'var(--color-neutral-400)', fontFamily: 'var(--font-mono), monospace' }}>[ALT]</span>
               )}
             </div>
           </div>
@@ -2533,7 +2533,7 @@ function OutlierCard({
       {/* Row 1: Matchup & Dislocation Pill */}
       <div className="flex justify-between items-center gap-[8px] flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: '#9ca3af', border: `1px solid ${HAIR}` }}>
+          <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: 'var(--color-neutral-400)', border: `1px solid ${HAIR}` }}>
             {sport.toUpperCase()}
           </span>
           <span className="mono text-[11.5px] text-[var(--color-neutral-300)]">
@@ -2552,11 +2552,11 @@ function OutlierCard({
             <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
           </span>
           <div>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#f3f4f6', lineHeight: 1.25 }}>{item.row.player}</div>
-            <div className="mono" style={{ fontSize: '12px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+            <div className="text-[15px] font-bold text-text-primary leading-[1.25]">{item.row.player}</div>
+            <div className="mono" style={{ fontSize: '12px', color: 'var(--color-neutral-400)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
               <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
               {item.row.is_alt === true && (
-                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 4px', borderRadius: '3px', border: '1px solid var(--color-border-button-hover)', color: '#9ca3af' }}>[ALT]</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 4px', borderRadius: '3px', border: '1px solid var(--color-border-button-hover)', color: 'var(--color-neutral-400)' }}>[ALT]</span>
               )}
             </div>
           </div>
@@ -2565,7 +2565,7 @@ function OutlierCard({
           <div className="mono" style={{ fontSize: '24px', fontWeight: 800, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
             {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
           </div>
-          <div className="mono" style={{ fontSize: '10px', color: '#7d8596', marginTop: '3px', letterSpacing: '0.04em' }}>OUTLIER PRICE</div>
+          <div className="mono text-[10px] text-text-secondary mt-[3px] tracking-[0.04em]">OUTLIER PRICE</div>
         </div>
       </div>
 
@@ -2574,9 +2574,9 @@ function OutlierCard({
         {isLocked ? (
           <>
             <div className="flex items-center gap-[7px]">
-              <LockGlyph size={13} color="#9ca3af" />
-              <span style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af' }}>Book hidden (Pro)</span>
-              <span className="mono" style={{ fontSize: '10.5px', color: '#7d8596' }}>({item.nPeers} peer books)</span>
+              <LockGlyph size={13} color="var(--color-neutral-400)" />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-neutral-400)' }}>Book hidden (Pro)</span>
+              <span className="mono text-[10.5px] text-text-secondary">({item.nPeers} peer books)</span>
             </div>
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '3px 9px', fontSize: '11px', color: GREEN, borderColor: 'rgba(87,242,135,0.3)' }}>
               See Pro &rarr;
@@ -2587,7 +2587,7 @@ function OutlierCard({
             <div className="flex items-center gap-2">
               <BookLogo book={item.outlierBook} size={22} />
               <span className="text-[12.5px] font-semibold text-text-primary">{bookDisplay(item.outlierBook).label}</span>
-              <span className="mono" style={{ fontSize: '11px', color: '#7d8596', marginLeft: '4px' }}>Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
+              <span className="mono text-[11px] text-text-secondary ml-[4px]">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
             </div>
             <span className="mono" style={{ fontSize: '10.5px', color: GREEN, fontWeight: 700, letterSpacing: '0.04em' }}>BEST PRICE</span>
           </>
@@ -2599,7 +2599,7 @@ function OutlierCard({
         {/* Outlier Book Row */}
         <div className="flex items-center gap-2.5">
           <div className="w-[32px] flex justify-center shrink-0">
-            {isLocked ? <LockGlyph size={12} color="#7d8596" /> : <BookLogo book={item.outlierBook} size={20} />}
+            {isLocked ? <LockGlyph size={12} color="var(--color-text-secondary)" /> : <BookLogo book={item.outlierBook} size={20} />}
           </div>
           <div className="flex-1 h-[8px] bg-[var(--color-background-tertiary-default)] rounded-[4px] overflow-hidden">
             <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
@@ -2618,14 +2618,14 @@ function OutlierCard({
             <div className="flex-1 h-[8px] bg-[var(--color-background-tertiary-default)] rounded-[4px] overflow-hidden">
               <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
             </div>
-            <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '11.5px', color: '#9ca3af', flexShrink: 0 }}>
+            <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '11.5px', color: 'var(--color-neutral-400)', flexShrink: 0 }}>
               {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
             </div>
           </div>
         ))}
 
         {/* Footer Summary Line */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '11px', color: '#7d8596' }}>
+        <div className="flex justify-between items-center mt-[4px] text-[11px] text-text-secondary">
           <div>
             <span>Market avg &middot; {item.nPeers} books</span>
             {item.fairAmerican != null && (
@@ -2669,7 +2669,7 @@ function OutlierTableRow({
       <td className="odds-ev">
         {isLocked ? (
           <div className="flex items-center gap-1.5">
-            <LockGlyph size={12} color="#9ca3af" />
+            <LockGlyph size={12} color="var(--color-neutral-400)" />
             <button onClick={onReveal} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px', color: GREEN }}>See Pro</button>
           </div>
         ) : (

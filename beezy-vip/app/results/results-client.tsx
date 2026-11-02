@@ -52,11 +52,11 @@ const SYSTEM_LABEL: Record<string, string> = { ALL: 'ALL', ..._SYS_LABEL }
 function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
-  const activeColor = color ?? 'var(--silver)'
+  const activeColor = color ?? 'var(--color-neutral-300)'
   return (
     <button onClick={onClick}
       className={cx('mono', PILLBTN, active ? 'font-bold' : 'border-separator-border bg-background-primary-default font-medium text-text-secondary hover:bg-background-primary-hover')}
-      style={active ? { borderColor: activeColor, color: activeColor, background: `color-mix(in oklab, ${activeColor} 16%, var(--carbon))` } : undefined}>
+      style={active ? { borderColor: activeColor, color: activeColor, background: `color-mix(in oklab, ${activeColor} 16%, var(--color-background-full))` } : undefined}>
       {label}
     </button>
   )
@@ -159,7 +159,7 @@ const PnLTooltip = ({ active, payload, label }: any) => {
       {payload
         .filter((p: any) => p.value != null && !['dd_top', 'dd_bot'].includes(p.dataKey))
         .map((p: any) => (
-          <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? 'var(--ash)', marginBottom: '2px' }}>
+          <div key={p.dataKey} style={{ color: PILL[p.dataKey] ?? 'var(--color-text-primary)', marginBottom: '2px' }}>
             {p.dataKey}: {p.value >= 0 ? '+' : '-'}${Math.abs(p.value).toFixed(0)}
           </div>
         ))}
@@ -221,9 +221,9 @@ function ResultBetCard({ bet }: { bet: Bet }) {
 
       <div className="grid grid-cols-4 items-end gap-2.5">
         {[
-          { label: 'Odds', value: formatOdds(bet.odds), color: 'var(--ash)' },
+          { label: 'Odds', value: formatOdds(bet.odds), color: 'var(--color-text-primary)' },
           { label: 'Edge', value: bet.edge != null ? `${bet.edge >= 0 ? '+' : ''}${(bet.edge * 100).toFixed(1)}%` : '--', color: 'var(--signal)' },
-          { label: 'Book', value: bet.book ? bookText(bet.book) : '--', color: 'var(--silver)' },
+          { label: 'Book', value: bet.book ? bookText(bet.book) : '--', color: 'var(--color-neutral-300)' },
         ].map(item => (
           <div key={item.label} className="min-w-0">
             <div className={cx(LBL, 'mb-[3px]')}>{item.label}</div>
@@ -350,7 +350,7 @@ export function ResultsClient({
             <span className={LBL}>Cumulative P&L, full season ($)</span>
             <span className="flex gap-3.5">
               <span className="mono" style={{ fontSize: '10px', color: '#57f287' }}>-- +EV alerts, flat $100</span>
-              <span className="mono" style={{ fontSize: '10px', color: '#f3f4f6' }}>-- models, paper stakes</span>
+              <span className="mono text-[10px] text-text-primary">-- models, paper stakes</span>
             </span>
           </div>
           {mounted && (
@@ -358,7 +358,7 @@ export function ResultsClient({
               <LineChart data={curve} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
                 <XAxis dataKey="date" tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(1, Math.floor(curve.length / 7))} />
                 <YAxis tick={{ fill: '#7d8596', fontSize: 10, fontFamily: 'monospace' }} tickLine={false} axisLine={false} tickFormatter={v => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toLocaleString()}`} width={68} />
-                <Tooltip contentStyle={{ background: '#171a24', border: '1px solid #1e2230', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#7d8596' }} formatter={(v) => money(Number(v))} />
+                <Tooltip contentStyle={{ background: 'var(--color-background-tertiary-default)', border: '1px solid var(--color-separator-border)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: 'var(--color-text-secondary)' }} formatter={(v) => money(Number(v))} />
                 <ReferenceLine y={0} stroke="#2e3446" strokeDasharray="3 3" />
                 <Line type="monotone" dataKey="ev_flat_cum" name="+EV alerts (flat $100)" stroke="#57f287" strokeWidth={2} dot={false} isAnimationActive={false} />
                 <Line type="monotone" dataKey="models_cum" name="Models (paper stakes)" stroke="#f3f4f6" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -378,7 +378,7 @@ export function ResultsClient({
             <div className="flex flex-wrap items-center gap-2.5">
               {[...chartSystems, 'ALL'].map(s => (
                 <span key={s} className="flex items-center gap-[5px]">
-                  <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: PILL[s] ?? 'var(--ash)' }} />
+                  <span className="inline-block size-2 shrink-0 rounded-full" style={{ background: PILL[s] ?? 'var(--color-text-primary)' }} />
                   <span className="mono text-[10px] text-text-secondary">{s}</span>
                 </span>
               ))}
@@ -424,7 +424,7 @@ export function ResultsClient({
             </div>
             <div className="flex gap-4">
               <span className="mono text-[10px] text-[var(--signal)]">-- model edge</span>
-              <span className="mono" style={{ fontSize: '10px', color: 'var(--link)' }}>-- realized ROI</span>
+              <span className="mono text-[10px] text-[var(--link)]">-- realized ROI</span>
             </div>
           </div>
           {mounted && (
@@ -468,7 +468,7 @@ export function ResultsClient({
                 ...groupStats.map(s => {
                   const r = s.roi == null ? null : parseFloat(String(s.roi))
                   const pnl = parseFloat(String(s.total_pnl ?? 0))
-                  const pc = PILL[s.system] ?? 'var(--silver)'
+                  const pc = PILL[s.system] ?? 'var(--color-neutral-300)'
                   return (
                     <div key={s.system} className="grid min-w-[500px] grid-cols-6 items-center border-b border-border-table transition-colors hover:bg-background-primary-hover">
                       <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pc }}>{s.system}</div>
@@ -476,7 +476,7 @@ export function ResultsClient({
                         {s.total_bets}{parseInt(String(s.total_bets)) < GATE && <span className="text-text-tertiary"> / {GATE}</span>}
                       </div>
                       <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%</div>
-                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
+                      <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '--' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}%`}</div>
                       <div className="mono px-3 py-2.5 text-[11px] font-semibold" style={{ color: pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(pnl)}</div>
                       <div className="mono px-3 py-2.5 text-[11px] text-text-primary">{fmtSigned(s.avg_edge)}</div>
                     </div>
@@ -500,19 +500,19 @@ export function ResultsClient({
                     {groupStats.map(s => {
                       const r = s.roi == null ? null : parseFloat(String(s.roi))
                       const pnl = parseFloat(String(s.total_pnl ?? 0))
-                      const pc = PILL[s.system] ?? 'var(--silver)'
+                      const pc = PILL[s.system] ?? 'var(--color-neutral-300)'
                       return (
                         <div key={s.system} className={cx('px-[13px] py-3', CARD)}>
                           <div className="mb-2.5 flex items-center justify-between gap-3">
                             <span className="mono text-xs font-extrabold" style={{ color: pc }}>{s.system}</span>
-                            <span className="mono text-[11px] font-extrabold" style={{ color: r == null ? 'var(--fog)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
+                            <span className="mono text-[11px] font-extrabold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
                           </div>
                           <div className="grid grid-cols-4 gap-2.5">
                             {[
-                              ['Bets', parseInt(String(s.total_bets)) < GATE ? `${s.total_bets} / ${GATE}` : String(s.total_bets), 'var(--ash)'],
-                              ['Win', `${parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%`, 'var(--ash)'],
+                              ['Bets', parseInt(String(s.total_bets)) < GATE ? `${s.total_bets} / ${GATE}` : String(s.total_bets), 'var(--color-text-primary)'],
+                              ['Win', `${parseFloat(String(s.win_rate ?? 0)).toFixed(1)}%`, 'var(--color-text-primary)'],
                               ['P&L', money(pnl), pnl >= 0 ? 'var(--signal)' : 'var(--loss)'],
-                              ['Edge', fmtSigned(s.avg_edge), 'var(--ash)'],
+                              ['Edge', fmtSigned(s.avg_edge), 'var(--color-text-primary)'],
                             ].map(([label, value, color]) => (
                               <div key={label}>
                                 <div className={cx(LBL, 'mb-[3px]')}>{label}</div>
@@ -559,7 +559,7 @@ export function ResultsClient({
             <span className={cx(LBL, 'mr-1')}>Result</span>
             {RESULTS.map(r => (
               <Chip key={r} label={r} active={result === r}
-                color={r === 'WIN' ? 'var(--signal)' : r === 'LOSS' ? 'var(--loss)' : r === 'VOID' ? 'var(--fog)' : undefined}
+                color={r === 'WIN' ? 'var(--signal)' : r === 'LOSS' ? 'var(--loss)' : r === 'VOID' ? 'var(--color-text-secondary)' : undefined}
                 onClick={() => { setResult(r); setPage(0) }} />
             ))}
           </div>

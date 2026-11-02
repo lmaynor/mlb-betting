@@ -33,8 +33,8 @@ export function gamesHref(view: GamesView, sport: GameSport): string {
 /** The page toolbar's right side: the PRICES | MODEL switch and the sport links. Both are plain links so each state is shareable. */
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px 16px', flexWrap: 'wrap' }}>
-      <nav aria-label="Game lines view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
+    <div className="flex items-center gap-y-[8px] gap-x-[16px] flex-wrap">
+      <nav aria-label="Game lines view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: 'var(--color-background-secondary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '8px' }}>
         {VIEW_TABS.map(t => (
           <Link
             key={t.key}
@@ -44,8 +44,8 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
             className="mono"
             style={{
               fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em', padding: '5px 11px', borderRadius: '6px', textDecoration: 'none',
-              color: view === t.key ? '#ffffff' : 'var(--silver)', background: view === t.key ? '#1b1f2b' : 'transparent',
-              border: `1px solid ${view === t.key ? '#3a4156' : 'transparent'}`,
+              color: view === t.key ? '#ffffff' : 'var(--color-neutral-300)', background: view === t.key ? 'var(--color-background-tertiary-default)' : 'transparent',
+              border: `1px solid ${view === t.key ? 'var(--color-border-button-hover)' : 'transparent'}`,
             }}
           >{t.label}</Link>
         ))}
@@ -56,7 +56,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
             key={t.key}
             href={gamesHref(view, t.key)}
             aria-current={sport === t.key ? 'page' : undefined}
-            style={{ color: sport === t.key ? 'var(--chalk)' : 'var(--link)', fontWeight: sport === t.key ? 600 : 400, textDecoration: 'none' }}
+            style={{ color: sport === t.key ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: sport === t.key ? 600 : 400, textDecoration: 'none' }}
           >{t.label}</Link>
         ))}
       </nav>

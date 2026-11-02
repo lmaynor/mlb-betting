@@ -105,7 +105,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             ) : (
               <>
                 {signIn}
-                <Link href="/pricing" className="whitespace-nowrap rounded-md bg-[#57F287] px-3 py-2 text-caption-1-bold tracking-[0.02em] text-[#090a0f] no-underline hover:bg-[#7bf5a4]">
+                <Link href="/pricing" className="whitespace-nowrap rounded-md bg-[#57F287] px-3 py-2 text-caption-1-bold tracking-[0.02em] text-[var(--color-background-secondary-default)] no-underline hover:bg-[#7bf5a4]">
                   {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
                 </Link>
               </>

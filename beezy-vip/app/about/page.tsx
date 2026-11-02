@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <div style={{ maxWidth: '760px', margin: '0 auto', padding: '32px 20px 48px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#f3f4f6', margin: '0 0 16px' }}>What is beezy.fyi?</h1>
+      <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>What is beezy.fyi?</h1>
       <div className="article-body">
         <p>
           <strong>beezy.fyi</strong> is a quantitative sports betting analytics site covering the NFL, NBA, NHL and MLB. It

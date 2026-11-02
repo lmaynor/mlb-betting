@@ -18,8 +18,8 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (
-    <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid #1e2230', background: 'var(--color-background-secondary-default)' }}>
-      <div className="gutter-m" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px 16px', flexWrap: 'wrap' }}>
+    <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
+      <div className="gutter-m max-w-[1200px] mx-auto py-[0px] px-[24px] flex items-center justify-between gap-y-[4px] gap-x-[16px] flex-wrap">
         <div className="flex items-baseline gap-[10px] py-[10px] px-[0px]">
           <span style={{ fontSize: '13px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
           <span className="mono text-[11.5px] text-text-secondary">&middot; {n} Systems</span>
