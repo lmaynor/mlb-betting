@@ -10,7 +10,7 @@ to review. This document is that hand-off. **Everything below is paper / UNVALID
 |---|---|---|
 | Are the new engines profitable? | **No evidence of it, and the NBA picks lose.** | Section 3 |
 | Do any beat the market on real lines? | No. NBA / NHL engines are worse than the market alone; NFL hierarchical is better than the old NFL engine on 3 stats but still loses to the market | Section 3, linked reports |
-| Are they running? | Locally on live data yes (Section 5); **NOT deployed** (build blocked by the permission layer, Section 8) | Section 5, 8 |
+| Are they running? | Locally on live data yes (Section 5); **deployed 2026-11-02 after owner approval** (Section 8); frontend still preview-only | Section 5, 8 |
 | Is every pick tracked? | Now yes: new ledger system `PROPS`, settlement, CLV, recap split, heartbeat monitor | Section 4 |
 | Discord? | Official-tier picks only, via the existing sport alerts channels, labelled paper / unvalidated | Section 4 |
 | Mobile? | Rendered at 375px, real problems fixed (props board was unusable), tsc + jest green | Section 6 |
@@ -87,13 +87,16 @@ shows the desktop filter bar (SSR), `/ev/games` prints a raw engine id, `LIVE_EN
 5. `daily_projections` merge summary can print a negative `games_parlay_only` (NFL showed -10): cosmetic counter bug, not fixed.
 6. `BetTracker.log_bet` only dedups when `game_pk` is set, which winter bets never have; `ev.model_picks` dedups itself. The existing `EV` winter alerts rely on upstream notify-state instead.
 
-## 8. Deployment state
-**Nothing was deployed.** The attempt to build the feeds images (`SKIP_PROD=1 ALLOW_NON_MAIN=1 bash deploy/build_all_images.sh`) was blocked by the session's permission layer and not retried. So:
-the new NBA / NHL / NFL engines, the NBA loader fix, `pp_points` rows and the `props-model-picks` job are NOT live; the live boards still run what was deployed on 2026-11-02 (service rev 00351; the
-`daily-projections` job has no `NFL_ENGINE` env, so NFL is on the old engine). Verified instead by running the new code locally against live GCS data (section 5) with no writes, and by the full test suites
-(pytest 3,093 passed; tsc clean; jest 759 passed). To go live, in order: build the feeds images (command above), `bash deploy/setup_daily_projections_job.sh` (sets `NFL_ENGINE=hierarchical`),
-`bash deploy/setup_model_picks.sh`, check `python -m ev.model_picks --sport all --dry-run`, and deploy the Vercel frontend. Retagging prod `mlb-betting:latest` (needed for the recap fields and the
-`monitor_ops` heartbeat check) is a separate owner decision because it changes every MLB job's next run; until then the recap's existing `props (unvalidated)` field counts PROPS bets together with `EV` alerts.
+## 8. Deployment state (updated 2026-11-02 ~16:12 UTC, after the owner approved the deploy)
+**Live (done this session, owner-approved):**
+- Feeds / ev:shadow / bp-crawl images built from commit 85acdca (digest `sha256:60b6da41f8fb7c0aad5ceb1f6744ad94fb0aa2bb8bce1496ed35df7a6a701b0f`); prod `mlb-betting:latest` and the service NOT touched.
+- `daily-projections` re-provisioned with `NFL_ENGINE=hierarchical` (needed `CONFIRM_IMAGE_HAS_LIVE_LINES=1`; `ev/rosters.py` and `ev/bettingpros_events.py` are tracked at 85acdca). One manual execution
+  succeeded; NHL rotation rows rose 379 -> 503 (`pp_points` projection-only rows).
+- `props-model-picks` Cloud Run Job + scheduler `props-model-picks-1` (`40 * * * *` UTC). First live pass: 159 `PROPS` bets logged (NBA 113, NHL 45, NFL 1), 1 official NBA pick posted to Discord; a second
+  pass logged 0 and posted nothing (idempotent). Heartbeat `ModelPicks/last_run.json` is written. Evidence is the job log + heartbeat; the `bets` table itself was not queried from here.
+**Still NOT done:** no CLV exists yet (closing lines are captured only after games start); the Vercel frontend has no production deploy (preview only, local 375x812 render); prod `mlb-betting:latest` not retagged
+(the recap's `model picks` fields and the `monitor_ops` heartbeat check need it; until then the recap's `props (unvalidated)` field counts PROPS bets together with `EV` alerts; it changes every MLB job's
+next run, so it is a separate owner decision); PR #158 unmerged. **No engine has been shown profitable** (Section 5): the live tracker is the way to find out, and CLV, not ROI, is the go/no-go.
 
 ## 9. Questions a reviewer should push on
 - Is the forward audit's replay faithful to what the job will log, given it uses last-state rather than first-sighting rows? (It cannot reproduce the 30-minute gate.)
