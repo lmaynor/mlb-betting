@@ -259,8 +259,11 @@ window truncated at 8,000 scanned markets, so a SAMPLE):
   price of 0.55 against our p_true of 0.21 and hit 47%: the market was right and we were not. Adverse selection by construction: our quote only fills where we
   disagree with the market most.
 Verdict: the join is now good enough to say something, and what it says is not "quote more". Retail combos do look overpriced on average (the lay-at-market result
-is positive and mostly same-game), but our fair value is badly calibrated on exactly the combos where we would win the quote. Fix the SGP model (empirical
-correlations from `research/sgp-empirical-rho`) and re-test on a held-out set of games before any quoting beyond the demo exchange.
+is positive and mostly same-game), but our fair value is badly calibrated on exactly the combos where we would win the quote. The existing empirical-rho work
+(`research/sgp-empirical-rho`, docs/analysis/sgp_empirical_rho_2026-10-19.md) covers MLB pairs only (K/outs/hits/TB x game total, same-player K x outs): it
+gives NO estimate for the NFL / NBA / NHL same-game pairs that dominate real combos (QB pass yds x WR rec yds, rush yds x spread, points x rebounds ...), whose
+rho the pricer still takes from the unvalidated spec table or the 0.15 default. Next step is the same method on NFL / NBA / NHL leg outcomes (the settled leg
+markets are public), re-tested on held-out games, before any quoting beyond the demo exchange.
 
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,
